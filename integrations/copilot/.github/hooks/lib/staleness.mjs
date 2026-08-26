@@ -297,7 +297,25 @@ export function checkAnchor(anchor) {
   if (anchor.kind === 'file') {
     return hash(source) === anchor.hash
       ? { fresh: true }
-      : { fresh: false, before: anchor.snapshot || '', hasBefore: Boolean(anchor.snapshot), after: source, reason: 'file changed' };
+      : {
+          fresh: false,
+          before: anchor.snapshot || '',
+          hasBefore: Boolean(anchor.snapshot),
+          after: source,
+          // AND WHAT CHANGED IT, when the graph knows. The structural harvest
+          // stamps `lastAction` -- the tool name that last touched this file --
+          // on every file node, and nothing read it: the field was written on
+          // every observed tool call since #203 and consumed nowhere.
+          //
+          // It belongs precisely here. "file changed" tells a reader that their
+          // finding may be wrong; "file changed (last touched by Edit)" tells
+          // them a targeted edit did it, which is cheap to re-verify, and "last
+          // touched by Write" says the file was replaced wholesale, which is
+          // usually not. Same disclosure, one word of provenance, no extra I/O.
+          reason: anchor.lastAction
+            ? `file changed (last touched by ${String(anchor.lastAction).slice(0, 40)})`
+            : 'file changed',
+        };
   }
 
   // For a symbol, re-locate it by NAME rather than by line number. Line numbers
@@ -499,6 +517,7 @@ function disputeOf(graph, finding) {
   if (!hasOutstandingContradiction(graph, finding.key)) return {};
 
   const keys = [];
+  const disputantIds = [];
   // AND THE REASON A PERSON TYPED, which had no reader anywhere. `contradict`
   // stores `contradictionReason` -- up to 400 characters of human explanation --
   // on the CONTRADICTED end only, and nothing outside its own test ever read it:
@@ -524,6 +543,7 @@ function disputeOf(graph, finding) {
     // fetch. `hasOutstandingContradiction` above already declines to open the
     // gate when EVERY disputant is retired; this is the same rule applied to
     // each name, so a live disputant is still reported alongside a withdrawn one.
+    if (!disputantIds.includes(otherId)) disputantIds.push(otherId);
     if (other && !other.retired && typeof other.key === 'string' && !keys.includes(other.key)) {
       keys.push(other.key);
       // A RETIRED END'S REASON IS NOT BORROWED EITHER, which is why this sits
@@ -537,9 +557,31 @@ function disputeOf(graph, finding) {
     }
   }
 
+  // WHEN, alongside WHY. `contradict` writes `contradictedAt` and
+  // `contradictionReason` on the same line of the same putNode call. Round 1
+  // gave the reason a reader -- this function -- and left the timestamp
+  // unread, so the disclosure could say a claim was disputed and why, and not
+  // whether that happened this morning or a year ago. For a reader deciding
+  // whether to trust a disputed finding, the age of the dispute is most of the
+  // signal: a year-old objection to a claim nobody has revisited reads very
+  // differently from one raised since the last release.
+  //
+  // Collected from whichever end holds it, exactly like the reason, and the
+  // EARLIEST is kept -- the dispute began when the first end recorded it.
+  let contradictedAt =
+    typeof finding.contradictedAt === 'number' ? finding.contradictedAt : null;
+  for (const id of disputantIds) {
+    const other = graph.nodes.get(id);
+    if (!other || other.retired) continue;
+    if (typeof other.contradictedAt !== 'number') continue;
+    contradictedAt =
+      contradictedAt === null ? other.contradictedAt : Math.min(contradictedAt, other.contradictedAt);
+  }
+
   return {
     contradicted: true,
     ...(keys.length ? { contradictedBy: keys.join(', ') } : {}),
+    ...(contradictedAt !== null ? { contradictedAt } : {}),
     // Trimmed here rather than at the renderer: an empty string is not a reason,
     // and a consumer checking `if (reason)` should not have to trim first.
     //

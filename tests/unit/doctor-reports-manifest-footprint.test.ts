@@ -4,7 +4,9 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
-import { checklist } from '../../hooks-core/doctor.mjs';
+import { checklist, probeClients } from '../../hooks-core/doctor.mjs';
+// @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
+import { record } from '../../hooks-core/metrics.mjs';
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
 import { writeManifest, manifestSize, readManifest } from '../../hooks-core/manifest.mjs';
 
@@ -136,5 +138,42 @@ describe('the limit of what the reachability guard can prove', () => {
     expect(
       checks.some((c: { name: string }) => /manifest|installed files/i.test(c.name))
     ).toBe(false);
+  });
+});
+
+describe('the doctor reports which MCP clients actually connected', () => {
+  // `mcp-client` was written on every handshake and read by nothing. Every
+  // other check in the doctor reasons about files on disk -- is the hook
+  // present, is it wired, does it refuse a large read. None of them can say
+  // whether the editor in front of you ever actually connected, which is the
+  // most common way this product is installed and silently does nothing.
+  it('names the clients seen, with the title each reports for itself', () => {
+    const graphDir = join(fixture, 'graph');
+    mkdirSync(graphDir, { recursive: true });
+    record(graphDir, {
+      kind: 'mcp-client',
+      client: 'claude-code',
+      clientVersion: '2.1.0',
+      clientTitle: 'Claude Code',
+    });
+
+    const check = probeClients({ dir: graphDir }).find((c: { name: string }) =>
+      /MCP clients/i.test(c.name)
+    );
+    expect(check).toBeDefined();
+    expect(check.pass).toBe(true);
+    expect(check.detail).toMatch(/Claude Code/);
+    expect(check.detail).toMatch(/2\.1\.0/);
+  });
+
+  it('never fails on a fresh install, which has had no handshake', () => {
+    // A doctor that reports red on a correct install teaches people to ignore
+    // it -- the failure this file's sibling tests were written about.
+    const graphDir = join(fixture, 'empty-graph');
+    mkdirSync(graphDir, { recursive: true });
+    const checks = probeClients({ dir: graphDir });
+    expect(checks).toHaveLength(1);
+    expect(checks[0].pass).toBe(true);
+    expect(checks[0].detail).toMatch(/none yet/i);
   });
 });

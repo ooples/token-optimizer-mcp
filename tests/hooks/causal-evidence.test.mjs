@@ -4,6 +4,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   declinedAtBudget,
+  mcpClientsSeen,
+  balanceSheet,
+  shadowDelivery,
   evidenceReport,
   evidenceReportMany,
   readEvidence,
@@ -425,5 +428,102 @@ describe('what the budget turned away', () => {
     const declined = declinedAtBudget(dir);
     expect(declined.declined).toBe(1);
     expect(declined.byReason).toEqual([{ reason: 'unspecified', count: 1 }]);
+  });
+});
+
+describe('the shadow arm, and the fields nothing read', () => {
+  // Five fields were written onto records and consumed nowhere:
+  // candidateCount and shadowFindingIds (the injection holdout's shadow),
+  // staleCount (index staleness as a rate), contradictedAt (when a claim was
+  // disputed) and clientTitle (on the mcp-client handshake). The first three
+  // are asserted here, driving the real record shapes rather than hand-written
+  // ones where possible.
+  //
+  // HOLDOUT PINNED at the top of this file, because forTouch consults it.
+
+  test('reports what the holdout withheld, not just how many touches it withheld', () => {
+    // THE GAP controlArmTokens WAS CREATED TO CLOSE, one arm over: `count` and
+    // `findingIds` go to zero in the holdout while `candidateCount` and
+    // `shadowFindingIds` carry what WOULD have been delivered. Nothing read the
+    // shadow pair, so the report could count the arms and never say what was
+    // in them.
+    record(dir, {
+      kind: 'inject', surface: 'file', anchor, holdout: false,
+      tokens: 120, count: 2, candidateCount: 2,
+      findingIds: ['a', 'b'], shadowFindingIds: ['a', 'b'],
+    });
+    record(dir, {
+      kind: 'inject', surface: 'file', anchor, holdout: true,
+      tokens: 0, count: 0, candidateCount: 3,
+      findingIds: [], shadowFindingIds: ['c', 'd', 'e'],
+    });
+
+    const shadow = shadowDelivery(dir);
+    expect(shadow.injections).toBe(2);
+    expect(shadow.selected).toBe(5);
+    expect(shadow.delivered).toBe(2);
+    // The control arm's content: chosen, deliberately not delivered.
+    expect(shadow.withheldSelected).toBe(3);
+    expect(shadow.withheldFindings).toBe(3);
+  });
+
+  test('counts index staleness as a rate rather than a boolean', () => {
+    // `stale` had a reader and `staleCount` did not, so an index with one
+    // rotten entry in forty was indistinguishable from one rotten throughout.
+    record(dir, {
+      kind: 'inject', surface: 'session-start', anchor: 'session-index',
+      holdout: false, tokens: 90, count: 40, candidateCount: 40,
+      stale: true, staleCount: 1,
+    });
+    const shadow = shadowDelivery(dir);
+    expect(shadow.indexRecords).toBe(1);
+    expect(shadow.staleEntries).toBe(1);
+  });
+
+  test('the balance sheet carries the control arm content, beside the control arm tokens', () => {
+    record(dir, {
+      kind: 'inject', surface: 'file', anchor, holdout: true,
+      tokens: 0, count: 0, candidateCount: 2, findingIds: [], shadowFindingIds: ['x', 'y'],
+    });
+    const causal = balanceSheet(dir).estimatedCausal;
+    expect(causal.controlArmSelected).toBe(2);
+    expect(causal.controlArmFindings).toBe(2);
+    expect(causal.selected).toBe(2);
+    expect(causal.delivered).toBe(0);
+  });
+
+  test('an empty graph reports honest zeroes rather than throwing', () => {
+    const shadow = shadowDelivery(dir);
+    expect(shadow).toMatchObject({
+      injections: 0, selected: 0, delivered: 0,
+      withheldSelected: 0, withheldFindings: 0, staleEntries: 0,
+    });
+  });
+
+  test('names the MCP clients that handshaked, with the title they report', () => {
+    // `mcp-client` was written on every handshake and read by nothing. Deleting
+    // it was the other option and would have been wrong: `mcp-tool` records a
+    // client only once it CALLS something, so a client that connected and then
+    // called nothing appeared nowhere at all.
+    record(dir, {
+      kind: 'mcp-client', client: 'claude-code', clientVersion: '2.1.0',
+      clientTitle: 'Claude Code',
+    });
+    record(dir, {
+      kind: 'mcp-client', client: 'codex', clientVersion: '0.9.0', clientTitle: null,
+    });
+    const clients = mcpClientsSeen(dir);
+    expect(clients).toHaveLength(2);
+    const claude = clients.find((c) => c.client === 'claude-code');
+    expect(claude).toMatchObject({ title: 'Claude Code', version: '2.1.0' });
+  });
+
+  test('reports a client at the version it is now, not the one it first connected on', () => {
+    record(dir, { kind: 'mcp-client', client: 'claude-code', clientVersion: '2.0.0', at: 1 });
+    record(dir, { kind: 'mcp-client', client: 'claude-code', clientVersion: '2.1.0', at: 2 });
+    const clients = mcpClientsSeen(dir);
+    expect(clients).toHaveLength(1);
+    expect(clients[0].version).toBe('2.1.0');
+    expect(clients[0].connections).toBe(2);
   });
 });

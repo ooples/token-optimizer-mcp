@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   selectForConsolidation, irrecoverability, reuseProbability,
-  consolidationRatio, aggregateConsolidation, contentAnchor, costToRederive,
+  consolidationRatio, aggregateConsolidation, costToRederive,
 } from '../../hooks-core/consolidate.mjs';
 import { classifySituation, restorationPlan } from '../../hooks-core/restore.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
@@ -134,31 +134,6 @@ describe('the consolidation ratio -- the metric that needs session instrumentati
     ]);
     expect(out.derived).toBe(12_000);
     expect(out.ratio).toBeGreaterThan(1);
-  });
-});
-
-describe('content anchors reach across projects', () => {
-  test('identical content yields the same anchor from different paths', () => {
-    // A vendored library file is the same file in every repo that holds it.
-    const a = join(workspace, 'a.ts');
-    const b = join(workspace, 'b.ts');
-    writeFileSync(a, 'export const x = 1;');
-    writeFileSync(b, 'export const x = 1;');
-
-    expect(contentAnchor(a, 'samehash')).toBe(contentAnchor(b, 'samehash'));
-  });
-
-  test('size is part of the identity, so a truncated digest cannot collide', () => {
-    const a = join(workspace, 'a.ts');
-    const b = join(workspace, 'b.ts');
-    writeFileSync(a, 'short');
-    writeFileSync(b, 'considerably longer content here');
-
-    expect(contentAnchor(a, 'samehash')).not.toBe(contentAnchor(b, 'samehash'));
-  });
-
-  test('an unreadable path yields no anchor rather than a wrong one', () => {
-    expect(contentAnchor(join(workspace, 'missing.ts'), 'hash')).toBeNull();
   });
 });
 

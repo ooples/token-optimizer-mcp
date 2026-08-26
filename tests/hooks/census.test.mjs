@@ -354,32 +354,27 @@ describe('event kinds', () => {
   });
 
   it('has no kind that is written but never read', () => {
-    // WHAT THIS FOUND, on its first run, and what it is still owed.
+    // EMPTY, AND IT WAS NOT. This assertion shipped its first draft carrying
+    // `mcp-client` on an attributed exemption list, on the reasoning that the
+    // resolution -- delete the record, or give it a reader -- was somebody
+    // else's call. That is the reasoning that produced the sixteen-entry
+    // backlog this whole plan exists to undo, and it was wrong here for a
+    // simpler reason: nobody else was going to do it.
     //
-    // `mcp-client` is written by src/server/mcp-evidence.ts on every client
-    // handshake and read by nothing. Its only field that is not already on
-    // every other record from the same writer is `clientTitle` -- the client
-    // name, version, arm and episode are all carried by `mcp-tool` too, and the
-    // client is separately recorded in the project registry, which is where the
-    // dashboard reads it from. So the resolution is a deletion or a reader in
-    // the MCP telemetry surface, and it is not this guard's call to make
-    // silently. Tracked, attributed, and held to a ceiling that can only fall.
-    //
-    // NOT A BACKLOG, and the distinction is the whole point of Plan 3. Round 1
-    // parked sixteen findings in a list with accurate descriptions and no
-    // owner, and an accurate description of a defect felt like resolution. This
-    // is one entry, it names what it is waiting for, and the assertion below
-    // refuses a second.
-    const KNOWN_ORPHAN_WRITERS = ['mcp-client'];
-
-    const orphans = withoutReader(written, read);
-    expect(orphans).toEqual(KNOWN_ORPHAN_WRITERS);
+    // `mcp-client` is written on every MCP handshake. `mcp-tool` records a
+    // client only once it CALLS something and the project registry stores a
+    // name only, so a client that connected and then called nothing -- the
+    // exact failure this project's doctor exists to diagnose -- appeared in
+    // neither. `mcpClientsSeen` reads it and the doctor reports it.
+    expect(withoutReader(written, read)).toEqual([]);
   });
 
-  it('holds the orphan-writer list to one entry, and refuses a second', () => {
+  it('refuses a new orphan writer', () => {
+    // The list is at zero. A ceiling that can only fall is the right shape
+    // while somebody genuinely owes the fix; at zero it is just this.
     const written2 = writtenEventKinds();
     const read2 = readEventKinds(new Set([...declared.keys(), ...written2.keys()]));
-    expect(withoutReader(written2, read2).length).toBeLessThanOrEqual(1);
+    expect(withoutReader(written2, read2)).toEqual([]);
   });
 });
 
@@ -412,51 +407,36 @@ describe('edge kinds', () => {
 });
 
 describe('record fields', () => {
-  /**
-   * WHAT THIS FOUND ON ITS FIRST RUN, with what each one is.
-   *
-   * Attributed, not triaged. Round 1's failure was a list of sixteen accurate
-   * descriptions with no owner, where writing the description down felt like
-   * fixing the thing. Each of these names what is stored, why it was stored,
-   * and where its reader would have to go -- and the ceiling below means the
-   * list can only shrink.
-   *
-   * Four of the six are measurement fields belonging to the holdout arm and the
-   * injection budget, which is Plan 2's subject (production and measurement),
-   * so wiring readers for them here would be reaching into work in flight.
-   * `contradictedAt` is already filed as a follow-up on #204.
-   */
-  const KNOWN_UNREAD_FIELDS = [
-    // The holdout arm's shadow payload: what WOULD have been injected. The
-    // whole point of a holdout is comparing the shadow against the delivered
-    // arm, and the comparison has never been run. Plan 2's measurement work.
-    'candidateCount',
-    // Which client connected, beyond what the project registry already stores.
-    // Written on every MCP handshake, read by nothing -- the same record as
-    // the `mcp-client` orphan writer above, and it resolves with that one.
-    'clientTitle',
-    // WHEN a finding was contradicted. Stored provenance with no reader;
-    // already filed as follow-up 3 on #204.
-    'contradictedAt',
-    // The last curation action applied to a node.
-    'lastAction',
-    // See candidateCount: the shadow arm's finding keys.
-    'shadowFindingIds',
-    // How many of the findings considered at a touch were stale.
-    'staleCount',
-  ];
-
   it('has a reader for every field written onto a record', () => {
-    expect(recordFields().unread.map((f) => f.name)).toEqual(KNOWN_UNREAD_FIELDS);
-  });
-
-  it('holds the unread-field list to a ceiling that can only fall', () => {
-    expect(recordFields().unread.length).toBeLessThanOrEqual(KNOWN_UNREAD_FIELDS.length);
+    // ZERO, AND THE FIRST DRAFT OF THIS FILE SHIPPED SIX.
+    //
+    // They were listed with accurate descriptions and attributed to "Plan 2's
+    // measurement territory", which was an excuse rather than an attribution:
+    // Plan 2 had not reached those tasks and none of the six needed anything it
+    // was building. Each is now read where it was always meant to be --
+    //
+    //   candidateCount, shadowFindingIds  the injection holdout's SHADOW: what
+    //     retrieval selected versus what was served. Exactly the gap
+    //     `controlArmTokens` was created to close one arm over, whose comment
+    //     already said `tokensFullFile` "was recorded and read by nothing, so
+    //     the comparison the holdout exists for was not computable".
+    //   staleCount  index staleness as a rate rather than a boolean: one rotten
+    //     entry in forty was indistinguishable from forty.
+    //   contradictedAt  WHEN a claim was disputed, beside the WHY that Plan 1
+    //     wired. Written on the same line of the same putNode call; only one of
+    //     the two got a reader.
+    //   lastAction  which tool last touched a file. "file changed (last touched
+    //     by Edit)" says a targeted edit did it and is cheap to re-verify;
+    //     "by Write" says the file was replaced wholesale and usually is not.
+    //   clientTitle  the display name a client reports for itself, on the
+    //     `mcp-client` handshake record that nothing read at all.
+    expect(recordFields().unread.map((f) => f.name)).toEqual([]);
   });
 
   it('sees enough fields that a broken extractor cannot report a clean bill of health', () => {
     // The extractor SKIPS any call site whose object literal does not balance,
-    // so a regression in it goes quiet rather than loud. This is the tripwire.
+    // so a regression in it goes quiet rather than loud. This is the tripwire,
+    // and it matters more now that the expected result is an empty list.
     expect(recordFields().written.size).toBeGreaterThan(50);
   });
 });

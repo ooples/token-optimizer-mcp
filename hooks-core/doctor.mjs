@@ -25,6 +25,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { harvestMode } from './harvest.mjs';
 import { readManifest, verifyManifest, residue, manifestSize } from './manifest.mjs';
+import { mcpClientsSeen } from './metrics.mjs';
 
 /**
  * Bytes as a person reads them.
@@ -551,7 +552,39 @@ export function probeGraph({ dir }) {
     checks.push(ok('graph directory is private', 'mode could not be read on this filesystem'));
   }
 
+  checks.push(...probeClients({ dir }));
   return checks;
+}
+
+/**
+ * Which MCP clients have actually handshaked with this server.
+ *
+ * THE QUESTION THE REST OF THE DOCTOR CANNOT ANSWER. Every other check here
+ * reasons about files on disk: is the hook present, is it wired, does it refuse
+ * a large read. None of them can tell you whether the editor in front of you
+ * ever actually connected -- which is the single most common way this product
+ * is installed and silently does nothing.
+ *
+ * `mcp-client` records exactly that on every `initialize`, and nothing read it
+ * until now. NEVER A FAILURE: a fresh install has no handshakes yet, and a
+ * doctor that reports red on a correct install teaches people to ignore it.
+ */
+export function probeClients({ dir }) {
+  let clients = [];
+  try {
+    clients = mcpClientsSeen(dir);
+  } catch {
+    return [ok('MCP clients seen', 'no evidence log yet')];
+  }
+  if (!clients.length) {
+    return [ok('MCP clients seen', 'none yet -- the server has had no MCP handshake in this project')];
+  }
+  const described = clients
+    .slice(0, 5)
+    .map((c) => `${c.title || c.client}${c.version ? ` ${c.version}` : ''}`)
+    .join(', ');
+  return [ok('MCP clients seen', `${clients.length}: ${described}` +
+    (clients.length > 5 ? `, and ${clients.length - 5} more` : ''))];
 }
 
 /**

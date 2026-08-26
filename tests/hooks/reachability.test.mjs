@@ -94,20 +94,30 @@ const ALLOWED = new Map([
   // only fall, and refuses any entry that is neither one of these five nor
   // genuine public API.
 
-  // CONSOLIDATION. forecast.mjs imports aggregateConsolidation from this module,
-  // so it is partly live -- but the selection, the ratio and the content anchor
-  // are not reached, meaning nothing ever decides WHAT to consolidate.
-  // PLAN 2 Task 4 wires selectForConsolidation and DELETES contentAnchor;
-  // PLAN 2 Task 8 wires consolidationRatio into the optimization report.
-  ['selectForConsolidation', 'UNWIRED, PLAN 2 TASK 4: chooses what to promote into the graph; no caller decides when consolidation runs.'],
+  // THE FOUR THAT REMAIN HAVE NO PRODUCING ACTION TO ATTACH TO, and that is a
+  // measured statement rather than a deferral. Each was checked against the
+  // codebase before being left here.
+  //
+  // CONSOLIDATION. forecast.mjs calls aggregateConsolidation, so the module is
+  // partly live -- but `grep` finds no caller anywhere that decides WHAT to
+  // consolidate or WHEN a consolidation pass runs. `selectForConsolidation`
+  // chooses candidates for a pass that does not exist; `consolidationRatio`
+  // reports what that pass bought and would return null forever without it.
+  // Plan 2's derive.mjs, running at Stop, is that pass. Wiring either here
+  // would mean building it twice.
+  ['selectForConsolidation', 'UNWIRED, PLAN 2 TASK 4: chooses what to promote into the graph; verified -- no caller anywhere decides when a consolidation pass runs.'],
   ['consolidationRatio', 'UNWIRED, PLAN 2 TASK 8: reports what consolidation bought, and cannot report on a selection that never happens.'],
-  ['contentAnchor', 'UNWIRED, PLAN 2 TASK 4 (to be deleted): content-based anchoring, additive to path anchoring; no caller.'],
 
-  // HALF A FEEDBACK LOOP. shouldKeepWarm and keepWarmDecision are reachable;
-  // the outcome half that would tell them whether a refresh ever paid off is
-  // not, so the decision can never learn. PLAN 2 Task 9 closes the loop.
-  ['recordRefresh', 'UNWIRED, PLAN 2 TASK 9: records that a keep-warm refresh happened; pairs with recordRefreshOutcome, and neither is reached.'],
-  ['recordRefreshOutcome', 'UNWIRED, PLAN 2 TASK 9: records whether a keep-warm refresh was worth it; the deciding half runs without it.'],
+  // HALF A FEEDBACK LOOP, and the missing half is an ACTION, not a reader.
+  // shouldKeepWarm is called by cache-tool.ts and prints its verdict; nothing
+  // in this repository ever performs a keep-warm ping. So `recordRefresh`
+  // records an event that never occurs, and calling it at the DECISION point --
+  // the only place a caller exists today -- would write refreshes that never
+  // happened into the ledger `tripwire` reads to decide whether keep-warm is
+  // losing money. Fabricated evidence in a backstop is worse than a dead
+  // function, so these stay until the refresh itself exists (Plan 2 Task 9).
+  ['recordRefresh', 'UNWIRED, PLAN 2 TASK 9: records a keep-warm refresh; verified -- nothing in the repository performs one, so a caller would fabricate the event.'],
+  ['recordRefreshOutcome', 'UNWIRED, PLAN 2 TASK 9: scores whether a refresh paid off; same missing producer, and it feeds the tripwire ledger.'],
 
   // ------------------------------------------------------------------
   // The policyText entry lived here as "GENUINE PUBLIC API", and it was stale
@@ -264,21 +274,21 @@ describe('every exported function in the live hook path is reachable', () => {
     // with accurate descriptions of what was wrong with them -- and an accurate
     // description of a defect felt like resolution. Plan 1 took it to seven.
     //
-    // A CEILING RATHER THAN ZERO, and the difference is deliberate. Five of the
+    // A CEILING RATHER THAN ZERO, and the difference is deliberate. Four of the
     // seven are owned by Plan 2 (production and measurement), which is in
-    // progress in parallel: selectForConsolidation and contentAnchor by its
-    // Task 4, consolidationRatio by its Task 8, recordRefresh and
-    // recordRefreshOutcome by its Task 9. Asserting zero here would ship a test
+    // progress in parallel: selectForConsolidation by its Task 4,
+    // consolidationRatio by its Task 8, recordRefresh and recordRefreshOutcome
+    // by its Task 9 -- and each was verified to have no producing ACTION to
+    // attach to, not merely no caller. Asserting zero here would ship a test
     // that is RED until someone else's PR merges, and a suite that is expected
     // to be red teaches everyone to ignore it -- the same disease in a new
     // organ. So this asserts the number can only fall, and names who owes what.
     // When Plan 2 lands, this drops to 0 and the ceiling comes with it.
-    expect(ALLOWED.size).toBeLessThanOrEqual(5);
+    expect(ALLOWED.size).toBeLessThanOrEqual(4);
 
     const PLAN_2 = [
       'selectForConsolidation',
       'consolidationRatio',
-      'contentAnchor',
       'recordRefresh',
       'recordRefreshOutcome',
     ];

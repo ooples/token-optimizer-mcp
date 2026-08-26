@@ -29,7 +29,6 @@
  * without session instrumentation cannot obtain.
  */
 
-import { statSync } from 'node:fs';
 import { nodeId } from './wiki.mjs';
 
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
@@ -199,25 +198,3 @@ export function aggregateConsolidation(findings) {
   return carry ? { derived, carry, ratio: derived / carry } : null;
 }
 
-/**
- * Content identity for a file, so a finding can reach across projects.
- *
- * A vendored library file is the same file in every repository that holds it,
- * whatever path each gives it. Anchoring to content as well as path means a
- * finding about it appears in all of them with no promotion step and no path
- * mapping -- reach a per-session checkpoint cannot have even in principle.
- *
- * The PATH anchor still drives staleness within a repo; this is additive.
- */
-export function contentAnchor(path, hash) {
-  if (!hash) return null;
-  let size = 0;
-  try {
-    size = statSync(path).size;
-  } catch {
-    return null;
-  }
-  // Size is included so two different files sharing a truncated digest do not
-  // collide into one identity.
-  return `content:${hash}:${size}`;
-}

@@ -744,6 +744,21 @@ export function balanceSheet(dir) {
           verdict: r.verdict,
         };
       })(),
+      // THE CONTROL ARM'S CONTENT, for the same reason `controlArmTokens` sits
+      // in the substitution block above: `candidateCount` and
+      // `shadowFindingIds` recorded what the holdout withheld and nothing read
+      // them, so the report could count the arms and never say what was in
+      // them.
+      ...(() => {
+        const shadow = shadowDelivery(dir);
+        return {
+          selected: shadow.selected,
+          delivered: shadow.delivered,
+          controlArmSelected: shadow.withheldSelected,
+          controlArmFindings: shadow.withheldFindings,
+          indexStaleEntries: shadow.staleEntries,
+        };
+      })(),
     },
     costs: {
       injection: injectCost,
@@ -1283,6 +1298,109 @@ export function declinedAtBudget(dir, { limit = 500 } = {}) {
       .sort((a, b) => b[1] - a[1])
       .map(([reason, count]) => ({ reason, count })),
   };
+}
+
+/**
+ * The injection arm's SHADOW: what retrieval selected, against what was served.
+ *
+ * THE SAME GAP `controlArmTokens` WAS CREATED TO CLOSE, one arm over. That
+ * field exists because `tokensFullFile` "was recorded and read by nothing, so
+ * the comparison the holdout exists for was not computable from the report" --
+ * and the injection side had the identical hole: every `inject` record carries
+ * `candidateCount` and `shadowFindingIds`, which are what WOULD have been
+ * delivered, non-zero in BOTH arms, while `count` and `findingIds` go to zero
+ * in the holdout. The shadow pair was written on every injection since the
+ * holdout shipped and read by nothing, so the report could say how many touches
+ * landed in each arm and never which findings the holdout actually withheld.
+ *
+ * `staleCount` is the same shape on the session-start index: `stale` (a
+ * boolean, "was any of this stale") had a reader, the count did not, so a index
+ * with one rotten entry in forty was indistinguishable from one rotten
+ * throughout.
+ *
+ * READ FROM THE BALANCE LOG, because `inject` is a BALANCE_KIND: the firehose
+ * evicts injections first -- 136 of them against 6,725 captures on one machine
+ * -- which is the eviction that made `report()` say "0 holdout" over a file
+ * containing nine.
+ */
+export function shadowDelivery(dir) {
+  const injections = readBalance(dir).filter((event) => event.kind === 'inject');
+
+  let selected = 0;
+  let delivered = 0;
+  let withheldSelected = 0;
+  const withheldKeys = new Set();
+  let staleEntries = 0;
+  let indexRecords = 0;
+
+  for (const event of injections) {
+    const candidates = Number(event.candidateCount) || 0;
+    selected += candidates;
+    delivered += Number(event.count) || 0;
+    if (event.holdout) {
+      withheldSelected += candidates;
+      for (const key of event.shadowFindingIds || []) withheldKeys.add(key);
+    }
+    if (event.surface === 'session-start') {
+      indexRecords += 1;
+      staleEntries += Number(event.staleCount) || 0;
+    }
+  }
+
+  return {
+    injections: injections.length,
+    // Everything retrieval chose, across both arms.
+    selected,
+    // What actually reached a model.
+    delivered,
+    // Chosen and deliberately not delivered, because the anchor was in the
+    // withheld arm. This is the control arm's content, which is the thing the
+    // holdout exists to make comparable.
+    withheldSelected,
+    withheldFindings: withheldKeys.size,
+    // Index staleness as a rate rather than a boolean.
+    indexRecords,
+    staleEntries,
+  };
+}
+
+/**
+ * Which MCP clients have actually handshaked with this server.
+ *
+ * `mcp-client` was written on every `initialize` and read by nothing -- a
+ * producer with no reader, and the last one the census found. Deleting it was
+ * the other option and would have been wrong: `mcp-tool` records a client only
+ * once it CALLS something, and the project registry records a name only, so a
+ * client that connected and then called nothing -- which is exactly the failure
+ * this project's doctor exists to diagnose -- appeared in neither. The
+ * handshake is the only record that a connection happened at all.
+ *
+ * `clientTitle` is the field that made the record unique and it was unread too:
+ * the display name a client reports for itself, which is how a user recognises
+ * their own editor in a list where `name` is a slug.
+ */
+export function mcpClientsSeen(dir, { limit = 200 } = {}) {
+  const seen = new Map();
+  for (const event of readEvidence(dir)) {
+    if (event.kind !== 'mcp-client') continue;
+    const name = String(event.client || 'unknown');
+    const at = Number(event.at) || 0;
+    const previous = seen.get(name);
+    // LAST HANDSHAKE WINS on the mutable fields: a client that upgraded should
+    // be reported at the version it is now, not the one it first connected on.
+    if (!previous || at >= previous.at) {
+      seen.set(name, {
+        client: name,
+        title: event.clientTitle || null,
+        version: event.clientVersion || null,
+        at,
+        connections: (previous?.connections || 0) + 1,
+      });
+    } else {
+      previous.connections += 1;
+    }
+  }
+  return [...seen.values()].sort((a, b) => b.at - a.at).slice(0, limit);
 }
 
 /* ----------------------------------------------------------------------
