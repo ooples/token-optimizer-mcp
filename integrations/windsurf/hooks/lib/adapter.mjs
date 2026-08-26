@@ -103,6 +103,44 @@ const HARVEST_MAX_BYTES =
   Number(process.env.TOKEN_OPTIMIZER_HARVEST_MAX_BYTES) || 4_000_000;
 
 /**
+ * The response envelopes a completed tool call can arrive in.
+ *
+ * Spelled out ONCE because FOUR readers depend on it -- mutation accounting,
+ * success classification, output capture and exit-code capture -- and clients
+ * disagree on the envelope name and on nothing else. Letting each reader name
+ * its own subset is exactly how both classifiers came to miss MCP's failure
+ * flag: `toolSucceeded` listed four envelopes and `mutationSucceeded` listed
+ * three, and neither list mentioned `isError` at all.
+ */
+function responseEnvelopes(raw) {
+  return [
+    raw?.tool_response,
+    raw?.toolResponse,
+    raw?.tool_result,
+    raw?.toolResult,
+    raw?.postToolUse,
+  ].filter((envelope) => envelope !== undefined && envelope !== null);
+}
+
+/**
+ * Did an MCP result declare itself an error?
+ *
+ * `isError` is the ONLY failure signal an MCP result carries -- there is no
+ * `error` field and no `status` -- and `src/server/index.ts` sets it in seven
+ * places. Shared by both classifiers so they cannot disagree about what a
+ * failed call from this project's own tools looks like.
+ *
+ * `=== true` EXACTLY. A client using the key for anything else must not have
+ * its successful calls silently reclassified, and `isError: false` is a
+ * successful MCP call, not a missing verdict.
+ */
+function reportedMcpError(raw) {
+  return [...responseEnvelopes(raw), raw].some(
+    (envelope) => envelope?.isError === true
+  );
+}
+
+/**
  * A post-tool event is not universally proof of success. Some clients split
  * success and failure into distinct events; others expose a result status.
  * Keep mutation accounting conservative so a failed edit cannot arm Stop.
@@ -112,6 +150,19 @@ export function mutationSucceeded(clientName, raw) {
     return false;
   if (raw?.postToolUse?.success === false || raw?.success === false)
     return false;
+  // BEFORE the status read, the explicit-success read AND the client
+  // allowlist, because all three would otherwise pass a failed MCP write. The
+  // allowlist is the one that actually bit: it returns true for claude-code,
+  // codex, qwen, opencode, kilo and windsurf on any post-tool event with no
+  // error and no status, which is precisely the shape of a failed smart_write.
+  //
+  // WHY THIS IS THE SAME BUG AS THE ONE IN `toolSucceeded` AND NOT A COSMETIC
+  // ECHO OF IT: this function gates edit counting and harvest pressure, so
+  // counting a failed write to THE OPTIMIZER'S OWN TOOLS as a mutation
+  // inflates "the optimizer successfully edited a file". Different consumers
+  // from the effectiveness figures, same direction of bias -- toward
+  // flattering the thing being measured.
+  if (reportedMcpError(raw)) return false;
 
   const status =
     raw?.tool_response?.status ??
@@ -145,24 +196,6 @@ export function mutationSucceeded(clientName, raw) {
   );
 }
 
-/**
- * The response envelopes a completed tool call can arrive in.
- *
- * Spelled out ONCE because three readers depend on it -- success
- * classification, output capture and exit-code capture -- and clients disagree
- * on the envelope name and on nothing else. Letting each reader name its own
- * subset is how `toolSucceeded` came to miss MCP's failure flag entirely.
- */
-function responseEnvelopes(raw) {
-  return [
-    raw?.tool_response,
-    raw?.toolResponse,
-    raw?.tool_result,
-    raw?.toolResult,
-    raw?.postToolUse,
-  ].filter((envelope) => envelope !== undefined && envelope !== null);
-}
-
 /** Conservative success classification for any completed tool call. */
 export function toolSucceeded(raw) {
   if (raw?.error || raw?.tool_response?.error || raw?.toolResponse?.error)
@@ -181,8 +214,7 @@ export function toolSucceeded(raw) {
   // call to THE OPTIMIZER'S OWN TOOLS as a success biased all of it in the
   // optimizer's favour. A measurement that flatters the thing being measured
   // is worse than no measurement.
-  if ([...responseEnvelopes(raw), raw].some((e) => e?.isError === true))
-    return false;
+  if (reportedMcpError(raw)) return false;
   const status =
     raw?.tool_response?.status ??
     raw?.toolResponse?.status ??

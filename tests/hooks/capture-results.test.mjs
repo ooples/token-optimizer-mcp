@@ -23,6 +23,7 @@ import {
   outputFrom,
   exitFrom,
   toolSucceeded,
+  mutationSucceeded,
 } from '../../hooks-core/adapter.mjs';
 
 let dir;
@@ -190,6 +191,95 @@ describe("toolSucceeded reads MCP's own failure flag", () => {
     // Exact `=== true` only: a client using the key for something else must
     // not have its successful calls silently recorded as failures.
     expect(toolSucceeded({ tool_response: { isError: 'no' } })).toBe(true);
+  });
+});
+
+describe("mutationSucceeded reads MCP's own failure flag too", () => {
+  // The six clients whose lifecycle contract makes the allowlist return true
+  // for any error-free, status-free post-tool event. That allowlist is what a
+  // failed smart_write used to slip through.
+  const ALLOWLISTED = [
+    'claude-code',
+    'codex',
+    'qwen',
+    'opencode',
+    'kilo',
+    'windsurf',
+  ];
+  const failedWrite = {
+    tool_response: {
+      content: [{ type: 'text', text: '{"success": false, "error": "read-only"}' }],
+      isError: true,
+    },
+  };
+
+  it('stops counting a failed MCP write as a mutation on every allowlisted client', () => {
+    for (const client of ALLOWLISTED)
+      expect(mutationSucceeded(client, failedWrite)).toBe(false);
+  });
+
+  it('overrides gemini, whose rule passes any tool_response at all', () => {
+    expect(mutationSucceeded('gemini', failedWrite)).toBe(false);
+  });
+
+  it('outranks an explicit success flag, because mutation accounting is conservative', () => {
+    // A failed edit must not arm Stop even if the envelope also claims success.
+    expect(
+      mutationSucceeded('claude-code', { ...failedWrite, success: true })
+    ).toBe(false);
+  });
+
+  it('outranks a positive status, for the same reason', () => {
+    expect(
+      mutationSucceeded('claude-code', {
+        tool_response: { status: 'ok', isError: true },
+      })
+    ).toBe(false);
+  });
+
+  it('reads isError in every envelope for mutation accounting too', () => {
+    expect(mutationSucceeded('codex', { toolResponse: { isError: true } })).toBe(
+      false
+    );
+    expect(mutationSucceeded('codex', { tool_result: { isError: true } })).toBe(
+      false
+    );
+    expect(mutationSucceeded('codex', { toolResult: { isError: true } })).toBe(
+      false
+    );
+    expect(mutationSucceeded('codex', { isError: true })).toBe(false);
+  });
+
+  it('still counts a successful MCP write, and a plain successful edit', () => {
+    // The gate must not turn every mutation into a non-mutation: that would
+    // silently stop all edit counting and harvest pressure.
+    expect(
+      mutationSucceeded('claude-code', {
+        tool_response: { content: [{ type: 'text', text: '{"success": true}' }] },
+      })
+    ).toBe(true);
+    expect(
+      mutationSucceeded('claude-code', {
+        tool_response: { content: [{ type: 'text', text: 'ok' }], isError: false },
+      })
+    ).toBe(true);
+    expect(
+      mutationSucceeded('claude-code', { tool_response: { status: 'ok' } })
+    ).toBe(true);
+  });
+
+  it('does not treat a truthy non-boolean isError as a mutation failure', () => {
+    expect(
+      mutationSucceeded('claude-code', { tool_response: { isError: 'no' } })
+    ).toBe(true);
+  });
+
+  it('leaves an unlisted client uncounted, as it was', () => {
+    // Regression guard on the pre-existing conservatism: adding the isError
+    // gate must not accidentally make a client count that never did.
+    expect(mutationSucceeded('cursor', { tool_response: { stdout: 'ok' } })).toBe(
+      false
+    );
   });
 });
 
