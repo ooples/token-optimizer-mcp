@@ -82,10 +82,19 @@ describe('Layer 1 classification', () => {
     expect(labelOf()).toBe('unknown');
   });
 
-  it('credits a reference only within the same session', () => {
+  it('credits a reference from another session, because a session id is not evidence', () => {
+    // `wiki_query` takes `sessionId` as an OPTIONAL input the model has to
+    // volunteer, so scoping on it made the numerator depend on the model
+    // choosing to identify itself. The finding key is the specific part.
     inject({ sessionId: 's' });
     query({ sessionId: 'other', at: 3 });
-    expect(labelOf()).not.toBe('referenced');
+    expect(labelOf()).toBe('referenced');
+  });
+
+  it('credits a query that carries no session id at all', () => {
+    inject();
+    query({ sessionId: null, at: 3 });
+    expect(labelOf()).toBe('referenced');
   });
 
   it('treats an expand as opportunity but never as a reference', () => {
@@ -201,13 +210,15 @@ describe('Layer 1 rate', () => {
     expect(rate.rate).toBe(0);
   });
 
-  it('counts a query with no session id as unscoped rather than crediting it', () => {
+  it('counts a query with no session id as a usable reference event', () => {
     inject();
     query({ sessionId: null, at: 2 });
     const rate = referenceRate(dir);
-    expect(rate.unscopedReferences).toBe(1);
-    expect(rate.referenceEvents).toBe(0);
-    expect(rate.referenced).toBe(0);
+    expect(rate.referenceEvents).toBe(1);
+    expect(rate.referenced).toBe(1);
+    // The field that counted the session-less losses is gone, not zeroed: a
+    // permanent 0 would read as "the loss was fixed".
+    expect(rate).not.toHaveProperty('unscopedReferences');
   });
 
   it('separates outcomes the join could not attribute from both arms', () => {
@@ -294,6 +305,33 @@ describe('Layer 1 disclosure', () => {
     inject();
     query();
     expect(referenceNote(dir)).toContain('1/1');
+  });
+
+  it('discloses the cross-attribution cost beside the number it qualifies', () => {
+    // The caveat has to live where a human meets the figure. A task report is
+    // not where someone quoting the number will look.
+    inject();
+    query();
+    expect(referenceNote(dir)).toContain('cross-attribute');
+  });
+
+  it('says the denominator can understate when the read was truncated', () => {
+    // One oversized record forces `readMetrics` past its byte cap, which is
+    // the same truncation that hid both of this repository's real injections.
+    record(dir, { kind: 'padding', pad: 'x'.repeat(2_200_000), at: 0 });
+    inject();
+    query();
+    const rate = referenceRate(dir);
+    expect(rate.windowed).toBe(true);
+    expect(referenceNote(dir)).toContain('can understate');
+  });
+
+  it('does not claim a window when the caller supplied its own events', () => {
+    const events = [
+      { kind: 'inject', findingIds: ['k1'], injectionId: 'i', sessionId: 's', at: 1 },
+      { kind: 'query', operation: 'get', key: 'k1', sessionId: 's', at: 2 },
+    ];
+    expect(referenceRate(dir, { events }).windowed).toBe(false);
   });
 
   it('reaches the audit report, which is its only production reader', () => {
