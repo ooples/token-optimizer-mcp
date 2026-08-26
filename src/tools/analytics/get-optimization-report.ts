@@ -251,7 +251,9 @@ function renderGraph(
         ? `${num(l1.referenced)}/${num(
             l1.denominator
           )} injected findings referenced later${
-            l1.rate === null ? ', no rate published' : ` (${pct(l1.rate * 100)})`
+            l1.rate === null
+              ? ', no rate published'
+              : ` (${pct(l1.rate * 100)})`
           }`
         : 'unavailable'
     }`
