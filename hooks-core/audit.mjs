@@ -31,6 +31,7 @@
 import { record, readMetrics } from './metrics.mjs';
 import { remedyLedger, applyRemedy, proposal } from './remedy.mjs';
 import { money, monthly, priceNote, dollars } from './pricing.mjs';
+import { renderStanding } from './standing.mjs';
 
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
 
@@ -181,7 +182,7 @@ export function buildQueue(
 export function renderAudit(
   dir,
   findings = [],
-  { tier = 'opus', full = false, sessionsPerMonth = 60 } = {}
+  { tier = 'opus', full = false, sessionsPerMonth = 60, standing = null } = {}
 ) {
   const { queue, suppressed, done } = buildQueue(dir, findings);
   const lines = [];
@@ -314,6 +315,38 @@ export function renderAudit(
       body.push(
         `  ${trend.detector}: ${trend.before.toLocaleString()} -> ${trend.after.toLocaleString()} tokens/session ` +
           `(${trend.improved ? 'improved' : 'worse'})`
+      );
+    }
+  }
+
+  // STANDING CONTEXT, as a panel rather than only as queue rows.
+  //
+  // auditStanding and verdictFor were both reachable, so this project already
+  // computed which CLAUDE.md rules and skills are stale, oversized or never
+  // used -- and threw the report away. renderStanding existed, was tested, and
+  // had no caller: the forTouch shape exactly, in the subsystem #203 claimed
+  // closed the skills-and-memory gap. Hard to defend a gap as closed while the
+  // report that would show it is unreachable.
+  //
+  // WHAT THE QUEUE ABOVE CANNOT SAY, which is why this is not duplication. The
+  // queue carries one row per ACTION, so a standing file with nothing wrong
+  // contributes no row and is invisible -- and the total cost of the prefix,
+  // the number that says what standing context is worth arguing about at all,
+  // is carried by no row either. Both are in the panel.
+  //
+  // Costed like everything else here: it is pushed BEFORE the closing line is
+  // measured, so the report's self-cost includes its own newest panel rather
+  // than understating it.
+  if (standing?.length) {
+    body.push('', 'Standing context -- charged every session:', '');
+    const panel = renderStanding(standing, { sessionsPerMonth });
+    // Indented to sit under its heading, blank lines left blank rather than
+    // turned into trailing whitespace.
+    for (const line of panel.split('\n')) body.push(line ? `  ${line}` : '');
+    if (standing.some((v) => v.actions?.length)) {
+      body.push(
+        '',
+        '  The actions above also appear in the queue at the top, where they are priced and applyable.'
       );
     }
   }

@@ -24,7 +24,21 @@ import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSyn
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { harvestMode } from './harvest.mjs';
-import { readManifest, verifyManifest, residue } from './manifest.mjs';
+import { readManifest, verifyManifest, residue, manifestSize } from './manifest.mjs';
+
+/**
+ * Bytes as a person reads them.
+ *
+ * Local because it exists for one line of one check, and because the alternative
+ * -- printing a raw byte count next to a file count -- is the kind of detail
+ * that gets skimmed past rather than read.
+ */
+function describeBytes(bytes) {
+  if (!bytes) return 'size unknown';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const ok = (name, detail) => ({ name, pass: true, detail });
 const bad = (name, detail, remedy) => ({ name, pass: false, detail, remedy });
@@ -360,11 +374,19 @@ export function checklist({ root, settingsPath, install }) {
     }
 
     // What we recorded putting on the machine, and whether it is still that.
-    const verified = verifyManifest(readManifest());
+    const manifest = readManifest();
+    const verified = verifyManifest(manifest);
     if (verified) {
+      // HOW MUCH, not just how many. manifestSize computed exactly this and had
+      // no caller, so the one number that says what uninstall will actually
+      // remove -- and the only cross-check on a manifest that lists files which
+      // no longer exist, since a missing file contributes zero bytes -- was
+      // computed nowhere and shown to no one.
+      const footprint = describeBytes(manifestSize(manifest));
       checks.push(verified.modified === 0
-        ? ok('installed files intact', `${verified.intact} file(s) match the install manifest`)
-        : ok('installed files intact', `${verified.modified} file(s) edited since install -- ` +
+        ? ok('installed files intact', `${verified.intact} file(s), ${footprint}, match the install manifest`)
+        : ok('installed files intact', `${verified.modified} of ${verified.intact + verified.modified} file(s) ` +
+          `(${footprint} recorded) edited since install -- ` +
           'uninstall will leave those alone rather than destroy your changes'));
     } else {
       checks.push(bad('install manifest present', 'no record of what was installed',

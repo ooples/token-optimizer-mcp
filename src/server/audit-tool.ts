@@ -136,9 +136,16 @@ export async function tokenAudit(input: {
   // every session, so it belongs in the same queue rather than in a report of
   // its own. A stale claim is listed even without a transcript, because it is
   // provable from the code alone.
+  //
+  // The verdicts are also kept whole and handed to renderAudit, which renders
+  // the panel. COMPUTED ONCE: flattening them into findings loses every file
+  // that has nothing wrong with it, and loses the prefix total, so the panel
+  // needs the verdicts themselves -- but it does not need them computed twice.
+  let standing: unknown[] = [];
   try {
     const transcript = mods.cache.transcriptFor(cwd);
-    for (const verdict of mods.standing.auditStanding(cwd, transcript)) {
+    standing = mods.standing.auditStanding(cwd, transcript);
+    for (const verdict of standing as any[]) {
       for (const action of verdict.actions) {
         findings.push({
           id: `standing-${action.action}`,
@@ -174,6 +181,7 @@ export async function tokenAudit(input: {
     full: Boolean(input?.full),
     tier: input?.tier || 'opus',
     sessionsPerMonth: input?.sessionsPerMonth || 60,
+    standing,
   });
 
   // Recording that a finding was raised is what makes the before-and-after
