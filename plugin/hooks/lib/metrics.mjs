@@ -31,6 +31,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
+import { redact } from './redact.mjs';
 
 /**
  * Read per call, not once at module load.
@@ -517,6 +518,15 @@ export function readEvidence(dir) {
 }
 
 /**
+ * The captured-output budget, in characters.
+ *
+ * Small enough that a 3 MB test log cannot bloat the evidence log or a single
+ * injected claim, large enough to hold the stack trace or compiler diagnostic
+ * that makes a failure finding worth anything.
+ */
+const OUTPUT_MAX_BYTES = 4096;
+
+/**
  * Joins a post-tool result to the most recent matching injection.  The exact
  * tool-call id wins; clients that omit it fall back to episode + surface +
  * anchor, in timestamp order, and the report states the weaker join method.
@@ -545,10 +555,31 @@ export function recordToolOutcome(dir, outcome) {
       : 'episode-anchor'
     : 'none';
 
+  // REDACTED AND CAPPED HERE, not at the call site. A claim built from this
+  // text is INJECTED into model context and EXPORTED to markdown, so the
+  // boundary is the only place that can guarantee it: a second caller added
+  // later would otherwise have to remember, and the one that forgot would leak
+  // a secret into two more places than the terminal it came from. `undefined`
+  // rather than `''` when nothing was captured, so JSON.stringify omits the
+  // key entirely and an absent capture is distinguishable from an empty one.
+  const output =
+    outcome.output === undefined || outcome.output === null
+      ? undefined
+      : redact(String(outcome.output), { max: OUTPUT_MAX_BYTES });
+  // NULL RATHER THAN 0 when nothing is reported. Most clients supply no numeric
+  // code at all, and 0 is the success value -- defaulting to it would claim
+  // every unreported call exited cleanly, which is a fabricated observation
+  // rather than a missing one.
+  const exit = Number.isInteger(outcome.exit) ? outcome.exit : null;
+
   return record(dir, {
     kind: 'tool-outcome',
     ...outcome,
     anchor,
+    // AFTER the spread, so a caller cannot smuggle raw text past the boundary
+    // by setting the field itself.
+    output,
+    exit,
     injectionId: injection?.injectionId || null,
     findingIds: injection?.findingIds || [],
     joinMethod,
