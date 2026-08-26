@@ -54,6 +54,7 @@ import { readMetrics, readTruncation, balanceSheet } from './metrics.mjs';
 import { classify, referenceRate } from './usage.mjs';
 import { effects, observations, servingPolicyVersion } from './loo.mjs';
 import { consolidationRatio, aggregateConsolidation } from './consolidate.mjs';
+import { recallProbe } from './recall.mjs';
 import { load } from './wiki.mjs';
 
 /**
@@ -307,11 +308,19 @@ export function consolidation(dir, { graph = null } = {}) {
 }
 
 /**
- * The balance sheet with the graph's own three measurements attached.
+ * The balance sheet with the graph's own measurements attached.
  *
  * `balanceSheet` lives in `metrics.mjs`, which every one of these modules
  * imports, so it cannot import them back. This is where the two meet, and it
  * is the shape `get_optimization_report` serves.
+ *
+ * `recall` joins them as an OFFLINE PROBE, and that label travels in the data
+ * (`recall.basis`) as well as in the rendered line. It is not an observation of
+ * anything a session did: it deletes an anchor edge in memory and re-runs the
+ * real retrieval primitives over the graph as it stands right now. `recall.mjs`
+ * imports only `wiki.mjs` and `lexical.mjs`, neither of which imports anything
+ * in this direction, so no cycle -- the same reason `calibration` had to live
+ * here rather than in `metrics.mjs`.
  */
 export function graphBalanceSheet(dir, options = {}) {
   const sheet = balanceSheet(dir);
@@ -323,6 +332,7 @@ export function graphBalanceSheet(dir, options = {}) {
     layer2,
     calibration: cal,
     consolidation: consolidation(dir, options),
+    recall: recallProbe(dir, options),
   };
 }
 
