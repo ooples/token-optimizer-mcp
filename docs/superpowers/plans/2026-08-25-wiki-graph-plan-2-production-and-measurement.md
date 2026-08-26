@@ -1168,7 +1168,21 @@ injection join — it cannot compile against `master` until #315 merges.
 | 3 — The four extractors | Not started. Depends on 2 and 3b. |
 | 4 | **Complete.** `derive` routes candidates through `selectForConsolidation` (budget 1000 tokens, `TOKEN_OPTIMIZER_DERIVE_BUDGET`) into `writeHarvested` as `ORIGIN_HARVESTED`. `contentAnchor` deleted (issue #319); allowlist 7 -> 5. Three defects fixed on the way: the scorer read `entry.summary` where every other layer writes `claim`, so the budget admitted everything; candidates anchored to the project ROOT, which `indexFile` cannot read, so storage would have been zero; and `derive`'s own evidence boilerplate said "flaky", which `irrecoverability` scores in its top tier. `derive` stays SYNC -- no import cycle, so the brief's async rewrite was unnecessary. See `task-4-report.md`. |
 | 5 | Not started. |
-| 6 — Layer 1 | Not started. |
+| 6 — Layer 1 | **Complete.** `hooks-core/usage.mjs` -- `classify`, `referenceRate`,
+`referenceNote`; 24 tests; 21/21 mutations killed. Keyed on explicit reference, never on
+read-suppression. Two determinations answered against real data: **`expand` does not name a
+finding** (`recordExpansion` writes a truncation-capture `ref`, and all 64 live expand
+events carry `sessionId: null`), so it counts as opportunity only and the brief's "query or
+expand" is wrong; and **2,994 of 2,995 live `tool-outcome` rows report `joinMethod: 'none'`
+because no injection existed for that tool call**, not because the join failed -- there are
+2 `inject` events in 16,387 rows. Denominator 1, `rate: null`, and the audit prints nothing
+rather than 0%. The 2 MB read window, not the join, is the binding constraint: both injects
+have aged out, so the windowed denominator is 0. A measurement-bias defect was found in the
+first draft and is recorded -- keying "the join failed" on `episodeId` (which IS the session
+id) scored 2,559 tool calls of one session as failed joins where the truth is 0. Wired to a
+real reader (`renderAudit` -> `referenceNote`) so the allowlist stays at 5. Also outstanding:
+`wiki_query`'s `sessionId` is an optional input the model must volunteer, so the numerator is
+structurally weak until it records the ambient session. See `task-6-report.md`. |
 | 7 — Layer 2 | Not started. The heaviest task in the plan. |
 | 8 | Not started. Depends on 6 and 7. |
 | 9, 10 | Not started. |
