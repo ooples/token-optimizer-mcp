@@ -1037,7 +1037,7 @@ nothing measured recall. Now it does."
 | Calibration refuses when uncalibrated | `calibration(dir).publishable` | false, with a stated reason |
 | No price on an estimate | the estimated line in `get_optimization_report` | no `$` |
 | Recall measured | `recallProbe(dir).rate` | a number, or null with a reason |
-| Allowlist shrunk | `grep -c "^  \['" tests/hooks/reachability.test.mjs` | 4 (from 9) |
+| Allowlist shrunk | `grep -c "^  \['" tests/hooks/reachability.test.mjs` | 3 (from 9; Task 9 took it 4 -> 3, and `recordRefresh` stays because nothing issues a refresh) |
 
 ---
 
@@ -1258,7 +1258,46 @@ plan's placement would have created `metrics -> loo -> {utility,curate,wiki} -> 
 `graphBalanceSheet`, which is the shape the plan's interface specifies. Cost: `balanceSheet`
 81.7 ms -> `graphBalanceSheet` 185.1 ms on this machine's real 2 MB log, on an on-demand report
 path. See `task-8-report.md`. |
-| 9, 10 | Not started. |
+| 9 — keep-warm loop | **Complete, with one recorder deliberately left unwired.**
+`hooks-core/keepwarm.mjs` — `scoreRefreshes`, `observedHitRates`, `OBSERVATION_FLOOR`,
+`TURN_GAP_MS`; `keepWarmDecision` / `ttlTier` gained an `observed` option; `adapter.mjs` calls
+`scoreRefreshes(dir)` on the **Stop** path. 22 tests; **25 mutations, 25 killed**, every new test
+killed by at least one, and Tasks 6/7/8's `audit.mjs` wiring mutations re-run and still killed.
+Allowlist **4 -> 3**.
+**A REAL TURN-ARRIVAL SIGNAL EXISTS, so the ruling was not needed**: `gapDistribution` is fitted
+to inter-turn gaps from `metrics.jsonl`, so the same log answers the outcome question directly — a
+`5m` refresh was used if a turn of the same session arrived within five minutes of it. The ruling's
+*spirit* is enforced anyway by four refusals, every one costing this project its own good news:
+`pending` (the TTL has not elapsed — scoring a hit the instant it lands while a miss waits out the
+window is **right-censoring**, biased upward and invisible to any test), `uncovered` (the firehose
+no longer reaches back to the refresh, so absence of arrival is absence of evidence and **not** a
+miss), `unattributable` (no `sessionId`, so no arrival can be shown to belong to it), and
+already-scored.
+**The plan's Step 1 test could not run and its Step 4 was a units error.** The signature is
+`keepWarmDecision({ prefixTokens, gaps, tier })` — no `dir` — so observations are passed in the
+options object and `keepWarmDecision` stays pure; `shouldKeepWarm` computes them from the outcome
+array **the tripwire has already read**, so the loop costs no extra I/O and the decision and its
+backstop cannot see different evidence. And a recorded `hit` is NOT the quantity
+`keepWarmDecision` models: its probability is the narrow ping window
+`P(tier.ms < gap < 2·tier.ms)`, while `hit` is `P(gap < tier.ms)` — 0.19% against 99.5% on this
+machine's real log, so substituting the observation would have recommended refreshing forever.
+So an observation may only ever **lower** a modelled probability, never raise it (`Math.min`),
+and it is `ttlTier` — whose `hit` **is** the same estimand — where it does real work. M11 flips the
+bound to `Math.max` and 6 tests kill it.
+**`recordRefresh` STAYS ON THE ALLOWLIST, and the finding is the deliverable**: nothing in this
+repository issues a refresh. `cache_audit` is the only consumer of the decision and it prints a
+recommendation; the prompt cache belongs to the client, so no code spends the money. Calling it at
+the recommendation site would compute a hit rate over refreshes never bought and make keep-warm
+look self-funding — the ninth instance of the measurement-bias class, and the first found by
+declining to wire something. So the loop is **closed and dormant**: on this machine
+`scoreRefreshes` scores 0 and records nothing, `observedHitRates` is empty, and `shouldKeepWarm`
+still answers `refresh` at `5m` on expected value alone. Dormant cost on the Stop path is one read
+of the small balance log (17-23 ms); the 2 MB firehose is read **only** if an unscored refresh
+exists (M8 kills the eager version). Floor is `OBSERVATION_FLOOR = TRIPWIRE_MIN = 10`: one miss
+changes nothing, 1-in-10 still refreshes, 0-in-10 switches it off. Not a Wilson bound — its 95%
+upper limit at 0/10 is 0.28, which could not switch off a policy that missed ten times out of ten.
+See `task-9-report.md`. |
+| 10 | Not started. |
 | 11 -- transcript reader | **Complete.** `failedResultsFromTranscript` in
 `hooks-core/transcript.mjs`, read-only, tail-bounded, redacted at the boundary. Yield on
 this machine is **0** and that is measured, not shrugged at: 8 of 571 command failures
@@ -1358,7 +1397,18 @@ published a calibration resting on a ~1e-13 floating-point gap as "referenced fi
 a rendered re-read-waste line that printed the confirmed figure without the count of repeats the
 classifier could not judge, which `rereadWaste`'s own docstring says must be reported rather than
 hidden. Neither was visible by reading. **The running total for this class across both plans is
-now eight.**
+now nine.**
+
+**The ninth was found by Task 9 and is the first one avoided by declining to wire something.**
+`recordRefresh` has no honest call site because nothing in this repository issues a refresh —
+`cache_audit` prints a recommendation and the prompt cache belongs to the client — so calling it at
+the recommendation site would have produced a hit rate computed over refreshes that were never
+bought, and since 99.5% of this machine's gaps fall inside five minutes that rate would have read
+as ~100% and made keep-warm look like it pays for itself. The same task found the inverted form in
+its own design and fixed it before shipping: a recorded `hit` (`P(gap < tier.ms)`) is not the
+quantity `keepWarmDecision` models (`P(tier.ms < gap < 2·tier.ms)`), 99.5% against 0.19% here, so
+an observation may only **lower** a modelled probability and never raise it. Both are the usual
+shape — the code works and the number lies.
 
 **A fourth instance is known and unfixed**, found while closing the third: `mutationSucceeded`'s
 status read omits the `postToolUse` envelope, so `postToolUse: { status: 'error' }` falls through

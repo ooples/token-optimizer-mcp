@@ -30,6 +30,15 @@ import { record, readMetrics, readBalance } from './metrics.mjs';
 import { WRITE_MULTIPLIER, READ_MULTIPLIER } from './cache.mjs';
 
 /**
+ * The shortest gap that counts as a NEW turn rather than a burst inside one.
+ *
+ * Shared by the gap distribution and by the hit test, because they have to
+ * agree about what a turn is. Two copies of this number would let the decision
+ * be fitted to one definition of a turn and scored against another.
+ */
+export const TURN_GAP_MS = 250;
+
+/**
  * TTL tiers, with what a WRITE costs at each.
  *
  * A five-minute entry is written at 1.25x a plain input token; the one-hour
@@ -85,7 +94,7 @@ export function gapDistribution(dir, { events = readMetrics(dir) } = {}) {
     for (let i = 1; i < session.length; i++) {
       const gap = session[i] - session[i - 1];
       // A burst of events inside one turn is not a gap between turns.
-      if (gap > 250) gaps.push(gap);
+      if (gap > TURN_GAP_MS) gaps.push(gap);
     }
   }
   if (gaps.length < 6) return null;
@@ -105,12 +114,93 @@ export function gapDistribution(dir, { events = readMetrics(dir) } = {}) {
 }
 
 /**
+ * Refreshes to observe at a tier before the observation may bound the decision.
+ *
+ * THE SAME NUMBER THE BACKSTOP DEMANDS, deliberately. The decision and the
+ * tripwire read the same ledger, so letting them disagree about when there is
+ * enough evidence would mean one of them acting on a sample the other calls too
+ * small. Below the floor the decision keeps its expected-value answer, so a
+ * single unlucky miss changes nothing at all.
+ *
+ * NOT A CONFIDENCE INTERVAL, and the reason is arithmetic rather than taste. A
+ * Wilson 95% upper bound at ten refreshes and zero hits is 0.28 -- so a policy
+ * that missed ten times out of ten would still be recommended, which is exactly
+ * the case the loop exists to catch. The point estimate is safe here because of
+ * the bound below: an observation may only ever LOWER the modelled probability,
+ * so sampling noise cannot manufacture a refresh, and the tripwire's realised
+ * ledger is a second guard underneath.
+ */
+export const OBSERVATION_FLOOR = TRIPWIRE_MIN;
+
+/**
+ * The measured hit rate per tier, from recorded outcomes.
+ *
+ * Tiers below the floor are ABSENT rather than present with a small n, because
+ * a rate carrying no weight is the thing most likely to be used as though it
+ * did.
+ */
+export function observedHitRates(outcomes = []) {
+  const byTier = new Map();
+  for (const event of outcomes) {
+    if (event?.kind !== 'keepwarm' || event.action !== 'outcome') continue;
+    const name = TIERS.some((t) => t.name === event.tier) ? event.tier : TIERS[0].name;
+    const row = byTier.get(name) || { refreshes: 0, hits: 0 };
+    row.refreshes += 1;
+    if (event.hit) row.hits += 1;
+    byTier.set(name, row);
+  }
+
+  const qualified = new Map();
+  for (const [name, row] of byTier) {
+    if (row.refreshes < OBSERVATION_FLOOR) continue;
+    qualified.set(name, { ...row, rate: row.hits / row.refreshes });
+  }
+  return qualified;
+}
+
+/**
+ * What the refreshes at this tier actually did, if enough of them have.
+ *
+ * Tolerates being handed anything -- null, a plain object, a Map -- because the
+ * callers are two public functions whose options object is assembled by other
+ * people's code.
+ */
+function observationsFor(observed, tierName) {
+  const row = observed instanceof Map ? observed.get(tierName) : null;
+  return row && Number.isFinite(row.rate) ? row : null;
+}
+
+/**
+ * The modelled probability, BOUNDED BY what was observed and never raised by it.
+ *
+ * The asymmetry is the whole point and runs against this project's interest. A
+ * recorded `hit` says only that a turn arrived before the entry expired; it
+ * cannot say the refresh is what kept the entry alive, because a turn arriving
+ * one minute after a five-minute ping would have found the entry warm anyway.
+ * So the observed rate is an UPPER bound on a refresh's value, and substituting
+ * it for the model would flatter keep-warm badly: on the machine this was
+ * written on, the modelled ping probability is 0.2% and the observable
+ * before-expiry rate is 99.5%, so the substitution would recommend refreshing
+ * forever. A low rate, by contrast, is real evidence against: if turns do not
+ * even arrive inside the TTL, the refresh certainly bought nothing.
+ */
+function bounded(modelled, seen) {
+  return seen ? Math.min(modelled, seen.rate) : modelled;
+}
+
+/**
  * Should we refresh this prefix now?
  *
  * Returns the arithmetic as well as the verdict, because a refusal to refresh
  * that cannot be checked is indistinguishable from a bug.
+ *
+ * `observed` is passed IN rather than read from disk here: this function is
+ * pure, its purity is what lets the tests build a distribution by hand, and
+ * `shouldKeepWarm` has already read the outcome log for the tripwire -- so
+ * threading the reader in here would be a second read of the same file and a
+ * second place for the window discipline to be got wrong.
  */
-export function keepWarmDecision({ prefixTokens, gaps, tier = TIERS[0] }) {
+export function keepWarmDecision({ prefixTokens, gaps, tier = TIERS[0], observed = null }) {
   if (!prefixTokens || !gaps) {
     return { action: 'unknown', reason: 'no gap distribution yet -- needs a few sessions of history' };
   }
@@ -124,22 +214,31 @@ export function keepWarmDecision({ prefixTokens, gaps, tier = TIERS[0] }) {
   // The ping only earns anything in the window where the entry WOULD have
   // expired but the next turn still arrives: before the TTL it was already
   // warm, and long after it, one ping does not reach.
-  const probability = Math.max(0, gaps.probabilityWithin(tier.ms * 2) - gaps.probabilityWithin(tier.ms));
+  const modelled = Math.max(0, gaps.probabilityWithin(tier.ms * 2) - gaps.probabilityWithin(tier.ms));
+  const seen = observationsFor(observed, tier.name);
+  const probability = bounded(modelled, seen);
   const savingIfUsed = prefixTokens * (tier.writeMultiplier - READ_MULTIPLIER);
   const ev = probability * savingIfUsed - costOfPing;
+  const note = seen && probability < modelled
+    ? `; bounded by ${seen.refreshes} observed refreshes, ` +
+      `${Math.round(seen.rate * 100)}% used before expiry`
+    : '';
 
   return {
     action: ev > 0 ? 'refresh' : 'skip',
     tier: tier.name,
     probability,
+    modelledProbability: modelled,
+    observedHitRate: seen ? seen.rate : null,
+    observedRefreshes: seen ? seen.refreshes : 0,
     savingIfUsed: Math.round(savingIfUsed),
     costOfPing: Math.round(costOfPing),
     expectedValue: Math.round(ev),
-    reason: ev > 0
+    reason: (ev > 0
       ? `${Math.round(probability * 100)}% of gaps land in the window one ${tier.name} refresh covers; ` +
         `expected gain ${Math.round(ev).toLocaleString()} tokens`
       : `only ${Math.round(probability * 100)}% of gaps land in the window a ${tier.name} refresh covers; ` +
-        `expected loss ${Math.abs(Math.round(ev)).toLocaleString()} tokens`,
+        `expected loss ${Math.abs(Math.round(ev)).toLocaleString()} tokens`) + note,
   };
 }
 
@@ -150,7 +249,12 @@ export function keepWarmDecision({ prefixTokens, gaps, tier = TIERS[0] }) {
  * long enough that the short tier keeps missing. Returns null when neither tier
  * pays, which is a real answer and the one a default-on product never gives.
  */
-export function ttlTier({ prefixTokens, gaps, turnsPerSession = DEFAULT_TURNS }) {
+export function ttlTier({
+  prefixTokens,
+  gaps,
+  turnsPerSession = DEFAULT_TURNS,
+  observed = null,
+}) {
   if (!prefixTokens || !gaps) return null;
 
   // Expected cost of a turn under each tier, as a multiple of what the prefix
@@ -158,7 +262,16 @@ export function ttlTier({ prefixTokens, gaps, turnsPerSession = DEFAULT_TURNS })
   // again; and the FIRST write is amortised over the session, which is what
   // stops the expensive tier from looking free whenever gaps are short.
   const costOf = (tier) => {
-    const hit = gaps.probabilityWithin(tier.ms);
+    // THE SAME QUANTITY THE OUTCOMES RECORD, which is what makes the
+    // observation admissible here at all. `hit` is P(a turn arrives before the
+    // entry expires) and `recordRefreshOutcome`'s `hit` is exactly that event,
+    // measured -- unlike keepWarmDecision, whose probability is the narrower
+    // ping window and for which the same observation is only an upper bound.
+    // Bounded rather than replaced even so: a sample drawn only from moments we
+    // CHOSE to refresh is not a sample of gaps, and its bias runs our way.
+    const modelled = gaps.probabilityWithin(tier.ms);
+    const seen = observationsFor(observed, tier.name);
+    const hit = bounded(modelled, seen);
     const perTurn = hit * READ_MULTIPLIER + (1 - hit) * tier.writeMultiplier;
     // THE SUPPLIED VALUE, not only the computed one. Math.max(1, NaN) is NaN -- Math.max
     // propagates it rather than clamping -- so perTurn became NaN, the `perTurn >= 1` guard below
@@ -171,6 +284,8 @@ export function ttlTier({ prefixTokens, gaps, turnsPerSession = DEFAULT_TURNS })
     return {
       tier,
       hit,
+      seen,
+      boundedByObservation: Boolean(seen) && hit < modelled,
       perTurn: (tier.writeMultiplier + (turns - 1) * perTurn) / turns,
     };
   };
@@ -187,24 +302,53 @@ export function ttlTier({ prefixTokens, gaps, turnsPerSession = DEFAULT_TURNS })
     action: 'refresh',
     tier: best.tier.name,
     hitProbability: best.hit,
+    observedHitRate: best.seen ? best.seen.rate : null,
+    observedRefreshes: best.seen ? best.seen.refreshes : 0,
     expectedCostPerTurn: Number(best.perTurn.toFixed(3)),
     expectedValue: Math.round((1 - best.perTurn) * prefixTokens),
     reason: `${Math.round(best.hit * 100)}% of gaps land inside ${best.tier.name}; ` +
-      `expected cost ${best.perTurn.toFixed(2)}x per turn against 1.00x uncached`,
+      `expected cost ${best.perTurn.toFixed(2)}x per turn against 1.00x uncached` +
+      (best.boundedByObservation
+        ? `, bounded by ${best.seen.refreshes} observed refreshes ` +
+          `(${Math.round(best.seen.rate * 100)}% used before expiry)`
+        : ''),
   };
 }
 
-/** Records a refresh so its outcome can be scored. */
-export function recordRefresh(dir, { tier, prefixTokens, expectedValue }) {
-  record(dir, { kind: 'keepwarm', action: 'refresh', tier, prefixTokens, expectedValue });
+/**
+ * Records a refresh so its outcome can be scored.
+ *
+ * `sessionId` IS REQUIRED FOR THE REFRESH TO BE SCOREABLE, and is not defaulted
+ * to anything. The hit test asks whether a turn of THIS conversation arrived
+ * before expiry; pooling arrivals across sessions would let a second concurrent
+ * session's turn pay for this one's ping, which manufactures hits. A refresh
+ * recorded without one is kept in the ledger and reported as unattributable
+ * rather than guessed at.
+ *
+ * Returns the stored record, whose `id` is what `scoreRefreshes` pairs the
+ * outcome to, so an issuer can hold onto it.
+ */
+export function recordRefresh(dir, { tier, prefixTokens, expectedValue, sessionId, at }) {
+  return record(dir, {
+    kind: 'keepwarm',
+    action: 'refresh',
+    tier,
+    prefixTokens,
+    expectedValue,
+    sessionId,
+    at,
+  });
 }
 
 /**
  * Records whether the refresh was used.
  *
  * `hit` means a real turn arrived before expiry, so the write bought a read.
+ * `refreshId` names the refresh this scores, so the same one cannot be scored
+ * twice -- once per turn for the rest of the session, which is what an
+ * unpaired outcome would become.
  */
-export function recordRefreshOutcome(dir, { tier, prefixTokens, hit }) {
+export function recordRefreshOutcome(dir, { tier, prefixTokens, hit, refreshId = null }) {
   const tierSpec = TIERS.find((t) => t.name === tier) || TIERS[0];
   // THE SAME LEDGER keepWarmDecision BUYS THE REFRESH WITH. That function is explicit that a
   // refresh is a PING, which READS the prefix -- costOfPing = prefixTokens * READ_MULTIPLIER --
@@ -221,7 +365,125 @@ export function recordRefreshOutcome(dir, { tier, prefixTokens, hit }) {
   const realised = hit
     ? prefixTokens * (tierSpec.writeMultiplier - READ_MULTIPLIER) - prefixTokens * READ_MULTIPLIER
     : -prefixTokens * READ_MULTIPLIER;
-  record(dir, { kind: 'keepwarm', action: 'outcome', tier, prefixTokens, hit: Boolean(hit), realised: Math.round(realised) });
+  record(dir, {
+    kind: 'keepwarm',
+    action: 'outcome',
+    tier,
+    prefixTokens,
+    hit: Boolean(hit),
+    refreshId,
+    realised: Math.round(realised),
+  });
+}
+
+/**
+ * Scores every recorded refresh whose window has closed -- and NOTHING ELSE.
+ *
+ * This is the arm that was missing. `recordRefresh` and `recordRefreshOutcome`
+ * were both correct and both called by nothing, so the decision spent money on
+ * refreshes and could never find out whether one bought a read.
+ *
+ * THE SIGNAL IS REAL, not invented. `gapDistribution` already treats this log's
+ * timestamps as turn arrivals -- that is the distribution the whole decision is
+ * fitted to -- so the same log answers the outcome question directly: a refresh
+ * at tier `5m` was used if a turn of the same session arrived within five
+ * minutes of it. Four cases refuse to answer rather than guess, and every one
+ * of them refuses in the direction that costs this project its own good news:
+ *
+ *   - `pending`: the window has not closed yet. A hit could be scored the
+ *     instant it arrives while a miss must wait out the whole TTL, so scoring
+ *     early would mean the recorded hits are always complete and the recorded
+ *     misses always lagging -- right-censoring, biased upward, invisible in any
+ *     test. So a hit waits exactly as long as a miss.
+ *   - `uncovered`: the arrival log no longer reaches back to the refresh, so
+ *     absence of an arrival is absence of evidence. RECORDING `hit: false` HERE
+ *     WOULD BE THE INVENTION THIS IS FORBIDDEN TO MAKE: an absent signal is not
+ *     a miss, and treating it as one biases every rate downward and would
+ *     eventually switch keep-warm off on no evidence at all.
+ *   - `unattributable`: the refresh names no session, so no arrival can be
+ *     shown to belong to it.
+ *   - already scored: an outcome already names this refresh.
+ *
+ * The firehose is READ LAZILY, and only when there is something to score. On a
+ * machine where nothing issues refreshes -- which is every machine today, since
+ * nothing in this repository issues one -- the whole cost is the outcome-log
+ * read: median 70 ms on a 3.5 MB log, of which readBalance is 49 ms, because
+ * that reader also scans the firehose tail for pre-split records.
+ */
+export function scoreRefreshes(dir, {
+  refreshes = readBalance(dir),
+  arrivals = null,
+  now = Date.now(),
+} = {}) {
+  const summary = { scored: 0, hits: 0, pending: 0, uncovered: 0, unattributable: 0 };
+  const keepwarm = refreshes.filter((event) => event?.kind === 'keepwarm');
+  const alreadyScored = new Set(
+    keepwarm
+      .filter((event) => event.action === 'outcome' && event.refreshId)
+      .map((event) => event.refreshId)
+  );
+  const unscored = keepwarm.filter(
+    (event) =>
+      event.action === 'refresh' &&
+      Number.isFinite(event.at) &&
+      event.id &&
+      !alreadyScored.has(event.id)
+  );
+
+  // A refresh with no id cannot be paired, so scoring it would write a fresh
+  // outcome on every turn forever. Reported, not silently dropped.
+  summary.unattributable += keepwarm.filter(
+    (event) => event.action === 'refresh' && (!event.id || !Number.isFinite(event.at))
+  ).length;
+
+  if (!unscored.length) return summary;
+
+  const events = (arrivals ? arrivals() : readMetrics(dir)).filter((event) =>
+    Number.isFinite(event?.at)
+  );
+  // Coverage is judged over EVERY event, including our own bookkeeping: the
+  // refresh's own copy in the firehose is what proves the window is still
+  // inside the read. Arrivals are judged over everything else, because a record
+  // keep-warm wrote about itself is not a turn -- and counting one would
+  // manufacture a hit out of the act of measuring.
+  const earliest = events.reduce((min, event) => Math.min(min, event.at), Infinity);
+  const turns = events.filter((event) => event.kind !== 'keepwarm');
+
+  for (const refresh of unscored) {
+    const tier = TIERS.find((t) => t.name === refresh.tier) || TIERS[0];
+    if (now - refresh.at < tier.ms) {
+      summary.pending += 1;
+      continue;
+    }
+    const session = refresh.sessionId;
+    if (!session) {
+      summary.unattributable += 1;
+      continue;
+    }
+    if (!(earliest <= refresh.at)) {
+      summary.uncovered += 1;
+      continue;
+    }
+
+    const opens = refresh.at + TURN_GAP_MS;
+    const closes = refresh.at + tier.ms;
+    const hit = turns.some(
+      (event) =>
+        (event.sessionId ?? event.episodeId) === session &&
+        event.at > opens &&
+        event.at <= closes
+    );
+    recordRefreshOutcome(dir, {
+      tier: refresh.tier,
+      prefixTokens: refresh.prefixTokens,
+      hit,
+      refreshId: refresh.id,
+    });
+    summary.scored += 1;
+    if (hit) summary.hits += 1;
+  }
+
+  return summary;
 }
 
 /**
@@ -279,8 +541,12 @@ export function shouldKeepWarm(dir, {
   const trip = tripwire(dir, { events: outcomes });
   if (trip.tripped) return { action: 'skip', reason: trip.reason, trippedWire: true };
 
+  // THE SAME ARRAY THE TRIPWIRE JUST READ, so closing the loop costs no extra
+  // I/O -- and so the decision and its backstop cannot be looking at different
+  // evidence about the same refreshes.
+  const observed = observedHitRates(outcomes);
   const gaps = gapDistribution(dir, { events });
-  const best = ttlTier({ prefixTokens, gaps });
+  const best = ttlTier({ prefixTokens, gaps, observed });
   if (!best) {
     // THE TWO MODELS ANSWER DIFFERENT QUESTIONS, so they may legitimately disagree. ttlTier asks
     // whether holding a cache beats not caching at all; keepWarmDecision asks whether ONE ping
@@ -289,7 +555,7 @@ export function shouldKeepWarm(dir, {
     // refusal justified by a GAIN: `{ action: 'skip', reason: '...expected gain 130 tokens' }`.
     // This module's own docstring says a refusal that cannot be checked is indistinguishable from
     // a bug; one that contradicts itself is worse.
-    const decision = keepWarmDecision({ prefixTokens, gaps });
+    const decision = keepWarmDecision({ prefixTokens, gaps, observed });
     if (decision.action === 'refresh') return decision;
     return { action: decision.action === 'unknown' ? 'unknown' : 'skip', reason: decision.reason };
   }

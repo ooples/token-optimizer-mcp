@@ -115,14 +115,25 @@ const ALLOWED = new Map([
   // derivedCost onto the finding node it creates, and src/server/disclosure.ts
   // calls it.
 
-  // HALF A FEEDBACK LOOP. shouldKeepWarm and keepWarmDecision are reachable;
-  // the outcome half that would tell them whether a refresh ever paid off is
-  // not, so the decision can never learn.
-  ['recordRefreshOutcome', 'UNWIRED: records whether a keep-warm refresh was worth it; the deciding half runs without it.'],
+  // HALF A FEEDBACK LOOP, and the half that could be closed has been.
+  // recordRefreshOutcome left this list: scoreRefreshes calls it for every
+  // recorded refresh whose TTL has elapsed, the Stop hook calls scoreRefreshes,
+  // and shouldKeepWarm now bounds both models by the rate that comes back. The
+  // turn-arrival signal was already in the log gapDistribution is fitted to.
+  //
+  // recordRefresh could NOT be closed, and the finding is worth more than a
+  // plausible call site would have been: NOTHING IN THIS REPOSITORY ISSUES A
+  // REFRESH. cache_audit is the only consumer of the decision and it prints a
+  // recommendation; no code sends the ping, because the prompt cache belongs to
+  // the client. Calling this at the recommendation site would record refreshes
+  // that were never bought, and the hit rate computed over them would make
+  // keep-warm look like it pays for itself -- the exact measurement bias this
+  // plan has now found nine times, every one flattering. So it stays orphaned,
+  // deliberately, until an issuer exists to call it.
 
   // SINGLETONS still to be traced.
   ['renderStanding', 'UNWIRED: renders the standing-context audit. auditStanding IS reachable, so only the report is orphaned.'],
-  ['recordRefresh', 'UNWIRED: records that a keep-warm refresh happened; pairs with recordRefreshOutcome, and neither is reached.'],
+  ['recordRefresh', 'UNWIRED BY DESIGN: nothing in this repository issues a keep-warm refresh -- cache_audit only recommends one -- so there is no site that spends the money. scoreRefreshes scores whatever an issuer records.'],
   ['manifestSize', 'UNWIRED: measures the installation manifest. Verified orphaned, and untested as well.'],
 
   // ------------------------------------------------------------------

@@ -56,6 +56,7 @@ import { join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { briefing } from './remedy.mjs';
 import { stableText, transcriptFor } from './cache.mjs';
+import { scoreRefreshes } from './keepwarm.mjs';
 import { cachedRoutingBriefing } from './routing.mjs';
 import {
   forCommand,
@@ -1008,6 +1009,26 @@ async function runHook(clientName, event, invocation) {
       });
     } catch {
       // Evidence is best effort and must never stop a session from finishing.
+    }
+    try {
+      // THE KEEP-WARM FEEDBACK ARM, at the boundary where a turn has just
+      // ended -- which is the only place the arrival question can be answered.
+      // Every refresh whose TTL has since elapsed is scored here as used or
+      // unused; anything the log cannot settle is left unscored rather than
+      // recorded as a miss, because an absent signal is not a miss.
+      //
+      // Nothing in this repository issues a refresh today -- cache_audit only
+      // recommends one -- so this scores nothing, and what it costs while
+      // dormant is one readBalance: median 70 ms on this machine's 3.5 MB log,
+      // against derive's 71-111 ms a few lines below on the same path. The
+      // firehose is read for ARRIVALS only if an unscored refresh exists, so
+      // the dormant case never pays for that. The moment an issuer exists, the
+      // decision starts learning with no second wiring change.
+      const cwd = raw.cwd || raw.working_directory || process.cwd();
+      const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+      scoreRefreshes(dir);
+    } catch {
+      // A refresh that cannot be scored costs a measurement, not a session.
     }
     try {
       // THE ARCHIVE, WRITTEN BEFORE ANYTHING READS IT.
