@@ -38,11 +38,13 @@ import {
   touchedFiles,
 } from './decide.mjs';
 import {
+  record,
   recordRead,
   fingerprint,
   recordToolOutcome,
   recordEpisodeOutcome,
 } from './metrics.mjs';
+import { derive } from './derive.mjs';
 import {
   contentHash,
   harvest,
@@ -946,6 +948,35 @@ async function runHook(clientName, event, invocation) {
       });
     } catch {
       // Evidence is best effort and must never stop a session from finishing.
+    }
+    try {
+      // ZERO-COST DERIVATION, on every client, with no credential. The semantic
+      // harvest below needs an API key, so on a machine without one the graph
+      // accumulates structure and no verdicts at all. These detectors read only
+      // what is already on disk and send nothing anywhere.
+      //
+      // The COUNT is recorded rather than the candidates: how many findings a
+      // session's own evidence supports is the number that says whether this is
+      // working, and it is measurable before anything is stored. Storage is the
+      // caller's next step, under a budget.
+      const cwd = raw.cwd || raw.working_directory || process.cwd();
+      const projectRoot = projectRootFor(join(cwd, '__session__'), cwd);
+      const dir = wikiDir(projectRoot);
+      const derived = derive(dir, {
+        sessionId,
+        projectRoot,
+        transcriptPath: agentScope,
+        // The hook payload's own identity, not a value a model typed.
+        authoritativeSessionId: sessionId,
+      });
+      record(dir, {
+        kind: 'derive',
+        sessionId,
+        candidates: derived.candidates.length,
+        observations: derived.observations.length,
+      });
+    } catch {
+      // A detector failing must never cost a user the end of their session.
     }
     const alreadyHarvested =
       Number(state.edits || 0) > 0 &&
