@@ -957,10 +957,12 @@ async function runHook(clientName, event, invocation) {
       // accumulates structure and no verdicts at all. These detectors read only
       // what is already on disk and send nothing anywhere.
       //
-      // The COUNT is recorded rather than the candidates: how many findings a
-      // session's own evidence supports is the number that says whether this is
-      // working, and it is measurable before anything is stored. Storage is the
-      // caller's next step, under a budget.
+      // COUNTS are recorded rather than the candidates, and BOTH counts: how
+      // many findings a session's own evidence supports, and how many of them
+      // survived the storage budget and the anchor discipline. The gap between
+      // the two is the number that says whether the bound is doing anything --
+      // one figure alone cannot distinguish "nothing to derive" from "derived
+      // plenty and stored none of it".
       const cwd = raw.cwd || raw.working_directory || process.cwd();
       const projectRoot = projectRootFor(join(cwd, '__session__'), cwd);
       const dir = wikiDir(projectRoot);
@@ -976,6 +978,7 @@ async function runHook(clientName, event, invocation) {
         sessionId,
         candidates: derived.candidates.length,
         observations: derived.observations.length,
+        written: derived.written.length,
       });
     } catch {
       // A detector failing must never cost a user the end of their session.

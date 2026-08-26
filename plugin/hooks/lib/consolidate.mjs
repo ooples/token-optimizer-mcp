@@ -31,10 +31,27 @@
  * without session instrumentation cannot obtain.
  */
 
-import { statSync } from 'node:fs';
 import { nodeId } from './wiki.mjs';
 
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
+
+/**
+ * The text of the conclusion itself, under either field name.
+ *
+ * THE FIELD MISMATCH THIS FIXES WAS SILENT AND TOTAL. This module was written
+ * against an extractor that produced `summary`; every other layer -- the graph
+ * node `writeHarvested` stores, `consolidationRatio` in this very file, the
+ * renderer in inject.mjs -- calls the same text `claim`. So when `derive.mjs`
+ * became the first real caller, `estimate(entry.summary)` was 0 for every
+ * candidate, `spent + 0 > budget` was never true, and the budget admitted
+ * EVERYTHING while still reporting a tidy `tokens: 0`. A bound that cannot bind
+ * is worse than no bound, because the caller believes it has one.
+ *
+ * `irrecoverability` had the matching failure: it scored the empty string, so
+ * every candidate landed in the bottom tier and the multiplier -- one of the
+ * three factors in the value formula -- was a constant.
+ */
+const conclusionText = (entry) => entry.summary ?? entry.claim ?? '';
 
 /**
  * How hard something is to reproduce, independent of what it cost this time.
@@ -46,7 +63,7 @@ const estimate = (text) => Math.ceil(String(text || '').length / 4);
  * measurements, and pretending otherwise would be false precision.
  */
 export function irrecoverability(entry) {
-  const text = `${entry.summary || ''} ${entry.evidence || ''}`.toLowerCase();
+  const text = `${conclusionText(entry)} ${entry.evidence || ''}`.toLowerCase();
 
   // Anything derived from a non-deterministic or long-running observation.
   //
@@ -111,7 +128,7 @@ export function costToRederive(entry, previousAt) {
   // no-op. The only measured cost is `entry.tokensSpent`, which the extraction
   // site must supply; otherwise fall back to the size of the evidence, so a
   // conclusion drawn from a large investigation still outranks an aside.
-  return estimate(entry.evidence) * 4 || estimate(entry.summary) * 8;
+  return estimate(entry.evidence) * 4 || estimate(conclusionText(entry)) * 8;
 }
 
 /** Kinds that survive on the floor regardless of score. */
@@ -121,7 +138,8 @@ const ALWAYS_KEEP = new Set(['failure', 'decision']);
  * Chooses what to promote into the graph, under a token budget.
  *
  * @param {object} graph      Loaded wiki graph, for reuse probability.
- * @param {Array}  candidates Extracted conclusions, each { type, summary, anchors, evidence, at }.
+ * @param {Array}  candidates Extracted conclusions, each { type, claim (or summary),
+ *                              anchors, evidence, at }.
  * @param {object} options    budget: tokens available for promoted findings.
  */
 export function selectForConsolidation(graph, candidates, { budget = 4000 } = {}) {
@@ -142,7 +160,7 @@ export function selectForConsolidation(graph, candidates, { budget = 4000 } = {}
     });
     const cost = costToRederive(entry, previousAt);
     const score = cost * irrecoverability(entry) * reuseProbability(graph, entry.anchorIds || anchors);
-    scored.push({ entry, score, cost, tokens: estimate(entry.summary) });
+    scored.push({ entry, score, cost, tokens: estimate(conclusionText(entry)) });
     previousAt = entry.at ?? previousAt;
   }
 
@@ -199,27 +217,4 @@ export function aggregateConsolidation(findings) {
     carry += estimate(finding.claim);
   }
   return carry ? { derived, carry, ratio: derived / carry } : null;
-}
-
-/**
- * Content identity for a file, so a finding can reach across projects.
- *
- * A vendored library file is the same file in every repository that holds it,
- * whatever path each gives it. Anchoring to content as well as path means a
- * finding about it appears in all of them with no promotion step and no path
- * mapping -- reach a per-session checkpoint cannot have even in principle.
- *
- * The PATH anchor still drives staleness within a repo; this is additive.
- */
-export function contentAnchor(path, hash) {
-  if (!hash) return null;
-  let size = 0;
-  try {
-    size = statSync(path).size;
-  } catch {
-    return null;
-  }
-  // Size is included so two different files sharing a truncated digest do not
-  // collide into one identity.
-  return `content:${hash}:${size}`;
 }

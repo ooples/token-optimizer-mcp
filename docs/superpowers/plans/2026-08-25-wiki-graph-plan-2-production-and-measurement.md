@@ -1058,7 +1058,8 @@ injection join — it cannot compile against `master` until #315 merges.
 | 2 — Extend `tool-outcome` | **Complete through fix round 2.** `output` + `exit` on the event, `isError` read by `toolSucceeded` and `mutationSucceeded`. |
 | 3b — `rereadsByAnchor` | Not started. **Run before Task 3** (see ruling). |
 | 3 — The four extractors | Not started. Depends on 2 and 3b. |
-| 4, 5 | Not started. |
+| 4 | **Complete.** `derive` routes candidates through `selectForConsolidation` (budget 1000 tokens, `TOKEN_OPTIMIZER_DERIVE_BUDGET`) into `writeHarvested` as `ORIGIN_HARVESTED`. `contentAnchor` deleted (issue #319); allowlist 7 -> 5. Three defects fixed on the way: the scorer read `entry.summary` where every other layer writes `claim`, so the budget admitted everything; candidates anchored to the project ROOT, which `indexFile` cannot read, so storage would have been zero; and `derive`'s own evidence boilerplate said "flaky", which `irrecoverability` scores in its top tier. `derive` stays SYNC -- no import cycle, so the brief's async rewrite was unnecessary. See `task-4-report.md`. |
+| 5 | Not started. |
 | 6 — Layer 1 | Not started. |
 | 7 — Layer 2 | Not started. The heaviest task in the plan. |
 | 8 | Not started. Depends on 6 and 7. |

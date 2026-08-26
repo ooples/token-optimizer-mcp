@@ -101,12 +101,14 @@ const ALLOWED = new Map([
   // entries left this list at once, which is what wiring a whole feature looks
   // like -- and is why it was worth doing rather than annotating.
 
-  // CONSOLIDATION. forecast.mjs imports aggregateConsolidation from this module,
-  // so it is partly live -- but the selection, the ratio and the content anchor
-  // are not reached, meaning nothing ever decides WHAT to consolidate.
-  ['selectForConsolidation', 'UNWIRED: chooses what to promote into the graph; no caller decides when consolidation runs.'],
-  ['consolidationRatio', 'UNWIRED: reports what consolidation bought, and cannot report on a selection that never happens.'],
-  ['contentAnchor', 'UNWIRED: content-based anchoring, additive to path anchoring; no caller.'],
+  // CONSOLIDATION. Two entries left this list at once, and by opposite routes.
+  // selectForConsolidation is WIRED: derive.mjs runs every candidate through it
+  // before writeHarvested, so a session's storage is now bounded. contentAnchor
+  // was DELETED rather than left dormant -- the idea is preserved as issue #319,
+  // because a second anchor identity interacts with the one thing in this
+  // codebase that has already caused silent node-splitting, and "we might use it
+  // later" is precisely the reason this list is not allowed to hold.
+  ['consolidationRatio', 'UNWIRED: reports what consolidation bought. The selection it reports on now runs, but nothing stores the derivedCost it needs.'],
 
   // HALF A FEEDBACK LOOP. shouldKeepWarm and keepWarmDecision are reachable;
   // the outcome half that would tell them whether a refresh ever paid off is

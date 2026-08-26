@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   selectForConsolidation, irrecoverability, reuseProbability,
-  consolidationRatio, aggregateConsolidation, contentAnchor, costToRederive,
+  consolidationRatio, aggregateConsolidation, costToRederive,
 } from '../../hooks-core/consolidate.mjs';
 import { classifySituation, restorationPlan } from '../../hooks-core/restore.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
@@ -95,11 +95,18 @@ describe('selection is derived, with a floor for dead ends', () => {
   });
 
   test('decisions are on the floor too', () => {
+    // THE TWO SUMMARIES ARE THE SAME LENGTH, and the budget holds exactly one of
+    // them. The previous fixture gave the decision a much SHORTER summary than
+    // the finding, so the finding did not fit the budget at all and the decision
+    // was kept by ranking -- the test passed with the floor deleted. Equal carry
+    // cost is what makes this a test of the floor rather than of arithmetic: on
+    // rank alone the 80,000-token finding wins every time.
     const { kept } = selectForConsolidation(graph(), [
-      { type: 'finding', summary: 'expensive thing '.repeat(6), anchors: ['/a.ts'], tokensSpent: 80_000 },
-      { type: 'decision', summary: 'chose per-host budgets', anchors: ['/a.ts'], tokensSpent: 50 },
+      { type: 'finding', summary: 'an expensive analysis of the retry path', anchors: ['/a.ts'], tokensSpent: 80_000 },
+      { type: 'decision', summary: 'chose per-host retry budgets, not one', anchors: ['/a.ts'], tokensSpent: 50 },
     ], { budget: 10 });
 
+    expect(kept).toHaveLength(1);
     expect(kept.map((k) => k.type)).toContain('decision');
   });
 
@@ -134,31 +141,6 @@ describe('the consolidation ratio -- the metric that needs session instrumentati
     ]);
     expect(out.derived).toBe(12_000);
     expect(out.ratio).toBeGreaterThan(1);
-  });
-});
-
-describe('content anchors reach across projects', () => {
-  test('identical content yields the same anchor from different paths', () => {
-    // A vendored library file is the same file in every repo that holds it.
-    const a = join(workspace, 'a.ts');
-    const b = join(workspace, 'b.ts');
-    writeFileSync(a, 'export const x = 1;');
-    writeFileSync(b, 'export const x = 1;');
-
-    expect(contentAnchor(a, 'samehash')).toBe(contentAnchor(b, 'samehash'));
-  });
-
-  test('size is part of the identity, so a truncated digest cannot collide', () => {
-    const a = join(workspace, 'a.ts');
-    const b = join(workspace, 'b.ts');
-    writeFileSync(a, 'short');
-    writeFileSync(b, 'considerably longer content here');
-
-    expect(contentAnchor(a, 'samehash')).not.toBe(contentAnchor(b, 'samehash'));
-  });
-
-  test('an unreadable path yields no anchor rather than a wrong one', () => {
-    expect(contentAnchor(join(workspace, 'missing.ts'), 'hash')).toBeNull();
   });
 });
 
@@ -280,5 +262,32 @@ describe('scoring inputs are the ones the module claims to use', () => {
 
   test('an explicitly measured spend still wins over the evidence-size fallback', () => {
     expect(costToRederive({ summary: 'x', evidence: 'y', tokensSpent: 4242 })).toBe(4242);
+  });
+
+  test('scores the `claim` field, which is what every layer that stores a finding calls it', () => {
+    // THE MISMATCH WAS SILENT AND TOTAL. This module was written against an
+    // extractor producing `summary`; the graph node, `consolidationRatio` in this
+    // same file, and the renderer all call the text `claim`. So for a
+    // claim-shaped candidate `estimate(entry.summary)` was 0, `spent + 0 > budget`
+    // was never true, and the budget admitted EVERYTHING while reporting a tidy
+    // `tokens: 0`. A bound that cannot bind is worse than no bound.
+    const candidates = Array.from({ length: 30 }, (_, i) => ({
+      type: 'command', claim: `conclusion number ${i} with a reasonably long claim`,
+      anchors: ['/a.ts'], tokensSpent: 1000 * i,
+    }));
+    const out = selectForConsolidation(graph(), candidates, { budget: 40 });
+    expect(out.tokens).toBeGreaterThan(0);
+    expect(out.tokens).toBeLessThanOrEqual(40);
+    expect(out.kept.length).toBeLessThan(candidates.length);
+  });
+
+  test('irrecoverability reads a `claim` too, so the multiplier is not a constant', () => {
+    expect(irrecoverability({ claim: 'only fails intermittently under load' }))
+      .toBeGreaterThan(irrecoverability({ claim: 'the handler returns early' }));
+  });
+
+  test('the evidence-size fallback works off a `claim` when there is no evidence', () => {
+    expect(costToRederive({ type: 'command', claim: 'a claim with some length to it' }))
+      .toBeGreaterThan(0);
   });
 });
