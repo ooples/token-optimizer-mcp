@@ -421,9 +421,24 @@ describe('the standing-context panel', () => {
     expect(out.text).toMatch(/nothing to do/);
   });
 
-  test('says the actions are also in the queue, rather than looking duplicated', () => {
-    const out = renderAudit(dir, [], { standing: verdicts });
-    expect(out.text).toMatch(/also appear in the queue/);
+  test('claims the actions are in the queue ONLY when they are', () => {
+    // THIS TEST USED TO REQUIRE THE FALSE CLAIM, which review caught. Rendered
+    // with no findings, the queue prints "Nothing addressable found" -- and the
+    // panel still told the reader the actions "also appear in the queue at the
+    // top". Pointing somebody at a row that is not there is worse than silence.
+    const withoutQueue = renderAudit(dir, [], { standing: verdicts });
+    expect(withoutQueue.text).toMatch(/Nothing addressable found/);
+    expect(withoutQueue.text).not.toMatch(/also appear in the queue/);
+
+    // With the matching standing rows actually in the queue, the pointer is
+    // true and worth printing: the panel and the queue would otherwise read as
+    // two unrelated lists saying the same thing.
+    const withQueue = renderAudit(
+      dir,
+      [{ id: 'standing-fix', title: 'CLAUDE.md: the claim is provably stale', costPerSession: 4200 }],
+      { standing: verdicts, full: true }
+    );
+    expect(withQueue.text).toMatch(/also appear in the queue/);
   });
 
   test('omits the panel entirely when there is no standing context', () => {

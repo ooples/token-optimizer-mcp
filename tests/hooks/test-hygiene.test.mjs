@@ -76,6 +76,9 @@ function suitesConsultingTheHoldout(entryPoints) {
  */
 const PINS_THE_ARM = /TOKEN_OPTIMIZER_HOLDOUT\s*[:=]\s*['"`]/;
 
+/** The pin must be live code, not a commented-out one. */
+const pinsTheArm = (text) => PINS_THE_ARM.test(stripComments(text));
+
 describe('suites that consult the stratified holdout pin the arm', () => {
   const entryPoints = holdoutConsumingEntryPoints();
 
@@ -92,7 +95,7 @@ describe('suites that consult the stratified holdout pin the arm', () => {
 
   it('has no suite that calls one without pinning', () => {
     const unpinned = suitesConsultingTheHoldout(entryPoints)
-      .filter(({ text }) => !PINS_THE_ARM.test(text))
+      .filter(({ text }) => !pinsTheArm(text))
       .map(({ file }) => file);
 
     // If this fails: set TOKEN_OPTIMIZER_HOLDOUT in the suite's setup and
@@ -102,12 +105,16 @@ describe('suites that consult the stratified holdout pin the arm', () => {
     expect(unpinned).toEqual([]);
   });
 
-  it('would catch a suite that only mentions the convention in a comment', () => {
-    // The guard reads the raw text for the pin, so a suite could in principle
-    // satisfy it with a comment. Asserting the pattern's shape is cheap and
-    // stops the check being weakened into a documentation search.
-    expect(PINS_THE_ARM.test('// remember to set TOKEN_OPTIMIZER_HOLDOUT')).toBe(false);
-    expect(PINS_THE_ARM.test("process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';")).toBe(true);
-    expect(PINS_THE_ARM.test("env: { TOKEN_OPTIMIZER_HOLDOUT: '1' }")).toBe(true);
+  it('does not accept a commented-out pin', () => {
+    // The first version matched raw text, so a suite whose pin had been
+    // commented out during debugging still satisfied the guard -- and a
+    // commented-out pin is exactly the state that produces the flake this file
+    // exists to prevent. Prose alone never matched, because the pattern
+    // requires an assignment; a commented-out ASSIGNMENT did.
+    expect(pinsTheArm('// remember to set TOKEN_OPTIMIZER_HOLDOUT')).toBe(false);
+    expect(pinsTheArm("// process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';")).toBe(false);
+    expect(pinsTheArm("/* process.env.TOKEN_OPTIMIZER_HOLDOUT = '0'; */")).toBe(false);
+    expect(pinsTheArm("process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';")).toBe(true);
+    expect(pinsTheArm("env: { TOKEN_OPTIMIZER_HOLDOUT: '1' }")).toBe(true);
   });
 });

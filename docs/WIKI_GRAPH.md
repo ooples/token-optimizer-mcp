@@ -407,11 +407,22 @@ reader, or is deleted:
 | `clientTitle`, `kind: 'mcp-client'` | the doctor reports which clients actually handshaked |
 | `contentAnchor` | **deleted**, per this project's own rule about capabilities kept for later |
 
-One list remains: the reachability allowlist, at four entries, ratcheted to a
-ceiling that can only fall. All four are keep-warm and consolidation functions
-whose **producing action does not exist** — nothing in the repository performs a
-keep-warm ping, and nothing decides what to consolidate or when. That is
-verified rather than assumed, and it is why they are neither wired nor deleted:
-calling `recordRefresh` at the only site that exists would write refreshes that
-never happened into the ledger the keep-warm backstop reads, and fabricated
-evidence in a backstop is worse than a dead function.
+**The reachability allowlist is empty.** It held twenty-one entries when the
+detector was built, sixteen after the first round parked them with accurate
+descriptions, seven after Plan 1, and zero now. The last four were the hard
+ones, and each was held back for a while on a true statement — "the producing
+action does not exist" — until the producing action was built:
+
+| | Resolution |
+|---|---|
+| `selectForConsolidation` | Runs in the semantic harvest, so a session stores what a token budget admits instead of everything extracted. Fixing it first required fixing `consolidate.mjs`, whose halves disagreed about the field name: the selector read `entry.summary`, which no producer here emits, so wiring it naively would have priced every candidate at zero and dropped nothing. Live, green and inert is the same defect wearing a call site. |
+| `consolidationRatio` | Reported per finding by `/api/wiki/node` and shown in the dashboard detail view — the number this document opens on, previously computed for no finding anyone could look at. |
+| `recordRefresh` | The keep-warm decision is written to the ledger when `cache_audit` issues it. |
+| `recordRefreshOutcome` | Scored by `scoreOutstandingRefreshes`, which reads the event log to see whether a turn actually arrived inside the window the advice predicted. A refresh whose window is still open records **nothing** rather than guessing a miss — the signal needed no new instrumentation, it was in the log the whole time. |
+
+That last one closed a loop that could never turn. `tripwire` demands ten
+outcomes before it may have an opinion and no call site ever produced one, so it
+answered "only 0/10 refreshes observed" for the life of the project, and
+`keepWarmDecision` could not learn that its modelled hit rate was wrong. Between
+"the model says refresh" and "stop the feature entirely" there was nothing at
+all.

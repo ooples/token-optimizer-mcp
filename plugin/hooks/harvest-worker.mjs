@@ -25,10 +25,23 @@ import {
 } from './lib/harvest.mjs';
 import { writeHarvested } from './lib/harvest-write.mjs';
 import { record } from './lib/metrics.mjs';
-import { wikiDir, projectRootFor } from './lib/wiki.mjs';
+import { wikiDir, projectRootFor, load } from './lib/wiki.mjs';
 import { readArchive } from './lib/transcript.mjs';
 import { buildFeedbackDigest, validateLessons, LESSON_PROMPT } from './lib/lessons.mjs';
 import { ORIGIN_HARVESTED } from './lib/curate.mjs';
+import { selectForConsolidation } from './lib/consolidate.mjs';
+
+/**
+ * The token budget one session's harvest may add to the graph.
+ *
+ * #204 lists graph bloat as a named risk -- "the session-start index grows with
+ * the graph; ranking and eviction are required, not optional" -- and until now
+ * nothing bounded what a single harvest could store. 4,000 tokens is the
+ * selector's own default and roughly twenty-five findings at the size the
+ * extractor produces, which is far above any observed session's real yield; it
+ * is a ceiling against a pathological extraction, not a routine constraint.
+ */
+const CONSOLIDATION_BUDGET = 4000;
 
 /**
  * The files the digest says were touched.
@@ -90,7 +103,36 @@ async function main() {
   // that invents a plausible path cannot anchor a finding to it. The digest
   // lists them under a heading it writes itself; the full delta is raw
   // transcript and carries no such list, so it gets no restriction.
-  const findings = validate(raw, { knownFiles: full ? null : filesIn(digest) });
+  const validated = validate(raw, { knownFiles: full ? null : filesIn(digest) });
+
+  // BUDGETED SELECTION, not everything the model extracted.
+  //
+  // `selectForConsolidation` exists for exactly this and had no caller
+  // anywhere, so every harvested candidate was stored regardless of what it
+  // cost to derive, how hard it is to reproduce, or whether the graph can ever
+  // retrieve it -- which is the graph-bloat risk #204 lists as needing
+  // "ranking and eviction ... not optional". It keeps failures and decisions on
+  // a floor before ranking, encoding the design's judgement that dead ends are
+  // the highest-value kind: they exist nowhere in the source tree, so nothing
+  // else can ever recover them.
+  //
+  // The selection is RECORDED, not silent. A cap that drops work without
+  // saying so reads as "there was nothing more to find", which is the same
+  // dishonesty as a truncated report with no remainder line.
+  const graph = load(dir);
+  const selection = selectForConsolidation(graph, validated, { budget: CONSOLIDATION_BUDGET });
+  const findings = selection.kept;
+  if (selection.dropped > 0) {
+    record(dir, {
+      kind: 'harvest',
+      action: 'consolidation',
+      candidates: validated.length,
+      kept: findings.length,
+      dropped: selection.dropped,
+      tokens: selection.tokens,
+      budget: CONSOLIDATION_BUDGET,
+    });
+  }
 
   const written = writeHarvested(dir, findings, {
     sessionId: sessionId || null,

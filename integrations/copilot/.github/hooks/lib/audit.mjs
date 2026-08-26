@@ -374,7 +374,16 @@ export function renderAudit(
     // Indented to sit under its heading, blank lines left blank rather than
     // turned into trailing whitespace.
     for (const line of panel.split('\n')) body.push(line ? `  ${line}` : '');
-    if (standing.some((v) => v.actions?.length)) {
+    // ONLY IF THEY ACTUALLY DID. This pointed the reader at "the queue at the
+    // top" whenever any verdict carried an action -- including when the queue
+    // printed "Nothing addressable found", because a caller can render the
+    // panel with no findings at all, and the withholding rule can drop a
+    // standing row even when findings were passed. Telling someone to look at
+    // a row that is not there is worse than saying nothing.
+    const shownStandingIds = new Set(
+      shown.map((item) => item.id).filter((id) => typeof id === 'string' && id.startsWith('standing-'))
+    );
+    if (shownStandingIds.size) {
       body.push(
         '',
         '  The actions above also appear in the queue at the top, where they are priced and applyable.'

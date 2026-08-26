@@ -36,6 +36,28 @@ import { nodeId } from './wiki.mjs';
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
 
 /**
+ * A candidate's own words, whatever the producer called the field.
+ *
+ * THE SELECTOR AND THE RATIO DISAGREED ABOUT THIS, and the half that had no
+ * caller is the half that was wrong. `irrecoverability`, `costToRederive` and
+ * `selectForConsolidation` all read `entry.summary`; `consolidationRatio` and
+ * `aggregateConsolidation` read `finding.claim`. NO PRODUCER IN THIS REPOSITORY
+ * EMITS `summary` -- the semantic harvest, wiki_write and the evaluation
+ * harnesses all emit `claim`, and `validate()` in harvest.mjs rejects anything
+ * without one.
+ *
+ * That matters more than a rename. Wired naively, every candidate would have
+ * scored `tokens: estimate(undefined)` -- zero -- so the budget could never
+ * bind, nothing would ever be dropped, and the selector would have been live,
+ * green, and inert. A capability that runs and cannot affect its own output is
+ * the same defect as one that never runs, wearing a call site.
+ *
+ * `summary` is still accepted, because an external caller may pass it and
+ * breaking that to fix an internal disagreement would be gratuitous.
+ */
+const claimText = (entry) => entry?.claim || entry?.summary || '';
+
+/**
  * How hard something is to reproduce, independent of what it cost this time.
  *
  * Token cost alone understates the expensive cases. Reproducing a flaky failure
@@ -45,7 +67,7 @@ const estimate = (text) => Math.ceil(String(text || '').length / 4);
  * measurements, and pretending otherwise would be false precision.
  */
 export function irrecoverability(entry) {
-  const text = `${entry.summary || ''} ${entry.evidence || ''}`.toLowerCase();
+  const text = `${claimText(entry)} ${entry.evidence || ''}`.toLowerCase();
 
   // Anything derived from a non-deterministic or long-running observation.
   //
@@ -110,7 +132,7 @@ export function costToRederive(entry, previousAt) {
   // no-op. The only measured cost is `entry.tokensSpent`, which the extraction
   // site must supply; otherwise fall back to the size of the evidence, so a
   // conclusion drawn from a large investigation still outranks an aside.
-  return estimate(entry.evidence) * 4 || estimate(entry.summary) * 8;
+  return estimate(entry.evidence) * 4 || estimate(claimText(entry)) * 8;
 }
 
 /** Kinds that survive on the floor regardless of score. */
@@ -141,7 +163,7 @@ export function selectForConsolidation(graph, candidates, { budget = 4000 } = {}
     });
     const cost = costToRederive(entry, previousAt);
     const score = cost * irrecoverability(entry) * reuseProbability(graph, entry.anchorIds || anchors);
-    scored.push({ entry, score, cost, tokens: estimate(entry.summary) });
+    scored.push({ entry, score, cost, tokens: estimate(claimText(entry)) });
     previousAt = entry.at ?? previousAt;
   }
 
@@ -182,7 +204,7 @@ export function selectForConsolidation(graph, candidates, { budget = 4000 } = {}
  * FOR, in a way that "tokens saved" never quite is.
  */
 export function consolidationRatio(finding) {
-  const carry = estimate(finding.claim);
+  const carry = estimate(claimText(finding));
   const derived = finding.derivedCost || 0;
   if (!carry || !derived) return null;
   return derived / carry;
@@ -195,7 +217,7 @@ export function aggregateConsolidation(findings) {
   for (const finding of findings) {
     if (!finding.derivedCost) continue;
     derived += finding.derivedCost;
-    carry += estimate(finding.claim);
+    carry += estimate(claimText(finding));
   }
   return carry ? { derived, carry, ratio: derived / carry } : null;
 }

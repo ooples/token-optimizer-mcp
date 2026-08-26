@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
-import { checklist, probeClients } from '../../hooks-core/doctor.mjs';
+import { checklist, probeClients, probeGraph } from '../../hooks-core/doctor.mjs';
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
 import { record } from '../../hooks-core/metrics.mjs';
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
@@ -175,5 +175,54 @@ describe('the doctor reports which MCP clients actually connected', () => {
     expect(checks).toHaveLength(1);
     expect(checks[0].pass).toBe(true);
     expect(checks[0].detail).toMatch(/none yet/i);
+  });
+});
+
+describe('a half-removed install is not an intact one', () => {
+  it('fails when recorded files are gone, rather than passing on modified === 0', () => {
+    // FOUND IN REVIEW. verifyManifest reports three states -- intact, modified,
+    // missing -- and this check read two of them, branching only on
+    // `modified === 0`. A recorded file DELETED rather than edited left
+    // `modified` at zero, so a half-removed install reported PASS. The
+    // footprint made it visible (a missing file contributes no bytes) but a
+    // visible detail beside a green tick is still a green tick.
+    const { root, files } = givenScriptInstall(3, 2048);
+    for (const f of files) rmSync(f, { force: true });
+
+    const check = manifestCheck(root);
+    expect(check.pass).toBe(false);
+    expect(check.detail).toMatch(/3 of 3 recorded file\(s\) are gone/);
+    expect(check.remedy).toBeTruthy();
+  });
+
+  it('still passes when every recorded file is present', () => {
+    const { root } = givenScriptInstall(2, 1024);
+    expect(manifestCheck(root).pass).toBe(true);
+  });
+
+  it('passes, with a note, when a file was edited rather than removed', () => {
+    // An edited file is the user's now and uninstall must leave it alone --
+    // that is a healthy state, not a broken one.
+    const { root, files } = givenScriptInstall(2, 1024);
+    writeFileSync(files[0], 'edited by the user');
+    const check = manifestCheck(root);
+    expect(check.pass).toBe(true);
+    expect(check.detail).toMatch(/edited since install/);
+  });
+});
+
+describe('the client probe runs on every platform', () => {
+  it('is included by probeGraph even on the Windows path', () => {
+    // FOUND IN REVIEW, and it is this branch's own disease a third time:
+    // probeClients was appended AFTER probeGraph's Windows early-return, so on
+    // Windows it had a call site and could never run. The reachability guard
+    // cannot see the difference between a reference and an execution -- which
+    // is the limitation this suite already documents one describe block up.
+    const graphDir = join(fixture, 'platform-graph');
+    mkdirSync(graphDir, { recursive: true });
+    record(graphDir, { kind: 'mcp-client', client: 'codex', clientTitle: 'Codex' });
+
+    const checks = probeGraph({ dir: graphDir });
+    expect(checks.some((c: { name: string }) => /MCP clients/i.test(c.name))).toBe(true);
   });
 });

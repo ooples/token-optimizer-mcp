@@ -14,6 +14,13 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
+/** Characters written by code point, so no escape in this file is load-bearing. */
+const BACKSLASH = String.fromCharCode(92);
+const NEWLINE = String.fromCharCode(10);
+const DQUOTE = String.fromCharCode(34);
+const SQUOTE = String.fromCharCode(39);
+const BACKTICK = String.fromCharCode(96);
+
 /**
  * Where DECLARATIONS live: the live hook path only.
  *
@@ -109,11 +116,67 @@ export function readSources(repo, dirs) {
  * appears in a string is the PERMISSIVE direction, and permissive is merely
  * useless where strict fails CI on working code and gets deleted. Comments
  * only. The line stays where the measurement put it.
+ *
+ * WHAT IS NOT NEGOTIABLE IS THE DIRECTION, and the regex version got that
+ * wrong in one case that review caught: a string containing a comment opener --
+ * `const label = "a // b"; realCall();` -- truncated the line at the quoted
+ * `//` and took `realCall()` with it, reporting a live function as an orphan.
+ * That is the strict direction, on working code, which this guard must never be.
+ *
+ * So the scanner is back, with one difference that is the whole point: QUOTE
+ * STATE RESETS AT EVERY NEWLINE. The second attempt failed because a regex
+ * literal desynchronised it for the remainder of the FILE; bounded to a line,
+ * the same mistake costs one line. And every way the tracker can be wrong is
+ * permissive, because its state is only ever used to DECLINE to strip: get it
+ * wrong and prose survives into the scan, which over-counts. It can no longer
+ * delete code.
  */
 export function stripComments(text) {
-  return String(text)
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')     // block comments, including docblocks
-    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 '); // line comments, sparing the // in a URL
+  const source = String(text);
+  let out = '';
+  let inBlock = false;
+  // Quote state is tracked WITHIN A LINE ONLY, and reset at every newline.
+  // That bound is the whole reason this is safe where the full-file scanner was
+  // not: a regex literal containing a quote desynchronises the tracker for the
+  // rest of ONE line instead of the rest of the file. And every way it can be
+  // wrong is permissive -- quote state is only ever used to DECLINE to strip,
+  // so mis-tracking leaves prose in the scan (over-counting) and never removes
+  // code (under-counting).
+  let quote = null;
+
+  for (let i = 0; i < source.length; i += 1) {
+    const c = source[i];
+    const next = source[i + 1];
+
+    if (c === NEWLINE) { quote = null; out += c; continue; }
+
+    if (inBlock) {
+      if (c === '*' && next === '/') { inBlock = false; i += 1; out += '  '; continue; }
+      out += ' ';
+      continue;
+    }
+
+    if (quote) {
+      // An escape consumes the next character, so an escaped quote inside a
+      // string does not close it early.
+      if (c === BACKSLASH) { out += source.slice(i, i + 2); i += 1; continue; }
+      if (c === quote) quote = null;
+      out += c;
+      continue;
+    }
+
+    if (c === DQUOTE || c === SQUOTE || c === BACKTICK) { quote = c; out += c; continue; }
+
+    if (c === '/' && next === '/') {
+      while (i < source.length && source[i] !== NEWLINE) { out += ' '; i += 1; }
+      i -= 1;
+      continue;
+    }
+    if (c === '/' && next === '*') { inBlock = true; i += 1; out += '  '; continue; }
+
+    out += c;
+  }
+  return out;
 }
 
 /**

@@ -136,8 +136,37 @@ export async function cacheAudit(): Promise<{
   });
   lines.push('', `Keep-warm: ${decision.action} -- ${decision.reason}`);
 
+  // AND THE DECISION IS RECORDED, which is what closes the loop.
+  //
+  // `recordRefresh` and `recordRefreshOutcome` had no call site anywhere, so
+  // `tripwire` could never reach the ten outcomes it demands before it is
+  // allowed an opinion -- it returned "only 0/10 refreshes observed" for the
+  // life of the project, and `keepWarmDecision` could never learn that its
+  // modelled hit rate was wrong. A backstop that cannot reach its own threshold
+  // is not a backstop.
+  //
+  // WHAT IS RECORDED IS THE ADVICE, and the ledger means exactly that: this
+  // tool advises, the user acts. `scoreOutstandingRefreshes` then reads the
+  // event log to see whether a turn actually arrived inside the window this
+  // advice predicted, so what accumulates is "was the recommendation right",
+  // which is the question the tripwire and the decision both need answered.
+  if (decision.action === 'refresh') {
+    try {
+      mods.keepwarm.recordRefresh(dir, {
+        tier: decision.tier,
+        prefixTokens: health?.prefixTokens,
+        expectedValue: decision.expectedValue,
+      });
+    } catch {
+      /* the ledger is evidence, never a reason to fail the report */
+    }
+  }
+
   const trip = mods.keepwarm.tripwire(dir);
   if (trip.tripped) lines.push(`  tripwire: ${trip.reason}`);
+  else if (trip.observed > 0) {
+    lines.push(`  ledger: ${trip.reason}`);
+  }
 
   return say(lines.join('\n'));
 }

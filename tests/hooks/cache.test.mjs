@@ -30,11 +30,15 @@ import {
   ttlTier,
   tripwire,
   shouldKeepWarm,
+  recordRefresh,
   recordRefreshOutcome,
+  scoreOutstandingRefreshes,
+  observedHitRate,
+  OBSERVATION_FLOOR,
   TIERS,
   TRIPWIRE_MIN,
 } from '../../hooks-core/keepwarm.mjs';
-import { record, readMetrics } from '../../hooks-core/metrics.mjs';
+import { record, readMetrics, readBalance } from '../../hooks-core/metrics.mjs';
 import { policyText } from '../../hooks-core/adapter.mjs';
 import { sessionContext } from '../../hooks-core/inject.mjs';
 import { putNode } from '../../hooks-core/wiki.mjs';
@@ -724,5 +728,115 @@ describe('SessionStart context is assembled in cache order', () => {
     } catch {
       /* windows keeps handles open briefly */
     }
+  });
+});
+
+describe('the keep-warm loop actually closes', () => {
+  // `recordRefresh` and `recordRefreshOutcome` had no call site anywhere, so
+  // `tripwire` returned "only 0/10 refreshes observed" for the life of the
+  // project and `keepWarmDecision` could never learn that its modelled hit rate
+  // was wrong. The missing piece was never a new sensor: the event log already
+  // records when every turn happened, so whether a refresh's window was used is
+  // recoverable from data that was there the whole time.
+  let graph;
+
+  beforeEach(() => {
+    graph = mkdtempSync(join(tmpdir(), 'kw-loop-'));
+  });
+
+  afterEach(() => {
+    rmSync(graph, { recursive: true, force: true });
+  });
+
+  const fiveMinutes = TIERS[0].ms;
+
+  test('a turn inside the window scores as a hit', () => {
+    const at = 1_000_000;
+    recordRefresh(graph, { tier: '5m', prefixTokens: 20000, expectedValue: 1 });
+    const refreshes = readBalance(graph).filter((e) => e.action === 'refresh');
+    // Drive the timeline explicitly rather than depending on wall-clock.
+    const events = [{ kind: 'read', at: refreshes[0].at + fiveMinutes / 2 }];
+
+    const { recorded } = scoreOutstandingRefreshes(graph, { events, now: at + fiveMinutes * 10 });
+    expect(recorded).toBe(1);
+    const outcome = readBalance(graph).find((e) => e.action === 'outcome');
+    expect(outcome.hit).toBe(true);
+  });
+
+  test('a turn after the window scores as a miss', () => {
+    recordRefresh(graph, { tier: '5m', prefixTokens: 20000, expectedValue: 1 });
+    const refreshAt = readBalance(graph).find((e) => e.action === 'refresh').at;
+    const events = [{ kind: 'read', at: refreshAt + fiveMinutes * 3 }];
+
+    scoreOutstandingRefreshes(graph, { events, now: refreshAt + fiveMinutes * 10 });
+    expect(readBalance(graph).find((e) => e.action === 'outcome').hit).toBe(false);
+  });
+
+  test('a window that has not closed yet records NOTHING, rather than guessing a miss', () => {
+    // Plan 2's own instruction, and the important one: scoring an open window
+    // as a miss would drive the tripwire negative on the newest and least
+    // informative records.
+    recordRefresh(graph, { tier: '5m', prefixTokens: 20000, expectedValue: 1 });
+    const refreshAt = readBalance(graph).find((e) => e.action === 'refresh').at;
+
+    const { recorded, outstanding } = scoreOutstandingRefreshes(graph, {
+      events: [],
+      now: refreshAt + fiveMinutes / 2,
+    });
+    expect(outstanding).toBe(1);
+    expect(recorded).toBe(0);
+    expect(readBalance(graph).some((e) => e.action === 'outcome')).toBe(false);
+  });
+
+  test('a closed window with no turn at all is an observed miss', () => {
+    recordRefresh(graph, { tier: '5m', prefixTokens: 20000, expectedValue: 1 });
+    const refreshAt = readBalance(graph).find((e) => e.action === 'refresh').at;
+
+    scoreOutstandingRefreshes(graph, { events: [], now: refreshAt + fiveMinutes * 2 });
+    expect(readBalance(graph).find((e) => e.action === 'outcome').hit).toBe(false);
+  });
+
+  test('scoring is idempotent, so a second drain does not double-count', () => {
+    recordRefresh(graph, { tier: '5m', prefixTokens: 20000, expectedValue: 1 });
+    const refreshAt = readBalance(graph).find((e) => e.action === 'refresh').at;
+    const opts = { events: [], now: refreshAt + fiveMinutes * 2 };
+
+    scoreOutstandingRefreshes(graph, opts);
+    const second = scoreOutstandingRefreshes(graph, { ...opts, outcomes: readBalance(graph) });
+    expect(second.recorded).toBe(0);
+    expect(readBalance(graph).filter((e) => e.action === 'outcome')).toHaveLength(1);
+  });
+
+  test('the observed hit rate stays null below the floor, then reports', () => {
+    for (let i = 0; i < OBSERVATION_FLOOR - 1; i++) {
+      recordRefreshOutcome(graph, { tier: '5m', prefixTokens: 20000, hit: false });
+    }
+    expect(observedHitRate(graph, { tier: '5m' })).toBeNull();
+
+    recordRefreshOutcome(graph, { tier: '5m', prefixTokens: 20000, hit: false });
+    const observed = observedHitRate(graph, { tier: '5m' });
+    expect(observed.observations).toBe(OBSERVATION_FLOOR);
+    expect(observed.rate).toBe(0);
+  });
+
+  test('an observed hit rate of zero overturns a model that says refresh', () => {
+    // THE POINT OF THE WHOLE LOOP. Before this, refreshes that bought nothing
+    // kept being recommended right up to the moment the tripwire cut the entire
+    // feature off -- there was nothing between "the model says yes" and "stop".
+    const gaps = { probabilityWithin: (ms) => (ms > TIERS[0].ms ? 1 : 0) };
+    const modelled = keepWarmDecision({ prefixTokens: 20000, gaps });
+    expect(modelled.action).toBe('refresh');
+    expect(modelled.basis).toMatch(/modelled/);
+
+    const learned = keepWarmDecision({
+      prefixTokens: 20000,
+      gaps,
+      observed: { observations: 10, rate: 0 },
+    });
+    expect(learned.action).toBe('skip');
+    expect(learned.basis).toMatch(/measured over 10/);
+    // The model's own number is still reported, so the disagreement is visible
+    // rather than silently overwritten.
+    expect(learned.modelledProbability).toBe(1);
   });
 });

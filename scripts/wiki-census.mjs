@@ -18,7 +18,7 @@
  * Run: npm run wiki:census [graph-dir]
  */
 
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -35,18 +35,36 @@ const dir =
  * `query` events means they ran and that capability did not. Collapsing those
  * into a single 0 would throw away the distinction the reader needs most.
  */
+const MAX = 32 * 1024 * 1024;
+
 function count(file, pattern) {
   const path = join(dir, file);
   if (!existsSync(path)) return null;
   try {
-    // Bounded: a mature graph's firehose is tens of megabytes and this is a
-    // diagnostic, not a batch job.
     const { size } = statSync(path);
-    const MAX = 32 * 1024 * 1024;
-    if (size > MAX) {
-      return { truncated: true, n: (readFileSync(path, 'utf8').slice(-MAX).match(pattern) || []).length };
+    if (size <= MAX) {
+      return { truncated: false, n: (readFileSync(path, 'utf8').match(pattern) || []).length };
     }
-    return { truncated: false, n: (readFileSync(path, 'utf8').match(pattern) || []).length };
+
+    // SEEK TO THE TAIL RATHER THAN DECODE THE WHOLE FILE. The first version
+    // read the file with `readFileSync(path, 'utf8')` and then took
+    // `.slice(-MAX)`, which bounds what is KEPT and nothing else -- the whole
+    // log is loaded and decoded to UTF-8 first, so a 64 MiB firehose costs 64
+    // MiB of string before a single byte is discarded. `MAX` has to bound the
+    // read to bound the memory. metrics.mjs's own reader already does it this
+    // way, for the same reason.
+    const fd = openSync(path, 'r');
+    try {
+      const buffer = Buffer.allocUnsafe(MAX);
+      const read = readSync(fd, buffer, 0, MAX, size - MAX);
+      // A multi-byte character may be cut in half at the seek point; the
+      // patterns here are ASCII, so a replacement character at the very start
+      // costs nothing, and the alternative is scanning for a boundary.
+      const text = buffer.subarray(0, read).toString('utf8');
+      return { truncated: true, n: (text.match(pattern) || []).length };
+    } finally {
+      closeSync(fd);
+    }
   } catch {
     return null;
   }

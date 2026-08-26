@@ -996,6 +996,11 @@ function showDetail(node) {
       <dt>Evidence</dt><dd>${escapeHtml(node.evidence || 'legacy finding: unspecified')}</dd>
       <dt>Invalidated by</dt><dd>${escapeHtml((node.invalidators || []).join('; ') || 'anchor changes')}</dd>
       <dt>Status</dt><dd>${node.stale ? '⚠ stale' : 'current'}</dd>
+      ${
+        node.consolidationRatio
+          ? `<dt>Worth carrying</dt><dd class="wiki-figure">${escapeHtml(String(node.consolidationRatio))}× cheaper to keep than to re-derive</dd>`
+          : ''
+      }
     </dl>
     ${node.snapshot ? `<div class="wiki-diff">${escapeHtml(node.snapshot.slice(0, 2000))}</div>` : ''}
     ${

@@ -108,7 +108,7 @@ export function gapDistribution(dir, { events = readMetrics(dir) } = {}) {
  * Returns the arithmetic as well as the verdict, because a refusal to refresh
  * that cannot be checked is indistinguishable from a bug.
  */
-export function keepWarmDecision({ prefixTokens, gaps, tier = TIERS[0] }) {
+export function keepWarmDecision({ prefixTokens, gaps, tier = TIERS[0], observed = null }) {
   if (!prefixTokens || !gaps) {
     return { action: 'unknown', reason: 'no gap distribution yet -- needs a few sessions of history' };
   }
@@ -122,21 +122,42 @@ export function keepWarmDecision({ prefixTokens, gaps, tier = TIERS[0] }) {
   // The ping only earns anything in the window where the entry WOULD have
   // expired but the next turn still arrives: before the TTL it was already
   // warm, and long after it, one ping does not reach.
-  const probability = Math.max(0, gaps.probabilityWithin(tier.ms * 2) - gaps.probabilityWithin(tier.ms));
+  const modelled = Math.max(0, gaps.probabilityWithin(tier.ms * 2) - gaps.probabilityWithin(tier.ms));
+
+  // MEASURED BEATS MODELLED, once there is enough of it.
+  //
+  // The module header already commits to this -- "an expected-value decision is
+  // only as good as the distribution it was fitted to, and distributions
+  // shift" -- and the tripwire underneath was the only thing acting on it, as
+  // an all-or-nothing kill switch. Between "the model says refresh" and "stop
+  // entirely" there was nothing, because the observed hit rate was never
+  // computed: both recording halves had no call site, so ten refreshes that
+  // bought nothing would keep recommending refresh right up to the moment the
+  // tripwire cut the whole feature off.
+  //
+  // Below OBSERVATION_FLOOR this stays null and the model is used unchanged; a
+  // handful of samples would swing the decision harder than the distribution
+  // they replace.
+  const probability = observed ? observed.rate : modelled;
   const savingIfUsed = prefixTokens * (tier.writeMultiplier - READ_MULTIPLIER);
   const ev = probability * savingIfUsed - costOfPing;
+  const basis = observed
+    ? `measured over ${observed.observations} refreshes`
+    : 'modelled from the gap distribution';
 
   return {
     action: ev > 0 ? 'refresh' : 'skip',
     tier: tier.name,
     probability,
+    modelledProbability: modelled,
+    basis,
     savingIfUsed: Math.round(savingIfUsed),
     costOfPing: Math.round(costOfPing),
     expectedValue: Math.round(ev),
     reason: ev > 0
-      ? `${Math.round(probability * 100)}% of gaps land in the window one ${tier.name} refresh covers; ` +
+      ? `${Math.round(probability * 100)}% of gaps land in the window one ${tier.name} refresh covers (${basis}); ` +
         `expected gain ${Math.round(ev).toLocaleString()} tokens`
-      : `only ${Math.round(probability * 100)}% of gaps land in the window a ${tier.name} refresh covers; ` +
+      : `only ${Math.round(probability * 100)}% of gaps land in the window a ${tier.name} refresh covers (${basis}); ` +
         `expected loss ${Math.abs(Math.round(ev)).toLocaleString()} tokens`,
   };
 }
@@ -192,9 +213,84 @@ export function ttlTier({ prefixTokens, gaps, turnsPerSession = DEFAULT_TURNS })
   };
 }
 
+/** Observations of a tier before its measured hit rate may override the model. */
+export const OBSERVATION_FLOOR = 5;
+
 /** Records a refresh so its outcome can be scored. */
 export function recordRefresh(dir, { tier, prefixTokens, expectedValue }) {
   record(dir, { kind: 'keepwarm', action: 'refresh', tier, prefixTokens, expectedValue });
+}
+
+/**
+ * Scores every refresh whose window has since resolved.
+ *
+ * THE MISSING HALF, and it was missing because nobody could see where the
+ * signal would come from. `recordRefreshOutcome` needs to know whether a real
+ * turn arrived before the entry expired -- and that is not a thing anyone has
+ * to instrument, because the event log already records when every turn
+ * happened. The answer was in the data the whole time.
+ *
+ * For each unscored refresh at time T on a tier with TTL `ms`:
+ *
+ *   - a later event within `ms`            -> HIT, observed
+ *   - a later event after `ms`             -> MISS, observed
+ *   - no later event, and `now - T > ms`   -> MISS, observed: the window has
+ *                                             demonstrably closed unused
+ *   - no later event, window still open    -> NOTHING RECORDED
+ *
+ * That last line is the important one and it is Plan 2's own instruction: "if
+ * no signal is available for a tier, record nothing rather than guessing
+ * `hit: false`". A refresh whose window has not closed yet is not a miss, and
+ * scoring it as one would drive the tripwire negative on the newest and least
+ * informative records.
+ *
+ * DRAINED AT READ TIME, which is the pattern this codebase already uses for
+ * staleness: the producer cannot know the outcome at the moment it acts, so the
+ * next reader resolves what has become knowable since.
+ */
+export function scoreOutstandingRefreshes(dir, { events = readMetrics(dir), outcomes = readBalance(dir), now = Date.now() } = {}) {
+  const keepwarm = outcomes.filter((e) => e.kind === 'keepwarm');
+  const refreshes = keepwarm.filter((e) => e.action === 'refresh').sort((a, b) => (a.at || 0) - (b.at || 0));
+  const scored = keepwarm.filter((e) => e.action === 'outcome').length;
+
+  // Refreshes are scored oldest-first and one outcome belongs to one refresh,
+  // so everything past the number already scored is outstanding. Pairing by
+  // timestamp instead would double-count two refreshes recorded in the same
+  // millisecond, which is reachable: a tool run twice in a loop.
+  const outstanding = refreshes.slice(scored);
+  const timeline = events.map((e) => Number(e.at) || 0).filter(Boolean).sort((a, b) => a - b);
+
+  let recorded = 0;
+  for (const refresh of outstanding) {
+    const at = Number(refresh.at) || 0;
+    if (!at) continue;
+    const tierSpec = TIERS.find((t) => t.name === refresh.tier) || TIERS[0];
+    const next = timeline.find((t) => t > at);
+
+    let hit;
+    if (next !== undefined) hit = next - at <= tierSpec.ms;
+    else if (now - at > tierSpec.ms) hit = false;
+    else continue; // window still open: not yet knowable
+
+    recordRefreshOutcome(dir, { tier: refresh.tier, prefixTokens: refresh.prefixTokens, hit });
+    recorded += 1;
+  }
+  return { outstanding: outstanding.length, recorded };
+}
+
+/**
+ * The measured hit rate for a tier, or null below the observation floor.
+ *
+ * Null rather than a small-sample number, because the caller substitutes it for
+ * a modelled probability and three observations would swing the decision harder
+ * than the model they replace.
+ */
+export function observedHitRate(dir, { tier, outcomes = readBalance(dir) } = {}) {
+  const relevant = outcomes.filter(
+    (e) => e.kind === 'keepwarm' && e.action === 'outcome' && (!tier || e.tier === tier)
+  );
+  if (relevant.length < OBSERVATION_FLOOR) return null;
+  return { observations: relevant.length, rate: relevant.filter((e) => e.hit).length / relevant.length };
 }
 
 /**
@@ -274,6 +370,18 @@ export function shouldKeepWarm(dir, {
   // was chosen was wrong for one of them.
   outcomes = readBalance(dir),
 } = {}) {
+  // DRAIN BEFORE DECIDING. Anything whose window has closed since the last call
+  // becomes evidence now, so the decision below and the tripwire above both see
+  // the most that is currently knowable -- the same read-time drain the
+  // staleness path uses, and for the same reason: the producer cannot know the
+  // outcome at the moment it acts.
+  try {
+    scoreOutstandingRefreshes(dir, { events, outcomes });
+    outcomes = readBalance(dir);
+  } catch {
+    /* scoring is evidence, never a reason to refuse a decision */
+  }
+
   const trip = tripwire(dir, { events: outcomes });
   if (trip.tripped) return { action: 'skip', reason: trip.reason, trippedWire: true };
 
@@ -287,7 +395,11 @@ export function shouldKeepWarm(dir, {
     // refusal justified by a GAIN: `{ action: 'skip', reason: '...expected gain 130 tokens' }`.
     // This module's own docstring says a refusal that cannot be checked is indistinguishable from
     // a bug; one that contradicts itself is worse.
-    const decision = keepWarmDecision({ prefixTokens, gaps });
+    const decision = keepWarmDecision({
+      prefixTokens,
+      gaps,
+      observed: observedHitRate(dir, { tier: TIERS[0].name, outcomes }),
+    });
     if (decision.action === 'refresh') return decision;
     return { action: decision.action === 'unknown' ? 'unknown' : 'skip', reason: decision.reason };
   }

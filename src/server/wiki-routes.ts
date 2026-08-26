@@ -35,6 +35,7 @@ interface GraphModules {
   capabilities: any;
   projects: any;
   lexical: any;
+  consolidate: any;
 }
 
 let cached: GraphModules | null = null;
@@ -42,16 +43,25 @@ let cached: GraphModules | null = null;
 async function modules(): Promise<GraphModules | null> {
   if (cached) return cached;
   try {
-    const [wiki, curate, metrics, staleness, capabilities, projects, lexical] =
-      await Promise.all([
-        import(coreUrl('wiki.mjs')),
-        import(coreUrl('curate.mjs')),
-        import(coreUrl('metrics.mjs')),
-        import(coreUrl('staleness.mjs')),
-        import(coreUrl('capabilities.mjs')),
-        import(coreUrl('projects.mjs')),
-        import(coreUrl('lexical.mjs')),
-      ]);
+    const [
+      wiki,
+      curate,
+      metrics,
+      staleness,
+      capabilities,
+      projects,
+      lexical,
+      consolidate,
+    ] = await Promise.all([
+      import(coreUrl('wiki.mjs')),
+      import(coreUrl('curate.mjs')),
+      import(coreUrl('metrics.mjs')),
+      import(coreUrl('staleness.mjs')),
+      import(coreUrl('capabilities.mjs')),
+      import(coreUrl('projects.mjs')),
+      import(coreUrl('lexical.mjs')),
+      import(coreUrl('consolidate.mjs')),
+    ]);
     cached = {
       wiki,
       curate,
@@ -60,6 +70,7 @@ async function modules(): Promise<GraphModules | null> {
       capabilities,
       projects,
       lexical,
+      consolidate,
     };
     return cached;
   } catch {
@@ -534,10 +545,20 @@ export function registerWikiRoutes(app: Express): void {
 
       // Provenance: which task established this, and from what. "Why do you
       // believe this?" is the question a knowledge graph has to answer.
+      // WHAT THIS FINDING SAVED, which is the whole premise stated per finding.
+      // #204 opens on it: "A finding costs ~150 tokens to carry. Re-deriving it
+      // costs 5k-50k." `consolidationRatio` computes exactly that number and
+      // had no caller anywhere, so the claim the product is built on was
+      // reported for no single finding a user could look at. Present only when
+      // the finding carries a measured derivation cost -- an unmeasured one
+      // yields null rather than a flattering guess.
+      const ratio = mods.consolidate.consolidationRatio(node);
+
       return res.json({
         node: {
           ...summarise(node, source),
           snapshot: node.snapshot ? node.snapshot.slice(0, 4000) : undefined,
+          ...(ratio ? { consolidationRatio: Math.round(ratio * 10) / 10 } : {}),
         },
         edges: edges.map((e: any) => ({
           from: qualifiedId(source, e.from),

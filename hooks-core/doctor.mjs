@@ -384,11 +384,23 @@ export function checklist({ root, settingsPath, install }) {
       // no longer exist, since a missing file contributes zero bytes -- was
       // computed nowhere and shown to no one.
       const footprint = describeBytes(manifestSize(manifest));
-      checks.push(verified.modified === 0
-        ? ok('installed files intact', `${verified.intact} file(s), ${footprint}, match the install manifest`)
-        : ok('installed files intact', `${verified.modified} of ${verified.intact + verified.modified} file(s) ` +
+      // MISSING IS NOT INTACT, and branching on `modified` alone said it was.
+      // verifyManifest reports three states and this read two of them: a
+      // recorded file DELETED rather than edited left `modified === 0`, so a
+      // half-removed install passed as healthy. The footprint above is what
+      // makes it visible -- a missing file contributes zero bytes -- but a
+      // visible detail beside a PASS is still a PASS.
+      if (verified.missing > 0) {
+        checks.push(bad('installed files intact',
+          `${verified.missing} of ${verified.files.length} recorded file(s) are gone (${footprint} still on disk)`,
+          'reinstall the package to restore them, or run the uninstaller to clear the manifest'));
+      } else if (verified.modified === 0) {
+        checks.push(ok('installed files intact', `${verified.intact} file(s), ${footprint}, match the install manifest`));
+      } else {
+        checks.push(ok('installed files intact', `${verified.modified} of ${verified.intact + verified.modified} file(s) ` +
           `(${footprint} recorded) edited since install -- ` +
           'uninstall will leave those alone rather than destroy your changes'));
+      }
     } else {
       checks.push(bad('install manifest present', 'no record of what was installed',
         'harmless if you installed manually; reinstall to get a removable, verifiable record'));
@@ -536,9 +548,16 @@ export function probeGraph({ dir }) {
   // the bits read back as world-readable regardless, so failing there would be
   // reporting a platform property as a broken install: a false alarm that
   // teaches people to ignore the doctor.
+  // BEFORE THE PLATFORM RETURN, and this is exactly the defect this branch
+  // exists to close: the client probe was appended after `probeGraph`'s
+  // Windows early-return, so on Windows it had a call site and never ran. A
+  // reference that cannot execute is what the reachability guard cannot see.
+  const clients = probeClients({ dir });
+
   if (process.platform === 'win32') {
     checks.push(ok('graph directory is private',
       'POSIX modes are not enforced on Windows; the directory inherits its parent ACL'));
+    checks.push(...clients);
     return checks;
   }
 
@@ -552,7 +571,7 @@ export function probeGraph({ dir }) {
     checks.push(ok('graph directory is private', 'mode could not be read on this filesystem'));
   }
 
-  checks.push(...probeClients({ dir }));
+  checks.push(...clients);
   return checks;
 }
 

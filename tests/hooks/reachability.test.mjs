@@ -94,31 +94,29 @@ const ALLOWED = new Map([
   // only fall, and refuses any entry that is neither one of these five nor
   // genuine public API.
 
-  // THE FOUR THAT REMAIN HAVE NO PRODUCING ACTION TO ATTACH TO, and that is a
-  // measured statement rather than a deferral. Each was checked against the
-  // codebase before being left here.
+  // NOTHING IS LEFT, and the last four did not leave by being re-described.
   //
-  // CONSOLIDATION. forecast.mjs calls aggregateConsolidation, so the module is
-  // partly live -- but `grep` finds no caller anywhere that decides WHAT to
-  // consolidate or WHEN a consolidation pass runs. `selectForConsolidation`
-  // chooses candidates for a pass that does not exist; `consolidationRatio`
-  // reports what that pass bought and would return null forever without it.
-  // Plan 2's derive.mjs, running at Stop, is that pass. Wiring either here
-  // would mean building it twice.
-  ['selectForConsolidation', 'UNWIRED, PLAN 2 TASK 4: chooses what to promote into the graph; verified -- no caller anywhere decides when a consolidation pass runs.'],
-  ['consolidationRatio', 'UNWIRED, PLAN 2 TASK 8: reports what consolidation bought, and cannot report on a selection that never happens.'],
-
-  // HALF A FEEDBACK LOOP, and the missing half is an ACTION, not a reader.
-  // shouldKeepWarm is called by cache-tool.ts and prints its verdict; nothing
-  // in this repository ever performs a keep-warm ping. So `recordRefresh`
-  // records an event that never occurs, and calling it at the DECISION point --
-  // the only place a caller exists today -- would write refreshes that never
-  // happened into the ledger `tripwire` reads to decide whether keep-warm is
-  // losing money. Fabricated evidence in a backstop is worse than a dead
-  // function, so these stay until the refresh itself exists (Plan 2 Task 9).
-  ['recordRefresh', 'UNWIRED, PLAN 2 TASK 9: records a keep-warm refresh; verified -- nothing in the repository performs one, so a caller would fabricate the event.'],
-  ['recordRefreshOutcome', 'UNWIRED, PLAN 2 TASK 9: scores whether a refresh paid off; same missing producer, and it feeds the tripwire ledger.'],
-
+  // They were held here for a stated reason -- "the producing action does not
+  // exist" -- which was true and was still an excuse, because the producing
+  // action was the work. All four now have one:
+  //
+  //   selectForConsolidation  runs in the semantic harvest, so what a session
+  //     stores is chosen under a token budget instead of stored wholesale.
+  //     Fixing it also required fixing consolidate.mjs, whose two halves
+  //     disagreed about the field name: the selector read `entry.summary`,
+  //     which NO producer in this repository emits, so wiring it naively would
+  //     have priced every candidate at zero tokens and dropped nothing. Live,
+  //     green and inert is the same defect wearing a call site.
+  //   consolidationRatio      reported per finding by /api/wiki/node and shown
+  //     in the dashboard detail view -- the number #204 opens on, which was
+  //     computed for no finding anybody could look at.
+  //   recordRefresh           the keep-warm decision is written to the ledger
+  //     when cache_audit issues it.
+  //   recordRefreshOutcome    scored from the event log by
+  //     scoreOutstandingRefreshes, which resolves whether a turn actually
+  //     arrived inside the window the advice predicted. The signal needed no
+  //     new instrumentation; it was in the log the whole time.
+  //
   // ------------------------------------------------------------------
   // The policyText entry lived here as "GENUINE PUBLIC API", and it was stale
   // in the same way forTouch was: adapter.mjs and the SessionStart hook both
@@ -268,35 +266,21 @@ describe('every exported function in the live hook path is reachable', () => {
     }
   });
 
-  it('keeps the allowlist shrinking, and refuses a new backlog entry', () => {
-    // THE LIST IS NOT A BACKLOG. Round 1 built this detector, it found ~21
-    // unreachable capabilities, four were wired and sixteen were parked here
-    // with accurate descriptions of what was wrong with them -- and an accurate
-    // description of a defect felt like resolution. Plan 1 took it to seven.
+  it('keeps the allowlist empty, and refuses a new backlog entry', () => {
+    // THE LIST IS NOT A BACKLOG, and it is now nothing at all.
     //
-    // A CEILING RATHER THAN ZERO, and the difference is deliberate. Four of the
-    // seven are owned by Plan 2 (production and measurement), which is in
-    // progress in parallel: selectForConsolidation by its Task 4,
-    // consolidationRatio by its Task 8, recordRefresh and recordRefreshOutcome
-    // by its Task 9 -- and each was verified to have no producing ACTION to
-    // attach to, not merely no caller. Asserting zero here would ship a test
-    // that is RED until someone else's PR merges, and a suite that is expected
-    // to be red teaches everyone to ignore it -- the same disease in a new
-    // organ. So this asserts the number can only fall, and names who owes what.
-    // When Plan 2 lands, this drops to 0 and the ceiling comes with it.
-    expect(ALLOWED.size).toBeLessThanOrEqual(4);
+    // Round 1 built this detector, it found ~21 unreachable capabilities, four
+    // were wired and sixteen were parked here with accurate descriptions of
+    // what was wrong with them -- and an accurate description of a defect felt
+    // like resolution. Plan 1 took it to seven. This plan took it to zero, and
+    // the last four went the hard way: each was held back on the true statement
+    // that its producing action did not exist, until it was built.
+    //
+    // Every future entry must be genuine public API and say so. Anything else
+    // is the backlog re-forming under a new name.
+    expect([...ALLOWED.keys()]).toEqual([]);
 
-    const PLAN_2 = [
-      'selectForConsolidation',
-      'consolidationRatio',
-      'recordRefresh',
-      'recordRefreshOutcome',
-    ];
-    // Everything still listed must be attributable. An entry that is neither
-    // Plan 2's nor genuine public API is a backlog entry, which is the thing
-    // this whole file exists to refuse.
     const unattributed = [...ALLOWED.entries()]
-      .filter(([name]) => !PLAN_2.includes(name))
       .filter(([, reason]) => !/^PUBLIC API/.test(reason))
       .map(([name]) => name);
     expect(unattributed).toEqual([]);
@@ -332,6 +316,35 @@ describe('the scan does not mistake prose for a call site', () => {
     const stripped = stripComments(code);
     expect(stripped).toContain('realCall');
     expect(stripped).toContain('example.com');
+  });
+
+  it('does not eat the rest of the line for a comment opener inside a string', () => {
+    // FOUND IN REVIEW, and it was the one direction this guard must never be
+    // wrong in. The regex line-comment pass had no idea it was inside a string,
+    // so a quoted `//` truncated the line and took the real call after it --
+    // reporting a live function as an orphan and failing CI on working code.
+    const line = 'const label = "a // b"; realCall();';
+    expect(stripComments(line)).toContain('realCall');
+
+    // Same shape with a block-comment opener: two strings, one holding `/*`
+    // and a later one holding `*/`, swallowed every call between them.
+    const block = 'const a = "/*"; realCall(); const b = "*/";';
+    expect(stripComments(block)).toContain('realCall');
+  });
+
+  it('still strips a real comment that follows a string on the same line', () => {
+    // The fix must not overshoot into keeping prose, which is the failure the
+    // whole file was built against.
+    expect(stripComments("const u = 'x'; // someOrphanFn")).not.toContain('someOrphanFn');
+  });
+
+  it('recovers on the next line when a regex literal confuses the tracker', () => {
+    // The second attempt at this failed because a regex containing a quote
+    // desynchronised the scanner for the rest of the FILE. Bounded to a line,
+    // the same input costs one line and the next is scanned correctly.
+    const quoteClass = '/[' + String.fromCharCode(34) + '/;';
+    const text = [quoteClass, 'realCall();'].join(String.fromCharCode(10));
+    expect(stripComments(text)).toContain('realCall');
   });
 
   it('still sees a name written inside a string literal', () => {

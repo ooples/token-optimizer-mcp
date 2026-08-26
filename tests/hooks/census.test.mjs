@@ -230,6 +230,18 @@ function edgeKinds() {
  * repository except as a key being written, which is a strong enough signal to
  * block a build on.
  */
+/**
+ * Keys every record carries, whose readers are destructures and spreads.
+ *
+ * EXPLICIT, because the alternative was a length rule and a length rule is
+ * about spelling. `id`, `at`, `to` and `key` are read by `load()` folding the
+ * log into a graph and by `record()` stamping envelopes -- as `{ id, at }`
+ * patterns and `...rest` spreads that a name-based scan cannot follow. Listing
+ * them says which fields are exempt and why; `name.length < 4` said only that
+ * they are short, and would have waved through an unread `ttl`.
+ */
+const STRUCTURAL_KEYS = new Set(['id', 'at', 'to', 'key', 'v', 't', 'from', 'kind']);
+
 const FIELD_WRITERS = ['record(?:Read)?', 'putNode', 'putNodeWithEdges'];
 const FIELD_WRITE_PATH = /^(hooks-core|plugin.hooks|src.server)/;
 
@@ -246,9 +258,13 @@ function recordFields() {
 
   const unread = [];
   for (const [name, writers] of written) {
-    // Three characters or fewer is not a distinctive enough word to reason
-    // about by text match -- `id`, `at`, `to`, `key` collide with everything.
-    if (name.length < 4) continue;
+    // NAMED, NOT MEASURED BY LENGTH. This skipped anything shorter than four
+    // characters, which is a rule about spelling rather than about the field:
+    // a writer adding an unread `ttl` or `pid` would have been waved through by
+    // the same clause that excuses `id`. These are the structural keys the
+    // graph and the metrics log put on every record, whose readers are
+    // destructures and spreads that no text match can see.
+    if (STRUCTURAL_KEYS.has(name)) continue;
     const readSomewhere = shipped.some(({ code }) => {
       const total = (code.match(new RegExp(`\\b${name}\\b`, 'g')) || []).length;
       const asKey = (code.match(new RegExp(`\\b${name}\\s*:`, 'g')) || []).length;
@@ -281,7 +297,14 @@ function toolNamesInInjectedText() {
   const mentioned = new Map();
   for (const file of DECLARE_DIRS.flatMap((d) => walk(join(REPO, d)))) {
     if (!/inject\.mjs$|policy\.mjs$|adapter\.mjs$|disclose\.mjs$/.test(file)) continue;
-    const raw = readFileSync(file, 'utf8');
+    // COMMENTS STRIPPED, and the earlier reasoning for scanning raw text was
+    // wrong in the direction that matters. It said a tool name in a comment
+    // that does not exist "is still worth knowing about" -- but this is a
+    // BLOCKING check, so a comment reading "we should add smart_foo someday"
+    // would fail CI on working code. Template literals survive stripComments,
+    // and injected prompt text lives in template literals, so nothing this
+    // check is actually for is lost.
+    const raw = stripComments(readFileSync(file, 'utf8'));
     for (const m of raw.matchAll(
       /\b(smart_[a-z_]+|wiki_[a-z_]+|optimize_session|get_optimization_report)\b/g
     )) {
