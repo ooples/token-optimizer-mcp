@@ -197,10 +197,11 @@ function hasEditEvidence(payload, raw) {
  * before this module is reached at all. So matching here is both complete for
  * every client the adapter serves and impossible to spell wrong.
  *
- * `NotebookEdit` is absent because `normalizeTool` maps it to null, and the MCP
- * `smart_edit`/`smart_write` tools are absent for the same reason. Both are gaps
- * in that alias table rather than in this file, and widening it changes routing
- * verdicts for every client -- so they are reported, not papered over here.
+ * `NotebookEdit` and the MCP `smart_edit`/`smart_write` tools were absent for as
+ * long as `normalizeTool` mapped them to null. That was a gap in the alias table
+ * rather than in this file, and it has since been closed there: all three now
+ * arrive as `Edit` or `Write` and are matched by the set below without it having
+ * to learn a fourth name.
  */
 const MUTATING = new Set(['Edit', 'MultiEdit', 'Write']);
 

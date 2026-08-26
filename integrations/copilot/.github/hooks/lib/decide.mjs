@@ -542,19 +542,92 @@ const TOOL_ALIASES = new Map(
     run_shell_command: 'Bash',
     run_terminal_cmd: 'Bash',
     terminal: 'Bash',
+
+    // THIS PROJECT'S OWN TOOLS, which the table did not list for as long as it
+    // existed. `plugin/hooks/hooks.json`'s PostToolUse matcher named
+    // `mcp__.*__(?:smart_edit|smart_write)` and Codex's AfterTool matcher named
+    // the bare `smart_edit|smart_write`, so both hooks fired -- and then
+    // `normalizeTool` returned null and the hook exited before a single line of
+    // accounting ran. Staleness, mutation counting and harvest pressure were all
+    // blind on exactly the path enforcement pushes the model toward, which is the
+    // worst place to be blind: the more effective the routing, the less the
+    // optimizer saw.
+    //
+    // These names are the CANONICAL operation, not a licence to redirect. A call
+    // that is already the replacement is excluded from routing by
+    // `isReplacementTool` below.
+    smart_read: 'Read',
+    smart_grep: 'Grep',
+    smart_glob: 'Glob',
+    smart_edit: 'Edit',
+    smart_write: 'Write',
+
+    // Claude Code's notebook editor. Same shape of gap: a real mutation of a
+    // real file on disk that arrived as null and so never reached
+    // `pending.mjs`'s MUTATING set, leaving every notebook write invisible to
+    // invalidation.
+    notebookedit: 'Edit',
+    notebook_edit: 'Edit',
   })
 );
 
-/** Maps a client's tool name onto the canonical one, or null if unhandled. */
+/**
+ * The optimizer's own replacement tools, by canonical trailing segment.
+ *
+ * Kept separate from the alias table because the two answer different questions.
+ * The table answers "what operation is this", which post-tool accounting needs.
+ * This set answers "is this call ALREADY the thing we would have recommended",
+ * which routing needs -- and conflating them is the loop hazard: `smart_edit`
+ * resolves to `Edit`, the Edit branch recommends `smart_edit`, and the model is
+ * told to call the tool it just called.
+ */
+const REPLACEMENT_TOOLS = new Set([
+  'smart_read',
+  'smart_grep',
+  'smart_glob',
+  'smart_edit',
+  'smart_write',
+]);
+
+/**
+ * The tool name with an `mcp__<server>__` prefix removed, if it had one.
+ *
+ * Server segments contain underscores freely (`plugin_token-optimizer_token-optimizer`)
+ * and so do tool names (`smart_edit`), so the split is taken at the LAST `__`
+ * after the `mcp__` sentinel. Both halves must be non-empty: `mcp__edit` names
+ * no server and is not a name any host emits, and treating it as `edit` would
+ * coerce an unrecognised string into a built-in.
+ */
+function withoutMcpPrefix(name) {
+  const match = /^mcp__(.+)__(.+)$/.exec(name);
+  return match ? match[2] : name;
+}
+
+/** Whether this call IS one of the optimizer's replacements, however spelled. */
+export function isReplacementTool(name) {
+  if (!name) return false;
+  return REPLACEMENT_TOOLS.has(withoutMcpPrefix(String(name)).toLowerCase());
+}
+
+/**
+ * Maps a client's tool name onto the canonical one, or null if unhandled.
+ *
+ * PERMISSIVE IN ONE DIRECTION ONLY. An MCP-prefixed name is resolved by its
+ * trailing segment, but only against the same table every other client is held
+ * to -- so `mcp__vendor__deploy_to_prod` stays null. Coercing an unrecognised
+ * MCP tool into a built-in would change a routing verdict for a tool nobody has
+ * considered, which is a far worse failure than not accounting for it.
+ */
 export function normalizeTool(name) {
   if (!name) return null;
+  const candidate = withoutMcpPrefix(String(name));
   if (
     ['Read', 'Grep', 'Glob', 'Edit', 'MultiEdit', 'Write', 'Bash'].includes(
-      name
+      candidate
     )
   )
-    return name;
-  return TOOL_ALIASES.get(String(name).toLowerCase()) || null;
+    return candidate;
+  return TOOL_ALIASES.get(candidate.toLowerCase()) || null;
 }
 
 /**
@@ -614,6 +687,13 @@ export function normalizePayload(raw) {
     transcript_path: raw.transcript_path ?? raw.transcriptPath ?? null,
     cwd,
     tool_name: normalizeTool(raw.tool_name ?? raw.toolName ?? raw.tool),
+    // WHETHER THIS CALL IS ALREADY THE REPLACEMENT, carried alongside the
+    // canonical name rather than inferred from it -- because it cannot be
+    // inferred from it. `smart_edit` and `Edit` both normalise to `Edit`, and
+    // routing has to treat them as opposites while accounting treats them as
+    // the same. Absent by default (`false`), so a payload assembled by hand in
+    // a test or by a caller that predates this field is a normal built-in call.
+    replacement: isReplacementTool(raw.tool_name ?? raw.toolName ?? raw.tool),
     tool_input: {
       ...input,
       // CANONICALISED HERE, once. Every consumer downstream -- the `seen` map
@@ -673,6 +753,19 @@ function replacementAvailable(availableTools, name) {
 }
 
 export function decide(payload, state, availableTools = undefined) {
+  // THE LOOP HAZARD, and the reason this guard is at the top rather than inside
+  // any one branch. Resolving `smart_edit` to `Edit` is what makes post-tool
+  // accounting work; it must not also make the Edit branch answer a smart_edit
+  // call with "call smart_edit instead". This is not theoretical on a matcher
+  // level either: Qwen's PreToolUse matcher is the unanchored regex
+  // `edit|write_file|run_shell_command`, and `edit` matches inside
+  // `mcp__x__smart_edit`, so that client really does hand the router calls to
+  // its own replacements.
+  //
+  // A tool that IS the replacement is never routed. There is nothing better to
+  // recommend, and every branch below would recommend itself.
+  if (payload.replacement) return null;
+
   const tool = payload.tool_name;
   const input = payload.tool_input || {};
   const threshold = largeFileBytes();
@@ -873,6 +966,12 @@ export function remember(payload, state) {
  */
 export function readCostBytes(payload) {
   if (payload.tool_name !== 'Read') return 0;
+  // A REPLACEMENT DID NOT SPEND THE WHOLE FILE. `smart_read` normalises to
+  // `Read` so the graph sees the touch, but it returns a diff -- charging the
+  // full file size here would feed the holdout comparison a cost that was never
+  // paid, on the arm the optimizer is trying to show is cheaper. Better to
+  // record nothing than to record a number in the wrong direction.
+  if (payload.replacement) return 0;
   const path = payload.tool_input?.file_path;
   if (!path || isBinaryPath(path)) return 0;
   const size = fileSize(path);
