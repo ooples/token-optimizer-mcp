@@ -27,7 +27,7 @@ import { standingRules } from '../../hooks-core/inject.mjs';
 import { ORIGIN_HUMAN } from '../../hooks-core/curate.mjs';
 import { transcriptDir, safeName } from '../../hooks-core/transcript.mjs';
 
-const WORKER = join(process.cwd(), 'plugin', 'hooks', 'harvest-worker.mjs');
+const WORKER = join(process.cwd(), 'hooks-core', 'harvest-worker.mjs');
 const SESSION = 's-feedback-e2e';
 
 let project;
@@ -179,39 +179,39 @@ describe('the feedback loop end to end', () => {
     expect(rules).toContain('Use npm test, not npx jest.');
   }, 120_000);
 });
-
-describe('the worker reports its own status honestly', () => {
-  // The `finally` used to assign `process.exitCode = 0` unconditionally, which
-  // would turn a harvest that had already recorded a failure into one that
-  // reports success. Reported by CodeRabbit on the PR. It matters more here
-  // than it looks: the worker is spawned DETACHED, so its exit status is the
-  // only signal a supervisor could ever act on.
-  it('does not overwrite a failure code recorded before the finally', async () => {
-    const { mkdtempSync: mk, writeFileSync: wf } = await import('fs');
-    const probe = join(mkdtempSync(join(tmpdir(), 'exitcode-')), 'probe.mjs');
-    mkdirSync(join(probe, '..'), { recursive: true });
-
-    // The exact shape of the worker's tail, in isolation: a main() that records
-    // a failure, the same catch, and the same finally.
-    wf(
-      probe,
-      [
-        'async function main() { process.exitCode = 3; throw new Error("boom"); }',
-        'main()',
-        '  .catch(() => {})',
-        '  .finally(() => {',
-        '    const code = process.exitCode ?? 0;',
-        '    process.exitCode = code;',
-        '    const w = setTimeout(() => process.exit(code), 5000);',
-        '    w.unref();',
-        '  });',
-      ].join('\n')
-    );
-
-    const r = await new Promise((resolve) => {
-      const c = spawn(process.execPath, [probe]);
-      c.on('close', (code) => resolve(code));
-    });
-    expect(r).toBe(3);
-  }, 60_000);
-});
+
+describe('the worker reports its own status honestly', () => {
+  // The `finally` used to assign `process.exitCode = 0` unconditionally, which
+  // would turn a harvest that had already recorded a failure into one that
+  // reports success. Reported by CodeRabbit on the PR. It matters more here
+  // than it looks: the worker is spawned DETACHED, so its exit status is the
+  // only signal a supervisor could ever act on.
+  it('does not overwrite a failure code recorded before the finally', async () => {
+    const { mkdtempSync: mk, writeFileSync: wf } = await import('fs');
+    const probe = join(mkdtempSync(join(tmpdir(), 'exitcode-')), 'probe.mjs');
+    mkdirSync(join(probe, '..'), { recursive: true });
+
+    // The exact shape of the worker's tail, in isolation: a main() that records
+    // a failure, the same catch, and the same finally.
+    wf(
+      probe,
+      [
+        'async function main() { process.exitCode = 3; throw new Error("boom"); }',
+        'main()',
+        '  .catch(() => {})',
+        '  .finally(() => {',
+        '    const code = process.exitCode ?? 0;',
+        '    process.exitCode = code;',
+        '    const w = setTimeout(() => process.exit(code), 5000);',
+        '    w.unref();',
+        '  });',
+      ].join('\n')
+    );
+
+    const r = await new Promise((resolve) => {
+      const c = spawn(process.execPath, [probe]);
+      c.on('close', (code) => resolve(code));
+    });
+    expect(r).toBe(3);
+  }, 60_000);
+});
