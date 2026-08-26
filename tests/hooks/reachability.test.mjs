@@ -101,14 +101,19 @@ const ALLOWED = new Map([
   // entries left this list at once, which is what wiring a whole feature looks
   // like -- and is why it was worth doing rather than annotating.
 
-  // CONSOLIDATION. Two entries left this list at once, and by opposite routes.
-  // selectForConsolidation is WIRED: derive.mjs runs every candidate through it
-  // before writeHarvested, so a session's storage is now bounded. contentAnchor
-  // was DELETED rather than left dormant -- the idea is preserved as issue #319,
-  // because a second anchor identity interacts with the one thing in this
-  // codebase that has already caused silent node-splitting, and "we might use it
-  // later" is precisely the reason this list is not allowed to hold.
-  ['consolidationRatio', 'UNWIRED: reports what consolidation bought. The selection it reports on now runs, but nothing stores the derivedCost it needs.'],
+  // CONSOLIDATION. THREE entries have now left this list, each by a different
+  // route. selectForConsolidation is WIRED: derive.mjs runs every candidate
+  // through it before writeHarvested, so a session's storage is bounded.
+  // contentAnchor was DELETED rather than left dormant -- the idea is preserved
+  // as issue #319, because a second anchor identity interacts with the one
+  // thing in this codebase that has already caused silent node-splitting, and
+  // "we might use it later" is precisely the reason this list is not allowed to
+  // hold. consolidationRatio is WIRED: crosslayer.mjs reads it per finding for
+  // the graph balance sheet's consolidation section, which get_optimization_report
+  // renders and the audit reaches. Its old excuse said "nothing stores the
+  // derivedCost it needs" and that had gone stale -- expand.promote persists
+  // derivedCost onto the finding node it creates, and src/server/disclosure.ts
+  // calls it.
 
   // HALF A FEEDBACK LOOP. shouldKeepWarm and keepWarmDecision are reachable;
   // the outcome half that would tell them whether a refresh ever paid off is

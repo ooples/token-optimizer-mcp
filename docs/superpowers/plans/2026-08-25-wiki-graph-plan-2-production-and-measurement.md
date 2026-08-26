@@ -1216,7 +1216,48 @@ defects found in my own work by mutation: an **unfalsifiable** publication gate 
 `costObservations` (deleted -- with all-zero costs p is exactly 1, so it could not change a
 verdict; the disclosure in `looNote` took over its job) and **exploration wired but unproven**
 (a new test shows a tight budget serving the never-served finding). See `task-7-report.md`. |
-| 8 | Not started. Depends on 6 and 7. |
+| 8 -- calibration loop | **Complete.** `hooks-core/crosslayer.mjs` (new) -- `calibration`,
+`calibrationNote`, `consolidation`, `graphBalanceSheet`, `labelsByFinding`,
+`MIN_FINDINGS_PER_ARM`, `MIN_GAP_TOKENS`; `audit.mjs` headline + one wiring point;
+`get-optimization-report.ts` serves a `graph` field and a rendered graph block. 29 tests; **30
+mutations, 30 killed, all 29 new tests killed by at least one mutation.** Full suite 224 suites /
+2,849 passed, twice green, no flakiness. Allowlist **5 -> 4**.
+**Three of the task's premises were stale and are resolved rather than papered over.** (a)
+`approxCost` and the hardcoded `$3/1M` **do not exist anywhere in the repo** -- only in the plan
+and the design spec; `pricing.mjs` and `provider-pricing.ts` were already correct, so nothing was
+manufactured. What was open was the RULE, now enforced against the rendered text with a rate
+configured: currency appears on the measured-counterfactual line and on no line saying
+"estimate" (M20/M21/M24 pin it both ways). (b) `hasOutstandingContradiction` is already the
+dispute gate at `staleness.mjs:497`, and **no promotion path exists to gate** -- every
+`confidence` write in `hooks-core` is at CREATION and `utility.mjs` reads it into an ephemeral
+`netUtility` only. So `mayPromote` was NOT added; the invariant is enforced instead, behaviourally
+(a contradicted finding with a large measured effect keeps its stored confidence through
+`graphBalanceSheet`/`calibrationNote`/`renderAudit`) and structurally (`crosslayer`/`loo`/`usage`
+contain zero `confidence` in code), with M26 adding a real promotion to prove the guard bites.
+(c) `consolidationRatio` was the real allowlist item and is wired through
+`consolidation()` -> `graphBalanceSheet` -> the report; its excuse was doubly stale, since
+`expand.promote` DOES persist `derivedCost` and `src/server/disclosure.ts` calls it.
+**`calibration()` REFUSES on this machine and that is the whole point**: Layer 1 publishes no rate
+(0 classifiable observations, 0 reference events) and Layer 2 has 0 observations, so the verdict
+names BOTH insufficient inputs and there is **no `gap` key at all** -- not `gap: 0`, which would
+read as "measured, and they agree". Seven distinct refusals, each tested and each killed by its
+own mutation. Independence preserved by construction -- only Layer 1's categorical LABEL and only
+Layer 2's effect MAGNITUDE, joined on the finding key -- and proven from both sides: flipping the
+labels over identical Layer 2 data flips the gap's sign, and moving Layer 1's rate without moving
+a label leaves the gap byte-identical (M16 injects the circularity and is killed).
+**One production defect found by my own mutation run:** the publication gate was `gap > 0`, and
+two arms of equal means produce a gap of ~1e-13 after floating point, which would have published
+`calibrated: referenced findings suppress 0 more tokens/touch` -- a calibration resting on
+arithmetic noise, leaning the project's own way. `MIN_GAP_TOKENS = 1`, tied to the unit the
+verdict prints, closes it. **`renderAudit`'s headline is fixed** (Task 7 left it): "Nothing
+addressable found." is now scoped to the remediation queue, so it can no longer be a false
+negative printed above a published Layer 2 verdict. `calibration()` lives in a NEW module rather
+than `metrics.mjs` as the plan said, because `metrics.mjs` is the BASE of the import graph and the
+plan's placement would have created `metrics -> loo -> {utility,curate,wiki} -> metrics`;
+`balanceSheet` is untouched and the four new sections are composed one level up in
+`graphBalanceSheet`, which is the shape the plan's interface specifies. Cost: `balanceSheet`
+81.7 ms -> `graphBalanceSheet` 185.1 ms on this machine's real 2 MB log, on an on-demand report
+path. See `task-8-report.md`. |
 | 9, 10 | Not started. |
 | 11 -- transcript reader | **Complete.** `failedResultsFromTranscript` in
 `hooks-core/transcript.mjs`, read-only, tail-bounded, redacted at the boundary. Yield on
@@ -1309,6 +1350,15 @@ this project's own numbers **in its own favour**:
 
 None was the kind of defect a test suite notices: the code works and the *number* lies. Tasks
 6, 7 and 8 are entirely measurement, so this is the class to hunt there.
+
+**Two further instances were found and fixed by Task 8's own mutation run**, both in its own new
+code and both flattering to the project: a publication gate of `gap > 0`, which would have
+published a calibration resting on a ~1e-13 floating-point gap as "referenced findings suppress
+0 more tokens/touch" (fixed with `MIN_GAP_TOKENS = 1`, tied to the unit the verdict prints); and
+a rendered re-read-waste line that printed the confirmed figure without the count of repeats the
+classifier could not judge, which `rereadWaste`'s own docstring says must be reported rather than
+hidden. Neither was visible by reading. **The running total for this class across both plans is
+now eight.**
 
 **A fourth instance is known and unfixed**, found while closing the third: `mutationSucceeded`'s
 status read omits the `postToolUse` envelope, so `postToolUse: { status: 'error' }` falls through

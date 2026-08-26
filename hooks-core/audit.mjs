@@ -31,6 +31,7 @@
 import { record, readMetrics } from './metrics.mjs';
 import { referenceNote } from './usage.mjs';
 import { looNote } from './loo.mjs';
+import { calibrationNote } from './crosslayer.mjs';
 import { remedyLedger, applyRemedy, proposal } from './remedy.mjs';
 import { money, monthly, priceNote, dollars } from './pricing.mjs';
 
@@ -241,9 +242,15 @@ export function renderAudit(
     lines.push(text);
   }
 
+  // SCOPED TO THE QUEUE, because that is all it ever described. The bare
+  // sentence "Nothing addressable found." was printed directly above a Layer 1
+  // reference note and a published Layer 2 causal verdict -- so a reader was
+  // told nothing had been found immediately before being shown a finding. The
+  // headline is about the remediation queue and nothing else, and saying so
+  // costs four words and removes a false negative shown to a human.
   const head = shown.length
     ? ['What to do next, most expensive first:', ...lines]
-    : ['Nothing addressable found.'];
+    : ['Nothing addressable found in the remediation queue.'];
 
   const body = [...head];
 
@@ -339,6 +346,16 @@ export function renderAudit(
   // is the one that most needs to be absent when it is not earned.
   const causal = looNote(dir);
   if (causal) body.push('', causal);
+
+  // WHETHER LAYER 1'S CHEAP LABEL PREDICTS LAYER 2'S EXPENSIVE EFFECT.
+  //
+  // The reason this is printed rather than kept for a dashboard: the reference
+  // rate is the number a reader is most likely to quote as a saving, and it is
+  // not one until this comparison says so. `calibrationNote` returns null while
+  // both layers are silent, and otherwise prints the refusal -- naming which
+  // input was insufficient -- rather than a gap of zero.
+  const calibrated = calibrationNote(dir);
+  if (calibrated) body.push('', calibrated);
 
   const addressable = queue.reduce(
     (sum, item) => sum + (item.costPerSession || 0),
