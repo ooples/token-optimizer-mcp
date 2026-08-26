@@ -26,6 +26,10 @@ import { linkCoOccurrence } from './lib/inject.mjs';
 import { wikiDir, projectRootFor } from './lib/wiki.mjs';
 import { closeForecast } from './lib/surface.mjs';
 import { compactionNudge } from './lib/recording.mjs';
+import { runStopHarvest } from './lib/stop-harvest.mjs';
+
+/** A blank line between two system messages, written by code point. */
+const BLANK_LINE = String.fromCharCode(10) + String.fromCharCode(10);
 import { optimizerToolsForHook } from './lib/capabilities.mjs';
 import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
 
@@ -71,6 +75,27 @@ async function main() {
   }
   invocation.bind(payload, null, input.bytes);
 
+  // THE OTHER HALF OF THE OUT-OF-BAND HARVEST. #204 specifies it "at
+  // Stop/PreCompact", and only Stop had it: compaction is the event this whole
+  // subsystem exists for, and a conclusion that is not extracted before it is
+  // destroyed rather than merely forgotten.
+  //
+  // ABOVE THE `seenCount === 0` RETURN, deliberately, for the reason the
+  // comment below gives about the wrapper check: a session that tracked no file
+  // operations still has a transcript worth harvesting, and gating this on
+  // tracked reads would make it unreachable for a reason nobody would think to
+  // look for -- the same shape as the defect that comment is about.
+  //
+  // The harvest debounces itself and spawns a DETACHED worker, so a PreCompact
+  // immediately after a Stop costs nothing and compaction is never delayed by a
+  // model call.
+  let harvestNotice = null;
+  try {
+    harvestNotice = await runStopHarvest(payload);
+  } catch {
+    // Compaction must proceed whatever the harvest does.
+  }
+
   // STATE AND CO-OCCURRENCE BEFORE THE WRAPPER CHECK, deliberately.
   //
   // The wrapper is only needed to spawn optimize_session, and plugin-only
@@ -83,7 +108,13 @@ async function main() {
   const state = loadState(payload.session_id);
   const seen = Object.keys(state.seen || {});
   const seenCount = seen.length;
-  if (seenCount === 0) return;
+  if (seenCount === 0) {
+    // The notice still has to reach the reader: `runStopHarvest` marks it as
+    // said, so discarding it here would spend the once-per-session explanation
+    // on nobody.
+    if (harvestNotice) emit({ systemMessage: harvestNotice });
+    return;
+  }
 
   // CO-OCCURRENCE, RECORDED AT THE ONE MOMENT IT IS COMPLETE.
   //
@@ -150,8 +181,13 @@ async function main() {
     const nudge = tools.names.has('wiki_write')
       ? compactionNudge(graphDir, { edits: state.edits || 0 })
       : null;
-    if (nudge) {
-      emit({ systemMessage: nudge });
+    // ONE MESSAGE, not two. Both of these are `systemMessage`, and this hook
+    // already has more than one emit path; adding a third writer to the same
+    // stdout is how a PreCompact payload gets corrupted.
+    const message = [harvestNotice, nudge].filter(Boolean).join(BLANK_LINE);
+    if (message) {
+      emit({ systemMessage: message });
+      harvestNotice = null;
     }
   } catch {
     // Never delay compaction for a reminder.
