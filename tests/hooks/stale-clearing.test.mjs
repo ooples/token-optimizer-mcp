@@ -23,7 +23,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { load, nodeId, putNode, putEdge, putNodeWithEdges } from '../../hooks-core/wiki.mjs';
@@ -520,17 +520,37 @@ describe('serve clears a stale flag automatically, on the same evidence', () => 
     expect(findingByKey('legacy2').stale).toBe(true);
   });
 
-  test('the lazy check can still mark a finding whose stored flag was just cleared', () => {
-    // Clearing removes only the STORED flag. The disk-against-node-hash
-    // comparison is a different question and is not overruled: here disk matches
-    // claim time while the anchor node still holds the post-edit hash.
+  test('the lazy check still works after a clear -- on a LATER change', () => {
+    // THIS TEST USED TO ASSERT THE DEFECT. It reverted without re-indexing and
+    // then required `served.stale === true` with `staleReason: 'file changed'` on
+    // the very object whose flag had just been cleared for matching its
+    // claim-time content -- stale and fresh in one response, written down as
+    // intended behaviour. The clear now re-points the anchor, so the two cannot
+    // disagree about the same bytes.
+    //
+    // WHAT IS ACTUALLY WORTH ASSERTING is that clearing did not switch the lazy
+    // path off: a change arriving AFTER the clear, from outside our hooks and
+    // therefore never indexed, is still caught.
     const key = staleFinding();
     writeFileSync(file, ORIGINAL); // reverted, but NOT re-indexed
+    expect(serveOne(key, { dir }).stale).toBe(false);
+    expect(findingByKey(key).stale).toBeUndefined();
 
+    // Now something outside the session edits the file again -- a git pull, a
+    // teammate, a build step. No hook observed it, so nothing re-indexed.
+    writeFileSync(file, CHANGED);
     const served = serveOne(key, { dir });
-    expect(findingByKey(key).stale).toBeUndefined(); // stored flag cleared
-    expect(served.stale).toBe(true);                 // lazy still disagrees
+    expect(served.stale).toBe(true);
     expect(served.staleReason).toBe('file changed');
+    // `derivationHolds: true` ALONGSIDE `stale: true` IS NOT THE CONTRADICTION
+    // this fix was about, and the difference is worth stating. These two answer
+    // different questions: the last indexed state does still agree with what the
+    // claim was made against, and disk has since moved away from both. That is
+    // exactly the complementary pair `derivationCheck` documents. The defect was
+    // the OTHER combination -- a clear decided on claim-time evidence served
+    // beside `derivationHolds: false` claiming that same evidence had moved.
+    expect(served.derivationHolds).toBe(true);
+    expect(served.derivationCheckedAgainst).toBe('index');
   });
 
   test('the injection path clears it, so no dashboard visit is required', () => {
@@ -605,5 +625,170 @@ describe('curate writes claim-time anchor hashes too', () => {
 
     writeFileSync(file, CHANGED);
     expect(reverify(dir, corrected)).toBe('cleared');
+  });
+});
+
+/**
+ * THE THREE DISCLOSURES MUST NOT CONTRADICT EACH OTHER.
+ *
+ * A served finding carries three independent verdicts, each computed from a
+ * different comparison:
+ *
+ *   `stale`/`staleReason`  -- disk against the anchor NODE's stored hash
+ *   `derivationHolds`      -- the anchor node's stored hash against the hash
+ *                             frozen into this finding at claim time
+ *   the clear decision     -- disk against that same claim-time hash
+ *
+ * Two of those three read the node's stored hash, and the EAGER path moves it.
+ * So on the revert path -- index at H1, claim against H1, edit and re-index to
+ * H2, eager-mark, then revert the file to H1 -- the clear fired (disk H1 equals
+ * claim H1) while the same returned object said `stale: true, staleReason: 'file
+ * changed'` and `derivationHolds: false`. The model was shown STALE and
+ * DERIVATION CHANGED at the exact moment the code's own evidence test had
+ * concluded the derivation holds, and it recurred on every serve until something
+ * unrelated re-indexed the anchor.
+ *
+ * EVERY EXISTING TEST OF THIS PATH RE-INDEXED AFTER REVERTING, which is what hid
+ * it: `indexFile(dir, file, ORIGINAL)` moves the node hash back to H1 by hand and
+ * all three agree for a reason the product does not supply. Nothing below calls
+ * `indexFile` after the revert. That omission is the test.
+ */
+describe('a mid-serve clear leaves all three disclosures agreeing', () => {
+  const staleFinding = () => {
+    writeFileSync(file, ORIGINAL);
+    indexFile(dir, file, ORIGINAL);
+    const key = seedFinding();
+    writeFileSync(file, CHANGED);
+    markStaleWithDiff(ORIGINAL, CHANGED);
+    expect(findingByKey(key).stale).toBe(true);
+    return key;
+  };
+
+  const serveOne = (key, opts) => {
+    const graph = load(dir);
+    return serve(graph, [graph.nodes.get(nodeId('finding', key))], opts)[0];
+  };
+
+  const fileHash = () => load(dir).nodes.get(nodeId('file', file)).hash;
+
+  test('the revert path serves fresh, not stale-and-fresh at once', () => {
+    const key = staleFinding();
+    const claimHash = findingByKey(key).derivation.anchors[nodeId('file', file)];
+    // The eager path re-pointed the node at the POST-edit bytes, which is the
+    // whole reason the two derived disclosures disagreed with the clear.
+    expect(fileHash()).not.toBe(claimHash);
+
+    writeFileSync(file, ORIGINAL); // reverted on disk, and NOT re-indexed
+
+    const served = serveOne(key, { dir });
+    // The clear happened...
+    expect(served.stale).toBe(false);
+    expect(findingByKey(key).stale).toBeUndefined();
+    // ...and neither derived disclosure contradicts it.
+    expect(served.staleReason).toBeUndefined();
+    expect(served.diff).toBeUndefined();
+    expect(served.staleEvidence).toBeUndefined();
+    expect(served.derivationHolds).toBe(true);
+    expect(served.derivationChanged).toBeUndefined();
+  });
+
+  test('the anchor is re-indexed from the bytes the evidence test already read', () => {
+    const key = staleFinding();
+    const claimHash = findingByKey(key).derivation.anchors[nodeId('file', file)];
+    writeFileSync(file, ORIGINAL);
+
+    serveOne(key, { dir });
+    // The stored hash is the claim-time hash again, so the NEXT reader -- and
+    // every other finding anchored to this file -- sees the same content this
+    // clear was decided on. Suppressing the disclosures instead would have left
+    // the graph holding a hash matching no version of the file that exists.
+    expect(fileHash()).toBe(claimHash);
+  });
+
+  test('a second serve says the same thing, and pays nothing to say it', () => {
+    const key = staleFinding();
+    writeFileSync(file, ORIGINAL);
+    serveOne(key, { dir });
+
+    const again = serveOne(key, { dir });
+    expect(again.stale).toBe(false);
+    expect(again.staleReason).toBeUndefined();
+    expect(again.derivationHolds).toBe(true);
+  });
+
+  test('a genuine change still disagrees with nothing, and stays stale', () => {
+    // The paired negative: the fix must not make everything agree by making
+    // everything read fresh. Not reverted, so the verdict is `differs`, no
+    // re-index happens, and all three disclosures agree that it is stale.
+    const key = staleFinding();
+    const claimHash = findingByKey(key).derivation.anchors[nodeId('file', file)];
+
+    const served = serveOne(key, { dir });
+    expect(served.stale).toBe(true);
+    expect(findingByKey(key).stale).toBe(true);
+    expect(served.derivationHolds).toBe(false);
+    expect(served.derivationChanged).toEqual([file]);
+    // And the anchor is NOT quietly moved back to the claim-time hash, which
+    // would be the laundering route wearing a re-index for a hat.
+    expect(fileHash()).not.toBe(claimHash);
+  });
+
+  test('reverify agrees with serve, because both re-index what they verified', () => {
+    const key = staleFinding();
+    const claimHash = findingByKey(key).derivation.anchors[nodeId('file', file)];
+    writeFileSync(file, ORIGINAL);
+
+    expect(reverify(dir, key)).toBe('cleared');
+    expect(fileHash()).toBe(claimHash);
+
+    const served = serveOne(key, { dir });
+    expect(served.stale).toBe(false);
+    expect(served.derivationHolds).toBe(true);
+  });
+});
+
+/**
+ * ONE CLEAR IS ONE RECORD.
+ *
+ * `clearStale`'s no-op guard reads the graph its CALLER handed it, not disk. So a
+ * second `serve` over the same in-memory graph object -- two touched files
+ * anchored to one finding, or a lifecycle branch that serves twice from a graph
+ * it loaded once, which is exactly the shape SessionStart has -- still saw
+ * `stale: true`, re-ran the evidence test and appended a byte-identical clear
+ * record. The store is append-only, so that is permanent growth for no change of
+ * state.
+ */
+describe('clearing twice from one graph object writes once', () => {
+  const clearRecordCount = (key) => {
+    const id = nodeId('finding', key);
+    return readFileSync(join(dir, 'graph.jsonl'), 'utf8')
+      .split('\n')
+      .filter((line) => line.includes(`"${id}"`) && line.includes('"t":"n"'))
+      .filter((line) => !JSON.parse(line).stale)
+      .length;
+  };
+
+  test('the second serve on the same graph appends no duplicate', () => {
+    writeFileSync(file, ORIGINAL);
+    indexFile(dir, file, ORIGINAL);
+    const key = seedFinding();
+    writeFileSync(file, CHANGED);
+    markStaleWithDiff(ORIGINAL, CHANGED);
+    writeFileSync(file, ORIGINAL);
+
+    // ONE graph object, served twice -- the SessionStart shape.
+    const graph = load(dir);
+    const findings = () => [graph.nodes.get(nodeId('finding', key))];
+    const before = clearRecordCount(key);
+    serve(graph, findings(), { dir });
+    const afterFirst = clearRecordCount(key);
+    serve(graph, findings(), { dir });
+    const afterSecond = clearRecordCount(key);
+
+    expect(afterFirst).toBe(before + 1);
+    expect(afterSecond).toBe(afterFirst);
+    // And the finding is still cleared -- writing once must not mean clearing
+    // once and then reporting it stale again.
+    expect(findingByKey(key).stale).toBeUndefined();
   });
 });

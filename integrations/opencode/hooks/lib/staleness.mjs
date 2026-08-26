@@ -368,6 +368,12 @@ const DIFF_MAX_BYTES = () => {
  * line, and total bytes. Every truncation is announced in the output, because a
  * silently shortened diff is worse than a visibly shortened one -- a reader who
  * cannot tell content was elided believes they saw the whole change.
+ *
+ * `maxLines` BOUNDS THE BODY, MARKERS INCLUDED: at most `maxLines` lines of
+ * removed lines, added lines and "... N more" elision markers between them, plus
+ * at most one final notice when the byte cap dropped lines -- so `maxLines + 1`
+ * lines in total, and no more. That last line is outside the budget on purpose,
+ * for the reason stated where it is pushed.
  */
 export function diffLines(
   before,
@@ -418,10 +424,24 @@ export function diffLines(
     bytes += size;
   };
 
-  for (const line of removed.slice(0, maxLines / 2)) push('- ' + line);
-  if (removed.length > maxLines / 2) push(`  ... ${removed.length - maxLines / 2} more removed`);
-  for (const line of added.slice(0, maxLines / 2)) push('+ ' + line);
-  if (added.length > maxLines / 2) push(`  ... ${added.length - maxLines / 2} more added`);
+  // THE ELISION MARKER IS PAID FOR OUT OF THE SIDE'S OWN QUOTA, so `maxLines`
+  // bounds the whole body rather than only the content in it. It did not: at the
+  // default 40 the body could reach 42 lines -- 20 removed, 20 added and two
+  // "... N more" markers -- and the out-of-budget notice below made 43, against
+  // a documented bound of 40 and a test asserting 41. Three numbers, no two the
+  // same. A side that has to elide now shows one fewer content line and spends
+  // that line on saying so, which is the trade a reader wants anyway: knowing
+  // that 300 lines were cut matters more than the 20th of the 20 shown.
+  const half = Math.floor(maxLines / 2);
+  const emit = (lines, prefix, label) => {
+    const elides = lines.length > half;
+    const shown = elides ? Math.max(0, half - 1) : half;
+    for (const line of lines.slice(0, shown)) push(prefix + line);
+    if (elides) push(`  ... ${lines.length - shown} more ${label}`);
+  };
+
+  emit(removed, '- ', 'removed');
+  emit(added, '+ ', 'added');
 
   // Announced OUTSIDE the budget, deliberately: the one line a reader most
   // needs is the one saying the rest is missing, and dropping it to stay under
@@ -479,6 +499,15 @@ function disputeOf(graph, finding) {
   if (!hasOutstandingContradiction(graph, finding.key)) return {};
 
   const keys = [];
+  // AND THE REASON A PERSON TYPED, which had no reader anywhere. `contradict`
+  // stores `contradictionReason` -- up to 400 characters of human explanation --
+  // on the CONTRADICTED end only, and nothing outside its own test ever read it:
+  // this disclosure named the other key and stopped, `audit` counts ends, and the
+  // dashboard detail view renders neither. So the one field on the edge that says
+  // WHY was written on every contradiction and seen by nobody. It is collected
+  // from whichever end holds it, so both sides of a dispute disclose the same
+  // reason rather than only the claim that lost.
+  let reason = typeof finding.contradictionReason === 'string' ? finding.contradictionReason : '';
   for (const edge of graph.edges) {
     if (edge.edge !== 'contradicts') continue;
     const otherId =
@@ -497,10 +526,30 @@ function disputeOf(graph, finding) {
     // each name, so a live disputant is still reported alongside a withdrawn one.
     if (other && !other.retired && typeof other.key === 'string' && !keys.includes(other.key)) {
       keys.push(other.key);
+      // A RETIRED END'S REASON IS NOT BORROWED EITHER, which is why this sits
+      // inside the same guard as the key: `hasOutstandingContradiction` can be
+      // open on one live disputant while another is withdrawn, and quoting the
+      // withdrawn one's explanation would attribute the live dispute to a claim
+      // the reader cannot fetch.
+      if (!reason && typeof other.contradictionReason === 'string') {
+        reason = other.contradictionReason;
+      }
     }
   }
 
-  return { contradicted: true, ...(keys.length ? { contradictedBy: keys.join(', ') } : {}) };
+  return {
+    contradicted: true,
+    ...(keys.length ? { contradictedBy: keys.join(', ') } : {}),
+    // Trimmed here rather than at the renderer: an empty string is not a reason,
+    // and a consumer checking `if (reason)` should not have to trim first.
+    //
+    // SET UNCONDITIONALLY, INCLUDING TO `undefined`. `serve` spreads the stored
+    // record before this object, so omitting the key would let a whitespace-only
+    // stored reason through untouched and make the served value differ from the
+    // one this function decided on. The disclosure is authoritative or it is not
+    // a disclosure.
+    contradictionReason: reason.trim() || undefined,
+  };
 }
 
 /**
@@ -580,8 +629,15 @@ function derivationCheck(graph, finding) {
  * the dashboard, which left the rot path fully open on every install where
  * nobody opens the dashboard -- and that is most of them. The evidence test is
  * what makes clearing safe, and it does not care who triggered it: the same
- * `claimTimeVerdict` runs here as in `reverify`, so this cannot clear anything
+ * `claimTimeEvidence` runs here as in `reverify`, so this cannot clear anything
  * the button would not.
+ *
+ * A CLEAR ALSO RE-INDEXES THE ANCHORS IT VERIFIED. The three disclosures this
+ * function emits -- `stale`, `derivationHolds`, and the dispute -- are computed
+ * from three different comparisons, and clearing the flag without moving the
+ * anchor's stored hash made the first two contradict the clear on the revert
+ * path. `reindexVerifiedAnchors` explains the reproduction and why re-pointing
+ * the index is the fix rather than suppressing the disclosures.
  *
  * `dir` IS OPTIONAL, AND OMITTING IT MAKES THIS READ-ONLY. Several callers hold
  * a graph without the directory it came from, and a serve that silently did
@@ -617,11 +673,17 @@ export function serve(graph, findings, { dir = null } = {}) {
 
     // AUTOMATIC CLEARING, on the same evidence the manual path demands.
     //
-    // ONLY THE STORED FLAG IS TOUCHED. The lazy loop below is left to run
-    // exactly as before and can independently mark this finding stale again on
-    // its own comparison -- disk against the anchor NODE's hash -- which answers
-    // a different question and is not this function's to overrule. Eager and
-    // lazy stay two mechanisms, as the module header insists.
+    // THE FLAG AND THE INDEX MOVE TOGETHER. Clearing the flag alone made this
+    // function contradict itself on the revert path: the lazy loop below
+    // compares disk against the anchor NODE's hash, which the eager path
+    // re-pointed at the post-edit bytes, so a reverted file read as `stale:
+    // true, staleReason: 'file changed'` and `derivationHolds: false` inside the
+    // very object whose flag had just been cleared for matching its claim-time
+    // content. `reindexVerifiedAnchors` writes the verified bytes' hash back to
+    // the anchor, so all three disclosures are finally reading the same content
+    // and cannot disagree. Eager and lazy stay two mechanisms, as the module
+    // header insists -- what changed is that the index no longer holds a hash
+    // that matches no version of the file that exists.
     //
     // AND THE FIELDS GO WITH THE FLAG. `putNode` does not merge and neither does
     // this spread: serving `{ ...finding, stale: false }` would hand back a
@@ -630,12 +692,37 @@ export function serve(graph, findings, { dir = null } = {}) {
     // So the cleared record, not the stored one, is what the rest of this
     // iteration reads and spreads.
     //
-    // BOUNDED, and the bound is the point: this runs only for a finding whose
-    // flag is already STORED, only when a `derivation` record exists to check
-    // against, and it reads each of that finding's anchors at most once. A
-    // finding that is not flagged pays nothing. The lazy loop below already
+    // BOUNDED PER CALL, and the bound is the point: this runs only for a finding
+    // whose flag is already STORED, only when a `derivation` record exists to
+    // check against, and it reads each of that finding's anchors at most once.
+    // A finding that is not flagged pays nothing. The lazy loop below already
     // reads every anchor of every content-dependent finding served, so the worst
     // case is twice the anchor reads on the already-stale subset alone.
+    //
+    // AND THE PER-SESSION SHAPE, stated because the per-call bound alone reads
+    // as cheaper than it is. Measured on a synthetic 40-stale-finding graph, the
+    // serve path went 158 ms -> 217 ms (+37%), and for a GENUINELY stale finding
+    // that cost recurs on every call for the whole session: the verdict is
+    // `'differs'` forever, nothing is cleared, and the reads are repaid with
+    // nothing. What keeps it survivable in practice is not this bound but two
+    // others -- `findingsFor`'s result limit and inject.mjs's `alreadyInjected`
+    // gate, which together put it near 40 ms on the first touch of a hot file
+    // and zero on the touches after.
+    //
+    // THE REVERT CASE PAYS ONCE, AND THAT IS MEASURED, not argued. Same 40
+    // findings, all revertible, medians of 9 across three process launches: the
+    // read-only serve is 23-29 ms, the first clearing serve is 141-173 ms (the
+    // anchor reads plus one node append per cleared finding AND per re-pointed
+    // anchor), and the SECOND clearing serve is 21-28 ms -- back to the
+    // read-only baseline, because the flag is off and the index agrees, so this
+    // gate no longer fires. What the re-index changed is not that cost -- the
+    // gate stopped firing once the flag came off before, too -- but that every
+    // serve after the clear used to re-derive `stale: true` and
+    // `derivationHolds: false` from an index nobody had moved. The extra ~120 ms
+    // buys silence that is actually correct.
+    // On the genuinely-stale set the recurring cost is
+    // real and unchanged in kind: 26-45 ms read-only against 53-105 ms with
+    // clearing on, every call, clearing nothing.
     //
     // NOT ON THE NON-CONTENT-DEPENDENT EARLY RETURN ABOVE, deliberately. Both
     // eager paths refuse to flag those types at all, so a flag there can only
@@ -643,10 +730,14 @@ export function serve(graph, findings, { dir = null } = {}) {
     // does not depend on them is exactly the cost `CONTENT_DEPENDENT` exists to
     // avoid.
     let record = finding;
-    if (dir && finding.stale && claimTimeVerdict(graph, finding) === 'match') {
-      clearStale(dir, finding.key, { graph });
-      const { stale: _s, staleReason: _r, diff: _d, staleEvidence: _e, ...cleared } = finding;
-      record = cleared;
+    if (dir && finding.stale) {
+      const evidence = claimTimeEvidence(graph, finding);
+      if (evidence.verdict === 'match') {
+        reindexVerifiedAnchors(dir, graph, evidence.contents);
+        clearStale(dir, finding.key, { graph });
+        const { stale: _s, staleReason: _r, diff: _d, staleEvidence: _e, ...cleared } = finding;
+        record = cleared;
+      }
     }
 
     const anchors = graph.edges
@@ -736,6 +827,14 @@ export function serve(graph, findings, { dir = null } = {}) {
       // carries its `derivation`, since clearing removes only the staleness
       // fields. A finding whose flag was just cleared is still disclosed as
       // disputed, and still reports whether its derivation holds.
+      //
+      // AND THEY NO LONGER CONTRADICT THE CLEAR. Surviving is not the same as
+      // agreeing: for a whole serve this returned `stale: true, staleReason:
+      // 'file changed'` and `derivationHolds: false` on a finding it had just
+      // cleared, because the clear was decided against disk while these two read
+      // the anchor node's hash, and the eager path had moved it. All three now
+      // read the same content because the clear re-points the anchor; see
+      // `reindexVerifiedAnchors`.
       ...dispute,
       // Independent of `stale` above: see `derivationCheck`'s own comment for
       // the case it catches that node-level staleness can miss.
@@ -934,6 +1033,34 @@ export function invalidateChangedAnchors(dir, graph, rawPath) {
 }
 
 /**
+ * The current content of an anchor, read from disk: the whole file for a file
+ * anchor, the located span for a symbol one. Null when nothing can be read.
+ *
+ * SPLIT OUT FROM `anchorHashNow` SO THE BYTES SURVIVE THE COMPARISON. The
+ * clearing path hashes this to reach a verdict and, on `'match'`, re-indexes the
+ * anchor from the same bytes -- see `reindexVerifiedAnchors`. Returning only a
+ * hash forced a second read of a file that had just been read, for content
+ * already known to be identical.
+ */
+function anchorContentNow(anchor) {
+  const path = anchor.kind === 'symbol' ? anchor.file : anchor.key;
+  let source;
+  try {
+    source = readAnySpelling(path);
+  } catch {
+    return null;
+  }
+  if (anchor.kind !== 'symbol') return source;
+
+  // By NAME, like checkAnchor: line numbers shift whenever anything above is
+  // edited, and re-locating by line would report a symbol as moved when only an
+  // unrelated insert happened above it.
+  const current = extractSymbols(path, source).find((s) => s.name === anchor.name);
+  if (!current) return null;
+  return spanText(source, current);
+}
+
+/**
  * The current content hash of an anchor, read from disk.
  *
  * DELIBERATELY NOT `checkAnchor`, and the difference is the whole of this
@@ -952,21 +1079,8 @@ export function invalidateChangedAnchors(dir, graph, rawPath) {
  * content it was made against.
  */
 function anchorHashNow(anchor) {
-  const path = anchor.kind === 'symbol' ? anchor.file : anchor.key;
-  let source;
-  try {
-    source = readAnySpelling(path);
-  } catch {
-    return null;
-  }
-  if (anchor.kind !== 'symbol') return hash(source);
-
-  // By NAME, like checkAnchor: line numbers shift whenever anything above is
-  // edited, and re-locating by line would report a symbol as moved when only an
-  // unrelated insert happened above it.
-  const current = extractSymbols(path, source).find((s) => s.name === anchor.name);
-  if (!current) return null;
-  return hash(spanText(source, current));
+  const content = anchorContentNow(anchor);
+  return content === null ? null : hash(content);
 }
 
 /**
@@ -1005,21 +1119,51 @@ export function clearStale(dir, key, { graph = null } = {}) {
   // `contradict`, `correct` -- writes from a graph it loaded earlier too. Both
   // callers here already DECIDED on this snapshot, so re-reading it purely for
   // the write narrowed no window that was ever closed.
-  const node = (graph || load(dir)).nodes.get(nodeId('finding', key));
+  const id = nodeId('finding', key);
+  const node = (graph || load(dir)).nodes.get(id);
   if (!node || node.kind !== 'finding') return false;
   const { stale, staleReason, diff, staleEvidence, ...rest } = node;
   // Nothing to clear is a success, not a write: an unconditional putNode here
   // would append a duplicate record to the log on every no-op call.
   if (stale === undefined && staleReason === undefined
     && diff === undefined && staleEvidence === undefined) return true;
-  putNode(dir, { ...rest, kind: 'finding', key: node.key });
+  const cleared = { ...rest, kind: 'finding', key: node.key };
+  putNode(dir, cleared);
+  // AND THE CALLER'S GRAPH IS UPDATED, because the guard above reads THAT graph,
+  // not disk. Without this, a second `serve` on the same in-memory graph object
+  // -- two touched files anchored to one finding, or a lifecycle branch that
+  // serves twice from a graph it loaded once, as SessionStart does -- still saw
+  // `stale: true`, re-ran the evidence test, and appended a byte-identical clear
+  // record. The store is append-only, so that is permanent log growth for no
+  // change in state, and the "nothing to clear is a success, not a write"
+  // guarantee directly above was only true of the first call.
+  if (graph) graph.nodes.set(id, { ...cleared, id });
   return true;
 }
 
 /**
- * Clears a stale flag when, and only when, the evidence for it is gone.
+ * THE ONE EVIDENCE TEST, plus the bytes it read. Does this finding's anchored
+ * content still hash to what the claim was actually made against?
  *
- * WHY THIS HAS TO EXIST. Nothing in this codebase ever cleared a `stale` flag.
+ * `verdict` is one of:
+ *   `'match'`   -- every anchor on disk re-hashes to the value frozen into this
+ *                  finding's own `derivation.anchors` at claim time. The content
+ *                  IS what the claim was derived from: a revert, or a write that
+ *                  never moved the anchored bytes.
+ *   `'differs'` -- at least one anchor does not, INCLUDING an anchor whose
+ *                  content is gone. Deleted is a difference, not a missing
+ *                  measurement.
+ *   `'unknown'` -- there is nothing to compare: no `derivation.anchors`, no
+ *                  anchors, an anchor with no recorded hash, or one that no
+ *                  longer resolves.
+ *
+ * `contents` carries the disk bytes read to reach a `'match'`, keyed by anchor
+ * id, so the caller can re-index those anchors without reading them again. It is
+ * empty for the other two verdicts, which read no further than the first
+ * disagreement.
+ *
+ * WHY CLEARING HAS TO EXIST AT ALL. Nothing in this codebase ever cleared a
+ * `stale` flag.
  * That was harmless while eager invalidation was dead code; it fires now, so
  * every finding on an edited file becomes permanently stale -- and permanently
  * discounted, since `disclose.mjs` skips a stale finding outright and
@@ -1049,24 +1193,6 @@ export function clearStale(dir, key, { graph = null } = {}) {
  * side door. It reports `unknown` and changes nothing; re-recording the claim
  * against the current code (`curate.correct`) is the way forward for those.
  *
- * DELIBERATELY NOT AUTOMATIC. This reads every anchor off disk, so running it on
- * the serve path would put N file reads inside injection -- and, worse, it would
- * silently un-mark findings nobody asked about. Staleness is disclosed to a
- * reader who then decides; clearing is an explicit act.
- */
-/**
- * THE ONE EVIDENCE TEST. Does this finding's anchored content still hash to what
- * the claim was actually made against?
- *
- * `'match'` -- every anchor on disk re-hashes to the value frozen into this
- * finding's own `derivation.anchors` at claim time. The content IS what the
- * claim was derived from: a revert, or a write that never moved the anchored
- * bytes.
- * `'differs'` -- at least one anchor does not, INCLUDING an anchor whose content
- * is gone. Deleted is a difference, not a missing measurement.
- * `'unknown'` -- there is nothing to compare: no `derivation.anchors`, no
- * anchors, an anchor with no recorded hash, or one that no longer resolves.
- *
  * SHARED BY BOTH CLEARING PATHS ON PURPOSE, and that sharing is the guarantee
  * rather than a convenience. `reverify` (a person pressing Re-verify) and
  * `serve` (automatic, on every retrieval) call THIS function and nothing else,
@@ -1080,9 +1206,10 @@ export function clearStale(dir, key, { graph = null } = {}) {
  * re-point at the very bytes that caused the mark, so it answers "fresh" for
  * exactly the finding it just marked stale.
  */
-function claimTimeVerdict(graph, finding) {
+function claimTimeEvidence(graph, finding) {
+  const none = { verdict: 'unknown', contents: new Map() };
   const recorded = finding.derivation && finding.derivation.anchors;
-  if (!recorded || typeof recorded !== 'object') return 'unknown';
+  if (!recorded || typeof recorded !== 'object') return none;
 
   const anchorIds = new Set(
     graph.edges
@@ -1092,22 +1219,122 @@ function claimTimeVerdict(graph, finding) {
   // An unanchored finding cannot be checked against anything, which is the
   // un-invalidatable shape the anchor discipline exists to refuse. It is equally
   // un-VERIFIABLE, so it is reported as such rather than cleared.
-  if (!anchorIds.size) return 'unknown';
+  if (!anchorIds.size) return none;
 
+  const contents = new Map();
   for (const id of anchorIds) {
     const expected = recorded[id];
     const node = graph.nodes.get(id);
     // An anchor this finding never recorded a hash for, or one that no longer
     // resolves to a node: nothing to compare, so nothing is concluded.
-    if (typeof expected !== 'string' || !expected || !node) return 'unknown';
-    if (node.kind !== 'file' && node.kind !== 'symbol') return 'unknown';
+    if (typeof expected !== 'string' || !expected || !node) return none;
+    if (node.kind !== 'file' && node.kind !== 'symbol') return none;
     // null means the content is gone -- deleted file, vanished symbol. That is a
     // difference, not an absence of evidence.
-    if (anchorHashNow(node) !== expected) return 'differs';
+    const content = anchorContentNow(node);
+    if (content === null || hash(content) !== expected) {
+      return { verdict: 'differs', contents: new Map() };
+    }
+    contents.set(id, content);
   }
-  return 'match';
+  return { verdict: 'match', contents };
 }
 
+/** The verdict alone, for callers that do not re-index. */
+function claimTimeVerdict(graph, finding) {
+  return claimTimeEvidence(graph, finding).verdict;
+}
+
+/**
+ * Re-points every verified anchor at the content the evidence test just read.
+ *
+ * WHY A CLEAR IS NOT ENOUGH ON ITS OWN, reproduced end to end: index a file at
+ * H1, write a finding whose `derivation.anchors` records H1, edit and re-index so
+ * the node holds H2, let the eager path mark the finding, then REVERT the edit on
+ * disk. `claimTimeVerdict` now says `'match'` -- disk is H1, which is exactly
+ * what the claim was derived from -- and the flag comes off. But the node still
+ * holds H2, so the same `serve` call went on to emit `stale: true` with
+ * `staleReason: 'file changed'` from the lazy loop (disk H1 against node H2) and
+ * `derivationHolds: false` from `derivationCheck` (index H2 against claim H1).
+ * The model was shown DERIVATION CHANGED and STALE at the exact moment this
+ * module's own evidence test had concluded the derivation holds -- on every
+ * serve, until something unrelated happened to re-index the anchor.
+ *
+ * THE FIX IS TO MOVE THE INDEX, NOT TO SILENCE THE DISCLOSURES. Suppressing the
+ * lazy check and the derivation verdict for a cleared finding would leave the
+ * graph holding a hash that matches no version of the file that exists, so every
+ * OTHER finding on that anchor keeps reading stale, and the next reader has to be
+ * told which disclosures to disbelieve. The node hash is simply out of date, the
+ * bytes are already in hand from the comparison that just succeeded, and writing
+ * them makes all three disclosures agree because they are finally reading the
+ * same content.
+ *
+ * COSTS NO READ. `contents` comes from `claimTimeEvidence`, which read each
+ * anchor to reach `'match'`. The write is one node record per anchor whose hash
+ * actually moved, and it happens once per revert rather than once per serve: with
+ * the index re-pointed, the flag stays off and the gate in `serve` does not fire
+ * again.
+ *
+ * THE IN-MEMORY GRAPH IS UPDATED TOO, because the caller is mid-serve and is
+ * about to read these same nodes through the lazy loop and `derivationCheck`.
+ * Writing only to disk would fix the next process and leave this one contradicting
+ * itself, which is the whole defect.
+ *
+ * Line numbers are deliberately left alone on a symbol anchor: `checkAnchor` and
+ * `anchorContentNow` both re-locate by NAME, so a stored line is informational,
+ * and the body being byte-identical is what was just established.
+ */
+function reindexVerifiedAnchors(dir, graph, contents) {
+  for (const [id, content] of contents) {
+    const node = graph.nodes.get(id);
+    if (!node) continue;
+    const nextHash = hash(content);
+    // Already agrees: no record, no write. The common case once a revert has
+    // been accounted for.
+    if (node.hash === nextHash) continue;
+    const limit = node.kind === 'symbol' ? symbolSnapshotLimit() : snapshotLimit();
+    // Same bound as `indexFile`: past the cap the hash still drives staleness and
+    // only the reconstructed diff degrades.
+    const snapshot = content.length <= limit ? content : undefined;
+    const { hash: _h, snapshot: _s, ...rest } = node;
+    try {
+      putNode(dir, { ...rest, kind: node.kind, key: node.key, hash: nextHash, snapshot });
+    } catch {
+      // Fail open: a graph that could not be written is a disclosure that stays
+      // as it was, never a broken tool call. The in-memory copy is left alone to
+      // match, so this serve keeps agreeing with the store.
+      continue;
+    }
+    graph.nodes.set(id, { ...node, hash: nextHash, ...(snapshot ? { snapshot } : {}) });
+  }
+}
+
+/**
+ * Clears a stale flag on behalf of a person who asked for it -- the dashboard's
+ * Re-verify action -- and reports what the evidence said.
+ *
+ * `'cleared'` when the flag is gone (including when it was already gone, so a
+ * caller polling this does not retry forever), `'still-stale'` when the anchored
+ * content genuinely differs from what the claim was made against, `'unknown'`
+ * when there is nothing to compare and therefore nothing to conclude.
+ *
+ * NO LONGER THE ONLY CLEARING PATH, and the docblock that used to sit here said
+ * the opposite: that automatic clearing was refused because it would put N file
+ * reads inside injection and "silently un-mark findings nobody asked about".
+ * `serve` now does exactly that, on the same evidence, for the reason its own
+ * comment gives -- the manual path was reachable only where somebody opens the
+ * dashboard, which is almost nowhere, so the rot path stayed open on most
+ * installs. What survives of that objection is the cost, which `serve` bounds
+ * and states.
+ *
+ * WHAT THIS STILL ADDS over the automatic path: it loads the graph itself, so a
+ * caller holding nothing but a key and a directory can act; it reports the
+ * verdict rather than folding it into a served record; and it runs on demand
+ * rather than only when the finding happens to be retrieved. It re-indexes the
+ * verified anchors for the same reason `serve` does -- otherwise the button
+ * clears the flag and the very next retrieval re-derives a contradiction from a
+ * node hash nobody moved.
+ */
 export function reverify(dir, key) {
   const graph = load(dir);
   const finding = graph.nodes.get(nodeId('finding', key));
@@ -1116,9 +1343,10 @@ export function reverify(dir, key) {
   // holds, and reporting anything else would make a caller retry forever.
   if (!finding.stale) return 'cleared';
 
-  const verdict = claimTimeVerdict(graph, finding);
+  const { verdict, contents } = claimTimeEvidence(graph, finding);
   if (verdict === 'unknown') return 'unknown';
   if (verdict === 'differs') return 'still-stale';
+  reindexVerifiedAnchors(dir, graph, contents);
   clearStale(dir, key, { graph });
   return 'cleared';
 }

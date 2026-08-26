@@ -335,8 +335,37 @@ describe('diff output is bounded', () => {
     const before = Array.from({ length: 500 }, (_, i) => `line ${i}`).join('\n');
     const after = Array.from({ length: 500 }, (_, i) => `changed ${i}`).join('\n');
     const diff = diffLines(before, after);
-    expect(diff.split('\n').length).toBeLessThanOrEqual(44);
+    // 41, NOT 44, AND THE NUMBER IS THE POINT. Four places described this bound
+    // and no two agreed: the code could emit 43 lines (20 removed, 20 added, two
+    // elision markers, one out-of-budget notice), WIKI_GRAPH.md said 40, another
+    // test said 41 and this one said 44. `maxLines` now bounds the whole body --
+    // elision markers are paid for out of the eliding side's own quota -- so the
+    // ceiling is `maxLines` plus the one notice that is deliberately outside the
+    // budget.
+    expect(diff.split('\n').length).toBeLessThanOrEqual(41);
     expect(diff).toContain('more');
+  });
+
+  test('the worst case -- both sides elided AND lines dropped -- is maxLines + 1', () => {
+    // The shape that produced 43: both sides overflow, so both emit a marker, and
+    // the byte cap drops lines, so the notice is appended too.
+    const before = Array.from({ length: 500 }, (_, i) => `remove ${i} ${'r'.repeat(300)}`).join('\n');
+    const after = Array.from({ length: 500 }, (_, i) => `add ${i} ${'a'.repeat(300)}`).join('\n');
+    const lines = diffLines(before, after).split('\n');
+
+    expect(lines.length).toBeLessThanOrEqual(41);
+    // Vacuous unless all three truncations really fired.
+    expect(lines.filter((l) => l.includes('more removed')).length).toBe(1);
+    expect(lines.filter((l) => l.includes('more added')).length).toBe(1);
+    expect(lines.filter((l) => l.includes('cut at the size limit')).length).toBe(1);
+  });
+
+  test('a smaller maxLines is honoured as a whole-body bound', () => {
+    const before = Array.from({ length: 50 }, (_, i) => `x${i}`).join('\n');
+    const after = Array.from({ length: 50 }, (_, i) => `y${i}`).join('\n');
+    // No byte pressure at this size, so there is no notice: the body alone must
+    // fit, markers included.
+    expect(diffLines(before, after, { maxLines: 6 }).split('\n').length).toBe(6);
   });
 
   test('one enormous line cannot blow the budget', () => {

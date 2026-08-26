@@ -194,7 +194,19 @@ describe('cross-client hook observability', () => {
       child.once('exit', (code) => resolve({ code, elapsed: Date.now() - started }));
     });
     expect(result.code).toBe(0);
-    expect(result.elapsed).toBeLessThan(2500);
+    // NO WALL-CLOCK BOUND. This used to assert `result.elapsed < 2500`: a
+    // wall-clock measurement of a spawned Node process, taken inside a suite that
+    // runs its files in parallel workers, against a budget whose slack over the
+    // 1,500 ms stdin wait is process startup. That is the identified source of
+    // this suite's intermittent failure, and it was never the thing under test.
+    //
+    // The gate that actually proves "fails open BEFORE the host timeout" is the
+    // RECORDED REASON below, and it is not a clock reading. `stdin_timeout` can
+    // only be written by the 1,500 ms stdin wait; had the child instead run past
+    // the 3,000 ms deadline configured above, `finish` would have stamped
+    // `internal_deadline_exceeded` and this test would fail no matter how the
+    // machine was loaded. Ordering is asserted by which mechanism won, not by how
+    // long the winner took.
 
     const file = readdirSync(join(workspace, 'timeout-logs')).find((name) =>
       name.endsWith('.jsonl')
