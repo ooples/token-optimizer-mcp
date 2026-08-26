@@ -231,6 +231,9 @@ rather than rendering an empty diff as though nothing had changed.
 
 **Diffs are bounded three ways** — lines (40), characters per line (200), and
 total UTF-8 bytes (4,000) — and every truncation is announced in the output. The
+line bound covers the whole body, elision markers included, so the output is at
+most 40 lines plus one final notice when the byte cap dropped lines: 41 in the
+worst case, which is what the test asserts. The
 byte bound is not redundant with the line bound: with only the line cap in
 force, two 200,000-character single-line inputs produced 2 lines and 400,005
 bytes, and that output goes straight into model context

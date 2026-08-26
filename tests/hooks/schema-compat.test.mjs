@@ -230,6 +230,29 @@ describe('schema compatibility', () => {
       expect(survivor).toEqual(future);
     });
 
+    it('keeps a READABLE snapshot record that has no id, rather than dropping it', () => {
+      /**
+       * THE SAME SHAPE, ONE BRANCH FURTHER IN. The version check above sorts
+       * records into `records` and `unreadable`, and both survive a rebuild. A
+       * record that passed the version check but carried no `id` went into
+       * NEITHER: `if (rec.id) out.push(...)` and nothing else, so the next
+       * compaction deleted it permanently. Unreachable today because every
+       * writer sets `id` -- which is exactly the argument that was wrong the
+       * last time, and the reader is not the right place to depend on it.
+       */
+      const idless = { t: 's', v: GRAPH_VERSION, snapshot: 'ORPHAN-PAYLOAD', at: 1 };
+      // Readable, unlike the future-version case: this record clears the version
+      // gate and is dropped for a different reason entirely.
+      expect(readable(idless)).toBe(true);
+      writeFileSync(join(dir, 'snapshots.jsonl'), JSON.stringify(idless) + '\n');
+
+      compact();
+
+      const survivor = sidecarLines().find((rec) => rec.snapshot === 'ORPHAN-PAYLOAD');
+      expect(survivor).toBeDefined();
+      expect(survivor).toEqual(idless);
+    });
+
     it('does not restamp a surviving snapshot with the current version', () => {
       // Compaction must never relabel bytes it did not write. Restamping was the
       // other half of this defect: every survivor was written back as

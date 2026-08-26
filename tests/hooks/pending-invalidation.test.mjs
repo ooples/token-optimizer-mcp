@@ -485,3 +485,79 @@ describe('the drain runs on a hook path, so it cannot throw or repeat', () => {
     expect(drainInvalidations(wiki, load(wiki))).toBe(0);
   });
 });
+
+/**
+ * A RECORD QUEUED WHILE THE DRAIN IS RUNNING MUST SURVIVE IT.
+ *
+ * The drain used to `readFileSync` the queue and then `rmSync` the SAME path. A
+ * post-tool hook appending between those two points had its record deleted
+ * having never been read -- and parallel tool calls inside one assistant turn are
+ * the ordinary way that happens, not an exotic race.
+ *
+ * AND A LOST RECORD IS PERMANENT, not degraded. The comment justifying the
+ * unconditional clear priced it as "a single missed eager mark that the lazy path
+ * still has a chance at". This suite's own header is the refutation: the lazy
+ * path compares the anchor's stored hash against disk, `indexFile` re-points that
+ * hash at the bytes the session just wrote, so for the session's own writes lazy
+ * is blind rather than late. Nothing else was ever going to catch it.
+ *
+ * THE INTERLEAVING IS DETERMINISTIC, not timed. `drainInvalidations` hands the
+ * caller's graph to `invalidateOnWrite`, so a graph whose `nodes` accessor queues
+ * a second record places that append exactly mid-drain, every run.
+ */
+describe('a concurrently queued record is not deleted unread', () => {
+  const queueFile = () => join(wiki, 'pending-invalidation.jsonl');
+
+  /** A graph that appends a second write to the queue the moment the drain reads it. */
+  const graphThatQueuesMidDrain = (onFirstAccess) => {
+    const graph = load(wiki);
+    let fired = false;
+    return {
+      get nodes() {
+        if (!fired) {
+          fired = true;
+          onFirstAccess();
+        }
+        return graph.nodes;
+      },
+      get edges() {
+        return graph.edges;
+      },
+    };
+  };
+
+  test('the record appended mid-drain is still there for the next drain', () => {
+    const second = join(project, 'other.ts');
+    writeFileSync(second, BEFORE);
+    indexFile(wiki, second, BEFORE);
+    putNodeWithEdges(
+      wiki,
+      { kind: 'finding', key: 'other-trims', claim: CLAIM, type: 'finding', confidence: 0.9 },
+      [{ edge: 'derived_from', to: nodeId('file', second) }]
+    );
+
+    queueInvalidation(wiki, { path: file, before: BEFORE, after: AFTER });
+    const graph = graphThatQueuesMidDrain(() => {
+      writeFileSync(second, AFTER);
+      queueInvalidation(wiki, { path: second, before: BEFORE, after: AFTER });
+    });
+
+    expect(drainInvalidations(wiki, graph)).toBeGreaterThan(0);
+    // The first drain took a CLAIM, so the concurrent append landed on a fresh
+    // queue rather than inside the file that was about to be deleted.
+    expect(existsSync(queueFile())).toBe(true);
+
+    // And it is applied, which is the point: the mark exists rather than being
+    // left to a lazy path that cannot see this write at all.
+    expect(drainInvalidations(wiki, load(wiki))).toBeGreaterThan(0);
+    expect(load(wiki).nodes.get(nodeId('finding', 'other-trims')).stale).toBe(true);
+  });
+
+  test('the claim file is not left behind for the next drain to re-apply', () => {
+    queueInvalidation(wiki, { path: file, before: BEFORE, after: AFTER });
+    expect(drainInvalidations(wiki, load(wiki))).toBeGreaterThan(0);
+    // Nothing to re-apply, and no queue: the claim was deleted, not the queue.
+    expect(existsSync(queueFile())).toBe(false);
+    expect(drainInvalidations(wiki, load(wiki))).toBe(0);
+  });
+});

@@ -2653,8 +2653,11 @@ async function handleToolCall(request: {
         };
       }
       case 'wiki_query': {
-        // The general read path: by key, by search terms, by anchor, or the
-        // graph's own shape. The SessionStart index has been telling the model
+        // The general read path: one finding by key, a ranked search over claims,
+        // a node with its neighbours, or the graph's own audit.
+        // NOT by anchor -- that operation was removed deliberately and a
+        // test asserts it now answers "unknown operation"; `wiki_read` is the
+        // path that takes files. The SessionStart index has been telling the model
         // to call this for detail since injection landed, so a missing dispatch
         // case here is the difference between an escape hatch and a dead end.
         const result = await wikiQuery(args as WikiQueryOptions);

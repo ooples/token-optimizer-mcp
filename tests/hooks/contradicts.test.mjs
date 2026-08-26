@@ -787,3 +787,89 @@ describe('the derivation record', () => {
     rmSync(dir3, { recursive: true, force: true });
   });
 });
+
+/**
+ * THE REASON A PERSON TYPED HAD NO READER.
+ *
+ * `contradict` stores `contradictionReason` -- up to 400 characters of human
+ * explanation -- on every call, and until this it was read by nothing outside
+ * this file's own "records WHY the belief changed" test. The dispute disclosure
+ * named the other key and stopped; `audit` counts ends; the dashboard detail view
+ * renders neither `contradictionReason` nor `contradictedAt`. Someone typed why
+ * one claim contradicts another and it was seen by nobody.
+ *
+ * NOTE ON THE GUARD THAT DID NOT CATCH THIS. The reachability check scans
+ * EXPORTS, so an unread RECORD FIELD is invisible to it -- correct code that
+ * nothing calls, in the one shape the guard cannot see.
+ */
+describe('the contradiction reason reaches a reader', () => {
+  let dir4;
+  let workspace;
+  let anchorPath;
+
+  beforeEach(() => {
+    dir4 = mkdtempSync(join(tmpdir(), 'contra-reason-'));
+    workspace = mkdtempSync(join(tmpdir(), 'contra-reason-ws-'));
+    anchorPath = canonicalPath(join(workspace, 'k.ts'));
+    writeFileSync(anchorPath, 'export function k() { return 1; }');
+    indexFile(dir4, anchorPath);
+    const id = putNode(dir4, {
+      kind: 'finding', key: 'claim-a', claim: 'k returns 1', confidence: 0.9, type: 'finding',
+    });
+    putEdge(dir4, id, 'derived_from', nodeId('file', anchorPath));
+    putNodeWithEdges(dir4, {
+      kind: 'finding', key: 'claim-b', claim: 'k returns 2', confidence: 0.9,
+    });
+  });
+
+  afterEach(() => {
+    rmSync(dir4, { recursive: true, force: true });
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  const servedFindings = () => {
+    const graph = load(dir4);
+    return serve(graph, [...graph.nodes.values()].filter((n) => n.kind === 'finding'));
+  };
+
+  test('serve carries it, at BOTH ends of the disagreement', () => {
+    contradict(dir4, { key: 'claim-a', byKey: 'claim-b', reason: 'read the tests, it returns 2' });
+    const served = servedFindings();
+    // `contradict` annotates only the contradicted end, so a disclosure reading
+    // its own record alone would tell one side of the dispute why and leave the
+    // other side pointing at a key with no explanation.
+    expect(served.find((f) => f.key === 'claim-a').contradictionReason)
+      .toBe('read the tests, it returns 2');
+    expect(served.find((f) => f.key === 'claim-b').contradictionReason)
+      .toBe('read the tests, it returns 2');
+  });
+
+  test('the injection disclosure renders it beside the key', () => {
+    contradict(dir4, { key: 'claim-a', byKey: 'claim-b', reason: 'read the tests, it returns 2' });
+    const out = forTouch(dir4, load(dir4), anchorPath, { sessionId: 'reason-1' });
+    expect(out).toContain('DISPUTED by claim-b');
+    expect(out).toContain('Reason given: read the tests, it returns 2');
+  });
+
+  test('an empty reason renders nothing, rather than an empty label', () => {
+    contradict(dir4, { key: 'claim-a', byKey: 'claim-b', reason: '   ' });
+    const served = servedFindings().find((f) => f.key === 'claim-a');
+    expect(served.contradicted).toBe(true);
+    expect(served.contradictionReason).toBeUndefined();
+    const out = forTouch(dir4, load(dir4), anchorPath, { sessionId: 'reason-2' });
+    expect(out).toContain('DISPUTED by claim-b');
+    expect(out).not.toContain('Reason given:');
+  });
+
+  test('a long reason is truncated where it is rendered, not where it is stored', () => {
+    const reason = 'x'.repeat(400);
+    contradict(dir4, { key: 'claim-a', byKey: 'claim-b', reason });
+    // Stored and served in full: `wiki_query` is a detail view and pays no
+    // injection budget.
+    expect(servedFindings().find((f) => f.key === 'claim-a').contradictionReason).toBe(reason);
+    // Rendered short, because `fit` prices this string against the budget.
+    const out = forTouch(dir4, load(dir4), anchorPath, { sessionId: 'reason-3' });
+    expect(out).toContain(`Reason given: ${'x'.repeat(140)}...`);
+    expect(out).not.toContain('x'.repeat(141));
+  });
+});

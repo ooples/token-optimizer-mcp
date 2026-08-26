@@ -773,7 +773,17 @@ function readSnapshots(dir) {
           unreadable.push(line);
           continue;
         }
+        // A RECORD WITH NO `id` IS KEPT VERBATIM, NOT DROPPED SILENTLY. It
+        // cannot be attributed to a node, so it is useless to `load` -- but this
+        // used to put it in neither bucket, and `compactIfWasteful` rebuilds the
+        // sidecar from `records` plus `unreadable`, so a line in neither was
+        // deleted permanently by the next compaction. That is the same shape as
+        // the Critical this reader's version check already fixed, and the same
+        // asymmetry: for the compactor, "ignore" and "destroy" are one operation.
+        // Unreachable today because every writer sets `id`; a reader is not the
+        // right place to rely on that.
         if (rec.id) out.push(upcast(rec));
+        else unreadable.push(line);
       } catch {
         // A torn line costs one snapshot -- and it is NOT preserved, because a
         // half-written line is not a record from another version, it is

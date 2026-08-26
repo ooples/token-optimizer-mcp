@@ -139,9 +139,26 @@ function fit(findings, budget) {
  */
 function disputeNote(finding) {
   if (!finding.contradicted) return '';
-  return finding.contradictedBy
+  const head = finding.contradictedBy
     ? `\n  DISPUTED by ${finding.contradictedBy} -- wiki_query that key for the other claim`
     : '\n  DISPUTED by another finding in this graph';
+  // THE REASON A PERSON TYPED, rendered here because this is the fullest of the
+  // three dispute surfaces and the only one with room for a sentence. `contradict`
+  // has always stored up to 400 characters of human explanation and, until this
+  // line, nothing read it: the pointer told a reader where to look and withheld
+  // the one thing that would tell them whether looking was worth a tool call.
+  //
+  // TRUNCATED AT 140, because `fit` prices this string against the injection
+  // budget and a 400-character paragraph beside a one-line claim inverts the
+  // proportions. The compressed surfaces -- the session index and restore.mjs's
+  // "Likely next" list -- deliberately keep marker-and-key only; they are one
+  // line per finding by design, and `wiki_query` returns the reason in full.
+  if (typeof finding.contradictionReason !== 'string' || !finding.contradictionReason.trim()) {
+    return head;
+  }
+  const reason = finding.contradictionReason.trim();
+  const shown = reason.length > 140 ? `${reason.slice(0, 140)}...` : reason;
+  return `${head}\n  Reason given: ${shown}`;
 }
 
 /**

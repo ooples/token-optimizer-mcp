@@ -33,6 +33,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
 } from 'node:fs';
@@ -41,6 +42,15 @@ import { invalidateChangedAnchors, invalidateOnWrite } from './staleness.mjs';
 import { canonicalPath, isFsSafePath, resolvableCandidates } from './paths.mjs';
 
 const queuePath = (dir) => join(dir, 'pending-invalidation.jsonl');
+/**
+ * Where a drain moves the queue before reading it.
+ *
+ * PER PROCESS, not one shared name: two hooks draining the same graph directory
+ * at once would otherwise race for the same claim file, and the loser would
+ * either clobber the winner's records or delete them mid-read. A pid makes the
+ * claim private to the drainer that won the rename.
+ */
+const claimPath = (dir) => join(dir, `pending-invalidation.claim.${process.pid}.jsonl`);
 
 /**
  * Largest before/after side kept in a queue record.
@@ -317,17 +327,47 @@ export function queueInvalidation(dir, { path, before, after, at } = {}) {
  * Returns the number of findings marked, so the caller knows whether its
  * in-memory graph is now behind the file on disk and needs re-reading.
  *
- * CLEARED AFTER APPLYING AND UNCONDITIONALLY: a record that cannot be applied
- * must not be retried on every tool call for the rest of the session, and the
- * cost of dropping one is a single missed eager mark that the lazy path still
- * has a chance at.
+ * CLAIMED BY RENAME, THEN READ, THEN DELETED -- and the order is the whole
+ * point. This used to read the queue and then `rmSync` the same path, so a
+ * post-tool hook appending between the read and the unlink had its record
+ * deleted having never been read. Parallel tool calls in one assistant turn are
+ * the ordinary way that happens, not an exotic race. `renameSync` makes the
+ * claim atomic: whatever the drainer took is exactly what it deletes, and a
+ * record appended a microsecond later lands on a fresh queue that the next drain
+ * will find.
+ *
+ * A LOST RECORD IS A PERMANENTLY MISSED INVALIDATION, which is why this is worth
+ * a rename. The comment here used to price it as "a single missed eager mark that
+ * the lazy path still has a chance at", and that premise is false: this module's
+ * own header states it. The lazy path compares the anchor's stored hash against
+ * disk, and `indexFile` re-points that hash at the bytes the session just wrote,
+ * so for the session's OWN writes lazy is structurally blind rather than merely
+ * late. Nothing else was ever going to catch a dropped record.
+ *
+ * A RECORD THAT CANNOT BE APPLIED IS STILL DROPPED, deliberately and
+ * unconditionally: retrying a permanently unapplicable record on every tool call
+ * for the rest of the session costs more than it can ever recover, and the claim
+ * file is deleted whether the loop marked anything or threw.
+ *
+ * FAIL-OPEN THROUGHOUT. A rename that loses a race, or fails for any other
+ * reason, returns 0 and leaves the queue for the next drain; it never throws
+ * into a hook.
  */
 export function drainInvalidations(dir, graph) {
   let records;
+  let claim;
   try {
     const file = queuePath(dir);
     if (!existsSync(file)) return 0;
-    records = readFileSync(file, 'utf8')
+    claim = claimPath(dir);
+    // A LEFTOVER CLAIM FROM A KILLED DRAIN IS OVERWRITTEN, not merged: rename
+    // onto an existing path replaces it. The pid in the name means the only way
+    // to hit that is this same pid having died mid-drain, whose records were
+    // already being applied when it went -- and re-applying is idempotent, so
+    // losing them is the cheaper of the two errors. Not doing the rename at all
+    // would strand the live queue forever.
+    renameSync(file, claim);
+    records = readFileSync(claim, 'utf8')
       .split('\n')
       .filter((line) => line.trim())
       .map((line) => {
@@ -340,6 +380,18 @@ export function drainInvalidations(dir, graph) {
       })
       .filter(Boolean);
   } catch {
+    // The rename lost a race, or the claim could not be read. Nothing is deleted
+    // unread and the hook proceeds. If the claim was taken and then could not be
+    // read, it is put back under the queue name so the next drain still sees it:
+    // a claim file nobody looks at again is the same lost record this rename
+    // exists to prevent.
+    try {
+      if (claim && existsSync(claim) && !existsSync(queuePath(dir))) {
+        renameSync(claim, queuePath(dir));
+      }
+    } catch {
+      // Best effort only. A hook must not fail because bookkeeping did.
+    }
     return 0;
   }
 
@@ -363,10 +415,13 @@ export function drainInvalidations(dir, graph) {
   }
 
   try {
-    rmSync(queuePath(dir), { force: true });
+    // THE CLAIM, NOT THE QUEUE. Deleting `queuePath` here is what dropped a
+    // concurrently appended record; this path holds exactly the bytes that were
+    // just read, so nothing unread can be inside it.
+    rmSync(claim, { force: true });
   } catch {
-    // Held open by a concurrent hook. The next drain re-applies these records,
-    // which is safe: marking an already-marked finding is idempotent.
+    // Held open by something else. The claim is not read again -- the next drain
+    // looks at the queue -- so this costs a stray file, never a record.
   }
 
   return marked;
