@@ -93,11 +93,13 @@ const ALLOWED = new Map([
   // assertion at the bottom of this file holds the count to a ceiling that can
   // only fall, and refuses any entry that is neither one of these five nor
   // genuine public API.
-  // NOTHING IS LEFT, and the last four did not leave by being re-described.
+  // ONE DELIBERATE EXCEPTION IS LEFT, and the other three did not leave by being
+  // re-described.
   //
   // They were held here for a stated reason -- "the producing action does not
   // exist" -- which was true and was still an excuse, because the producing
-  // action was the work. All four now have one:
+  // action was the work. Three now have in-repo callers; the fourth is the
+  // boundary an external refresh issuer must call:
   //
   //   selectForConsolidation  runs in the semantic harvest, so what a session
   //     stores is chosen under a token budget instead of stored wholesale.
@@ -109,13 +111,15 @@ const ALLOWED = new Map([
   //   consolidationRatio      reported per finding by /api/wiki/node and shown
   //     in the dashboard detail view -- the number #204 opens on, which was
   //     computed for no finding anybody could look at.
-  //   recordRefresh           the keep-warm decision is written to the ledger
-  //     when cache_audit issues it.
+  //   recordRefresh           remains public and deliberately unwired: this
+  //     repository recommends refreshes but never issues one, and recording at
+  //     the recommendation site would score refreshes that were never bought.
   //   recordRefreshOutcome    scored from the event log by
   //     scoreOutstandingRefreshes, which resolves whether a turn actually
   //     arrived inside the window the advice predicted. The signal needed no
   //     new instrumentation; it was in the log the whole time.
   //
+  ['recordRefresh', 'PUBLIC API, UNWIRED BY DESIGN: an external client that actually issues a keep-warm refresh calls this; cache_audit only recommends one, so wiring it there would fabricate purchases.'],
   // ------------------------------------------------------------------
   // The policyText entry lived here as "GENUINE PUBLIC API", and it was stale
   // in the same way forTouch was: adapter.mjs and the SessionStart hook both
@@ -276,8 +280,10 @@ describe('every exported function in the live hook path is reachable', () => {
     // that its producing action did not exist, until it was built.
     //
     // Every future entry must be genuine public API and say so. Anything else
-    // is the backlog re-forming under a new name.
-    expect([...ALLOWED.keys()]).toEqual([]);
+    // is the backlog re-forming under a new name. The sole current entry is the
+    // issuer boundary: deleting it would make the feedback loop impossible for
+    // the client that actually spends the refresh.
+    expect([...ALLOWED.keys()]).toEqual(['recordRefresh']);
 
     const unattributed = [...ALLOWED.entries()]
       .filter(([, reason]) => !/^PUBLIC API/.test(reason))

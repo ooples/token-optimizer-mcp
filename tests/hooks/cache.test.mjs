@@ -32,11 +32,12 @@ import {
   shouldKeepWarm,
   recordRefresh,
   recordRefreshOutcome,
-  scoreOutstandingRefreshes,
-  observedHitRate,
-  OBSERVATION_FLOOR,
+  scoreRefreshes,
+  observedHitRates,
   TIERS,
   TRIPWIRE_MIN,
+  OBSERVATION_FLOOR,
+  TURN_GAP_MS,
 } from '../../hooks-core/keepwarm.mjs';
 import { record, readMetrics, readBalance } from '../../hooks-core/metrics.mjs';
 import { policyText } from '../../hooks-core/adapter.mjs';
@@ -317,6 +318,308 @@ describe('the tripwire stays underneath the expected-value decision', () => {
     }
     expect(tripwire(dir).tripped).toBe(false);
     expect(tripwire(dir).realised).toBeGreaterThan(0);
+  });
+});
+
+describe('a refresh finds out whether it bought anything', () => {
+  /** A refresh recorded at a chosen moment, as an issuer would record it. */
+  const issue = (at, extra = {}) =>
+    recordRefresh(dir, {
+      tier: '5m',
+      prefixTokens: 20_000,
+      expectedValue: 1,
+      sessionId: 's1',
+      at,
+      ...extra,
+    });
+
+  /** A turn, through the real producer, so both logs see it. */
+  const turn = (at, sessionId = 's1') => record(dir, { kind: 'read', at, sessionId });
+
+  const outcomes = () =>
+    readBalance(dir).filter((e) => e.kind === 'keepwarm' && e.action === 'outcome');
+
+  test('a turn arriving before expiry is recorded as a hit', () => {
+    const at = Date.now() - 10 * 60 * 1000;
+    issue(at);
+    turn(at + 60_000);
+
+    const summary = scoreRefreshes(dir);
+    expect([summary.scored, summary.hits]).toEqual([1, 1]);
+    expect(outcomes().map((o) => [o.hit, o.tier])).toEqual([[true, '5m']]);
+  });
+
+  test('a window that closed with no turn in it is a real miss', () => {
+    const at = Date.now() - 10 * 60 * 1000;
+    issue(at);
+    // Six minutes later: the 5m entry had already lapsed, so this arrival is
+    // evidence the window closed unused rather than evidence of a hit.
+    turn(at + 6 * 60 * 1000);
+
+    const summary = scoreRefreshes(dir);
+    expect([summary.scored, summary.hits]).toEqual([1, 0]);
+    expect(outcomes().map((o) => o.hit)).toEqual([false]);
+  });
+
+  test('a hit is not scored before its window closes, or hits would be counted first', () => {
+    // RIGHT-CENSORING, which is the way this measurement flatters itself.
+    // Scoring a hit the moment it arrives while a miss has to wait out the
+    // whole TTL means that at any instant the recorded hits are complete and
+    // the recorded misses are not.
+    const at = Date.now() - 60_000;
+    issue(at);
+    turn(at + 10_000);
+
+    const summary = scoreRefreshes(dir);
+    expect([summary.scored, summary.pending]).toEqual([0, 1]);
+    expect(outcomes()).toEqual([]);
+  });
+
+  test('a refresh with no arrival evidence records nothing rather than a miss', () => {
+    const at = Date.now() - 10 * 60 * 1000;
+    issue(at);
+
+    // The firehose window has moved past the period an answer would need. An
+    // absent signal is not a miss: counting it as one biases every rate
+    // downward and would eventually switch keep-warm off on no evidence.
+    const summary = scoreRefreshes(dir, {
+      arrivals: () => [{ kind: 'read', at: Date.now(), sessionId: 's1' }],
+    });
+    expect([summary.scored, summary.uncovered]).toEqual([0, 1]);
+    expect(outcomes()).toEqual([]);
+  });
+
+  test('a refresh naming no session is not scored, because no arrival belongs to it', () => {
+    const at = Date.now() - 10 * 60 * 1000;
+    issue(at, { sessionId: null });
+    turn(at + 60_000);
+
+    const summary = scoreRefreshes(dir);
+    expect([summary.scored, summary.unattributable]).toEqual([0, 1]);
+    expect(outcomes()).toEqual([]);
+  });
+
+  test('a refresh that cannot be paired is not scored, or it would be scored forever', () => {
+    // No id, so no outcome could ever name it -- and an outcome that names
+    // nothing is one more row on the ledger at the end of every turn, forever.
+    // Everything else about this refresh is scoreable: the window has closed,
+    // the arrival log covers it, and a turn did arrive inside it.
+    const at = Date.now() - 10 * 60 * 1000;
+    const summary = scoreRefreshes(dir, {
+      refreshes: [
+        {
+          kind: 'keepwarm',
+          action: 'refresh',
+          tier: '5m',
+          prefixTokens: 20_000,
+          sessionId: 's1',
+          at,
+        },
+      ],
+      arrivals: () => [
+        { kind: 'keepwarm', action: 'refresh', at, sessionId: 's1' },
+        { kind: 'read', at: at + 60_000, sessionId: 's1' },
+      ],
+    });
+    expect([summary.scored, summary.unattributable]).toEqual([0, 1]);
+  });
+
+  test('each refresh is scored once, not once per turn', () => {
+    const at = Date.now() - 10 * 60 * 1000;
+    issue(at);
+    turn(at + 60_000);
+
+    scoreRefreshes(dir);
+    expect(scoreRefreshes(dir).scored).toBe(0);
+    expect(outcomes()).toHaveLength(1);
+  });
+
+  test('the firehose is not read when there is no refresh to score', () => {
+    // The dormant cost of this loop is one small file, not a 2 MB tail read on
+    // every turn of every session on a machine that never refreshes anything.
+    turn(Date.now() - 60_000);
+    let reads = 0;
+    const summary = scoreRefreshes(dir, {
+      arrivals: () => {
+        reads += 1;
+        return [];
+      },
+    });
+    expect([reads, summary.scored, summary.pending]).toEqual([0, 0, 0]);
+  });
+
+  test("keep-warm's own bookkeeping does not count as a turn arrival", () => {
+    const at = Date.now() - 10 * 60 * 1000;
+    issue(at);
+    const summary = scoreRefreshes(dir, {
+      arrivals: () => [
+        { kind: 'keepwarm', action: 'refresh', at, sessionId: 's1' },
+        { kind: 'keepwarm', action: 'outcome', at: at + 60_000, sessionId: 's1' },
+      ],
+    });
+    expect([summary.scored, summary.hits]).toEqual([1, 0]);
+  });
+
+  test('a burst inside the same turn is not an arrival', () => {
+    const at = Date.now() - 10 * 60 * 1000;
+    issue(at);
+    turn(at + TURN_GAP_MS - 50);
+    turn(at + 6 * 60 * 1000);
+    expect(scoreRefreshes(dir).hits).toBe(0);
+  });
+
+  test('the window is the tier the refresh was bought at', () => {
+    const at = Date.now() - 2 * 60 * 60 * 1000;
+    issue(at, { tier: '1h' });
+    turn(at + 30 * 60 * 1000);
+    const summary = scoreRefreshes(dir);
+    expect([summary.scored, summary.hits]).toEqual([1, 1]);
+  });
+
+  test('the Stop hook scores refreshes, so the loop has a live call site', () => {
+    // THE HALF THAT WAS MISSING. Both recorders were correct, tested and called
+    // by nothing, so the decision could never learn. Spawned rather than
+    // imported: an in-process call proves the function works, not that anything
+    // runs it.
+    const project = mkdtempSync(join(tmpdir(), 'kw-stop-'));
+    mkdirSync(join(project, '.git'), { recursive: true });
+    try {
+      const at = Date.now() - 10 * 60 * 1000;
+      issue(at);
+      turn(at + 60_000);
+
+      const r = spawnSync(
+        process.execPath,
+        [join(process.cwd(), 'plugin', 'hooks', 'stop.mjs')],
+        {
+          input: JSON.stringify({ cwd: project, session_id: 'stop-session' }),
+          encoding: 'utf8',
+          timeout: 30_000,
+          env: {
+            ...process.env,
+            TOKEN_OPTIMIZER_WIKI_DIR: dir,
+            TOKEN_OPTIMIZER_SHARED_DIR: dir,
+            TOKEN_OPTIMIZER_STATE_DIR: join(project, '.state'),
+            TOKEN_OPTIMIZER_PROJECT_REGISTRY: join(project, 'projects.jsonl'),
+            CLAUDE_PROJECT_DIR: project,
+          },
+        }
+      );
+      expect(r.status).toBe(0);
+      expect(outcomes().map((o) => o.hit)).toEqual([true]);
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('the keep-warm decision reads what the refreshes actually did', () => {
+  /** Turns `gapMs` apart, through the real producer. */
+  const seedTurns = (gapMs, count = 20) => {
+    const base = Date.now() - count * gapMs;
+    for (let i = 0; i < count; i++) record(dir, { kind: 'read', at: base + i * gapMs });
+  };
+
+  const seedOutcomes = (hits, misses, tier = '5m') => {
+    for (let i = 0; i < hits + misses; i++)
+      recordRefreshOutcome(dir, { tier, prefixTokens: 20_000, hit: i < hits });
+  };
+
+  const observed = () => observedHitRates(readBalance(dir));
+
+  test('ten refreshes that never bought a read stop it recommending one', () => {
+    // Gaps just past the TTL: the ping model says refresh, and until now
+    // nothing could contradict it.
+    seedTurns(7 * 60 * 1000);
+    const gaps = gapDistribution(dir);
+    expect(keepWarmDecision({ prefixTokens: 20_000, gaps }).action).toBe('refresh');
+
+    seedOutcomes(0, OBSERVATION_FLOOR);
+    const decision = keepWarmDecision({ prefixTokens: 20_000, gaps, observed: observed() });
+    expect(decision.action).toBe('skip');
+    expect(decision.observedHitRate).toBe(0);
+    expect(decision.reason).toMatch(/10 observed refreshes/);
+  });
+
+  test('an observed hit rate may lower the modelled probability and never raise it', () => {
+    // Every gap inside the TTL, so a ping buys nothing: the entry was warm
+    // anyway. A recorded `hit` only says a turn arrived before expiry -- it
+    // cannot say the ping is what kept the entry alive, so it is an UPPER bound
+    // on the ping's value and must never be substituted for the model.
+    seedTurns(30_000);
+    const gaps = gapDistribution(dir);
+    const plain = keepWarmDecision({ prefixTokens: 20_000, gaps });
+    expect(plain.action).toBe('skip');
+
+    seedOutcomes(OBSERVATION_FLOOR, 0);
+    const withObservations = keepWarmDecision({
+      prefixTokens: 20_000,
+      gaps,
+      observed: observed(),
+    });
+    expect(withObservations.action).toBe('skip');
+    expect(withObservations.probability).toBe(plain.probability);
+  });
+
+  test('a perfect observed record cannot make a tier that never pays pay', () => {
+    seedTurns(6 * 60 * 60 * 1000);
+    seedOutcomes(OBSERVATION_FLOOR, 0);
+    expect(
+      ttlTier({ prefixTokens: 20_000, gaps: gapDistribution(dir), observed: observed() })
+    ).toBeNull();
+  });
+
+  test('an observed hit rate moves the tier chooser off the tier that missed', () => {
+    seedTurns(30_000);
+    expect(ttlTier({ prefixTokens: 20_000, gaps: gapDistribution(dir) }).tier).toBe('5m');
+
+    seedOutcomes(2, OBSERVATION_FLOOR - 2);
+    const best = ttlTier({
+      prefixTokens: 20_000,
+      gaps: gapDistribution(dir),
+      observed: observed(),
+    });
+    // Observations bind the tier they were measured at, and only that tier.
+    expect(best.tier).toBe('1h');
+  });
+
+  test('when every tier has missed, no tier pays and it says so', () => {
+    seedTurns(30_000);
+    seedOutcomes(0, OBSERVATION_FLOOR, '5m');
+    seedOutcomes(0, OBSERVATION_FLOOR, '1h');
+    expect(
+      ttlTier({ prefixTokens: 20_000, gaps: gapDistribution(dir), observed: observed() })
+    ).toBeNull();
+  });
+
+  test('a single unlucky miss cannot switch keep-warm off', () => {
+    seedTurns(30_000);
+    seedOutcomes(0, 1);
+    expect(observed().size).toBe(0);
+    expect(shouldKeepWarm(dir, { prefixTokens: 20_000 }).action).toBe('refresh');
+  });
+
+  test('the floor is the same evidence the backstop demands', () => {
+    seedOutcomes(0, OBSERVATION_FLOOR - 1);
+    expect(observed().size).toBe(0);
+    seedOutcomes(0, 1);
+    expect(observed().get('5m')).toEqual({ refreshes: 10, hits: 0, rate: 0 });
+    expect(OBSERVATION_FLOOR).toBe(TRIPWIRE_MIN);
+  });
+
+  test('the shipped decision reads the observations without the tripwire doing it', () => {
+    seedTurns(30_000);
+    expect(shouldKeepWarm(dir, { prefixTokens: 20_000 }).action).toBe('refresh');
+
+    // Two used in ten at each tier. The realised ledger is still POSITIVE, so
+    // the backstop has no opinion: if the verdict moves, the decision moved it.
+    seedOutcomes(2, OBSERVATION_FLOOR - 2, '5m');
+    seedOutcomes(2, OBSERVATION_FLOOR - 2, '1h');
+    expect(tripwire(dir).tripped).toBe(false);
+
+    const out = shouldKeepWarm(dir, { prefixTokens: 20_000 });
+    expect(out.action).toBe('skip');
+    expect(out.trippedWire).toBeUndefined();
   });
 });
 
@@ -731,112 +1034,3 @@ describe('SessionStart context is assembled in cache order', () => {
   });
 });
 
-describe('the keep-warm loop actually closes', () => {
-  // `recordRefresh` and `recordRefreshOutcome` had no call site anywhere, so
-  // `tripwire` returned "only 0/10 refreshes observed" for the life of the
-  // project and `keepWarmDecision` could never learn that its modelled hit rate
-  // was wrong. The missing piece was never a new sensor: the event log already
-  // records when every turn happened, so whether a refresh's window was used is
-  // recoverable from data that was there the whole time.
-  let graph;
-
-  beforeEach(() => {
-    graph = mkdtempSync(join(tmpdir(), 'kw-loop-'));
-  });
-
-  afterEach(() => {
-    rmSync(graph, { recursive: true, force: true });
-  });
-
-  const fiveMinutes = TIERS[0].ms;
-
-  test('a turn inside the window scores as a hit', () => {
-    const at = 1_000_000;
-    recordRefresh(graph, { tier: '5m', prefixTokens: 20000, expectedValue: 1 });
-    const refreshes = readBalance(graph).filter((e) => e.action === 'refresh');
-    // Drive the timeline explicitly rather than depending on wall-clock.
-    const events = [{ kind: 'read', at: refreshes[0].at + fiveMinutes / 2 }];
-
-    const { recorded } = scoreOutstandingRefreshes(graph, { events, now: at + fiveMinutes * 10 });
-    expect(recorded).toBe(1);
-    const outcome = readBalance(graph).find((e) => e.action === 'outcome');
-    expect(outcome.hit).toBe(true);
-  });
-
-  test('a turn after the window scores as a miss', () => {
-    recordRefresh(graph, { tier: '5m', prefixTokens: 20000, expectedValue: 1 });
-    const refreshAt = readBalance(graph).find((e) => e.action === 'refresh').at;
-    const events = [{ kind: 'read', at: refreshAt + fiveMinutes * 3 }];
-
-    scoreOutstandingRefreshes(graph, { events, now: refreshAt + fiveMinutes * 10 });
-    expect(readBalance(graph).find((e) => e.action === 'outcome').hit).toBe(false);
-  });
-
-  test('a window that has not closed yet records NOTHING, rather than guessing a miss', () => {
-    // Plan 2's own instruction, and the important one: scoring an open window
-    // as a miss would drive the tripwire negative on the newest and least
-    // informative records.
-    recordRefresh(graph, { tier: '5m', prefixTokens: 20000, expectedValue: 1 });
-    const refreshAt = readBalance(graph).find((e) => e.action === 'refresh').at;
-
-    const { recorded, outstanding } = scoreOutstandingRefreshes(graph, {
-      events: [],
-      now: refreshAt + fiveMinutes / 2,
-    });
-    expect(outstanding).toBe(1);
-    expect(recorded).toBe(0);
-    expect(readBalance(graph).some((e) => e.action === 'outcome')).toBe(false);
-  });
-
-  test('a closed window with no turn at all is an observed miss', () => {
-    recordRefresh(graph, { tier: '5m', prefixTokens: 20000, expectedValue: 1 });
-    const refreshAt = readBalance(graph).find((e) => e.action === 'refresh').at;
-
-    scoreOutstandingRefreshes(graph, { events: [], now: refreshAt + fiveMinutes * 2 });
-    expect(readBalance(graph).find((e) => e.action === 'outcome').hit).toBe(false);
-  });
-
-  test('scoring is idempotent, so a second drain does not double-count', () => {
-    recordRefresh(graph, { tier: '5m', prefixTokens: 20000, expectedValue: 1 });
-    const refreshAt = readBalance(graph).find((e) => e.action === 'refresh').at;
-    const opts = { events: [], now: refreshAt + fiveMinutes * 2 };
-
-    scoreOutstandingRefreshes(graph, opts);
-    const second = scoreOutstandingRefreshes(graph, { ...opts, outcomes: readBalance(graph) });
-    expect(second.recorded).toBe(0);
-    expect(readBalance(graph).filter((e) => e.action === 'outcome')).toHaveLength(1);
-  });
-
-  test('the observed hit rate stays null below the floor, then reports', () => {
-    for (let i = 0; i < OBSERVATION_FLOOR - 1; i++) {
-      recordRefreshOutcome(graph, { tier: '5m', prefixTokens: 20000, hit: false });
-    }
-    expect(observedHitRate(graph, { tier: '5m' })).toBeNull();
-
-    recordRefreshOutcome(graph, { tier: '5m', prefixTokens: 20000, hit: false });
-    const observed = observedHitRate(graph, { tier: '5m' });
-    expect(observed.observations).toBe(OBSERVATION_FLOOR);
-    expect(observed.rate).toBe(0);
-  });
-
-  test('an observed hit rate of zero overturns a model that says refresh', () => {
-    // THE POINT OF THE WHOLE LOOP. Before this, refreshes that bought nothing
-    // kept being recommended right up to the moment the tripwire cut the entire
-    // feature off -- there was nothing between "the model says yes" and "stop".
-    const gaps = { probabilityWithin: (ms) => (ms > TIERS[0].ms ? 1 : 0) };
-    const modelled = keepWarmDecision({ prefixTokens: 20000, gaps });
-    expect(modelled.action).toBe('refresh');
-    expect(modelled.basis).toMatch(/modelled/);
-
-    const learned = keepWarmDecision({
-      prefixTokens: 20000,
-      gaps,
-      observed: { observations: 10, rate: 0 },
-    });
-    expect(learned.action).toBe('skip');
-    expect(learned.basis).toMatch(/measured over 10/);
-    // The model's own number is still reported, so the disagreement is visible
-    // rather than silently overwritten.
-    expect(learned.modelledProbability).toBe(1);
-  });
-});
