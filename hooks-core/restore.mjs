@@ -25,6 +25,7 @@ import { findingsFor, nodeId } from './wiki.mjs';
 import { serve } from './staleness.mjs';
 import { indexBudget } from './metrics.mjs';
 import { canonicalPath } from './paths.mjs';
+import { safeLine } from './safe-text.mjs';
 
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
 
@@ -179,7 +180,13 @@ export function restorationPlan(dir, graph, context = {}) {
     )
     .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
     .slice(0, 12)
-    .map((n) => `${n.key}: ${n.claim.slice(0, 100)}`);
+    // FLATTENED HERE, because this list does NOT go through `serve`. It reads
+    // graph nodes directly -- deliberately, since it wants the highest-confidence
+    // claims rather than the ones anchored to a file -- so it is outside the
+    // boundary that holds the no-forged-lines guarantee for everything else. A
+    // stored newline here writes its own entries into the restore brief, which
+    // is injected at SessionStart before the model has read anything.
+    .map((n) => `${safeLine(n.key)}: ${safeLine(n.claim).slice(0, 100)}`);
   section('Established', established, total * split.brief);
 
   if (!sections.length) return null;
