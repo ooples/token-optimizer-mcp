@@ -81,6 +81,44 @@ describe('what qualifies', () => {
   });
 });
 
+describe('how the next rule gets here', () => {
+  it('asks for wiki_write by name, with the anchor the tool requires', () => {
+    // A model reading a set of standing rules has no way to add to it unless the
+    // block says how one is made. Both routes into this list -- a pin and a
+    // person's verified correction -- start as a wiki_write, and an unanchored
+    // write is refused, so naming the tool without the anchor would produce
+    // refusals the agent cannot diagnose.
+    seed({ key: 'p1', claim: 'Build against an isolated worktree.', pinned: true });
+    const out = standingRules(dir, load(dir));
+
+    expect(out).toMatch(/wiki_write/);
+    expect(out).toMatch(/anchor/i);
+  });
+
+  it('spends ONE LINE on it, charged inside the budget rather than beside it', () => {
+    // The guidance is part of the message the budget bounds -- `spent` starts at
+    // the heading's own cost -- so every token it takes is a token a real rule
+    // does not get. The documented shape of the budget is "400 tokens is roughly
+    // a dozen rules", and that has to survive the addition: a paragraph here
+    // would silently push rules out of a block whose whole justification is
+    // that it is tightly bounded.
+    // MEASURED AS THE FIXED OVERHEAD, not as "twelve short rules still fit".
+    // The first version of this asserted the latter, and a five-line paragraph
+    // pasted into the heading still left room for twelve 12-token rules inside
+    // 400 -- so it passed for the wrong reason and proved nothing about the
+    // size of the addition. One seeded rule isolates what the wrapper costs.
+    seed({ key: 'p1', claim: 'A pinned rule.', pinned: true });
+    const out = standingRules(dir, load(dir));
+    const tokens = Math.ceil(out.length / 4);
+
+    expect(out).toMatch(/wiki_write/);
+    // A sixth of the 400-token budget for heading plus guidance plus one rule.
+    // The documented shape is "400 tokens is roughly a dozen rules"; a wrapper
+    // that grows past this is spending rules on prose about rules.
+    expect(tokens).toBeLessThanOrEqual(70);
+  });
+});
+
 describe('ordering', () => {
   it("puts a person's own correction above an inferred pin", () => {
     seed({ key: 'pin', claim: 'PINNED RULE', pinned: true, confidence: 0.99 });

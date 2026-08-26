@@ -1037,4 +1037,519 @@ nothing measured recall. Now it does."
 | Calibration refuses when uncalibrated | `calibration(dir).publishable` | false, with a stated reason |
 | No price on an estimate | the estimated line in `get_optimization_report` | no `$` |
 | Recall measured | `recallProbe(dir).rate` | a number, or null with a reason |
-| Allowlist shrunk | `grep -c "^  \['" tests/hooks/reachability.test.mjs` | 4 (from 9) |
+| Allowlist shrunk | `grep -c "^  \['" tests/hooks/reachability.test.mjs` | 3 (from 9; Task 9 took it 4 -> 3, and `recordRefresh` stays because nothing issues a refresh) |
+
+---
+
+## Task 11: A transcript reader for failed tool results
+
+**Added mid-plan, after Task 5 measured why the detectors produced nothing.**
+
+Claude Code **never fires PostToolUse for a failed tool call.** Proved with a deliberately
+failing command that produced no event at all, and 2,238 of 2,238 live outcomes on the
+measuring machine were `success: true`. So the two highest-confidence detectors — command
+failed-then-succeeded (0.90) and test/build red-to-green (0.85) — have **no input on the
+primary client**, while working normally on the ten adapter clients.
+
+This task gives them input from the one place the failures do exist: the local transcript
+archive, which the correction detector already reads.
+
+**Files:**
+- Modify: `hooks-core/derive.mjs`
+- Test: `tests/hooks/derive.test.mjs`
+
+**Interfaces:**
+- Produces: `failedResultsFromArchive(turns) => Array<{ command, output, at }>`, fed to the
+  existing command and test detectors alongside `tool-outcome` events.
+
+**Requirements**
+
+- **Read-only, and reuse the archive already in use.** No new capture path, no new hook, no
+  new event kind. The correction detector reads this archive; so does this.
+- **The confidence ceilings do not change.** A failure observed in a transcript is the same
+  evidence as one observed in an event — the ceilings encode how much the evidence supports,
+  not how it arrived. Do not raise or lower them for this source.
+- **Deduplicate against `tool-outcome`.** On the ten clients that *do* report failures, a
+  failure may appear in both sources. The same failure must not produce two candidates, and
+  the pairing must not treat the transcript copy and the event copy as a failed-then-
+  succeeded pair with itself.
+- **Redact.** Transcript text is not redacted upstream — `recordToolOutcome`'s boundary never
+  saw it. Everything derived from it goes through `redact` before storage.
+- **The refusals from Task 3 still hold.** Identical command text either side of a failure
+  emits nothing, and pairing uses the nearest preceding failure. A transcript source does not
+  license a weaker causal claim.
+- **Bound the read.** A long session's archive is large; cap what is scanned the way the
+  correction detector does, and say what the cap is.
+
+**Two things to determine rather than assume**
+
+1. **Does the archive actually contain failed tool results, and in what shape?** Task 5
+   established the archive exists and carries 723 turns on a real session. Confirm that a
+   *failed* result is present and identifiable — a tool result block with an error, a
+   non-zero exit rendered as text, or a refusal — and report the shape you found. **If failed
+   results are not recoverable from the archive, say so plainly and stop**: that would mean
+   this task cannot work, and reporting it is worth more than an extractor that finds nothing.
+2. **How is a command identified?** `tool-outcome` puts the command text in `anchor`. A
+   transcript turn may render it differently. The `attemptKey` grouping (up to three non-flag
+   tokens) must produce the same key from both sources, or a failure from the transcript will
+   never pair with a success from an event.
+
+**Verification — the deliverable is a measurement, not a claim.** After wiring, run a real
+transcript through the Stop path and report how many command and test candidates it yields,
+against the zero it yields today. If the answer is still zero, that is the finding.
+
+**Mutation bar as elsewhere**, plus the harness defect Task 5 recorded: mutating `hooks-core/`
+without `npm run sync:hooks` leaves spawn-based E2E tests running the old synced copy, so a
+mutation reads as survived when it was never applied. Sync between mutation and test.
+
+---
+
+## Task 12: `attemptKey` groups unrelated commands together
+
+**Added mid-plan. This is a correctness bug, not an unlock.**
+
+`attemptKey` groups by up to three non-flag tokens. A leading `cd <repo> &&` therefore
+consumes the whole key, and Task 11 measured the consequence in this repository: **539
+distinct commands share one key.**
+
+That is not only a Claude Code problem. On the ten clients where the detectors *do* receive
+failures, the command detector can pair a failure with a success from a completely unrelated
+command and emit a claim at **0.90** — the highest confidence any detector is permitted. The
+claim would be false about both halves.
+
+**Files:** Modify `hooks-core/derive.mjs`; Test `tests/hooks/derive.test.mjs`
+
+**Requirements**
+
+- Skip a leading directory-change prefix before computing the key — `cd <path> &&`, and any
+  similar shell preamble that carries no information about *what* was run. Report which
+  prefixes you chose to skip and why that set and no wider.
+- **The two existing refusals must survive.** Identical command text either side of a failure
+  still emits nothing, and pairing still uses the nearest preceding failure. A better key must
+  not become a licence to pair more loosely.
+- **Keys must still agree across sources.** Task 11 established that the transcript reader and
+  `recordToolOutcome` agree on 266/266 attempt keys only because both apply the same 120-char
+  truncation. Whatever you change must be applied identically on both paths, and verified on a
+  real session rather than a fixture.
+
+**Measure it, do not assert it.** This changes grouping for all eleven clients, which is the
+kind of shared-behaviour change that has twice needed its own per-client evidence on these
+plans. Report, from real transcripts:
+
+- the number of distinct commands sharing the most-populated key, before and after
+- how many command/test candidates are produced, before and after
+- whether any candidate produced after the change pairs two commands that a reader would
+  agree are the same attempt — inspect them, do not just count them
+
+A larger candidate count is **not** success on its own. The question is whether the pairs are
+true. If the change produces pairs that are still wrong, say so.
+
+**Mutation bar as elsewhere**, plus: sync `hooks-core/` between mutation and test, or
+spawn-based tests run the old copy and a mutation reads as survived.
+
+---
+
+## Task 13: Hold the cross-layer headline to its own causal test
+
+**Added after Task 10's final audit found one more measurement-bias instance.**
+
+`calibration()` currently publishes whenever the referenced arm's mean shrunk effect is at
+least one token larger than the not-referenced arm's and *some* Layer 2 row published. That
+does not test the cross-layer claim itself. With three findings per arm, a favourable 2:1
+split of real and null effects against an unfavourable 1:2 split produces a positive gap even
+though a two-sided permutation test reads `p = 1`. The existing code calls that partition
+"calibrated".
+
+**Files:** Modify `hooks-core/loo.mjs`, `hooks-core/crosslayer.mjs`; Test
+`tests/hooks/loo.test.mjs`, `tests/hooks/calibration-loop.test.mjs`
+
+**Requirements**
+
+- Reuse Layer 2's exact-or-sampled two-sided permutation statistic. Do not implement a second
+  statistic whose tolerance, enumeration cutoff, or sidedness can drift.
+- Preserve Layer 2's historical fixed sampled sequence when it does not supply a seed.
+- For the cross-layer caller, canonicalise both arms and derive the sampled seed from their
+  data. The result must be invariant to event order and to swapping the two semantic labels.
+- A positive gap publishes only at `p <= 0.10`. The boundary is inclusive: at the existing
+  three-per-arm floor, complete separation has exact two-sided `p = 2/20 = 0.10`; using `<`
+  would make the floor impossible to clear.
+- Carry `p`, `alpha`, and the test name in measured output and print `p` in both the published
+  and refused verdicts. Before both arms clear the floor, no `p` field exists; absence of a
+  test is not `p = 0`.
+- Fail open and preserve every pre-existing calibration refusal, independence invariant,
+  policy-version guard, and report/audit reader.
+
+**Mutation bar as elsewhere.** At minimum mutate away the gate, flip `>` to `>=`, ignore the
+caller's seed, remove canonical ordering, make the exact result one-sided, hide `p` from the
+result or verdict, and inject a permanent `p: 0` into unmeasured refusals.
+
+---
+
+# Execution state and corrections
+
+**Read this before starting or resuming. It is authoritative over the task text above,
+which was written before Plan 1 was executed and is wrong in the places named here.**
+
+Plan 1 shipped as **PR #315** (36 commits). Plan 2 runs on `feat/close-wiki-graph-gaps-plan2`,
+stacked on Plan 1 because it imports `hooks-core/lexical.mjs`, `hooks-core/pending.mjs` and the
+injection join — it cannot compile against `master` until #315 merges.
+
+## Where execution stopped
+
+| Task | State |
+|---|---|
+| 1 — Redaction | **Complete.** `hooks-core/redact.mjs`, 10 tests. |
+| 2 — Extend `tool-outcome` | **Complete through fix round 2.** `output` + `exit` on the event, `isError` read by `toolSucceeded` and `mutationSucceeded`. |
+| 3b — `rereadsByAnchor` | Not started. **Run before Task 3** (see ruling). |
+| 3 — The four extractors | Not started. Depends on 2 and 3b. |
+| 4 | **Complete.** `derive` routes candidates through `selectForConsolidation` (budget 1000 tokens, `TOKEN_OPTIMIZER_DERIVE_BUDGET`) into `writeHarvested` as `ORIGIN_HARVESTED`. `contentAnchor` deleted (issue #319); allowlist 7 -> 5. Three defects fixed on the way: the scorer read `entry.summary` where every other layer writes `claim`, so the budget admitted everything; candidates anchored to the project ROOT, which `indexFile` cannot read, so storage would have been zero; and `derive`'s own evidence boilerplate said "flaky", which `irrecoverability` scores in its top tier. `derive` stays SYNC -- no import cycle, so the brief's async rewrite was unnecessary. See `task-4-report.md`. |
+| 5 | Not started. |
+| 6 — Layer 1 | **Complete.** `hooks-core/usage.mjs` -- `classify`, `referenceRate`,
+`referenceNote`; 24 tests; 21/21 mutations killed. Keyed on explicit reference, never on
+read-suppression. Two determinations answered against real data: **`expand` does not name a
+finding** (`recordExpansion` writes a truncation-capture `ref`, and all 64 live expand
+events carry `sessionId: null`), so it counts as opportunity only and the brief's "query or
+expand" is wrong; and **2,994 of 2,995 live `tool-outcome` rows report `joinMethod: 'none'`
+because no injection existed for that tool call**, not because the join failed -- there are
+2 `inject` events in 16,387 rows. Denominator 1, `rate: null`, and the audit prints nothing
+rather than 0%. The 2 MB read window, not the join, is the binding constraint: both injects
+have aged out, so the windowed denominator is 0. A measurement-bias defect was found in the
+first draft and is recorded -- keying "the join failed" on `episodeId` (which IS the session
+id) scored 2,559 tool calls of one session as failed joins where the truth is 0. Wired to a
+real reader (`renderAudit` -> `referenceNote`) so the allowlist stays at 5. **Fix round 1:**
+attribution no longer scopes by session -- `wiki_query`'s `sessionId` is an optional input the
+model must volunteer, and an unverifiable model-supplied id is not evidence, so a `query`
+naming key K credits any earlier injection of K and **time order is the only remaining
+guard**. The cost (two concurrent sessions on one repo can cross-attribute) is disclosed in
+`referenceNote` beside the figure, not just in the report; `unscopedReferences` was removed
+rather than zeroed. `referenceRate` now returns **`windowed`** and the note says the
+denominator can understate: unwindowing only the injection arm (which already has
+`BALANCE_KINDS`/`EVIDENCE_KINDS` access, unlike `query`) would make the arms cover different
+time spans and manufacture a pessimistic rate from the asymmetry, and unwindowing the query
+arm means widening `EVIDENCE_KINDS`, which two consumers read and which needs its own
+per-consumer comparison. 28 tests, 25/25 mutations killed. See `task-6-report.md`. |
+| 7 — Layer 2 | **Complete.** `hooks-core/loo.mjs` -- `withheldFor`, `exploreOrder`,
+`observations`, `effects`, `looNote`, `servingPolicyVersion`, `LOO_ENABLED`; 43 tests; 43/43
+mutations killed and all 43 tests killed by at least one mutation. Estimand is
+**read-suppression**, disjoint from Layer 1's explicit reference: `loo.mjs` contains zero
+occurrences of `query`, `usage.mjs` zero occurrences of `tokens`/`cost`/`bytes`, and a test
+moves each layer while the other stays deeply equal. Gated on `recordToolOutcome`'s existing
+join; no new join. Withholding happens in `forTouch` **after `fit`** (a leave-one-out, not a
+substitution) and the delivered set is **re-priced**, so `tokens` bills only what was sent.
+Five guards bound it: file surface only, never fewer than two kept findings, never inside
+`inHoldout` (passed in and refused), one per touch, **one per session** -- so the user's worst
+case is one extra file read per session (median 6,531 / p90 20,000 tokens measured here)
+against a finding that costs 66-317 tokens to send. `pinned` / `origin: 'human'` are exempt and
+the note says how many. Exact permutation p-values (84 relabellings at the 6/3 floor, so the
+floor and q=0.10 are compatible by arithmetic), BH across every candidate row, empirical-Bayes
+shrinkage with both the prior mean and the weight estimated from the data.
+**On this machine Layer 2 is dormant and reports nothing at all**: 0 file-surface injections in
+16,875 rows across three graphs (both live injections are command-surface) and the graph holds
+one finding with no anchor carrying two -- so `effects()` is `[]`, `looNote()` is `null`, and
+the audit gains no line rather than a zero. Verified on a synthetic graph built with the real
+producers (`record`, `recordToolOutcome`), field-checked against live `metrics.jsonl`. Two
+defects found in my own work by mutation: an **unfalsifiable** publication gate on
+`costObservations` (deleted -- with all-zero costs p is exactly 1, so it could not change a
+verdict; the disclosure in `looNote` took over its job) and **exploration wired but unproven**
+(a new test shows a tight budget serving the never-served finding). See `task-7-report.md`. |
+| 8 -- calibration loop | **Complete.** `hooks-core/crosslayer.mjs` (new) -- `calibration`,
+`calibrationNote`, `consolidation`, `graphBalanceSheet`, `labelsByFinding`,
+`MIN_FINDINGS_PER_ARM`, `MIN_GAP_TOKENS`; `audit.mjs` headline + one wiring point;
+`get-optimization-report.ts` serves a `graph` field and a rendered graph block. 29 tests; **30
+mutations, 30 killed, all 29 new tests killed by at least one mutation.** Full suite 224 suites /
+2,849 passed, twice green, no flakiness. Allowlist **5 -> 4**.
+**Three of the task's premises were stale and are resolved rather than papered over.** (a)
+`approxCost` and the hardcoded `$3/1M` **do not exist anywhere in the repo** -- only in the plan
+and the design spec; `pricing.mjs` and `provider-pricing.ts` were already correct, so nothing was
+manufactured. What was open was the RULE, now enforced against the rendered text with a rate
+configured: currency appears on the measured-counterfactual line and on no line saying
+"estimate" (M20/M21/M24 pin it both ways). (b) `hasOutstandingContradiction` is already the
+dispute gate at `staleness.mjs:497`, and **no promotion path exists to gate** -- every
+`confidence` write in `hooks-core` is at CREATION and `utility.mjs` reads it into an ephemeral
+`netUtility` only. So `mayPromote` was NOT added; the invariant is enforced instead, behaviourally
+(a contradicted finding with a large measured effect keeps its stored confidence through
+`graphBalanceSheet`/`calibrationNote`/`renderAudit`) and structurally (`crosslayer`/`loo`/`usage`
+contain zero `confidence` in code), with M26 adding a real promotion to prove the guard bites.
+(c) `consolidationRatio` was the real allowlist item and is wired through
+`consolidation()` -> `graphBalanceSheet` -> the report; its excuse was doubly stale, since
+`expand.promote` DOES persist `derivedCost` and `src/server/disclosure.ts` calls it.
+**`calibration()` REFUSES on this machine and that is the whole point**: Layer 1 publishes no rate
+(0 classifiable observations, 0 reference events) and Layer 2 has 0 observations, so the verdict
+names BOTH insufficient inputs and there is **no `gap` key at all** -- not `gap: 0`, which would
+read as "measured, and they agree". Seven distinct refusals, each tested and each killed by its
+own mutation. Independence preserved by construction -- only Layer 1's categorical LABEL and only
+Layer 2's effect MAGNITUDE, joined on the finding key -- and proven from both sides: flipping the
+labels over identical Layer 2 data flips the gap's sign, and moving Layer 1's rate without moving
+a label leaves the gap byte-identical (M16 injects the circularity and is killed).
+**One production defect found by my own mutation run:** the publication gate was `gap > 0`, and
+two arms of equal means produce a gap of ~1e-13 after floating point, which would have published
+`calibrated: referenced findings suppress 0 more tokens/touch` -- a calibration resting on
+arithmetic noise, leaning the project's own way. `MIN_GAP_TOKENS = 1`, tied to the unit the
+verdict prints, closes it. **`renderAudit`'s headline is fixed** (Task 7 left it): "Nothing
+addressable found." is now scoped to the remediation queue, so it can no longer be a false
+negative printed above a published Layer 2 verdict. `calibration()` lives in a NEW module rather
+than `metrics.mjs` as the plan said, because `metrics.mjs` is the BASE of the import graph and the
+plan's placement would have created `metrics -> loo -> {utility,curate,wiki} -> metrics`;
+`balanceSheet` is untouched and the four new sections are composed one level up in
+`graphBalanceSheet`, which is the shape the plan's interface specifies. Cost: `balanceSheet`
+81.7 ms -> `graphBalanceSheet` 185.1 ms on this machine's real 2 MB log, on an on-demand report
+path. See `task-8-report.md`. |
+| 9 — keep-warm loop | **Complete, with one recorder deliberately left unwired.**
+`hooks-core/keepwarm.mjs` — `scoreRefreshes`, `observedHitRates`, `OBSERVATION_FLOOR`,
+`TURN_GAP_MS`; `keepWarmDecision` / `ttlTier` gained an `observed` option; `adapter.mjs` calls
+`scoreRefreshes(dir)` on the **Stop** path. 22 tests; **25 mutations, 25 killed**, every new test
+killed by at least one, and Tasks 6/7/8's `audit.mjs` wiring mutations re-run and still killed.
+Allowlist **4 -> 3**.
+**A REAL TURN-ARRIVAL SIGNAL EXISTS, so the ruling was not needed**: `gapDistribution` is fitted
+to inter-turn gaps from `metrics.jsonl`, so the same log answers the outcome question directly — a
+`5m` refresh was used if a turn of the same session arrived within five minutes of it. The ruling's
+*spirit* is enforced anyway by four refusals, every one costing this project its own good news:
+`pending` (the TTL has not elapsed — scoring a hit the instant it lands while a miss waits out the
+window is **right-censoring**, biased upward and invisible to any test), `uncovered` (the firehose
+no longer reaches back to the refresh, so absence of arrival is absence of evidence and **not** a
+miss), `unattributable` (no `sessionId`, so no arrival can be shown to belong to it), and
+already-scored.
+**The plan's Step 1 test could not run and its Step 4 was a units error.** The signature is
+`keepWarmDecision({ prefixTokens, gaps, tier })` — no `dir` — so observations are passed in the
+options object and `keepWarmDecision` stays pure; `shouldKeepWarm` computes them from the outcome
+array **the tripwire has already read**, so the loop costs no extra I/O and the decision and its
+backstop cannot see different evidence. And a recorded `hit` is NOT the quantity
+`keepWarmDecision` models: its probability is the narrow ping window
+`P(tier.ms < gap < 2·tier.ms)`, while `hit` is `P(gap < tier.ms)` — 0.19% against 99.5% on this
+machine's real log, so substituting the observation would have recommended refreshing forever.
+So an observation may only ever **lower** a modelled probability, never raise it (`Math.min`),
+and it is `ttlTier` — whose `hit` **is** the same estimand — where it does real work. M11 flips the
+bound to `Math.max` and 6 tests kill it.
+**`recordRefresh` STAYS ON THE ALLOWLIST, and the finding is the deliverable**: nothing in this
+repository issues a refresh. `cache_audit` is the only consumer of the decision and it prints a
+recommendation; the prompt cache belongs to the client, so no code spends the money. Calling it at
+the recommendation site would compute a hit rate over refreshes never bought and make keep-warm
+look self-funding — the ninth instance of the measurement-bias class, and the first found by
+declining to wire something. So the loop is **closed and dormant**: on this machine
+`scoreRefreshes` scores 0 and records nothing, `observedHitRates` is empty, and `shouldKeepWarm`
+still answers `refresh` at `5m` on expected value alone. Dormant cost on the Stop path is one read
+of the small balance log (17-23 ms); the 2 MB firehose is read **only** if an unscored refresh
+exists (M8 kills the eager version). Floor is `OBSERVATION_FLOOR = TRIPWIRE_MIN = 10`: one miss
+changes nothing, 1-in-10 still refreshes, 0-in-10 switches it off. Not a Wilson bound — its 95%
+upper limit at 0/10 is 0.28, which could not switch off a policy that missed ten times out of ten.
+See `task-9-report.md`. |
+| 10 -- the recall probe | **Complete, and the plan's own Step 1 test was the defect.**
+`hooks-core/recall.mjs` -- `recallProbe`, `MIN_PROBED`, `MAX_FINDINGS`; wired into
+`graphBalanceSheet` and rendered as one labelled line in `get_optimization_report`. 22 tests
+plus 1 in `optimization-report.test.ts`; **32 mutations, 32 killed**, every new test killed by
+at least one, and Tasks 6/7/8/9's wiring mutations plus the allowlist guard re-run and still
+killed. Allowlist stays at **3**. Full suite 225 suites / 2,892 passed.
+**THE PLAN'S STEP 3 PROBE CANNOT FAIL, and shipping it would have replaced one unfalsifiable
+claim with another.** `findingsFor(graph, A)` walks `derived_from` edges backwards into `A`,
+and the edge `F -> A` is what MAKES `A` an anchor of `F` -- so "retrieve each finding from its
+own anchor" asks whether an edge that exists exists. It is 1.0 for every graph, forever, and
+`rate: 1.0` printed in the savings report reads to a human as "retrieval is perfect,
+embeddings unnecessary". Proved two ways: a test asserts the property of the primitive
+directly, and across four fixtures whose measured rates are **0, 0.5, 1 and null** the
+by-construction check is **1.0 on every one**. It is kept as `integrity`, with its own
+`what` string saying it is NOT a recall rate, and M2 (publish it as the rate) and M14 (delete
+the disclaimer) are both killed.
+What replaced it is **leave-one-edge-out**: delete each anchor edge, then ask whether traversal
+from the anchor's `contains` NEIGHBOURHOOD or BM25 over the anchor's OWN KEY still surfaces the
+finding. Arm B is deliberately not queried with the finding's claim as Step 3 said, because
+both readings are degenerate -- against a corpus INCLUDING the finding, BM25 scores a document
+against its own text and it wins every time; against a corpus EXCLUDING it, a hit means a
+DIFFERENT finding matched, which measures redundancy of storage and rewards a graph for holding
+duplicates.
+**On this machine the probe REFUSES, and n=1 is honoured as Task 8's house style demands.**
+Project graph: `probed 1, retrieved 1, rate: null` -- both anchor edges of the one finding
+recovered by the lexical arm, and the reason ends *"which is a count and not a rate"*. Shared
+graph: **14 active findings, all 14 UNPROBEABLE** -- every one is anchored to a `file:` id with
+no node in the graph (`expand.promote` writes the edge without indexing the anchor), so there
+is no key to query BM25 with. `findingsFor` still returns them, so **integrity is 1.0 while
+every finding is unprobeable** -- which is exactly why the two are reported separately, and the
+probe declines to convert a graph-integrity defect into a recall loss.
+Four refusals, each costing this project its own good news: `MIN_PROBED = 10` (a resolution
+argument, on distinct FINDINGS not anchor edges, since two anchors of one claim are not two
+independent observations); a corpus no larger than the retrieval limit (below it nothing is
+ever cut for budget, so Arm B is more permissive than production and can only overstate);
+a dangling anchor is UNPROBEABLE rather than a miss; and strict aggregation (every probeable
+anchor edge must recover, biasing the rate DOWN).
+**Two of my own tests were vacuous and only the mutation run found them** -- the
+eighth-and-ninth instance of that class. M15 survived because the cap test read `all.length`
+while BM25 ranked over a separate `corpus` variable, so a mutation shrinking the RANKING corpus
+(easier retrieval, in this project's favour) could not move the number; fixed in the production
+code, so the published size IS the ranking corpus. M23 survived because the fail-open test
+passed a nonexistent directory and `load` returns an EMPTY graph for a missing log rather than
+throwing, so the catch never ran; now two tests, one per catch.
+`recall.mjs` imports only `wiki.mjs` and `lexical.mjs`, neither of which imports back -- **no
+cycle**, the same constraint that moved Task 8's `calibration` out of `metrics.mjs`.
+`graphBalanceSheet` 185 ms -> 213 ms on the real graph; the probe is 42 ms and `MAX_FINDINGS`
+caps it. See `task-10-report.md`, which also runs **every row of the Definition of done** and
+reports the four that do not pass: findings-on-a-default-install passes only on the letter
+(the one finding is `origin: 'agent'`, and Task 3 is Not started so the producer is unbuilt);
+the `kind:"result"` row is stale per correction #5 and its substitute also reads 0 (3,031
+outcome rows, zero failures, so zero rows carry `exit`/`output`); Layer 1's denominator has
+regressed 1 -> 0 as the last two injections aged out of the 2 MB window; and Layer 2's refusal
+row passes VACUOUSLY, on an empty set. |
+| 11 -- transcript reader | **Complete.** `failedResultsFromTranscript` in
+`hooks-core/transcript.mjs`, read-only, tail-bounded, redacted at the boundary. Yield on
+this machine is **0** and that is measured, not shrugged at: 8 of 571 command failures
+across 163 transcripts are quotable. Two refusals shipped with it -- `quotable` and
+`hasAttemptIdentity`. See `task-11-report.md`. |
+| 12 -- `attemptKey` | **Complete.** `commandBody` skips a leading `cd <path>` up to `&&`,
+`;` or a newline, applied inside `attemptKey` so both sources get it identically. The
+most-populated key fell from **547 distinct commands to 76**; the false-pair exposure a real
+quotable failure sat in fell from **222 to 0**. Candidates 0 -> 0, because the binding
+constraint is `quotable`, not the key. The identical-text refusal was WIDENED to compare
+`commandBody` both sides, or the better key would have claimed `npm test` succeeded where
+`cd repo && npm test` failed. Environment assignments, `time`, `bash -c` and `||` are
+deliberately NOT stripped, each for a measured reason. See `task-12-report.md`. |
+| 13 -- cross-layer significance | **Complete.** The final calibration headline now reuses
+Layer 2's exact-or-sampled two-sided `permutationP`; a positive mean gap alone no longer
+publishes. Cross-layer sampling canonicalises both arms and derives its seed from their data,
+while Layer 2's omitted-seed default stays byte-identical. Publication requires `gap >= 1`
+and `p <= 0.10`; equality is deliberate because complete separation at the three-per-arm
+floor is exactly `2/20 = 0.10`. Four new tests, **9 mutations / 9 killed**, every new test
+killed by at least one mutation. Focused 69/69; cross-file regression 103/103; full suite
+225 suites / **2,896 passed**, 5 skipped, 0 failed on the clean rerun. The first full run had
+one unrelated 5-second doctor timeout; that 13-test suite passed immediately in isolation and
+inside the clean rerun. Real graph remains honestly dormant: 0/0 layer observations, with no
+`gap` and no `p`. See `task-13-report.md`. |
+
+## Corrections to the task text above
+
+1. **The harvest is OPT-OUT, not opt-in.** `harvestMode()` in `hooks-core/harvest.mjs` was
+   flipped by #296. `TOKEN_OPTIMIZER_HARVEST` now turns it *off*; the real default gate is
+   credential availability (`off:no-key`). So this plan's framing of `derive.mjs` as
+   necessary "because the harvest is opt-in" is wrong. The correct framing: **`derive.mjs`
+   needs no credential and sends nothing off the machine**, so it is the only finding
+   producer on a machine without an API key — CI, corporate machines, subscription-only
+   auth. Evidence it still matters: after Plan 1 this repository's own graph held 2,965
+   symbol / 904 file / 128 task nodes and **one** finding, because this machine has no key.
+
+2. **`exit` and `output` now exist on `tool-outcome`** (Task 2). They did not when this plan
+   was written. `output` is captured **only on failure**, gated on `outcome.success !== true`
+   so an unclassified outcome keeps its text; it is redacted and capped at 4 KB at the
+   boundary inside `recordToolOutcome`. `exit` is `null` unless the client reports an integer.
+   MCP tools return no exit code, so `exitFrom` returns null for them by design.
+
+3. **`derive.mjs` must pass an authoritative `taskId`.** The `answers` edge fires nowhere on a
+   default install because its only producer is credential-gated. `derive.mjs` runs in the
+   Stop hook where a real session id exists, so it is the producer that finally makes
+   `answers` live by default. `taskForAnchors` **requires** an authoritative id and returns
+   null without one — an unverified string will not work.
+
+4. **Task 3's churn detector consumes `rereadsByAnchor`** (Task 3b), not `rereadWaste().worst`,
+   which does not exist.
+
+5. **Task 2 extends the existing `tool-outcome` event** rather than adding a `kind:'result'`.
+
+## Plan 1 surfaces this plan will collide with
+
+Plan 1 modified every file Plan 2 touches. Read before editing:
+
+- **`hooks-core/staleness.mjs`** — `serve()` emits three disclosures (staleness, dispute,
+  derivation), clears stale flags automatically, and **writes to the graph** on a verified
+  match (`reindexVerifiedAnchors`). `claimTimeVerdict` is the single shared evidence test;
+  do not duplicate it.
+- **`hooks-core/inject.mjs`** — `withPendingApplied` drains at four entry points; `disputeNote`
+  and `derivationNote` render into the head; `sessionContext` orders blocks via `cacheOrdered`.
+  Layer 2 must decide what to withhold *inside* this machinery.
+- **`hooks-core/metrics.mjs`** — `recordToolOutcome` already joins each outcome to its
+  injection with `injectionId` / `findingIds` / `joinMethod` (preferring an exact
+  tool-call-id match). **Layers 1 and 2 build on that join; do not invent another.**
+  Also gained `evidenceTruncated`.
+- **`hooks-core/decide.mjs`** — `normalizeTool` resolves MCP-prefixed names, so this project's
+  own tools now reach the post-tool path; `isReplacementTool` gates the loop hazard;
+  `readCostBytes` returns 0 for a replacement.
+- **New modules:** `hooks-core/pending.mjs`, `hooks-core/lexical.mjs`, `hooks-core/redact.mjs`.
+
+## Rulings that bind future tasks
+
+- **Run Task 3b before Task 3.** Task 3's churn detector consumes what 3b creates, so the
+  plan's numbering would have Task 3 importing something that does not exist. *Cost if wrong:
+  none; only the execution order changes.*
+- **If Task 9 finds no turn-arrival signal, record observations without letting them change
+  the keep-warm decision, and say so.** Do not invent a signal. *Cost if wrong: keep-warm
+  still decides on expected value, with the data visible for a later fix.*
+- **Every task brief restates the corrections above rather than assuming they were read.**
+  Fresh agents per task cannot know them, and Plan 1 lost a round to exactly this. *Cost if
+  wrong: a few extra lines per dispatch.*
+- **Capture `output` only on failure** (overrides the Task 2 text). A successful `smart_read`
+  would otherwise deposit up to 4 KB of file content into the evidence log on every call —
+  megabytes per session, and a privacy surface, for a consumer that does not exist. *Cost if
+  wrong: a future detector wanting success output must re-add it.*
+- **`outputFrom` deliberately still runs on successful calls** with its result discarded by
+  the boundary gate. One gate at the boundary beats a defensive second one that can drift.
+
+## The measurement-bias class — check every task against it
+
+Three defects of one shape were found across these plans, and all three would have inflated
+this project's own numbers **in its own favour**:
+
+- `readCostBytes` would have charged the A/B holdout a whole file for a call returning a diff.
+- `toolSucceeded` ignored MCP `isError`, so every failed `smart_edit` recorded as a success.
+- `mutationSucceeded` did the same, inflating edit counts and harvest pressure on six clients.
+
+None was the kind of defect a test suite notices: the code works and the *number* lies. Tasks
+6, 7 and 8 are entirely measurement, so this is the class to hunt there.
+
+**Two further instances were found and fixed by Task 8's own mutation run**, both in its own new
+code and both flattering to the project: a publication gate of `gap > 0`, which would have
+published a calibration resting on a ~1e-13 floating-point gap as "referenced findings suppress
+0 more tokens/touch" (fixed with `MIN_GAP_TOKENS = 1`, tied to the unit the verdict prints); and
+a rendered re-read-waste line that printed the confirmed figure without the count of repeats the
+classifier could not judge, which `rereadWaste`'s own docstring says must be reported rather than
+hidden. Neither was visible by reading.
+
+**Task 9 added the tenth, and it is the first found by DECLINING to wire something**:
+`recordRefresh` stays on the reachability allowlist because nothing in this repository issues a
+keep-warm refresh, and calling it at the recommendation site would have computed a hit rate over
+refreshes never bought.
+
+**Task 10 added the eleventh and twelfth, and the eleventh was written into this plan's own task
+text.** The Step 3 recall probe -- take each finding's anchors and run `findingsFor` from each --
+**cannot fail**, because the edge `F -> A` is what makes `A` an anchor of `F`, so its rate is 1.0
+for every graph forever; the plan's Step 1 test asserted exactly that, and `recall: 100%` in the
+savings report reads as "retrieval is perfect, embeddings unnecessary". It ships as `integrity`,
+never as `rate`. The twelfth was in Task 10's own new tests and only its mutation run found it: a
+cap assertion read a reported `all.length` while BM25 ranked over a separate `corpus` variable,
+so a mutation shrinking the RANKING corpus -- making retrieval easier, in this project's favour --
+could not move the number the test read. Fixed in the production code rather than the test, so
+the published size IS the ranking corpus. **The running total for this class across both plans is
+now twelve, and every single one flattered this project's own numbers.**
+
+**Task 13 added the thirteenth, in the cross-layer headline itself.** Task 8 required a
+positive difference between the two label-arm means but never tested that difference. A
+2-real/1-null versus 1-real/2-null split clears the one-token gap and had at least one
+published Layer 2 row, so the old code printed `calibrated`; its exact two-sided permutation
+result is **p = 1.0**. The headline now reuses Layer 2's exact-or-sampled statistic and
+publishes only at `p <= 0.10`. Sampling is canonical and data-seeded, while Layer 2's default
+seed remains byte-identical. Complete separation at the three-per-arm floor is `2/20 = 0.10`,
+so the boundary is inclusive or the declared floor would be impossible to clear. The running
+total is now **thirteen**, and all thirteen flattered this project's own numbers.
+
+**The ninth was found by Task 9 and is the first one avoided by declining to wire something.**
+`recordRefresh` has no honest call site because nothing in this repository issues a refresh —
+`cache_audit` prints a recommendation and the prompt cache belongs to the client — so calling it at
+the recommendation site would have produced a hit rate computed over refreshes that were never
+bought, and since 99.5% of this machine's gaps fall inside five minutes that rate would have read
+as ~100% and made keep-warm look like it pays for itself. The same task found the inverted form in
+its own design and fixed it before shipping: a recorded `hit` (`P(gap < tier.ms)`) is not the
+quantity `keepWarmDecision` models (`P(tier.ms < gap < 2·tier.ms)`), 99.5% against 0.19% here, so
+an observation may only **lower** a modelled probability and never raise it. Both are the usual
+shape — the code works and the number lies.
+
+**A fourth instance is known and unfixed**, found while closing the third: `mutationSucceeded`'s
+status read omits the `postToolUse` envelope, so `postToolUse: { status: 'error' }` falls through
+to the allowlist and counts as a success. It changes no verdict today — which is why it was not
+folded into Task 2 rather than widening a shared classifier silently — but it is the same class
+one envelope out, and it wants its own change with its own per-client comparison.
+
+## The verification bar established on Plan 1
+
+Every task on Plan 1 produced at least one test that passed for the wrong reason, and **every
+one was found by mutating rather than reading**. So for each test: mutate what it targets,
+confirm that test *and only that test* fails, restore, and record the matrix. Also confirm no
+pre-existing kill set *shrank* — adding tests to an existing mechanism can silently stop an
+older one discriminating.
+
+A shared-classification change needs a **per-client verdict comparison**, not an assertion
+that nothing changed. Task 2 set the standard: 1,088 verdicts across 16 clients, with every
+change accounted for.

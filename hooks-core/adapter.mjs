@@ -38,11 +38,13 @@ import {
   touchedFiles,
 } from './decide.mjs';
 import {
+  record,
   recordRead,
   fingerprint,
   recordToolOutcome,
   recordEpisodeOutcome,
 } from './metrics.mjs';
+import { derive } from './derive.mjs';
 import {
   contentHash,
   harvest,
@@ -54,6 +56,7 @@ import { join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { briefing } from './remedy.mjs';
 import { stableText, transcriptFor } from './cache.mjs';
+import { scoreRefreshes } from './keepwarm.mjs';
 import { cachedRoutingBriefing } from './routing.mjs';
 import {
   forCommand,
@@ -68,7 +71,8 @@ import {
 } from './inject.mjs';
 import { indexFile } from './staleness.mjs';
 import { observedWrites, queueInvalidation } from './pending.mjs';
-import { isArchived } from './transcript.mjs';
+import { archive, isArchived } from './transcript.mjs';
+import { harvestMode } from './harvest.mjs';
 import { isFsSafePath } from './paths.mjs';
 import {
   isSubstantive,
@@ -102,6 +106,44 @@ const HARVEST_MAX_BYTES =
   Number(process.env.TOKEN_OPTIMIZER_HARVEST_MAX_BYTES) || 4_000_000;
 
 /**
+ * The response envelopes a completed tool call can arrive in.
+ *
+ * Spelled out ONCE because FOUR readers depend on it -- mutation accounting,
+ * success classification, output capture and exit-code capture -- and clients
+ * disagree on the envelope name and on nothing else. Letting each reader name
+ * its own subset is exactly how both classifiers came to miss MCP's failure
+ * flag: `toolSucceeded` listed four envelopes and `mutationSucceeded` listed
+ * three, and neither list mentioned `isError` at all.
+ */
+function responseEnvelopes(raw) {
+  return [
+    raw?.tool_response,
+    raw?.toolResponse,
+    raw?.tool_result,
+    raw?.toolResult,
+    raw?.postToolUse,
+  ].filter((envelope) => envelope !== undefined && envelope !== null);
+}
+
+/**
+ * Did an MCP result declare itself an error?
+ *
+ * `isError` is the ONLY failure signal an MCP result carries -- there is no
+ * `error` field and no `status` -- and `src/server/index.ts` sets it in seven
+ * places. Shared by both classifiers so they cannot disagree about what a
+ * failed call from this project's own tools looks like.
+ *
+ * `=== true` EXACTLY. A client using the key for anything else must not have
+ * its successful calls silently reclassified, and `isError: false` is a
+ * successful MCP call, not a missing verdict.
+ */
+function reportedMcpError(raw) {
+  return [...responseEnvelopes(raw), raw].some(
+    (envelope) => envelope?.isError === true
+  );
+}
+
+/**
  * A post-tool event is not universally proof of success. Some clients split
  * success and failure into distinct events; others expose a result status.
  * Keep mutation accounting conservative so a failed edit cannot arm Stop.
@@ -111,6 +153,19 @@ export function mutationSucceeded(clientName, raw) {
     return false;
   if (raw?.postToolUse?.success === false || raw?.success === false)
     return false;
+  // BEFORE the status read, the explicit-success read AND the client
+  // allowlist, because all three would otherwise pass a failed MCP write. The
+  // allowlist is the one that actually bit: it returns true for claude-code,
+  // codex, qwen, opencode, kilo and windsurf on any post-tool event with no
+  // error and no status, which is precisely the shape of a failed smart_write.
+  //
+  // WHY THIS IS THE SAME BUG AS THE ONE IN `toolSucceeded` AND NOT A COSMETIC
+  // ECHO OF IT: this function gates edit counting and harvest pressure, so
+  // counting a failed write to THE OPTIMIZER'S OWN TOOLS as a mutation
+  // inflates "the optimizer successfully edited a file". Different consumers
+  // from the effectiveness figures, same direction of bias -- toward
+  // flattering the thing being measured.
+  if (reportedMcpError(raw)) return false;
 
   const status =
     raw?.tool_response?.status ??
@@ -150,6 +205,19 @@ export function toolSucceeded(raw) {
     return false;
   if (raw?.postToolUse?.success === false || raw?.success === false)
     return false;
+  // MCP'S OWN FAILURE FLAG, which this function did not read for as long as it
+  // existed. It did not matter while `normalizeTool` dropped MCP names before
+  // any accounting ran; it matters now that `mcp__<server>__smart_edit` and
+  // `smart_write` reach the post-tool path, because an MCP result carries no
+  // `error` field and no `status` -- only `isError` -- so a failed smart_edit
+  // fell through to the optimistic `return true` below.
+  //
+  // WHY THIS IS A MEASUREMENT BUG AND NOT A COSMETIC ONE: this boolean feeds
+  // episode outcomes and effectiveness accounting, so recording every failed
+  // call to THE OPTIMIZER'S OWN TOOLS as a success biased all of it in the
+  // optimizer's favour. A measurement that flatters the thing being measured
+  // is worse than no measurement.
+  if (reportedMcpError(raw)) return false;
   const status =
     raw?.tool_response?.status ??
     raw?.toolResponse?.status ??
@@ -169,6 +237,119 @@ export function toolSucceeded(raw) {
   // that its output proved the task.  `success` here is deliberately scoped to
   // the tool call; task correctness comes only from an eval grader.
   return true;
+}
+
+/** A non-empty string, or null.  Blank output is the same as none. */
+function nonEmpty(value) {
+  const text = String(value ?? '');
+  return text.trim() ? text : null;
+}
+
+/**
+ * The human-readable result text inside one envelope, or null.
+ *
+ * RETURNS NULL RATHER THAN GUESSING. An envelope shape nobody here has seen
+ * produces no capture at all, which costs one finding. Stringifying it instead
+ * would put `[object Object]` or a wall of JSON metadata into a claim that gets
+ * injected into model context -- a wrong observation, which is strictly worse
+ * than a missing one.
+ */
+function resultText(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') return nonEmpty(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return null;
+
+  // MCP content blocks, which is how THIS PROJECT'S OWN tools now arrive:
+  // `normalizeTool` resolves `mcp__<server>__smart_edit`, so smart_edit and
+  // smart_write reach the post-tool path for the first time and their results
+  // are `{ content: [{ type: 'text', text }], isError }` rather than a shell
+  // result. Both the bare array and the wrapping object are accepted because
+  // hosts differ on whether they hand the hook the result or its content.
+  if (Array.isArray(value)) {
+    const blocks = value
+      .map((block) =>
+        typeof block === 'string' ? block : nonEmpty(block?.text)
+      )
+      .filter(Boolean);
+    return blocks.length ? nonEmpty(blocks.join('\n')) : null;
+  }
+  if (typeof value !== 'object') return null;
+
+  // STDERR FIRST, and not because that is the order it was produced in. The
+  // cap can only ever cut the tail, and the diagnostic that explains a failure
+  // is almost always on stderr while the volume is almost always on stdout --
+  // so appending stderr would let a 3 MB build log push the one line worth
+  // capturing out of the window.
+  const streams = [nonEmpty(value.stderr), nonEmpty(value.stdout)].filter(
+    Boolean
+  );
+  if (streams.length) return streams.join('\n');
+
+  if (Array.isArray(value.content)) {
+    const inner = resultText(value.content);
+    if (inner) return inner;
+  }
+
+  const error = value.error;
+  if (error) {
+    const message =
+      typeof error === 'string' ? error : nonEmpty(error.message ?? error.msg);
+    if (message) return message;
+  }
+
+  return (
+    nonEmpty(value.output) ??
+    nonEmpty(value.text) ??
+    nonEmpty(value.message) ??
+    (typeof value.result === 'string' ? nonEmpty(value.result) : null)
+  );
+}
+
+/**
+ * The result text of a completed tool call, or null when the client reports
+ * none.  Redaction and the size cap are NOT applied here -- they belong at the
+ * `recordToolOutcome` boundary, which is the only place every caller passes.
+ */
+export function outputFrom(raw) {
+  for (const envelope of responseEnvelopes(raw)) {
+    const text = resultText(envelope);
+    if (text) return text;
+  }
+  return resultText(raw?.output) ?? resultText(raw?.stdout) ?? null;
+}
+
+/**
+ * Key names that mean "process exit code" and nothing else.
+ *
+ * `code` is deliberately ABSENT. JSON-RPC errors (`code: -32602`), Node errno
+ * objects (`code: 'ENOENT'`) and HTTP wrappers all reuse that name, so reading
+ * it would record a confident exit code for calls that never had one. A null
+ * here is honest; a -32602 claiming to be an exit status is not.
+ */
+const EXIT_KEYS = [
+  'exit_code',
+  'exitCode',
+  'exit',
+  'exit_status',
+  'exitStatus',
+  'return_code',
+  'returncode',
+];
+
+/** The numeric exit code a client reported, or null when it reported none. */
+export function exitFrom(raw) {
+  for (const envelope of [...responseEnvelopes(raw), raw]) {
+    if (!envelope || typeof envelope !== 'object') continue;
+    for (const key of EXIT_KEYS) {
+      const value = envelope[key];
+      if (Number.isInteger(value)) return value;
+      // A client that serializes the code as a digit string still reported it.
+      // Bounded so a hash or an id cannot be mistaken for a status.
+      if (typeof value === 'string' && /^-?\d{1,5}$/.test(value.trim()))
+        return Number(value.trim());
+    }
+  }
+  return null;
 }
 
 function contextOutput(client, eventName, additionalContext) {
@@ -397,6 +578,65 @@ function emit(object) {
   process.stdout.write(serialized);
 }
 
+/**
+ * What will and will not extract findings after this session, in one sentence.
+ *
+ * THE STATE WAS ONLY EVER LEGIBLE FROM THE DOCTOR, and the doctor is a place
+ * someone visits after they already suspect something is wrong. A user watching
+ * a graph fill with structural nodes and no verdicts has no reason to suspect
+ * anything, which is the failure this project has now measured twice.
+ *
+ * IT IS ADDRESSED TO THE MODEL, NOT ONLY TO THE READER, which is why it earns a
+ * place in the prefix rather than a systemMessage. "Nothing else will write this
+ * down in words" changes what the model does with a conclusion it is holding;
+ * "here is a configuration variable" would not.
+ *
+ * CACHE-SAFE: derived from configuration, so it differs between sessions only
+ * when the configuration does -- the same standard the rest of this block is
+ * held to, and it carries no digits for `stableText` to reject.
+ *
+ * A local endpoint is named FIRST in the off case on purpose. It is the option
+ * that costs nothing and sends nothing, and it was the one buried deepest.
+ */
+function extractionNotice() {
+  switch (harvestMode()) {
+    case 'local':
+      return (
+        '\n\nA local model endpoint is configured, so semantic extraction also runs after this ' +
+        'session -- free and private, with nothing leaving this machine.'
+      );
+    case 'remote':
+      return (
+        '\n\nA credential is configured, so fallback extraction also runs after this session from ' +
+        'a bounded digest: paths, commands, prompts and conclusions, never file contents.'
+      );
+    case 'off:mode':
+      // The whole optimizer is off and this text is not emitted anyway. Saying
+      // anything here would be noise stacked on an explicit choice.
+      return '';
+    case 'off:opted-out':
+      // A DELIBERATE CHOICE, SO NO PITCH. The consequence is stated because the
+      // model needs it; the setting that would reverse it is not, because
+      // arguing with a configured decision on every session is how a notice
+      // stops being read. doctor.mjs draws the same line for the same reason.
+      return (
+        '\n\nFallback extraction is off by configuration, so a conclusion you do not record is ' +
+        'not written down in words anywhere. Findings are still derived locally from exit codes, ' +
+        'red-to-green transitions and corrections.'
+      );
+    default:
+      // off:no-key, and any mode a future harvest adds: no extractor is running
+      // and nobody chose that, so the free option is worth naming.
+      return (
+        '\n\nNo separate extractor will run after this session, so a conclusion you do not record ' +
+        'is not written down in words anywhere. Findings are still derived locally from exit ' +
+        'codes, red-to-green transitions and corrections. Pointing ' +
+        'TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model adds semantic extraction, free and ' +
+        'private.'
+      );
+  }
+}
+
 /** The session-start notice, shared verbatim so no client drifts its own copy. */
 export function policyText(
   canDeny,
@@ -455,7 +695,7 @@ export function policyText(
     .filter(Boolean)
     .join(' ');
   const recording = tools.has('wiki_write')
-    ? `\n\n## Record what you work out\n\nCall wiki_write when you establish something durable about this project, while\nyou still hold the context. Every claim needs at least one anchor -- a real file\npath, or path#symbol -- because an unanchored claim can never be checked against\nthe code again and would be served as current forever; unanchored writes are\nrefused.\n\nWorth recording: a decision and why the alternative was rejected, a failure and\nwhat actually caused it, a command that turned out to be the one that works.\nNot worth recording: what the code plainly says. Every wiki_write must include\nthe concrete evidence, when it applies, a calibrated confidence label, its\nscope, and what would invalidate it. Prefer the thing someone had to work out,\nbecause that exists nowhere in the source tree.`
+    ? `\n\n## Record what you work out\n\nCall wiki_write when you establish something durable about this project, while\nyou still hold the context. Every claim needs at least one anchor -- a real file\npath, or path#symbol -- because an unanchored claim can never be checked against\nthe code again and would be served as current forever; unanchored writes are\nrefused.\n\nWorth recording: a decision and why the alternative was rejected, a failure and\nwhat actually caused it, a command that turned out to be the one that works.\nNot worth recording: what the code plainly says. Every wiki_write must include\nthe concrete evidence, when it applies, a calibrated confidence label, its\nscope, and what would invalidate it. Prefer the thing someone had to work out,\nbecause that exists nowhere in the source tree.${extractionNotice()}`
     : '\n\nStructural graph capture remains active through lifecycle hooks. Durable semantic MCP writes are not requested because the writer schema is not proven available.';
 
   return `# Token optimization is active\n\nLive graph capture is active through the lifecycle adapter.\n\n${connection}${routing}${enforcement}${utilities ? `\n\n${utilities}` : ''}${recording}${projectBriefing()}`;
@@ -774,6 +1014,79 @@ async function runHook(clientName, event, invocation) {
     } catch {
       // Evidence is best effort and must never stop a session from finishing.
     }
+    try {
+      // THE KEEP-WARM FEEDBACK ARM, at the boundary where a turn has just
+      // ended -- which is the only place the arrival question can be answered.
+      // Every refresh whose TTL has since elapsed is scored here as used or
+      // unused; anything the log cannot settle is left unscored rather than
+      // recorded as a miss, because an absent signal is not a miss.
+      //
+      // Nothing in this repository issues a refresh today -- cache_audit only
+      // recommends one -- so this scores nothing, and what it costs while
+      // dormant is one readBalance: median 70 ms on this machine's 3.5 MB log,
+      // against derive's 71-111 ms a few lines below on the same path. The
+      // firehose is read for ARRIVALS only if an unscored refresh exists, so
+      // the dormant case never pays for that. The moment an issuer exists, the
+      // decision starts learning with no second wiring change.
+      const cwd = raw.cwd || raw.working_directory || process.cwd();
+      const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+      scoreRefreshes(dir);
+    } catch {
+      // A refresh that cannot be scored costs a measurement, not a session.
+    }
+    try {
+      // THE ARCHIVE, WRITTEN BEFORE ANYTHING READS IT.
+      //
+      // This was lost rather than retired. `plugin/hooks/stop-harvest.mjs` called
+      // `archive()` at Stop, and #300 replaced that entry in `hooks.json` with the
+      // generated `stop.mjs`, which routes here -- so on Claude Code no session has
+      // been archived since. Nothing failed loudly: `readArchive` simply returns an
+      // empty list, so `derive`'s correction detector fell through to the live
+      // transcript (present only for a client that reports one) and `lessons.mjs`
+      // lost the only corpus it can verify a verbatim quote against, which is the
+      // single test that grants a feedback finding human origin.
+      //
+      // BEFORE `derive`, deliberately: the correction detector reads the archive
+      // first and treats the live transcript as the fallback, and the archive is
+      // the copy that survives into later sessions.
+      const cwd = raw.cwd || raw.working_directory || process.cwd();
+      const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+      if (agentScope) archive(dir, agentScope, { sessionId });
+    } catch {
+      // The archive is a record, not a result. A session still ends.
+    }
+    try {
+      // ZERO-COST DERIVATION, on every client, with no credential. The semantic
+      // harvest below needs an API key, so on a machine without one the graph
+      // accumulates structure and no verdicts at all. These detectors read only
+      // what is already on disk and send nothing anywhere.
+      //
+      // COUNTS are recorded rather than the candidates, and BOTH counts: how
+      // many findings a session's own evidence supports, and how many of them
+      // survived the storage budget and the anchor discipline. The gap between
+      // the two is the number that says whether the bound is doing anything --
+      // one figure alone cannot distinguish "nothing to derive" from "derived
+      // plenty and stored none of it".
+      const cwd = raw.cwd || raw.working_directory || process.cwd();
+      const projectRoot = projectRootFor(join(cwd, '__session__'), cwd);
+      const dir = wikiDir(projectRoot);
+      const derived = derive(dir, {
+        sessionId,
+        projectRoot,
+        transcriptPath: agentScope,
+        // The hook payload's own identity, not a value a model typed.
+        authoritativeSessionId: sessionId,
+      });
+      record(dir, {
+        kind: 'derive',
+        sessionId,
+        candidates: derived.candidates.length,
+        observations: derived.observations.length,
+        written: derived.written.length,
+      });
+    } catch {
+      // A detector failing must never cost a user the end of their session.
+    }
     const alreadyHarvested =
       Number(state.edits || 0) > 0 &&
       Number(state.harvestedEdits || 0) >= Number(state.edits || 0);
@@ -929,6 +1242,11 @@ async function runHook(clientName, event, invocation) {
         anchor,
         toolName: payload.tool_name,
         success: toolSucceeded(raw),
+        // The two fields a boolean cannot carry: which KIND of failure this
+        // was. Read through the same normalisers as `success`, never off `raw`
+        // at this call site.
+        output: outputFrom(raw),
+        exit: exitFrom(raw),
         durationMs:
           Number(
             raw.duration_ms ?? raw.durationMs ?? raw.elapsed_ms ?? raw.elapsedMs

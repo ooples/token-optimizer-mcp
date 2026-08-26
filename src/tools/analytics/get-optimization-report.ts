@@ -17,6 +17,11 @@ import {
 } from '../../analytics/savings-classification.js';
 import { priceTokenUsage } from '../../analytics/provider-pricing.js';
 import type { AnalyticsEntry } from '../../analytics/analytics-types.js';
+import path from 'path';
+import { dirname } from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 export const GET_OPTIMIZATION_REPORT_TOOL_DEFINITION = {
   name: 'get_optimization_report',
@@ -134,6 +139,160 @@ function renderTable(
   return `${title}\n${header}\n${lines.join('\n')}\n${extra}`;
 }
 
+/** Resolves hooks-core relative to the built output, which lives in dist/tools/analytics. */
+function coreUrl(name: string): string {
+  return pathToFileURL(path.join(here, '..', '..', '..', 'hooks-core', name))
+    .href;
+}
+
+interface GraphPricing {
+  dollars: (n: number) => number | null;
+  money: (a: number | null) => string;
+  priceNote: () => string;
+}
+
+/**
+ * The graph's own balance sheet, or nothing.
+ *
+ * FAILS OPEN, like every other hooks-core bridge in this codebase: the savings
+ * report is what a user runs when something already looks wrong, so a missing
+ * graph module must cost them a section rather than the report.
+ */
+async function graphSection(): Promise<{
+  sheet: Record<string, unknown>;
+  lines: string[];
+} | null> {
+  try {
+    const [cross, wiki, pricing] = await Promise.all([
+      import(coreUrl('crosslayer.mjs')),
+      import(coreUrl('wiki.mjs')),
+      import(coreUrl('pricing.mjs')),
+    ]);
+    const dir = wiki.wikiDir(process.cwd());
+    const sheet = cross.graphBalanceSheet(dir);
+    return { sheet, lines: renderGraph(sheet, pricing as GraphPricing) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The graph block, with CURRENCY ON EXACTLY ONE LINE.
+ *
+ * The rule is the project's own: a dollar figure may appear beside a MEASURED
+ * COUNTERFACTUAL -- a substitution whose control arm's cost was recorded -- and
+ * nowhere else. The holdout estimate, the consolidation ratio and the
+ * calibration verdict are estimates, and pricing an estimate makes a headline
+ * saving larger for free, which is exactly the measurement-bias class this work
+ * exists to close. Each of those lines says "estimate" and carries no currency,
+ * which a test checks by reading the rendered text rather than by trusting this
+ * comment.
+ */
+function renderGraph(
+  sheet: Record<string, any>,
+  pricing: GraphPricing
+): string[] {
+  const lines: string[] = ['▸ Graph balance sheet'];
+  const mc = sheet.measuredCounterfactual || {};
+  const avoided = Number(mc.tokensAvoidedNet || 0);
+  // The ONE priced line: a substitution whose control arm was measured.
+  lines.push(
+    `  measured counterfactual : ${num(avoided)} tokens avoided net over ${num(
+      Number(mc.substitutions || 0)
+    )} substitution(s), ${num(
+      Number(mc.withheld || 0)
+    )} withheld; ${pricing.money(pricing.dollars(avoided))}`
+  );
+
+  const ec = sheet.estimatedCausal || {};
+  lines.push(
+    `  estimated causal        : ${num(
+      Number(ec.tokensAvoided || 0)
+    )} tokens from ${num(Number(ec.treated || 0))} treated and ${num(
+      Number(ec.holdouts || 0)
+    )} holdout injection(s) -- estimate, deliberately not priced`
+  );
+
+  const con = sheet.consolidation;
+  lines.push(
+    con && con.withDerivedCost
+      ? `  consolidation           : ${num(con.withDerivedCost)} of ${num(
+          con.findings
+        )} finding(s) carry a derivation cost, ${(
+          con.aggregate?.ratio || 0
+        ).toFixed(
+          1
+        )}x cost-to-derive over cost-to-carry -- estimate, deliberately not priced`
+      : '  consolidation           : no finding carries a derivation cost yet -- estimate, deliberately not priced'
+  );
+
+  const waste = sheet.waste || {};
+  // THE UNDECIDABLE COUNT TRAVELS WITH THE FIGURE. `rereadWaste` splits repeats
+  // into confirmed waste, legitimate re-reads of a CHANGED file, and repeats
+  // written before fingerprints existed -- and its own docstring says the third
+  // group is reported rather than hidden, because a reader has to know the
+  // classification is incomplete. Printing only the confirmed number is
+  // conservative, but silently conservative is still a number without its
+  // error bar.
+  lines.push(
+    `  re-read waste           : ${num(
+      Number(waste.wastefulTokens || 0)
+    )} tokens over ${num(
+      Number(waste.wasteful || 0)
+    )} unchanged repeat read(s), ${num(
+      Number(waste.undecidable || 0)
+    )} repeat(s) unclassifiable`
+  );
+
+  const l1 = sheet.layer1;
+  lines.push(
+    `  Layer 1 (reference)     : ${
+      l1
+        ? `${num(l1.referenced)}/${num(
+            l1.denominator
+          )} injected findings referenced later${
+            l1.rate === null
+              ? ', no rate published'
+              : ` (${pct(l1.rate * 100)})`
+          }`
+        : 'unavailable'
+    }`
+  );
+  const l2 = sheet.layer2;
+  lines.push(
+    `  Layer 2 (suppression)   : ${
+      l2
+        ? `${num(l2.observations)} observation(s), ${num(
+            l2.published
+          )} published effect(s)`
+        : 'unavailable'
+    }`
+  );
+  lines.push(
+    `  calibration             : ${sheet.calibration?.verdict || 'unavailable'}`
+  );
+
+  // AN OFFLINE PROBE, AND THE LINE SAYS SO. It observes nothing a session did:
+  // it deletes each anchor edge in memory and re-runs traversal and BM25 over
+  // the graph as it stands. `rate` is deliberately absent more often than
+  // present -- the by-construction check that always returns 1.0 is reported as
+  // `integrity` and is never printed as a recall rate.
+  const recall = sheet.recall;
+  lines.push(
+    `  recall (offline probe)  : ${
+      recall
+        ? recall.rate === null
+          ? `no rate -- ${recall.reason}`
+          : `${pct(recall.rate * 100)} of ${num(
+              recall.probed
+            )} finding(s) recovered without their own anchor edge -- offline probe over the current graph`
+        : 'unavailable'
+    }`
+  );
+  lines.push(`  ${pricing.priceNote()}`);
+  return lines;
+}
+
 export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
   return async (args: {
     startDate?: string;
@@ -195,6 +354,7 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
         : `${args.startDate || 'all time'} → ${args.endDate || 'present'}`;
 
       const cost = directPrice(scopedEntries);
+      const graph = await graphSection();
 
       const formatted = [
         '╔══ Token Optimizer — Verified Savings Report ══╗',
@@ -214,6 +374,7 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
         renderTable('▸ By action (tool)', byAction, topN),
         renderTable('▸ By hook phase', hook.byHook, topN),
         renderTable('▸ By MCP server', server.byServer, topN),
+        ...(graph ? graph.lines : []),
       ].join('\n');
 
       return JSON.stringify(
@@ -235,6 +396,7 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
             legacyPolicy:
               'rows without versioned comparable-baseline provenance are excluded',
           },
+          graph: graph ? graph.sheet : null,
           byAction,
           byHook: hook.byHook,
           byServer: server.byServer,

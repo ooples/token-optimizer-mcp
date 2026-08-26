@@ -463,3 +463,16 @@ describe('the standing-context panel', () => {
     );
   });
 });
+
+describe('the local derivation metric has a reader', () => {
+  test('keeps evidence, candidates, and stored findings distinct in the audit', () => {
+    expect(renderAudit(dir, []).text).not.toMatch(/Local derivation:/);
+
+    record(dir, { kind: 'derive', observations: 7, candidates: 3, written: 2 });
+    record(dir, { kind: 'derive', observations: 5, candidates: 2, written: 1 });
+
+    expect(renderAudit(dir, []).text).toMatch(
+      /Local derivation: 5 candidate\(s\) from 12 observation\(s\); 3 stored across 2 Stop run\(s\)\./
+    );
+  });
+});

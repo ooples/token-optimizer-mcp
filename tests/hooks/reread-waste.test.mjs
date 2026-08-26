@@ -21,7 +21,7 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { record, rereadWaste, fingerprint, recordRead } from '../../hooks-core/metrics.mjs';
+import { record, rereadWaste, rereadsByAnchor, fingerprint, recordRead } from '../../hooks-core/metrics.mjs';
 
 let dir;
 let project;
@@ -140,5 +140,78 @@ describe('the fingerprint itself', () => {
     expect(w.repeats).toBe(1);
     expect(w.wasteful).toBe(1);
     expect(w.coverage).toBe(1);
+  });
+});
+
+/**
+ * The per-anchor rows, which exist because two consumers now need them.
+ *
+ * The churn detector in derive.mjs asks WHICH file was re-read pointlessly;
+ * rereadWaste asks HOW MUCH was wasted in total. Answering both from one
+ * grouping is the point -- a second implementation would be a second definition
+ * of "wasteful", and the two would drift.
+ */
+describe('re-reads grouped by anchor', () => {
+  it('groups re-reads by anchor, worst first', () => {
+    const events = [
+      { kind: 'read', anchor: 'a.ts', fp: 'x', tokens: 100, at: 1 },
+      { kind: 'read', anchor: 'a.ts', fp: 'x', tokens: 100, at: 2 },
+      { kind: 'read', anchor: 'a.ts', fp: 'x', tokens: 100, at: 3 },
+      { kind: 'read', anchor: 'b.ts', fp: 'y', tokens: 50, at: 4 },
+      { kind: 'read', anchor: 'b.ts', fp: 'z', tokens: 50, at: 5 },
+    ];
+    const rows = rereadsByAnchor(events);
+    expect(rows[0].anchor).toBe('a.ts');
+    // Two repeats with an unchanged fingerprint are wasteful; b.ts changed, so it is not.
+    expect(rows[0].wasteful).toBe(2);
+    expect(rows.find((r) => r.anchor === 'b.ts').wasteful).toBe(0);
+  });
+
+  it('reports only the WASTEFUL tokens on a row, never the legitimate ones', () => {
+    // A row whose headline number included re-reads of a file that changed
+    // would overstate the recoverable waste in exactly the way the 14.6M
+    // headline did.
+    const events = [
+      { kind: 'read', anchor: 'a.ts', fp: 'x', tokens: 100, at: 1 },
+      { kind: 'read', anchor: 'a.ts', fp: 'x', tokens: 100, at: 2 },
+      { kind: 'read', anchor: 'a.ts', fp: 'CHANGED', tokens: 999, at: 3 },
+    ];
+    const [row] = rereadsByAnchor(events);
+    expect(row.tokens).toBe(100);
+    expect(row.legitimateTokens).toBe(999);
+  });
+
+  it('merges one anchor across sessions into one row without inventing a repeat', () => {
+    // Grouping is per session -- a file read once in each of two sessions is
+    // not a re-read -- but the ROW is per anchor, so a caller asking "which
+    // file do we keep re-reading" gets one answer rather than one per session.
+    const events = [
+      { kind: 'read', anchor: 'a.ts', sessionId: 's1', fp: 'x', tokens: 10, at: 1 },
+      { kind: 'read', anchor: 'a.ts', sessionId: 's1', fp: 'x', tokens: 10, at: 2 },
+      { kind: 'read', anchor: 'a.ts', sessionId: 's2', fp: 'x', tokens: 10, at: 3 },
+      { kind: 'read', anchor: 'a.ts', sessionId: 's2', fp: 'x', tokens: 10, at: 4 },
+    ];
+    const rows = rereadsByAnchor(events);
+    expect(rows.length).toBe(1);
+    expect(rows[0].repeats).toBe(2);
+  });
+
+  it('leaves every existing rereadWaste field untouched', () => {
+    const events = [
+      { kind: 'read', anchor: '/src/a.ts', sessionId: 's1', fp: 'x', tokens: 100, at: 1 },
+      { kind: 'read', anchor: '/src/a.ts', sessionId: 's1', fp: 'x', tokens: 100, at: 2 },
+    ];
+    const before = rereadWaste(dir, { events, includeFixtures: true });
+    expect(before).toHaveProperty('repeats', 1);
+    expect(before).toHaveProperty('wasteful', 1);
+    expect(before).toHaveProperty('wastefulTokens', 100);
+    expect(before).toHaveProperty('legitimate', 0);
+    expect(before).toHaveProperty('legitimateTokens', 0);
+    expect(before).toHaveProperty('undecidable', 0);
+    expect(before).toHaveProperty('undecidableTokens', 0);
+    expect(before).toHaveProperty('coverage', 1);
+    // Additive, and bounded: the offenders behind the totals.
+    expect(Array.isArray(before.worst)).toBe(true);
+    expect(before.worst[0].anchor).toBe('/src/a.ts');
   });
 });

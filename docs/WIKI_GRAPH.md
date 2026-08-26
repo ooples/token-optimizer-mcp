@@ -81,10 +81,12 @@ being disputed.
 deliberately narrow: absent an explicit task id, the target is derived by
 session-scoped traversal that requires the task to have touched *every* one of
 the finding's anchors, and only when an authoritative session id is present.
-**It does not fire on a default install.** `wiki_write` never supplies an
-authoritative session id, so the model-invoked path never produces the edge; the
-only producer today is the harvest worker, which runs only when the semantic
-harvest is enabled (`hooks-core/harvest-write.mjs`).
+`wiki_write` never supplies an authoritative session id, so the model-invoked
+path never produces the edge. It used to fire nowhere on a default install for
+that reason — its only other producer was the harvest worker, which needs a
+credential. `derive` is now a second producer that needs none: it runs in the
+Stop hook, where the session id comes from the hook payload rather than from a
+model (`hooks-core/derive.mjs`, `hooks-core/harvest-write.mjs`).
 
 ## Harvest — structural free, semantic at boundaries
 
@@ -99,18 +101,32 @@ dead ends. It runs **out-of-band** — a separate cheap-model call that never
 enters the working context, so the harvest cost is not paid by the session doing
 the work.
 
-Model-invoked `wiki_write` exists for the agent to record something deliberately,
-but nothing depends on it. The lesson of the enforcement redesign is that
-anything opt-in does not happen.
+**Local (zero cost, no credential, always on).** At `Stop`,
+[`hooks-core/derive.mjs`](../hooks-core/derive.mjs) reads evidence that is
+already on disk — command outcomes and their exit codes, red-to-green
+transitions, user corrections, re-read churn — and writes findings from it. No
+model call, no credential, nothing sent anywhere. Precision is capped rather
+than claimed: each detector carries a confidence ceiling, claims say only what
+was *observed* ("succeeded where", never "fixes"), and candidates pass through
+`selectForConsolidation` so one long session cannot spend every later session's
+retrieval budget.
 
-**What a default install actually produces is the structural graph.** The
-semantic pass needs a model to call: it is off with no credential
-(`off:no-key`), runs against a local endpoint if one is configured, and is
-disabled outright by `TOKEN_OPTIMIZER_HARVEST=0` or `TOKEN_OPTIMIZER_MODE=off`
-(`hooks-core/harvest.mjs`, `harvestMode`). So findings — and everything that
-depends on them, including the `answers` edge and the hit-rate numbers below —
-accrue only where the harvest or a local model endpoint is in play. Nothing
-below should be read as describing verdicts that accrue on their own.
+Model-invoked `wiki_write` exists for the agent to record something
+deliberately. It is the primary semantic path and the standing-rules block asks
+for it by name, but nothing depends on it.
+
+**What a default install actually produces: the structural graph plus locally
+derived findings.** The model-based semantic harvest is the part that needs
+more. It is **not opt-in** — `harvestMode()` is opt-*out* since #296, and
+`TOKEN_OPTIMIZER_HARVEST=0` (or `TOKEN_OPTIMIZER_MODE=off`) is what turns it off.
+Its real gate is a **credential**: with none it reports `off:no-key`, which is
+the state on CI, corporate machines and subscription-only logins. Point
+`TOKEN_OPTIMIZER_HARVEST_ENDPOINT` at a local model and it runs free and
+private, with nothing leaving the machine
+(`hooks-core/harvest.mjs`, `harvestMode`). The hit-rate numbers below describe a
+graph that has verdicts in it; a machine with neither a credential nor a local
+endpoint gets the structural layer and whatever `derive` could establish
+locally.
 
 ## Retrieval — traversal and lexical, no embeddings
 

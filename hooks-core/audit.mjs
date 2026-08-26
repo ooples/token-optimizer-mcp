@@ -29,6 +29,9 @@
  */
 
 import { record, readMetrics, declinedAtBudget } from './metrics.mjs';
+import { referenceNote } from './usage.mjs';
+import { looNote } from './loo.mjs';
+import { calibrationNote } from './crosslayer.mjs';
 import { remedyLedger, applyRemedy, proposal } from './remedy.mjs';
 import { money, monthly, priceNote, dollars } from './pricing.mjs';
 import { renderStanding } from './standing.mjs';
@@ -54,6 +57,28 @@ export function declines(dir, { events = readMetrics(dir) } = {}) {
     counts.set(event.id, (counts.get(event.id) || 0) + 1);
   }
   return counts;
+}
+
+/**
+ * What the local Stop-time derivation path produced in the visible event log.
+ *
+ * The producer records all three counts because any one of them alone is
+ * ambiguous: zero stored can mean no evidence, no candidates, or a binding
+ * storage/anchor filter. This reader keeps those states distinct and prevents
+ * the telemetry itself from becoming an unobserved cost.
+ */
+export function derivationNote(dir, { events = readMetrics(dir) } = {}) {
+  const runs = events.filter((event) => event.kind === 'derive');
+  if (!runs.length) return null;
+
+  const sum = (field) =>
+    runs.reduce((total, event) => total + Math.max(0, Number(event[field]) || 0), 0);
+  const candidates = sum('candidates');
+  const observations = sum('observations');
+  const written = sum('written');
+  return `Local derivation: ${candidates.toLocaleString()} candidate(s) from ` +
+    `${observations.toLocaleString()} observation(s); ${written.toLocaleString()} stored ` +
+    `across ${runs.length.toLocaleString()} Stop run(s).`;
 }
 
 const idOf = (finding) =>
@@ -240,9 +265,15 @@ export function renderAudit(
     lines.push(text);
   }
 
+  // SCOPED TO THE QUEUE, because that is all it ever described. The bare
+  // sentence "Nothing addressable found." was printed directly above a Layer 1
+  // reference note and a published Layer 2 causal verdict -- so a reader was
+  // told nothing had been found immediately before being shown a finding. The
+  // headline is about the remediation queue and nothing else, and saying so
+  // costs four words and removes a false negative shown to a human.
   const head = shown.length
     ? ['What to do next, most expensive first:', ...lines]
-    : ['Nothing addressable found.'];
+    : ['Nothing addressable found in the remediation queue.'];
 
   const body = [...head];
 
@@ -388,6 +419,45 @@ export function renderAudit(
       );
     }
   }
+
+  // WHAT THE DEFAULT, LOCAL DERIVATION PATH ACTUALLY PRODUCED.
+  //
+  // This event used to have a producer and no reader. Keep its three states
+  // together: evidence seen, candidates derived, and findings that survived
+  // selection/storage. A lone stored count would turn every earlier refusal
+  // into an apparent "nothing found" result.
+  const derived = derivationNote(dir);
+  if (derived) body.push('', derived);
+
+  // WHETHER THE FINDINGS WE INJECTED GOT USED (Layer 1).
+  //
+  // Printed here because this is the report that already asks "did the advice
+  // change anything", and because a measurement with no reader is how this
+  // project shipped two metrics whose only consumer was their own test suite.
+  // `referenceNote` returns null when it has nothing honest to say, so a
+  // project with no injections and no queries gains no line at all.
+  const reference = referenceNote(dir);
+  if (reference) body.push('', reference);
+
+  // WHAT ONE FINDING IS CAUSALLY WORTH (Layer 2).
+  //
+  // The same reasoning as above, and the same refusal: `looNote` returns null
+  // until the leave-one-out experiment has collected an observation, and says
+  // NOT MEASURABLE YET rather than printing a mean until it clears the floor.
+  // A causal number is the most quotable thing this project can produce, so it
+  // is the one that most needs to be absent when it is not earned.
+  const causal = looNote(dir);
+  if (causal) body.push('', causal);
+
+  // WHETHER LAYER 1'S CHEAP LABEL PREDICTS LAYER 2'S EXPENSIVE EFFECT.
+  //
+  // The reason this is printed rather than kept for a dashboard: the reference
+  // rate is the number a reader is most likely to quote as a saving, and it is
+  // not one until this comparison says so. `calibrationNote` returns null while
+  // both layers are silent, and otherwise prints the refusal -- naming which
+  // input was insufficient -- rather than a gap of zero.
+  const calibrated = calibrationNote(dir);
+  if (calibrated) body.push('', calibrated);
 
   const addressable = queue.reduce(
     (sum, item) => sum + (item.costPerSession || 0),

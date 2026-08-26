@@ -31,6 +31,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
+import { redact } from './redact.mjs';
 
 /**
  * Read per call, not once at module load.
@@ -517,6 +518,15 @@ export function readEvidence(dir) {
 }
 
 /**
+ * The captured-output budget, in characters.
+ *
+ * Small enough that a 3 MB test log cannot bloat the evidence log or a single
+ * injected claim, large enough to hold the stack trace or compiler diagnostic
+ * that makes a failure finding worth anything.
+ */
+const OUTPUT_MAX_BYTES = 4096;
+
+/**
  * Joins a post-tool result to the most recent matching injection.  The exact
  * tool-call id wins; clients that omit it fall back to episode + surface +
  * anchor, in timestamp order, and the report states the weaker join method.
@@ -545,10 +555,47 @@ export function recordToolOutcome(dir, outcome) {
       : 'episode-anchor'
     : 'none';
 
+  // FAILURES ONLY, and that is a deliberate override of the original plan.
+  // The plan predates MCP tool names reaching this path, so it never
+  // considered that a SUCCESSFUL `smart_read` would deposit 4 KB of file
+  // content into the evidence log on every call -- the log would grow with
+  // file text and the privacy surface would be every file the session opened.
+  //
+  // Nothing downstream loses anything. A failure claim quotes the error text;
+  // a "this command works" claim needs only the fact that it worked, which
+  // `success` and `exit` already carry. So the stored text narrows to text
+  // that is already an error message.
+  //
+  // GATED ON `success === true`, not on `!== false`: an outcome that never
+  // said whether it worked is unclassified, not successful, and dropping its
+  // text would lose exactly the failures a client too terse to report status
+  // produces.
+  const captureOutput = outcome.success !== true;
+  // REDACTED AND CAPPED HERE, not at the call site. A claim built from this
+  // text is INJECTED into model context and EXPORTED to markdown, so the
+  // boundary is the only place that can guarantee it: a second caller added
+  // later would otherwise have to remember, and the one that forgot would leak
+  // a secret into two more places than the terminal it came from. `undefined`
+  // rather than `''` when nothing was captured, so JSON.stringify omits the
+  // key entirely and an absent capture is distinguishable from an empty one.
+  const output =
+    !captureOutput || outcome.output === undefined || outcome.output === null
+      ? undefined
+      : redact(String(outcome.output), { max: OUTPUT_MAX_BYTES });
+  // NULL RATHER THAN 0 when nothing is reported. Most clients supply no numeric
+  // code at all, and 0 is the success value -- defaulting to it would claim
+  // every unreported call exited cleanly, which is a fabricated observation
+  // rather than a missing one.
+  const exit = Number.isInteger(outcome.exit) ? outcome.exit : null;
+
   return record(dir, {
     kind: 'tool-outcome',
     ...outcome,
     anchor,
+    // AFTER the spread, so a caller cannot smuggle raw text past the boundary
+    // by setting the field itself.
+    output,
+    exit,
     injectionId: injection?.injectionId || null,
     findingIds: injection?.findingIds || [],
     joinMethod,
@@ -616,6 +663,89 @@ export function isFixtureAnchor(anchor) {
  * Fixture anchors are excluded from both.
  */
 /**
+ * Re-reads grouped by anchor -- the one place that decides what "wasteful" means.
+ *
+ * `rereadWaste` needed only the totals, so the grouping lived inside it and the
+ * per-anchor rows were thrown away. `derive.mjs`'s churn detector needs the
+ * rows, and re-deriving them there would put TWO definitions of "a repeat read
+ * of an unchanged file is waste" in the codebase, free to drift apart -- the
+ * exact divergence `npm run sync:hooks` exists to prevent between hooks-core and
+ * its generated copies. So the grouping lives here and both consumers read it.
+ *
+ * A re-read is only a re-read INSIDE ONE SESSION: grouping is keyed on
+ * session + canonical anchor, and rows are then merged per anchor so a file
+ * re-read across three sessions reports as one anchor with the sum of its
+ * repeats rather than three rows the caller has to add up. Merging cannot move
+ * the totals -- a sum of sums -- which is what makes it safe for `rereadWaste`.
+ *
+ * `tokens` is the WASTEFUL token count, not the total: it is the only one of the
+ * three that names something recoverable, and a row whose headline number
+ * included legitimate re-reads would overstate exactly the way the first
+ * version of this measurement did.
+ *
+ * @returns {Array<{anchor: string, repeats: number, wasteful: number,
+ *   tokens: number, legitimate: number, legitimateTokens: number,
+ *   undecidable: number, undecidableTokens: number}>} descending by `wasteful`,
+ *   then by `repeats`.
+ */
+export function rereadsByAnchor(events = [], { includeFixtures = false } = {}) {
+  const groups = new Map();
+  for (const e of events) {
+    if (!e || e.kind !== 'read' || !e.anchor) continue;
+    if (!includeFixtures && isFixtureAnchor(e.anchor)) continue;
+    const key = `${e.sessionId || ''}|${canonicalKeyish(e.anchor)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+
+  const rows = new Map();
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => (a.at || 0) - (b.at || 0));
+
+    const anchorKey = canonicalKeyish(list[0].anchor);
+    let row = rows.get(anchorKey);
+    if (!row) {
+      row = {
+        anchor: list[0].anchor,
+        repeats: 0,
+        wasteful: 0,
+        tokens: 0,
+        legitimate: 0,
+        legitimateTokens: 0,
+        undecidable: 0,
+        undecidableTokens: 0,
+      };
+      rows.set(anchorKey, row);
+    }
+
+    for (let i = 1; i < list.length; i++) {
+      const prev = list[i - 1];
+      const cur = list[i];
+      const tokens = cur.tokens || 0;
+      row.repeats += 1;
+      // THE JUDGEMENT, in one place. A repeat read of a file that CHANGED is
+      // correct behaviour, not waste; a read written before fingerprints
+      // existed cannot be judged at all and says so.
+      if (!prev.fp || !cur.fp) {
+        row.undecidable += 1;
+        row.undecidableTokens += tokens;
+      } else if (prev.fp === cur.fp) {
+        row.wasteful += 1;
+        row.tokens += tokens;
+      } else {
+        row.legitimate += 1;
+        row.legitimateTokens += tokens;
+      }
+    }
+  }
+
+  return [...rows.values()].sort(
+    (a, b) => b.wasteful - a.wasteful || b.repeats - a.repeats
+  );
+}
+
+/**
  * Re-read waste, split into what is KNOWN and what is not.
  *
  * The question is narrow on purpose: how often does one session read the same
@@ -630,6 +760,9 @@ export function isFixtureAnchor(anchor) {
  * `undecidable` is reported rather than hidden. Reads written before the
  * fingerprint existed cannot be classified, and a measurement that quietly
  * counted them either way would be inventing its own answer.
+ *
+ * The aggregate fields are UNCHANGED -- `balanceSheet` reads them -- and are now
+ * a fold over `rereadsByAnchor`'s rows. `worst` is purely additive.
  */
 export function rereadWaste(
   dir,
@@ -638,14 +771,7 @@ export function rereadWaste(
   // excludes by design, making the real path untestable.
   { events = readMetrics(dir), includeFixtures = false } = {}
 ) {
-  const groups = new Map();
-  for (const e of events) {
-    if (e.kind !== 'read' || !e.anchor) continue;
-    if (!includeFixtures && isFixtureAnchor(e.anchor)) continue;
-    const key = `${e.sessionId || ''}|${canonicalKeyish(e.anchor)}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(e);
-  }
+  const rows = rereadsByAnchor(events, { includeFixtures });
 
   const out = {
     repeats: 0,
@@ -657,29 +783,21 @@ export function rereadWaste(
     undecidableTokens: 0,
   };
 
-  for (const list of groups.values()) {
-    if (list.length < 2) continue;
-    list.sort((a, b) => (a.at || 0) - (b.at || 0));
-    for (let i = 1; i < list.length; i++) {
-      const prev = list[i - 1];
-      const cur = list[i];
-      const tokens = cur.tokens || 0;
-      out.repeats += 1;
-      if (!prev.fp || !cur.fp) {
-        out.undecidable += 1;
-        out.undecidableTokens += tokens;
-      } else if (prev.fp === cur.fp) {
-        out.wasteful += 1;
-        out.wastefulTokens += tokens;
-      } else {
-        out.legitimate += 1;
-        out.legitimateTokens += tokens;
-      }
-    }
+  for (const row of rows) {
+    out.repeats += row.repeats;
+    out.wasteful += row.wasteful;
+    out.wastefulTokens += row.tokens;
+    out.legitimate += row.legitimate;
+    out.legitimateTokens += row.legitimateTokens;
+    out.undecidable += row.undecidable;
+    out.undecidableTokens += row.undecidableTokens;
   }
 
   const decided = out.wasteful + out.legitimate;
   out.coverage = out.repeats ? decided / out.repeats : null;
+  // The offenders behind the totals, bounded: a report needs the handful worth
+  // acting on, not one row per file the session touched twice.
+  out.worst = rows.slice(0, 10);
   return out;
 }
 

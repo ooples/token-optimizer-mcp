@@ -35,6 +35,7 @@ import { substitutionBudget } from './metrics.mjs';
 import { assessFindings } from './utility.mjs';
 import { quarantineSharedSource } from './harvest-write.mjs';
 import { cacheOrdered } from './cache.mjs';
+import { withheldFor, exploreOrder, servingPolicyVersion, LOO_ENABLED } from './loo.mjs';
 
 // Read per call for the same reason as the holdout fraction in metrics.mjs.
 const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 500;
@@ -311,8 +312,38 @@ export function forTouch(
     });
     for (const rejected of assessed.rejected) alreadyInjected.add(rejected.key);
   }
-  const { kept, spent } = fit(assessed.eligible.map((item) => item.finding), budget);
+  // LAYER 2 EXPLORATION, BEFORE the budget decides.
+  //
+  // `assessed.eligible` arrives in net-utility order and `fit` keeps that order
+  // until the budget runs out -- so the ranking decides which findings are ever
+  // served, which decides which ever accumulate observations, which decides
+  // their utility. A tenth of touches therefore promote the least-served
+  // candidate first. This is the only place it can go: after `fit` the choice
+  // has already been made.
+  const ordered = exploreOrder(assessed.eligible, dir, { sessionId, anchor: filePath });
+  const { kept, spent } = fit(ordered.map((item) => item.finding), budget);
   if (!kept.length) return null;
+
+  // LAYER 2 WITHHOLDING, AFTER the budget decides, which is the only ordering
+  // that produces a leave-one-out rather than a substitution: withholding first
+  // would let the next-ranked finding take the freed tokens, so the withheld
+  // arm would differ from the served arm by two findings instead of one and the
+  // effect would belong to neither.
+  //
+  // `holdout` is passed so the two experiments cannot compose into "withhold
+  // everything and call it a leave-one-out": that arm already serves nothing.
+  const withheld = withheldFor(kept.map((finding) => finding.key), sessionId, graph, dir, {
+    surface: 'file',
+    anchor: filePath,
+    holdout,
+  });
+  const delivered = withheld ? kept.filter((finding) => finding.key !== withheld) : kept;
+  // RE-PRICED, because `fit` priced what it KEPT and this delivers less. Using
+  // `spent` would bill the injection-cost side of the balance sheet for text
+  // the model never received.
+  const deliveredSpent = withheld
+    ? delivered.reduce((sum, finding) => sum + estimate(render(finding)), 0)
+    : spent;
 
   record(dir, {
     kind: 'inject',
@@ -321,15 +352,20 @@ export function forTouch(
     surface: 'file',
     anchor: filePath,
     holdout,
-    tokens: holdout ? 0 : spent,
-    deliveredTokens: holdout ? 0 : spent,
+    tokens: holdout ? 0 : deliveredSpent,
+    deliveredTokens: holdout ? 0 : deliveredSpent,
     shadowTokens: spent,
-    count: holdout ? 0 : kept.length,
+    count: holdout ? 0 : delivered.length,
     candidateCount: kept.length,
-    findingIds: holdout ? [] : kept.map((finding) => finding.key),
+    findingIds: holdout ? [] : delivered.map((finding) => finding.key),
     shadowFindingIds: kept.map((finding) => finding.key),
-    stale: kept.some((f) => f.stale),
+    stale: delivered.some((f) => f.stale),
     sessionId,
+    // ON EVERY RECORD, not only the withheld ones. A served observation needs
+    // the policy version as much as a withheld one does, or `effects` cannot
+    // keep the two arms of one comparison inside one policy.
+    ...(LOO_ENABLED() ? { looPolicy: servingPolicyVersion() } : {}),
+    ...(withheld ? { loo: withheld } : {}),
   });
 
   // MARKED SEEN IN BOTH ARMS, for the same reason as the command path: a file
@@ -339,11 +375,16 @@ export function forTouch(
   // grow faster purely from repetition.
   //
   // This is the identical defect that was fixed in `forCommand` and not here.
+  //
+  // THE WITHHELD KEY IS MARKED TOO, and that is load-bearing rather than tidy:
+  // an unmarked one would be a candidate again on the next touch of this file,
+  // where the one-per-touch tiebreak could serve it -- flipping its arm inside
+  // the very session the arm hash exists to pin it for.
   for (const f of kept) alreadyInjected.add(f.key);
 
-  if (holdout || !kept.length) return null;
+  if (holdout || !delivered.length) return null;
 
-  return `Known about ${filePath} (from previous sessions):\n${kept.map(render).join('\n')}`;
+  return `Known about ${filePath} (from previous sessions):\n${delivered.map(render).join('\n')}`;
 }
 
 /**
@@ -1134,10 +1175,25 @@ export function standingRules(dir, graph, { budget = standingBudget(), episode =
   // injected more than the budget allowed and recorded fewer tokens than it
   // spent -- in a block whose entire justification is that it is tightly
   // bounded and measured against the control arm.
+  // THE LAST LINE IS HOW THE NEXT RULE GETS HERE, and it is one line because
+  // this block is charged on every session forever. A rule reaches this list
+  // only by being pinned or by being a person's verified correction, and both
+  // start as a `wiki_write` -- so a model reading a set of standing rules with
+  // no idea how they were produced has no way to add to it. Stated at the point
+  // of the evidence rather than as a separate always-on block: the reader is
+  // already looking at the output of the mechanism being described.
+  //
+  // THE COLD GRAPH IS COVERED ELSEWHERE, deliberately. Nothing here renders
+  // until at least one rule qualifies, which is the property the always-on
+  // budget depends on, so this line cannot be the first-session nudge --
+  // `policyText`'s "Record what you work out" section is, and it is emitted at
+  // SessionStart whether or not the graph holds anything.
   const HEADING =
     '# Standing rules for this project' +
     '\n\nEstablished in previous sessions and expected to hold. ' +
-    'These are not suggestions.\n\n';
+    'These are not suggestions.\n\n' +
+    'Record what you work out with wiki_write and a real file anchor; ' +
+    'that is how a rule reaches this list.\n\n';
   const noticeFor = (n) =>
     n
       ? `\n(${n} further standing rule${n === 1 ? '' : 's'} did not fit this budget; ` +
