@@ -842,6 +842,26 @@ export function registerWikiRoutes(app: Express): void {
           return res.json({ ok: mods.curate.pin(dir, key, pinned !== false) });
         case 'retire':
           return res.json({ ok: mods.curate.retire(dir, key) });
+        case 'reverify': {
+          // THE ONLY DOOR THAT CLEARS A STALE FLAG, and it cannot be pushed
+          // open. Nothing in the codebase ever cleared one, which was harmless
+          // while eager invalidation was dead code and is a rot path now that it
+          // fires: every finding on an edited file becomes permanently stale.
+          //
+          // `reverify` clears ONLY when disk re-hashes to the frozen claim-time
+          // hashes in the finding's own `derivation` record -- a revert, or a
+          // write that never moved the anchored bytes. There is no force flag and
+          // no second action, so this endpoint cannot launder a stale finding
+          // back to fresh: a caller can only make one fresh by putting the
+          // content back. `clearStale`, the primitive that clears without
+          // checking, is deliberately not reachable from here.
+          //
+          // `unknown` is an ANSWER, not a server error -- no such finding, or
+          // nothing recorded to compare against -- so it is reported as one
+          // rather than as a status a caller would retry until it succeeded.
+          const verdict = mods.staleness.reverify(dir, key);
+          return res.json({ ok: verdict === 'cleared', result: verdict });
+        }
         case 'correct': {
           if (!claim) return res.status(400).json({ error: 'claim required' });
           const replacement = mods.curate.correct(dir, key, claim, {
