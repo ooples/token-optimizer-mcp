@@ -450,7 +450,8 @@ export function registerWikiRoutes(app: Express): void {
       // instead of asking `rank` to score against nothing (which would
       // return zero results, not "everything," for what a user typing a
       // stray space in the search box expects to behave like no filter).
-      const hasQueryTerms = query.length > 0 && mods.lexical.tokenize(query).length > 0;
+      const hasQueryTerms =
+        query.length > 0 && mods.lexical.tokenize(query).length > 0;
       if (hasQueryTerms) {
         const scored = mods.lexical.rank(
           query,

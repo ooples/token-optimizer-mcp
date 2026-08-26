@@ -1056,7 +1056,9 @@ function showDetail(node) {
   // `still-stale` otherwise.
   const reverifyButton = document.getElementById('detail-reverify');
   if (reverifyButton) {
-    reverifyButton.addEventListener('click', () => curate({ action: 'reverify' }));
+    reverifyButton.addEventListener('click', () =>
+      curate({ action: 'reverify' })
+    );
   }
   const feedback = async (rating) => {
     await api('/api/wiki/evidence/feedback', {

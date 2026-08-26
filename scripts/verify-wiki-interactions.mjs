@@ -153,7 +153,13 @@ async function main() {
       `${retryCount} results`
     );
 
-    await search.fill('zzzz-definitely-no-such-finding');
+    // ONE NONSENSE TOKEN, not a nonsense PHRASE. Search is BM25 now
+    // (hooks-core/lexical.mjs), so a hyphenated phrase tokenizes to its parts
+    // and any one of them scoring is a match -- `zzzz-definitely-no-such-
+    // finding` returned two rows on the word `finding` alone. That is correct
+    // BM25 and correct for a search box; it just is not a no-match query, and
+    // this check needs one to reach the empty state at all.
+    await search.fill('zzzzqqq');
     await page.waitForTimeout(400);
     check(
       'a search with no matches shows an empty list',
@@ -162,6 +168,19 @@ async function main() {
     check(
       'the count still reports honestly when empty',
       (await page.locator('#wiki-count').innerText()).includes('0')
+    );
+
+    // PINNED, because it is the behaviour that silently invalidated the probe
+    // above: any ONE term of a multi-term query scoring is a match. Asserted
+    // rather than left implicit, so a later change back to phrase- or
+    // AND-matching fails here instead of quietly narrowing every search.
+    await search.fill('zzzzqqq finding');
+    await page.waitForTimeout(400);
+    const orCount = await page.locator('#wiki-list li').count();
+    check(
+      'a multi-term search matches on any one term',
+      orCount > 0,
+      `${orCount} results`
     );
 
     // Regex metacharacters must be treated as literal text, not a pattern.

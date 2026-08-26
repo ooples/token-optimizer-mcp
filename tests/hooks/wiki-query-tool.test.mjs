@@ -300,17 +300,34 @@ describe('wiki_query', () => {
     process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(repo, 'projects.jsonl');
     try {
       // Where the hooks write the denominator.
-      const hookDir = wikiDir(projectRootFor(join(repo, '__session__'), repo));
+      const canonicalRoot = projectRootFor(join(repo, '__session__'), repo);
+      const hookDir = wikiDir(canonicalRoot);
 
       // The same root, spelled the way a caller might hand it over.
+      //
+      // CONCATENATED, NOT `join`ed. `path.join` normalises `packages/..` away
+      // as it builds the string, so the "odd" spelling came back already
+      // canonical and the two spellings below were the same string on a POSIX
+      // host -- the assertion that they differ could only ever hold on Windows,
+      // where the lower-case drive letter survives.
       const SEP = String.fromCharCode(92); // a backslash, unambiguously
-      let odd = join(repo, 'packages', '..').split(SEP).join('/');
+      let odd = `${repo}${SEP}packages${SEP}..`.split(SEP).join('/');
       if (process.platform === 'win32')
         odd = odd.charAt(0).toLowerCase() + odd.slice(1);
       // The two spellings are different STRINGS, which is the whole problem:
       // `indexBudget`, the project registry and the dashboards all key on the
       // graph directory, so two strings for one repository double-count it.
-      expect(wikiDir(odd)).not.toBe(hookDir);
+      expect(odd).not.toBe(canonicalRoot);
+      // ...and on Windows that difference reaches the KEY, because `wikiDir`
+      // joins and `path.join` does not touch a drive letter's case.
+      //
+      // STATED RATHER THAN ASSERTED EVERYWHERE: on a POSIX host there is no
+      // spelling of the same directory that survives `path.join` -- it collapses
+      // `.`, `..` and doubled separators, and a case-sensitive filesystem has no
+      // case variant that names the same directory. So the fork is demonstrated
+      // where the platform can produce one; the GUARANTEE below is asserted on
+      // every platform, and so is the end-to-end event placement further down.
+      if (process.platform === 'win32') expect(wikiDir(odd)).not.toBe(hookDir);
       // Canonicalised, they are one key. This is the guarantee the fix adds.
       expect(wikiDir(canonicalPath(odd))).toBe(hookDir);
 
