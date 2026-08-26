@@ -143,11 +143,43 @@ export function mutationSucceeded(clientName, raw) {
   );
 }
 
+/**
+ * The response envelopes a completed tool call can arrive in.
+ *
+ * Spelled out ONCE because three readers depend on it -- success
+ * classification, output capture and exit-code capture -- and clients disagree
+ * on the envelope name and on nothing else. Letting each reader name its own
+ * subset is how `toolSucceeded` came to miss MCP's failure flag entirely.
+ */
+function responseEnvelopes(raw) {
+  return [
+    raw?.tool_response,
+    raw?.toolResponse,
+    raw?.tool_result,
+    raw?.toolResult,
+    raw?.postToolUse,
+  ].filter((envelope) => envelope !== undefined && envelope !== null);
+}
+
 /** Conservative success classification for any completed tool call. */
 export function toolSucceeded(raw) {
   if (raw?.error || raw?.tool_response?.error || raw?.toolResponse?.error)
     return false;
   if (raw?.postToolUse?.success === false || raw?.success === false)
+    return false;
+  // MCP'S OWN FAILURE FLAG, which this function did not read for as long as it
+  // existed. It did not matter while `normalizeTool` dropped MCP names before
+  // any accounting ran; it matters now that `mcp__<server>__smart_edit` and
+  // `smart_write` reach the post-tool path, because an MCP result carries no
+  // `error` field and no `status` -- only `isError` -- so a failed smart_edit
+  // fell through to the optimistic `return true` below.
+  //
+  // WHY THIS IS A MEASUREMENT BUG AND NOT A COSMETIC ONE: this boolean feeds
+  // episode outcomes and effectiveness accounting, so recording every failed
+  // call to THE OPTIMIZER'S OWN TOOLS as a success biased all of it in the
+  // optimizer's favour. A measurement that flatters the thing being measured
+  // is worse than no measurement.
+  if ([...responseEnvelopes(raw), raw].some((e) => e?.isError === true))
     return false;
   const status =
     raw?.tool_response?.status ??
@@ -168,23 +200,6 @@ export function toolSucceeded(raw) {
   // that its output proved the task.  `success` here is deliberately scoped to
   // the tool call; task correctness comes only from an eval grader.
   return true;
-}
-
-/**
- * The response envelopes a completed tool call can arrive in.
- *
- * The same family `toolSucceeded` reads above, hoisted so the three readers
- * cannot drift apart. Clients disagree on the envelope name and on nothing
- * else, so this is the one place that disagreement is spelled out.
- */
-function responseEnvelopes(raw) {
-  return [
-    raw?.tool_response,
-    raw?.toolResponse,
-    raw?.tool_result,
-    raw?.toolResult,
-    raw?.postToolUse,
-  ].filter((envelope) => envelope !== undefined && envelope !== null);
 }
 
 /** A non-empty string, or null.  Blank output is the same as none. */

@@ -555,6 +555,22 @@ export function recordToolOutcome(dir, outcome) {
       : 'episode-anchor'
     : 'none';
 
+  // FAILURES ONLY, and that is a deliberate override of the original plan.
+  // The plan predates MCP tool names reaching this path, so it never
+  // considered that a SUCCESSFUL `smart_read` would deposit 4 KB of file
+  // content into the evidence log on every call -- the log would grow with
+  // file text and the privacy surface would be every file the session opened.
+  //
+  // Nothing downstream loses anything. A failure claim quotes the error text;
+  // a "this command works" claim needs only the fact that it worked, which
+  // `success` and `exit` already carry. So the stored text narrows to text
+  // that is already an error message.
+  //
+  // GATED ON `success === true`, not on `!== false`: an outcome that never
+  // said whether it worked is unclassified, not successful, and dropping its
+  // text would lose exactly the failures a client too terse to report status
+  // produces.
+  const captureOutput = outcome.success !== true;
   // REDACTED AND CAPPED HERE, not at the call site. A claim built from this
   // text is INJECTED into model context and EXPORTED to markdown, so the
   // boundary is the only place that can guarantee it: a second caller added
@@ -563,7 +579,7 @@ export function recordToolOutcome(dir, outcome) {
   // rather than `''` when nothing was captured, so JSON.stringify omits the
   // key entirely and an absent capture is distinguishable from an empty one.
   const output =
-    outcome.output === undefined || outcome.output === null
+    !captureOutput || outcome.output === undefined || outcome.output === null
       ? undefined
       : redact(String(outcome.output), { max: OUTPUT_MAX_BYTES });
   // NULL RATHER THAN 0 when nothing is reported. Most clients supply no numeric

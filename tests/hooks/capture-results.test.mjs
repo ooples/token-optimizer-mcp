@@ -19,7 +19,11 @@ import {
   recordToolOutcome,
   record,
 } from '../../hooks-core/metrics.mjs';
-import { outputFrom, exitFrom } from '../../hooks-core/adapter.mjs';
+import {
+  outputFrom,
+  exitFrom,
+  toolSucceeded,
+} from '../../hooks-core/adapter.mjs';
 
 let dir;
 beforeEach(() => {
@@ -54,7 +58,10 @@ describe('tool-outcome carries output and exit', () => {
   });
 
   it('caps output so a huge log is never stored whole', () => {
-    outcome({ output: 'x'.repeat(100000), exit: 0 });
+    // A FAILING call, because capture is now failure-only. The cap still has
+    // to hold: a 100 KB build log is exactly the failure whose text is worth
+    // having, and exactly the one that must not be stored whole.
+    outcome({ output: 'x'.repeat(100000), exit: 1 });
     expect(latest().output.length).toBeLessThanOrEqual(4096);
   });
 
@@ -72,8 +79,27 @@ describe('tool-outcome carries output and exit', () => {
 
   it('keeps a reported exit of 0 distinguishable from an unreported one', () => {
     // The whole point of the null: 0 must mean "the client said zero".
-    outcome({ output: 'ok', exit: 0, success: true });
+    outcome({ exit: 0, success: true });
     expect(latest().exit).toBe(0);
+  });
+
+  it('records no output at all for a call that succeeded', () => {
+    // OVERRIDES THE ORIGINAL PLAN. A successful smart_read would otherwise
+    // deposit 4 KB of file content per call: the evidence log would grow with
+    // file text and the privacy surface would be every file the session read.
+    // `success` and `exit` already carry everything a "this works" claim needs.
+    outcome({ output: 'FILE BODY LINE ONE', exit: 0, success: true });
+    expect(latest().success).toBe(true);
+    expect(latest().output).toBeUndefined();
+    expect(JSON.stringify(latest())).not.toContain('FILE BODY');
+  });
+
+  it('still captures output when the outcome never said whether it worked', () => {
+    // Unclassified is not successful. A client too terse to report status
+    // still produces failures, and dropping their text would lose exactly the
+    // ones worth having.
+    outcome({ output: 'segfault', exit: null, success: undefined });
+    expect(latest().output).toBe('segfault');
   });
 
   it('omits output entirely when nothing was captured', () => {
@@ -127,6 +153,43 @@ describe('tool-outcome carries output and exit', () => {
     expect(latest().joinMethod).toBe('tool-call-id');
     expect(latest().findingIds).toEqual(['f-1']);
     expect(latest().injectionId).toBeTruthy();
+  });
+});
+
+describe("toolSucceeded reads MCP's own failure flag", () => {
+  it('classifies an MCP isError result as a failure', () => {
+    // The only failure signal an MCP result carries: no `error` field, no
+    // `status`. Missing it recorded every failed smart_edit as a success and
+    // biased effectiveness accounting in the optimizer's own favour.
+    expect(
+      toolSucceeded({
+        tool_response: {
+          content: [{ type: 'text', text: '{"success": false}' }],
+          isError: true,
+        },
+      })
+    ).toBe(false);
+  });
+
+  it('reads isError in every envelope, and at the top level', () => {
+    expect(toolSucceeded({ toolResponse: { isError: true } })).toBe(false);
+    expect(toolSucceeded({ tool_result: { isError: true } })).toBe(false);
+    expect(toolSucceeded({ isError: true })).toBe(false);
+  });
+
+  it('leaves a successful MCP result classified as a success', () => {
+    // isError absent, and isError:false, both mean the call worked. Only
+    // `true` may flip the verdict, or every MCP call becomes a failure.
+    expect(
+      toolSucceeded({ tool_response: { content: [{ type: 'text', text: 'ok' }] } })
+    ).toBe(true);
+    expect(toolSucceeded({ tool_response: { isError: false } })).toBe(true);
+  });
+
+  it('does not treat a truthy non-boolean isError as a verdict', () => {
+    // Exact `=== true` only: a client using the key for something else must
+    // not have its successful calls silently recorded as failures.
+    expect(toolSucceeded({ tool_response: { isError: 'no' } })).toBe(true);
   });
 });
 
