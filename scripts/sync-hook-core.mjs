@@ -43,12 +43,33 @@ const TARGETS = [
 ];
 
 const check = process.argv.includes('--check');
+
+/**
+ * Publish-time only. The version is NOT committed into the generated copies.
+ *
+ * A version literal in a generated-and-committed file makes the invariant
+ * "generated output == committed file" one that CANNOT hold across a release:
+ * release-please bumps package.json without regenerating, so every release
+ * commit is born drifted and `sync:hooks:check` fails inside `publish-npm` --
+ * which checks out the tag, so a later repair on master cannot rescue it.
+ *
+ * This repository has now paid for that invariant three times: v5.4.0 and
+ * v5.4.1 were tagged with GitHub Releases and neither reached npm, and v5.7.1
+ * repeated it after the stamp was reintroduced here. scripts/pin-mcp-version.mjs
+ * and scripts/generate-client-configs.mjs both carry the post-mortem, and both
+ * name the remedy: pin at publish time only, so the tarball carries an exact
+ * version while git carries none. Nothing in git can then go stale.
+ *
+ * `npm run stamp:version` applies it, and release.yml runs that after the drift
+ * check and before the tarball is built.
+ */
+const stamp = process.argv.includes('--stamp');
 const files = readdirSync(SOURCE).filter((f) => f.endsWith('.mjs'));
 
 const banner = (name) =>
   `// GENERATED FILE -- do not edit.\n` +
   `// Source of truth: hooks-core/${name}. Regenerate with \`npm run sync:hooks\`.\n` +
-  (name === 'observability.mjs'
+  (stamp && name === 'observability.mjs'
     ? `process.env.TOKEN_OPTIMIZER_VERSION = '${PACKAGE_VERSION}';\n`
     : '');
 

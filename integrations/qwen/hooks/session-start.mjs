@@ -4,7 +4,6 @@
 // shared core so no client can drift its own thresholds or guidance.
 // Fail open: a defect in the optimizer must never cost the user a tool call.
 // Bootstrap failures are still recorded so fail-open does not become fail-silent.
-process.env.TOKEN_OPTIMIZER_VERSION = '5.7.1';
 // These entry points ship beside an MCP declaration for this same package. Hosts
 // do not expose their registered tool inventory to hook payloads, so make that
 // bundled contract explicit. An explicit empty value still wins and fails open.

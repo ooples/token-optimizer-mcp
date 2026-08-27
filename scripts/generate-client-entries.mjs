@@ -68,6 +68,18 @@ const ENTRIES = [
 // though `sync:hooks` would have overwritten it -- exactly the drift the check
 // exists to prevent, just one level up.
 const check = process.argv.includes('--check');
+
+/**
+ * Publish-time only, for the reason spelled out in scripts/sync-hook-core.mjs:
+ * a committed version literal cannot survive a release commit, and the drift it
+ * guarantees fails `publish-npm` at the tag. Thirty-seven entry files carried
+ * one, which is why the surface was never going to be fixable by listing the
+ * files somewhere.
+ */
+const stamp = process.argv.includes('--stamp');
+const versionStamp = stamp
+  ? `process.env.TOKEN_OPTIMIZER_VERSION = '${PACKAGE_VERSION}';\n`
+  : '';
 let drifted = 0;
 
 for (const [dir, client, event, name] of ENTRIES) {
@@ -80,8 +92,7 @@ for (const [dir, client, event, name] of ENTRIES) {
 // shared core so no client can drift its own thresholds or guidance.
 // Fail open: a defect in the optimizer must never cost the user a tool call.
 // Bootstrap failures are still recorded so fail-open does not become fail-silent.
-process.env.TOKEN_OPTIMIZER_VERSION = '${PACKAGE_VERSION}';
-// These entry points ship beside an MCP declaration for this same package. Hosts
+${versionStamp}// These entry points ship beside an MCP declaration for this same package. Hosts
 // do not expose their registered tool inventory to hook payloads, so make that
 // bundled contract explicit. An explicit empty value still wins and fails open.
 process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= '${BUNDLED_MCP_CAPABILITIES}';

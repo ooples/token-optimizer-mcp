@@ -1,6 +1,5 @@
 // GENERATED FILE -- do not edit.
 // Source of truth: hooks-core/observability.mjs. Regenerate with `npm run sync:hooks`.
-process.env.TOKEN_OPTIMIZER_VERSION = '5.7.1';
 /**
  * Privacy-safe, cross-client lifecycle diagnostics.
  *
@@ -24,7 +23,8 @@ import {
 } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const HOOK_LOG_SCHEMA_VERSION = 2;
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
@@ -34,6 +34,75 @@ const DEFAULT_DEADLINE_MS = 4200;
 const MAX_ERROR_CHARS = 4000;
 const MAX_DIMENSION_CHARS = 160;
 let activeInvocation = null;
+
+/**
+ * Manifests that carry this package's version, nearest first.
+ *
+ * WHY THIS IS RESOLVED RATHER THAN COMPILED IN. The generators used to write the
+ * version into all 48 generated files, which made "generated output == committed
+ * file" an invariant that cannot survive a release: release-please bumps
+ * package.json without regenerating, so the release commit is born drifted and
+ * `publish-npm` -- which checks out the tag -- fails its drift gate. It has cost
+ * this project three releases (v5.4.0, v5.4.1, v5.7.1: all tagged, none on npm).
+ *
+ * The stamp is now applied at publish time only, so an npm install still reports
+ * an exact version from the env. Everything else resolves here instead of
+ * reporting a stale literal -- a lagging version is not a version, it is a wrong
+ * one, and this file exists to make failures correlatable.
+ *
+ * Inside the tarball the walk finds the package's own package.json; a plugin
+ * installed from the marketplace finds .claude-plugin/plugin.json, which
+ * release-please keeps correct. A bare copy into a client hook directory finds
+ * nothing and says 'unknown', which is what this reported before the stamp
+ * existed and is honest.
+ */
+const VERSION_MANIFESTS = [
+  ['package.json'],
+  ['.claude-plugin', 'plugin.json'],
+  ['.codex-plugin', 'plugin.json'],
+];
+const MAX_MANIFEST_DEPTH = 6;
+
+let cachedManifestVersion;
+
+function versionFromNearestManifest() {
+  if (cachedManifestVersion !== undefined) return cachedManifestVersion;
+  cachedManifestVersion = '';
+  try {
+    let dir = dirname(fileURLToPath(import.meta.url));
+    for (let depth = 0; depth < MAX_MANIFEST_DEPTH; depth++) {
+      for (const parts of VERSION_MANIFESTS) {
+        const candidate = join(dir, ...parts);
+        if (!existsSync(candidate)) continue;
+        const { version } = JSON.parse(readFileSync(candidate, 'utf8'));
+        if (typeof version === 'string' && version) {
+          cachedManifestVersion = version;
+          return cachedManifestVersion;
+        }
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+    // Diagnostics must never be the reason a hook fails.
+  }
+  return cachedManifestVersion;
+}
+
+/**
+ * The version this process reports. Env first so the publish-time stamp and any
+ * host that sets it still win; only the filesystem walk is cached, so the env
+ * stays authoritative for the life of the process.
+ */
+export function serviceVersion() {
+  return (
+    process.env.TOKEN_OPTIMIZER_VERSION ||
+    process.env.npm_package_version ||
+    versionFromNearestManifest() ||
+    'unknown'
+  );
+}
 
 function positiveInteger(name, fallback) {
   const value = Number(process.env[name]);
@@ -161,10 +230,7 @@ export function writeHookEvent(event) {
       schemaVersion: HOOK_LOG_SCHEMA_VERSION,
       timestamp: now.toISOString(),
       service: 'token-optimizer',
-      serviceVersion:
-        process.env.TOKEN_OPTIMIZER_VERSION ||
-        process.env.npm_package_version ||
-        'unknown',
+      serviceVersion: serviceVersion(),
       ...severity(event.level),
       body: event.event || 'hook.event',
       ...event,
