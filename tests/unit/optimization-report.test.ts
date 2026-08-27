@@ -101,6 +101,33 @@ describe('get_optimization_report and the graph', () => {
     expect(report.formatted).toContain('Graph balance sheet');
   });
 
+  it('reports the hit rate beside the balance, which is what #204 asks for', async () => {
+    // The issue's acceptance test is "hit rate and token balance", and this
+    // block carried only the balance -- what the graph spent and saved, with
+    // nothing about whether anything it injected was ever used. A positive
+    // balance built on findings nobody read is the overhead this project says
+    // it must not become, so the two halves belong in one block.
+    const report = await run();
+    const line = report.formatted
+      .split('\n')
+      .find((l: string) => /hit rate\s+:/.test(l));
+    expect(line).toBeDefined();
+  });
+
+  it('states an unmeasured hit rate rather than printing it as zero', async () => {
+    // `referenceNote` returns null when it has nothing honest to say. Rendering
+    // that as 0% would read as "nothing is ever used", which is the
+    // unknown-becomes-zero error this report corrects everywhere else.
+    const report = await run();
+    const line = report.formatted
+      .split('\n')
+      .find((l: string) => /hit rate\s+:/.test(l));
+    expect(line).toBeDefined();
+    if (/not measurable/.test(String(line))) {
+      expect(line).not.toMatch(/\b0%/);
+    }
+  });
+
   it('refuses to publish a calibration it cannot compute, with no gap number', async () => {
     const report = await run();
     expect(report.graph.calibration.publishable).toBe(false);

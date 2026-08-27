@@ -170,7 +170,24 @@ async function graphSection(): Promise<{
     ]);
     const dir = wiki.wikiDir(process.cwd());
     const sheet = cross.graphBalanceSheet(dir);
-    return { sheet, lines: renderGraph(sheet, pricing as GraphPricing) };
+    // THE OTHER HALF OF #204's ACCEPTANCE TEST. The issue asks for "hit rate
+    // and token balance" together, and this block carried only the balance:
+    // what the graph SPENT and SAVED, with nothing about whether anything it
+    // injected was ever used. Those are the two halves of one question -- a
+    // positive balance built on findings nobody read is the overhead this
+    // project says it must not become -- so they belong in one block rather
+    // than one here and one in `token_audit`.
+    let reference: string | null = null;
+    try {
+      const usage = await import(coreUrl('usage.mjs'));
+      reference = usage.referenceNote(dir);
+    } catch {
+      // A missing usage module costs the line, not the section.
+    }
+    return {
+      sheet,
+      lines: renderGraph(sheet, pricing as GraphPricing, reference),
+    };
   } catch {
     return null;
   }
@@ -190,7 +207,8 @@ async function graphSection(): Promise<{
  */
 function renderGraph(
   sheet: Record<string, any>,
-  pricing: GraphPricing
+  pricing: GraphPricing,
+  reference: string | null = null
 ): string[] {
   const lines: string[] = ['▸ Graph balance sheet'];
   const mc = sheet.measuredCounterfactual || {};
@@ -224,6 +242,17 @@ function renderGraph(
           1
         )}x cost-to-derive over cost-to-carry -- estimate, deliberately not priced`
       : '  consolidation           : no finding carries a derivation cost yet -- estimate, deliberately not priced'
+  );
+
+  // HIT RATE, and NULL IS AN ANSWER. `referenceNote` returns null when it has
+  // nothing honest to say and its own sentence when it cannot measure yet, so
+  // the absent case is stated rather than rendered as a zero -- an unmeasured
+  // hit rate printed as 0% would read as "nothing is ever used", which is the
+  // unknown-becomes-zero error this report corrects everywhere else.
+  lines.push(
+    reference
+      ? `  hit rate                : ${reference}`
+      : '  hit rate                : not measurable yet -- no injection has been followed by a query'
   );
 
   const waste = sheet.waste || {};

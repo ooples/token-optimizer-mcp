@@ -26,6 +26,10 @@ import { linkCoOccurrence } from './lib/inject.mjs';
 import { wikiDir, projectRootFor } from './lib/wiki.mjs';
 import { closeForecast } from './lib/surface.mjs';
 import { compactionNudge } from './lib/recording.mjs';
+import { runStopHarvest } from './lib/stop-harvest.mjs';
+
+/** A blank line between two system messages, written by code point. */
+const BLANK_LINE = String.fromCharCode(10) + String.fromCharCode(10);
 import { optimizerToolsForHook } from './lib/capabilities.mjs';
 import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
 
@@ -40,6 +44,33 @@ function emit(output) {
   const serialized = JSON.stringify(output);
   noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
   process.stdout.write(serialized);
+}
+
+/**
+ * Messages this hook wants to say, said ONCE.
+ *
+ * A hook writes one JSON object to stdout. This one had three places that could
+ * write -- the compaction nudge, the wrapper's compression summary, and now the
+ * harvest notice -- and two of them firing in the same run concatenated two
+ * objects into something no host can parse.
+ *
+ * IT WAS LATENT AND THIS CHANGE MADE IT LIKELY. The nudge only appears when the
+ * model has `wiki_write` and there is something to record, so the collision was
+ * rare enough to survive unnoticed; the harvest notice appears on the FIRST
+ * compaction of every session that has not opted into the harvest, which is the
+ * default. Collecting rather than writing is the fix, and flushing on every exit
+ * path is what makes it one.
+ */
+const pending = [];
+const say = (message) => {
+  if (message) pending.push(message);
+};
+
+/** Writes everything collected, as a single object, or nothing at all. */
+function flush() {
+  if (!pending.length) return;
+  emit({ systemMessage: pending.join(BLANK_LINE) });
+  pending.length = 0;
 }
 
 function findWrapper() {
@@ -71,6 +102,26 @@ async function main() {
   }
   invocation.bind(payload, null, input.bytes);
 
+  // THE OTHER HALF OF THE OUT-OF-BAND HARVEST. #204 specifies it "at
+  // Stop/PreCompact", and only Stop had it: compaction is the event this whole
+  // subsystem exists for, and a conclusion that is not extracted before it is
+  // destroyed rather than merely forgotten.
+  //
+  // ABOVE THE `seenCount === 0` RETURN, deliberately, for the reason the
+  // comment below gives about the wrapper check: a session that tracked no file
+  // operations still has a transcript worth harvesting, and gating this on
+  // tracked reads would make it unreachable for a reason nobody would think to
+  // look for -- the same shape as the defect that comment is about.
+  //
+  // The harvest debounces itself and spawns a DETACHED worker, so a PreCompact
+  // immediately after a Stop costs nothing and compaction is never delayed by a
+  // model call.
+  try {
+    say(await runStopHarvest(payload));
+  } catch {
+    // Compaction must proceed whatever the harvest does.
+  }
+
   // STATE AND CO-OCCURRENCE BEFORE THE WRAPPER CHECK, deliberately.
   //
   // The wrapper is only needed to spawn optimize_session, and plugin-only
@@ -83,7 +134,13 @@ async function main() {
   const state = loadState(payload.session_id);
   const seen = Object.keys(state.seen || {});
   const seenCount = seen.length;
-  if (seenCount === 0) return;
+  if (seenCount === 0) {
+    // The notice still has to reach the reader: `runStopHarvest` marks it as
+    // said, so discarding it here would spend the once-per-session explanation
+    // on nobody.
+    flush();
+    return;
+  }
 
   // CO-OCCURRENCE, RECORDED AT THE ONE MOMENT IT IS COMPLETE.
   //
@@ -150,9 +207,7 @@ async function main() {
     const nudge = tools.names.has('wiki_write')
       ? compactionNudge(graphDir, { edits: state.edits || 0 })
       : null;
-    if (nudge) {
-      emit({ systemMessage: nudge });
-    }
+    say(nudge);
   } catch {
     // Never delay compaction for a reminder.
   }
@@ -190,7 +245,11 @@ async function main() {
   // NOW the wrapper, which only the optimize_session spawn needs. Plugin-only
   // installs stop here having still recorded their co-occurrence above.
   const wrapper = findWrapper();
-  if (!wrapper) return;
+  if (!wrapper) {
+    // Nothing more to add, but whatever was collected above is still owed.
+    flush();
+    return;
+  }
 
   await new Promise((resolve) => {
     const child = spawn(
@@ -216,9 +275,10 @@ async function main() {
     });
   });
 
-  emit({
-      systemMessage: `token-optimizer: compressed ${seenCount} tracked file operation(s) before compaction.`,
-    });
+  say(
+    `token-optimizer: compressed ${seenCount} tracked file operation(s) before compaction.`
+  );
+  flush();
 }
 
 // Compaction must proceed whatever happens here.

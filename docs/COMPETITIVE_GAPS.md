@@ -58,6 +58,13 @@ from SQLite without re-reading transcripts.
 We have a `PreCompact` hook that shells out to the CLI wrapper, and I have
 already flagged that it is unverified against a real compaction cycle.
 
+**Status: narrowed.** The hook now runs the out-of-band semantic harvest at
+compaction as well as at Stop, which is the half of #204's P3 that was missing:
+compaction is the event this subsystem exists for, since a conclusion not
+extracted before it is destroyed rather than merely forgotten. That is not
+checkpointing and does not claim to be — the gap below it, restoring the
+richest eligible checkpoint after compaction, is still theirs.
+
 This is worth stating plainly: **the wiki graph is a better substrate for this
 than checkpoints are** — findings are anchored, stale-checked and survive
 compaction by construction, where a checkpoint is a frozen blob. We built the
@@ -194,3 +201,16 @@ list matches.
 But we are behind on the thing a user notices in the first five minutes, and
 "we have a better substrate" does not survive contact with a competitor whose
 dashboard shows a letter grade and a dollar figure the moment you install it.
+
+### How current this is
+
+This document is a snapshot and it has drifted before, in both directions: gap 9
+said "Zero for us" about something already built and unreachable, and the
+correction at the top overstated a concession that zero-turn substitution had
+already made untrue. Both are fixed above.
+
+The dates worth knowing: it was written against #201, corrected once on
+2026-07-31, and the statuses on gaps 1 and 9 were refreshed when the graph work
+of #204 landed. Every other entry is as first written and has not been
+re-verified against their current release, so read an unstatused gap as "true
+when written" rather than "true today".
