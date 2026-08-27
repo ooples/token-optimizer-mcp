@@ -1,6 +1,6 @@
 {
   "name": "@ooples/token-optimizer-mcp",
-  "version": "5.7.1",
+  "version": "5.8.0",
   "mcpName": "io.github.ooples/token-optimizer-mcp",
   "description": "Audit net MCP context avoided per AI coding agent, optimize context, and share a live local knowledge graph across 16 CLI clients",
   "main": "dist/server/index.js",
