@@ -21,7 +21,8 @@ import {
 } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const HOOK_LOG_SCHEMA_VERSION = 2;
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
@@ -31,6 +32,92 @@ const DEFAULT_DEADLINE_MS = 4200;
 const MAX_ERROR_CHARS = 4000;
 const MAX_DIMENSION_CHARS = 160;
 let activeInvocation = null;
+
+/**
+ * Manifests that carry this package's version, nearest first.
+ *
+ * WHY THIS IS RESOLVED RATHER THAN COMPILED IN. The generators used to write the
+ * version into all 48 generated files, which made "generated output == committed
+ * file" an invariant that cannot survive a release: release-please bumps
+ * package.json without regenerating, so the release commit is born drifted and
+ * `publish-npm` -- which checks out the tag -- fails its drift gate. It has cost
+ * this project three releases (v5.4.0, v5.4.1, v5.7.1: all tagged, none on npm).
+ *
+ * The stamp is now applied at publish time only, so an npm install still reports
+ * an exact version from the env. Everything else resolves here instead of
+ * reporting a stale literal -- a lagging version is not a version, it is a wrong
+ * one, and this file exists to make failures correlatable.
+ *
+ * Inside the tarball the walk finds the package's own package.json; a plugin
+ * installed from the marketplace finds .claude-plugin/plugin.json, which
+ * release-please keeps correct. A bare copy into a client hook directory finds
+ * nothing and says 'unknown', which is what this reported before the stamp
+ * existed and is honest.
+ */
+const VERSION_MANIFESTS = [
+  ['package.json'],
+  ['.claude-plugin', 'plugin.json'],
+  ['.codex-plugin', 'plugin.json'],
+];
+
+/**
+ * The names that prove a manifest is OURS.
+ *
+ * FOUND IN REVIEW. Without this the walk reports the version of whatever
+ * package.json happens to sit above the hook, so a copy of these hooks
+ * vendored into someone else's repository would report that repository's
+ * version as the optimizer's -- a wrong version, which is the exact failure
+ * this file was changed to avoid. `npm_package_version` is ambient for the same
+ * reason: it belongs to whichever npm script is running, not necessarily to us.
+ */
+const PACKAGE_NAME = '@ooples/token-optimizer-mcp';
+const PLUGIN_NAME = 'token-optimizer';
+const OWNED_MANIFEST_NAMES = new Set([PACKAGE_NAME, PLUGIN_NAME]);
+const MAX_MANIFEST_DEPTH = 6;
+
+let cachedManifestVersion;
+
+function versionFromNearestManifest() {
+  if (cachedManifestVersion !== undefined) return cachedManifestVersion;
+  cachedManifestVersion = '';
+  try {
+    let dir = dirname(fileURLToPath(import.meta.url));
+    for (let depth = 0; depth < MAX_MANIFEST_DEPTH; depth++) {
+      for (const parts of VERSION_MANIFESTS) {
+        const candidate = join(dir, ...parts);
+        if (!existsSync(candidate)) continue;
+        const { name, version } = JSON.parse(readFileSync(candidate, 'utf8'));
+        if (!OWNED_MANIFEST_NAMES.has(name)) continue;
+        if (typeof version === 'string' && version) {
+          cachedManifestVersion = version;
+          return cachedManifestVersion;
+        }
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+    // Diagnostics must never be the reason a hook fails.
+  }
+  return cachedManifestVersion;
+}
+
+/**
+ * The version this process reports. Env first so the publish-time stamp and any
+ * host that sets it still win; only the filesystem walk is cached, so the env
+ * stays authoritative for the life of the process.
+ */
+export function serviceVersion() {
+  return (
+    process.env.TOKEN_OPTIMIZER_VERSION ||
+    (process.env.npm_package_name === PACKAGE_NAME
+      ? process.env.npm_package_version
+      : '') ||
+    versionFromNearestManifest() ||
+    'unknown'
+  );
+}
 
 function positiveInteger(name, fallback) {
   const value = Number(process.env[name]);
@@ -48,7 +135,10 @@ export function hookLogDirectory() {
 
 function hash(value, length = 16) {
   if (!value) return null;
-  return createHash('sha256').update(String(value)).digest('hex').slice(0, length);
+  return createHash('sha256')
+    .update(String(value))
+    .digest('hex')
+    .slice(0, length);
 }
 
 function sanitize(text) {
@@ -57,9 +147,15 @@ function sanitize(text) {
   const home = homedir().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   if (home) value = value.replace(new RegExp(home, 'gi'), '<home>');
   value = value
-    .replace(/\b(?:sk-[A-Za-z0-9_-]{12,}|gh[opusr]_[A-Za-z0-9]{12,})\b/g, '[REDACTED]')
+    .replace(
+      /\b(?:sk-[A-Za-z0-9_-]{12,}|gh[opusr]_[A-Za-z0-9]{12,})\b/g,
+      '[REDACTED]'
+    )
     .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi, '$1[REDACTED]')
-    .replace(/\b(password|secret|token|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]');
+    .replace(
+      /\b(password|secret|token|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi,
+      '$1=[REDACTED]'
+    );
   return value.slice(0, MAX_ERROR_CHARS);
 }
 
@@ -91,7 +187,10 @@ function activeLogPath(now = new Date()) {
 function rotateIfNeeded(path) {
   try {
     if (!existsSync(path)) return;
-    const maxBytes = positiveInteger('TOKEN_OPTIMIZER_LOG_MAX_BYTES', DEFAULT_MAX_BYTES);
+    const maxBytes = positiveInteger(
+      'TOKEN_OPTIMIZER_LOG_MAX_BYTES',
+      DEFAULT_MAX_BYTES
+    );
     if (statSync(path).size < maxBytes) return;
 
     const lock = join(hookLogDirectory(), '.rotate.lock');
@@ -112,7 +211,11 @@ function rotateIfNeeded(path) {
       }
     } finally {
       // Non-recursive removal of the one fixed-name lock directory only.
-      try { rmdirSync(lock); } catch { /* best effort */ }
+      try {
+        rmdirSync(lock);
+      } catch {
+        /* best effort */
+      }
     }
   } catch {
     // Diagnostics must never become the reason a lifecycle hook fails.
@@ -123,14 +226,26 @@ function pruneIfDue(now = new Date()) {
   try {
     const dir = hookLogDirectory();
     const marker = join(dir, '.last-prune');
-    if (existsSync(marker) && now.getTime() - statSync(marker).mtimeMs < 60 * 60 * 1000)
+    if (
+      existsSync(marker) &&
+      now.getTime() - statSync(marker).mtimeMs < 60 * 60 * 1000
+    )
       return;
     writeFileSync(marker, now.toISOString(), { flag: 'w' });
 
     const retentionMs =
-      positiveInteger('TOKEN_OPTIMIZER_LOG_RETENTION_DAYS', DEFAULT_RETENTION_DAYS) *
-      24 * 60 * 60 * 1000;
-    const maxFiles = positiveInteger('TOKEN_OPTIMIZER_LOG_MAX_FILES', DEFAULT_MAX_FILES);
+      positiveInteger(
+        'TOKEN_OPTIMIZER_LOG_RETENTION_DAYS',
+        DEFAULT_RETENTION_DAYS
+      ) *
+      24 *
+      60 *
+      60 *
+      1000;
+    const maxFiles = positiveInteger(
+      'TOKEN_OPTIMIZER_LOG_MAX_FILES',
+      DEFAULT_MAX_FILES
+    );
     const files = readdirSync(dir)
       .filter((name) => /^hook-events-.*\.jsonl$/.test(name))
       .map((name) => {
@@ -158,10 +273,7 @@ export function writeHookEvent(event) {
       schemaVersion: HOOK_LOG_SCHEMA_VERSION,
       timestamp: now.toISOString(),
       service: 'token-optimizer',
-      serviceVersion:
-        process.env.TOKEN_OPTIMIZER_VERSION ||
-        process.env.npm_package_version ||
-        'unknown',
+      serviceVersion: serviceVersion(),
       ...severity(event.level),
       body: event.event || 'hook.event',
       ...event,
@@ -223,7 +335,11 @@ export function beginHookInvocation(client, event, options = {}) {
   });
 
   let deadline;
-  const finish = (nextOutcome = outcome, nextReason = reason, nextError = error) => {
+  const finish = (
+    nextOutcome = outcome,
+    nextReason = reason,
+    nextError = error
+  ) => {
     if (ended) return;
     ended = true;
     if (deadline) clearTimeout(deadline);
@@ -231,7 +347,10 @@ export function beginHookInvocation(client, event, options = {}) {
     process.removeListener('uncaughtException', onUncaughtException);
     process.removeListener('unhandledRejection', onUnhandledRejection);
     writeHookEvent({
-      level: nextOutcome === 'failure' || nextOutcome === 'timeout' ? 'error' : 'info',
+      level:
+        nextOutcome === 'failure' || nextOutcome === 'timeout'
+          ? 'error'
+          : 'info',
       event: 'hook.completed',
       outcome: nextOutcome,
       reason: nextReason,
@@ -259,31 +378,43 @@ export function beginHookInvocation(client, event, options = {}) {
   process.once('uncaughtException', onUncaughtException);
   process.once('unhandledRejection', onUnhandledRejection);
 
-  deadline = setTimeout(() => {
-    outcome = 'timeout';
-    reason = 'internal_deadline_exceeded';
-    finish(outcome, reason);
-    // Beat the host's five-second timeout and fail open deterministically.
-    process.exit(0);
-  }, options.deadlineMs ?? positiveInteger('TOKEN_OPTIMIZER_HOOK_DEADLINE_MS', DEFAULT_DEADLINE_MS));
+  deadline = setTimeout(
+    () => {
+      outcome = 'timeout';
+      reason = 'internal_deadline_exceeded';
+      finish(outcome, reason);
+      // Beat the host's five-second timeout and fail open deterministically.
+      process.exit(0);
+    },
+    options.deadlineMs ??
+      positiveInteger('TOKEN_OPTIMIZER_HOOK_DEADLINE_MS', DEFAULT_DEADLINE_MS)
+  );
   deadline.unref();
 
   const invocation = {
     invocationId,
     bind(raw = {}, payload = null, payloadBytes = null) {
-      const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? null;
+      const sessionId =
+        raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? null;
       dimensions.sessionIdHash = hash(sessionId);
       dimensions.turnIdHash = hash(raw.turn_id ?? raw.turnId ?? null);
       dimensions.toolUseIdHash = hash(raw.tool_use_id ?? raw.toolUseId ?? null);
-      dimensions.toolName = payload?.tool_name ?? raw.tool_name ?? raw.toolName ?? null;
+      dimensions.toolName =
+        payload?.tool_name ?? raw.tool_name ?? raw.toolName ?? null;
       dimensions.rawToolName = dimension(
         raw.tool_name ?? raw.toolName ?? raw.tool ?? null
       );
       dimensions.codeModeEnvelope =
         payload?.tool_input?.code_mode_envelope === true;
-      dimensions.clientVersion = dimension(raw.client_version ?? raw.clientVersion ?? null);
-      dimensions.model = dimension(raw.model ?? raw.model_name ?? raw.modelName ?? null);
-      dimensions.cwdHash = hash(raw.cwd ?? raw.working_directory ?? process.cwd());
+      dimensions.clientVersion = dimension(
+        raw.client_version ?? raw.clientVersion ?? null
+      );
+      dimensions.model = dimension(
+        raw.model ?? raw.model_name ?? raw.modelName ?? null
+      );
+      dimensions.cwdHash = hash(
+        raw.cwd ?? raw.working_directory ?? process.cwd()
+      );
       dimensions.payloadBytes = payloadBytes;
       dimensions.inputStatus = 'ok';
       if (sessionId) traceId = hash(sessionId, 32);
@@ -304,15 +435,21 @@ export function beginHookInvocation(client, event, options = {}) {
       reason = nextReason;
     },
     noteOutput(output, outputBytes = null) {
-      dimensions.outputBytes = outputBytes ?? Buffer.byteLength(JSON.stringify(output), 'utf8');
+      dimensions.outputBytes =
+        outputBytes ?? Buffer.byteLength(JSON.stringify(output), 'utf8');
       if (!output || typeof output !== 'object' || Array.isArray(output)) {
         dimensions.outputShape = [];
         return;
       }
       const shape = Object.keys(output).sort();
       const hookSpecific = output.hookSpecificOutput;
-      if (hookSpecific && typeof hookSpecific === 'object' && !Array.isArray(hookSpecific)) {
-        for (const key of Object.keys(hookSpecific).sort()) shape.push(`hookSpecificOutput.${key}`);
+      if (
+        hookSpecific &&
+        typeof hookSpecific === 'object' &&
+        !Array.isArray(hookSpecific)
+      ) {
+        for (const key of Object.keys(hookSpecific).sort())
+          shape.push(`hookSpecificOutput.${key}`);
       }
       dimensions.outputShape = shape;
     },
@@ -373,7 +510,10 @@ export function readHookEvents({
       .reverse();
     const events = [];
     for (const file of files) {
-      const lines = readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).reverse();
+      const lines = readFileSync(file, 'utf8')
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .reverse();
       for (const line of lines) {
         try {
           const event = JSON.parse(line);
@@ -461,7 +601,9 @@ export function hookHealthSummary(options = {}) {
   for (const current of Object.values(byClient)) current.hookEvents.sort();
   const percentile = (p) =>
     durations.length
-      ? durations[Math.min(durations.length - 1, Math.floor(durations.length * p))]
+      ? durations[
+          Math.min(durations.length - 1, Math.floor(durations.length * p))
+        ]
       : null;
   const summary = {
     schemaVersion: HOOK_LOG_SCHEMA_VERSION,

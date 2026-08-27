@@ -15,6 +15,28 @@ const ROOT = process.cwd();
 const PACKAGE_VERSION = JSON.parse(
   readFileSync(join(ROOT, 'package.json'), 'utf8')
 ).version;
+
+/**
+ * A child environment WITHOUT the injected version.
+ *
+ * The generated entry files used to open with an unconditional
+ * `process.env.TOKEN_OPTIMIZER_VERSION = '<version>'`, so a spawned hook
+ * reported the package version whatever it inherited. That literal is applied
+ * at publish time only now: a version committed into a generated file makes
+ * "generated output == committed file" an invariant that cannot survive a
+ * release commit, and the drift it guarantees has cost this project three
+ * releases (v5.4.0, v5.4.1, v5.7.1 -- all tagged, none on npm).
+ *
+ * Unsetting it keeps the assertion below identical and makes it stronger: the
+ * child now has to resolve its own version from the nearest manifest, which is
+ * exactly what a marketplace plugin install does.
+ */
+function childEnv(extra) {
+  const env = { ...process.env, ...extra };
+  delete env.TOKEN_OPTIMIZER_VERSION;
+  return env;
+}
+
 let workspace;
 let previous;
 
@@ -227,10 +249,7 @@ describe('cross-client hook observability', () => {
       [join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs')],
       {
         cwd: workspace,
-        env: {
-          ...process.env,
-          TOKEN_OPTIMIZER_LOG_DIR: join(workspace, 'claude-logs'),
-        },
+        env: childEnv({ TOKEN_OPTIMIZER_LOG_DIR: join(workspace, 'claude-logs') }),
         stdio: ['pipe', 'pipe', 'pipe'],
       }
     );
@@ -271,10 +290,7 @@ describe('cross-client hook observability', () => {
         const logDirectory = join(workspace, `${client}-logs`);
         const child = spawn(process.execPath, [join(ROOT, ...entryParts)], {
           cwd: workspace,
-          env: {
-            ...process.env,
-            TOKEN_OPTIMIZER_LOG_DIR: logDirectory,
-          },
+          env: childEnv({ TOKEN_OPTIMIZER_LOG_DIR: logDirectory }),
           stdio: ['pipe', 'pipe', 'pipe'],
         });
         child.stdin.end(

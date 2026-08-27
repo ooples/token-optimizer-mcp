@@ -101,6 +101,21 @@ jobs:
       - name: Verify generated configs match their generators
         run: npm run sync:hooks:check
 
+      # AFTER the drift check and BEFORE the tarball is built, which is the only
+      # window where both can hold. The version is deliberately absent from git:
+      # a version literal in a generated-and-committed file makes "generated
+      # output == committed file" an invariant that cannot survive a release
+      # commit, because release-please bumps package.json without regenerating.
+      # That invariant has cost this project three releases -- v5.4.0, v5.4.1 and
+      # v5.7.1 were all tagged with GitHub Releases and none reached npm -- and
+      # it cannot be repaired on master, because this job checks out the TAG.
+      #
+      # So git carries no version and the tarball carries an exact one. The step
+      # must stay above `Generate CHECKSUMS.sha256`, which hashes exactly what
+      # ships; a stamp applied after it would ship files the checksums disown.
+      - name: Stamp the shipped version into the packaged hooks
+        run: npm run stamp:version
+
       - name: Build project
         run: npm run build
 

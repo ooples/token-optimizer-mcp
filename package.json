@@ -61,6 +61,7 @@
     "validate": "node scripts/validate-package.js",
     "sync:hooks": "node scripts/sync-hook-core.mjs && node scripts/generate-client-entries.mjs && node scripts/generate-client-configs.mjs && node scripts/pin-mcp-version.mjs",
     "sync:hooks:check": "node scripts/sync-hook-core.mjs --check && node scripts/generate-client-entries.mjs --check && node scripts/generate-client-configs.mjs --check && node scripts/pin-mcp-version.mjs --check",
+    "stamp:version": "node scripts/sync-hook-core.mjs --stamp && node scripts/generate-client-entries.mjs --stamp",
     "verify:ui": "node scripts/verify-wiki-ui.mjs",
     "verify:harvest": "node scripts/verify-harvest-api.mjs",
     "verify:live-graph": "node scripts/verify-live-graph-flow.mjs",
