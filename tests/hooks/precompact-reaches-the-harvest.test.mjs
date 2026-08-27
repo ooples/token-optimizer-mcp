@@ -110,12 +110,67 @@ describe('PreCompact reaches the harvest', () => {
   });
 
   test('emits ONE json object', () => {
-    // This hook already has more than one emit path; a third writer on the same
-    // stdout is how a PreCompact payload gets corrupted, so the harvest notice
-    // is merged rather than written separately.
     const result = runPreCompact();
     expect(result.status).toBe(0);
     expect(() => JSON.parse(result.stdout.trim())).not.toThrow();
+  });
+
+  test('emits one object even when several parts of the hook want to speak', () => {
+    // FOUND IN REVIEW, and it was latent before this change made it likely.
+    // The hook had three places that could write -- the compaction nudge, the
+    // wrapper's compression summary, and now the harvest notice -- and two of
+    // them firing in one run concatenated two JSON objects into something no
+    // host can parse. The nudge is rare; the harvest notice appears on the
+    // first compaction of every session that has not opted in, which is the
+    // default, so the collision went from unlikely to ordinary.
+    //
+    // BOTH WRITERS ARE MADE TO FIRE, which the first version of this test did
+    // not manage: with no tracked file operations the hook returns before the
+    // wrapper branch, and with no `cli-wrapper.mjs` on disk that branch returns
+    // too -- so only one writer ever ran and the test passed against the bug.
+    // The router populates `seen`, and a stub wrapper satisfies `findWrapper`.
+    const tracked = join(work, 'tracked.ts');
+    writeFileSync(tracked, 'export const x = 1;' + NL);
+
+    const home = join(work, 'home');
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(home, 'cli-wrapper.mjs'), 'process.exit(0);' + NL);
+
+    const env = { TOKEN_OPTIMIZER_HOME: home };
+    const session = 'pc-one-object';
+
+    // A real tool call, so the session has something to compress.
+    spawnSync(process.execPath, [join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs')], {
+      input: JSON.stringify({
+        cwd: work,
+        session_id: session,
+        tool_name: 'Read',
+        tool_input: { file_path: tracked },
+      }),
+      env: { ...process.env, [STATE_VAR]: state, ...env },
+      encoding: 'utf8',
+      timeout: 30_000,
+    });
+
+    const result = runPreCompact({ sessionId: session, env });
+    expect(result.status).toBe(0);
+
+    const out = result.stdout.trim();
+    expect(out.length).toBeGreaterThan(0);
+    // A concatenation of two objects parses as neither.
+    expect(() => JSON.parse(out)).not.toThrow();
+    // And there is only one top-level object, not `}{`.
+    expect(out.replace(/\s+/g, '')).not.toMatch(/\}\{/);
+  });
+
+  test('every exit path flushes what it collected', () => {
+    // The refactor's real risk is the opposite of the bug: collecting a message
+    // and then returning without saying it. Both early returns -- no tracked
+    // operations, and no CLI wrapper -- are exercised by the suite above and
+    // here, and each must still produce the notice.
+    const result = runPreCompact({ sessionId: 'pc-flush' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/token-optimizer:/);
   });
 
   test('does not repeat the notice on a second compaction of one session', () => {

@@ -46,6 +46,33 @@ function emit(output) {
   process.stdout.write(serialized);
 }
 
+/**
+ * Messages this hook wants to say, said ONCE.
+ *
+ * A hook writes one JSON object to stdout. This one had three places that could
+ * write -- the compaction nudge, the wrapper's compression summary, and now the
+ * harvest notice -- and two of them firing in the same run concatenated two
+ * objects into something no host can parse.
+ *
+ * IT WAS LATENT AND THIS CHANGE MADE IT LIKELY. The nudge only appears when the
+ * model has `wiki_write` and there is something to record, so the collision was
+ * rare enough to survive unnoticed; the harvest notice appears on the FIRST
+ * compaction of every session that has not opted into the harvest, which is the
+ * default. Collecting rather than writing is the fix, and flushing on every exit
+ * path is what makes it one.
+ */
+const pending = [];
+const say = (message) => {
+  if (message) pending.push(message);
+};
+
+/** Writes everything collected, as a single object, or nothing at all. */
+function flush() {
+  if (!pending.length) return;
+  emit({ systemMessage: pending.join(BLANK_LINE) });
+  pending.length = 0;
+}
+
 function findWrapper() {
   // Plugin installs place the plugin under .../plugin; the wrapper, when
   // present, sits at the package root above it. Global installs resolve it
@@ -89,9 +116,8 @@ async function main() {
   // The harvest debounces itself and spawns a DETACHED worker, so a PreCompact
   // immediately after a Stop costs nothing and compaction is never delayed by a
   // model call.
-  let harvestNotice = null;
   try {
-    harvestNotice = await runStopHarvest(payload);
+    say(await runStopHarvest(payload));
   } catch {
     // Compaction must proceed whatever the harvest does.
   }
@@ -112,7 +138,7 @@ async function main() {
     // The notice still has to reach the reader: `runStopHarvest` marks it as
     // said, so discarding it here would spend the once-per-session explanation
     // on nobody.
-    if (harvestNotice) emit({ systemMessage: harvestNotice });
+    flush();
     return;
   }
 
@@ -181,14 +207,7 @@ async function main() {
     const nudge = tools.names.has('wiki_write')
       ? compactionNudge(graphDir, { edits: state.edits || 0 })
       : null;
-    // ONE MESSAGE, not two. Both of these are `systemMessage`, and this hook
-    // already has more than one emit path; adding a third writer to the same
-    // stdout is how a PreCompact payload gets corrupted.
-    const message = [harvestNotice, nudge].filter(Boolean).join(BLANK_LINE);
-    if (message) {
-      emit({ systemMessage: message });
-      harvestNotice = null;
-    }
+    say(nudge);
   } catch {
     // Never delay compaction for a reminder.
   }
@@ -226,7 +245,11 @@ async function main() {
   // NOW the wrapper, which only the optimize_session spawn needs. Plugin-only
   // installs stop here having still recorded their co-occurrence above.
   const wrapper = findWrapper();
-  if (!wrapper) return;
+  if (!wrapper) {
+    // Nothing more to add, but whatever was collected above is still owed.
+    flush();
+    return;
+  }
 
   await new Promise((resolve) => {
     const child = spawn(
@@ -252,9 +275,10 @@ async function main() {
     });
   });
 
-  emit({
-      systemMessage: `token-optimizer: compressed ${seenCount} tracked file operation(s) before compaction.`,
-    });
+  say(
+    `token-optimizer: compressed ${seenCount} tracked file operation(s) before compaction.`
+  );
+  flush();
 }
 
 // Compaction must proceed whatever happens here.
