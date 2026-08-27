@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.8.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.7.1...v5.8.0) (2026-08-27)
+
+
+### Features
+
+* **wiki:** a finding reaches every identical copy of its file ([#327](https://github.com/ooples/token-optimizer-mcp/issues/327)) ([9a016b6](https://github.com/ooples/token-optimizer-mcp/commit/9a016b6d23250b5ea7df4505305cc700fdea0c5e))
+* **wiki:** harvest at precompact, and report the hit rate beside the balance ([#329](https://github.com/ooples/token-optimizer-mcp/issues/329)) ([ae6d53e](https://github.com/ooples/token-optimizer-mcp/commit/ae6d53eecd35da714a23a4d1bfb7fec639757357))
+* **wiki:** produce findings and measure whether they pay ([#204](https://github.com/ooples/token-optimizer-mcp/issues/204), part 2 of 3) ([#328](https://github.com/ooples/token-optimizer-mcp/issues/328)) ([e672c13](https://github.com/ooples/token-optimizer-mcp/commit/e672c139fccd9c466b5cf23c1d5e5a2e6b2f2132))
+
+
+### Bug Fixes
+
+* **dashboard:** repair wiki route and plugin activity status ([#313](https://github.com/ooples/token-optimizer-mcp/issues/313)) ([d6fcc24](https://github.com/ooples/token-optimizer-mcp/commit/d6fcc2432dd291acba184d35ec72a2b16d1ad220))
+* **harvest:** run the semantic harvest on the shared stop path ([#326](https://github.com/ooples/token-optimizer-mcp/issues/326)) ([0b39e7d](https://github.com/ooples/token-optimizer-mcp/commit/0b39e7d2cfa21f3b618a30586bd6eb6b1321cf0d))
+* **pending:** adopt a claim stranded by a killed drainer ([#325](https://github.com/ooples/token-optimizer-mcp/issues/325)) ([877f66b](https://github.com/ooples/token-optimizer-mcp/commit/877f66b2ca71441d64798586eb061b19ef159bc5))
+* **wiki:** stored text cannot forge lines in the model's context ([#324](https://github.com/ooples/token-optimizer-mcp/issues/324)) ([b632391](https://github.com/ooples/token-optimizer-mcp/commit/b632391375799aab6d18b25b9c45685f71ca686b))
+
 ## [5.7.1](https://github.com/ooples/token-optimizer-mcp/compare/v5.7.0...v5.7.1) (2026-08-23)
 
 
