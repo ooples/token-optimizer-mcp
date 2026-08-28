@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "token-optimizer": {
-      "command": "npx",
-      "args": ["-y", "@ooples/token-optimizer-mcp@latest"],
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/launch.mjs"],
       "env": {}
     }
   }

@@ -51,12 +51,24 @@ const SPEC = /@ooples\/token-optimizer-mcp@([^"'\s,\]]+)/g;
  * The configs that launch the server via an inline `package@version` spec.
  *
  * Everything in PINNED_CONFIGS is swept for a numeric version; only these are
- * required to CARRY a spec. mcp.json and server.json are registry manifests that
- * name the package and version in separate fields, so demanding an inline spec of
- * them would assert a shape they do not have.
+ * required to CARRY a spec. Three are excluded:
+ *   - mcp.json and server.json are registry manifests that name the package and
+ *     version in separate fields, so demanding an inline spec would assert a shape
+ *     they do not have.
+ *   - plugin/.mcp.json (the Claude Code plugin) no longer launches via npx at all.
+ *     It runs a bundled warm-launch shim (`node ${CLAUDE_PLUGIN_ROOT}/launch.mjs`)
+ *     that serves the already-installed server directly (~1.9s, offline) and
+ *     refreshes @latest in the BACKGROUND for the next launch — eliminating the
+ *     per-launch registry round-trip that made cold starts blow the MCP connect
+ *     budget. The shim still resolves @latest at runtime, so no version is
+ *     committed and nothing here can go stale. Its contract is asserted separately
+ *     below ('the plugin launches via the bundled warm-launch shim').
  */
 const INLINE_SPEC_CONFIGS = PINNED_CONFIGS.filter(
-  (relative) => relative !== 'mcp.json' && relative !== 'server.json'
+  (relative) =>
+    relative !== 'mcp.json' &&
+    relative !== 'server.json' &&
+    relative !== 'plugin/.mcp.json'
 );
 
 const present = () => PINNED_CONFIGS.filter((r) => existsSync(join(ROOT, r)));
@@ -108,6 +120,33 @@ describe('the MCP spec in client configs', () => {
     );
 
     expect(withSpec.length).toBeGreaterThan(0);
+  });
+});
+
+describe('the plugin launches via the bundled warm-launch shim', () => {
+  const relative = 'plugin/.mcp.json';
+  const server = () =>
+    JSON.parse(read(relative)).mcpServers['token-optimizer'];
+
+  it('runs node against the plugin-bundled launcher, not npx', () => {
+    // npx re-resolves @latest against the registry on EVERY launch (~2s warm, and
+    // a cold download that can exceed the 30s MCP connect budget). The shim runs a
+    // file shipped inside the plugin, so startup is a local node spawn.
+    const s = server();
+    expect(s.command).toBe('node');
+    expect(s.args).toContain('${CLAUDE_PLUGIN_ROOT}/launch.mjs');
+    expect(s.command).not.toBe('npx');
+  });
+
+  it('carries no committed version, so nothing here can go stale', () => {
+    // Same invariant the rest of this file protects: the shim resolves @latest at
+    // runtime; git carries no version. A numeric spec creeping back in would
+    // reintroduce the release-please drift documented above.
+    expect([...read(relative).matchAll(SPEC)]).toEqual([]);
+  });
+
+  it('ships the launcher it points at', () => {
+    expect(existsSync(join(ROOT, 'plugin/launch.mjs'))).toBe(true);
   });
 });
 
