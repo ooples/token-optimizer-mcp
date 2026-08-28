@@ -151,7 +151,7 @@
   },
   "src/tools/code-analysis/smart-dependencies.ts": {
     "n/no-sync": {
-      "count": 7
+      "count": 5
     }
   },
   "src/tools/code-analysis/smart-exports.ts": {
@@ -171,7 +171,7 @@
   },
   "src/tools/code-analysis/smart-security.ts": {
     "n/no-sync": {
-      "count": 7
+      "count": 5
     }
   },
   "src/tools/code-analysis/smart-symbols.ts": {
