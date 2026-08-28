@@ -104,6 +104,49 @@ export interface SmartEditResult {
   error?: string;
 }
 
+/**
+ * Coerce whatever arrived as `operations` into an array of operation objects.
+ *
+ * WHY A STRING IS ACCEPTED HERE. `operations` is the only input on this tool
+ * declared as a bare `oneOf` (object OR array) with no top-level `type`, and a
+ * client that decides how to serialise a value from its declared type has
+ * nothing to go on -- so the array arrives as JSON TEXT. `Array.isArray` is
+ * then false, the string gets wrapped as `[theString]`, and validation refuses
+ * it with `Invalid operation type: undefined`, because a string is not an
+ * object. Reproduced 2026-08-28 with a schema-valid payload:
+ *
+ *     operations: [{ "type": "replace", "startLine": 1, "endLine": 1,
+ *                    "content": "x" }]          -> Invalid operation type: undefined
+ *     operations: {  "type": "replace", ... }   -> applied
+ *
+ * A single object binds; the array form does not. That made every multi-edit
+ * call fail while single edits worked, which reads as a broken tool rather than
+ * a marshalling quirk.
+ *
+ * Parsing here rather than tightening the schema, because the schema is not
+ * wrong -- both shapes are genuinely accepted -- and because this keeps working
+ * whatever any given client does with a `oneOf`. Anything that is not valid
+ * JSON is passed through untouched, so validateOperations still produces its
+ * own precise error rather than a parse failure.
+ */
+export function normalizeOperations(
+  operations: EditOperation | EditOperation[] | string
+): EditOperation[] {
+  let value: unknown = operations;
+
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      // Not JSON: leave it, and let validateOperations name the real problem.
+    }
+  }
+
+  return Array.isArray(value)
+    ? (value as EditOperation[])
+    : ([value] as EditOperation[]);
+}
+
 export class SmartEditTool {
   constructor(
     private cache: CacheEngine,
@@ -116,7 +159,9 @@ export class SmartEditTool {
    */
   async edit(
     filePath: string,
-    operations: EditOperation | EditOperation[],
+    //  is real: see normalizeOperations for why the array form can
+    // arrive as JSON text.
+    operations: EditOperation | EditOperation[] | string,
     options: SmartEditOptions = {}
   ): Promise<SmartEditResult> {
     const startTime = Date.now();
@@ -186,8 +231,7 @@ export class SmartEditTool {
         Buffer.byteLength(originalContent, opts.encoding) < SMALL_FILE_BYTES;
       const effectiveReturnDiff = opts.returnDiff && !isSmallFile;
 
-      // Normalize operations to array
-      const ops = Array.isArray(operations) ? operations : [operations];
+      const ops = normalizeOperations(operations);
 
       // Validate operations
       this.validateOperations(ops, lineCount);
@@ -754,7 +798,7 @@ export function getSmartEditTool(
  */
 export async function runSmartEdit(
   filePath: string,
-  operations: EditOperation | EditOperation[],
+  operations: EditOperation | EditOperation[] | string,
   options: SmartEditOptions = {}
 ): Promise<SmartEditResult> {
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
