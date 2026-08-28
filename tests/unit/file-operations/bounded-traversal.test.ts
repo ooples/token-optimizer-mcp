@@ -4,7 +4,7 @@
  * ISSUE #335. `smart_glob` and `smart_grep` enumerated an entire tree with
  * `globSync` and only then applied `limit`, so on a real machine they did not
  * merely run slowly, they ran unbounded. Measured on 2026-08-28: a
- * default-ignore glob of `C:/Users/cheat` ran **178 seconds without
+ * default-ignore glob of a Windows user profile directory ran **178 seconds without
  * completing** and had to be killed, past the caller's 120 s tool timeout,
  * while `dir` and `rg` answered the same question instantly. Because the
  * routing policy DENIES the built-in `Glob`/`grep`, a tool that hangs there
@@ -147,6 +147,29 @@ describe('boundedWalk', () => {
     expect(seen).toContain('node_modules');
     expect(result.items.some((p) => p.includes('node_modules'))).toBe(false);
     expect(result.truncated).toBe(false);
+  });
+
+  it('never looks at a single file inside a pruned directory', async () => {
+    // THE PRECISE PRUNE CONTRACT, and the one assertion that separates pruning
+    // from filtering-afterwards. The test above shows no pruned path comes
+    // BACK, which a post-hoc filter also satisfies -- it enumerates the whole
+    // of `node_modules` and then discards it one entry at a time, which is the
+    // exact cost this module exists to stop paying.
+    //
+    // Every tool that excludes a directory delegates to this, and none of them
+    // can assert it for themselves: their accept filters re-reject the same
+    // paths, so their output is identical either way and only the work differs.
+    const offered: string[] = [];
+    await boundedWalk(dir, {
+      prune: (name) => name === 'node_modules',
+      accept: (fullPath) => {
+        offered.push(fullPath);
+        return fullPath.endsWith('.ts');
+      },
+    });
+
+    expect(offered.length).toBeGreaterThan(0);
+    expect(offered.some((p) => p.includes('node_modules'))).toBe(false);
   });
 
   it('stops at the cap', async () => {

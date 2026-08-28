@@ -4,7 +4,7 @@
  * WHY THIS EXISTS. Every traversal in this server used `globSync` or a recursive
  * `readdirSync`, enumerated the entire tree, and only then applied `limit`. On a
  * real machine that is not a slow path, it is an unbounded one: measured on
- * 2026-08-28, a default-ignore glob of `C:/Users/cheat` ran **178 seconds
+ * 2026-08-28, a default-ignore glob of a Windows user profile directory ran **178 seconds
  * without completing** and had to be killed, while the same walk capped at 50
  * matches returned in **27 ms**. The tools are advertised as bounded
  * replacements for the built-in `Glob`/`grep`, and the routing policy DENIES the

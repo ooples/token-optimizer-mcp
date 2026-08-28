@@ -179,13 +179,49 @@ export function interfaceFields(text: string, name: string): InterfaceField[] {
   return match ? fieldsFrom(text, text.indexOf('{', match.index)) : [];
 }
 
+/**
+ * Every `*Options` interface in the file, EXPORTED OR NOT.
+ *
+ * THE `export` KEYWORD WAS NEVER THE POINT, and requiring it put a hole in this
+ * guard that nobody could see. 15 of the tools declare their options interface
+ * without `export` -- smart_build, smart_test, smart_lint, smart_install,
+ * smart_docker, smart_typecheck and the rest -- and the server hands the
+ * caller's whole argument object to the implementation regardless. So every one
+ * of those tools was exempt from the audit while appearing to pass it, which is
+ * the worst state for a ratchet to be in: a new undeclared option added to any
+ * of them was reported as clean. That is how a `deadlineMs` added to
+ * smart_build during #335 slipped past silently.
+ *
+ * NESTED DATA SHAPES ARE NOT TOOL OPTIONS, and widening the search brings them
+ * in. `TsConfigCompilerOptions` in smart-tsconfig describes the contents of a
+ * tsconfig FILE -- `target`, `module`, `strict` -- and no caller ever sends
+ * those as MCP arguments; the tool takes `compilerOptions` as a single field
+ * and `nestedShape` is what checks inside it. The discriminator is structural
+ * rather than a name list: a shape that appears as the TYPE OF A FIELD of some
+ * other interface in the same file is nested by construction. A tool's own
+ * options interface is passed to a method, never held as a field, so it is
+ * never excluded by this -- and the "audits a meaningful number of tools" test
+ * is what fails if that ever stops being true.
+ */
 function interfaceFieldsMatching(
   text: string,
   pattern: RegExp
 ): InterfaceField[] {
+  const declarations = [...text.matchAll(/(?:export\s+)?interface\s+(\w+)\s*\{/g)];
+
+  const usedAsFieldType = new Set<string>();
+  for (const m of declarations) {
+    for (const field of fieldsFrom(text, text.indexOf('{', m.index))) {
+      for (const identifier of field.type.matchAll(/[A-Za-z_$][\w$]*/g)) {
+        usedAsFieldType.add(identifier[0]);
+      }
+    }
+  }
+
   const out: InterfaceField[] = [];
-  for (const m of text.matchAll(/export interface\s+(\w+)\s*\{/g)) {
+  for (const m of declarations) {
     if (!pattern.test(m[1])) continue;
+    if (usedAsFieldType.has(m[1])) continue;
     out.push(...fieldsFrom(text, text.indexOf('{', m.index)));
   }
 

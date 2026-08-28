@@ -13,10 +13,15 @@ import { CacheEngine } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
-import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { join, relative, extname } from 'path';
 import { homedir } from 'os';
 import { hashFileMetadata } from '../shared/hash-utils.js';
+import {
+  boundedWalk,
+  traversalDeadlineMs,
+  type TruncationReason,
+} from '../shared/bounded-traversal.js';
 
 /**
  * Vulnerability severity levels
@@ -85,6 +90,26 @@ interface FileScanResult {
 /**
  * Complete security scan result
  */
+/**
+ * The file types the pattern rules below actually know how to read.
+ *
+ * Hoisted out of the walk so the accept test is a lookup rather than an array
+ * literal rebuilt once per directory entry.
+ */
+const SCANNABLE_EXTENSIONS = [
+  '.js',
+  '.ts',
+  '.jsx',
+  '.tsx',
+  '.py',
+  '.java',
+  '.cs',
+  '.go',
+  '.rb',
+  '.php',
+  '.html',
+];
+
 interface SecurityScanResult {
   success: boolean;
   filesScanned: string[];
@@ -134,6 +159,16 @@ export interface SmartSecurityOptions {
    * Include low-severity findings
    */
   includeLowSeverity?: boolean;
+
+  /**
+   * Wall-clock budget in ms for discovering the files to scan.
+   *
+   * Discovery was a recursive `readdirSync` that enumerated every entry and
+   * only THEN tested it against `exclude` -- so a project with `node_modules`
+   * paid the full cost of reading the thing it was excluding, on the event
+   * loop, with no point at which it could give up. Defaults to 10 s.
+   */
+  deadlineMs?: number;
 }
 
 /**
@@ -155,6 +190,15 @@ export interface SmartSecurityOutput {
     duration: number;
     fromCache: boolean;
     incrementalMode: boolean;
+    /**
+     * Set when a bound stopped file discovery, so files were never opened.
+     *
+     * This flag is the whole difference between "no vulnerabilities" and "no
+     * vulnerabilities in the files I got to". Absent means the walk completed.
+     */
+    searchTruncated?: boolean;
+    searchTruncatedBy?: TruncationReason;
+    searchNote?: string;
   };
 
   /**
@@ -599,9 +643,11 @@ export class SmartSecurity {
     } = options;
 
     const startTime = Date.now();
+    const deadlineMs = traversalDeadlineMs(options.deadlineMs);
 
     // Determine files to scan
-    const filesToScan = await this.discoverFiles(targets, exclude);
+    const discovery = await this.discoverFiles(targets, exclude, deadlineMs);
+    const filesToScan = discovery.files;
 
     // Generate cache key
     const cacheKey = await this.generateCacheKey(filesToScan);
@@ -650,7 +696,20 @@ export class SmartSecurity {
     // Transform to compact output
     const output = this.transformOutput(scanResults, incrementalMode);
 
-    // Cache the result
+    if (discovery.truncatedBy) {
+      output.summary.searchTruncated = true;
+      output.summary.searchTruncatedBy = discovery.truncatedBy;
+      output.summary.searchNote =
+        'File discovery stopped at the ' +
+        deadlineMs +
+        'ms traversal deadline after finding ' +
+        filesToScan.length +
+        ' file(s), so parts of the project were never scanned and a clean result does NOT mean there is nothing there. Narrow `targets`, widen `exclude`, or raise TOKEN_OPTIMIZER_TRAVERSAL_DEADLINE_MS.';
+    }
+
+    // Cached under a key derived from the DISCOVERED FILE SET, so a partial
+    // scan can never be served in answer to a complete one: a different set of
+    // files hashes to a different key.
     this.cacheResult(cacheKey, output);
 
     // Record metrics
@@ -672,58 +731,56 @@ export class SmartSecurity {
    */
   private async discoverFiles(
     targets: string[],
-    exclude: string[]
-  ): Promise<string[]> {
-    const files: string[] = [];
+    exclude: string[],
+    deadlineMs: number
+  ): Promise<{ files: string[]; truncatedBy?: TruncationReason }> {
+    // ONE budget for the whole call. `targets` is a list, and a per-target
+    // deadline would multiply the ceiling by however many the caller passed.
+    const expiresAt = Date.now() + deadlineMs;
+    const remainingMs = () => Math.max(1, expiresAt - Date.now());
 
-    const scanDirectory = (dir: string) => {
+    const isExcluded = (fullPath: string): boolean => {
+      const relativePath = relative(this.projectRoot, fullPath);
+      return exclude.some((pattern) => relativePath.includes(pattern));
+    };
+
+    const files: string[] = [];
+    let truncatedBy: TruncationReason | undefined;
+
+    const scanDirectory = async (dir: string) => {
       if (!existsSync(dir)) return;
 
-      const entries = readdirSync(dir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = join(dir, entry.name);
-        const relativePath = relative(this.projectRoot, fullPath);
-
-        // Skip excluded patterns
-        if (exclude.some((pattern) => relativePath.includes(pattern))) {
-          continue;
-        }
-
-        if (entry.isDirectory()) {
-          scanDirectory(fullPath);
-        } else if (entry.isFile()) {
-          const ext = extname(entry.name);
-          // Only scan source code files
-          if (
-            [
-              '.js',
-              '.ts',
-              '.jsx',
-              '.tsx',
-              '.py',
-              '.java',
-              '.cs',
-              '.go',
-              '.rb',
-              '.php',
-              '.html',
-            ].includes(ext)
-          ) {
-            files.push(fullPath);
-          }
-        }
-      }
+      // PRUNED, NOT FILTERED. The exclusion ran after enumerating each entry,
+      // so `node_modules` was read in full and then discarded directory by
+      // directory -- paying the entire cost of the thing being excluded.
+      // Pruning is exactly equivalent to the old test rather than a tightening
+      // of it: a child's relative path contains its parent's, so everything
+      // under an excluded directory already failed the same substring check.
+      const walk = await boundedWalk(dir, {
+        prune: (_name, fullPath) => isExcluded(fullPath),
+        accept: (fullPath, fileName) =>
+          !isExcluded(fullPath) &&
+          SCANNABLE_EXTENSIONS.includes(extname(fileName)),
+        // NO CAP, DELIBERATELY. A file that was never opened is
+        // indistinguishable in this output from a file with no
+        // vulnerabilities, so a cap converts "I stopped looking" into "this
+        // project is clean" -- the most dangerous wrong answer this server can
+        // produce. A deadline is reportable, so it never makes that claim.
+        deadlineMs: remainingMs(),
+      });
+      files.push(...walk.items);
+      if (walk.truncated) truncatedBy = walk.truncatedBy;
     };
 
     if (targets.length > 0) {
       // Scan specific targets
       for (const target of targets) {
+        if (truncatedBy) break;
         const fullPath = join(this.projectRoot, target);
         if (existsSync(fullPath)) {
           const stat = statSync(fullPath);
           if (stat.isDirectory()) {
-            scanDirectory(fullPath);
+            await scanDirectory(fullPath);
           } else if (stat.isFile()) {
             files.push(fullPath);
           }
@@ -731,10 +788,10 @@ export class SmartSecurity {
       }
     } else {
       // Full project scan
-      scanDirectory(this.projectRoot);
+      await scanDirectory(this.projectRoot);
     }
 
-    return files;
+    return { files, truncatedBy };
   }
 
   /**
@@ -1436,6 +1493,11 @@ export const SMART_SECURITY_TOOL_DEFINITION = {
         items: {
           type: 'string',
         },
+      },
+      deadlineMs: {
+        type: 'number',
+        description:
+          'Wall-clock budget in ms for discovering the files to scan (default 10000). On expiry the scan reports what it reached with summary.searchTruncated set, instead of walking until the calling tool times out.',
       },
       exclude: {
         type: 'array',
