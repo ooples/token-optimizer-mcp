@@ -211,8 +211,11 @@ export class SmartBuild {
     const duration = Date.now() - startTime;
     result.duration = duration;
 
-    // Cache the result
-    if (!watch) {
+    // Cache the result -- but never a truncated file count. The key hashes
+    // tsconfig and package.json, NOT which files were reached, so a partial
+    // count stored here is replayed for every later build until one of those
+    // two files changes. Found by the bounded-tools guard, not by hand.
+    if (!watch && !result.filesCompiledTruncatedBy) {
       this.cacheResult(cacheKey, result);
     }
 

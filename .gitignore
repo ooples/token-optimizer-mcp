@@ -114,3 +114,8 @@ tests/benchmarks/results.json
 # a release-pipeline PR. Ignored so the next one cannot.
 .playwright-mcp/
 data/sessions.json
+
+# Mutation testing (Stryker). The temp tree and the JSON report are build
+# output; the incremental file is a cache that makes a nightly run resumable.
+.stryker-tmp/
+reports/mutation/

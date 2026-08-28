@@ -1,0 +1,86 @@
+name: Mutation Testing
+
+# WHY THIS IS SCHEDULED AND NOT A PR GATE.
+#
+# Measured 2026-08-28: 140 mutants against the traversal safety primitive, at
+# roughly a minute each with concurrency 2, is about 2h20m. Nothing that long
+# belongs on a pull request. The cost is not Stryker -- it is the 2,000-file
+# fixture that `beforeAll` rebuilds for every mutant.
+#
+# WHAT IT IS FOR. A passing test suite is evidence of nothing until you have
+# watched it go red. The bounded-traversal primitive is the code that decides
+# whether a search silently returns a partial answer, so its tests are exactly
+# the ones that must not be vacuous. This is the maintained replacement for a
+# hand-rolled harness that reported every mutation as SURVIVED (it could not
+# parse jest's summary line) and left mutations in the working tree whenever it
+# was killed.
+#
+# `incremental: true` in stryker.config.json means a rerun only re-tests mutants
+# whose code or tests changed, so after the first full run the nightly is short.
+# The incremental file is cached below rather than committed.
+
+on:
+  schedule:
+    # 04:17 UTC, off the hour so it does not pile up with everything else.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why this run was triggered by hand'
+        required: false
+        default: 'manual check'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    name: Stryker on the traversal primitives
+    runs-on: ubuntu-latest
+    # Generous: the first run has no incremental cache to work from.
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Restored, not committed: a stale incremental file only costs a slower
+      # run, whereas committing it would put a machine-generated cache into
+      # every diff.
+      - name: Restore the incremental mutation cache
+        uses: actions/cache@v4
+        with:
+          path: reports/mutation/stryker-incremental.json
+          key: stryker-incremental-${{ github.sha }}
+          restore-keys: |
+            stryker-incremental-
+
+      - name: Run Stryker
+        # jest needs the ESM flag; without it every suite fails to load and the
+        # dry run dies with an error that reads like a broken test rather than a
+        # missing flag.
+        env:
+          NODE_OPTIONS: --experimental-vm-modules
+        run: npm run mutation:run
+
+      - name: Upload the mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          if-no-files-found: warn
+          retention-days: 14
