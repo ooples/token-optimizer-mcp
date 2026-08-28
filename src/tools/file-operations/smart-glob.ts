@@ -11,8 +11,12 @@
  * Target: 75% reduction vs listing all files with content
  */
 
-import { globSync } from 'glob';
 import { statSync, readFileSync } from 'fs';
+import {
+  boundedGlob,
+  traversalDeadlineMs,
+  type TruncationReason,
+} from '../shared/bounded-traversal.js';
 import { relative, basename, extname, join, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -97,6 +101,14 @@ export interface SmartGlobOptions {
    */
   useCache?: boolean;
   ttl?: number; // Cache TTL in seconds (default: 300)
+  /**
+   * Wall-clock budget for the whole call, in ms.
+   *
+   * Defaults to TOKEN_OPTIMIZER_TRAVERSAL_DEADLINE_MS, then to 10 s. The
+   * search returns what it found and says it was cut short, rather than
+   * running until the caller's own tool timeout kills it.
+   */
+  deadlineMs?: number;
 }
 
 export interface SmartGlobResult {
@@ -118,6 +130,19 @@ export interface SmartGlobResult {
     ignoredMatches?: number;
     /** Plain-language explanation of what was withheld and how to see it. */
     ignoreNote?: string;
+    /**
+     * True when a BOUND stopped the walk, so the tree was not fully searched.
+     *
+     * Distinct from `truncated`, which means "more matches exist than this page
+     * returned" and says nothing about coverage. A caller can page through a
+     * `truncated` result and see everything; a `searchTruncated` result has
+     * matches that were never looked for.
+     */
+    searchTruncated?: boolean;
+    /** Which bound stopped it: a result cap, or the wall-clock deadline. */
+    searchTruncatedBy?: TruncationReason;
+    /** What to do about it, in the caller's terms. */
+    searchNote?: string;
   };
   files?: Array<string | FileMetadata>;
   error?: string;
@@ -217,6 +242,7 @@ export class SmartGlobTool {
         sortOrder: options.sortOrder ?? 'asc',
         useCache: options.useCache ?? false,
         ttl: options.ttl ?? 300,
+        deadlineMs: traversalDeadlineMs(options.deadlineMs),
       };
 
       // Check cache first
@@ -250,36 +276,81 @@ export class SmartGlobTool {
         }
       }
 
-      // Perform glob search
+      // ONE BUDGET FOR THE WHOLE CALL.
       //
+      // Both walks share a single wall-clock deadline. Two independent
+      // ten-second budgets is a twenty-second call, and the bound a caller
+      // cares about is on the tool, not on its internals.
+      const expiresAt = startTime + opts.deadlineMs;
+      const remainingMs = () => Math.max(1, expiresAt - Date.now());
+
+      // WHEN THE CAP MAY STOP THE WALK EARLY.
+      //
+      // Short-circuiting is what makes a narrow search on a huge tree instant,
+      // but it changes WHICH matches come back, so it is only allowed where
+      // that cannot silently produce a wrong answer:
+      //
+      //   - Sorting by size or mtime asks for the top N of the whole set. Stop
+      //     early and "largest" quietly becomes "largest among the first
+      //     found", which is a wrong answer wearing a right answer's clothes.
+      //   - The size and date filters need a `statSync` this walk does not do,
+      //     so a cap counted before them gets spent on files that are then
+      //     filtered out -- returning fewer than asked for while more existed.
+      //   - `onlyDirectories` is decided after the walk for the same reason.
+      //
+      // Extension filters are exempt: they are decided from the path alone, so
+      // they run INSIDE both walks and the cap counts only keepers.
+      const filtersNeedStat =
+        opts.minSize > 0 ||
+        opts.maxSize !== Infinity ||
+        opts.modifiedAfter.getTime() > 0 ||
+        opts.modifiedBefore.getTime() < 8640000000000000 ||
+        opts.onlyDirectories;
+      const mayShortCircuit =
+        opts.sortBy === 'path' &&
+        opts.sortOrder === 'asc' &&
+        !filtersNeedStat &&
+        Number.isFinite(opts.limit);
+
+      // Applied to BOTH walks. Filtering only the primary would inflate the
+      // difference below and invent withheld matches that never existed.
+      const acceptsExtension = (candidate: string): boolean => {
+        const ext = extname(candidate);
+        if (opts.extensions.length > 0 && !opts.extensions.includes(ext)) {
+          return false;
+        }
+        return !opts.excludeExtensions.includes(ext);
+      };
+
       // Narrowed to the scoped file when `path` named one -- the glob ran from
       // that file's PARENT, so without this it would also return the parent's
       // other matches and quietly widen the scope the caller asked for.
-      const matches = limitToScopedFile(
-        globSync(pattern, {
-          cwd: opts.cwd,
-          absolute: opts.absolute,
-          // ALWAYS_IGNORED REACHES THIS WALK TOO.
-          //
-          // It used to apply only to the comparison walk, so a caller-supplied
-          // ignore list left `.git` enumerated HERE and excluded THERE. The
-          // primary walk then returned more matches than the comparison, the
-          // difference went negative, and `ignoredMatches` clamped to zero --
-          // telling the caller nothing had been withheld while their own
-          // pattern was withholding a file. The two walks only mean anything
-          // relative to each other, so they have to be scoped identically.
-          ignore: withAlwaysIgnored(opts.ignore),
-          nodir: opts.onlyFiles,
-          // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
-          // project content, but glob skips anything dot-prefixed unless told
-          // otherwise. Measured in a real checkout: ten .yml files existed, all
-          // under .github/workflows, and a repo-wide search returned ZERO while
-          // reporting success over 654 files searched. Exclusion is the ignore
-          // list's job -- .git and node_modules are still excluded by it.
-          dot: true,
-        }),
-        scope
-      );
+      const primaryWalk = await boundedGlob(pattern, {
+        cwd: opts.cwd,
+        absolute: opts.absolute,
+        // ALWAYS_IGNORED REACHES THIS WALK TOO.
+        //
+        // It used to apply only to the comparison walk, so a caller-supplied
+        // ignore list left `.git` enumerated HERE and excluded THERE. The
+        // primary walk then returned more matches than the comparison, the
+        // difference went negative, and `ignoredMatches` clamped to zero --
+        // telling the caller nothing had been withheld while their own
+        // pattern was withholding a file. The two walks only mean anything
+        // relative to each other, so they have to be scoped identically.
+        ignore: withAlwaysIgnored(opts.ignore),
+        nodir: opts.onlyFiles,
+        // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
+        // project content, but glob skips anything dot-prefixed unless told
+        // otherwise. Measured in a real checkout: ten .yml files existed, all
+        // under .github/workflows, and a repo-wide search returned ZERO while
+        // reporting success over 654 files searched. Exclusion is the ignore
+        // list's job -- .git and node_modules are still excluded by it.
+        dot: true,
+        deadlineMs: remainingMs(),
+        cap: mayShortCircuit ? opts.offset + opts.limit : undefined,
+        accept: acceptsExtension,
+      });
+      const matches = limitToScopedFile(primaryWalk.items, scope);
 
       // Whether the exclusions in force are OURS or the caller's -- the note
       // below names them, and naming them wrongly misdirects anyone hunting a
@@ -291,8 +362,8 @@ export class SmartGlobTool {
       //
       // With `ignore: []` there is nothing to withhold and `matches` is
       // already the unignored set, so the second walk would traverse the whole
-      // tree synchronously to rediscover a list we are holding -- pure cost on
-      // the exact call that opted out of filtering.
+      // tree to rediscover a list we are holding -- pure cost on the exact
+      // call that opted out of filtering.
       //
       // BOTH WALKS ARE SCOPED THE SAME WAY. Narrowing only the first one made
       // the difference between them look like suppressed matches: a file-scoped
@@ -300,29 +371,45 @@ export class SmartGlobTool {
       // returned 2, so the response reported that 1 file "matched but were
       // excluded by the ignore patterns" when nothing had been excluded at all.
       // A number invented to explain an absence is worse than no number.
-      const ignoredMatches =
-        opts.ignore.length === 0
-          ? 0
-          : Math.max(
-              0,
-              limitToScopedFile(
-                globSync(pattern, {
-                  cwd: opts.cwd,
-                  absolute: opts.absolute,
-                  nodir: opts.onlyFiles,
-                  // Same reason as above; both walks must agree.
-                  dot: true,
-                  // NOT an empty ignore list, now that `dot` is on. This walk
-                  // deliberately drops the caller's ignores to count what they
-                  // withheld -- but with dots visible that would enumerate
-                  // `.git/objects`, which on a real repository is enormous and
-                  // is pure cost: nobody's glob was "withheld" by git's object
-                  // store. Infrastructure stays excluded in both walks.
-                  ignore: ALWAYS_IGNORED,
-                }),
-                scope
-              ).length - matches.length
-            );
+      //
+      // AND IT IS SKIPPED WHENEVER EITHER WALK WAS BOUNDED, for that same
+      // reason: a difference between two walks that stopped in different places
+      // measures where they stopped, not what the ignore patterns withheld. The
+      // negative would clamp to zero and report "nothing was withheld" -- the
+      // one answer worse than admitting we do not know.
+      let ignoredMatches: number | undefined;
+      let ignoreUncounted = false;
+      if (opts.ignore.length === 0) {
+        ignoredMatches = 0;
+      } else if (primaryWalk.truncated) {
+        ignoreUncounted = true;
+      } else {
+        const comparisonWalk = await boundedGlob(pattern, {
+          cwd: opts.cwd,
+          absolute: opts.absolute,
+          nodir: opts.onlyFiles,
+          // Same reason as above; both walks must agree.
+          dot: true,
+          // NOT an empty ignore list, now that `dot` is on. This walk
+          // deliberately drops the caller's ignores to count what they
+          // withheld -- but with dots visible that would enumerate
+          // `.git/objects`, which on a real repository is enormous and
+          // is pure cost: nobody's glob was "withheld" by git's object
+          // store. Infrastructure stays excluded in both walks.
+          ignore: ALWAYS_IGNORED,
+          deadlineMs: remainingMs(),
+          accept: acceptsExtension,
+        });
+        if (comparisonWalk.truncated) {
+          ignoreUncounted = true;
+        } else {
+          ignoredMatches = Math.max(
+            0,
+            limitToScopedFile(comparisonWalk.items, scope).length -
+              matches.length
+          );
+        }
+      }
 
       // Filter and collect file info
       let files: Array<{ path: string; metadata?: FileMetadata }> = [];
@@ -462,9 +549,30 @@ export class SmartGlobTool {
           savingsClassification: 'unmeasured',
           savingsReason:
             'No comparable unoptimized glob response was materialized; caller-requested pagination is not optimizer-created savings.',
+          // Coverage, reported separately from pagination. Only present when
+          // the walk really was cut short, so an ordinary search stays quiet.
+          ...(primaryWalk.truncated
+            ? {
+                searchTruncated: true,
+                searchTruncatedBy: primaryWalk.truncatedBy,
+                searchNote:
+                  primaryWalk.truncatedBy === 'deadline'
+                    ? `Search stopped at the ${expiresAt - startTime}ms traversal deadline, so the tree was not fully searched and matches may be missing. Narrow \`path\` or \`pattern\`, or raise TOKEN_OPTIMIZER_TRAVERSAL_DEADLINE_MS.`
+                    : `Search stopped after collecting ${opts.offset + opts.limit} match(es), so the tree was not fully searched. Raise \`limit\` or narrow \`pattern\` to see more.`,
+              }
+            : {}),
+          // The withheld count is unknowable once a walk was bounded, and a
+          // number invented to explain an absence is worse than no number.
+          ...(ignoreUncounted
+            ? {
+                ignoreNote:
+                  'The search stopped at a bound before it finished, so how many matches the ' +
+                  'ignore patterns withheld is unknown. It is not being reported as zero.',
+              }
+            : {}),
           // Only present when something was actually withheld, so a normal
           // search stays as quiet as it was.
-          ...(ignoredMatches > 0
+          ...(ignoredMatches !== undefined && ignoredMatches > 0
             ? {
                 ignoredMatches,
                 // "default" only when they ARE the defaults. A caller who
@@ -701,6 +809,11 @@ export const SMART_GLOB_TOOL_DEFINITION = {
         description:
           'Return absolute paths instead of paths relative to the search root',
         default: false,
+      },
+      deadlineMs: {
+        type: 'number',
+        description:
+          'Wall-clock budget in ms for the whole search (default 10000). On expiry the search returns what it found with metadata.searchTruncated set, instead of running until the calling tool times out.',
       },
       ignore: {
         type: 'array',

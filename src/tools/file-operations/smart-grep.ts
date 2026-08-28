@@ -12,7 +12,12 @@
  */
 
 import { readFileSync, statSync } from 'fs';
-import { globSync } from 'glob';
+import {
+  boundedGlobStream,
+  traversalDeadlineMs,
+  type StreamState,
+  type TruncationReason,
+} from '../shared/bounded-traversal.js';
 import { relative, join } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -33,6 +38,25 @@ import { resolveSearchScope } from '../../utils/search-scope.js';
  * through it with `offset`.
  */
 const MAX_RESPONSE_TOKENS = 8_000;
+
+/**
+ * Ceilings that hold even when the caller sets no limit at all.
+ *
+ * Every match record carries its whole LINE, so a dense file multiplies two
+ * unbounded quantities together: one 50,000-character line searched for a
+ * character it repeats produced 50,000 records each holding that same 50,000
+ * characters -- 2.5 GB of string, which threw `Invalid string length` out of
+ * the response-budget `JSON.stringify` and failed the entire search with
+ * `success: false, filesSearched: 0` after 5.3 s.
+ *
+ * THE CEILING IS ON THE LINE, NOT ON THE MATCH COUNT. Capping matches per file
+ * was the first attempt and it was wrong: an existing test pins a file holding
+ * 130,000 matches, and short lines at that count are perfectly fine. The line
+ * text is what gets duplicated per match, so that is where the bound belongs.
+ * A match record is a locator anyway; a 50,000-character line in one is a file
+ * dump wearing a search result's clothes.
+ */
+const MAX_MATCH_LINE_CHARS = 2_000;
 
 export interface GrepMatch {
   file: string; // File path
@@ -98,6 +122,14 @@ export interface SmartGrepOptions {
 
   // Performance options
   maxFileSize?: number; // Skip files larger than this (bytes)
+  /**
+   * Wall-clock budget for discovery AND reading, in ms.
+   *
+   * Defaults to TOKEN_OPTIMIZER_TRAVERSAL_DEADLINE_MS, then to 10 s. The
+   * search returns what it found and says it was cut short, rather than
+   * running until the caller's own tool timeout kills it.
+   */
+  deadlineMs?: number;
   encoding?: BufferEncoding; // File encoding (default: utf-8)
 }
 
@@ -107,6 +139,16 @@ export interface SmartGrepResult {
   metadata: {
     totalMatches: number;
     filesSearched: number;
+    /**
+     * True when a BOUND stopped the search, so the tree was not fully
+     * covered. Distinct from `truncated`, which only means more matches
+     * exist than this page returned.
+     */
+    searchTruncated?: boolean;
+    /** Which bound stopped it: a result cap, or the wall-clock deadline. */
+    searchTruncatedBy?: TruncationReason;
+    /** What to do about it, in the caller's terms. */
+    searchNote?: string;
     filesWithMatches: number;
     returnedMatches: number;
     truncated: boolean;
@@ -241,6 +283,7 @@ export class SmartGrepTool {
         useCache: options.useCache ?? false,
         ttl: options.ttl ?? 300,
         maxFileSize: options.maxFileSize ?? 10 * 1024 * 1024, // 10MB default
+        deadlineMs: traversalDeadlineMs(options.deadlineMs),
         encoding: options.encoding ?? 'utf-8',
       };
 
@@ -278,32 +321,26 @@ export class SmartGrepTool {
       // Build search pattern
       const searchPattern = this.buildPattern(pattern, opts);
 
-      // Find files to search
-      let filesToSearch: string[] = [];
-      for (const filePattern of opts.files) {
-        const matches = globSync(filePattern, {
-          cwd: opts.cwd,
-          absolute: true,
-          ignore: opts.ignore,
-          nodir: true,
-          // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
-          // project content, but glob skips anything dot-prefixed unless told
-          // otherwise -- so every CI workflow in the repository was invisible.
-          // Measured: searching a tree returned 0 matches over 654 files while
-          // reporting success, and naming `.github` explicitly in `path` returned
-          // 7 matches in 4 files. This is the third shape of the same defect in
-          // this tool, and the worst: the other two reported `filesSearched: 0`,
-          // whereas this one looks like a thorough search that found nothing.
-          // What is excluded stays the ignore list's job.
-          dot: true,
-        });
-        appendAll(filesToSearch, matches);
-      }
+      // ONE BUDGET FOR THE WHOLE CALL: discovery and reading share it, because
+      // the bound a caller cares about is on the tool, not on its phases.
+      const expiresAt = startTime + opts.deadlineMs;
+      const remainingMs = () => Math.max(1, expiresAt - Date.now());
+      let searchTruncatedBy: TruncationReason | undefined;
 
-      // Filter files by extension and size
-      filesToSearch = filesToSearch.filter((file) => {
+      // DISCOVERY IS STREAMED INTO THE READ, not completed before it.
+      //
+      // Collecting every path first meant a `limit: 5` grep still paid for
+      // enumerating the whole tree: measured on 12,000 files, 5,985 ms against
+      // 10,266 ms exhaustive, for five matches that were all in the first
+      // handful of files. The issue asks for the cap to "short-circuit
+      // traversal, not post-filter a full enumeration", and only reading as
+      // paths arrive delivers that -- the decision to stop comes from matches
+      // found, which cannot be known until files are actually read.
+      const streamState: StreamState = { truncated: false };
+
+      /** Path-and-stat filters, applied per file as it arrives. */
+      const passesFilters = (file: string): boolean => {
         try {
-          // Extension filter
           if (opts.extensions.length > 0) {
             const hasAllowedExt = opts.extensions.some((ext) =>
               file.endsWith(ext)
@@ -316,20 +353,29 @@ export class SmartGrepTool {
           );
           if (hasExcludedExt) return false;
 
-          // Size filter
           const stats = statSync(file);
           if (stats.size > opts.maxFileSize) return false;
 
-          // Binary file filter
           if (opts.skipBinary && this.isBinaryFile(file)) return false;
 
           return true;
         } catch {
           return false;
         }
-      });
+      };
 
-      const filesSearched = filesToSearch.length;
+      // Counted as files are actually opened, NOT as they are discovered.
+      // A run that stops at a bound would otherwise report having searched
+      // files it never read -- coverage it did not have, which is the same
+      // confident-wrong-answer shape this tool family keeps producing.
+      let filesSearched = 0;
+
+      // Stop reading once the caller's page is filled. There is no sort here,
+      // so the first N matches in walk order ARE the first N -- unlike
+      // smart_glob, where a cap could silently reorder a sorted answer.
+      const matchCap = Number.isFinite(opts.limit)
+        ? opts.offset + opts.limit
+        : Infinity;
 
       // Search files
       const allMatches: GrepMatch[] = [];
@@ -343,72 +389,115 @@ export class SmartGrepTool {
       const regexProbe = this.buildRegexProbe(pattern, opts);
       let regexWouldMatch = false;
 
-      for (const file of filesToSearch) {
-        try {
-          const content = readFileSync(file, opts.encoding);
-          const lines = content.split('\n');
-          const fileMatches: GrepMatch[] = [];
-
-          // PER LINE, because that is how the search itself matches.
-          //
-          // Testing whole file contents disagreed with the search in both
-          // directions: `^TOKEN$` is false against a multi-line string -- `^`
-          // and `$` anchor to the ends of the WHOLE string without the `m`
-          // flag -- so the hint went missing for exactly the anchored patterns
-          // someone reaching for regex is most likely to write; and a pattern
-          // spanning a newline matched the file while matching no line, which
-          // would have promised a `regex: true` result that does not exist.
-          if (
-            regexProbe &&
-            !regexWouldMatch &&
-            lines.some((l) => regexProbe.test(l))
-          ) {
-            regexWouldMatch = true;
+      for (const filePattern of opts.files) {
+        if (searchTruncatedBy) break;
+        for await (const file of boundedGlobStream(
+          filePattern,
+          {
+            cwd: opts.cwd,
+            absolute: true,
+            ignore: opts.ignore,
+            nodir: true,
+            deadlineMs: remainingMs(),
+            // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
+            // project content, but glob skips anything dot-prefixed unless told
+            // otherwise -- so every CI workflow in the repository was invisible.
+            // Measured: searching a tree returned 0 matches over 654 files while
+            // reporting success, and naming `.github` explicitly in `path`
+            // returned 7 matches in 4 files. What is excluded stays the ignore
+            // list's job.
+            dot: true,
+          },
+          streamState
+        )) {
+          if (Date.now() >= expiresAt) {
+            searchTruncatedBy = 'deadline';
+            break;
           }
+          if (allMatches.length >= matchCap) {
+            searchTruncatedBy = 'cap';
+            break;
+          }
+          if (!passesFilters(file)) continue;
+          try {
+            filesSearched++;
+            const content = readFileSync(file, opts.encoding);
+            const lines = content.split('\n');
+            const fileMatches: GrepMatch[] = [];
 
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const matches = [...line.matchAll(searchPattern)];
-
-            for (const match of matches) {
-              if (fileMatches.length >= opts.maxMatchesPerFile) break;
-
-              const grepMatch: GrepMatch = {
-                file: relative(opts.cwd, file),
-                lineNumber: i + 1, // 1-based
-                line: line,
-                match: match[0],
-              };
-
-              // Add column if requested
-              if (opts.includeColumn && match.index !== undefined) {
-                grepMatch.column = match.index;
-              }
-
-              // Add context if requested
-              if (opts.includeContext) {
-                if (opts.contextBefore > 0) {
-                  const start = Math.max(0, i - opts.contextBefore);
-                  grepMatch.before = lines.slice(start, i);
-                }
-                if (opts.contextAfter > 0) {
-                  const end = Math.min(lines.length, i + opts.contextAfter + 1);
-                  grepMatch.after = lines.slice(i + 1, end);
-                }
-              }
-
-              fileMatches.push(grepMatch);
+            // PER LINE, because that is how the search itself matches.
+            //
+            // Testing whole file contents disagreed with the search in both
+            // directions: `^TOKEN$` is false against a multi-line string -- `^`
+            // and `$` anchor to the ends of the WHOLE string without the `m`
+            // flag -- so the hint went missing for exactly the anchored patterns
+            // someone reaching for regex is most likely to write; and a pattern
+            // spanning a newline matched the file while matching no line, which
+            // would have promised a `regex: true` result that does not exist.
+            if (
+              regexProbe &&
+              !regexWouldMatch &&
+              lines.some((l) => regexProbe.test(l))
+            ) {
+              regexWouldMatch = true;
             }
-          }
 
-          if (fileMatches.length > 0) {
-            filesWithMatches.add(relative(opts.cwd, file));
-            matchCounts.set(relative(opts.cwd, file), fileMatches.length);
-            appendAll(allMatches, fileMatches);
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              const matches = [...line.matchAll(searchPattern)];
+
+              for (const match of matches) {
+                if (fileMatches.length >= opts.maxMatchesPerFile) break;
+
+                const grepMatch: GrepMatch = {
+                  file: relative(opts.cwd, file),
+                  lineNumber: i + 1, // 1-based
+                  // A match record is a LOCATOR, not a file dump. An
+                  // unbounded line here is what turned dense matches into
+                  // gigabytes of duplicated text.
+                  line:
+                    line.length > MAX_MATCH_LINE_CHARS
+                      ? line.slice(0, MAX_MATCH_LINE_CHARS) + '...'
+                      : line,
+                  match: match[0],
+                };
+
+                // Add column if requested
+                if (opts.includeColumn && match.index !== undefined) {
+                  grepMatch.column = match.index;
+                }
+
+                // Add context if requested
+                if (opts.includeContext) {
+                  if (opts.contextBefore > 0) {
+                    const start = Math.max(0, i - opts.contextBefore);
+                    grepMatch.before = lines.slice(start, i);
+                  }
+                  if (opts.contextAfter > 0) {
+                    const end = Math.min(
+                      lines.length,
+                      i + opts.contextAfter + 1
+                    );
+                    grepMatch.after = lines.slice(i + 1, end);
+                  }
+                }
+
+                fileMatches.push(grepMatch);
+              }
+            }
+
+            if (fileMatches.length > 0) {
+              filesWithMatches.add(relative(opts.cwd, file));
+              matchCounts.set(relative(opts.cwd, file), fileMatches.length);
+              appendAll(allMatches, fileMatches);
+            }
+          } catch {
+            // Skip files we can't read
+            continue;
           }
-        } catch {
-          // Skip files we can't read
-          continue;
+        }
+        if (streamState.truncated && !searchTruncatedBy) {
+          searchTruncatedBy = streamState.truncatedBy;
         }
       }
 
@@ -496,6 +585,16 @@ export class SmartGrepTool {
         metadata: {
           totalMatches,
           filesSearched,
+          ...(searchTruncatedBy
+            ? {
+                searchTruncated: true,
+                searchTruncatedBy,
+                searchNote:
+                  searchTruncatedBy === 'deadline'
+                    ? `Search stopped at the ${opts.deadlineMs}ms deadline after reading ${filesSearched} file(s), so files were left unsearched and matches may be missing. Narrow \`path\`/\`files\`, or raise TOKEN_OPTIMIZER_TRAVERSAL_DEADLINE_MS.`
+                    : `Search stopped once ${matchCap} match(es) were collected, so files were left unsearched. Raise \`limit\` to search further.`,
+              }
+            : {}),
           filesWithMatches: filesWithMatches.size,
           returnedMatches:
             opts.count || opts.filesWithMatches ? 0 : paginatedMatches.length,
@@ -843,6 +942,11 @@ export const SMART_GREP_TOOL_DEFINITION = {
         type: 'boolean',
         description: 'Skip files that look binary',
         default: true,
+      },
+      deadlineMs: {
+        type: 'number',
+        description:
+          'Wall-clock budget in ms for the whole search (default 10000). On expiry the search returns what it found with metadata.searchTruncated set, instead of running until the calling tool times out.',
       },
       ignore: {
         type: 'array',
