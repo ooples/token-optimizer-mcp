@@ -864,6 +864,18 @@ export const SMART_PROCESSES_TOOL_DEFINITION = {
         description: 'Compare with previous snapshot',
         default: true,
       },
+      useCache: {
+        type: 'boolean',
+        description:
+          'Reuse the cached snapshot so the run can report what changed since it (default: true)',
+        default: true,
+      },
+      maxCacheAge: {
+        type: 'number',
+        description:
+          'Oldest cached snapshot still worth comparing against, in seconds (default: 60)',
+        default: 60,
+      },
     },
   },
 };

@@ -1,0 +1,302 @@
+{
+  "src/analytics/analytics-storage.ts": {
+    "n/no-sync": {
+      "count": 2
+    }
+  },
+  "src/analytics/native-provider-usage.ts": {
+    "n/no-sync": {
+      "count": 10
+    }
+  },
+  "src/analytics/optimization-storage.ts": {
+    "n/no-sync": {
+      "count": 2
+    }
+  },
+  "src/core/cache-engine.ts": {
+    "n/no-sync": {
+      "count": 7
+    }
+  },
+  "src/core/compression-engine.ts": {
+    "n/no-sync": {
+      "count": 2
+    }
+  },
+  "src/core/config.ts": {
+    "n/no-sync": {
+      "count": 6
+    }
+  },
+  "src/core/session-manager.ts": {
+    "n/no-sync": {
+      "count": 2
+    }
+  },
+  "src/server/daemon.ts": {
+    "n/no-sync": {
+      "count": 8
+    }
+  },
+  "src/server/dashboard-analytics.ts": {
+    "n/no-sync": {
+      "count": 2
+    }
+  },
+  "src/server/hook-diagnostics.ts": {
+    "n/no-sync": {
+      "count": 6
+    }
+  },
+  "src/server/index.ts": {
+    "n/no-sync": {
+      "count": 11
+    }
+  },
+  "src/server/mcp-diagnostics.ts": {
+    "n/no-sync": {
+      "count": 14
+    }
+  },
+  "src/server/session-log-parser.ts": {
+    "n/no-sync": {
+      "count": 1
+    }
+  },
+  "src/server/ucr-routes.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/server/ucr-tools.ts": {
+    "n/no-sync": {
+      "count": 3
+    }
+  },
+  "src/server/web-server.ts": {
+    "n/no-sync": {
+      "count": 7
+    }
+  },
+  "src/server/wiki-routes.ts": {
+    "n/no-sync": {
+      "count": 1
+    }
+  },
+  "src/tools/advanced-caching/cache-analytics.ts": {
+    "n/no-sync": {
+      "count": 1
+    }
+  },
+  "src/tools/advanced-caching/cache-benchmark.ts": {
+    "n/no-sync": {
+      "count": 1
+    }
+  },
+  "src/tools/advanced-caching/predictive-cache.ts": {
+    "n/no-sync": {
+      "count": 3
+    }
+  },
+  "src/tools/build-systems/run-node-bin.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/tools/build-systems/smart-build.ts": {
+    "n/no-sync": {
+      "count": 5
+    }
+  },
+  "src/tools/build-systems/smart-docker.ts": {
+    "n/no-sync": {
+      "count": 5
+    }
+  },
+  "src/tools/build-systems/smart-install.ts": {
+    "n/no-sync": {
+      "count": 9
+    }
+  },
+  "src/tools/build-systems/smart-lint.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/tools/build-systems/smart-logs.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/tools/build-systems/smart-test.ts": {
+    "n/no-sync": {
+      "count": 8
+    }
+  },
+  "src/tools/build-systems/smart-typecheck.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/tools/code-analysis/smart-ast-grep.ts": {
+    "n/no-sync": {
+      "count": 8
+    }
+  },
+  "src/tools/code-analysis/smart-complexity.ts": {
+    "n/no-sync": {
+      "count": 2
+    }
+  },
+  "src/tools/code-analysis/smart-dependencies.ts": {
+    "n/no-sync": {
+      "count": 5
+    }
+  },
+  "src/tools/code-analysis/smart-exports.ts": {
+    "n/no-sync": {
+      "count": 3
+    }
+  },
+  "src/tools/code-analysis/smart-imports.ts": {
+    "n/no-sync": {
+      "count": 5
+    }
+  },
+  "src/tools/code-analysis/smart-refactor.ts": {
+    "n/no-sync": {
+      "count": 2
+    }
+  },
+  "src/tools/code-analysis/smart-security.ts": {
+    "n/no-sync": {
+      "count": 5
+    }
+  },
+  "src/tools/code-analysis/smart-symbols.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/tools/code-analysis/smart-typescript.ts": {
+    "n/no-sync": {
+      "count": 8
+    }
+  },
+  "src/tools/configuration/smart-config-read.ts": {
+    "n/no-sync": {
+      "count": 3
+    }
+  },
+  "src/tools/configuration/smart-env.ts": {
+    "n/no-sync": {
+      "count": 2
+    }
+  },
+  "src/tools/configuration/smart-package-json.ts": {
+    "n/no-sync": {
+      "count": 7
+    }
+  },
+  "src/tools/configuration/smart-tsconfig.ts": {
+    "n/no-sync": {
+      "count": 2
+    }
+  },
+  "src/tools/configuration/smart-workflow.ts": {
+    "n/no-sync": {
+      "count": 8
+    }
+  },
+  "src/tools/file-operations/smart-branch.ts": {
+    "n/no-sync": {
+      "count": 7
+    }
+  },
+  "src/tools/file-operations/smart-diff.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/tools/file-operations/smart-edit.ts": {
+    "n/no-sync": {
+      "count": 3
+    }
+  },
+  "src/tools/file-operations/smart-glob.ts": {
+    "n/no-sync": {
+      "count": 3
+    }
+  },
+  "src/tools/file-operations/smart-grep.ts": {
+    "n/no-sync": {
+      "count": 3
+    }
+  },
+  "src/tools/file-operations/smart-log.ts": {
+    "n/no-sync": {
+      "count": 6
+    }
+  },
+  "src/tools/file-operations/smart-merge.ts": {
+    "n/no-sync": {
+      "count": 18
+    }
+  },
+  "src/tools/file-operations/smart-read.ts": {
+    "n/no-sync": {
+      "count": 7
+    }
+  },
+  "src/tools/file-operations/smart-status.ts": {
+    "n/no-sync": {
+      "count": 8
+    }
+  },
+  "src/tools/file-operations/smart-write.ts": {
+    "n/no-sync": {
+      "count": 9
+    }
+  },
+  "src/tools/intelligence/sentiment-analysis.ts": {
+    "n/no-sync": {
+      "count": 3
+    }
+  },
+  "src/tools/shared/compression-utils.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/tools/shared/hash-utils.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/tools/system-operations/smart-user.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/utils/file-backup.ts": {
+    "n/no-sync": {
+      "count": 4
+    }
+  },
+  "src/utils/gzip.ts": {
+    "n/no-sync": {
+      "count": 13
+    }
+  },
+  "src/utils/safe-exec.ts": {
+    "n/no-sync": {
+      "count": 1
+    }
+  },
+  "src/utils/search-scope.ts": {
+    "n/no-sync": {
+      "count": 1
+    }
+  }
+}

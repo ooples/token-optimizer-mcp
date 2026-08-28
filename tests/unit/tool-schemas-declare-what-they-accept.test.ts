@@ -169,6 +169,47 @@ describe('every tool declares the options it accepts', () => {
     expect(audited).toBeGreaterThan(40);
   });
 
+  it('audits a tool whose options interface is not exported', () => {
+    // THE HOLE THIS CLOSES, AND WHY THE COUNT ABOVE DID NOT CATCH IT. The
+    // extractor once required `export interface`, so the 15 tools that declare
+    // their options without it -- smart_build, smart_test, smart_lint,
+    // smart_install, smart_docker, smart_typecheck among them -- were exempt
+    // while appearing to pass. `audited` still cleared 40, because the count is
+    // of FILES reached, and those files were reached; it was their options that
+    // were invisible. A `deadlineMs` added to smart_build slipped through
+    // exactly that way.
+    //
+    // Asserting on a specific non-exported interface is what makes the fix
+    // self-protecting: narrowing the extractor back turns this red instead of
+    // quietly re-exempting a sixth of the surface.
+    const build = readFileSync(
+      join(SRC, 'build-systems', 'smart-build.ts'),
+      'utf8'
+    );
+    expect(/\n\s*interface SmartBuildOptions/.test(build)).toBe(true);
+    expect(build).not.toContain('export interface SmartBuildOptions');
+    expect(acceptedOptions(build)).toContain('deadlineMs');
+  });
+
+  it('does not mistake a nested data shape for a tool option', () => {
+    // Widening the search brings in every `*Options` interface in the file, and
+    // not all of them are arguments. `TsConfigCompilerOptions` describes the
+    // contents of a tsconfig FILE -- `target`, `module`, `strict` -- which no
+    // caller ever sends as MCP arguments; the tool accepts `compilerOptions` as
+    // one field, and `nestedShape` is what looks inside it. Counting its 16
+    // keys as undeclared options would be 16 false alarms, and false alarms are
+    // how a ratchet gets switched off.
+    const tsconfig = readFileSync(
+      join(SRC, 'configuration', 'smart-tsconfig.ts'),
+      'utf8'
+    );
+    const accepted = acceptedOptions(tsconfig);
+
+    expect(accepted).toContain('configPath');
+    expect(accepted).not.toContain('esModuleInterop');
+    expect(accepted).not.toContain('skipLibCheck');
+  });
+
   it('drops function-valued options, which cannot arrive over MCP', () => {
     const sample = `
       export interface XOptions {

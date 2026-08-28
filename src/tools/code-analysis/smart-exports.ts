@@ -9,12 +9,17 @@
 
 import * as ts from 'typescript';
 import { createHash } from 'crypto';
-import { join } from 'path';
+import { join, relative, dirname } from 'path';
 import { homedir } from 'os';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
+import {
+  boundedWalk,
+  traversalDeadlineMs,
+  type TruncationReason,
+} from '../shared/bounded-traversal.js';
 
 /**
  * Export statement information
@@ -107,6 +112,15 @@ export interface SmartExportsResult {
     reexports: number;
     unusedCount: number;
     dependencyCount: number;
+    /**
+     * Set when a bound stopped the usage scan, so `unusedExports` is a list of
+     * exports whose importers were not FOUND, which is not the same as exports
+     * that have none. Acting on the first as if it were the second deletes
+     * live code. Absent means the scan completed.
+     */
+    searchTruncated?: boolean;
+    searchTruncatedBy?: TruncationReason;
+    searchNote?: string;
   };
   /** Cache metadata */
   cached: boolean;
@@ -131,6 +145,15 @@ export interface SmartExportsOptions {
   checkUsage?: boolean;
   /** Scan depth for checking usage (number of directories) */
   scanDepth?: number;
+
+  /**
+   * Wall-clock budget in ms for the usage scan.
+   *
+   * `scanDepth` bounds how DEEP the walk goes but not how WIDE, so a shallow
+   * scan of a broad monorepo was still unbounded -- and it ran `statSync` per
+   * entry on the event loop. Defaults to 10 s.
+   */
+  deadlineMs?: number;
 }
 
 /**
@@ -170,6 +193,7 @@ export class SmartExportsTool {
       checkUsage = false,
       scanDepth = 3,
     } = options;
+    const deadlineMs = traversalDeadlineMs(options.deadlineMs);
 
     // Get file content
     let content: string;
@@ -225,10 +249,17 @@ export class SmartExportsTool {
 
     // Analyze exports
     const exports = this.extractExports(sourceFile);
-    const dependencies =
+    const usage =
       checkUsage && filePath
-        ? this.findExportDependencies(filePath, exports, projectRoot, scanDepth)
-        : [];
+        ? await this.findExportDependencies(
+            filePath,
+            exports,
+            projectRoot,
+            scanDepth,
+            deadlineMs
+          )
+        : { dependencies: [], truncatedBy: undefined };
+    const dependencies = usage.dependencies;
     const unusedExports = checkUsage
       ? this.detectUnusedExports(exports, dependencies)
       : [];
@@ -247,6 +278,16 @@ export class SmartExportsTool {
         reexports: exports.filter((e) => e.type === 'reexport').length,
         unusedCount: unusedExports.length,
         dependencyCount: dependencies.length,
+        ...(usage.truncatedBy
+          ? {
+              searchTruncated: true,
+              searchTruncatedBy: usage.truncatedBy,
+              searchNote:
+                'The usage scan stopped at the ' +
+                deadlineMs +
+                'ms traversal deadline, so `unusedExports` lists exports whose importers were NOT FOUND rather than exports that have none -- do not delete on this result. Lower `scanDepth`, or raise TOKEN_OPTIMIZER_TRAVERSAL_DEADLINE_MS.',
+            }
+          : {}),
       },
       cached: false,
     };
@@ -257,8 +298,13 @@ export class SmartExportsTool {
     const originalTokens = this.tokenCounter.count(fullOutput).tokens;
     const compactedTokens = this.tokenCounter.count(compactOutput).tokens;
 
-    // Cache result
-    this.cacheResult(cacheKey, result, originalTokens, compactedTokens);
+    // A PARTIAL USAGE SCAN IS NEVER CACHED. The key is derived from the file's
+    // content and the scan settings, NOT from which files were reached, so a
+    // truncated "nothing imports this" would be replayed for the whole cache
+    // window -- and it is the exact answer someone acts on by deleting code.
+    if (!usage.truncatedBy) {
+      this.cacheResult(cacheKey, result, originalTokens, compactedTokens);
+    }
 
     // Record metrics
     const duration = Date.now() - startTime;
@@ -448,16 +494,25 @@ export class SmartExportsTool {
   /**
    * Find files that import these exports
    */
-  private findExportDependencies(
+  private async findExportDependencies(
     filePath: string,
     exports: ExportInfo[],
     projectRoot: string,
-    scanDepth: number
-  ): ExportDependency[] {
+    scanDepth: number,
+    deadlineMs: number
+  ): Promise<{
+    dependencies: ExportDependency[];
+    truncatedBy?: TruncationReason;
+  }> {
     const dependencies: ExportDependency[] = [];
 
     // Scan project files
-    const filesToScan = this.scanProjectFiles(projectRoot, scanDepth);
+    const scan = await this.scanProjectFiles(
+      projectRoot,
+      scanDepth,
+      deadlineMs
+    );
+    const filesToScan = scan.files;
 
     for (const file of filesToScan) {
       if (file === filePath) continue;
@@ -491,55 +546,42 @@ export class SmartExportsTool {
       }
     }
 
-    return dependencies;
+    return { dependencies, truncatedBy: scan.truncatedBy };
   }
 
   /**
    * Scan project files up to specified depth
    */
-  private scanProjectFiles(
+  private async scanProjectFiles(
     dir: string,
     depth: number,
-    currentDepth = 0
-  ): string[] {
-    if (currentDepth >= depth) {
-      return [];
-    }
+    deadlineMs: number
+  ): Promise<{ files: string[]; truncatedBy?: TruncationReason }> {
+    // The old walk called `statSync` on every entry to decide file-vs-directory
+    // -- one blocking syscall per entry, on the event loop, on top of the
+    // recursion. `withFileTypes` answers the same question from the directory
+    // read that already happened, and also stops a Windows junction (which
+    // stats as a directory but is not one) from turning the walk into a loop.
+    const skipped = (name: string): boolean =>
+      name === 'node_modules' || name === '.git' || name.startsWith('.');
 
-    const files: string[] = [];
+    // DEPTH IS PRESERVED EXACTLY, not approximated. The recursive version
+    // listed `dir` at currentDepth 0 and refused to recurse once currentDepth
+    // reached `depth`, so a directory whose path is `depth` segments below the
+    // root was never opened. `relative` counts those segments.
+    const tooDeep = (fullPath: string): boolean =>
+      relative(dir, fullPath).split(/[\\/]/).length >= depth;
 
-    try {
-      const entries = readdirSync(dir);
+    const walk = await boundedWalk(dir, {
+      prune: (name, fullPath) => skipped(name) || tooDeep(fullPath),
+      accept: (_fullPath, fileName) =>
+        !skipped(fileName) && /\.(ts|tsx|js|jsx)$/.test(fileName),
+      // NO CAP. Usage is proved by FINDING an importer, so a short walk turns
+      // "I did not look everywhere" into "nothing uses this, delete it".
+      deadlineMs,
+    });
 
-      for (const entry of entries) {
-        // Skip node_modules, .git, etc.
-        if (
-          entry === 'node_modules' ||
-          entry === '.git' ||
-          entry.startsWith('.')
-        ) {
-          continue;
-        }
-
-        const fullPath = join(dir, entry);
-        const stat = statSync(fullPath);
-
-        if (stat.isDirectory()) {
-          files.push(
-            ...this.scanProjectFiles(fullPath, depth, currentDepth + 1)
-          );
-        } else if (stat.isFile()) {
-          // Only TypeScript/JavaScript files
-          if (/\.(ts|tsx|js|jsx)$/.test(entry)) {
-            files.push(fullPath);
-          }
-        }
-      }
-    } catch {
-      // Skip directories we can't read
-    }
-
-    return files;
+    return { files: walk.items, truncatedBy: walk.truncatedBy };
   }
 
   /**
@@ -619,33 +661,60 @@ export class SmartExportsTool {
     targetFilePath: string
   ): boolean {
     // Handle relative imports
-    if (importPath.startsWith('.')) {
-      const importingDir = importingFile.substring(
-        0,
-        importingFile.lastIndexOf('/') || importingFile.lastIndexOf('\\')
-      );
-      let resolved = join(importingDir, importPath);
+    if (!importPath.startsWith('.')) return false;
 
-      // Try different extensions
-      const extensions = [
-        '',
-        '.ts',
-        '.tsx',
-        '.js',
-        '.jsx',
-        '/index.ts',
-        '/index.tsx',
-        '/index.js',
-        '/index.jsx',
-      ];
+    // `dirname`, not a hand-rolled `lastIndexOf`. The previous version read
+    // `lastIndexOf('/') || lastIndexOf('\\')`, and `||` yields the FIRST
+    // truthy operand -- which for a path containing no forward slash is the
+    // -1 the failed search returned, and `substring(0, -1)` clamps to ''.
+    //
+    // MEASURED, NOT ASSUMED: that is LATENT here, not live. `importingFile` is
+    // `sourceFile.fileName`, and TypeScript normalises it to forward slashes --
+    // `C:/Users/.../src/uses.ts` even on Windows, while the target path passed
+    // in alongside it keeps its backslashes. So the '/' search always finds a
+    // real index and the fallback never runs. It would bite the moment this is
+    // called with a path that did not come through TypeScript.
+    //
+    // Fixed anyway, because the expression is wrong on its own terms -- but no
+    // test here can observe the difference, and a mutation reverting this line
+    // survives. That is the honest result, recorded rather than papered over.
+    const importingDir = dirname(importingFile);
+
+    // A NodeNext specifier names the EMITTED file: `./helper.js` is how you
+    // import `helper.ts`, and it is the style this repository itself uses
+    // throughout. Candidate extensions were appended to the specifier AS
+    // WRITTEN, so such an import was only ever tried as `helper.js`,
+    // `helper.js.ts`, `helper.js.tsx` ... and never as `helper.ts`. Every one
+    // of them failed to resolve, so every export reached only through one came
+    // back in `unusedExports` -- which is the single output of this tool that
+    // someone acts on by deleting live code.
+    const specifiers = [importPath];
+    const emitted = /\.(js|jsx|mjs|cjs)$/.exec(importPath);
+    if (emitted) specifiers.push(importPath.slice(0, -emitted[0].length));
+
+    const extensions = [
+      '',
+      '.ts',
+      '.tsx',
+      '.js',
+      '.jsx',
+      '/index.ts',
+      '/index.tsx',
+      '/index.js',
+      '/index.jsx',
+    ];
+
+    // Compared with one separator spelling on both sides. `join` produces
+    // backslashes on Windows while the `/index.*` candidates carry a forward
+    // slash, so a raw string comparison misses on exactly the platform this
+    // runs on.
+    const normalised = (path: string): string => path.replace(/\\/g, '/');
+    const target = normalised(targetFilePath);
+
+    for (const specifier of specifiers) {
+      const resolved = join(importingDir, specifier);
       for (const ext of extensions) {
-        const withExt = resolved + ext;
-        if (
-          withExt === targetFilePath ||
-          withExt.replace(/\\/g, '/') === targetFilePath.replace(/\\/g, '/')
-        ) {
-          return true;
-        }
+        if (normalised(resolved + ext) === target) return true;
       }
     }
 
@@ -924,6 +993,11 @@ export const SMART_EXPORTS_TOOL_DEFINITION = {
         type: 'number',
         description: 'Directory depth to scan when checking usage (default: 3)',
         default: 3,
+      },
+      deadlineMs: {
+        type: 'number',
+        description:
+          'Wall-clock budget in ms for the usage scan (default 10000). On expiry the result comes back with summary.searchTruncated set and is NOT cached, instead of walking until the calling tool times out.',
       },
     },
   },

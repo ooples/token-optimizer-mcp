@@ -340,10 +340,26 @@ export class SmartEditTool {
       bumpFsGeneration();
 
       // Update cache
+      //
+      // ISOLATED, BECAUSE THE WRITE ABOVE ALREADY HAPPENED. This ran inside the
+      // method's single try/catch, so a cache failure after a successful write
+      // was reported as `success: false, operation: 'failed', editsApplied: 0`
+      // while the file on disk was already edited. Observed live: the SQLite
+      // cache returned "database or disk is full" and smart_edit reported a
+      // failed edit it had in fact completed.
+      //
+      // The caller's only sane response to a reported failure is to retry, and
+      // retrying a LINE-BASED edit against an already-edited file corrupts it.
+      // A refreshed cache is a nicety; a truthful report of what happened to
+      // the file is not.
       if (opts.updateCache) {
-        const cacheKey = generateCacheKey('file-edit', { path: filePath });
-        const contentSize = Buffer.from(editedContent, 'utf-8').length;
-        this.cache.set(cacheKey, editedContent, contentSize, contentSize);
+        try {
+          const cacheKey = generateCacheKey('file-edit', { path: filePath });
+          const contentSize = Buffer.from(editedContent, 'utf-8').length;
+          this.cache.set(cacheKey, editedContent, contentSize, contentSize);
+        } catch {
+          // The edit stands. The next read simply misses the cache.
+        }
       }
 
       // Record metrics

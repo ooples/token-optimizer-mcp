@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_why": "Mutation testing for the traversal safety primitives. A green suite is evidence of nothing until you have watched it go red; this makes that automatic instead of a hand-rolled script that gets rebuilt, and re-debugged, every time. The previous bespoke harness reported every mutation as SURVIVED because it could not parse jest's summary, and left mutations in the working tree when it was killed.",
+  "_why_not_a_pr_gate": "Measured 2026-08-28: 140 mutants against the traversal tests, ~1 minute each at concurrency 2, is roughly 2h20m. That is a scheduled job, not a blocking check. The cost is dominated by the 2,000-file fixture rebuilt in beforeAll for every mutant, not by Stryker.",
+  "_no_break_threshold_yet": "`thresholds.break` is deliberately absent until a first full run establishes the real score. Picking a number before measuring would either fail the first nightly for no reason or be set so low it asserts nothing.",
+  "_scope": "Only the shared primitive is mutated. Widening `mutate` without also widening jest.mutation.config.js scores mutants as SURVIVED because their killing tests were never run -- a false alarm of exactly the kind that gets a gate switched off.",
+  "packageManager": "npm",
+  "testRunner": "jest",
+  "jest": {
+    "projectType": "custom",
+    "configFile": "jest.mutation.config.js",
+    "enableFindRelatedTests": false
+  },
+  "mutate": [
+    "src/tools/shared/bounded-traversal.ts"
+  ],
+  "reporters": [
+    "clear-text",
+    "progress",
+    "json"
+  ],
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "coverageAnalysis": "off",
+  "concurrency": 2,
+  "timeoutMS": 120000,
+  "dryRunTimeoutMinutes": 15,
+  "incremental": true,
+  "incrementalFile": "reports/mutation/stryker-incremental.json",
+  "thresholds": {
+    "high": 90,
+    "low": 80
+  }
+}

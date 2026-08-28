@@ -12,10 +12,15 @@ import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { spawnNodeBin } from './run-node-bin.js';
+import {
+  boundedWalk,
+  traversalDeadlineMs,
+  type TruncationReason,
+} from '../shared/bounded-traversal.js';
 
 interface BuildError {
   file: string;
@@ -33,6 +38,11 @@ interface BuildResult {
   duration: number;
   filesCompiled: number;
   timestamp: number;
+  /**
+   * Set when `filesCompiled` came from a walk that was cut short, which makes
+   * it a FLOOR rather than a count.
+   */
+  filesCompiledTruncatedBy?: TruncationReason;
 }
 
 interface SmartBuildOptions {
@@ -65,6 +75,16 @@ interface SmartBuildOptions {
    * Maximum cache age in seconds (default: 3600 = 1 hour)
    */
   maxCacheAge?: number;
+
+  /**
+   * Wall-clock budget in ms for the source-file count fallback.
+   *
+   * When tsc's output carries no "Found N errors" line there is nothing to
+   * count files from, so the tool walked `src` itself -- recursively, with a
+   * `statSync` per entry, following junctions, and with no way to stop.
+   * Defaults to 10 s.
+   */
+  deadlineMs?: number;
 }
 
 interface SmartBuildOutput {
@@ -78,6 +98,18 @@ interface SmartBuildOutput {
     errorCount: number;
     warningCount: number;
     fromCache: boolean;
+    /**
+     * Set when `filesCompiled` is a FLOOR rather than a count, because the
+     * fallback walk that produced it hit its deadline.
+     *
+     * There is no honest cap for this number: unlike a search, the answer here
+     * IS the total, so any bound that stops early makes it wrong. Saying so is
+     * the only thing that keeps it usable -- as a lower bound it still
+     * supports the "more than 50 files" test below, which can only err by
+     * withholding a suggestion.
+     */
+    filesCompiledPartial?: boolean;
+    filesCompiledNote?: string;
   };
 
   /**
@@ -150,6 +182,7 @@ export class SmartBuild {
       includeWarnings = false,
       maxCacheAge = 3600,
     } = options;
+    const deadlineMs = traversalDeadlineMs(options.deadlineMs);
 
     const startTime = Date.now();
 
@@ -172,13 +205,17 @@ export class SmartBuild {
       tsconfig,
       watch,
       incremental: !force,
+      deadlineMs,
     });
 
     const duration = Date.now() - startTime;
     result.duration = duration;
 
-    // Cache the result
-    if (!watch) {
+    // Cache the result -- but never a truncated file count. The key hashes
+    // tsconfig and package.json, NOT which files were reached, so a partial
+    // count stored here is replayed for every later build until one of those
+    // two files changes. Found by the bounded-tools guard, not by hand.
+    if (!watch && !result.filesCompiledTruncatedBy) {
       this.cacheResult(cacheKey, result);
     }
 
@@ -201,6 +238,7 @@ export class SmartBuild {
     tsconfig: string;
     watch: boolean;
     incremental: boolean;
+    deadlineMs: number;
   }): Promise<BuildResult> {
     const args = ['--project', options.tsconfig];
 
@@ -212,7 +250,7 @@ export class SmartBuild {
       args.push('--incremental');
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise<BuildResult>((resolve, reject) => {
       let stdout = '';
       let stderr = '';
 
@@ -241,14 +279,23 @@ export class SmartBuild {
         const output = stdout + stderr;
         const errors = this.parseCompilerOutput(output);
 
-        resolve({
-          success: code === 0,
-          errors: errors.filter((e) => e.severity === 'error'),
-          warnings: errors.filter((e) => e.severity === 'warning'),
-          duration: 0, // Set by caller
-          filesCompiled: this.countCompiledFiles(output),
-          timestamp: Date.now(),
-        });
+        // The count can now require a filesystem walk, which is async, so the
+        // handler resolves from a promise chain rather than inline. `reject`
+        // is wired up because a walk that throws must surface as a failed
+        // build, not as a promise that never settles.
+        this.countCompiledFiles(output, options.deadlineMs).then(
+          (counted) =>
+            resolve({
+              success: code === 0,
+              errors: errors.filter((e) => e.severity === 'error'),
+              warnings: errors.filter((e) => e.severity === 'warning'),
+              duration: 0, // Set by caller
+              filesCompiled: counted.count,
+              filesCompiledTruncatedBy: counted.truncatedBy,
+              timestamp: Date.now(),
+            }),
+          reject
+        );
       });
 
       tsc.on('error', (err) => {
@@ -287,7 +334,10 @@ export class SmartBuild {
   /**
    * Count files compiled from output
    */
-  private countCompiledFiles(output: string): number {
+  private async countCompiledFiles(
+    output: string,
+    deadlineMs: number
+  ): Promise<{ count: number; truncatedBy?: TruncationReason }> {
     // Look for "Found X errors" message which indicates compilation happened
     const match = output.match(/Found (\d+) error/);
     if (match) {
@@ -300,38 +350,20 @@ export class SmartBuild {
           files.add(fileMatch[1]);
         }
       }
-      return files.size;
+      return { count: files.size };
     }
 
     // Fallback: count .ts files in src
-    return this.countSourceFiles();
+    return this.countSourceFiles(deadlineMs);
   }
 
   /**
    * Count TypeScript source files
    */
-  private countSourceFiles(): number {
-    const srcDir = join(this.projectRoot, 'src');
-    if (!existsSync(srcDir)) {
-      return 0;
-    }
-
-    let count = 0;
-    const walk = (dir: string) => {
-      const files = readdirSync(dir);
-      for (const file of files) {
-        const fullPath = join(dir, file);
-        const stat = statSync(fullPath);
-        if (stat.isDirectory()) {
-          walk(fullPath);
-        } else if (file.endsWith('.ts')) {
-          count++;
-        }
-      }
-    };
-
-    walk(srcDir);
-    return count;
+  private async countSourceFiles(
+    deadlineMs: number
+  ): Promise<{ count: number; truncatedBy?: TruncationReason }> {
+    return countTypeScriptSources(join(this.projectRoot, 'src'), deadlineMs);
   }
 
   /**
@@ -500,6 +532,13 @@ export class SmartBuild {
         errorCount: result.errors.length,
         warningCount: result.warnings.length,
         fromCache,
+        ...(result.filesCompiledTruncatedBy
+          ? {
+              filesCompiledPartial: true,
+              filesCompiledNote:
+                'tsc reported no error summary to count from, so this number came from walking `src` -- and that walk hit its traversal deadline. Treat `filesCompiled` as a LOWER BOUND, not a count.',
+            }
+          : {}),
       },
       errors: allErrors,
       suggestions,
@@ -736,6 +775,49 @@ export const SMART_BUILD_TOOL_DEFINITION = {
         description: 'Maximum cache age in seconds (default: 3600)',
         default: 3600,
       },
+      deadlineMs: {
+        type: 'number',
+        description:
+          'Wall-clock budget in ms for the fallback source-file count (default 10000). On expiry filesCompiled is reported as a lower bound with summary.filesCompiledPartial set.',
+      },
     },
   },
 };
+
+/**
+ * Count `.ts` files under a directory, bounded.
+ *
+ * A MODULE FUNCTION RATHER THAN A METHOD so the bound can be exercised
+ * directly. Reaching it through `run()` requires a real `tsc` invocation that
+ * produces no "Found N errors" line, which is a five-second subprocess to test
+ * a walk -- and a bound nobody can test is a bound nobody will keep.
+ */
+export async function countTypeScriptSources(
+  srcDir: string,
+  deadlineMs?: number
+): Promise<{ count: number; truncatedBy?: TruncationReason }> {
+  if (!existsSync(srcDir)) {
+    return { count: 0 };
+  }
+
+  // NO CAP HERE, WHICH IS NOT THE SAME CHOICE `smart_glob` MAKES. A cap is
+  // legitimate when the caller asked for N results, because stopping at N is
+  // the answer. Here the answer IS the total, so a cap does not shorten it,
+  // it replaces it with the cap -- and nothing downstream could tell.
+  //
+  // The deadline can also make the number a floor, so when it fires the
+  // number is reported AS a floor rather than as a count. That is still
+  // useful: the only consumer is a "more than 50 files" heuristic, and a
+  // floor can only ever err by withholding a suggestion.
+  //
+  // The old walk used `statSync` per entry and therefore FOLLOWED junctions,
+  // which on Windows is how a shared `node_modules` turns a count into an
+  // endless loop. `boundedWalk` reads types from the directory entry, so a
+  // junction is simply not descended.
+  const walk = await boundedWalk(srcDir, {
+    accept: (_fullPath, fileName) => fileName.endsWith('.ts'),
+    deadlineMs,
+  });
+
+  return { count: walk.items.length, truncatedBy: walk.truncatedBy };
+}

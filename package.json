@@ -158,6 +158,8 @@
     "@semantic-release/github": "^11.0.0",
     "@semantic-release/npm": "^13.1.3",
     "@semantic-release/release-notes-generator": "^14.0.1",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/jest-runner": "^10.0.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/body-parser": "^1.19.6",
     "@types/conventional-commits-parser": "^5.0.1",
@@ -180,6 +182,7 @@
     "conventional-changelog-conventionalcommits": "^8.0.0",
     "eslint": "^9.38.0",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-n": "^18.3.0",
     "fast-check": "^4.9.0",
     "jest": "^30.2.0",
     "npm": "^11.19.0",
@@ -208,7 +211,7 @@
     "tiktoken": "^1.0.22",
     "typescript": "^5.9.3",
     "yaml": "^2.9.0",
-    "zod": ">=3.25.0 <5"
+    "zod": "^3.25.0"
   },
   "overrides": {
     "brace-expansion": "5.0.9",

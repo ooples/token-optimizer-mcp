@@ -747,6 +747,11 @@ Perfect for:
         type: 'boolean',
         description: 'Parse response as JSON (default: true)',
       },
+      includeFullResponse: {
+        type: 'boolean',
+        description:
+          'Return the full response body alongside the compacted summary (default: false)',
+      },
     },
     required: ['method', 'url'],
   },

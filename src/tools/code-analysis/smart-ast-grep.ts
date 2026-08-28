@@ -16,12 +16,17 @@ import {
   resolveBinScript,
   resolveNpmScript,
 } from '../build-systems/run-node-bin.js';
-import { existsSync, statSync, readdirSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { hashFile } from '../shared/hash-utils.js';
+import {
+  boundedWalk,
+  traversalDeadlineMs,
+  type TruncationReason,
+} from '../shared/bounded-traversal.js';
 
 /**
  * The ast-grep CLI package, pinned by name.
@@ -65,6 +70,16 @@ export interface SmartAstGrepOptions {
   // Performance options
   respectGitignore?: boolean;
   incrementalIndexing?: boolean;
+
+  /**
+   * Wall-clock budget in ms for discovering the files to index.
+   *
+   * Discovery was a recursive `readdirSync` that enumerated every entry and
+   * only then tested it against the exclusions -- so `node_modules` was read
+   * in full before being thrown away, on the event loop, with no point at
+   * which the walk could give up and answer. Defaults to 10 s.
+   */
+  deadlineMs?: number;
 }
 
 export interface AstMatch {
@@ -99,6 +114,18 @@ export interface SmartAstGrepResult {
       reindexedFiles: number;
       cachedFiles: number;
     };
+    /**
+     * Set when a bound stopped file discovery, so the index covers only part
+     * of the project and a missing match may simply be an unvisited file.
+     *
+     * Neither the index nor the pattern result is cached while this is set:
+     * the index key is derived from the project path and language, not from
+     * the file set, so a partial index stored under it would be served in
+     * answer to every later search.
+     */
+    searchTruncated?: boolean;
+    searchTruncatedBy?: TruncationReason;
+    searchNote?: string;
   };
   suggestions?: string[];
 }
@@ -171,6 +198,8 @@ export class SmartAstGrepTool {
       respectGitignore = true,
       incrementalIndexing = true,
     } = options;
+    const deadlineMs = traversalDeadlineMs(options.deadlineMs);
+    let searchTruncatedBy: TruncationReason | undefined;
 
     // Validate project path
     if (!existsSync(projectPath)) {
@@ -217,17 +246,24 @@ export class SmartAstGrepTool {
 
     if (!index || !enableCache) {
       // Create new index
-      index = await this.createIndex(
+      const created = await this.createIndex(
         projectPath,
         detectedLanguage,
         filePattern,
         excludePatterns,
-        respectGitignore
+        respectGitignore,
+        deadlineMs
       );
+      index = created.index;
+      searchTruncatedBy = created.truncatedBy;
       reindexedFiles = index.files.size;
 
-      // Cache the index
-      if (enableCache) {
+      // A PARTIAL INDEX IS NEVER CACHED. The index key is derived from the
+      // project path and language, NOT from the file set, so a partial index
+      // stored under it would be served to every later search of this project
+      // for the whole TTL -- silently answering "no matches" for files that
+      // were never walked.
+      if (enableCache && !searchTruncatedBy) {
         this.cacheIndex(indexKey, index, ttl);
       }
     } else if (incrementalIndexing) {
@@ -238,13 +274,16 @@ export class SmartAstGrepTool {
         detectedLanguage,
         filePattern,
         excludePatterns,
-        respectGitignore
+        respectGitignore,
+        deadlineMs
       );
       reindexedFiles = updates.reindexed;
       cachedFiles = updates.cached;
+      searchTruncatedBy = updates.truncatedBy;
 
-      // Update cache if files changed
-      if (reindexedFiles > 0 && enableCache) {
+      // Update cache if files changed -- but never with a partial walk, for
+      // the same reason as above.
+      if (reindexedFiles > 0 && enableCache && !searchTruncatedBy) {
         this.cacheIndex(indexKey, index, ttl);
       }
     }
@@ -302,8 +341,21 @@ export class SmartAstGrepTool {
       suggestions: suggestions.length > 0 ? suggestions : undefined,
     };
 
-    // Cache pattern result
-    if (enableCache && !fromPatternCache) {
+    if (searchTruncatedBy) {
+      result.metadata.searchTruncated = true;
+      result.metadata.searchTruncatedBy = searchTruncatedBy;
+      result.metadata.searchNote =
+        'File discovery stopped at the ' +
+        deadlineMs +
+        'ms traversal deadline after indexing ' +
+        index.files.size +
+        ' file(s), so parts of the project were never searched and an absent match may just be an unvisited file. Narrow `projectPath`/`excludePatterns`, or raise TOKEN_OPTIMIZER_TRAVERSAL_DEADLINE_MS.';
+    }
+
+    // Cache pattern result -- but not one produced from a partial walk. The
+    // pattern key does not encode which files were reached, so caching it
+    // would answer every later identical search with the short version.
+    if (enableCache && !fromPatternCache && !searchTruncatedBy) {
       this.cachePatternResult(patternKey, result, ttl);
     }
 
@@ -321,15 +373,18 @@ export class SmartAstGrepTool {
     language: string,
     filePattern?: string,
     excludePatterns: string[] = [],
-    respectGitignore: boolean = true
-  ): Promise<AstIndex> {
-    const files = this.findSourceFiles(
+    respectGitignore: boolean = true,
+    deadlineMs?: number
+  ): Promise<{ index: AstIndex; truncatedBy?: TruncationReason }> {
+    const discovery = await this.findSourceFiles(
       projectPath,
       language,
       filePattern,
       excludePatterns,
-      respectGitignore
+      respectGitignore,
+      deadlineMs
     );
+    const files = discovery.files;
 
     const index: AstIndex = {
       version: SmartAstGrepTool.INDEX_VERSION,
@@ -356,7 +411,7 @@ export class SmartAstGrepTool {
       index.files.set(file, entry);
     }
 
-    return index;
+    return { index, truncatedBy: discovery.truncatedBy };
   }
 
   /**
@@ -368,15 +423,22 @@ export class SmartAstGrepTool {
     language: string,
     filePattern?: string,
     excludePatterns: string[] = [],
-    respectGitignore: boolean = true
-  ): Promise<{ reindexed: number; cached: number }> {
-    const files = this.findSourceFiles(
+    respectGitignore: boolean = true,
+    deadlineMs?: number
+  ): Promise<{
+    reindexed: number;
+    cached: number;
+    truncatedBy?: TruncationReason;
+  }> {
+    const discovery = await this.findSourceFiles(
       projectPath,
       language,
       filePattern,
       excludePatterns,
-      respectGitignore
+      respectGitignore,
+      deadlineMs
     );
+    const files = discovery.files;
     let reindexed = 0;
     let cached = 0;
 
@@ -587,50 +649,40 @@ export class SmartAstGrepTool {
   /**
    * Find source files in project
    */
-  private findSourceFiles(
+  private async findSourceFiles(
     projectPath: string,
     language: string,
     _filePattern?: string,
     excludePatterns: string[] = [],
-    respectGitignore: boolean = true
-  ): string[] {
+    respectGitignore: boolean = true,
+    deadlineMs?: number
+  ): Promise<{ files: string[]; truncatedBy?: TruncationReason }> {
     const extensions = this.getExtensionsForLanguage(language);
-    const files: string[] = [];
 
-    const walk = (dir: string) => {
-      try {
-        const entries = readdirSync(dir, { withFileTypes: true });
+    const excluded = (fullPath: string): boolean =>
+      this.shouldExclude(
+        relative(projectPath, fullPath),
+        excludePatterns,
+        respectGitignore
+      );
 
-        for (const entry of entries) {
-          const fullPath = join(dir, entry.name);
-          const relativePath = relative(projectPath, fullPath);
+    // PRUNED, NOT FILTERED. `shouldExclude` was consulted per entry AFTER the
+    // directory had been enumerated, so a project with `node_modules` paid to
+    // read the whole of it and then dropped the results one at a time. Pruning
+    // is exactly equivalent, not stricter: `shouldExclude` is a substring test
+    // on the relative path, and a child's relative path contains its parent's.
+    const walk = await boundedWalk(projectPath, {
+      prune: (_name, fullPath) => excluded(fullPath),
+      accept: (fullPath, fileName) =>
+        !excluded(fullPath) &&
+        extensions.includes(fileName.substring(fileName.lastIndexOf('.'))),
+      // NO CAP. A file missing from the index is a match missing from the
+      // answer, and nothing in the output would distinguish that from the
+      // pattern genuinely not occurring.
+      deadlineMs,
+    });
 
-          // Skip excluded patterns
-          if (
-            this.shouldExclude(relativePath, excludePatterns, respectGitignore)
-          ) {
-            continue;
-          }
-
-          if (entry.isDirectory()) {
-            walk(fullPath);
-          } else if (entry.isFile()) {
-            // Check extension
-            const ext = entry.name.substring(entry.name.lastIndexOf('.'));
-            if (extensions.includes(ext)) {
-              files.push(fullPath);
-            }
-          }
-        }
-      } catch (error) {
-        // Skip directories we can't read
-        return;
-      }
-    };
-
-    walk(projectPath);
-
-    return files;
+    return { files: walk.items, truncatedBy: walk.truncatedBy };
   }
 
   /**
@@ -1030,6 +1082,11 @@ export const SMART_AST_GREP_TOOL_DEFINITION = {
         description:
           'Reindex only files changed since the last run instead of the whole project',
         default: true,
+      },
+      deadlineMs: {
+        type: 'number',
+        description:
+          'Wall-clock budget in ms for discovering the files to index (default 10000). On expiry the search reports what it reached with metadata.searchTruncated set and caches nothing, instead of walking until the calling tool times out.',
       },
     },
     required: ['pattern', 'projectPath'],
