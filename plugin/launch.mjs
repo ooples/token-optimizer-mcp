@@ -60,6 +60,13 @@ import {
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Decoded absolute path to THIS file. Must use fileURLToPath, not
+// `new URL(import.meta.url).pathname`, which leaves percent-encoding intact
+// (e.g. a space becomes %20) and mishandles the Windows leading-slash — either
+// would hand `node` a path that does not exist and silently break the refresh.
+const THIS_FILE = fileURLToPath(import.meta.url);
 
 const PACKAGE = '@ooples/token-optimizer-mcp';
 const IS_WIN = process.platform === 'win32';
@@ -334,7 +341,7 @@ function refreshDueNow() {
 function spawnBackgroundRefresh() {
   if (!refreshDueNow()) return;
   try {
-    const child = spawn(process.execPath, [fileURL(), '--refresh'], {
+    const child = spawn(process.execPath, [THIS_FILE, '--refresh'], {
       detached: true,
       stdio: 'ignore',
       env: process.env,
@@ -343,10 +350,6 @@ function spawnBackgroundRefresh() {
   } catch (err) {
     log(`could not start background refresh: ${err?.message ?? err}`);
   }
-}
-
-function fileURL() {
-  return new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 }
 
 /** Spawn the server, forwarding stdio, signals, and exit code. */
@@ -380,12 +383,16 @@ function runServer(entry) {
 }
 
 function main() {
+  // Ensure the runtime dir exists BEFORE anything else — runRefresh's lock is a
+  // mkdir of RUNTIME/.refresh.lock, which fails (and silently no-ops the refresh)
+  // if RUNTIME does not exist yet. This matters for a standalone/cron `--refresh`
+  // on a cold machine, where nothing else has created RUNTIME first.
+  mkdirSync(RUNTIME, { recursive: true });
+
   if (process.argv.includes('--refresh')) {
     runRefresh();
     return;
   }
-
-  mkdirSync(RUNTIME, { recursive: true });
 
   let entry = currentEntry();
   if (entry) {
