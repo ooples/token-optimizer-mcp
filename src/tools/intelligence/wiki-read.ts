@@ -21,17 +21,7 @@
  * identically in both places and fixed once.
  */
 
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
-import { dirname } from 'path';
-
-const here = dirname(fileURLToPath(import.meta.url));
-
-/** Resolves hooks-core relative to the built output, which lives in dist/tools/intelligence. */
-function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', '..', 'hooks-core', name))
-    .href;
-}
+import { loadHooksCore } from './hooks-core-loader.js';
 
 export interface WikiReadOptions {
   /**
@@ -116,7 +106,7 @@ export async function wikiRead(
       : 10;
 
   try {
-    const wiki: any = await import(coreUrl('wiki.mjs'));
+    const wiki: any = await loadHooksCore('wiki.mjs');
 
     // Same rule as wiki_write: the graph is the ANCHOR's project, not wherever the caller is
     // running. A subagent's cwd is not meaningful, which is precisely why it cannot be trusted

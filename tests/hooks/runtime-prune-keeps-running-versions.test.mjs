@@ -57,10 +57,10 @@ function makeVersion(name, minutesOld) {
  * `TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY` is what stops `main()` from running;
  * without it, importing the launcher starts a real MCP server.
  */
-function pruneInFreshProcess(keepVersion, keepCount) {
+function pruneInFreshProcess(keepVersion, keepCount, alsoKeep) {
   const script = `
     const { pruneOldVersions } = await import(${JSON.stringify(LAUNCHER)});
-    pruneOldVersions(${JSON.stringify(keepVersion)});
+    pruneOldVersions(${JSON.stringify(keepVersion)}, ${JSON.stringify(alsoKeep ?? null)});
     const { readdirSync } = await import('fs');
     let left = [];
     try { left = readdirSync(${JSON.stringify(versionsDir)}); } catch {}
@@ -141,7 +141,36 @@ describe('pruning the managed runtime', () => {
 
     const left = pruneInFreshProcess('6.0.1', 1);
 
-    expect(left).toEqual(['6.0.1']);
+    expect(left).toContain('6.0.1');
+  }, 60_000);
+
+  it('refuses to retain only one version, however it is configured', () => {
+    // REVIEW CAUGHT THIS, AND THIS TEST USED TO ASSERT THE BUG. It pinned
+    // `keep: 1` as leaving exactly one directory -- but a refresh prunes with
+    // the version it has just INSTALLED, so keeping one deletes the version the
+    // live session is running from and puts the original defect straight back.
+    // A retention of one is never a coherent setting here, so it floors at two.
+    makeVersion('6.0.0', 400);
+    makeVersion('6.0.1', 10);
+
+    const left = pruneInFreshProcess('6.0.1', 1);
+
+    expect(left.sort()).toEqual(['6.0.0', '6.0.1']);
+  }, 60_000);
+
+  it('keeps the previously-pointed version by name, not by luck', () => {
+    // `prev` is what a live session is executing from. Passing it explicitly
+    // matters because mtime ordering does not guarantee it survives: a
+    // reinstall can freshen unrelated directories, pushing the one that is
+    // actually in use out of the newest few.
+    makeVersion('6.0.0', 9000); // the live one, and by far the oldest
+    makeVersion('6.0.1', 30);
+    makeVersion('6.0.2', 20);
+    makeVersion('6.0.3', 10);
+
+    const left = pruneInFreshProcess('6.0.3', 2, '6.0.0');
+
+    expect(left.sort()).toEqual(['6.0.0', '6.0.3']);
   }, 60_000);
 
   it('honours a retention count set by the environment', () => {

@@ -318,18 +318,31 @@ function releaseLock() {
  * liveness check because there is no reliable, cheap way to ask "is a process
  * still running from this directory" across platforms -- and guessing wrong in
  * that direction deletes a live runtime again.
+ *
+ * A FLOOR OF TWO, NOT ONE. Retaining a single directory is never a coherent
+ * setting here: a refresh prunes with the version it just INSTALLED, so keeping
+ * exactly one deletes the version the live session is running from and puts the
+ * original defect straight back. Review caught this -- the first cut floored at
+ * one, and a test asserted that behaviour as if it were correct.
  */
 const VERSIONS_TO_KEEP = Math.max(
-  1,
+  2,
   Math.floor(numericEnv('TOKEN_OPTIMIZER_RUNTIME_KEEP', 3))
 );
 
 /**
- * Delete stale version directories, keeping `keepVersion` and the newest few.
+ * Delete stale version directories.
+ *
+ * `keepVersion` is what the next launch will use; `alsoKeep` is the version the
+ * pointer named BEFORE this refresh, which is what any live session is still
+ * executing from. Both are retained by NAME rather than left to the mtime
+ * ordering, because those are the two that must survive and neither is
+ * guaranteed to sort newest -- a reinstall can freshen an unrelated directory's
+ * timestamp.
  *
  * Exported for tests; see VERSIONS_TO_KEEP for why it is not just "keep one".
  */
-export function pruneOldVersions(keepVersion) {
+export function pruneOldVersions(keepVersion, alsoKeep = null) {
   try {
     const dirs = readdirSync(VERSIONS_DIR).map((name) => {
       let mtimeMs = 0;
@@ -346,6 +359,7 @@ export function pruneOldVersions(keepVersion) {
     // `keepVersion` first and unconditionally -- it is the one the next launch
     // will use, and it must survive even if its mtime is somehow not newest.
     const keep = new Set([keepVersion]);
+    if (alsoKeep) keep.add(alsoKeep);
     for (const { name } of [...dirs].sort((a, b) => b.mtimeMs - a.mtimeMs)) {
       if (keep.size >= VERSIONS_TO_KEEP) break;
       keep.add(name);
@@ -377,7 +391,9 @@ function runRefresh() {
       atomicWrite(CURRENT_FILE, version);
       log(`refreshed runtime -> ${version} (was ${prev ?? 'none'})`);
     }
-    pruneOldVersions(version);
+    // `prev` is what a live session is still running from, so it is named
+    // explicitly rather than trusted to be among the newest by mtime.
+    pruneOldVersions(version, prev);
   } finally {
     releaseLock();
   }
