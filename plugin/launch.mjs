@@ -292,10 +292,67 @@ function releaseLock() {
   safeRm(LOCK_DIR);
 }
 
-function pruneOldVersions(keepVersion) {
+/**
+ * How many version directories survive a prune, newest first.
+ *
+ * NOT ONE, WHICH IS WHAT IT USED TO BE. The header of this file promises that a
+ * refresh "never mutates files a running server may still be lazy-require-ing",
+ * and then this function deleted every directory except the newest -- including
+ * the one a server is executing from right now. Deleting is the most extreme
+ * mutation available, so the invariant was being broken by the very code that
+ * documented it.
+ *
+ * The damage is invisible for almost everything. A running server has already
+ * imported its eager modules, and those stay in memory, so the server keeps
+ * answering normally. Only a path resolved at CALL time notices -- and the wiki
+ * tools resolve one, importing hooks-core lazily through `coreUrl()`. Observed
+ * 2026-08-28: a session that outlived one refresh got
+ * `Cannot find module ...\\versions\\6.0.0\\...\\hooks-core\\wiki.mjs` from
+ * every wiki_write call for the rest of the session, while every other tool
+ * carried on fine. The whole knowledge-capture feature was dead and nothing
+ * else looked wrong.
+ *
+ * The refresh interval is six hours, so an ordinary working session routinely
+ * outlives one. Keeping three versions buys roughly eighteen hours of grace for
+ * a few tens of megabytes of disk. It is a retention count rather than a
+ * liveness check because there is no reliable, cheap way to ask "is a process
+ * still running from this directory" across platforms -- and guessing wrong in
+ * that direction deletes a live runtime again.
+ */
+const VERSIONS_TO_KEEP = Math.max(
+  1,
+  Math.floor(numericEnv('TOKEN_OPTIMIZER_RUNTIME_KEEP', 3))
+);
+
+/**
+ * Delete stale version directories, keeping `keepVersion` and the newest few.
+ *
+ * Exported for tests; see VERSIONS_TO_KEEP for why it is not just "keep one".
+ */
+export function pruneOldVersions(keepVersion) {
   try {
-    for (const name of readdirSync(VERSIONS_DIR)) {
-      if (name !== keepVersion) safeRm(join(VERSIONS_DIR, name));
+    const dirs = readdirSync(VERSIONS_DIR).map((name) => {
+      let mtimeMs = 0;
+      try {
+        mtimeMs = statSync(join(VERSIONS_DIR, name)).mtimeMs;
+      } catch {
+        // Vanished from under us, or unreadable. Sorting it oldest is safe:
+        // the worst case is that we decline to keep a directory we could not
+        // even stat.
+      }
+      return { name, mtimeMs };
+    });
+
+    // `keepVersion` first and unconditionally -- it is the one the next launch
+    // will use, and it must survive even if its mtime is somehow not newest.
+    const keep = new Set([keepVersion]);
+    for (const { name } of [...dirs].sort((a, b) => b.mtimeMs - a.mtimeMs)) {
+      if (keep.size >= VERSIONS_TO_KEEP) break;
+      keep.add(name);
+    }
+
+    for (const { name } of dirs) {
+      if (!keep.has(name)) safeRm(join(VERSIONS_DIR, name));
     }
   } catch {
     /* ignore */
@@ -449,4 +506,11 @@ function main() {
   runServer(entry);
 }
 
-main();
+// IMPORTABLE FOR TESTS, AND DELIBERATELY FAIL-OPEN. Anything other than an
+// explicit opt-out still calls main(), so if this check is ever wrong the shim
+// launches a server anyway. The alternative -- detecting whether this file is
+// the entry point -- fails in the other direction: one bad comparison and the
+// launcher silently does nothing, which means no MCP server at all.
+if (process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY !== '1') {
+  main();
+}
