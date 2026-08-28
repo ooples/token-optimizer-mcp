@@ -79,6 +79,7 @@ const RUNTIME =
 const VERSIONS_DIR = join(RUNTIME, 'versions');
 const CURRENT_FILE = join(RUNTIME, 'current');
 const LOCK_DIR = join(RUNTIME, '.refresh.lock');
+const ACTIVE_DIR = join(RUNTIME, 'active');
 const LAST_REFRESH_FILE = join(RUNTIME, '.last-refresh');
 
 // Don't hammer the registry on frequent restarts: only background-refresh if it
@@ -268,6 +269,116 @@ function safeRm(p) {
   }
 }
 
+/**
+ * Record that THIS shim is serving `version`, so a later refresh can see it.
+ *
+ * A RETENTION COUNT IS A GUESS; THIS IS THE ANSWER. Keeping the newest few
+ * directories protects a session across one or two refreshes and then quietly
+ * stops: on v1 -> v2 -> v3 the second refresh sees `prev` as v2, so the v1 a
+ * server is still running from ages out and is deleted. Review caught that, and
+ * it is the same defect as the original one, just delayed.
+ *
+ * Liveness is cheap after all -- `process.kill(pid, 0)` asks the OS whether a
+ * pid exists, on every platform, without signalling it. The earlier comment
+ * here claimed there was no such check; there is, and this uses it.
+ */
+function registerActiveVersion(version) {
+  try {
+    mkdirSync(ACTIVE_DIR, { recursive: true });
+    // ATOMIC, because a reader runs concurrently. `writeFileSync` updates the
+    // marker in place, so a refresh calling activeVersions() mid-write gets a
+    // truncated file, fails to parse it, and DELETES it as corrupt -- and the
+    // live shim only ever writes this once, so it never comes back. The
+    // runtime it was protecting is then prunable for the rest of the session.
+    // Review caught this. `atomicWrite` writes a temp file and renames, and a
+    // rename is atomic.
+    //
+    // NOT COVERED BY A TEST, AND SAYING SO. Catching this would need a reader
+    // to observe a half-written file, which is a genuine timing race and not
+    // something a unit test can stage deterministically -- a mutation swapping
+    // this back to writeFileSync survives the suite. What IS tested is the
+    // consequence of the fix: the temp file this creates must not be mistaken
+    // for a marker. The atomicity itself rests on rename being atomic.
+    atomicWrite(
+      join(ACTIVE_DIR, `${process.pid}.json`),
+      JSON.stringify({ version, startedAt: Date.now() })
+    );
+  } catch {
+    // Best effort. Failing to register costs retention, not correctness: the
+    // version-count fallback still protects the common case.
+  }
+}
+
+function unregisterActiveVersion() {
+  safeRm(join(ACTIVE_DIR, `${process.pid}.json`));
+}
+
+/** True when a process with this pid exists (it is not signalled). */
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // EPERM means it exists but belongs to someone else -- still alive.
+    return err?.code === 'EPERM';
+  }
+}
+
+/**
+ * Versions that a live shim is currently serving.
+ *
+ * Also reaps its own stale markers, so a machine that has been rebooted or has
+ * crashed sessions does not accumulate them forever. A marker is only trusted
+ * for 30 days, which bounds the damage from pid reuse: a recycled pid could
+ * otherwise pin a version indefinitely.
+ */
+function activeVersions() {
+  const alive = new Set();
+  const MAX_MARKER_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+  let names = [];
+  try {
+    names = readdirSync(ACTIVE_DIR);
+  } catch {
+    return alive;
+  }
+  for (const name of names) {
+    const file = join(ACTIVE_DIR, name);
+
+    // ONLY `<pid>.json` IS A MARKER. `atomicWrite` lands a `<pid>.json.tmp-...`
+    // file in this same directory for an instant, and `Number.parseInt` reads
+    // leading digits happily -- so a temp file would otherwise be treated as a
+    // marker for that pid, and deleting it as unparseable would race the
+    // rename that is about to consume it. A temp left behind by a crashed
+    // write is swept once it is older than any marker would be trusted.
+    if (!/^\d+\.json$/.test(name)) {
+      try {
+        if (Date.now() - statSync(file).mtimeMs > MAX_MARKER_AGE_MS) safeRm(file);
+      } catch {
+        /* vanished under us, which is the outcome we wanted anyway */
+      }
+      continue;
+    }
+
+    const pid = Number.parseInt(name, 10);
+    let record;
+    try {
+      record = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      safeRm(file);
+      continue;
+    }
+    const tooOld =
+      !Number.isFinite(record?.startedAt) ||
+      Date.now() - record.startedAt > MAX_MARKER_AGE_MS;
+    if (!Number.isFinite(pid) || tooOld || !pidAlive(pid)) {
+      safeRm(file);
+      continue;
+    }
+    if (record?.version) alive.add(record.version);
+  }
+  return alive;
+}
+
 /** Best-effort single-flight lock via mkdir (atomic on all platforms). */
 function acquireLock() {
   try {
@@ -292,10 +403,97 @@ function releaseLock() {
   safeRm(LOCK_DIR);
 }
 
-function pruneOldVersions(keepVersion) {
+/**
+ * How many version directories survive a prune, newest first.
+ *
+ * NOT ONE, WHICH IS WHAT IT USED TO BE. The header of this file promises that a
+ * refresh "never mutates files a running server may still be lazy-require-ing",
+ * and then this function deleted every directory except the newest -- including
+ * the one a server is executing from right now. Deleting is the most extreme
+ * mutation available, so the invariant was being broken by the very code that
+ * documented it.
+ *
+ * The damage is invisible for almost everything. A running server has already
+ * imported its eager modules, and those stay in memory, so the server keeps
+ * answering normally. Only a path resolved at CALL time notices -- and the wiki
+ * tools resolve one, importing hooks-core lazily through `coreUrl()`. Observed
+ * 2026-08-28: a session that outlived one refresh got
+ * `Cannot find module ...\\versions\\6.0.0\\...\\hooks-core\\wiki.mjs` from
+ * every wiki_write call for the rest of the session, while every other tool
+ * carried on fine. The whole knowledge-capture feature was dead and nothing
+ * else looked wrong.
+ *
+ * The refresh interval is six hours, so an ordinary working session routinely
+ * outlives one. Keeping three versions buys roughly eighteen hours of grace for
+ * a few tens of megabytes of disk. It is a retention count rather than a
+ * liveness check because there is no reliable, cheap way to ask "is a process
+ * still running from this directory" across platforms -- and guessing wrong in
+ * that direction deletes a live runtime again.
+ *
+ * A FLOOR OF TWO, NOT ONE. Retaining a single directory is never a coherent
+ * setting here: a refresh prunes with the version it just INSTALLED, so keeping
+ * exactly one deletes the version the live session is running from and puts the
+ * original defect straight back. Review caught this -- the first cut floored at
+ * one, and a test asserted that behaviour as if it were correct.
+ */
+const VERSIONS_TO_KEEP = Math.max(
+  2,
+  Math.floor(numericEnv('TOKEN_OPTIMIZER_RUNTIME_KEEP', 3))
+);
+
+/**
+ * Delete stale version directories.
+ *
+ * `keepVersion` is what the next launch will use; `alsoKeep` is the version the
+ * pointer named BEFORE this refresh, which is what any live session is still
+ * executing from. Both are retained by NAME rather than left to the mtime
+ * ordering, because those are the two that must survive and neither is
+ * guaranteed to sort newest -- a reinstall can freshen an unrelated directory's
+ * timestamp.
+ *
+ * Exported for tests; see VERSIONS_TO_KEEP for why it is not just "keep one".
+ */
+export function pruneOldVersions(keepVersion, alsoKeep = null) {
   try {
-    for (const name of readdirSync(VERSIONS_DIR)) {
-      if (name !== keepVersion) safeRm(join(VERSIONS_DIR, name));
+    const dirs = readdirSync(VERSIONS_DIR).map((name) => {
+      let mtimeMs = 0;
+      try {
+        mtimeMs = statSync(join(VERSIONS_DIR, name)).mtimeMs;
+      } catch {
+        // Vanished from under us, or unreadable. Sorting it oldest is safe:
+        // the worst case is that we decline to keep a directory we could not
+        // even stat.
+      }
+      return { name, mtimeMs };
+    });
+
+    const present = new Set(dirs.map((entry) => entry.name));
+
+    // ONLY NAMES THAT EXIST COUNT TOWARD RETENTION. `keep` used to take
+    // `keepVersion` and `alsoKeep` unconditionally, so a stale `current`
+    // pointer naming a directory that is not there consumed a retention slot
+    // and the cleanup could then strip everything else. Review caught it.
+    const keep = new Set();
+    const reserve = (name) => {
+      if (name && present.has(name)) keep.add(name);
+    };
+
+    // Every runtime a live shim is serving, first: this is the whole point.
+    for (const version of activeVersions()) reserve(version);
+
+    // Then the one the next launch will use, and the one the pointer named
+    // before this refresh -- by name, since neither is guaranteed to sort
+    // newest once a reinstall has freshened another directory's timestamp.
+    reserve(keepVersion);
+    reserve(alsoKeep);
+
+    for (const { name } of [...dirs].sort((a, b) => b.mtimeMs - a.mtimeMs)) {
+      if (keep.size >= VERSIONS_TO_KEEP) break;
+      keep.add(name);
+    }
+
+    for (const { name } of dirs) {
+      if (!keep.has(name)) safeRm(join(VERSIONS_DIR, name));
     }
   } catch {
     /* ignore */
@@ -320,7 +518,9 @@ function runRefresh() {
       atomicWrite(CURRENT_FILE, version);
       log(`refreshed runtime -> ${version} (was ${prev ?? 'none'})`);
     }
-    pruneOldVersions(version);
+    // `prev` is what a live session is still running from, so it is named
+    // explicitly rather than trusted to be among the newest by mtime.
+    pruneOldVersions(version, prev);
   } finally {
     releaseLock();
   }
@@ -354,6 +554,16 @@ function spawnBackgroundRefresh() {
 
 /** Spawn the server, forwarding stdio, signals, and exit code. */
 function runServer(entry) {
+  // Announce which runtime this shim is serving BEFORE the server starts, so a
+  // refresh that fires immediately afterwards can already see it.
+  const served = entry.startsWith(VERSIONS_DIR)
+    ? entry.slice(VERSIONS_DIR.length + 1).split(/[\\/]/)[0]
+    : null;
+  if (served) {
+    registerActiveVersion(served);
+    process.on('exit', unregisterActiveVersion);
+  }
+
   const child = spawn(process.execPath, [entry], {
     stdio: 'inherit',
     env: process.env,
@@ -449,4 +659,11 @@ function main() {
   runServer(entry);
 }
 
-main();
+// IMPORTABLE FOR TESTS, AND DELIBERATELY FAIL-OPEN. Anything other than an
+// explicit opt-out still calls main(), so if this check is ever wrong the shim
+// launches a server anyway. The alternative -- detecting whether this file is
+// the entry point -- fails in the other direction: one bad comparison and the
+// launcher silently does nothing, which means no MCP server at all.
+if (process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY !== '1') {
+  main();
+}

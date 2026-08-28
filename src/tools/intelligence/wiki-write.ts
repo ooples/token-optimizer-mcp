@@ -17,17 +17,7 @@
  * concluded; the harvest, when enabled, catches what it forgot to record.
  */
 
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
-import { dirname } from 'path';
-
-const here = dirname(fileURLToPath(import.meta.url));
-
-/** Resolves hooks-core relative to the built output, which lives in dist/tools/intelligence. */
-function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', '..', 'hooks-core', name))
-    .href;
-}
+import { loadHooksCore } from './hooks-core-loader.js';
 
 export interface WikiWriteOptions {
   /** The claim itself. What was concluded, in a sentence someone can act on. */
@@ -196,11 +186,11 @@ export async function wikiWrite(
 
   try {
     const [wiki, harvestWrite, curate, metrics, projects] = await Promise.all([
-      import(coreUrl('wiki.mjs')),
-      import(coreUrl('harvest-write.mjs')),
-      import(coreUrl('curate.mjs')),
-      import(coreUrl('metrics.mjs')),
-      import(coreUrl('projects.mjs')),
+      loadHooksCore('wiki.mjs'),
+      loadHooksCore('harvest-write.mjs'),
+      loadHooksCore('curate.mjs'),
+      loadHooksCore('metrics.mjs'),
+      loadHooksCore('projects.mjs'),
     ]);
 
     // The finding belongs to the project the ANCHOR is in, not to wherever the

@@ -15,15 +15,7 @@
  */
 
 import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
-import { dirname } from 'path';
-
-const here = dirname(fileURLToPath(import.meta.url));
-
-function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', '..', 'hooks-core', name))
-    .href;
-}
+import { loadHooksCore } from './hooks-core-loader.js';
 
 /** Closed set, so a typo cannot compile. */
 export enum WikiQueryOperation {
@@ -211,13 +203,13 @@ export async function wikiQuery(
 
   const [wiki, curate, metrics, staleness, lexical, projects, paths] =
     await Promise.all([
-      import(coreUrl('wiki.mjs')),
-      import(coreUrl('curate.mjs')),
-      import(coreUrl('metrics.mjs')),
-      import(coreUrl('staleness.mjs')),
-      import(coreUrl('lexical.mjs')),
-      import(coreUrl('projects.mjs')),
-      import(coreUrl('paths.mjs')),
+      loadHooksCore('wiki.mjs'),
+      loadHooksCore('curate.mjs'),
+      loadHooksCore('metrics.mjs'),
+      loadHooksCore('staleness.mjs'),
+      loadHooksCore('lexical.mjs'),
+      loadHooksCore('projects.mjs'),
+      loadHooksCore('paths.mjs'),
     ]);
 
   // THE GRAPH LIVES AT THE REPOSITORY ROOT, and `wikiDir` does no upward walk.
