@@ -243,6 +243,55 @@ it('keeps a runtime a live process registered, however old it is', () => {
     expect(left.sort()).toEqual(['6.0.2', '6.0.3']);
   }, 60_000);
 
+it('is not confused by an in-flight atomic write', () => {
+    // REVIEW CAUGHT THE UNDERLYING RACE. The marker was written in place, so a
+    // refresh reading it mid-write got a truncated file, failed to parse it,
+    // and DELETED it as corrupt -- and a live shim only writes it once, so the
+    // protection never came back. It is an atomic write now, which means a
+    // `<pid>.json.tmp-...` file exists in this directory for an instant.
+    //
+    // That temp file must not be mistaken for a marker: `Number.parseInt`
+    // reads leading digits, so `4242.json.tmp-1-2` would otherwise register as
+    // pid 4242, and removing it as unparseable would race the rename about to
+    // consume it. Here the real marker for this live pid must survive
+    // untouched alongside one.
+    // The temp file holds VALID json naming a version that should be pruned.
+    // A truncated one does not discriminate: unparseable input is swept either
+    // way and the real marker still wins, so the first version of this test
+    // passed with the guard removed. Naming a prunable version makes the
+    // difference observable -- without the guard `Number.parseInt` reads the
+    // leading pid, the record parses, and 5.9.0 is pinned by a file that is
+    // not a marker at all.
+    makeVersion('5.9.0', 9000);
+    makeVersion('6.0.0', 9000);
+    makeVersion('6.0.3', 10);
+    registerActive(process.pid, '6.0.0');
+    writeFileSync(
+      join(runtime, 'active', `${process.pid}.json.tmp-9-9`),
+      JSON.stringify({ version: '5.9.0', startedAt: Date.now() })
+    );
+    const left = pruneInFreshProcess('6.0.3', 2);
+
+    expect(left.sort()).toEqual(['6.0.0', '6.0.3']);
+  }, 60_000);
+
+  it('ignores a marker file that is not named for a pid', () => {
+    // Anything else in the directory is not a marker and must not pin a
+    // runtime -- otherwise a stray file keeps a version alive forever.
+    makeVersion('5.9.0', 9000);
+    makeVersion('6.0.2', 20);
+    makeVersion('6.0.3', 10);
+    mkdirSync(join(runtime, 'active'), { recursive: true });
+    writeFileSync(
+      join(runtime, 'active', 'notes.txt'),
+      JSON.stringify({ version: '5.9.0', startedAt: Date.now() })
+    );
+
+    const left = pruneInFreshProcess('6.0.3', 2);
+
+    expect(left.sort()).toEqual(['6.0.2', '6.0.3']);
+  }, 60_000);
+
   it('survives a versions directory that is not there', () => {
     rmSync(versionsDir, { recursive: true, force: true });
 

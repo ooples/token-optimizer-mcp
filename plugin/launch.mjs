@@ -285,7 +285,21 @@ function safeRm(p) {
 function registerActiveVersion(version) {
   try {
     mkdirSync(ACTIVE_DIR, { recursive: true });
-    writeFileSync(
+    // ATOMIC, because a reader runs concurrently. `writeFileSync` updates the
+    // marker in place, so a refresh calling activeVersions() mid-write gets a
+    // truncated file, fails to parse it, and DELETES it as corrupt -- and the
+    // live shim only ever writes this once, so it never comes back. The
+    // runtime it was protecting is then prunable for the rest of the session.
+    // Review caught this. `atomicWrite` writes a temp file and renames, and a
+    // rename is atomic.
+    //
+    // NOT COVERED BY A TEST, AND SAYING SO. Catching this would need a reader
+    // to observe a half-written file, which is a genuine timing race and not
+    // something a unit test can stage deterministically -- a mutation swapping
+    // this back to writeFileSync survives the suite. What IS tested is the
+    // consequence of the fix: the temp file this creates must not be mistaken
+    // for a marker. The atomicity itself rests on rename being atomic.
+    atomicWrite(
       join(ACTIVE_DIR, `${process.pid}.json`),
       JSON.stringify({ version, startedAt: Date.now() })
     );
@@ -329,6 +343,22 @@ function activeVersions() {
   }
   for (const name of names) {
     const file = join(ACTIVE_DIR, name);
+
+    // ONLY `<pid>.json` IS A MARKER. `atomicWrite` lands a `<pid>.json.tmp-...`
+    // file in this same directory for an instant, and `Number.parseInt` reads
+    // leading digits happily -- so a temp file would otherwise be treated as a
+    // marker for that pid, and deleting it as unparseable would race the
+    // rename that is about to consume it. A temp left behind by a crashed
+    // write is swept once it is older than any marker would be trusted.
+    if (!/^\d+\.json$/.test(name)) {
+      try {
+        if (Date.now() - statSync(file).mtimeMs > MAX_MARKER_AGE_MS) safeRm(file);
+      } catch {
+        /* vanished under us, which is the outcome we wanted anyway */
+      }
+      continue;
+    }
+
     const pid = Number.parseInt(name, 10);
     let record;
     try {
