@@ -259,6 +259,11 @@
       "count": 9
     }
   },
+  "src/tools/intelligence/hooks-core-loader.ts": {
+    "n/no-sync": {
+      "count": 6
+    }
+  },
   "src/tools/intelligence/sentiment-analysis.ts": {
     "n/no-sync": {
       "count": 3
