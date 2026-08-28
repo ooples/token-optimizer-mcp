@@ -66,6 +66,25 @@ function runningPackageDir(): string | null {
   return existsSync(path.join(candidate, 'package.json')) ? candidate : null;
 }
 
+/**
+ * This server's own version, read ONCE while its directory still exists.
+ *
+ * READ AT MODULE LOAD, NOT AT FALLBACK TIME, and this is the whole point.
+ * Review caught the first version reading it inside the fallback: by then the
+ * runtime may have been pruned, `package.json` is gone, the version comes back
+ * null -- and the major-version check was written to skip when it could not
+ * establish a version. So the guard failed OPEN in precisely the situation the
+ * fallback exists for, and a live v6 server could have loaded v7 hooks-core and
+ * written the shared wiki store with incompatible code.
+ *
+ * This module is imported at server startup, when the directory is certainly
+ * present, so the value is captured before anything can delete it.
+ */
+const RUNNING_VERSION: string | null = (() => {
+  const running = runningPackageDir();
+  return running ? readVersionOf(running) : null;
+})();
+
 const major = (version: string): string => version.split('.')[0] ?? '';
 
 /**
@@ -101,15 +120,35 @@ function fallbackDir(): { dir: string; version: string } | null {
   const dir = path.join(packageDir, 'hooks-core');
   if (!existsSync(dir)) return null;
 
-  const running = runningPackageDir();
-  const runningVersion = running ? readVersionOf(running) : null;
   const candidateVersion = readVersionOf(packageDir);
-  if (!candidateVersion) return null;
-  if (runningVersion && major(runningVersion) !== major(candidateVersion)) {
-    return null;
-  }
+  if (!fallbackIsCompatible(RUNNING_VERSION, candidateVersion)) return null;
 
-  return { dir, version: candidateVersion };
+  return { dir, version: candidateVersion as string };
+}
+
+/**
+ * Whether a runtime copy may stand in for the bundled one.
+ *
+ * SEPARATE AND EXPORTED SO IT CAN BE TESTED FROM BOTH SIDES. Folded into
+ * `fallbackDir` this was unreachable: any fixture that makes the running
+ * version unknown also makes the candidate unreadable, so the candidate check
+ * fired first and a mutation flipping this guard to fail-open survived every
+ * test.
+ *
+ * FAILS CLOSED on an unknown version, either side. If this server's own version
+ * cannot be established there is no way to know whether the candidate is
+ * compatible, and "load it anyway" is the answer that corrupts a shared store.
+ * Refusing costs a restart. That is not hypothetical: the first version of this
+ * skipped the comparison when the running version was null, which is exactly
+ * what a PRUNED runtime produces -- so the guard was disabled in the only
+ * situation the fallback exists for.
+ */
+export function fallbackIsCompatible(
+  runningVersion: string | null,
+  candidateVersion: string | null
+): boolean {
+  if (!runningVersion || !candidateVersion) return false;
+  return major(runningVersion) === major(candidateVersion);
 }
 
 /** Reported once per process, so a degraded session says so without spamming. */

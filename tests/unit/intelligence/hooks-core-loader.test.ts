@@ -146,6 +146,57 @@ describe('loading hooks-core', () => {
     expect(recovered.marker).toBe('from-runtime');
   }, 30_000);
 
+  it('refuses a fallback whenever either version is unknown', async () => {
+    // THE GUARD, ASSERTED DIRECTLY. Reached through `fallbackDir` this is
+    // unreachable: any fixture that makes the running version unknown also
+    // makes the candidate unreadable, so the candidate check fires first --
+    // which is why a mutation flipping this to fail-open survived every other
+    // test here. A null running version is exactly what a PRUNED runtime
+    // produces, so failing open there disables the guard in the only situation
+    // the fallback exists for.
+    const { fallbackIsCompatible } = await loader();
+
+    expect(fallbackIsCompatible(null, '6.0.1')).toBe(false);
+    expect(fallbackIsCompatible('6.0.1', null)).toBe(false);
+    expect(fallbackIsCompatible('6.0.1', '7.0.0')).toBe(false);
+    expect(fallbackIsCompatible('6.0.1', '6.9.9')).toBe(true);
+  }, 30_000);
+
+  it('refuses to fall back when it cannot establish its own version', async () => {
+    // REVIEW CAUGHT THIS, AND IT FAILED OPEN IN THE ONLY CASE THAT MATTERS.
+    // The major check originally read the running version inside the fallback
+    // and skipped the comparison when it came back null -- but null is exactly
+    // what a PRUNED runtime produces, which is the situation the fallback
+    // exists for. A live v6 server could then have loaded v7 hooks-core and
+    // written the shared wiki store with incompatible code.
+    //
+    // The version is captured at module load now, so this asserts the guard
+    // from the other side: a candidate whose own manifest is unreadable can
+    // never be accepted, whatever the running version is.
+    const packageDir = join(
+      runtime,
+      'versions',
+      '6.0.9',
+      'node_modules',
+      '@ooples',
+      'token-optimizer-mcp'
+    );
+    mkdirSync(join(packageDir, 'hooks-core'), { recursive: true });
+    writeFileSync(
+      join(packageDir, 'hooks-core', 'definitely-not-a-real-module.mjs'),
+      'export const marker = "from-runtime";\n'
+    );
+    // A manifest that cannot be parsed: no version can be established.
+    writeFileSync(join(packageDir, 'package.json'), 'not json at all');
+    writeFileSync(join(runtime, 'current'), '6.0.9');
+
+    const { loadHooksCore } = await loader();
+
+    await expect(
+      loadHooksCore('definitely-not-a-real-module.mjs')
+    ).rejects.toThrow(/could not load|has been removed/);
+  }, 30_000);
+
   it('does not fall back across a major version', async () => {
     // A cross-major fallback would load one release's hooks-core into another
     // release's server, and these modules share a persisted wiki store: a

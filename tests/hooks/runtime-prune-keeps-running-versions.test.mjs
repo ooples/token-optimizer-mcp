@@ -42,6 +42,19 @@ const LAUNCHER = pathToFileURL(
 let runtime;
 let versionsDir;
 
+/** A pid that is not running: claimed at the top of the pid space. */
+const DEAD_PID = 0x7ffffffe;
+
+/** Record that `pid` is serving `version`, as a live shim would. */
+function registerActive(pid, version) {
+  const dir = join(runtime, 'active');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `${pid}.json`),
+    JSON.stringify({ version, startedAt: Date.now() })
+  );
+}
+
 /** A version directory holding a file, aged `minutesOld` minutes. */
 function makeVersion(name, minutesOld) {
   const dir = join(versionsDir, name);
@@ -180,6 +193,52 @@ describe('pruning the managed runtime', () => {
     makeVersion('6.0.3', 10);
 
     const left = pruneInFreshProcess('6.0.3', 2);
+
+    expect(left.sort()).toEqual(['6.0.2', '6.0.3']);
+  }, 60_000);
+
+it('keeps a runtime a live process registered, however old it is', () => {
+    // REVIEW CAUGHT THE HOLE THIS CLOSES. A retention COUNT only protects a
+    // session for a refresh or two: on v1 -> v2 -> v3 the second refresh sees
+    // `prev` as v2, so the v1 a server is still running from ages out and is
+    // deleted -- the original defect again, just delayed. A live shim now
+    // records the runtime it is serving, and a recorded runtime with a live pid
+    // is retained no matter where it sorts.
+    makeVersion('6.0.0', 9000);
+    makeVersion('6.0.1', 30);
+    makeVersion('6.0.2', 20);
+    makeVersion('6.0.3', 10);
+    // `process.pid` is this jest worker: unquestionably alive.
+    registerActive(process.pid, '6.0.0');
+
+    const left = pruneInFreshProcess('6.0.3', 2);
+
+    expect(left.sort()).toEqual(['6.0.0', '6.0.3']);
+  }, 60_000);
+
+  it('does not let a dead process pin a runtime forever', () => {
+    // The other half: markers have to be reaped, or a crashed session keeps a
+    // version alive indefinitely and the directory grows without bound.
+    makeVersion('5.9.0', 9000);
+    makeVersion('6.0.2', 20);
+    makeVersion('6.0.3', 10);
+    registerActive(DEAD_PID, '5.9.0');
+
+    const left = pruneInFreshProcess('6.0.3', 2);
+
+    expect(left.sort()).toEqual(['6.0.2', '6.0.3']);
+  }, 60_000);
+
+  it('does not spend a retention slot on a version that is not installed', () => {
+    // REVIEW CAUGHT THIS TOO. `keep` took `keepVersion` and `alsoKeep`
+    // unconditionally, so a stale `current` pointer naming a directory that is
+    // not there consumed a slot -- and with a retention of two the cleanup then
+    // stripped every real directory but one.
+    makeVersion('6.0.1', 40);
+    makeVersion('6.0.2', 20);
+    makeVersion('6.0.3', 10);
+
+    const left = pruneInFreshProcess('6.0.3', 2, 'no-such-version');
 
     expect(left.sort()).toEqual(['6.0.2', '6.0.3']);
   }, 60_000);

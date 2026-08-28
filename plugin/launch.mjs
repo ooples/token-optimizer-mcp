@@ -79,6 +79,7 @@ const RUNTIME =
 const VERSIONS_DIR = join(RUNTIME, 'versions');
 const CURRENT_FILE = join(RUNTIME, 'current');
 const LOCK_DIR = join(RUNTIME, '.refresh.lock');
+const ACTIVE_DIR = join(RUNTIME, 'active');
 const LAST_REFRESH_FILE = join(RUNTIME, '.last-refresh');
 
 // Don't hammer the registry on frequent restarts: only background-refresh if it
@@ -268,6 +269,86 @@ function safeRm(p) {
   }
 }
 
+/**
+ * Record that THIS shim is serving `version`, so a later refresh can see it.
+ *
+ * A RETENTION COUNT IS A GUESS; THIS IS THE ANSWER. Keeping the newest few
+ * directories protects a session across one or two refreshes and then quietly
+ * stops: on v1 -> v2 -> v3 the second refresh sees `prev` as v2, so the v1 a
+ * server is still running from ages out and is deleted. Review caught that, and
+ * it is the same defect as the original one, just delayed.
+ *
+ * Liveness is cheap after all -- `process.kill(pid, 0)` asks the OS whether a
+ * pid exists, on every platform, without signalling it. The earlier comment
+ * here claimed there was no such check; there is, and this uses it.
+ */
+function registerActiveVersion(version) {
+  try {
+    mkdirSync(ACTIVE_DIR, { recursive: true });
+    writeFileSync(
+      join(ACTIVE_DIR, `${process.pid}.json`),
+      JSON.stringify({ version, startedAt: Date.now() })
+    );
+  } catch {
+    // Best effort. Failing to register costs retention, not correctness: the
+    // version-count fallback still protects the common case.
+  }
+}
+
+function unregisterActiveVersion() {
+  safeRm(join(ACTIVE_DIR, `${process.pid}.json`));
+}
+
+/** True when a process with this pid exists (it is not signalled). */
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // EPERM means it exists but belongs to someone else -- still alive.
+    return err?.code === 'EPERM';
+  }
+}
+
+/**
+ * Versions that a live shim is currently serving.
+ *
+ * Also reaps its own stale markers, so a machine that has been rebooted or has
+ * crashed sessions does not accumulate them forever. A marker is only trusted
+ * for 30 days, which bounds the damage from pid reuse: a recycled pid could
+ * otherwise pin a version indefinitely.
+ */
+function activeVersions() {
+  const alive = new Set();
+  const MAX_MARKER_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+  let names = [];
+  try {
+    names = readdirSync(ACTIVE_DIR);
+  } catch {
+    return alive;
+  }
+  for (const name of names) {
+    const file = join(ACTIVE_DIR, name);
+    const pid = Number.parseInt(name, 10);
+    let record;
+    try {
+      record = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      safeRm(file);
+      continue;
+    }
+    const tooOld =
+      !Number.isFinite(record?.startedAt) ||
+      Date.now() - record.startedAt > MAX_MARKER_AGE_MS;
+    if (!Number.isFinite(pid) || tooOld || !pidAlive(pid)) {
+      safeRm(file);
+      continue;
+    }
+    if (record?.version) alive.add(record.version);
+  }
+  return alive;
+}
+
 /** Best-effort single-flight lock via mkdir (atomic on all platforms). */
 function acquireLock() {
   try {
@@ -356,10 +437,26 @@ export function pruneOldVersions(keepVersion, alsoKeep = null) {
       return { name, mtimeMs };
     });
 
-    // `keepVersion` first and unconditionally -- it is the one the next launch
-    // will use, and it must survive even if its mtime is somehow not newest.
-    const keep = new Set([keepVersion]);
-    if (alsoKeep) keep.add(alsoKeep);
+    const present = new Set(dirs.map((entry) => entry.name));
+
+    // ONLY NAMES THAT EXIST COUNT TOWARD RETENTION. `keep` used to take
+    // `keepVersion` and `alsoKeep` unconditionally, so a stale `current`
+    // pointer naming a directory that is not there consumed a retention slot
+    // and the cleanup could then strip everything else. Review caught it.
+    const keep = new Set();
+    const reserve = (name) => {
+      if (name && present.has(name)) keep.add(name);
+    };
+
+    // Every runtime a live shim is serving, first: this is the whole point.
+    for (const version of activeVersions()) reserve(version);
+
+    // Then the one the next launch will use, and the one the pointer named
+    // before this refresh -- by name, since neither is guaranteed to sort
+    // newest once a reinstall has freshened another directory's timestamp.
+    reserve(keepVersion);
+    reserve(alsoKeep);
+
     for (const { name } of [...dirs].sort((a, b) => b.mtimeMs - a.mtimeMs)) {
       if (keep.size >= VERSIONS_TO_KEEP) break;
       keep.add(name);
@@ -427,6 +524,16 @@ function spawnBackgroundRefresh() {
 
 /** Spawn the server, forwarding stdio, signals, and exit code. */
 function runServer(entry) {
+  // Announce which runtime this shim is serving BEFORE the server starts, so a
+  // refresh that fires immediately afterwards can already see it.
+  const served = entry.startsWith(VERSIONS_DIR)
+    ? entry.slice(VERSIONS_DIR.length + 1).split(/[\\/]/)[0]
+    : null;
+  if (served) {
+    registerActiveVersion(served);
+    process.on('exit', unregisterActiveVersion);
+  }
+
   const child = spawn(process.execPath, [entry], {
     stdio: 'inherit',
     env: process.env,
