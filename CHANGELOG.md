@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.2](https://github.com/ooples/token-optimizer-mcp/compare/v6.0.1...v6.0.2) (2026-08-28)
+
+
+### Bug Fixes
+
+* bound file traversal so smart_glob and smart_grep cannot hang ([#336](https://github.com/ooples/token-optimizer-mcp/issues/336)) ([21d6fb1](https://github.com/ooples/token-optimizer-mcp/commit/21d6fb15da852878fd5e983eda46442a13dae69a))
+* **launch:** stop the refresh deleting the runtime a live session is using ([#337](https://github.com/ooples/token-optimizer-mcp/issues/337)) ([ad440c6](https://github.com/ooples/token-optimizer-mcp/commit/ad440c638441dc426cac2444dd020fc24cf99ff0))
+* **lint:** record the sync calls that arrived with the runtime loader ([#341](https://github.com/ooples/token-optimizer-mcp/issues/341)) ([0ef6d9e](https://github.com/ooples/token-optimizer-mcp/commit/0ef6d9e18a2eb4c52869cb6257ff7e0d4e925048))
+
+
+### Performance
+
+* **analysis:** read each file once instead of two or three times ([#338](https://github.com/ooples/token-optimizer-mcp/issues/338)) ([bf3f259](https://github.com/ooples/token-optimizer-mcp/commit/bf3f259d71efecaebbecc30c6a55bd3e56341802))
+
 ## [6.0.1](https://github.com/ooples/token-optimizer-mcp/compare/v6.0.0...v6.0.1) (2026-08-28)
 
 
