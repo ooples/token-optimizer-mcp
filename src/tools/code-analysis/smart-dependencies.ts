@@ -13,7 +13,7 @@
  * Week 5 - Phase 2 Track 2A
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { parse as parseTypescript } from '@typescript-eslint/typescript-estree';
 import { parse as parseBabel } from '@babel/parser';
 // glob v10+ is native ESM and has no default export; the CJS-style
@@ -164,6 +164,26 @@ export interface SmartDependenciesResult {
 }
 
 export class SmartDependenciesTool {
+  /**
+   * Token count per relative path, recorded while the file was open.
+   *
+   * Cleared at the start of every `analyze()` so it can never serve a count
+   * from a previous call's content -- the saving is skipping a redundant read
+   * WITHIN one analysis, not caching across them.
+   */
+  private fileTokenCounts = new Map<string, number>();
+
+  /**
+   * Whether a candidate module path is a file, remembered for one `analyze()`.
+   *
+   * Import resolution probes the same handful of candidates over and over --
+   * every file in a package resolving `./index` walks the identical extension
+   * list -- and each probe was its own `existsSync`. Measured 2026-08-28 after
+   * the read-once fix landed: 4.98 s, 14.6% of the run, and the single largest
+   * remaining cost. Cleared per call for the same reason as the token counts.
+   */
+  private pathExists = new Map<string, boolean>();
+
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
@@ -187,6 +207,8 @@ export class SmartDependenciesTool {
     options: SmartDependenciesOptions = {}
   ): Promise<SmartDependenciesResult> {
     const startTime = Date.now();
+    this.fileTokenCounts.clear();
+    this.pathExists.clear();
 
     // Default options
     const opts: Required<SmartDependenciesOptions> = {
@@ -491,6 +513,13 @@ export class SmartDependenciesTool {
       const ext = extname(filePath);
       const hash = hashFileMetadata(filePath);
       const relativePath = relative(cwd, filePath);
+
+      // Counted here, where the content is already in memory. See
+      // measureFullFileTokens for what this replaces.
+      this.fileTokenCounts.set(
+        relativePath,
+        this.tokenCounter.count(content).tokens
+      );
 
       const imports: DependencyImport[] = [];
       const exports: DependencyExport[] = [];
@@ -1171,36 +1200,59 @@ export class SmartDependenciesTool {
   /**
    * Utility: Resolve relative path
    */
+  /**
+   * Whether a candidate resolves to an actual FILE, asked once per analysis.
+   *
+   * `isFile()`, not `existsSync`. A directory satisfies `existsSync`, so
+   * `./foo` in a project holding a `foo/` directory resolved to the directory
+   * itself -- producing a graph edge to `src/foo`, which is not a node in the
+   * graph at all. Measured on a fixture holding both `foo.ts` and
+   * `foo/index.ts`: the recorded edge was `src\\main.ts -> src\\foo`, pointing
+   * at nothing, while Node resolves that import to `foo.ts`.
+   */
+  private candidateIsFile(candidate: string): boolean {
+    const remembered = this.pathExists.get(candidate);
+    if (remembered !== undefined) return remembered;
+    let isFile = false;
+    try {
+      isFile = statSync(candidate).isFile();
+    } catch {
+      isFile = false;
+    }
+    this.pathExists.set(candidate, isFile);
+    return isFile;
+  }
+
+  /**
+   * Resolve an import specifier to a path relative to `cwd`.
+   *
+   * Order matches Node: the path as written, then the extension candidates,
+   * then `index.*` inside a directory of that name. Each step returns on the
+   * first hit, so a later candidate can never overwrite an earlier one.
+   */
   private resolveRelativePath(
     source: string,
     fileDir: string,
     cwd: string
   ): string {
     const resolved = resolve(fileDir, source);
-    let relativePath = relative(cwd, resolved);
+    if (this.candidateIsFile(resolved)) return relative(cwd, resolved);
 
-    // Try common extensions if file doesn't exist
     const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
-    if (!existsSync(resolved)) {
-      for (const ext of extensions) {
-        const withExt = `${resolved}${ext}`;
-        if (existsSync(withExt)) {
-          relativePath = relative(cwd, withExt);
-          break;
-        }
-      }
 
-      // Try index files
-      const indexFiles = extensions.map((ext) => join(resolved, `index${ext}`));
-      for (const indexFile of indexFiles) {
-        if (existsSync(indexFile)) {
-          relativePath = relative(cwd, indexFile);
-          break;
-        }
-      }
+    for (const ext of extensions) {
+      const withExt = `${resolved}${ext}`;
+      if (this.candidateIsFile(withExt)) return relative(cwd, withExt);
     }
 
-    return relativePath;
+    for (const ext of extensions) {
+      const indexFile = join(resolved, `index${ext}`);
+      if (this.candidateIsFile(indexFile)) return relative(cwd, indexFile);
+    }
+
+    // Nothing on disk matches -- an unresolvable import is recorded as written
+    // rather than dropped, so the edge is visible instead of silently absent.
+    return relative(cwd, resolved);
   }
 
   /**
@@ -1265,6 +1317,20 @@ export class SmartDependenciesTool {
   private measureFullFileTokens(files: string[], cwd: string): number {
     let total = 0;
     for (const file of files) {
+      // ALREADY COUNTED WHILE THE FILE WAS OPEN. `analyzeFile` reads every file
+      // to parse it and records the count there, so this baseline used to read
+      // the entire project a SECOND time purely to produce a savings figure.
+      // Measured 2026-08-28 on 12,000 files: 19.58 s of readFileUtf8, 38% of a
+      // 51 s run, spent re-reading bytes the tool had just finished with.
+      //
+      // A miss still reads -- the cached-graph paths reach here without having
+      // analysed anything -- so this is a shortcut, never a different answer:
+      // the count comes from the same tokenizer over the same content.
+      const counted = this.fileTokenCounts.get(file);
+      if (counted !== undefined) {
+        total += counted;
+        continue;
+      }
       try {
         // RESOLVED AGAINST THE PROJECT, not the process. The graph is keyed by
         // paths relative to `cwd` (see analyzeFile), so reading them as-is
