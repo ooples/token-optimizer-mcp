@@ -5,7 +5,7 @@
  * Runs the appropriate platform-specific installer
  */
 
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -34,7 +34,8 @@ try {
   const packageRoot = path.resolve(__dirname, '..');
 
   let installScript;
-  let command;
+  let runner;
+  let runnerArgs;
 
   if (platform === 'win32') {
     installScript = path.join(packageRoot, 'install-hooks.ps1');
@@ -52,7 +53,8 @@ try {
       process.exit(0);
     }
 
-    command = `powershell -ExecutionPolicy Bypass -File "${installScript}"`;
+    runner = 'powershell';
+    runnerArgs = ['-ExecutionPolicy', 'Bypass', '-File', installScript];
   } else {
     installScript = path.join(packageRoot, 'install-hooks.sh');
 
@@ -66,7 +68,8 @@ try {
       );
     }
 
-    command = `bash "${installScript}"`;
+    runner = 'bash';
+    runnerArgs = [installScript];
   }
 
   // Check if install script exists
@@ -81,8 +84,17 @@ try {
 
   console.log('[token-optimizer-mcp] Running hook installer...');
 
-  // Run the installer
-  execSync(command, {
+  // Run the installer in ARGV MODE, not through a shell.
+  //
+  // This built a shell string by interpolating installScript, which is
+  // derived from the package's own directory -- so it is trusted and this was
+  // never exploitable. It is still worth removing: it runs on npm install,
+  // the highest-consequence moment in a package's life, and a global prefix
+  // path containing a quote or a command substitution would break out of the
+  // quoting. Argv
+  // mode makes the question not arise, whatever the install directory is
+  // called. Raised by the mcpaudit static audit in #343.
+  execFileSync(runner, runnerArgs, {
     stdio: 'inherit',
     cwd: packageRoot,
   });
