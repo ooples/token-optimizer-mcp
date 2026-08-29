@@ -91,6 +91,25 @@ const REFRESH_INTERVAL_MS = numericEnv(
   6 * 60 * 60 * 1000
 );
 
+/**
+ * An exact version to serve, or '' for the normal @latest-tracking behaviour.
+ *
+ * Without this there is no way to say which build runs. `current` and the npx
+ * cache decide, and the npx cache is not a property of the install at all: on a
+ * cold runtime the shim serves whatever copy that cache happens to hold, so a
+ * machine with 6.0.2 installed was observed serving 6.0.0 on first launch.
+ * REFRESH_INTERVAL_MS could not prevent it -- that only throttles the
+ * background refresh, it does not choose what is served now.
+ *
+ * When set, this is authoritative: the npx cache is only accepted if it is the
+ * pinned version, no background refresh runs (a refresh exists to move off the
+ * current version, which is precisely what a pin forbids), and a missing
+ * pinned build is installed at that exact version rather than at latest.
+ */
+const PINNED_VERSION = String(
+  process.env.TOKEN_OPTIMIZER_VERSION || ''
+).trim();
+
 function numericEnv(name, fallback) {
   const raw = process.env[name];
   if (raw == null || raw === '') return fallback;
@@ -199,7 +218,7 @@ function atomicWrite(file, contents) {
  * entry path — WITHOUT flipping `current`. Returns null on any failure (offline,
  * registry down, install error) so callers fall back to what they already have.
  */
-function installLatest() {
+function installLatest(spec = 'latest') {
   mkdirSync(VERSIONS_DIR, { recursive: true });
   const staging = join(
     RUNTIME,
@@ -211,7 +230,7 @@ function installLatest() {
       NPM,
       [
         'install',
-        `${PACKAGE}@latest`,
+        `${PACKAGE}@${spec}`,
         '--prefix',
         staging,
         '--no-save',
@@ -601,6 +620,54 @@ function main() {
 
   if (process.argv.includes('--refresh')) {
     runRefresh();
+    return;
+  }
+
+  // A PIN SHORT-CIRCUITS EVERY OTHER SOURCE. Deliberately ahead of `current`
+  // and of the npx cache, because both of those are exactly what a pin exists
+  // to overrule, and no background refresh is started: a refresh's job is to
+  // move off the version being served, which is what the pin forbids.
+  if (PINNED_VERSION) {
+    let pinned = entryFor(join(VERSIONS_DIR, PINNED_VERSION));
+
+    if (!pinned) {
+      // The npx cache is acceptable only when it happens to hold the pinned
+      // version. Serving its newest copy is the unpinned behaviour, and is the
+      // bug this branch exists to prevent.
+      const cached = findCachedEntry();
+      if (cached && cached.version === PINNED_VERSION) pinned = cached.entry;
+    }
+
+    if (!pinned) {
+      log(`pinned to ${PINNED_VERSION}; installing that exact version…`);
+      if (acquireLock()) {
+        try {
+          pinned = installLatest(PINNED_VERSION);
+          if (pinned) atomicWrite(CURRENT_FILE, PINNED_VERSION);
+        } finally {
+          releaseLock();
+        }
+      } else {
+        for (let i = 0; i < 120 && !pinned; i++) {
+          sleepSync(500);
+          pinned = entryFor(join(VERSIONS_DIR, PINNED_VERSION));
+        }
+      }
+    }
+
+    if (!pinned) {
+      // FAIL LOUDLY RATHER THAN FALLING BACK. Someone who pinned a version and
+      // silently got a different one is worse off than someone who got an
+      // error: the whole point of the pin is knowing what ran.
+      log(
+        `could not obtain pinned version ${PINNED_VERSION}. ` +
+          `Unset TOKEN_OPTIMIZER_VERSION to track latest, or install it once: ` +
+          `npx -y ${PACKAGE}@${PINNED_VERSION}`
+      );
+      process.exit(1);
+    }
+
+    runServer(pinned);
     return;
   }
 
