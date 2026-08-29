@@ -21,9 +21,6 @@ export {
   type AstMatch,
 } from './smart-ast-grep.js';
 
-// SmartAmbiance - Implementation pending
-// Note: Exports temporarily removed until implementation is complete
-
 export {
   SmartSecurity,
   getSmartSecurityTool,
