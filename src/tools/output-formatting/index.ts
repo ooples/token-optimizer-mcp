@@ -4,14 +4,6 @@
  * Intelligent format conversion and output formatting with smart caching
  */
 
-// SmartFormat - Implementation pending
-// SmartStream - Implementation pending
-// SmartReport - Implementation pending
-// SmartDiff - Implementation pending
-// SmartExport - Implementation pending
-// SmartLog - Implementation pending
-// Note: Exports temporarily removed until implementation is complete
-
 export {
   SmartPretty,
   runSmartPretty,
