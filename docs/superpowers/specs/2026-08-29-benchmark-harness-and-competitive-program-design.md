@@ -54,8 +54,14 @@ merely expensive; it makes tasks fail. Any framing that treats this as a
 cost/benefit trade is wrong — there is no benefit column.
 
 **Everything else is already competitive.** `MODE=off` at 0.904 would rank
-second on THOL's aggregate, behind `tokenade` (0.768) and ahead of
-`claude-token-efficient` (0.952).
+second, behind `tokenade` and ahead of `claude-token-efficient`.
+
+Two different tokenade figures appear in this document and they are not a
+contradiction: **0.768** is its published aggregate over THOL's full 17-task
+battery, while **0.810** is its aggregate recomputed over only the 16 tasks we
+ran. Every head-to-head comparison here uses the like-for-like 16-task figure;
+on that basis `MODE=off` is 0.928 against tokenade's 0.810 (see the per-task
+join in the head-to-head analysis).
 
 The mechanism is legible in the turn counts. Enforcement added ~107 tool calls
 and took turns from 12.6 to 20.9 — approximately **one extra turn per refusal**.
@@ -84,12 +90,41 @@ Stated here so it is never over-claimed downstream:
 
 **Goals.**
 
-1. A verified, published row on THOL — the board buyers actually compare.
-2. A multi-session benchmark we own and publish, measuring the cross-session
+1. **Rank first.** Aggregate cost ratio below **0.810** — tokenade's figure on
+   our 16 tasks — measured with **enforcement ON**, not off. Second place is not
+   the target; parity is not the target.
+2. A verified, published row on THOL demonstrating it.
+3. A multi-session benchmark we own and publish, measuring the cross-session
    value THOL structurally cannot see.
-3. A benchmark harness living in this repo, so a behaviour change and its
+4. A benchmark harness living in this repo, so a behaviour change and its
    measured effect can land in the same commit.
-4. Stop shipping a default that is measurably worse than not installing us.
+5. Stop shipping a default that is measurably worse than not installing us,
+   while the work in goal 1 lands.
+
+Goal 1 is the constraint the rest of the design serves. Enforcement is the
+mechanism that solved the adoption failure which left 9 of 12 THOL tools
+indistinguishable from doing nothing; winning *without* it would mean winning
+without our differentiator.
+
+### 3.1 The quantified path to first place
+
+Modelled on the measured per-task data (§2), holding everything else constant:
+
+| scenario | aggregate | vs tokenade 0.810 |
+| --- | --- | --- |
+| today, `MODE=off` | 0.928 | behind |
+| close the debug-loop gap only | 0.811 | dead heat |
+| remove small-session overhead only | 0.872 | behind |
+| **both** | **0.777** | **first, by ~4%** |
+| both, debug gap only half closed | 0.831 | still behind |
+
+Two conclusions that set the roadmap. **Both levers are required** — either alone
+leaves us behind. And **the debug-loop gap must be substantially closed, not
+partially**: halving it lands at 0.831, still behind. This is why §6.3 reorders
+the levers away from what was originally proposed.
+
+The 0.777 figure assumes enforcement is cost-neutral, which §6.2 is what makes
+true.
 
 **Non-goals.**
 
@@ -102,7 +137,7 @@ Stated here so it is never over-claimed downstream:
 | decision | rejected alternative | why |
 | --- | --- | --- |
 | Compete on THOL **and** publish our own multi-session benchmark | THOL only; or ours only | THOL alone grades us on a race that excludes our differentiator. Ours alone is a benchmark run by the vendor it flatters — exactly the credibility problem THOL's own charter names. |
-| Default `MODE=off`; re-admit enforcement rules **on measured evidence** | Delete enforcement; or keep it on and re-tune | Deleting discards the one mechanism that solved the adoption failure killing 9 of 12 THOL tools. Keeping it on ships a 1.687 default. Off-by-default stops the loss now; per-rule re-admission preserves the idea and makes it earn its place. |
+| `MODE=off` as an **interim** default; enforcement returns ON once it is cost-neutral | Delete enforcement; ship off permanently; or keep it on untouched | Deleting discards the one mechanism that solved the adoption failure killing 9 of 12 THOL tools. Shipping off permanently wins the board without the differentiator. Keeping it on untouched ships a 1.687 default. The interim flip stops the loss while §6.2 makes the zero-turn path actually fire, after which enforcement returns under a measurable invariant. |
 | Default to `off`, not `advise` | `advise` as the middle ground | `off` is the configuration measured at 0.904. `advise` was never measured and spends `additionalContext` tokens on every matched call, so it is plausibly harmful. It stays available, opt-in. |
 | Harness in the main repo under `bench/` | Separate public repo; keep external rig | Versioned with the code it grades, so CI and reviewers can reproduce any published claim, and a rule change ships with its number. Excluded from the npm `files` list so users never download it. |
 | Our benchmark measures **derive-then-reuse** | Compaction survival; long-lived project simulation; cross-client transfer | Directly isolates what the graph is for, and the control arm is honest: a competitor without memory re-derives and pays. Cross-client transfer is a real moat but a benchmark only we can pass reads as self-serving. |
@@ -200,43 +235,82 @@ README's headline claim and a badge. It must go. The replacement claim is
 *measured, not enforced* — which is more defensible and is the one thing no
 competitor in this category can currently say.
 
-### 6.2 Re-admission protocol for enforcement
+### 6.2 Making enforcement cost-neutral — the root cause
 
-Since the cost is the refusal round-trip, the design rule is: **a refusal is
-viable only if it answers in the refusal rather than redirecting.**
+Enforcement is not inherently expensive. Its cheap path exists and is dead in
+production.
 
-Rules become individually switchable and are measured as five families, one arm
-each:
+The design already has a **zero-turn refusal**: `refusalPayload` is meant to
+return the answer *inside* the refusal — "unchanged since you last read it",
+the diff when a snapshot is held, otherwise an annotated skeleton — so the model
+never makes a second call. The measurement shows it is not happening: 115 of our
+own tool calls and +8.3 turns across 16 tasks means refusals were **redirecting**
+("call `smart_read` instead"), each costing a round trip.
 
-| family | rule | prior |
-| --- | --- | --- |
-| R1 | large first `Read` | costs a turn — likely negative |
-| R2 | repeat `Read` (already carries the diff) | zero-turn — most likely net-positive |
-| R3 | `Grep`/`Glob` bounding | costs a turn |
-| R4 | Bash content dumps (`cat`/`head`/`grep -r`) | costs a turn |
-| R5 | large `Edit` | costs a turn |
+`hooks-core/staleness.mjs` states the cause in its own comment:
 
-`Write` is already removed (PR #348). A family ships enabled only when its arm
-beats `off` on cost **and** does not lose correctness. Five families × 16 tasks
-≈ 80 runs ≈ $22 per sweep.
+> the zero-turn refusal, the headline of P4, **never fired outside tests that
+> hand-wrote the snapshot themselves**
 
-### 6.3 Levers, landed one at a time
+`refusalPayload` needs a snapshot on the file node to build a `before` side.
+Without one it returns null for every real file, and the refusal degrades to a
+redirect. So the fix is not to remove refusals — it is to **make the snapshot
+exist for the files we refuse**, bounded by the existing `snapshotLimit()` so
+the graph does not become a second copy of the repository.
 
-Each lands as its own change with its own measured delta:
+A second, related failure is documented in `hooks-core/policy.mjs`: subagents
+inherit the parent session id and shared one `seen` set, so an agent was told a
+file was "UNCHANGED since you last read it" when a *different* agent had read
+it — and it fell back to Bash, which "defeats the optimizer and costs more than
+the read it replaced."
 
-- **L1 — CLAUDE.md terseness scaffold.** Output tokens were the THOL winner's
-  largest lever (−26.9%); a tool that is *only* a CLAUDE.md file ranked second
-  of twelve. We ship nothing on this axis.
-- **L2 — compaction window and cache economics.** Cache fell 21.8% for the
-  winner. We set no `autoCompactWindow`; `keepwarm.mjs` exists but no setting
-  reaches the client.
-- **L3 — PostToolUse rewrite-in-place** on `Read`/`Grep`/`WebSearch`/`WebFetch`.
-  The principled replacement for enforcement: same benefit, no turn tax.
-  **Requires a spike first** — `anthropics/claude-code#32105` means a hook
-  cannot replace a built-in tool's result, so coverage may be limited to Bash
-  and MCP results. Establish feasibility before designing around it.
-- **L4 — statusline.** An always-visible number. Competitors ship one; ours is a
-  dashboard you must open.
+**The invariant this design adopts.** Enforcement ships on only when, with
+enforcement enabled, **turns and `own_tool_calls` do not rise above the `off`
+arm**. That is a directly measurable property of the harness, it is the exact
+quantity that produced the 1.687, and it converts "is enforcement worth it" from
+an argument into a test.
+
+Refusal families are individually switchable so the invariant can be checked per
+family: R1 large first `Read`, R2 repeat `Read`, R3 `Grep`/`Glob` bounding,
+R4 Bash content dumps, R5 large `Edit`. `Write` is already removed (PR #348).
+A family is enabled only when it satisfies the invariant and does not lose
+correctness. Five families × 16 tasks ≈ 80 runs ≈ $22 per sweep.
+
+### 6.3 Levers, reordered by measured value
+
+**This ordering replaces the one first proposed.** L1 and L4 below were
+originally ranked first on the strength of THOL's published token composition;
+the per-task measurement in §2 says the two levers that actually decide first
+place are the ones that were ranked third and not at all. The evidence outranks
+the prior.
+
+- **P0 — Bash and test-output compaction in `PostToolUse`.** Debug loops are our
+  worst family (1.248) and tokenade's best (0.611); a debug loop reruns a test
+  suite and each run dumps a wall of output. tokenade compacts `Bash` output in
+  a hook at zero turn cost; we *refuse* dumping commands instead, which costs a
+  turn and pushes the agent to another route. Closing this gap alone moves the
+  aggregate 0.928 → 0.811. **Required, and must be substantially closed** —
+  halving it lands at 0.831, still behind.
+- **P1 — Suppress fixed overhead on small sessions.** The cheap band is 1.170
+  while the expensive band is 0.620 against a leader at 0.618. A fixed
+  per-session cost — MCP tool schemas re-sent every turn, hook banners,
+  SessionStart injection — is negligible on a $0.38 session and dominant on a
+  $0.13 one. Costs no capability to fix; moves the aggregate to 0.872 alone and
+  is required to reach 0.777 together with P0.
+- **P2 — Make the zero-turn refusal actually fire** (§6.2). This is what lets
+  enforcement be on at all, so it gates goal 1 rather than adding to it.
+- **P3 — CLAUDE.md terseness scaffold.** Output tokens were the winner's largest
+  single lever (−26.9%) and a rival that is *only* a CLAUDE.md file ranks third
+  on our board. Unquantified for us, so it is upside beyond 0.777 rather than
+  part of the path to it.
+- **P4 — compaction window and cache economics.** Cache fell 21.8% for the
+  winner. `keepwarm.mjs` exists but no setting reaches the client.
+- **P5 — statusline.** Visibility, not cost.
+
+P0 needs a feasibility spike first: `anthropics/claude-code#32105` means a hook
+cannot replace a built-in tool's result. Bash output is the case that matters
+most for debug loops and is reachable via `PostToolUse`, but `Read`/`Grep`
+coverage must be established, not assumed.
 
 ## 7. Measuring the knowledge graph
 
@@ -287,24 +361,33 @@ that is not actively losing.
 
 | milestone | contents | exit criterion |
 | --- | --- | --- |
-| M1 | Default `MODE=off`; README/positioning rewrite; patch release | Released; `off` is what users get |
-| M2 | `bench/` landed: `lib/` + `thol/`, migrated from the external rig; `bench:screen` and `bench:confirm` scripts | A maintainer can reproduce §2 from a clean clone |
-| M3 | Graph-disabled arm; `--reps 3` confirmation of §2 on the losing tasks | §2 has confidence intervals; graph overhead known |
-| M4 | THOL manifest PR upstream, pinned at the default-off release | A verified row appears on the public board |
-| M5 | Enforcement families R1–R5 measured; net-positive families re-enabled | Each family has a number; only winners ship on |
-| M6 | L3 spike, then L1/L2/L4 landed one at a time | Each lever has its own delta |
-| M7 | `bench/recall/` built and published | Calls-avoided measured; multi-session benchmark public |
+| M1 | Default `MODE=off` as an **interim safety measure**; positioning rewrite; patch release | Released; users stop paying +63% while M4–M6 land |
+| M2 | `bench/` landed: `lib/` + `thol/`, migrated from the external rig; `bench:screen` and `bench:confirm` | A maintainer reproduces §2 from a clean clone |
+| M3 | Graph-disabled arm; `--reps 3` confirmation on the decisive tasks | §2 has confidence intervals; graph overhead known |
+| M4 | **P0** — Bash/test-output compaction (spike first) | Debug family ≤ 0.70; aggregate ≤ 0.82 |
+| M5 | **P1** — small-session overhead suppression | Cheap band ≤ 1.00; **aggregate < 0.810 → first place** |
+| M6 | **P2** — zero-turn refusal fires; families R1–R5 checked against the invariant | Enforcement ON with turns and `own_tool_calls` no higher than `off` |
+| M7 | Default returns to **enforcing**; THOL manifest PR upstream | A verified first-place row, measured with enforcement on |
+| M8 | `bench/recall/` built and published | Calls-avoided measured; multi-session benchmark public |
+| M9 | P3–P5 (terseness, cache, statusline) | Upside beyond 0.777, each with its own delta |
 
-M1 is independent. M2 gates M3–M6. M7 can proceed in parallel with M5–M6.
+M1 is independent and ships first. M2 gates everything after it, because from M4
+onward every exit criterion is a number the harness produces. **M4 and M5
+together are the path to first place; M6 and M7 are what let us hold it with the
+differentiator switched on.** M8 runs in parallel from M3. M9 is upside.
+
+The ordering is deliberate: we reach first place *with enforcement off* at M5,
+then re-enable enforcement at M6–M7 under an invariant that forbids it from
+costing what it cost before. That way the headline claim is never waiting on the
+riskiest work, and enforcement returns as a measured feature rather than a
+restored article of faith.
 
 **Decomposition.** This is a program, not one plan. The first implementation
-plan covers **M1–M3** — the flip, the harness, and the evidence that makes
-every later claim defensible — because those are fully specified here and
-unblock everything else. M4 (upstream PR), M5 (enforcement families), M6
-(levers) and M7 (`bench/recall/`) each get their own spec-and-plan cycle, since
-each depends on numbers M2 and M3 have not produced yet. Writing detailed steps
-for M5 today would be inventing them: the whole point is that the families are
-re-admitted on measurements that do not exist until M2 lands.
+plan covers **M1-M3** - the interim flip, the harness, and the confirmed
+evidence that every later exit criterion is measured against. M4 onward each
+get their own plan, because each is gated on a number the harness has not
+produced yet: writing detailed steps for the debug-loop fix today would be
+inventing them before the spike says what a hook can rewrite.
 
 ## 10. Risks
 
