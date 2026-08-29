@@ -175,6 +175,14 @@ export class SmartProcess {
       throw new Error('Command required for start operation');
     }
 
+    // SECURITY: argv mode, no shell -- there is no command-injection surface
+    // here and metacharacters in `args` are inert. What remains is a trust
+    // boundary rather than a bug: the caller picks the executable, its
+    // arguments, its working directory and its environment. That is the whole
+    // purpose of a `start` operation, so it is not validated away; it is
+    // stated in SMART_PROCESS_TOOL_DEFINITION so an operator wiring this
+    // server into an agent knows what they are granting. Do not add
+    // `shell: true` or build a command string here.
     const child = spawn(options.command, options.args || [], {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
@@ -706,7 +714,10 @@ export async function runSmartProcess(
 export const SMART_PROCESS_TOOL_DEFINITION = {
   name: 'smart_process',
   description:
-    'Intelligent process management with smart caching (88%+ token reduction). Start, stop, monitor processes with resource tracking and cross-platform support.',
+    'Intelligent process management with smart caching (88%+ token reduction). Start, stop, monitor processes with resource tracking and cross-platform support. ' +
+    'TRUST BOUNDARY: the "start" operation launches an arbitrary executable of the caller\'s choosing, with caller-supplied arguments, working directory and environment. ' +
+    'It runs in argv mode with no shell, so there is no command injection, but granting this tool is equivalent to granting local command execution as the user running the server. ' +
+    'Operators who do not want that should expose smart_processes (read-only monitoring) instead.',
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -725,7 +736,8 @@ export const SMART_PROCESS_TOOL_DEFINITION = {
       },
       command: {
         type: 'string' as const,
-        description: 'Command to execute (for start operation)',
+        description:
+          'Executable to launch (for start operation). Run directly in argv mode with no shell -- this is a path or binary name, not a shell command line, so pipes, redirection and metacharacters are inert here.',
       },
       args: {
         type: 'array' as const,
