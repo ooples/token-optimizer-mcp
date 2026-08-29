@@ -188,6 +188,8 @@ export class SmartProcess {
       env: { ...process.env, ...options.env },
       detached: options.detached,
       stdio: 'pipe',
+      shell: false,
+      windowsHide: true,
     });
 
     const pid = child.pid!;

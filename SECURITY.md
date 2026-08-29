@@ -11,7 +11,10 @@ branches, so a fix ships as a new patch release rather than a backport.
 | 6.0.x   | :white_check_mark: |
 | < 6.0   | :x:                |
 
-If you are pinned to an older line, the upgrade path is `npm install -g token-optimizer-mcp@latest`.
+If you are pinned to an older line, the upgrade path is
+`npm install -g @ooples/token-optimizer-mcp@latest`. Note the scope: the
+unscoped `token-optimizer-mcp` on npm is a different package and is not this
+project.
 
 ## Reporting a Vulnerability
 
@@ -53,7 +56,10 @@ Neither is a vulnerability; both are the point of the respective tools. They
 are listed here so the decision to wire this server into an autonomous agent is
 made with the scope visible.
 
-Process execution inside the tool surface goes through `src/utils/safe-exec.ts`,
-which is argv-mode and `shell: false` by construction. String-concatenated
-commands, `shell: true`, and interpolated `execSync` must not be reintroduced in
-tool code.
+Every process launch in tool code runs in argv mode with no shell. Most go
+through the helpers in `src/utils/safe-exec.ts`, which are `shell: false` by
+construction; the rest call `spawn` directly with an explicit `shell: false`
+(`smart-docker`, `smart-network`, `smart-system-metrics`, `run-node-bin`,
+`smart-process`). String-concatenated commands, `shell: true`, and interpolated
+`execSync` must not be reintroduced in tool code, whichever route a call site
+takes.
