@@ -124,14 +124,29 @@ jobs:
       - name: Build, because the stdio contract suite drives dist/
         run: npm run build
 
+      # ONE RUN OF THE SUITE, NOT THREE. `test:ci` is
+      # `jest --ci --coverage --maxWorkers=2`, so it already writes
+      # coverage/coverage-final.json, lcov.info and clover.xml -- the same files
+      # every step below consumes. Two further steps re-ran the WHOLE suite to
+      # regenerate them:
+      #
+      #   - "Generate coverage report" (npm run test:coverage)
+      #   - "Check coverage threshold" (npm run test:coverage again)
+      #
+      # Only the Node 22 shard carried them, which is why Node 22 alone timed
+      # out at the job's 15-minute limit while 24, 25 and 26 passed: three
+      # passes over 3,200 tests at --maxWorkers=2 does not fit, and the run was
+      # cancelled mid-way through the threshold step.
+      #
+      # The threshold step also enforced NOTHING. jest.config.js has
+      # `coverageThreshold` commented out ("disabled for initial release"), so
+      # `npm run test:coverage` cannot fail on coverage and its "minimum 80%"
+      # message was never reachable. Removing it loses no gate. Restoring a real
+      # one belongs in jest.config.js's coverageThreshold, where a failure would
+      # actually be produced, not in a shell `if` after a command that always
+      # exits 0.
       - name: Run tests with coverage
         run: npm run test:ci
-        env:
-          NODE_OPTIONS: --experimental-vm-modules
-
-      - name: Generate coverage report
-        if: matrix.node-version == '22'
-        run: npm run test:coverage
         env:
           NODE_OPTIONS: --experimental-vm-modules
 
@@ -144,17 +159,6 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
-
-      - name: Check coverage threshold
-        if: matrix.node-version == '22'
-        run: |
-          npm run test:coverage
-          if [ $? -ne 0 ]; then
-            echo "Error: Coverage threshold not met (minimum 80%)"
-            exit 1
-          fi
-        env:
-          NODE_OPTIONS: --experimental-vm-modules
 
       - name: Upload coverage artifacts
         if: matrix.node-version == '22' && always()
