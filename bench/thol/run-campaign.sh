@@ -48,8 +48,10 @@ SEGMENTS_MAX="${SEGMENTS_MAX:-5}"
 log() { printf '\n\033[1;36m>> %s\033[0m\n' "$*"; }
 
 stage_credentials() {
-  # auth/ is gitignored, so it does not exist on a fresh clone.
+  # auth/ is gitignored, so it does not exist on a fresh clone. 0700 so the
+  # directory cannot be listed by other local users even before the file lands.
   mkdir -p "$RIG_DIR/auth"
+  chmod 700 "$RIG_DIR/auth" 2>/dev/null || true
   [ -f "$HOST_CREDS" ] || { echo "!! no host credentials at $HOST_CREDS" >&2; exit 1; }
   node -e "
     const fs=require('fs');
@@ -57,12 +59,32 @@ stage_credentials() {
     if(!c.claudeAiOauth) throw new Error('no claudeAiOauth in host credentials');
     // Only the login block leaves the host. MCP OAuth secrets for unrelated
     // servers (github, supabase) stay put.
-    fs.writeFileSync(process.argv[2], JSON.stringify({claudeAiOauth:c.claudeAiOauth},null,2)+'\n');
+    //
+    // MODE 0600, AND CREATED THAT WAY RATHER THAN CHMODDED AFTERWARDS. The
+    // default is 0666 masked by umask, so on a multi-user host every local
+    // account could read a live OAuth access and refresh token. Passing the
+    // mode to writeFileSync closes the window in which a world-readable file
+    // exists at all; chmod after the write leaves one.
+    //
+    // The mode only applies on creation, so an existing loose file is fixed
+    // explicitly below.
+    const out = process.argv[2];
+    fs.writeFileSync(out, JSON.stringify({claudeAiOauth:c.claudeAiOauth},null,2)+'\n', { mode: 0o600 });
+    try { fs.chmodSync(out, 0o600); } catch { /* Windows has no POSIX modes */ }
     const left=(c.claudeAiOauth.expiresAt-Date.now())/60000;
     console.log('   token valid for ~'+left.toFixed(0)+' min');
     if(left<20) console.log('   WARNING: token expires soon; open Claude Code on the host to refresh it');
   " "$HOST_CREDS" "$RIG_DIR/auth/credentials.json"
 }
+
+# The staged copy is a live credential. Remove it when the campaign ends, however
+# it ends -- an earlier version left it lying in the working tree, where a later
+# `git add -A` on a branch without bench/.gitignore committed it to a public
+# repository.
+cleanup_credentials() {
+  rm -f "$RIG_DIR/auth/credentials.json" 2>/dev/null || true
+}
+trap cleanup_credentials EXIT INT TERM
 
 for i in "${!SEGMENTS[@]}"; do
   n=$((i+1))
