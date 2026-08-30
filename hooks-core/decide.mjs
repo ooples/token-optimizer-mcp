@@ -883,19 +883,38 @@ export function decide(payload, state, availableTools = undefined) {
     };
   }
 
-  if (tool === 'Write') {
-    if (!replacementAvailable(availableTools, 'smart_write')) return null;
-    const path = input.file_path;
-    const content = input.content || '';
-    if (!path || content.length < threshold) return null;
-    return {
-      key: `write:${path}`,
-      reason:
-        `You are writing ${KB(content.length)} KB to ${path}. Call the ` +
-        `token-optimizer MCP tool smart_write instead -- it stores the content ` +
-        `through the cache so later reads of this file diff against it.`,
-    };
-  }
+  // Write is deliberately NOT routed, and the asymmetry with Read is the reason.
+  //
+  // Every other redirection here refuses tokens that DO NOT EXIST YET: a Read's
+  // bytes, a Grep's match list and a Glob's path list are all produced by the
+  // tool, so refusing the call is what stops them entering context. The saving
+  // is real and the refusal pays for itself.
+  //
+  // A Write inverts that. Its `content` is authored by the model inside the very
+  // call being refused, so those tokens are already spent and unreclaimable by
+  // the time this function sees them. Refusing cannot un-spend them -- it can
+  // only demand an identical second copy through smart_write. The redirect
+  // therefore cost exactly one extra copy of the file, with certainty, every
+  // time, on a tool whose entire purpose is to reduce context spend.
+  //
+  // AND THE CACHE ENTRY IT CLAIMED TO BUY WAS NEVER BOUGHT. The refusal text
+  // promised smart_write would "store the content through the cache so later
+  // reads of this file diff against it". It does not: smart_write writes
+  // `generateCacheKey('file-write', {path})` while smart_read reads
+  // `generateCacheKey('smart-read', {path, options})` -- different namespaces,
+  // different keys. So the first smart_read after a smart_write already returned
+  // the whole file, exactly as it does after a built-in Write. Removing the
+  // redirect gives up nothing that was actually happening.
+  //
+  // Populating the smart-read cache after a write IS worth doing, and would
+  // make that first read a diff for the first time. It is deliberately not done
+  // here: the cache is a SQLite store owned by the MCP server process, and a
+  // PreToolUse hook cannot reach it without cross-process plumbing that does not
+  // belong in this change. Tracked in #350.
+  //
+  // Edit/MultiEdit above stay routed on purpose -- their inputs are a pair of
+  // small strings rather than the whole file, so this argument does not reach
+  // them.
 
   if (tool === 'Bash') {
     const command = input.command || '';
