@@ -67,8 +67,16 @@ function provenance() {
 
   const tmpIndex = join(dest, 'provenance.index');
   const withTmpIndex = { GIT_INDEX_FILE: tmpIndex };
-  // -a stages tracked modifications; untracked files are deliberately excluded,
-  // because they are not part of what npm pack ships either.
+  // `-A` STAGES UNTRACKED FILES TOO, and that is deliberate -- but it means the
+  // tree hash covers scratch files `npm pack` may not ship. An earlier comment
+  // here claimed the opposite, which would have made a reader trust a narrower
+  // identity than the hash actually has.
+  //
+  // Untracked is the right side to err on: this identifies THE INPUT THAT WAS
+  // BUILT, and an untracked source file is part of that input. Ignored paths
+  // (node_modules, dist, bench/thol/pkg) are excluded by gitignore either way,
+  // so the noise this admits is small and the alternative -- silently ignoring a
+  // file the build compiled -- is the failure that matters.
   git(['add', '-A', '--', '.'], withTmpIndex);
   const tree = git(['write-tree'], withTmpIndex);
   rmSync(tmpIndex, { force: true });

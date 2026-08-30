@@ -43,9 +43,12 @@ expired credentials.
 ## What the numbers mean
 
 **Cost ratio** is a task's cost divided by the same task's cost on the `control`
-arm *of the same campaign*. Ratios are comparable across campaigns; absolute
-dollars are not, because campaigns pin different Claude Code versions.
-
+arm *of the same campaign*. Ratios are comparable across campaigns **only when
+those campaigns share the same `THOL_REV`, task set, fixtures and scoring** --
+the ruler has to be the same for two measurements of it to mean anything.
+Absolute dollars are never comparable, because campaigns pin different Claude
+Code versions. A `THOL_REV` bump therefore starts a new campaign whose numbers
+do not line up with the previous one; see the publishing section below.
 **`score`** is the task verifier's 0–1 correctness, from ground truth that is
 never present in the workspace. **A cost figure without its paired score is not a
 result** — a compressor that eats the answer looks excellent on cost alone.
@@ -115,12 +118,19 @@ can trace to the versions that produced it is not evidence.
 
 Every report records the three things that make it reproducible:
 
-| | where it comes from |
-| --- | --- |
-| product commit | this repo's HEAD when `bench:build` packed it |
-| Claude Code version | `CLAUDE_VERSION` in `thol/Dockerfile` |
-| THOL revision | `THOL_REV` in `thol/Dockerfile` |
+| field | where it comes from | why it is not enough alone |
+| --- | --- | --- |
+| `tree` | git tree hash of exactly what `bench:pack` packed | the identity of record |
+| `dirty` | whether the working tree had uncommitted changes | a dirty tree is not the commit |
+| `head` / `branch` | the commit and branch it was built from | **cannot** identify a dirty input |
+| Claude Code version | `CLAUDE_VERSION` in `thol/Dockerfile` | |
+| THOL revision | `THOL_REV` in `thol/Dockerfile` | |
 
+**`tree` is the identity, not `head`.** `bench:build` packs the WORKING TREE, so
+two reports can share a commit and still have been built from different inputs.
+The tree hash is what tells them apart, and `dirty` is what warns you that the
+commit alone would mislead. Both are written to
+`results/provenance-<campaign>.json` by every campaign.
 **`THOL_REV` is pinned on purpose.** The harness is half of every measurement, so
 cloning its default branch would let their task, fixture or scoring changes move
 our numbers with nothing here having changed. Bumping it is a deliberate act that

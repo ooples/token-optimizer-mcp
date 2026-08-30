@@ -234,24 +234,31 @@ case "$MODE" in
     cd "$THOL_HOME"
     : "${THOL_CAMPAIGN:?set THOL_CAMPAIGN to the Claude Code version label}"
 
-    # THE TREE TRAVELS WITH THE DATA. runner.py stores the campaign label on
-    # every run row, so folding the tree hash into it is what makes a row
-    # self-describing: the number and the exact content that produced it live
-    # together, and rows from two different trees can never be pooled by
-    # accident. Provenance recorded only in a log line is provenance that is
-    # lost the moment someone queries the database.
+    # THE TREE IS RECORDED BESIDE THE CAMPAIGN, NOT INSIDE IT.
     #
-    # 12 hex characters, which is unambiguous in practice and keeps the label
-    # readable in leaderboard output.
-    if [ -f /opt/optimizer-provenance.json ]; then
-      TREE="$(node -e "
+    # An earlier version appended `tree:<hash>` to THOL_CAMPAIGN so provenance
+    # would ride along on every run row. That breaks EVERY run: runner.py gates
+    # on `cver.startswith(want)`, so a THOL_CAMPAIGN longer than the detected
+    # client version exits with "campaign pin mismatch" before any work happens.
+    # Verified: "2.1.251 (Claude Code)" does not start with
+    # "2.1.251 (Claude Code) tree:713161d04c37".
+    #
+    # The selftest gate did not catch it, because that check runs on the
+    # campaign path only -- which is exactly why a review caught it instead.
+    #
+    # So THOL_CAMPAIGN stays exactly the client version, and the tree is written
+    # beside the results, keyed by campaign, where a reader joins the two.
+    if [ -f /opt/optimizer-provenance.json ] && [ -d /results ] && [ -w /results ]; then
+      node -e "
+        const fs = require('fs');
         const p = require('/opt/optimizer-provenance.json');
-        process.stdout.write(p.tree.slice(0, 12) + (p.dirty ? '-dirty' : ''));
-      ")"
-      THOL_CAMPAIGN="$THOL_CAMPAIGN tree:$TREE"
-      export THOL_CAMPAIGN
+        const slug = String(process.env.THOL_CAMPAIGN).replace(/[^A-Za-z0-9.-]+/g, '_');
+        const out = '/results/provenance-' + slug + '.json';
+        fs.writeFileSync(out, JSON.stringify({ campaign: process.env.THOL_CAMPAIGN, ...p }, null, 2) + '
+');
+        console.log('   provenance -> ' + out);
+      "
     fi
-
     log "Campaign: $THOL_CAMPAIGN"
     python3 runner.py run "$@"
     log "Building leaderboard"
