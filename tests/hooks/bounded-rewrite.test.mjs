@@ -21,11 +21,12 @@ import {
 } from '../../hooks-core/rewrite.mjs';
 
 /** Runs a command through bash exactly as the client's Bash tool would. */
-function run(command, shellFlags = []) {
+function run(command, shellFlags = [], env = {}) {
   try {
     const stdout = execFileSync('bash', [...shellFlags, '-c', command], {
       encoding: 'utf8',
       timeout: 30_000,
+      env: { ...process.env, ...env },
     });
     return { stdout, status: 0 };
   } catch (error) {
@@ -418,6 +419,50 @@ describe('the shipped router bounds instead of refusing', () => {
   });
 });
 
+
+describe('colour is asked away at the source', () => {
+  // Colour is not a rounding error and it does not go away on its own. With the
+  // command IDENTICAL and only the invocation shape differing -- a direct node
+  // spawn, a plain bash pipe, and this wrapper -- a failing jest run carried 348
+  // ANSI sequences in all three. The convention that a tool drops colour when
+  // stdout is not a terminal simply does not hold for jest. Asking for no colour
+  // took that run from 7,301 bytes to 5,575 with its exit status intact.
+  //
+  // At the source rather than through a filter, because the bytes then never
+  // exist and the byte budget holds real text -- and because the obvious filter
+  // is dangerous: piping through sed measured the same saving while reporting
+  // EXIT 0 for a run that failed with 1.
+  const asked = (env) =>
+    run(
+      boundedRewrite('echo "[$NO_COLOR][$FORCE_COLOR]"').command,
+      [],
+      env
+    ).stdout.trim();
+
+  it('asks for no colour when the caller has no opinion', () => {
+    expect(asked({})).toBe('[1][0]');
+  });
+
+  it.each([
+    ['a caller who forces colour', { FORCE_COLOR: '3' }, '[1][3]'],
+    ['an empty value, which the spec treats as no opinion', { FORCE_COLOR: '' }, '[1][0]'],
+    // A default must not word-split on the way into `export`.
+    ['a value containing a space', { NO_COLOR: 'a b' }, '[a b][0]'],
+  ])('defers to %s', (_label, env, expected) => {
+    expect(asked(env)).toBe(expected);
+  });
+
+  it('and none of it survives into the caller', () => {
+    const after = run(
+      [
+        boundedRewrite('echo hi').command,
+        'echo "[${NO_COLOR-unset}][${FORCE_COLOR-unset}]"',
+      ].join('\n')
+    ).stdout.trim();
+
+    expect(after.split('\n').pop()).toBe('[unset][unset]');
+  });
+});
 
 describe('the command cannot restructure the wrapper', () => {
   // The command used to be interpolated between our subshell delimiters, so it

@@ -340,6 +340,44 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
   // successful command into exit 141 -- the exact status-masking this wrapper
   // exists to avoid. `cat >/dev/null` consumes the rest and emits nothing.
   const tailStage = tailBytes === 0 ? 'cat >/dev/null' : `tail -c ${tailBytes}`;
+  // ASK FOR NO COLOUR, RATHER THAN STRIPPING IT AFTERWARDS.
+  //
+  // Colour is not a rounding error and it does not go away on its own. Measured
+  // on a failing `jest tests/hooks/redact.test.mjs`, with the command IDENTICAL
+  // and only the invocation shape differing: a direct node spawn, a plain bash
+  // pipe, and this bounded wrapper each carried 348 ANSI sequences. The
+  // convention that a tool drops colour when stdout is not a terminal does not
+  // hold here -- jest emits it into a pipe -- so the bytes are real in
+  // production, and a model gains nothing from any of them.
+  //
+  // `NO_COLOR=1` and `FORCE_COLOR=0` each removed all 348: 7,301 bytes -> 5,575,
+  // a 23.6% cut, with the failing exit status intact. `TERM=dumb` changed
+  // nothing.
+  //
+  // AT THE SOURCE, NOT THROUGH A FILTER, for three reasons. The bytes then never
+  // exist, so the byte budget below holds real text instead of escape codes --
+  // a filter after the bound would spend the budget on them first. There is no
+  // extra process and no regex to get wrong on unusual output. And the obvious
+  // filter is actively dangerous: `... | sed 's/<esc>\[[0-9;]*[a-zA-Z]//g'`
+  // measured the same byte saving but reported EXIT 0 for a run that failed with
+  // 1 -- exactly the status masking this wrapper exists to prevent.
+  //
+  // Exported inside the subshell, so it reaches the command's children and dies
+  // with the subshell -- checked: after a bounded command the caller's own shell
+  // still shows both variables unset.
+  //
+  // A DEFAULT, NOT AN OVERRIDE. Setting them outright would also take colour
+  // away from someone who had deliberately put `FORCE_COLOR=1` in their own
+  // environment, which is a silent change to something they asked for. `:-`
+  // fills in only when the variable is unset or empty, and in the client this
+  // was measured in, both are unset (with TERM=xterm-256color, which is why the
+  // colour is there at all) -- so the saving is collected in the ordinary case
+  // and the deliberate case is left alone. A command-level
+  // `FORCE_COLOR=1 npm test` wins over either, since an assignment attached to
+  // a command outranks the exported environment.
+  const NO_COLOUR =
+    'export NO_COLOR="${NO_COLOR:-1}" FORCE_COLOR="${FORCE_COLOR:-0}";';
+
   // THE COMMAND GOES IN AS A LITERAL, NOT AS SHELL TEXT.
   //
   // Interpolating it between our subshell delimiters let it CLOSE them: with
@@ -381,7 +419,7 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
     command:
       `( _tok_pf=$(set +o 2>/dev/null | grep pipefail); ` +
       `{ set -o pipefail; } 2>/dev/null; ` +
-      `( eval "$_tok_pf" 2>/dev/null; eval ${quoted}\n) 2>&1 | ` +
+      `( eval "$_tok_pf" 2>/dev/null; ${NO_COLOUR} eval ${quoted}\n) 2>&1 | ` +
       `{ head -c ${headBytes}; ${tailStage}; } )`,
     maxBytes,
   };
