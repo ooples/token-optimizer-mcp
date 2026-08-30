@@ -71,6 +71,7 @@ import {
   standingRules,
 } from './inject.mjs';
 import { indexFile } from './staleness.mjs';
+import { recordAuthoredContent } from './authored.mjs';
 import { observedWrites, queueInvalidation } from './pending.mjs';
 import { archive, isArchived } from './transcript.mjs';
 import { harvestMode } from './harvest.mjs';
@@ -432,6 +433,18 @@ function codexStringLiteral(literal) {
   return decoded;
 }
 
+/**
+ * Cline's write tools, under the names the rest of the pipeline matches on.
+ *
+ * Cline calls them `write_to_file` and `replace_in_file`; authoredWrite tests
+ * membership of {Edit, MultiEdit, Write}, so without the rename the
+ * integration reads the right field and still never records an authored write.
+ */
+const CLINE_TOOL_NAMES = {
+  write_to_file: 'Write',
+  replace_in_file: 'Edit',
+};
+
 /** Convert client-specific lifecycle envelopes into the common tool shape. */
 function codexStringBindings(source) {
   const values = new Map();
@@ -516,17 +529,28 @@ export function normalizeClientPayload(clientName, event, raw) {
   if (clientName === 'cline') {
     const body = event === 'post-tool' ? raw.postToolUse : raw.preToolUse;
     if (!body) return raw;
+    // `toolName` IS THE FIELD CLINE SENDS. Reading only `body.tool` left
+    // `tool_name` null, and the handler exits on a null tool name -- so every
+    // Cline call fell out before authoredWrite or recordAuthoredContent could
+    // run, and the whole integration was a silent no-op. `body.tool` is kept as
+    // a fallback rather than replaced, because a payload carrying it costs
+    // nothing to accept.
+    const rawTool = body.toolName ?? body.tool;
     return {
       ...raw,
       session_id: raw.taskId ?? raw.task_id,
       cwd: raw.workspaceRoots?.[0] ?? raw.workspacePath,
       model: raw.model?.slug,
-      tool: body.tool,
+      // MAPPED TO THE CANONICAL NAMES the rest of the pipeline matches on.
+      // authoredWrite tests membership of {Edit, MultiEdit, Write}, so Cline's
+      // own spellings would still have missed even once the field was read.
+      tool: CLINE_TOOL_NAMES[rawTool] ?? rawTool,
       parameters: body.parameters,
     };
   }
 
   if (clientName === 'windsurf') {
+    // (see CLINE_TOOL_NAMES above for why the cline branch renames its tools)
     const info = raw.tool_info || {};
     const action = String(raw.agent_action_name || '');
     const tool = action.includes('read_code')
@@ -778,7 +802,7 @@ function projectBriefing() {
  * metrics. It never called forTouch/forCommand, so four advertised clients
  * accumulated a graph that their active model could not receive.
  */
-function observeAndInject(payload, state, episode, features) {
+function observeAndInject(payload, state, episode, features, authored = false) {
   const touched = touchedFiles(payload);
   const dirFor = (path) => wikiDir(projectRootFor(path, payload.cwd));
   const registerRoot = (root) => {
@@ -881,6 +905,32 @@ function observeAndInject(payload, state, episode, features) {
           hash: contentHash(path, source),
         });
         indexFile(dir, path, source);
+
+        // WHAT THIS SESSION WROTE -- and ONLY what it wrote.
+        //
+        // GATED ON A SUCCESSFUL MUTATION, because this loop is not one. It
+        // iterates `touchedFiles`, which covers every tool that NAMES a file,
+        // reads included, and its own comment above calls that "evidence about
+        // what was touched". Recording an authored base from a read would
+        // recreate the exact defect this store exists to avoid: a later
+        // smart_read in the same session would be told "no changes" about
+        // content the model never received.
+        //
+        // A failed write is excluded for the same reason -- the bytes on disk
+        // are not what we tried to write, so they are not a truthful base.
+        // `mutationSucceeded` is the existing conservative classifier, already
+        // used to gate edit counting, so this cannot disagree with the rest of
+        // the accounting about what a successful mutation is.
+        //
+        // Free when it does apply: the source is already in hand for the graph.
+        if (authored) {
+          recordAuthoredContent(
+            projectRootFor(path, payload.cwd),
+            payload.session_id,
+            path,
+            source
+          );
+        }
       } catch {
         // Graph bookkeeping must never break the user's tool call.
       }
@@ -1389,7 +1439,20 @@ async function runHook(clientName, event, invocation) {
   remember(payload, state);
   let graphContext = null;
   try {
-    graphContext = observeAndInject(payload, state, episode, features);
+    // Computed HERE because clientName, event and raw are in scope here and
+    // not inside observeAndInject -- a first attempt referenced them there and
+    // would have thrown at runtime on the one path that matters.
+    const authoredWrite =
+      event === 'post-tool' &&
+      new Set(['Edit', 'MultiEdit', 'Write']).has(String(payload.tool_name || '')) &&
+      mutationSucceeded(clientName, raw);
+    graphContext = observeAndInject(
+      payload,
+      state,
+      episode,
+      features,
+      authoredWrite
+    );
   } catch {
     // Delivery is an optimization. Fail open.
   }
