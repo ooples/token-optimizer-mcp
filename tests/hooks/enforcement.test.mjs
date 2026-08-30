@@ -162,7 +162,11 @@ describe('the shell bypass is closed', () => {
     });
     expect(r.decision).toBe('allow');
     expect(r.updatedInput.command).toContain(`cat ${big}`);
-    expect(r.updatedInput.command).toContain('tail -c');
+    // Either bounding stage counts: what is under test is that the call was
+    // bounded, not which of the two spellings is currently the default.
+    expect(r.updatedInput.command).toEqual(
+      expect.stringMatching(/head -c \d+|compact-stage\.mjs/)
+    );
   });
 
   test('a pipeline with no file operand is untouched', () => {
@@ -200,7 +204,11 @@ describe('the shell bypass is closed', () => {
     // RESOLVED. An unresolved path produces no verdict at all, so the router
     // would have allowed the call untouched and there would be no rewrite here.
     expect(r.decision).toBe('allow');
-    expect(r.updatedInput.command).toContain('tail -c');
+    // Either bounding stage counts: what is under test is that the call was
+    // bounded, not which of the two spellings is currently the default.
+    expect(r.updatedInput.command).toEqual(
+      expect.stringMatching(/head -c \d+|compact-stage\.mjs/)
+    );
   });
 
   test('the two spellings of one path are one identity, on every platform', () => {

@@ -329,6 +329,22 @@ function router(payload, env = {}) {
   };
 }
 
+/**
+ * Asserts that a rewritten command actually applies a bound.
+ *
+ * TWO STAGES ARE VALID, and which one is the default has already changed once.
+ * The wrapper ends either in the shell's own `head -c`/`tail -c` or in the node
+ * compactor, and pinning the assertion to one spelling made six tests fail for a
+ * deliberate default change rather than for a defect. What every one of them
+ * actually means is "this call was bounded", so that is what they say; the two
+ * mechanisms are then pinned individually, below.
+ */
+const expectBounded = (command) => {
+  expect(command).toEqual(
+    expect.stringMatching(/head -c \d+|compact-stage\.mjs/)
+  );
+};
+
 describe('the shipped router bounds instead of refusing', () => {
   const SEARCH = { tool_name: 'Bash', tool_input: { command: 'grep -rn needle .' } };
 
@@ -340,7 +356,7 @@ describe('the shipped router bounds instead of refusing', () => {
     expect(r.decision).toBe('allow');
     expect(r.updatedInput).not.toBeNull();
     expect(r.updatedInput.command).toContain('grep -rn needle .');
-    expect(r.updatedInput.command).toContain('tail -c');
+    expectBounded(r.updatedInput.command);
   });
 
   it('tells the model what it did, so the rewrite is not silent', () => {
@@ -369,7 +385,7 @@ describe('the shipped router bounds instead of refusing', () => {
       { TOKEN_OPTIMIZER_MODE: 'enforce' }
     );
 
-    expect(r.updatedInput.command).toContain('head -c');
+    expectBounded(r.updatedInput.command);
     expect(r.context).toContain('smart_grep');
     expect(r.context).toContain('bounds this command');
   });
@@ -391,9 +407,23 @@ describe('the shipped router bounds instead of refusing', () => {
 
       expect(r.decision).toBe('allow');
       expect(r.updatedInput.command).toContain('npm test');
-      expect(r.updatedInput.command).toContain('head -c');
+      expectBounded(r.updatedInput.command);
     }
   );
+
+  it.each([
+    ['on by default', {}, /compact-stage\.mjs/],
+    // One variable turns the stage off and the shell form comes back, which is
+    // the escape hatch if the compactor ever misbehaves in the field.
+    ['off by env', { TOKEN_OPTIMIZER_COMPACT: '0' }, /head -c \d+; tail -c \d+/],
+  ])('uses the %s bounding stage', (_label, env, expected) => {
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npm test' } },
+      { TOKEN_OPTIMIZER_MODE: 'assist', ...env }
+    );
+
+    expect(r.updatedInput.command).toEqual(expect.stringMatching(expected));
+  });
 
   it('leaves a test run alone when the optimizer is off', () => {
     const r = router(
