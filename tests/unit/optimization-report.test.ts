@@ -111,7 +111,9 @@ describe('get_optimization_report and the graph', () => {
     const line = report.formatted
       .split('\n')
       .find((l: string) => /hit rate\s+:/.test(l));
-    expect(line).toBeDefined();
+    // The line's CONTENT, not merely that a line was found: the issue asks for
+    // the hit rate beside the balance, and a found-but-empty line is not that.
+    expect(String(line)).toMatch(/hit rate\s+:\s*\S/);
   });
 
   it('states an unmeasured hit rate rather than printing it as zero', async () => {
@@ -122,7 +124,7 @@ describe('get_optimization_report and the graph', () => {
     const line = report.formatted
       .split('\n')
       .find((l: string) => /hit rate\s+:/.test(l));
-    expect(line).toBeDefined();
+    expect(String(line)).toMatch(/hit rate\s+:\s*\S/);
     if (/not measurable/.test(String(line))) {
       expect(line).not.toMatch(/\b0%/);
     }

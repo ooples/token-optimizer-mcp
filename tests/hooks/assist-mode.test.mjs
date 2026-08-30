@@ -143,6 +143,10 @@ describe('assist does not advertise routing it will not perform', () => {
     // every session, and under assist they describe a mechanism that is off --
     // which is the per-session overhead assist exists to remove.
     const out = startUnder('assist');
+    // The hook actually ran and emitted its payload. Three absences alone are
+    // also satisfied by a crashed hook returning '' -- which would suppress the
+    // routing advisory for entirely the wrong reason, and look identical here.
+    expect(out).toContain('Record what you work out');
     expect(out).not.toContain('Prefer only the registered');
     expect(out).not.toContain('These are recommendations');
     expect(out).not.toContain('denied only when');

@@ -120,7 +120,11 @@ describe('forCommand', () => {
       trigger: undefined,
     });
 
-    expect(forCommand(dir, load(dir), 'npx jest tests/', { sessionId: 's1' })).toBeTruthy();
+    // Asserted on the CLAIM, not on truthiness: forCommand returns text, and a
+    // truthy check passes on any other finding it might have matched instead.
+    expect(forCommand(dir, load(dir), 'npx jest tests/', { sessionId: 's1' })).toContain(
+      'bare jest skips ESM suites'
+    );
   });
 
   it('does not match an untriggered finding on a common word alone', () => {
@@ -153,7 +157,9 @@ describe('forCommand', () => {
       trigger: 'deploy\\.sh',
     });
 
-    expect(forCommand(dir, load(dir), './deploy.sh prod', { sessionId: 's1' })).toBeTruthy();
+    expect(forCommand(dir, load(dir), './deploy.sh prod', { sessionId: 's1' })).toContain(
+      'never by hand'
+    );
   });
 
   it('survives a malformed trigger regex instead of throwing on the hook path', () => {
@@ -246,7 +252,7 @@ describe('a model-supplied trigger cannot hang the hook', () => {
     // The finding must still be deliverable; it just cannot use the regex.
     seed({ key: 'f-redos', claim: 'Something about (a+)+b in a command.', trigger: '(a+)+b' });
     const out = forCommand(dir, load(dir), 'echo (a+)+b', { sessionId: 's1' });
-    expect(out).toBeTruthy();
+    expect(out).toContain('Something about (a+)+b');
   });
 
   it('does not consider an unbounded number of findings for one command', () => {

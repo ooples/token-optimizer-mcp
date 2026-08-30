@@ -170,6 +170,16 @@ describe('a path that would abort libuv', () => {
       cwd: process.cwd(),
     });
 
+    // The control, in the same test. touchedFiles drops any path it cannot
+    // stat, so returning nothing for everything would satisfy the absence check
+    // below while making the hook blind to every file it is supposed to see.
+    const clean = touchedFiles({
+      tool_name: 'Read',
+      tool_input: { file_path: join(process.cwd(), 'package.json') },
+      cwd: process.cwd(),
+    });
+    expect([...clean].map((t) => t.path ?? t).join(' ')).toMatch(/package\.json$/);
+
     expect([...touched].map((t) => t.path ?? t)).not.toContain(
       `/tmp/bad${ABORTS}.ts`
     );

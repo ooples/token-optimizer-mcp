@@ -85,8 +85,11 @@ describe('Claude Desktop Integration Harness', () => {
     });
 
     it('should initialize with tool capabilities', () => {
-      // Verify server has capabilities
-      expect(server).toBeDefined();
+      // Capabilities are internal, so they are observable here only through the
+      // handler-registration entry point the tool routes hang off. `toBeDefined`
+      // asserted nothing whatsoever -- it passed for any value at all.
+      expect(server).toBeInstanceOf(Server);
+      expect(typeof server.setRequestHandler).toBe('function');
     });
   });
 

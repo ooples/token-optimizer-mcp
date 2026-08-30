@@ -303,13 +303,19 @@ describe('the scan does not mistake prose for a call site', () => {
       '// A write the hook observes is invalidated eagerly by someOrphanFn, so',
       'export function other() { return 1; }',
     ].join('\n');
-    expect(stripComments(text)).not.toContain('someOrphanFn');
+    const stripped = stripComments(text);
+    // The absence is only half the claim. `not.toContain` alone also passes when
+    // stripComments returns '' for everything, which would blank real code and
+    // report every function in the repository as an orphan -- the exact
+    // permissive failure this file exists to prevent. Assert the code survived.
+    expect(stripped).toContain('export function other() { return 1; }');
+    expect(stripped).not.toContain('someOrphanFn');
   });
 
   it('ignores a name inside a block comment', () => {
-    expect(stripComments('/* calls someOrphanFn */ const x = 1;')).not.toContain(
-      'someOrphanFn'
-    );
+    const stripped = stripComments('/* calls someOrphanFn */ const x = 1;');
+    expect(stripped).toContain('const x = 1;');
+    expect(stripped).not.toContain('someOrphanFn');
   });
 
   it('keeps real code intact, including a URL that contains a double slash', () => {
@@ -340,7 +346,9 @@ describe('the scan does not mistake prose for a call site', () => {
   it('still strips a real comment that follows a string on the same line', () => {
     // The fix must not overshoot into keeping prose, which is the failure the
     // whole file was built against.
-    expect(stripComments("const u = 'x'; // someOrphanFn")).not.toContain('someOrphanFn');
+    const stripped = stripComments("const u = 'x'; // someOrphanFn");
+    expect(stripped).toContain("const u = 'x';");
+    expect(stripped).not.toContain('someOrphanFn');
   });
 
   it('recovers on the next line when a regex literal confuses the tracker', () => {
@@ -366,12 +374,18 @@ describe('the scan does not mistake prose for a call site', () => {
 describe('an import is not a call site', () => {
   it('discounts an import specifier', () => {
     const code = "import { cacheOrdered } from './cache.mjs';\nconst x = 1;";
-    expect(stripSpecifiers(code)).not.toContain('cacheOrdered');
+    const stripped = stripSpecifiers(code);
+    // Only the braces go. Blanking the whole statement would also satisfy
+    // `not.toContain`, so the surviving module path and following line are what
+    // separate 'discounted the specifier' from 'ate the file'.
+    expect(stripped).toContain("'./cache.mjs';");
+    expect(stripped).toContain('const x = 1;');
+    expect(stripped).not.toContain('cacheOrdered');
   });
 
   it('discounts a re-export specifier', () => {
-    expect(stripSpecifiers("export { cacheOrdered } from './cache.mjs';")).not.toContain(
-      'cacheOrdered'
+    expect(stripSpecifiers("export { cacheOrdered } from './cache.mjs';")).toBe(
+      " exportfrom  './cache.mjs';"
     );
   });
 

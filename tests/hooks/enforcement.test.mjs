@@ -285,6 +285,11 @@ describe('a refusal must not cost more than the call it replaces', () => {
         content: 'y'.repeat(80_000),
       },
     });
+    // THE DECISION FIRST. `not.toContain` on the reason is satisfied by the
+    // router throwing and returning an error object, which is not the behaviour
+    // under test -- this exact shape is why the no-vacuous-assertions rule
+    // exists. Pin the allow, then say what the reason must not carry.
+    expect(r.decision).toBe('allow');
     // An allowed call may carry no reason at all, which is the strongest form
     // of passing -- hence the `|| ''` rather than asserting a reason exists.
     expect(r.reason || '').not.toContain('smart_write');

@@ -55,7 +55,9 @@ describe('tool-outcome carries output and exit', () => {
 
   it('redacts secrets out of captured output', () => {
     outcome({ output: 'API_TOKEN=abcdef123456 failed', exit: 1 });
-    expect(latest().output).not.toContain('abcdef123456');
+    // Whole string, not an absence: recording '' would satisfy `not.toContain`
+    // while destroying the diagnostic the capture exists to keep.
+    expect(latest().output).toBe('API_TOKEN=[redacted] failed');
   });
 
   it('caps output so a huge log is never stored whole', () => {
@@ -122,12 +124,18 @@ describe('tool-outcome carries output and exit', () => {
       output: `${'x'.repeat(4084)} ghp_abcdefghijklmnopqrst`,
       exit: 1,
     });
-    expect(latest().output).not.toContain('ghp_abcdef');
+    // Both halves of the ordering claim. The secret is gone AND the 4084
+    // characters before it are intact -- redacting by emptying the buffer would
+    // pass an absence check while losing every outcome the capture records.
+    expect(latest().output).toBe(`${'x'.repeat(4084)} [redacted]`);
   });
 
   it('does not disturb the injection join the pipeline already performs', () => {
     outcome({ output: 'x', exit: 1 });
-    expect(latest().joinMethod).toBeDefined();
+    // No injection preceded this outcome, so the join is honestly 'none'.
+    // `toBeDefined` passed on any value at all, including a join method that
+    // silently claimed attribution the pipeline never established.
+    expect(latest().joinMethod).toBe('none');
   });
 
   it('still joins an outcome to its injection by tool call id', () => {

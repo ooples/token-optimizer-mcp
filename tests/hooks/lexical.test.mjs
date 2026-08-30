@@ -84,12 +84,13 @@ describe('lexical', () => {
     });
 
     it('omits findings with no matching term rather than scoring them zero', () => {
-      // Discrimination: (a) naive count-sort and (b) no-sort passthrough
-      // both also omit a total non-match, so this assertion alone does not
-      // discriminate against either confound -- it is a correctness check,
-      // not a ranking one. The preceding and following tests carry that.
+      // Stated as the whole result rather than as the absence of 'c'. Both
+      // confounds this replaces -- (a) naive count-sort and (b) no-sort
+      // passthrough -- also omit a total non-match, and so does rank()
+      // returning [] for everything, so an absence check cannot tell any of
+      // them apart. The full list carries the omission AND the ranking.
       const keys = rank('retry backoff', FINDINGS).map((r) => r.finding.key);
-      expect(keys).not.toContain('c');
+      expect(keys).toEqual(['a', 'b']);
     });
 
     it('reorders all three matches relative to their input order when ranking requires it', () => {

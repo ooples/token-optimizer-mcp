@@ -203,8 +203,12 @@ describe('Smart Schema - Import Type Corrections', () => {
           connectionString: `sqlite:${file}`,
           mode: 'full',
         });
-        expect(result).toBeDefined();
-        expect(result.result).toBeDefined();
+        // Full mode emits JSON, not the markdown the other modes render, so the
+        // assertion is on the parsed structure -- which is also what makes it
+        // able to fail when the introspection returns no tables.
+        const parsed = JSON.parse(result.result);
+        expect(parsed.schema.databaseType).toBe('sqlite');
+        expect(parsed.schema.tables.length).toBeGreaterThan(0);
       } finally {
         cleanup();
       }
@@ -225,8 +229,10 @@ describe('Smart Schema - Import Type Corrections', () => {
         forceRefresh: false,
       });
 
-      expect(result1).toBeDefined();
-      expect(result2).toBeDefined();
+      // `cached` is the only field that states the subject of this test. Two
+      // `toBeDefined` checks passed whether or not the cache existed at all.
+      expect(result1.cached).toBe(false);
+      expect(result2.cached).toBe(true);
     });
 
     it('should bypass cache when forceRefresh is true', async () => {
@@ -259,7 +265,8 @@ describe('Smart Schema - Import Type Corrections', () => {
         analyzeTables: ['users', 'orders'],
       });
 
-      expect(result).toBeDefined();
+      expect(result.result).toContain('Schema Analysis');
+      expect(result.result).toContain('Missing Indexes');
     });
 
     it('should include data (row counts) when requested', async () => {
@@ -269,7 +276,7 @@ describe('Smart Schema - Import Type Corrections', () => {
         includeData: true,
       });
 
-      expect(result).toBeDefined();
+      expect(result.result).toContain('Schema Summary');
     });
   });
 

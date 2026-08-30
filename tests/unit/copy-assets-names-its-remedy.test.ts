@@ -94,6 +94,10 @@ describe('copyAssets when the vendored dependency is missing', () => {
       message = (error as Error).message;
     }
 
+    // It must actually have thrown, and thrown the named error. Without this,
+    // `message` stays '' when copyAssets succeeds and the absence below is
+    // vacuously true -- the test would pass with the guard deleted.
+    expect(message).toMatch(/chart\.js/);
     expect(message).not.toMatch(/ENOENT|lstat/);
   });
 });

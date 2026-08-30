@@ -54,6 +54,10 @@ describe('the reason given for an unreadable anchor', () => {
   it('does not claim the file was deleted or stopped being readable', () => {
     const { reason } = checkAnchor(missing());
 
+    // What it DOES say, before what it must not. Two absences alone are also
+    // satisfied by an empty reason, and a stale finding served with no reason
+    // at all is the same failure as one served with a fabricated cause.
+    expect(reason).toMatch(/not readable/);
     expect(reason).not.toMatch(/no longer/i);
     expect(reason).not.toMatch(/deleted/i);
   });

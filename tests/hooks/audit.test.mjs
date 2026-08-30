@@ -444,6 +444,13 @@ describe('the standing-context panel', () => {
   test('omits the panel entirely when there is no standing context', () => {
     // Silence rather than an empty heading: a panel that always prints costs
     // tokens in every audit on a project with no CLAUDE.md.
+    // The control: the SAME renderer prints the panel when there IS standing
+    // context. Without it, a renderer that produced nothing at all would
+    // satisfy every absence below and read as correct silence.
+    expect(renderAudit(dir, [], { standing: verdicts }).text).toMatch(
+      /Standing context -- charged/
+    );
+
     for (const empty of [null, undefined, []]) {
       const out = renderAudit(dir, [], { standing: empty });
       expect(out.text).not.toMatch(/Standing context -- charged/);

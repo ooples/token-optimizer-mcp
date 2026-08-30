@@ -136,6 +136,10 @@ describe('a finding reaches every identical copy', () => {
     const different = vendor('lib/other.mjs', 'export const x = 2;' + NL);
     findingAt('only-here', source);
 
+    // Reached from its own file first. Without this, keysFor() returning [] for
+    // everything -- content addressing switched off entirely -- would satisfy
+    // the absence below and read as correct isolation.
+    expect(keysFor(source)).toContain('only-here');
     expect(keysFor(different)).not.toContain('only-here');
   });
 });

@@ -138,9 +138,14 @@ describe('responses survive JSON', () => {
     it('never returns a variable value', async () => {
       const text = JSON.stringify(await analyze());
 
-      for (const value of Object.values(SECRETS)) {
-        if (value.startsWith('CANARY')) expect(text).not.toContain(value);
-      }
+      const canaries = Object.values(SECRETS).filter((v) =>
+        v.startsWith('CANARY')
+      );
+      // Asserted before the loop. A fixture whose values stopped being canaries
+      // leaves the guarded loop iterating zero times, asserting nothing, and
+      // reporting that no secret leaked.
+      expect(canaries.length).toBeGreaterThan(0);
+      for (const value of canaries) expect(text).not.toContain(value);
     });
 
     it('still returns every variable NAME, which is the useful part', async () => {
@@ -154,6 +159,10 @@ describe('responses survive JSON', () => {
       // used to echo them into its own issue messages as well.
       const text = JSON.stringify(await analyze(true));
 
+      // The NAMES must survive -- that is the useful half, and it proves the
+      // security path actually produced a response. A run that failed and
+      // returned an error object satisfies both absences below.
+      for (const key of Object.keys(SECRETS)) expect(text).toContain(key);
       expect(text).not.toContain('CANARY_password_hunter2_correct');
       expect(text).not.toContain('CANARY_jwt_aaaabbbbccccddddeeee');
     });

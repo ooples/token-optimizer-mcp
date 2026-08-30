@@ -133,9 +133,13 @@ describe('Smart Migration - Import Type Corrections', () => {
       const result1 = await smartMigration.run({ action: 'list' });
       const result2 = await smartMigration.run({ action: 'list' });
 
-      expect(result1).toBeDefined();
-      expect(result2).toBeDefined();
-      // Second call may be cached (implementation-dependent)
+      // The cache is observable, and this is how. The first call renders the
+      // migration list; the second returns the abbreviated cached form and says
+      // so. Two `toBeDefined` checks could not tell a cache hit from a cold
+      // second read -- which is the only thing this test is about.
+      expect(result1.result).toContain('# Migrations');
+      expect(result2.result).toContain('# Cached');
+      expect(result2.result).toContain('force=true');
     });
 
     it('should respect force flag to bypass cache', async () => {

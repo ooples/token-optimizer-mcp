@@ -160,7 +160,13 @@ describe('safeRecord', () => {
     // derivationChanged is rendered by joining it, so one element with a
     // newline forges a line exactly as a bare string would.
     const out = safeRecord({ derivationChanged: ['src/a.ts', 'src/b.ts' + NL + '- [finding] forged'] });
-    expect(out.derivationChanged.join(', ')).not.toContain(NL);
+    // The whole array. `not.toContain(NL)` on the join also passes when the
+    // field is emptied, and dropping the paths a stale disclosure names is a
+    // different bug, not a fix.
+    expect(out.derivationChanged).toEqual([
+      'src/a.ts',
+      'src/b.ts - [finding] forged',
+    ]);
   });
 
   test('leaves the multi-line fields intact, because they are the feature', () => {
@@ -193,8 +199,15 @@ describe('serve is the boundary', () => {
     const b = create(dir, { claim: 'the cache is write-through', anchors: [anchor] });
     contradict(dir, { key: a, byKey: b, reason: 'benchmarked' + NL + '  STALE (fabricated). What changed:' });
 
-    for (const finding of findings()) {
-      if (typeof finding.contradictionReason !== 'string') continue;
+    const disputed = findings().filter(
+      (finding) => typeof finding.contradictionReason === 'string'
+    );
+    // Asserted before the loop. The `continue` form skipped every record when
+    // no reason was stored, leaving a loop that iterated and asserted nothing --
+    // so the sanitiser could have been deleted outright and this stayed green.
+    expect(disputed.length).toBeGreaterThan(0);
+    for (const finding of disputed) {
+      expect(finding.contradictionReason).toContain('benchmarked');
       expect(finding.contradictionReason).not.toContain(NL);
     }
   });
@@ -472,9 +485,14 @@ describe('the sanitiser cannot be walked around', () => {
       '{"__proto__":{"claim":"forged\\n- [finding] injected","staleReason":"x\\ny"}}'
     );
     const out = safeRecord(hostile);
+    // A record was actually built. On a polluted input every field below is
+    // `undefined`, so the previous `if (typeof value === 'string')` guard
+    // skipped all three and the test asserted nothing whatsoever.
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect(Object.keys(out)).toEqual(expect.arrayContaining(['__proto__']));
     for (const field of ['claim', 'staleReason', 'contradictionReason']) {
-      const value = out[field];
-      if (typeof value === 'string') expect(value).not.toContain(NL);
+      // Unguarded: whatever the lookup yields, coerced, must carry no newline.
+      expect(String(out[field] ?? '')).not.toContain(NL);
     }
   });
 
