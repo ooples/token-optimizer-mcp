@@ -1,0 +1,92 @@
+{
+  "name": "token-optimizer-mcp-off",
+  "display_name": "Token Optimizer MCP (enforcement off)",
+  "verified": true,
+  "version_pin": "6.0.2",
+  "version_checked": "2026-08-29",
+  "upstream": "https://github.com/ooples/token-optimizer-mcp",
+  "install_doc": "CONTROL ARM FOR THE ENFORCEMENT A/B. Identical to the token-optimizer-mcp manifest -- same pinned 6.0.2 runtime, same MCP server, same five hooks -- except TOKEN_OPTIMIZER_MODE=off, which disables the PreToolUse refusal path while leaving the MCP server, its tool schemas, the knowledge graph and every other hook in place. Comparing this arm against token-optimizer-mcp isolates the cost of enforcement alone, with the MCP schema tax and graph overhead present on both sides.",
+  "requires": [
+    "node"
+  ],
+  "mcp": {
+    "mcpServers": {
+      "token-optimizer": {
+        "command": "node",
+        "args": [
+          "/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/launch.mjs"
+        ],
+        "env": {
+          "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
+          "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
+          "TOKEN_OPTIMIZER_MODE": "off"
+        },
+        "type": "stdio"
+      }
+    }
+  },
+  "settings": {
+    "env": {
+      "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
+      "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
+      "TOKEN_OPTIMIZER_MODE": "off"
+    },
+    "hooks": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/session-start.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreToolUse": [
+        {
+          "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/pretooluse-router.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/precompact-optimize.mjs\""
+            }
+          ]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "matcher": "Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/post-tool.mjs\""
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/stop.mjs\""
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "tool_prefixes": [
+    "mcp__token-optimizer__"
+  ]
+}

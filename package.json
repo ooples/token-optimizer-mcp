@@ -107,7 +107,11 @@
     "dashboard:verify-live": "node scripts/verify-live-dashboard.mjs",
     "dashboard:attribution-smoke": "node scripts/run-dashboard-attribution-smoke.mjs",
     "dashboard:audit-savings": "node scripts/audit-token-savings.mjs",
-    "explore:wiki": "node scripts/explore-wiki.mjs"
+    "explore:wiki": "node scripts/explore-wiki.mjs",
+    "bench:build": "npm run bench:pack && docker build -f bench/thol/Dockerfile -t thol-rig:local bench/",
+    "bench:screen": "bash bench/thol/run-campaign.sh",
+    "bench:confirm": "REPS=3 bash bench/thol/run-campaign.sh",
+    "bench:pack": "node scripts/bench-pack.mjs"
   },
   "repository": {
     "type": "git",

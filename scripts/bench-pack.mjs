@@ -1,0 +1,148 @@
+#!/usr/bin/env node
+/**
+ * Packs the working tree into the benchmark image's build context.
+ *
+ * WHY THE HARNESS MUST NOT INSTALL FROM THE REGISTRY. The point of keeping
+ * bench/ in this repo is that a behaviour change and its measured effect land
+ * together. An image that installed the published package could not measure
+ * anything unreleased -- and would fail SILENTLY rather than loudly: a benchmark
+ * arm pinning a mode the published build does not recognise falls back to the
+ * default, so two arms become identical and the campaign yields a meaningless
+ * comparison instead of an error.
+ *
+ * The tarball is written to a fixed name so the Dockerfile does not have to know
+ * the version, and is gitignored so a build artifact never lands in a commit.
+ */
+
+import { execFileSync } from 'node:child_process';
+import {
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  readFileSync,
+  writeFileSync,
+  existsSync,
+} from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const dest = join(root, 'bench', 'thol', 'pkg');
+
+rmSync(dest, { recursive: true, force: true });
+mkdirSync(dest, { recursive: true });
+
+const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+
+/**
+ * Records WHICH TREE produced this tarball, not merely which version.
+ *
+ * A version string cannot distinguish two branches, a branch from master, or a
+ * clean tree from a dirty one -- and every one of those measures a different
+ * product. "Built from 6.0.2" is exactly the claim that let an image pinned to
+ * 6.0.1 measure 6.0.2 without anyone noticing.
+ *
+ * So the provenance is the git tree hash: the content hash of what was actually
+ * packed, identical for two checkouts with identical content and different the
+ * moment one byte differs. That makes a result attributable to a precise tree
+ * regardless of branch, merge state, or whether the work has landed on master.
+ *
+ * `git write-tree` needs a clean index, so the working tree is staged into a
+ * TEMPORARY index first -- this must never touch the user's real index.
+ */
+function provenance() {
+  const git = (args, env = {}) => {
+    try {
+      return execFileSync('git', args, {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...process.env, ...env },
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      return '';
+    }
+  };
+
+  const tmpIndex = join(dest, 'provenance.index');
+  const withTmpIndex = { GIT_INDEX_FILE: tmpIndex };
+  // `-A` STAGES UNTRACKED FILES TOO, and that is deliberate -- but it means the
+  // tree hash covers scratch files `npm pack` may not ship. An earlier comment
+  // here claimed the opposite, which would have made a reader trust a narrower
+  // identity than the hash actually has.
+  //
+  // Untracked is the right side to err on: this identifies THE INPUT THAT WAS
+  // BUILT, and an untracked source file is part of that input. Ignored paths
+  // (node_modules, dist, bench/thol/pkg) are excluded by gitignore either way,
+  // so the noise this admits is small and the alternative -- silently ignoring a
+  // file the build compiled -- is the failure that matters.
+  git(['add', '-A', '--', '.'], withTmpIndex);
+  const tree = git(['write-tree'], withTmpIndex);
+  rmSync(tmpIndex, { force: true });
+
+  return {
+    version,
+    tree,
+    head: git(['rev-parse', 'HEAD']),
+    branch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
+    // A dirty tree is not a defect -- measuring unmerged work is the point --
+    // but it must be RECORDED, so a number can never be silently attributed to
+    // a commit that does not contain the code that produced it.
+    dirty: git(['status', '--porcelain']).length > 0,
+    packedAt: new Date().toISOString(),
+  };
+}
+
+const prov = provenance();
+if (!prov.tree) {
+  throw new Error(
+    'could not compute a git tree hash; refusing to pack an unattributable build'
+  );
+}
+writeFileSync(join(dest, 'provenance.json'), JSON.stringify(prov, null, 2) + '\n');
+process.stdout.write(
+  `packing tree ${prov.tree.slice(0, 12)} (${prov.branch}${prov.dirty ? ', dirty' : ''}) at version ${version}\n`
+);
+
+// BUILD EXPLICITLY. `npm pack` runs prepack/prepare/postpack -- NOT
+// prepublishOnly, which is where this package defines its build. An earlier
+// version of this script assumed otherwise and was wrong in the most dangerous
+// direction: with a stale dist/ on disk the tarball looked fine while carrying
+// compiled code that did not match the source, so the harness would grade a
+// build nobody wrote. With dist/ absent it packed ZERO compiled files -- proved
+// by deleting dist/ and counting `package/dist/` entries in the tarball, which
+// came back 0.
+//
+// So the build runs here, unconditionally, before the pack.
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const runNpm = (args) =>
+  execFileSync(npm, args, {
+    cwd: root,
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  });
+
+runNpm(['run', 'build']);
+
+// FAIL LOUDLY IF THE BUILD PRODUCED NOTHING. A tarball without a compiled
+// server installs cleanly and fails at MCP handshake time, deep inside a
+// container, where it reads as a harness fault rather than a packaging one.
+const entry = join(root, 'dist', 'server', 'index.js');
+if (!existsSync(entry)) {
+  throw new Error(
+    `build produced no ${entry}; refusing to pack a tarball with no server`
+  );
+}
+
+runNpm(['pack', '--pack-destination', dest, '--loglevel', 'error']);
+
+const packed = readdirSync(dest).filter((name) => name.endsWith('.tgz'));
+if (packed.length !== 1) {
+  throw new Error(
+    `expected exactly one tarball in ${dest}, found ${packed.length}: ${packed.join(', ')}`
+  );
+}
+
+renameSync(join(dest, packed[0]), join(dest, 'optimizer.tgz'));
+process.stdout.write(`bench/thol/pkg/optimizer.tgz <- ${packed[0]}\n`);

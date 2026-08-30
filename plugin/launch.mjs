@@ -91,6 +91,46 @@ const REFRESH_INTERVAL_MS = numericEnv(
   6 * 60 * 60 * 1000
 );
 
+/**
+ * An exact version to serve, or '' for the normal @latest-tracking behaviour.
+ *
+ * Without this there is no way to say which build runs. `current` and the npx
+ * cache decide, and the npx cache is not a property of the install at all: on a
+ * cold runtime the shim serves whatever copy that cache happens to hold, so a
+ * machine with 6.0.2 installed was observed serving 6.0.0 on first launch.
+ * REFRESH_INTERVAL_MS could not prevent it -- that only throttles the
+ * background refresh, it does not choose what is served now.
+ *
+ * When set, this is authoritative: the npx cache is only accepted if it is the
+ * pinned version, no background refresh runs (a refresh exists to move off the
+ * current version, which is precisely what a pin forbids), and a missing
+ * pinned build is installed at that exact version rather than at latest.
+ */
+const PINNED_VERSION = String(
+  process.env.TOKEN_OPTIMIZER_VERSION || ''
+).trim();
+
+/**
+ * An exact release, as opposed to anything npm would resolve for us.
+ *
+ * Ranges (`^9.0.0`), dist-tags (`latest`, `next`) and aliases are all valid
+ * `npm install` specs and all resolve to a version chosen by the registry --
+ * which defeats a pin, because the value recorded would be the spec rather than
+ * what actually installed. Prereleases and build metadata are allowed; a
+ * leading `v` is not, so the value matches the directory name it becomes.
+ *
+ * THE OFFICIAL SEMVER GRAMMAR, not an approximation of it. A looser pattern
+ * accepted `01.2.3`, `1.02.3`, `1.2.3-01` and `1.2.3-alpha.` -- none of which
+ * are versions npm will ever publish, so each would pass validation here and
+ * then fail at install time with a registry error rather than the clear message
+ * this check exists to give. Leading zeros are rejected in the numeric
+ * identifiers, and a prerelease is dot-separated identifiers that are each
+ * either numeric-without-leading-zero or alphanumeric, which is what stops a
+ * trailing dot.
+ */
+const EXACT_VERSION =
+  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
 function numericEnv(name, fallback) {
   const raw = process.env[name];
   if (raw == null || raw === '') return fallback;
@@ -154,7 +194,7 @@ function compareVersions(a, b) {
  * Computed from the default/env cache path (no `npm` spawn); any layout surprise
  * is swallowed and we simply fall through to a synchronous install.
  */
-function findCachedEntry() {
+function findCachedEntry(wantVersion = null) {
   const cacheRoot =
     process.env.npm_config_cache ||
     (IS_WIN
@@ -165,14 +205,21 @@ function findCachedEntry() {
   try {
     for (const hash of readdirSync(npxDir)) {
       const info = pkgInfo(join(npxDir, hash, 'node_modules', PACKAGE));
-      if (info && (!best || compareVersions(info.version, best.version) > 0)) {
-        best = info;
+      if (!info) continue;
+      // A PIN ASKS A DIFFERENT QUESTION THAN "what is newest here".
+      // Returning only the highest version meant a cache holding both 9.9.9 and
+      // 10.0.0 answered a 9.9.9 pin with 10.0.0, which the caller then declined
+      // -- so an offline launch failed with the requested build already on disk.
+      if (wantVersion) {
+        if (info.version === wantVersion) return info;
+        continue;
       }
+      if (!best || compareVersions(info.version, best.version) > 0) best = info;
     }
   } catch {
     /* no npx cache dir — fall through */
   }
-  return best;
+  return wantVersion ? null : best;
 }
 
 /** Resolve the currently-pointed entry, validating it exists. */
@@ -199,7 +246,7 @@ function atomicWrite(file, contents) {
  * entry path — WITHOUT flipping `current`. Returns null on any failure (offline,
  * registry down, install error) so callers fall back to what they already have.
  */
-function installLatest() {
+function installLatest(spec = 'latest') {
   mkdirSync(VERSIONS_DIR, { recursive: true });
   const staging = join(
     RUNTIME,
@@ -211,7 +258,7 @@ function installLatest() {
       NPM,
       [
         'install',
-        `${PACKAGE}@latest`,
+        `${PACKAGE}@${spec}`,
         '--prefix',
         staging,
         '--no-save',
@@ -592,6 +639,33 @@ function runServer(entry) {
   });
 }
 
+/**
+ * Installs exactly PINNED_VERSION and returns its entry, or null.
+ *
+ * VERIFIES WHAT ARRIVED rather than trusting the spec: npm can resolve a spec
+ * to a different manifest version, and writing PINNED_VERSION into `current`
+ * without checking would make the marker claim a version that is not what sits
+ * in the directory. The caller must hold the lock.
+ */
+function installPinnedVersion() {
+  const entry = installLatest(PINNED_VERSION);
+  if (!entry) return null;
+
+  const installed = pkgInfo(
+    join(VERSIONS_DIR, PINNED_VERSION, 'node_modules', PACKAGE)
+  );
+  if (installed?.version !== PINNED_VERSION) {
+    log(
+      `install of ${PACKAGE}@${PINNED_VERSION} produced version ` +
+        `${installed?.version ?? 'unknown'}; refusing to serve it`
+    );
+    return null;
+  }
+
+  atomicWrite(CURRENT_FILE, PINNED_VERSION);
+  return entry;
+}
+
 function main() {
   // Ensure the runtime dir exists BEFORE anything else — runRefresh's lock is a
   // mkdir of RUNTIME/.refresh.lock, which fails (and silently no-ops the refresh)
@@ -601,6 +675,77 @@ function main() {
 
   if (process.argv.includes('--refresh')) {
     runRefresh();
+    return;
+  }
+
+  // A PIN SHORT-CIRCUITS EVERY OTHER SOURCE. Deliberately ahead of `current`
+  // and of the npx cache, because both of those are exactly what a pin exists
+  // to overrule, and no background refresh is started: a refresh's job is to
+  // move off the version being served, which is what the pin forbids.
+  if (PINNED_VERSION) {
+    let pinned = entryFor(join(VERSIONS_DIR, PINNED_VERSION));
+
+    if (!pinned) {
+      // The npx cache is acceptable only when it happens to hold the pinned
+      // version. Serving its newest copy is the unpinned behaviour, and is the
+      // bug this branch exists to prevent.
+      const cached = findCachedEntry(PINNED_VERSION);
+      if (cached) pinned = cached.entry;
+    }
+
+    // A PIN MUST BE AN EXACT VERSION, checked before anything is installed.
+    // `npm install <pkg>@<spec>` also accepts ranges, dist-tags and aliases,
+    // and those resolve to whatever the registry decides -- so `^9.0.0` or
+    // `latest` would install one version while this code recorded the spec
+    // string as though it were the version. A pin whose value cannot be
+    // verified afterwards is not a pin.
+    if (!EXACT_VERSION.test(PINNED_VERSION)) {
+      log(
+        `TOKEN_OPTIMIZER_VERSION must be an exact version like 6.0.2, ` +
+          `not a range, dist-tag or alias (got "${PINNED_VERSION}"). ` +
+          `Unset it to track latest.`
+      );
+      process.exit(1);
+    }
+
+    if (!pinned) {
+      log(`pinned to ${PINNED_VERSION}; installing that exact version…`);
+
+      // RETRY THE LOCK, do not merely wait for the directory. The lock is
+      // shared with `runRefresh()`, which installs `latest` rather than this
+      // pin -- so a launch that only watched VERSIONS_DIR would sit through its
+      // entire budget and exit, even though the lock became free seconds in and
+      // the refresh was never going to produce the pinned version. Each pass
+      // therefore tries the lock first, and also notices a directory that
+      // another pinned launch may have produced in the meantime.
+      for (let i = 0; i < 120 && !pinned; i++) {
+        if (acquireLock()) {
+          try {
+            pinned = installPinnedVersion();
+          } finally {
+            releaseLock();
+          }
+          break; // we held the lock and attempted the install; that is the answer
+        }
+        pinned = entryFor(join(VERSIONS_DIR, PINNED_VERSION));
+        if (pinned) break;
+        sleepSync(500);
+      }
+    }
+
+    if (!pinned) {
+      // FAIL LOUDLY RATHER THAN FALLING BACK. Someone who pinned a version and
+      // silently got a different one is worse off than someone who got an
+      // error: the whole point of the pin is knowing what ran.
+      log(
+        `could not obtain pinned version ${PINNED_VERSION}. ` +
+          `Unset TOKEN_OPTIMIZER_VERSION to track latest, or install it once: ` +
+          `npx -y ${PACKAGE}@${PINNED_VERSION}`
+      );
+      process.exit(1);
+    }
+
+    runServer(pinned);
     return;
   }
 

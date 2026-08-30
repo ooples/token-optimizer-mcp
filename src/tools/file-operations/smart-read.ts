@@ -22,6 +22,7 @@ import {
   lastWrittenKey,
 } from '../shared/hash-utils.js';
 import { cacheGet, cacheSet } from '../../utils/cache-helper.js';
+import { authoredBase } from './authored-base.js';
 import {
   chunkBySyntax,
   truncateContent,
@@ -146,20 +147,41 @@ export class SmartReadTool {
     // Check cache
     const ownCached = enableCache ? cacheGet(this.cache, cacheKey) : null;
 
-    // FALL BACK TO WHAT WAS LAST WRITTEN. Without this, the first read of a
-    // file always resends it in full even when this process wrote the file
-    // moments earlier -- the writer's entry lived under a different namespace,
-    // so it was never found. The fallback gives the diff a base on that first
-    // read; the entry is only ever a base, never the answer, so a stale one
-    // costs a diff rather than a wrong result.
-    const cachedData =
-      ownCached ??
-      (enableCache ? cacheGet(this.cache, lastWrittenKey(filePath)) : null);
+    // FALL BACK TO WHAT WAS ALREADY WRITTEN, from the safer source first.
+    //
+    // TWO MECHANISMS LANDED FOR THE SAME PROBLEM and this merge keeps both,
+    // because neither subsumes the other:
+    //
+    //   authoredBase()  is SESSION-SCOPED and covers a write made through ANY
+    //     path, including the built-in Write, because the hook recorded those
+    //     bytes. The record carries the session that authored it, so a caller
+    //     that did not write the file gets nothing and resends -- which is
+    //     today's behaviour, so it can never make a read worse. The
+    //     knowledge-graph snapshot could NOT be used here for exactly that
+    //     reason: `indexFile` runs on reads too, so it would have told a
+    //     session that never saw a file that nothing had changed.
+    //
+    //   lastWrittenKey() is PATH-SCOPED and covers only this product's own
+    //     smart_write / smart_edit, whose entries lived under a different
+    //     namespace and so were never found on a read.
+    //
+    // Ordered session-scoped first: it is the one with a provenance argument.
+    // Both are only ever a BASE, never the answer, so a stale entry costs a
+    // diff rather than a wrong result.
+    // BOTH fallbacks are gated on enableCache. `enableCache: false` is a
+    // caller saying 'give me the file, not a diff against something you
+    // remember'; serving `// No changes` off a persisted authored record would
+    // ignore that opt-out just as surely as serving it off the cache.
+    const cachedData = enableCache
+      ? (ownCached ??
+        authoredBase(filePath) ??
+        cacheGet(this.cache, lastWrittenKey(filePath)))
+      : null;
 
-    // Deliberately NOT `cachedData !== null`. This flags "my own entry hit",
-    // which is what the metrics below report and what gates the re-seed further
-    // down -- so a read served off the fallback still populates its own key and
-    // the next read needs no fallback at all.
+    // Deliberately NOT `cachedData !== null`. This means "my own cache entry
+    // hit", which is what the metrics below report and what gates the re-seed
+    // further down -- so a read served off either fallback still populates its
+    // own key, and the next read needs no fallback at all.
     const fromCache = ownCached !== null;
 
     // Read file content
