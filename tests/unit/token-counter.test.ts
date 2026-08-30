@@ -535,3 +535,111 @@ describe('a pathological line cannot stall the counter', () => {
     expect((bounded - exact) / exact).toBeLessThan(0.005);
   });
 });
+
+describe('the count memo', () => {
+  // The cache exists because count() had none: 200 calls on the same 79 KB
+  // source cost 4,595 ms, a median of 22.8 ms each, all recomputing a result
+  // already produced. Measured end to end, smart_read on a 180 KB file went
+  // from 25.9 ms to 10.0 ms. These tests pin the part that must not change:
+  // a memoised count is the SAME count.
+  it('returns the identical result a fresh counter computes', () => {
+    const text = 'export const value = 1;\n'.repeat(3000);
+    const fresh = new TokenCounter().count(text);
+    const memo = new TokenCounter();
+
+    const first = memo.count(text);
+    const second = memo.count(text);
+
+    expect(first.tokens).toBe(fresh.tokens);
+    expect(second.tokens).toBe(fresh.tokens);
+    expect(second.characters).toBe(text.length);
+  });
+
+  it('does not confuse two texts of the same length', () => {
+    // The reason the key is the text itself and not a length-plus-samples
+    // fingerprint. A collision here does not fail loudly -- it silently reports
+    // the wrong token count into every tokensSaved figure the product prints.
+    const counter = new TokenCounter();
+    const a = 'aaaa bbbb cccc dddd '.repeat(400);
+    const b = 'z'.repeat(a.length);
+    expect(b.length).toBe(a.length);
+
+    const viaCounter = [counter.count(a).tokens, counter.count(b).tokens];
+    const viaFresh = [new TokenCounter().count(a).tokens, new TokenCounter().count(b).tokens];
+
+    expect(viaCounter).toEqual(viaFresh);
+    expect(viaCounter[0]).not.toBe(viaCounter[1]);
+  });
+
+  it('stays bounded when far more texts are counted than it can hold', () => {
+    // A server process is long-lived, so an unbounded memo is a leak that only
+    // shows up in production. 4,000 distinct texts against a 512-entry cap.
+    const counter = new TokenCounter();
+    for (let i = 0; i < 4000; i++) counter.count(`distinct text number ${i}`);
+
+    const internals = counter as unknown as {
+      cache: Map<string, { bytes: number }>;
+      cachedBytes: number;
+    };
+    expect(internals.cache.size).toBeLessThanOrEqual(512);
+    // The byte accounting must track the evictions, not drift upward forever.
+    let live = 0;
+    for (const key of internals.cache.keys()) live += Buffer.byteLength(key, 'utf8');
+    expect(internals.cachedBytes).toBe(live);
+  });
+
+  it('bounds multi-byte text by its bytes, not its UTF-16 length', () => {
+    // `length` is not a memory measure: this string's length is well under the
+    // 8 MiB cap while its bytes are well over it, so a cap written against
+    // `length` would admit roughly twice what it claims to hold.
+    const counter = new TokenCounter();
+    const emoji = '\u{1F600}'.repeat(3 * 1024 * 1024);
+
+    expect(emoji.length).toBeLessThan(8 * 1024 * 1024);
+    expect(Buffer.byteLength(emoji, 'utf8')).toBeGreaterThan(8 * 1024 * 1024);
+
+    const result = counter.count(emoji);
+
+    expect(result.characters).toBe(emoji.length);
+    expect((counter as unknown as { cache: Map<string, unknown> }).cache.size).toBe(0);
+  }, 60_000);
+
+  it('still counts a text too large to store, without storing it', () => {
+    const counter = new TokenCounter();
+    const huge = 'x'.repeat(9 * 1024 * 1024);
+
+    const result = counter.count(huge);
+
+    expect(result.tokens).toBeGreaterThan(0);
+    expect(result.characters).toBe(huge.length);
+    expect((counter as unknown as { cache: Map<string, unknown> }).cache.size).toBe(0);
+  });
+
+  it('hands out a copy, so one caller cannot rewrite the cached count', () => {
+    // Returning the stored record let any caller mutate the cache for every
+    // later caller, silently and with nothing failing loudly.
+    const counter = new TokenCounter();
+    const text = 'export const shared = 1;'.repeat(200);
+
+    const first = counter.count(text);
+    const real = first.tokens;
+    first.tokens = -999;
+
+    expect(counter.count(text).tokens).toBe(real);
+  });
+
+  it('releases the memo on free, so a freed counter pins nothing', () => {
+    const counter = new TokenCounter();
+    counter.count('export const kept = 1;\n'.repeat(500));
+    const internals = counter as unknown as {
+      cache: Map<string, unknown>;
+      cachedBytes: number;
+    };
+    expect(internals.cache.size).toBe(1);
+
+    counter.free();
+
+    expect(internals.cache.size).toBe(0);
+    expect(internals.cachedBytes).toBe(0);
+  });
+});

@@ -295,14 +295,67 @@ export function readTruncation() {
   return { ...lastReadTruncation };
 }
 
-function readAll(dir) {
-  lastReadTruncation = { byBytes: false, byEvents: false };
-  const path = metricsPath(dir);
-  if (!existsSync(path)) return [];
+/**
+ * One read and one parse of the byte window, shared by the readers above it.
+ *
+ * MEASURED. `readAll` and `scanForBalance` were near-identical copies of this
+ * function, and both run inside a single fleet_audit against the same 5.4 MB
+ * metrics.jsonl. Leaf CPU: readAll 15.8%, scanForBalance 16.3%, plus
+ * readFileUtf8 9.5%, Buffer.slice 6.0%, readFileSync 4.5%, open 2.3%,
+ * read 2.0% -- roughly half the tool, spent doing the same work twice.
+ *
+ * IT RETURNS THE WHOLE WINDOW AND APPLIES NO EVENT POLICY, which is the part
+ * that must not be lost. `scanForBalance` deliberately does NOT window by event
+ * count: an earlier fix routed it through `readAll`, inherited readAll's
+ * MAX_EVENTS window, and the holdout measurement it existed to repair stayed at
+ * zero on 122 real graphs. So the shared piece is the I/O and the JSON.parse;
+ * each caller still decides what to keep.
+ *
+ * THE MEMO IS SCOPED TO ONE SYNCHRONOUS OPERATION, not keyed on the file's
+ * stat. Keying on (size, mtime) was the obvious design and it is UNSOUND on
+ * Windows: measured here, 200 same-size in-place rewrites left mtimeMs
+ * identical 154 times, and mtimeNs -- nanosecond resolution -- identical 135
+ * times. A stat-keyed memo would therefore serve a stale event log, silently,
+ * and every measurement built on it would simply stop moving. Nothing about
+ * that failure is loud.
+ *
+ * `withTailCache` instead opens the memo for the duration of one synchronous
+ * caller, which is where the duplicate read actually is: balanceSheet() reads
+ * the balance scan and the event window back to back. No append can interleave
+ * inside a synchronous function, so within the scope the two reads are
+ * provably the same file. Outside a scope nothing is memoised and behaviour is
+ * exactly what it was before.
+ *
+ * Both callers copy before returning, so nothing can mutate the entry.
+ */
+let tailScope = null;
+
+/** Runs `fn` with the metrics tail read and parsed at most once. */
+function withTailCache(fn) {
+  const outer = tailScope;
+  tailScope = { entry: null };
+  try {
+    return fn();
+  } finally {
+    tailScope = outer;
+  }
+}
+
+function readTail(path) {
+  const cached = tailScope?.entry;
+  if (cached && cached.path === path) return cached;
+  if (!existsSync(path)) return null;
+
+  let size;
+  try {
+    ({ size } = statSync(path));
+  } catch {
+    return null;
+  }
 
   let text;
+  let truncatedByBytes = false;
   try {
-    const { size } = statSync(path);
     if (size <= MAX_BYTES) {
       text = readFileSync(path, 'utf8');
     } else {
@@ -318,24 +371,44 @@ function readAll(dir) {
       // The first line is almost certainly cut mid-record; drop it rather than
       // letting it fail to parse and look like corruption.
       text = text.slice(text.indexOf('\n') + 1);
-      lastReadTruncation.byBytes = true;
+      truncatedByBytes = true;
     }
   } catch {
-    return [];
+    return null;
   }
 
-  const out = [];
   const lines = text.split('\n');
-  if (lines.length > MAX_EVENTS) lastReadTruncation.byEvents = true;
-  for (const line of lines.slice(-MAX_EVENTS)) {
+  const events = [];
+  for (const line of lines) {
     if (!line) continue;
     try {
-      out.push(JSON.parse(line));
+      events.push(JSON.parse(line));
     } catch {
       // A truncated final line is normal; skip it.
     }
   }
-  return out;
+
+  const entry = { path, size, events, lineCount: lines.length, truncatedByBytes };
+  if (tailScope) tailScope.entry = entry;
+  return entry;
+}
+
+function readAll(dir) {
+  lastReadTruncation = { byBytes: false, byEvents: false };
+  const tail = readTail(metricsPath(dir));
+  if (!tail) return [];
+
+  lastReadTruncation.byBytes = tail.truncatedByBytes;
+  // MEASURED ON THE RECORDS THAT ARE ACTUALLY CUT. The slice below applies to
+  // parsed events, and events.length <= lineCount because blank and torn lines
+  // are dropped -- so counting lines here reported a truncation that had not
+  // happened whenever the window held a few unparseable lines. The flag exists
+  // to tell a reader their statistics are incomplete; saying so when they are
+  // not is the same class of error as staying silent when they are.
+  if (tail.events.length > MAX_EVENTS) lastReadTruncation.byEvents = true;
+  // slice() always copies, including when the window is shorter than the cap,
+  // so a caller mutating the result cannot reach into the memo.
+  return tail.events.slice(-MAX_EVENTS);
 }
 
 /**
@@ -359,37 +432,11 @@ function readAll(dir) {
  * nothing.
  */
 function scanForBalance(path) {
-  if (!existsSync(path)) return [];
-  let text = '';
-  try {
-    const { size } = statSync(path);
-    if (size <= MAX_BYTES) {
-      text = readFileSync(path, 'utf8');
-    } else {
-      const fd = openSync(path, 'r');
-      try {
-        const buffer = Buffer.allocUnsafe(MAX_BYTES);
-        const read = readSync(fd, buffer, 0, MAX_BYTES, size - MAX_BYTES);
-        text = buffer.subarray(0, read).toString('utf8');
-      } finally {
-        closeSync(fd);
-      }
-      text = text.slice(text.indexOf('\n') + 1);
-    }
-  } catch {
-    return [];
-  }
-  const out = [];
-  for (const line of text.split('\n')) {
-    if (!line) continue;
-    try {
-      const e = JSON.parse(line);
-      if (BALANCE_KINDS.has(e.kind)) out.push(e);
-    } catch {
-      /* a torn line costs a record, not the report */
-    }
-  }
-  return out;
+  const tail = readTail(path);
+  if (!tail) return [];
+  // NO EVENT WINDOW HERE, deliberately -- see readTail. filter() copies, so the
+  // memo is not exposed.
+  return tail.events.filter((e) => BALANCE_KINDS.has(e.kind));
 }
 
 export function readBalance(dir) {
@@ -800,8 +847,14 @@ export function rereadWaste(
 }
 
 export function balanceSheet(dir) {
-  const balance = readBalance(dir).filter((e) => !isFixtureAnchor(e.anchor));
-  const events = readMetrics(dir);
+  // THE DUPLICATE READ, and the reason withTailCache exists. These two lines
+  // each read and JSON.parse the same metrics.jsonl -- 5.4 MB on this machine,
+  // and about half of fleet_audit's leaf CPU between them. The scope makes the
+  // second one free without making any later call stale.
+  const { balance, events } = withTailCache(() => ({
+    balance: readBalance(dir).filter((e) => !isFixtureAnchor(e.anchor)),
+    events: readMetrics(dir),
+  }));
   const truncation = readTruncation();
 
   const subs = balance.filter((e) => e.kind === 'substitute');
