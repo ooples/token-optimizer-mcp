@@ -551,7 +551,11 @@ ${nudge}`
     if (bounded) {
       allowWithRewrite(
         { ...payload.tool_input, command: bounded.command },
-        boundNotice(bounded.maxBytes)
+        // THE VERDICT'S OWN REASON RIDES ALONG. Bounding instead of refusing
+        // must not cost the guidance the refusal would have carried -- the
+        // reason names the optimizer tool that makes the NEXT call cheaper,
+        // and dropping it leaves only a byte notice that teaches nothing.
+        [reason, boundNotice(bounded.maxBytes)].filter(Boolean).join('\n\n')
       );
     }
   }

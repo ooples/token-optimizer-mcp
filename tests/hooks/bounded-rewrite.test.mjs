@@ -338,6 +338,21 @@ describe('the shipped router bounds instead of refusing', () => {
     expect(r.decision).toBe('allow');
   });
 
+  it('keeps the verdict\'s own guidance when it bounds instead of refusing', () => {
+    // Bounding instead of refusing must not cost the guidance the refusal would
+    // have carried. The reason names the optimizer tool that makes the NEXT
+    // call cheaper; dropping it leaves a byte notice that teaches nothing, and
+    // the model repeats the expensive call it was being steered away from.
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'grep -rn foo .' } },
+      { TOKEN_OPTIMIZER_MODE: 'enforce' }
+    );
+
+    expect(r.updatedInput.command).toContain('head -c');
+    expect(r.context).toContain('smart_grep');
+    expect(r.context).toContain('bounds this command');
+  });
+
   it.each([['enforce'], ['assist']])(
     'bounds a test run in %s, where nothing was going to refuse it',
     (mode) => {
