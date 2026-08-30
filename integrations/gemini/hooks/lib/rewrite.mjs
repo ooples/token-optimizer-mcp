@@ -87,14 +87,19 @@ const OUTPUT_HEAVY = [
   /^(eslint|ruff|flake8|pylint|mypy|clippy|golangci-lint)\b/,
 ];
 
-/** Each segment of a command line, reduced to the program it actually runs. */
-function commandSegments(command) {
+/** Each segment of a command line, as written. */
+function splitSegments(command) {
   return String(command)
     .split(/\|\||&&|[;|&\n]/)
+    .map((segment) => segment.trim().replace(/^[({]+\s*/, '').trim())
+    .filter(Boolean);
+}
+
+/** Each segment of a command line, reduced to the program it actually runs. */
+function commandSegments(command) {
+  return splitSegments(command)
     .map((segment) =>
       segment
-        .trim()
-        .replace(/^[({]+\s*/, '')
         .replace(/^(?:[A-Za-z_]\w*=\S*\s+)+/, '')
         .replace(/^(?:sudo|env|time|command|npx|bunx)\s+/, '')
         .trim()
@@ -159,6 +164,33 @@ function unsafeToBound(command) {
     /(?:^|\s)-w(?:\s|$)/.test(command)
   ) {
     return 'interactive';
+  }
+
+  // A SUBSHELL CANNOT CHANGE ITS PARENT. The wrapper runs the command inside
+  // `( ... )` so that restoring the caller's `pipefail` stays local -- but that
+  // same containment silently discards any state the command existed to set.
+  // `cd packages/api && npm test` is the common one and the worst: this client's
+  // Bash tool PERSISTS the working directory between calls, so bounding it
+  // leaves the next command running in the old directory, with nothing to
+  // suggest why. `export`, a bare `FOO=1`, and `source venv/bin/activate` fail
+  // the same way in clients whose shell persists more than the cwd.
+  //
+  // `set` and `shopt` are deliberately NOT screened: their whole scope is the
+  // command they precede, which runs inside the same subshell, so a bound
+  // changes nothing about them. `CI=1 npm test` is likewise fine -- an
+  // assignment attached to a command never outlived that command anyway. Only a
+  // segment that is assignments ALONE is a shell mutation.
+  if (
+    splitSegments(command).some(
+      (segment) =>
+        /^(?:cd|pushd|popd|export|source|alias|unalias|unset|umask|ulimit)(?:\s|$)/.test(
+          segment
+        ) ||
+        /^\.\s/.test(segment) ||
+        /^(?:[A-Za-z_]\w*=\S*\s*)+$/.test(segment)
+    )
+  ) {
+    return 'state-mutating';
   }
 
   // FOLLOW MODE IN ANY SPELLING. Matching only `tail -f` left four working
