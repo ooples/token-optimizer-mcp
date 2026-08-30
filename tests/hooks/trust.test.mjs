@@ -149,21 +149,21 @@ describe('our config entries are found by what they run, not where they sit', ()
 });
 
 describe('the doctor runs the thing rather than inspecting it', () => {
-  test('a large read is actually refused by the real hook binary', () => {
+  test('a large read is actually refused by the real hook binary', async () => {
     // The check a checklist cannot make. This project shipped a version where
     // every configuration check passed and the hook saved nothing.
-    const checks = probeEnforcement({ root: ROOT, workspace });
+    const checks = await probeEnforcement({ root: ROOT, workspace });
     const refusal = checks.find((c) => c.name === 'enforcement refuses a large read');
     expect(refusal.pass).toBe(true);
   }, 30_000);
 
-  test('a small read is left alone, because refusing everything is also broken', () => {
-    const checks = probeEnforcement({ root: ROOT, workspace });
+  test('a small read is left alone, because refusing everything is also broken', async () => {
+    const checks = await probeEnforcement({ root: ROOT, workspace });
     expect(checks.find((c) => c.name === 'small reads are left alone').pass).toBe(true);
   }, 30_000);
 
-  test('the session-start hook really emits the policy', () => {
-    const checks = probeSessionStart({ root: ROOT, workspace });
+  test('the session-start hook really emits the policy', async () => {
+    const checks = await probeSessionStart({ root: ROOT, workspace });
     expect(checks[0].pass).toBe(true);
     expect(checks[0].detail).toMatch(/tokens of standing context/);
   }, 30_000);
@@ -173,8 +173,8 @@ describe('the doctor runs the thing rather than inspecting it', () => {
     expect(checks.every((c) => c.pass)).toBe(true);
   });
 
-  test('a missing hook binary fails with a remedy rather than an exception', () => {
-    const checks = probeEnforcement({ root: join(workspace, 'nowhere'), workspace });
+  test('a missing hook binary fails with a remedy rather than an exception', async () => {
+    const checks = await probeEnforcement({ root: join(workspace, 'nowhere'), workspace });
     expect(checks[0].pass).toBe(false);
     expect(checks[0].remedy).toBeTruthy();
   });

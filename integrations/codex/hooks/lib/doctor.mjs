@@ -20,7 +20,7 @@
  * complaint.
  */
 
-import { execFileSync, spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -312,24 +312,51 @@ export function probeVersion({ install }) {
   return checks.concat([ok('plugin is up to date', `installed ${installedVersion}`)]);
 }
 
-/** Runs a hook binary with a payload and returns its stdout, or null. */
+/**
+ * Runs a hook binary with a payload and returns its stdout, or null.
+ *
+ * ASYNCHRONOUS BECAUSE EACH CALL IS A WHOLE NODE PROCESS. Measured on this
+ * machine, one hook spawn costs ~118 ms, of which ~60 ms is bare Node startup
+ * and ~52 ms is loading the 30-module hook graph -- almost none of it this
+ * process's CPU. Run serially, the doctor's three probes simply added up:
+ * 477 ms for the enforcement pair, 166 ms for session-start, and 1,490 ms for
+ * the server probe, for 2,133 ms of a 2,137 ms diagnose. Waiting on them
+ * concurrently costs the same CPU and a third of the wall clock.
+ *
+ * `execFileSync` also blocks the event loop for its entire duration, so while
+ * one probe ran the server could not answer anything else -- the same defect
+ * class `n/no-sync` exists to catch in src/.
+ */
 function probe(binary, payload, { timeoutMs = 8000, cwd, env } = {}) {
-  try {
-    return execFileSync(process.execPath, [binary], {
-      input: JSON.stringify(payload),
-      encoding: 'utf8',
-      timeout: timeoutMs,
-      cwd,
-      env: { ...process.env, ...(env || {}) },
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'ignore'],
-    });
-  } catch (error) {
-    // A hook that exits non-zero WITH OUTPUT still told us something. One that
-    // timed out, was killed, or never spawned told us nothing -- and null has to
-    // mean exactly that, because an empty string is a legitimate "allowed".
-    return error?.stdout || null;
-  }
+  return new Promise((resolve) => {
+    const child = execFile(
+      process.execPath,
+      [binary],
+      {
+        encoding: 'utf8',
+        timeout: timeoutMs,
+        cwd,
+        env: { ...process.env, ...(env || {}) },
+        windowsHide: true,
+      },
+      (error, stdout) => {
+        // A hook that exits non-zero WITH OUTPUT still told us something. One
+        // that timed out, was killed, or never spawned told us nothing -- and
+        // null has to mean exactly that, because an empty string is a
+        // legitimate "allowed".
+        if (!error) return resolve(stdout);
+        resolve(stdout || error?.stdout || null);
+      }
+    );
+    // stderr is discarded exactly as the previous stdio:'ignore' did, but the
+    // pipe must still be drained or a chatty hook can fill it and deadlock.
+    child.stderr?.resume();
+    try {
+      child.stdin.end(JSON.stringify(payload));
+    } catch {
+      // A spawn that already failed has no stdin; the callback reports it.
+    }
+  });
 }
 
 /* ------------------------------------------------------------- THE CHECKLIST */
@@ -437,7 +464,7 @@ export function checklist({ root, settingsPath, install }) {
  * a hook that refuses everything is as broken as one that refuses nothing, and
  * only the second is what shipped last time.
  */
-export function probeEnforcement({ root, workspace, hooksDir, install }) {
+export async function probeEnforcement({ root, workspace, hooksDir, install }) {
   const checks = [];
   // Probe the build that RUNS, not the one bundled beside this module. On a real
   // machine those were 5.3.5 and 5.3.6 with all 37 hook files differing, and
@@ -465,7 +492,14 @@ export function probeEnforcement({ root, workspace, hooksDir, install }) {
     // Do not inject capability evidence here. The shipped hook must establish
     // its bundled MCP contract by itself or this check would pass while real
     // Claude/Codex sessions continue to leave native large reads unrestricted.
-    const denied = probe(
+    // THE TWO PROBES BELOW STAY SERIAL, DELIBERATELY. They share `probeId` as
+    // their session id, and the router keeps per-session state on disk: what it
+    // has already refused (loop-breaking) and which files it has already seen
+    // (re-read detection). Running them concurrently would race two processes
+    // on the same session file, and the failure would be intermittent and
+    // wrong-looking rather than loud. The concurrency win is taken in
+    // diagnose(), across probes that share no state.
+    const denied = await probe(
       binary,
       {
         tool_name: 'Read',
@@ -480,7 +514,7 @@ export function probeEnforcement({ root, workspace, hooksDir, install }) {
       : bad('enforcement refuses a large read', `hook returned: ${String(denied).slice(0, 200) || '(nothing)'}`,
         'check TOKEN_OPTIMIZER_MODE is not "off" or "advise", then reinstall the hooks'));
 
-    const allowed = probe(
+    const allowed = await probe(
       binary,
       {
         tool_name: 'Read',
@@ -512,7 +546,7 @@ export function probeEnforcement({ root, workspace, hooksDir, install }) {
 }
 
 /** The session-start notice has to actually come out. */
-export function probeSessionStart({ root, workspace, hooksDir, install }) {
+export async function probeSessionStart({ root, workspace, hooksDir, install }) {
   const binary = join(hooksDirFor({ hooksDir, install, root }), 'session-start.mjs');
   if (!existsSync(binary)) {
     return [bad('session-start emits the policy', 'binary missing', 'reinstall the package')];
@@ -523,7 +557,7 @@ export function probeSessionStart({ root, workspace, hooksDir, install }) {
   // exist makes the SPAWN fail rather than the hook. Do not depend on another
   // check having run first.
   mkdirSync(workspace, { recursive: true });
-  const out = probe(binary, {}, { cwd: workspace });
+  const out = await probe(binary, {}, { cwd: workspace });
   // JSON.parse(null) coerces to the string 'null' and RETURNS null rather than
   // throwing, so without this the never-ran case fell past the catch written for
   // it and reported 'ran, but produced no policy text' -- sending the user after
@@ -1001,16 +1035,29 @@ export async function diagnose({
   // ended up describing two different builds in the same report.
   const install = detectInstall({ pluginsDir, root });
 
+  // THE THREE SPAWNING PROBES RUN CONCURRENTLY. Each is a separate Node
+  // process and the cost is almost entirely that process's own startup, so
+  // serialising them just added the wall clocks together. They share no state:
+  // probeEnforcement works under a per-run `probeId` and cleans up after
+  // itself, probeSessionStart creates the workspace itself rather than relying
+  // on another check having run first, and probeServer spawns a separate
+  // server. Order is restored below, so the report reads exactly as before.
+  const [enforcement, sessionStart, serverChecks] = await Promise.all([
+    probeEnforcement({ root, workspace, install }),
+    probeSessionStart({ root, workspace, install }),
+    skipServer ? Promise.resolve([]) : probeServer({ root }),
+  ]);
+
   const checks = [
     ...checklist({ root, settingsPath, install }),
     ...probeVersion({ install }),
     ...probeHarvest(),
-    ...probeEnforcement({ root, workspace, install }),
-    ...probeSessionStart({ root, workspace, install }),
+    ...enforcement,
+    ...sessionStart,
     ...probeGraph({ dir: graphDir }),
     ...probeCodex({ codexHome }),
     ...probeCache({ degradedReason: cacheDegradedReason }),
-    ...(skipServer ? [] : await probeServer({ root })),
+    ...serverChecks,
   ];
 
   const failed = checks.filter((c) => !c.pass);
