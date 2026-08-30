@@ -40,22 +40,63 @@ prepare() {
   # master-based image resolved TOKEN_OPTIMIZER_MODE=assist to `enforce`.
   #
   # Cheap to check, and the failure it prevents is otherwise invisible.
-  log "Verifying every arm's mode is recognised by the packaged build"
+  log "Provenance of the build under test"
   PKG=/usr/local/lib/node_modules/@ooples/token-optimizer-mcp
+  if [ -f /opt/optimizer-provenance.json ]; then
+    node -e "
+      const p = require('/opt/optimizer-provenance.json');
+      console.log('   tree    ' + p.tree + (p.dirty ? '  (DIRTY working tree)' : ''));
+      console.log('   head    ' + p.head + '  on ' + p.branch);
+      console.log('   version ' + p.version);
+    "
+  else
+    die "no provenance record in the image; a result that cannot be attributed to a tree is not evidence. Rebuild with 'npm run bench:build'."
+  fi
+
+  # ASSERT CAPABILITY, NOT PROVENANCE.
+  #
+  # Recording the tree says WHAT was built; it does not say the build behaves as
+  # an arm assumes. Those are different failures and both are silent: `mode()`
+  # maps an unrecognised value to the default, and a graph "disabled" by a
+  # variable the build predates simply stays on. Either produces two arms that
+  # differ only in their name, and a campaign that looks real and means nothing.
+  #
+  # So each arm's declared configuration is EXERCISED against the packaged build
+  # rather than assumed from the branch it came from. That is why waiting for a
+  # merge was the wrong instrument: merge status is a proxy for behaviour, and
+  # this checks the behaviour directly.
+  log "Asserting every arm's declared capability against the packaged build"
   for manifest in /home/bench/manifests/*/manifest.json; do
-    want="$(node -e "
-      const m = require('$manifest');
-      process.stdout.write(m.settings?.env?.TOKEN_OPTIMIZER_MODE || '');
-    ")"
-    [ -n "$want" ] || continue
-    got="$(TOKEN_OPTIMIZER_MODE="$want" node --input-type=module -e "
-      const p = await import('file://$PKG/hooks-core/policy.mjs');
-      process.stdout.write(p.mode());
-    ")"
-    if [ "$got" != "$want" ]; then
-      die "arm $(basename "$(dirname "$manifest")") declares TOKEN_OPTIMIZER_MODE=$want but the packaged build resolves it to '$got'. That arm would silently measure '$got'. Build from a tree that supports '$want'."
+    arm="$(basename "$(dirname "$manifest")")"
+
+    want="$(node -e "const m=require('$manifest');process.stdout.write(m.settings?.env?.TOKEN_OPTIMIZER_MODE||'')")"
+    if [ -n "$want" ]; then
+      got="$(TOKEN_OPTIMIZER_MODE="$want" node --input-type=module -e "
+        const p = await import('file://$PKG/hooks-core/policy.mjs');
+        process.stdout.write(p.mode());
+      ")"
+      [ "$got" = "$want" ] || die "arm $arm declares TOKEN_OPTIMIZER_MODE=$want but the packaged build resolves it to '$got'. That arm would silently measure '$got'. Build from a tree that supports '$want'."
+      echo "   $arm: mode=$want resolves correctly"
     fi
-    echo "   $(basename "$(dirname "$manifest")"): $want ok"
+
+    # The graph switch cannot be checked by resolving a name -- an export can
+    # exist and gate nothing -- so this exercises the writers and counts what
+    # reaches disk.
+    nograph="$(node -e "const m=require('$manifest');process.stdout.write(m.settings?.env?.TOKEN_OPTIMIZER_WIKI_DISABLED||'')")"
+    if [ -n "$nograph" ]; then
+      wrote="$(TOKEN_OPTIMIZER_WIKI_DISABLED="$nograph" node --input-type=module -e "
+        import { mkdtempSync, readdirSync } from 'node:fs';
+        import { join } from 'node:path';
+        import { tmpdir } from 'node:os';
+        const dir = mkdtempSync(join(tmpdir(), 'nograph-'));
+        const w = await import('file://$PKG/hooks-core/wiki.mjs');
+        w.putNode(dir, { kind: 'file', key: '/tmp/a.ts', hash: 'x', bytes: 1 });
+        w.putEdge(dir, 'a', 'related', 'b');
+        process.stdout.write(String(readdirSync(dir).length));
+      " 2>/dev/null || echo "error")"
+      [ "$wrote" = "0" ] || die "arm $arm declares TOKEN_OPTIMIZER_WIKI_DISABLED=$nograph but the packaged build still wrote $wrote graph file(s). That arm would measure a graph that is running. Build from a tree that supports it."
+      echo "   $arm: graph gate is inert"
+    fi
   done
 
   log "Registering our manifests in the THOL competitor registry"
@@ -192,6 +233,25 @@ case "$MODE" in
     prepare
     cd "$THOL_HOME"
     : "${THOL_CAMPAIGN:?set THOL_CAMPAIGN to the Claude Code version label}"
+
+    # THE TREE TRAVELS WITH THE DATA. runner.py stores the campaign label on
+    # every run row, so folding the tree hash into it is what makes a row
+    # self-describing: the number and the exact content that produced it live
+    # together, and rows from two different trees can never be pooled by
+    # accident. Provenance recorded only in a log line is provenance that is
+    # lost the moment someone queries the database.
+    #
+    # 12 hex characters, which is unambiguous in practice and keeps the label
+    # readable in leaderboard output.
+    if [ -f /opt/optimizer-provenance.json ]; then
+      TREE="$(node -e "
+        const p = require('/opt/optimizer-provenance.json');
+        process.stdout.write(p.tree.slice(0, 12) + (p.dirty ? '-dirty' : ''));
+      ")"
+      THOL_CAMPAIGN="$THOL_CAMPAIGN tree:$TREE"
+      export THOL_CAMPAIGN
+    fi
+
     log "Campaign: $THOL_CAMPAIGN"
     python3 runner.py run "$@"
     log "Building leaderboard"

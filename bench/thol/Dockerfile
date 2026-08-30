@@ -45,6 +45,9 @@ RUN useradd -ms /bin/bash bench
 #
 # To measure a published release, check out its tag and build from there.
 COPY thol/pkg/optimizer.tgz /tmp/optimizer.tgz
+# The tree that produced the tarball, so a result is attributable to exact
+# content rather than to a version string that cannot tell two branches apart.
+COPY thol/pkg/provenance.json /opt/optimizer-provenance.json
 RUN npm install -g /tmp/optimizer.tgz
 
 # Pre-seed a SHARED managed runtime for plugin/launch.mjs.

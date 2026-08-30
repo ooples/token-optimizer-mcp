@@ -21,6 +21,7 @@ import {
   renameSync,
   rmSync,
   readFileSync,
+  writeFileSync,
   existsSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -33,7 +34,68 @@ rmSync(dest, { recursive: true, force: true });
 mkdirSync(dest, { recursive: true });
 
 const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-process.stdout.write(`packing working tree at version ${version}\n`);
+
+/**
+ * Records WHICH TREE produced this tarball, not merely which version.
+ *
+ * A version string cannot distinguish two branches, a branch from master, or a
+ * clean tree from a dirty one -- and every one of those measures a different
+ * product. "Built from 6.0.2" is exactly the claim that let an image pinned to
+ * 6.0.1 measure 6.0.2 without anyone noticing.
+ *
+ * So the provenance is the git tree hash: the content hash of what was actually
+ * packed, identical for two checkouts with identical content and different the
+ * moment one byte differs. That makes a result attributable to a precise tree
+ * regardless of branch, merge state, or whether the work has landed on master.
+ *
+ * `git write-tree` needs a clean index, so the working tree is staged into a
+ * TEMPORARY index first -- this must never touch the user's real index.
+ */
+function provenance() {
+  const git = (args, env = {}) => {
+    try {
+      return execFileSync('git', args, {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...process.env, ...env },
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      return '';
+    }
+  };
+
+  const tmpIndex = join(dest, 'provenance.index');
+  const withTmpIndex = { GIT_INDEX_FILE: tmpIndex };
+  // -a stages tracked modifications; untracked files are deliberately excluded,
+  // because they are not part of what npm pack ships either.
+  git(['add', '-A', '--', '.'], withTmpIndex);
+  const tree = git(['write-tree'], withTmpIndex);
+  rmSync(tmpIndex, { force: true });
+
+  return {
+    version,
+    tree,
+    head: git(['rev-parse', 'HEAD']),
+    branch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
+    // A dirty tree is not a defect -- measuring unmerged work is the point --
+    // but it must be RECORDED, so a number can never be silently attributed to
+    // a commit that does not contain the code that produced it.
+    dirty: git(['status', '--porcelain']).length > 0,
+    packedAt: new Date().toISOString(),
+  };
+}
+
+const prov = provenance();
+if (!prov.tree) {
+  throw new Error(
+    'could not compute a git tree hash; refusing to pack an unattributable build'
+  );
+}
+writeFileSync(join(dest, 'provenance.json'), JSON.stringify(prov, null, 2) + '\n');
+process.stdout.write(
+  `packing tree ${prov.tree.slice(0, 12)} (${prov.branch}${prov.dirty ? ', dirty' : ''}) at version ${version}\n`
+);
 
 // BUILD EXPLICITLY. `npm pack` runs prepack/prepare/postpack -- NOT
 // prepublishOnly, which is where this package defines its build. An earlier
