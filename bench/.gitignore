@@ -1,4 +1,14 @@
+# Live credentials, staged per campaign. Also in .git/info/exclude, because a
+# per-branch ignore does not exist on branches cut before it -- which is exactly
+# how a token once reached this repository.
 auth/
-results/
-*.sqlite
+
+# Build artifact: the packed working tree the image installs.
 thol/pkg/
+
+# Raw run data. Large, machine-written, and reproducible from a campaign.
+results/runs/
+*.sqlite
+
+# NOT results/ itself. Published reports live there and MUST be committed: a
+# number nobody can trace to the versions that produced it is not evidence.
