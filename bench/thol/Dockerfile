@@ -78,7 +78,21 @@ RUN mkdir -p ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
 USER bench
 WORKDIR /home/bench
 
-RUN git clone --depth 1 https://github.com/pi-infected/token-harness-optimizer-leaderboard.git thol
+# PINNED, because the harness is half of every measurement.
+#
+# Cloning the default branch meant a rebuild could pick up THOL task, fixture or
+# scoring changes, so the same optimizer build would score differently on two
+# days with nothing in this repo having changed -- which destroys the only thing
+# a benchmark is for. Ratios are compared across campaigns; that comparison is
+# meaningless if the ruler moves.
+#
+# Bumping this is a deliberate act that starts a NEW campaign: results either
+# side of a bump are not comparable, and mixing them is the mistake the pin
+# exists to prevent. Record the bump alongside the results it produced.
+ARG THOL_REV=5ee6ea7f81dc21db1aae8d359cda3e1f7ded6dde
+RUN git clone https://github.com/pi-infected/token-harness-optimizer-leaderboard.git thol \
+    && git -C thol checkout --quiet ${THOL_REV} \
+    && test "$(git -C thol rev-parse HEAD)" = "${THOL_REV}"
 
 # THOL ships no requirements.txt: fixtures/generate_fixtures.py, tasks/_vlib.py
 # and every verify.py import stdlib only. So there is nothing to pip install,

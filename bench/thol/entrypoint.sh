@@ -130,7 +130,12 @@ PY
   # PYTHONHASHSEED is pinned as well, so a fresh /results also regenerates the
   # same way rather than merely being self-consistent.
   export PYTHONHASHSEED=0
-  if [ -d /results/fixtures/out ] && [ -d /results/fixtures/truth ]; then
+  # A COMPLETION MARKER, not the mere existence of the directories. Presence
+  # cannot distinguish a finished fixture set from one abandoned mid-copy, and
+  # the failure is silent: a missing fixture scores as a failed task rather than
+  # as a broken cache. The marker is written last, so it exists only if
+  # everything before it did.
+  if [ -f /results/fixtures/.complete ]; then
     echo "   reusing the persisted fixture set (identical across segments)"
     rm -rf fixtures/out fixtures/truth
     ln -sfn /results/fixtures/out fixtures/out
@@ -140,9 +145,24 @@ PY
     python3 fixtures/gen_longtasks.py
     python3 fixtures/gen_megatasks.py
     if [ -d /results ] && [ -w /results ]; then
-      mkdir -p /results/fixtures
-      cp -r fixtures/out /results/fixtures/out
-      cp -r fixtures/truth /results/fixtures/truth
+      # PUBLISH ATOMICALLY. Copying directly into the final path leaves a
+      # half-written fixture set if the process dies mid-copy, and the next run
+      # sees `out` and `truth` present, takes the reuse branch, and measures
+      # against fixtures that are missing files -- silently, because a missing
+      # fixture reads as a task that scores zero rather than as a broken cache.
+      # `cp -r a b` when `b` already exists also nests as `b/a`, which is the
+      # same failure wearing a different shape.
+      #
+      # So: stage under a temp name, then move into place only once complete.
+      rm -rf /results/fixtures.tmp
+      mkdir -p /results/fixtures.tmp
+      cp -r fixtures/out /results/fixtures.tmp/out
+      cp -r fixtures/truth /results/fixtures.tmp/truth
+      # Written LAST, inside the staging dir, so it can only exist on a set that
+      # copied completely.
+      : > /results/fixtures.tmp/.complete
+      rm -rf /results/fixtures
+      mv /results/fixtures.tmp /results/fixtures
       echo "   fixture set persisted for later segments"
     fi
   fi

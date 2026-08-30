@@ -106,5 +106,24 @@ MSYS_NO_PATHCONV=1 docker run --rm -v thol-results:/results \
      from runs where status=\"ok\" group by competitor;"'
 ```
 
-Write anything published to `bench/results/`, including the pinned Claude Code
-and product versions, so a number can always be traced to what produced it.
+## Publishing a result
+
+Write reports to `bench/results/` and **commit them**. `bench/.gitignore`
+excludes `results/runs/` and `*.sqlite` — the large machine-written run data,
+reproducible from a campaign — but not the reports themselves: a number nobody
+can trace to the versions that produced it is not evidence.
+
+Every report records the three things that make it reproducible:
+
+| | where it comes from |
+| --- | --- |
+| product commit | this repo's HEAD when `bench:build` packed it |
+| Claude Code version | `CLAUDE_VERSION` in `thol/Dockerfile` |
+| THOL revision | `THOL_REV` in `thol/Dockerfile` |
+
+**`THOL_REV` is pinned on purpose.** The harness is half of every measurement, so
+cloning its default branch would let their task, fixture or scoring changes move
+our numbers with nothing here having changed. Bumping it is a deliberate act that
+starts a **new campaign**: results either side of a bump are not comparable, and
+mixing them is exactly what the pin prevents. Record the bump next to the results
+it produced.
