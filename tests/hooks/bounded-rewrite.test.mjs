@@ -384,6 +384,33 @@ describe('the shipped router bounds instead of refusing', () => {
 });
 
 
+describe('follow mode in commands that are not tail', () => {
+  // For a streamer the wrapper is strictly WORSE than no wrapper: unwrapped the
+  // model receives output until the client timeout, wrapped it receives nothing
+  // and the timeout is spent anyway.
+  it.each([
+    ['journalctl -f'],
+    ['journalctl --follow -u nginx'],
+    ['docker logs -f web'],
+    ['docker compose logs -f'],
+    ['kubectl logs -f pod/api'],
+    ['kubectl logs --follow deploy/api'],
+    ['pm2 logs -f'],
+    ['adb logcat -f'],
+  ])('refuses to bound %s', (command) => {
+    expect(boundedRewrite(command)).toBeNull();
+  });
+
+  it.each([
+    // The same programs without the follow flag terminate, so they keep the bound.
+    ['docker logs web'],
+    ['kubectl logs pod/api'],
+    ['journalctl -u nginx -n 500'],
+  ])('still bounds %s', (command) => {
+    expect(boundedRewrite(command)).not.toBeNull();
+  });
+});
+
 describe('watch mode, which a bound would turn into a hang', () => {
   // A word-boundary pattern needs a word boundary AFTER the word, so it caught --watch and
   // missed --watchAll. That was harmless while only would-be refusals were
