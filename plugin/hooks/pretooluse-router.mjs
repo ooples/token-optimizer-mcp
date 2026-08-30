@@ -61,6 +61,10 @@ import {
 } from './lib/rewrite.mjs';
 import { isFsSafePath } from './lib/paths.mjs';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import {
   HOOK_MCP_TOOLS,
@@ -450,7 +454,9 @@ ${nudge}`
     // this, which is the opposite of the intent. Only `off`, the kill switch,
     // skips it, and that is handled far above.
     if (payload.tool_name === 'Bash' && isOutputHeavy(payload.tool_input?.command)) {
-      const bounded = boundedRewrite(payload.tool_input.command);
+      const bounded = boundedRewrite(payload.tool_input.command, {
+        compactor: compactorFor(payload.session_id, payload.tool_input.command),
+      });
       if (bounded) {
         allowWithRewrite(
           { ...payload.tool_input, command: bounded.command },
@@ -529,6 +535,57 @@ ${nudge}`
     }
   }
 
+/**
+ * Where this command's previous output is kept, so the next run can be compacted
+ * against it.
+ *
+ * Keyed by SESSION AND COMMAND. Two different commands must not be compared to
+ * each other -- the lines they share would be elided from both for no reason --
+ * and a new session starts clean, because the model in it has not been shown
+ * anything yet.
+ *
+ * Under the OS temp directory, since this is a cache whose loss costs one
+ * comparison and nothing else.
+ */
+function compactorFor(sessionId, command) {
+  // OFF BY DEFAULT, ON THE EVIDENCE. On the representative debug loop -- four
+  // iterations of a real failing suite -- compaction measured 0.216 of raw
+  // against the plain bound's 0.214, which is to say it saved nothing and cost
+  // the notice. The reason is visible in the capture: the runs differ in every
+  // failure block, because jest prints a code frame of the line that changed,
+  // so after eliding repeats there is still more fresh text than the head budget
+  // holds. Compaction then changes WHICH content fills the budget, not how much.
+  //
+  // Where it does pay is a large stable preamble with a small delta: 8,000 bytes
+  // -> 4,080, with the summary and the new failure both intact. That shape is
+  // common in build and lint output and rare in this suite.
+  //
+  // So the code ships, tested, and the switch stays off: a node process in the
+  // pipeline is a real cost and a new failure surface on a wrapper that has
+  // already produced nine silent-meaning-change defects, and it is not worth
+  // paying by default for a saving that could not be measured.
+  if (!/^(1|true|on|yes)$/i.test(process.env.TOKEN_OPTIMIZER_COMPACT || '')) {
+    return null;
+  }
+
+  try {
+    const key = createHash('sha256')
+      .update(`${sessionId}\u0000${command}`)
+      .digest('hex')
+      .slice(0, 32);
+
+    return {
+      node: process.execPath,
+      helper: fileURLToPath(new URL('./lib/compact-stage.mjs', import.meta.url)),
+      previous: join(tmpdir(), 'token-optimizer-compact', key),
+    };
+  } catch {
+    // Any failure here simply means no compaction: `boundedRewrite` falls back
+    // to the shell's own head and tail.
+    return null;
+  }
+}
+
   // BOUND IT INSTEAD OF REFUSING IT.
   //
   // Reaching here means a verdict exists -- the no-verdict path allowed and
@@ -547,7 +604,9 @@ ${nudge}`
   // there would be a new behaviour rather than a cheaper spelling of an
   // existing one.
   if (payload.tool_name === 'Bash' && refusalsEnabled()) {
-    const bounded = boundedRewrite(payload.tool_input?.command);
+    const bounded = boundedRewrite(payload.tool_input?.command, {
+      compactor: compactorFor(payload.session_id, payload.tool_input?.command),
+    });
     if (bounded) {
       allowWithRewrite(
         { ...payload.tool_input, command: bounded.command },
