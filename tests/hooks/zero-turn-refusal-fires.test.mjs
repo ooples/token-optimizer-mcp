@@ -118,6 +118,12 @@ describe('the refusal does not answer what it cannot know', () => {
     expect(read(first).decision).toBe('deny');
 
     const other = read('sess-b-' + Date.now());
-    expect(other.reason).not.toMatch(/unchanged since you last read it/i);
+
+    // ALLOWED, not merely lacking the phrase. The absence alone is satisfied by
+    // a denial for any OTHER reason, and by the call throwing -- so it could
+    // not tell 'B is correctly served the file' from 'B was refused on some
+    // unrelated ground', which is the failure this test exists to catch.
+    expect(other.decision).toBe('allow');
+    expect(other.reason || '').not.toMatch(/unchanged since you last read it/i);
   });
 });
