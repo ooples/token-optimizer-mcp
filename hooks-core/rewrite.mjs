@@ -41,6 +41,73 @@ export function boundBytes() {
 }
 
 /**
+ * Commands whose output is large enough to be worth bounding on its own.
+ *
+ * THE BOUND WAS UNREACHABLE FOR THE FAMILY IT WAS BUILT FOR. `boundedRewrite`
+ * shipped applied only where a REFUSAL would otherwise have happened -- a
+ * recursive search or a large file dump -- and a test run is neither. Checked
+ * directly: `npm test`, `npx jest`, `pytest -q`, `cargo test` and
+ * `npm run build` all produced no verdict at all, so none of them was ever
+ * bounded. Debug loops are the family we measure worst on, and the bound did
+ * not touch them.
+ *
+ * A NAMED LIST, NOT EVERY COMMAND. Bounding all Bash output would be simpler
+ * and is tempting, but it silently truncates commands whose whole output is the
+ * point -- `git show`, or a `cat` of the config someone asked to see. These are
+ * the runners that reliably emit a wall of repeated output and put their
+ * verdict at the two ends, which is what a head-and-tail bound preserves.
+ *
+ * MATCHED AT A COMMAND POSITION, NOT ANYWHERE IN THE STRING. The first version
+ * used `\b`-delimited patterns and matched three ordinary commands that produce
+ * nothing of the sort:
+ *
+ *   echo "run npm test"      the words appear inside a STRING
+ *   ls src/jest-helpers.ts   `jest` appears inside a FILENAME
+ *   grep -n make Makefile    `make` is an ARGUMENT, not the command
+ *
+ * Each would have been silently truncated. So the command is split on shell
+ * separators and each segment is stripped of environment assignments and
+ * wrappers (`npx`, `sudo`, `env`, `time`) before the patterns are anchored at
+ * its start.
+ */
+const OUTPUT_HEAVY = [
+  // test runners
+  /^(jest|vitest|mocha|pytest|rspec|phpunit|nose2)\b/,
+  /^(npm|pnpm|yarn|bun)\s+(run\s+)?test\b/,
+  /^(go|cargo|dotnet|swift)\s+test\b/,
+  /^python[0-9.]*\s+-m\s+(pytest|unittest)\b/,
+  // builds
+  /^(npm|pnpm|yarn|bun)\s+run\s+build\b/,
+  /^(cargo|go|dotnet)\s+build\b/,
+  /^(make|gradle|gradlew|mvn|bazel|ninja)\b/,
+  /^(tsc|webpack|rollup|esbuild|vite)\b/,
+  // linters and type checkers, which emit one block per finding
+  /^(eslint|ruff|flake8|pylint|mypy|clippy|golangci-lint)\b/,
+];
+
+/** Each segment of a command line, reduced to the program it actually runs. */
+function commandSegments(command) {
+  return String(command)
+    .split(/\|\||&&|[;|&\n]/)
+    .map((segment) =>
+      segment
+        .trim()
+        .replace(/^[({]+\s*/, '')
+        .replace(/^(?:[A-Za-z_]\w*=\S*\s+)+/, '')
+        .replace(/^(?:sudo|env|time|command|npx|bunx)\s+/, '')
+        .trim()
+    )
+    .filter(Boolean);
+}
+
+export function isOutputHeavy(command) {
+  if (typeof command !== 'string') return false;
+  return commandSegments(command).some((segment) =>
+    OUTPUT_HEAVY.some((pattern) => pattern.test(segment))
+  );
+}
+
+/**
  * Shapes that must never be rewritten.
  *
  * Every one of these is a case where wrapping the command changes what it
@@ -78,7 +145,17 @@ function unsafeToBound(command) {
   // it through a pipe does not merely waste effort -- it HANGS, because the
   // wrapper's own `tail -c` cannot emit anything until EOF and follow mode
   // never reaches EOF.
-  if (/\b(watch|less|more|vim|nano|top|htop)\b/.test(command)) {
+  //
+  // WATCH IN EVERY SPELLING A RUNNER USES. `\bwatch\b` needs a word boundary
+  // AFTER the word, so it caught `--watch` and missed `--watchAll` -- and now
+  // that test runners are bounded on sight, `jest --watchAll` and `vitest -w`
+  // reach here routinely. Rejecting `-w` costs a bound on the odd `grep -w`,
+  // which is worth it: the failure it prevents is a hang, and the failure it
+  // causes is one unbounded command.
+  if (
+    /\b(watch(?:All|-all)?|less|more|vim|nano|top|htop)\b/.test(command) ||
+    /(?:^|\s)-w(?:\s|$)/.test(command)
+  ) {
     return 'interactive';
   }
 

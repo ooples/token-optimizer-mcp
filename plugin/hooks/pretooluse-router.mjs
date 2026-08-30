@@ -54,7 +54,11 @@ import {
 } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { isArchived } from './lib/transcript.mjs';
-import { boundedRewrite, boundNotice } from './lib/rewrite.mjs';
+import {
+  boundedRewrite,
+  boundNotice,
+  isOutputHeavy,
+} from './lib/rewrite.mjs';
 import { isFsSafePath } from './lib/paths.mjs';
 import { readFileSync } from 'node:fs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
@@ -425,6 +429,37 @@ ${nudge}`
           /* never let bookkeeping break an allowed call */
         }
       }
+
+    // BOUND AN OUTPUT-HEAVY COMMAND EVEN THOUGH NOTHING WAS GOING TO REFUSE IT.
+    //
+    // This is the debug-loop path, and until now it was unreachable: the bound
+    // only ran where a refusal would otherwise have happened, and a test run is
+    // never refused. `npm test`, `npx jest`, `pytest`, `cargo test` and
+    // `npm run build` all reach here with no verdict, and all of them used to be
+    // allowed unbounded.
+    //
+    // Measured on a real three-iteration loop against `jest tests/hooks`: the
+    // client's own 30,000-character middle truncation delivers 20,852 tokens,
+    // and an 8 KB head-and-tail bound delivers 3,697 -- 0.177 of it. Debug loops
+    // are the family we measure worst on (1.248 against the leader's 0.611).
+    //
+    // NOT GATED ON REFUSALS, unlike the bound applied to a would-be refusal. A
+    // bound is not a refusal: it costs no turn, changes no decision, and is
+    // announced. Gating it on enforcement would mean the posture we intend to
+    // ship -- assist, which keeps the graph and drops the refusals -- got none of
+    // this, which is the opposite of the intent. Only `off`, the kill switch,
+    // skips it, and that is handled far above.
+    if (payload.tool_name === 'Bash' && isOutputHeavy(payload.tool_input?.command)) {
+      const bounded = boundedRewrite(payload.tool_input.command);
+      if (bounded) {
+        allowWithRewrite(
+          { ...payload.tool_input, command: bounded.command },
+          // The graph's own context still rides along; a bound must not cost a
+          // finding that was about to be delivered.
+          [context, boundNotice(bounded.maxBytes)].filter(Boolean).join('\n\n')
+        );
+      }
+    }
 
     allowWithContext(context);
   }
