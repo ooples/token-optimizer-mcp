@@ -86,17 +86,52 @@ const OUR_FILES = new Set(WIRING.map((w) => w.file));
  * The filename list has held these five for the life of the file, so nothing
  * installed by an earlier version becomes unremovable.
  */
+/**
+ * The script `node` actually runs, ignoring flags and later arguments.
+ *
+ * Scanning the whole command for a `.mjs` name reads ARGUMENTS too, so a user's
+ * `node "/hooks/token-optimizer-report.mjs" --template "/hooks/stop.mjs"` looked
+ * like ours on the strength of a filename it merely passes along.
+ */
+function entrypointOf(command) {
+  const tokens = command.match(/"[^"]*"|'[^']*'|\S+/g) || [];
+  const unquote = (token) => token.replace(/^["']|["']$/g, '');
+
+  const nodeAt = tokens.findIndex((token) =>
+    /(^|[/\\])node(\.exe)?$/i.test(unquote(token))
+  );
+  if (nodeAt === -1) return '';
+
+  for (const token of tokens.slice(nodeAt + 1)) {
+    const bare = unquote(token);
+    if (bare.startsWith('-')) continue;
+    return bare;
+  }
+  return '';
+}
+
 const isOurs = (entry) => {
   const hooks = Array.isArray(entry?.hooks) ? entry.hooks : [];
   if (!hooks.length) return false;
 
   return hooks.every((hook) => {
     const command = typeof hook?.command === 'string' ? hook.command : '';
-    if (!command.includes(MARKER)) return false;
+    const script = entrypointOf(command).split('\\').join('/');
+    if (!script) return false;
 
-    return (command.match(/[A-Za-z0-9._-]+\.mjs/g) || []).some((name) =>
-      OUR_FILES.has(name)
-    );
+    const slash = script.lastIndexOf('/');
+    const directory = slash === -1 ? '' : script.slice(0, slash);
+    const file = script.slice(slash + 1);
+
+    // A PATH SEGMENT, NOT A SUBSTRING. Both installers put our files in a
+    // directory named exactly `token-optimizer` -- `$HOME/.claude-global/hooks/
+    // token-optimizer` in the shell installer, the same join in the PowerShell
+    // one -- so requiring the segment costs us nothing and stops us claiming a
+    // user's `~/token-optimizer-backup/stop.mjs`, which carries the marker only
+    // because it borrowed the name.
+    const inOurDirectory = new RegExp(`(^|/)${MARKER}(/|$)`).test(directory);
+
+    return inOurDirectory && OUR_FILES.has(file);
   });
 };
 
