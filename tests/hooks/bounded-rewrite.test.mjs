@@ -467,6 +467,12 @@ describe('commands whose point is to change the shell itself', () => {
     ['cd packages/api && npm test'],
     ['npm test; cd ..'],
     ['pushd src && make'],
+    // `builtin` and `command` both run a builtin in the CURRENT shell, so
+    // these change the caller's directory exactly as a bare `cd` does while
+    // sailing past a guard anchored on the word.
+    ['builtin cd packages/api && npm test'],
+    ['command cd packages/api && npm test'],
+    ['command builtin cd x && make'],
     ['export FOO=1; npm test'],
     ['source venv/bin/activate && pytest -q'],
     ['. venv/bin/activate && pytest'],
@@ -486,6 +492,10 @@ describe('commands whose point is to change the shell itself', () => {
     // contain `cd` and `export` and mutate nothing.
     ['make cdrom'],
     ['grep -n export src/a.ts'],
+    // The prefixes themselves mutate nothing, and `cd-report` is not `cd`.
+    ['command npm test'],
+    ['builtin echo hi; npm test'],
+    ['cd-report && npm test'],
   ])('still bounds %s', (command) => {
     expect(boundedRewrite(command)).not.toBeNull();
   });

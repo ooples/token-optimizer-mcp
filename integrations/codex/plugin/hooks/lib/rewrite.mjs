@@ -180,15 +180,23 @@ function unsafeToBound(command) {
   // changes nothing about them. `CI=1 npm test` is likewise fine -- an
   // assignment attached to a command never outlived that command anyway. Only a
   // segment that is assignments ALONE is a shell mutation.
+  // `builtin` AND `command` ARE STRIPPED FIRST. Both take a builtin and run it
+  // in the current shell, so `builtin cd packages/api && npm test` and
+  // `command cd packages/api && npm test` change the caller's directory exactly
+  // as a bare `cd` does -- while sailing past a guard anchored on the word.
+  // (`env cd` and `sudo cd` are not the same: those run an external program, so
+  // there is no `cd` to lose.)
   if (
-    splitSegments(command).some(
-      (segment) =>
-        /^(?:cd|pushd|popd|export|source|alias|unalias|unset|umask|ulimit)(?:\s|$)/.test(
-          segment
-        ) ||
-        /^\.\s/.test(segment) ||
-        /^(?:[A-Za-z_]\w*=\S*\s*)+$/.test(segment)
-    )
+    splitSegments(command)
+      .map((segment) => segment.replace(/^(?:(?:builtin|command)\s+)+/, ''))
+      .some(
+        (segment) =>
+          /^(?:cd|pushd|popd|export|source|alias|unalias|unset|umask|ulimit)(?:\s|$)/.test(
+            segment
+          ) ||
+          /^\.\s/.test(segment) ||
+          /^(?:[A-Za-z_]\w*=\S*\s*)+$/.test(segment)
+      )
   ) {
     return 'state-mutating';
   }
