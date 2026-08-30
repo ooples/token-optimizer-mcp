@@ -57,6 +57,29 @@ describe('the rewritten command still means what it meant', () => {
     expect(bounded.stdout).toContain('boom');
   });
 
+  it.each([
+    ['false | true', 0],
+    ['true | false', 1],
+    ['echo a | grep -q a', 0],
+  ])('leaves %s exiting %i, as it does unwrapped', (command, expected) => {
+    // `pipefail` is a SHELL option, not a property of one pipe, so enabling it
+    // changed the meaning of any command that already contained a pipe:
+    // `false | true` exits 0 normally and exited 1 once wrapped. Silently
+    // changing a command's exit status is the same defect as masking one, just
+    // in the other direction.
+    expect(run(command).status).toBe(expected);
+    expect(run(boundedRewrite(command).command).status).toBe(expected);
+  });
+
+  it('still honours a pipefail the caller asked for themselves', () => {
+    // The reset must not override an explicit intent: the caller's `set -o`
+    // runs inside the subshell, after ours is undone.
+    const command = 'set -o pipefail; false | true';
+
+    expect(run(command).status).toBe(1);
+    expect(run(boundedRewrite(command).command).status).toBe(1);
+  });
+
   it('captures stderr, where a failing build says what went wrong', () => {
     const { command } = boundedRewrite('echo to-stderr 1>&2; exit 1');
 
