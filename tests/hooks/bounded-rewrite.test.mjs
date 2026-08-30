@@ -13,7 +13,12 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { boundedRewrite, boundNotice, DEFAULT_BOUND_BYTES } from '../../hooks-core/rewrite.mjs';
+import {
+  boundedRewrite,
+  boundNotice,
+  isOutputHeavy,
+  DEFAULT_BOUND_BYTES,
+} from '../../hooks-core/rewrite.mjs';
 
 /** Runs a command through bash exactly as the client's Bash tool would. */
 function run(command, shellFlags = []) {
@@ -333,6 +338,36 @@ describe('the shipped router bounds instead of refusing', () => {
     expect(r.decision).toBe('allow');
   });
 
+  it.each([['enforce'], ['assist']])(
+    'bounds a test run in %s, where nothing was going to refuse it',
+    (mode) => {
+      // THE DEBUG-LOOP PATH. A test run produces no verdict, so it used to
+      // reach the end of the router unbounded -- the bound only ran where a
+      // refusal would otherwise have happened.
+      //
+      // assist is included deliberately: a bound is not a refusal, it costs no
+      // turn, and gating it on enforcement would mean the posture we intend to
+      // ship got none of the win it exists for.
+      const r = router(
+        { tool_name: 'Bash', tool_input: { command: 'npm test' } },
+        { TOKEN_OPTIMIZER_MODE: mode }
+      );
+
+      expect(r.decision).toBe('allow');
+      expect(r.updatedInput.command).toContain('npm test');
+      expect(r.updatedInput.command).toContain('head -c');
+    }
+  );
+
+  it('leaves a test run alone when the optimizer is off', () => {
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npm test' } },
+      { TOKEN_OPTIMIZER_MODE: 'off' }
+    );
+
+    expect(r.updatedInput).toBeNull();
+  });
+
   it('does not rewrite a command it cannot bound safely', () => {
     // A heredoc body is data; wrapping it in braces moves the terminator. The
     // router must fall back to its previous behaviour rather than mangle it.
@@ -345,5 +380,71 @@ describe('the shipped router bounds instead of refusing', () => {
     );
 
     expect(r.updatedInput).toBeNull();
+  });
+});
+
+
+describe('watch mode, which a bound would turn into a hang', () => {
+  // A word-boundary pattern needs a word boundary AFTER the word, so it caught --watch and
+  // missed --watchAll. That was harmless while only would-be refusals were
+  // bounded; now that test runners are bounded on sight, a watch run reaches
+  // the bound routinely, and `tail -c` cannot emit until an EOF that never comes.
+  it.each([
+    ['npm test -- --watch'],
+    ['npx jest --watchAll'],
+    ['npx jest --watch-all'],
+    ['vitest -w'],
+    ['vitest watch'],
+  ])('refuses to bound %s', (command) => {
+    expect(boundedRewrite(command)).toBeNull();
+  });
+
+  it.each([
+    ['npm test -- -i'],
+    ['vitest run'],
+    // `watcher` is not `watch`: widening the guard must not cost the bound on
+    // an ordinary run that merely names a file.
+    ['npm test src/watcher.test.ts'],
+  ])('still bounds %s', (command) => {
+    expect(boundedRewrite(command)).not.toBeNull();
+  });
+});
+
+describe('which commands are worth bounding at all', () => {
+  // The bound shipped applied only where a REFUSAL would otherwise have
+  // happened, and a test run is never refused -- so the family it was built for
+  // never reached it. These are the runners that reach it now.
+  it.each([
+    ['npm test'],
+    ['npx jest tests/hooks'],
+    ['pytest -q'],
+    ['cargo test'],
+    ['go test ./...'],
+    ['dotnet test'],
+    ['npm run build'],
+    ['make'],
+    ['tsc --noEmit'],
+    ['eslint src'],
+    ['CI=1 npm test'],
+    ['npm run build && npm test'],
+    ['sudo make install'],
+  ])('bounds %s', (command) => {
+    expect(isOutputHeavy(command)).toBe(true);
+  });
+
+  it.each([
+    ['git status'],
+    ['cat README.md'],
+    ['git show HEAD'],
+    ['git log --oneline'],
+    // THE THREE THAT A `\b` PATTERN GOT WRONG, and each would have been
+    // silently truncated: the words appear in a string, in a filename, and as
+    // an argument -- never as the command being run.
+    ['echo "run npm test"'],
+    ['ls src/jest-helpers.ts'],
+    ['grep -n make Makefile'],
+    ['cat Makefile'],
+  ])('leaves %s alone', (command) => {
+    expect(isOutputHeavy(command)).toBe(false);
   });
 });
