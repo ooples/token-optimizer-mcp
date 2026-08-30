@@ -384,6 +384,32 @@ describe('the shipped router bounds instead of refusing', () => {
 });
 
 
+describe('the configured bound is the bound', () => {
+  // Both stages used to get floor(maxBytes / 2) with a floor of 1, which
+  // overshoots on any odd value and DOUBLES it at the bottom: a configured
+  // bound of 1 byte emitted two.
+  it.each([[1], [2], [3], [7], [100], [101], [8000]])(
+    'emits at most %i bytes when %i is configured',
+    (maxBytes) => {
+      const producer = 'for i in $(seq 1 3000); do echo "line $i"; done';
+      const bounded = boundedRewrite(producer, { maxBytes });
+
+      const out = run(bounded.command);
+
+      expect(out.stdout.length).toBeLessThanOrEqual(maxBytes);
+    }
+  );
+
+  it('keeps the exit status when the tail stage has no bytes to take', () => {
+    // A zero-byte tail cannot simply be dropped. A bare `head -c N` exits as
+    // soon as it has its bytes and SIGPIPEs the producer, which under pipefail
+    // reports 141 -- the status-masking this wrapper exists to avoid.
+    const bounded = boundedRewrite('exit 3', { maxBytes: 1 });
+
+    expect(run(bounded.command).status).toBe(3);
+  });
+});
+
 describe('follow mode in commands that are not tail', () => {
   // For a streamer the wrapper is strictly WORSE than no wrapper: unwrapped the
   // model receives output until the client timeout, wrapped it receives nothing

@@ -275,13 +275,29 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
   // to `boundNotice`, stated as the POLICY ("output over N bytes is bounded")
   // rather than as a claim about this particular output. A policy statement is
   // true whether or not this command was cut, so it cannot lie.
-  const half = Math.max(1, Math.floor(maxBytes / 2));
+  // THE TWO STAGES MUST SUM TO maxBytes, NOT EACH BE HALF OF IT. Giving both
+  // stages `floor(maxBytes / 2)` and flooring at 1 overshoots the configured
+  // bound on any odd value and doubles it at the bottom: TOKEN_OPTIMIZER_BOUND_
+  // BYTES=1 produced `head -c 1; tail -c 1` and emitted two bytes.
+  //
+  // The head is the half that gets the odd byte, because for a truncated run
+  // the opening lines carry the command and its first failure, while the tail
+  // is a summary line that survives being one byte shorter.
+  const headBytes = Math.max(1, Math.ceil(maxBytes / 2));
+  const tailBytes = Math.max(0, maxBytes - headBytes);
+
+  // A ZERO-BYTE TAIL STILL HAS TO DRAIN THE PIPE. `tail -c 0` would be correct
+  // but the stage cannot simply be dropped: a bare `head -c N` exits as soon as
+  // it has its bytes and SIGPIPEs the producer, which under pipefail turns a
+  // successful command into exit 141 -- the exact status-masking this wrapper
+  // exists to avoid. `cat >/dev/null` consumes the rest and emits nothing.
+  const tailStage = tailBytes === 0 ? 'cat >/dev/null' : `tail -c ${tailBytes}`;
   return {
     command:
       `_tok_pf=$(set +o 2>/dev/null | grep pipefail); ` +
       `{ set -o pipefail; } 2>/dev/null; ` +
       `( eval "$_tok_pf" 2>/dev/null; ${trimmed}\n) 2>&1 | ` +
-      `{ head -c ${half}; tail -c ${half}; }`,
+      `{ head -c ${headBytes}; ${tailStage}; }`,
     maxBytes,
   };
 }
