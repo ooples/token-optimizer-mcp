@@ -158,3 +158,56 @@ describe('the plan says what it will do before it does it', () => {
     expect(plan.adding).toBe(0);
   });
 });
+
+
+describe('a hook that merely mentions us is not ours', () => {
+  // Ownership was `JSON.stringify(entry).includes('token-optimizer')`, which
+  // reads the whole entry -- matcher included -- so installing DELETED a user's
+  // own hooks for naming us. Verified against the pre-fix code: both of the
+  // first two below were gone after a single `wire()`.
+  const DIR = '/home/u/.claude/token-optimizer/hooks';
+
+  const theirs = () => ({
+    hooks: {
+      // Someone logging optimizer calls names us in the MATCHER.
+      PostToolUse: [
+        {
+          matcher: 'mcp__.*token-optimizer.*',
+          hooks: [{ type: 'command', command: 'node ~/scripts/log-optimizer.mjs' }],
+        },
+      ],
+      Stop: [
+        // Carries the marker, but is not a file we install.
+        { hooks: [{ type: 'command', command: 'node ~/scripts/token-optimizer-report.mjs' }] },
+        // Shares a filename with one of ours, but is not in our directory.
+        { hooks: [{ type: 'command', command: 'node ~/my/stop.mjs' }] },
+      ],
+    },
+  });
+
+  test.each([
+    ['a hook whose matcher names us', 'log-optimizer.mjs'],
+    ['a script of theirs whose name contains ours', 'token-optimizer-report.mjs'],
+    ['a script of theirs sharing one of our filenames', '~/my/stop.mjs'],
+  ])('installing preserves %s', (_label, fragment) => {
+    expect(JSON.stringify(wire(theirs(), DIR))).toContain(fragment);
+  });
+
+  test('and uninstalling preserves them too', () => {
+    const removed = unwire(wire(theirs(), DIR));
+
+    expect(wiredEntries(removed)).toHaveLength(0);
+    for (const fragment of [
+      'log-optimizer.mjs',
+      'token-optimizer-report.mjs',
+      '~/my/stop.mjs',
+    ]) {
+      expect(JSON.stringify(removed)).toContain(fragment);
+    }
+  });
+
+  test('while ours are still recognised, so a re-install does not stack', () => {
+    expect(wiredEntries(wire(theirs(), DIR))).toHaveLength(5);
+    expect(wiredEntries(wire(wire(theirs(), DIR), DIR))).toHaveLength(5);
+  });
+});
