@@ -111,6 +111,7 @@
     "bench:build": "npm run bench:pack && docker build -f bench/thol/Dockerfile -t thol-rig:local bench/",
     "bench:screen": "bash bench/thol/run-campaign.sh",
     "bench:confirm": "REPS=3 bash bench/thol/run-campaign.sh",
+    "bench:debug-loop": "node bench/debug-loop/run.mjs",
     "bench:pack": "node scripts/bench-pack.mjs"
   },
   "repository": {
