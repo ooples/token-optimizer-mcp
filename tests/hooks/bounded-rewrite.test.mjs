@@ -294,6 +294,18 @@ function router(payload, env = {}) {
       ...env,
     },
   });
+  // A CRASH IS NOT AN ALLOW. A router that dies before it writes anything
+  // produces exactly the empty stdout a silent allow produces, so without this
+  // every "leaves it alone" assertion below would pass against a router that
+  // never started. This is not hypothetical: a stray escape in the router's
+  // source turned it into a SyntaxError, and the only reason it was caught was
+  // that a different check read stderr.
+  if (result.status !== 0) {
+    throw new Error(
+      `router exited ${result.status}: ${result.stderr.trim().slice(0, 400)}`
+    );
+  }
+
   // A silent allow emits nothing at all. Spelled out with the same shape as
   // the parsed path so a caller cannot tell them apart by accident.
   if (!result.stdout.trim()) {
