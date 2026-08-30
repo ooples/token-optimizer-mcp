@@ -72,6 +72,7 @@ import {
   standingRules,
 } from './inject.mjs';
 import { indexFile } from './staleness.mjs';
+import { recordAuthoredContent } from './authored.mjs';
 import { observedWrites, queueInvalidation } from './pending.mjs';
 import { archive, isArchived } from './transcript.mjs';
 import { harvestMode } from './harvest.mjs';
@@ -868,6 +869,22 @@ function observeAndInject(payload, state, episode, features) {
           hash: contentHash(path, source),
         });
         indexFile(dir, path, source);
+
+        // WHAT THIS SESSION WROTE, kept separate from the graph snapshot above
+        // because it answers a different question. `indexFile` records what a
+        // hook OBSERVED -- reads included, across sessions -- which is unusable
+        // as a diff base: it would tell a session that never saw a file that
+        // nothing had changed. This record is written only on a mutation and
+        // carries the authoring session, so `smart_read` can ask "did I write
+        // this?" rather than "has anyone seen this?".
+        //
+        // Free here: the source is already in hand for the graph write.
+        recordAuthoredContent(
+          projectRootFor(path, payload.cwd),
+          payload.session_id,
+          path,
+          source
+        );
       } catch {
         // Graph bookkeeping must never break the user's tool call.
       }

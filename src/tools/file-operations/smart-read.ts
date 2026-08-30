@@ -18,6 +18,7 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { generateDiff, hasMeaningfulChanges } from '../shared/diff-utils.js';
 import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
 import { cacheGet, cacheSet } from '../../utils/cache-helper.js';
+import { authoredBase } from './authored-base.js';
 import {
   chunkBySyntax,
   truncateContent,
@@ -140,8 +141,26 @@ export class SmartReadTool {
     });
 
     // Check cache
-    const cachedData = enableCache ? cacheGet(this.cache, cacheKey) : null;
-    const fromCache = cachedData !== null;
+    const ownCached = enableCache ? cacheGet(this.cache, cacheKey) : null;
+
+    // FALL BACK TO WHAT THIS SESSION WROTE. Without this, the first read of a
+    // file resends it in full even when the session wrote it moments earlier
+    // through the built-in Write -- the hook recorded those bytes, but nothing
+    // consulted the record.
+    //
+    // Session-scoped, and that is the whole safety argument. The record carries
+    // the session that authored it, so a caller that did not write the file
+    // gets nothing and resends -- which is today's behaviour, so this can never
+    // make a read worse. The knowledge-graph snapshot could NOT be used here
+    // for exactly that reason: `indexFile` runs on reads too, so it would have
+    // told a session that never saw a file that nothing had changed.
+    const cachedData = ownCached ?? authoredBase(filePath);
+
+    // Deliberately NOT `cachedData !== null`. This means "my own cache entry
+    // hit", which is what the metrics below report and what gates the re-seed
+    // further down -- so a read served off the fallback still populates its own
+    // key, and the next read needs no fallback.
+    const fromCache = ownCached !== null;
 
     // Read file content
     const rawContent = readFileSync(filePath, encoding);
