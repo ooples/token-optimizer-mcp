@@ -31,6 +31,33 @@ prepare() {
     die "No auth. Mount a trimmed credentials file at /auth/credentials.json or set ANTHROPIC_API_KEY."
   fi
 
+  # EVERY DECLARED MODE MUST BE ONE THE PACKAGED BUILD RECOGNISES.
+  #
+  # `mode()` maps an unrecognised value to the default, silently. So an arm
+  # pinning a posture the build predates does not fail -- it quietly measures
+  # the default, two arms become identical, and the campaign produces a
+  # meaningless comparison that looks exactly like a real one. Verified: a
+  # master-based image resolved TOKEN_OPTIMIZER_MODE=assist to `enforce`.
+  #
+  # Cheap to check, and the failure it prevents is otherwise invisible.
+  log "Verifying every arm's mode is recognised by the packaged build"
+  PKG=/usr/local/lib/node_modules/@ooples/token-optimizer-mcp
+  for manifest in /home/bench/manifests/*/manifest.json; do
+    want="$(node -e "
+      const m = require('$manifest');
+      process.stdout.write(m.settings?.env?.TOKEN_OPTIMIZER_MODE || '');
+    ")"
+    [ -n "$want" ] || continue
+    got="$(TOKEN_OPTIMIZER_MODE="$want" node --input-type=module -e "
+      const p = await import('file://$PKG/hooks-core/policy.mjs');
+      process.stdout.write(p.mode());
+    ")"
+    if [ "$got" != "$want" ]; then
+      die "arm $(basename "$(dirname "$manifest")") declares TOKEN_OPTIMIZER_MODE=$want but the packaged build resolves it to '$got'. That arm would silently measure '$got'. Build from a tree that supports '$want'."
+    fi
+    echo "   $(basename "$(dirname "$manifest")"): $want ok"
+  done
+
   log "Registering our manifests in the THOL competitor registry"
   for d in /home/bench/manifests/*/; do
     name="$(basename "$d")"

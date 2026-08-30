@@ -34,9 +34,18 @@ RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION}
 # as root, and every THOL run passes that flag.
 RUN useradd -ms /bin/bash bench
 
-# Our tool, installed globally the way install_competitors.sh installs every
-# other competitor that needs a binary on PATH before a run.
-RUN npm install -g @ooples/token-optimizer-mcp@${OPTIMIZER_VERSION}
+# THE WORKING TREE, NOT THE REGISTRY.
+#
+# `npm run bench:build` packs this repo into thol/pkg/optimizer.tgz first, so the
+# harness grades the code beside it. Installing from the registry instead meant
+# the image could not measure anything unreleased -- and worse, could do so
+# SILENTLY: an arm pinning a mode the published build does not recognise falls
+# back to the default, so two arms become identical and the campaign produces a
+# meaningless comparison rather than an error.
+#
+# To measure a published release, check out its tag and build from there.
+COPY thol/pkg/optimizer.tgz /tmp/optimizer.tgz
+RUN npm install -g /tmp/optimizer.tgz
 
 # Pre-seed a SHARED managed runtime for plugin/launch.mjs.
 #
@@ -61,8 +70,7 @@ RUN npm install -g @ooples/token-optimizer-mcp@${OPTIMIZER_VERSION}
 ENV TOKEN_OPTIMIZER_RUNTIME=/opt/token-optimizer-runtime
 RUN mkdir -p ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
     && cd ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
-    && npm install --prefix . --no-audit --no-fund \
-         @ooples/token-optimizer-mcp@${OPTIMIZER_VERSION} \
+    && npm install --prefix . --no-audit --no-fund /tmp/optimizer.tgz \
     && printf '%s' "${OPTIMIZER_VERSION}" > ${TOKEN_OPTIMIZER_RUNTIME}/current \
     && node -e "require('fs').writeFileSync(process.env.TOKEN_OPTIMIZER_RUNTIME + '/.last-refresh', String(Date.now()))" \
     && chown -R bench:bench ${TOKEN_OPTIMIZER_RUNTIME}
