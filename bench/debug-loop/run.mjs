@@ -42,7 +42,7 @@
  * project pointed a write-capable tool at the repository root and overwrote
  * package.json.
  */
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import {
   readFileSync,
   writeFileSync,
@@ -80,22 +80,29 @@ const ITERATIONS = [
   { label: 'fixed', from: null, to: null },
 ];
 
+/**
+ * BOTH STREAMS, EVERY RUN. The first version returned only stdout when the
+ * suite passed and stdout+stderr when it failed, so the passing iteration was
+ * measured on a different quantity from the failing ones -- and jest writes its
+ * report to stderr, which is exactly the wall of output a debug loop pays for.
+ * A measurement whose input changes shape between arms is not a measurement.
+ *
+ * `spawnSync` rather than `execFileSync` because it does not throw on a
+ * non-zero exit: a failing suite is the NORMAL case here, not an error. Only a
+ * failure to spawn at all is worth throwing for.
+ */
 function runSuite() {
-  try {
-    return execFileSync(
-      process.execPath,
-      [
-        '--experimental-vm-modules',
-        join('node_modules', 'jest', 'bin', 'jest.js'),
-        SUITE,
-      ],
-      { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 180_000 }
-    );
-  } catch (error) {
-    // A failing suite exits non-zero and its report is on stderr. That report
-    // IS the measurement -- this is the wall of output a debug loop pays for.
-    return `${error.stdout ?? ''}${error.stderr ?? ''}`;
-  }
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--experimental-vm-modules',
+      join('node_modules', 'jest', 'bin', 'jest.js'),
+      SUITE,
+    ],
+    { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 180_000 }
+  );
+  if (result.error) throw result.error;
+  return `${result.stdout ?? ''}${result.stderr ?? ''}`;
 }
 
 /**
@@ -135,6 +142,26 @@ function truncateMiddle(text, cap) {
   const marker = `\n\n... [${text.length - cap} characters truncated] ...\n\n`;
   const half = Math.max(0, Math.floor((cap - marker.length) / 2));
   return text.slice(0, half) + marker + text.slice(text.length - half);
+}
+
+/**
+ * The head+tail byte bound production applies, modelled honestly.
+ *
+ * BYTES, because the shell's `head -c` / `tail -c` count bytes; slicing
+ * characters would model a bigger budget than the command really gets on any
+ * multibyte output. And head+tail rather than a tail, because that is what
+ * `boundedRewrite` emits -- the client's own truncation keeps both ends, so a
+ * tail-only model would misrepresent both production and the baseline.
+ */
+function boundBytes(text, maxBytes) {
+  const buffer = Buffer.from(text, 'utf8');
+  if (buffer.length <= maxBytes) return text;
+  const half = Math.max(1, Math.floor(maxBytes / 2));
+  return (
+    buffer.subarray(0, half).toString('utf8') +
+    '\n... [middle omitted by token-optimizer] ...\n' +
+    buffer.subarray(buffer.length - half).toString('utf8')
+  );
 }
 
 const stripColour = (text) => text.replace(/\x1b\[[0-9;]*m/g, '');
@@ -226,8 +253,17 @@ const main = async () => {
     const raw = truncateMiddle(capture.output, CLIENT_CAP_CHARS);
     // control: the same wall with ANSI colour stripped. Nothing else.
     const control = truncateMiddle(base, CLIENT_CAP_CHARS);
-    // bounded: what this project now does -- the last 8 KB.
-    const bounded = base.slice(-bound);
+    // bounded: what production ACTUALLY does, which is not what this arm used
+    // to model. `boundedRewrite` does not strip ANSI, and it now keeps the head
+    // AND the tail rather than the tail alone. Modelling it as a colour-stripped
+    // tail credited the bounded arm with the 36% that stripping is worth on its
+    // own -- the same arm-asymmetry defect this file already had once, in the
+    // dedup arms, and missed here.
+    //
+    // Byte-based, not character-based, because `head -c`/`tail -c` count bytes:
+    // on multibyte output a character slice would model a larger budget than
+    // the shell actually applies.
+    const bounded = boundBytes(capture.output, bound);
     // deduped: only lines this run did not repeat, plus a one-line summary.
     const deduped = previous
       ? `[${repeated} lines identical to the previous run, omitted]\n` +
@@ -237,7 +273,7 @@ const main = async () => {
     // combined: dedup FIRST, then bound what is left. They are not rivals --
     // dedup keeps the first run in full and saves on later ones, bounding caps
     // every run including the first. Each covers the other's blind spot.
-    const combined = deduped.slice(-bound);
+    const combined = boundBytes(deduped, bound);
 
     arms.raw += counter.count(raw).tokens;
     arms.control += counter.count(control).tokens;
@@ -266,7 +302,7 @@ const main = async () => {
   say('');
   say(
     `raw = the client's own ${CLIENT_CAP_CHARS}-char MIDDLE truncation, ANSI included; ` +
-      `control = same, colour stripped; bounded = ${bound} bytes; ` +
+      `control = same, colour stripped; bounded = ${bound} bytes head+tail, colour KEPT; ` +
       `deduped = new lines only; combined = both.`
   );
   say(

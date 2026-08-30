@@ -49,10 +49,18 @@ export function boundBytes() {
  * same command with less output, and anything short of that is left alone.
  */
 function unsafeToBound(command) {
-  // A heredoc body is data, and `{ cmd <<'EOF' ; }` moves the terminator
-  // relative to the braces. Getting this wrong corrupts the payload rather than
-  // failing loudly -- the same class of damage a greedy regex does to source.
-  if (/<<-?\s*['"]?\w+/.test(command)) return 'heredoc';
+  // EVERY `<<`, not a guess at the delimiter shape. A heredoc body is data, and
+  // wrapping it moves the terminator relative to the braces -- which corrupts
+  // the payload rather than failing loudly, the same class of damage a greedy
+  // regex does to source.
+  //
+  // The first version tried to match the delimiter (`<<-?\s*['"]?\w+`) and
+  // missed the ESCAPED form: `cat <<\EOF` was rewritten. Bash accepts several
+  // spellings -- bare, single-quoted, double-quoted, backslash-escaped, `<<-`,
+  // and with arbitrary spacing -- so enumerating them is a losing game. The
+  // operator itself is unambiguous. Herestrings (`<<<`) are swept up too: they
+  // would be safe to bound, and giving that up is the cheaper mistake.
+  if (/<</.test(command)) return 'heredoc';
 
   // Backgrounding detaches the process; a pipeline cannot bound what it no
   // longer owns. `&&` and `||` are not this, hence the negative lookarounds.
@@ -67,9 +75,20 @@ function unsafeToBound(command) {
   if (/\|\s*(head|tail)\b/.test(command)) return 'already-bounded';
 
   // An interactive or streaming command has no meaningful tail, and buffering
-  // it through a pipe can hang.
-  if (/\b(watch|tail\s+-f|less|more|vim|nano|top|htop)\b/.test(command)) {
+  // it through a pipe does not merely waste effort -- it HANGS, because the
+  // wrapper's own `tail -c` cannot emit anything until EOF and follow mode
+  // never reaches EOF.
+  if (/\b(watch|less|more|vim|nano|top|htop)\b/.test(command)) {
     return 'interactive';
+  }
+
+  // FOLLOW MODE IN ANY SPELLING. Matching only `tail -f` left four working
+  // forms to hang: `tail -F`, `tail -n 100 -f`, `tail --follow` and
+  // `tail --follow=name`. The flag does not have to come first and does not
+  // have to be short, so the guard looks anywhere in the `tail` invocation --
+  // bounded to that command by stopping at a `;`, `|` or `&`.
+  if (/\btail\b[^;|&]*(\s-{1,2}(f|F|follow)\b|\s--follow=)/.test(command)) {
+    return 'follow-mode';
   }
 
   return null;
