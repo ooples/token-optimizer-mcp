@@ -175,11 +175,21 @@ function unsafeToBound(command) {
   // suggest why. `export`, a bare `FOO=1`, and `source venv/bin/activate` fail
   // the same way in clients whose shell persists more than the cwd.
   //
-  // `set` and `shopt` are deliberately NOT screened: their whole scope is the
-  // command they precede, which runs inside the same subshell, so a bound
-  // changes nothing about them. `CI=1 npm test` is likewise fine -- an
-  // assignment attached to a command never outlived that command anyway. Only a
-  // segment that is assignments ALONE is a shell mutation.
+  // `set` AND `shopt` BELONG HERE TOO, which was not the first judgement. The
+  // reasoning then was that their scope is the command they precede, which runs
+  // in the same subshell -- true, and beside the point: unbounded, `set -e` also
+  // outlives that command and applies to the caller's LATER calls, and bounded
+  // it does not. Whether anyone relies on that depends on how persistent a given
+  // client's shell is, and this module ships to eleven of them, so the safe
+  // reading is the one that does not silently differ.
+  //
+  // The cost is real -- `set -euo pipefail; npm test` is a common prefix and now
+  // goes unbounded. Hoisting a leading mutating segment out of the wrapper would
+  // recover it, and is the same follow-up the `cd` case wants.
+  //
+  // `CI=1 npm test` stays bounded: an assignment attached to a command never
+  // outlived that command anyway. Only a segment that is assignments ALONE is a
+  // shell mutation.
   // `builtin` AND `command` ARE STRIPPED FIRST. Both take a builtin and run it
   // in the current shell, so `builtin cd packages/api && npm test` and
   // `command cd packages/api && npm test` change the caller's directory exactly
@@ -191,7 +201,7 @@ function unsafeToBound(command) {
       .map((segment) => segment.replace(/^(?:(?:builtin|command)\s+)+/, ''))
       .some(
         (segment) =>
-          /^(?:cd|pushd|popd|export|source|alias|unalias|unset|umask|ulimit)(?:\s|$)/.test(
+          /^(?:cd|pushd|popd|export|source|alias|unalias|unset|umask|ulimit|set|shopt|declare|typeset|readonly|eval|exec|trap)(?:\s|$)/.test(
             segment
           ) ||
           /^\.\s/.test(segment) ||
@@ -332,6 +342,28 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
   // successful command into exit 141 -- the exact status-masking this wrapper
   // exists to avoid. `cat >/dev/null` consumes the rest and emits nothing.
   const tailStage = tailBytes === 0 ? 'cat >/dev/null' : `tail -c ${tailBytes}`;
+  // THE COMMAND GOES IN AS A LITERAL, NOT AS SHELL TEXT.
+  //
+  // Interpolating it between our subshell delimiters let it CLOSE them: with
+  // `echo one ); echo INJECTED; ( echo two`, bash rejects the command outright
+  // when it is run on its own -- a syntax error, exit 2, no output -- while the
+  // bounded form completed successfully and ran the middle command. Turning a
+  // command the shell refuses into one that runs is the most serious thing this
+  // wrapper could do, and it is a change in meaning even when nothing hostile
+  // is intended.
+  //
+  // Single-quoting and handing it to `eval` closes that off: the shell sees one
+  // word, our structure is fixed before the command is looked at, and the
+  // command is then parsed exactly as it would have been on its own. Every
+  // legitimate shape that contains a paren keeps working, and those were the
+  // reason not to simply ban the character -- `case a in a) ...;; esac`, a
+  // function definition, a quoted `"a (b)"`, and the author's own `( ... )` all
+  // behave identically bounded and unbounded.
+  //
+  // The escape is the standard one: end the quoted run, add an escaped quote,
+  // start a new run.
+  const quoted = `'${trimmed.split("'").join("'\\''")}'`;
+
   // AND ALL OF IT INSIDE ONE OUTER SUBSHELL, so nothing survives the command.
   //
   // The pipefail dance above was written at the CALLER'S level, which fixed the
@@ -351,7 +383,7 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
     command:
       `( _tok_pf=$(set +o 2>/dev/null | grep pipefail); ` +
       `{ set -o pipefail; } 2>/dev/null; ` +
-      `( eval "$_tok_pf" 2>/dev/null; ${trimmed}\n) 2>&1 | ` +
+      `( eval "$_tok_pf" 2>/dev/null; eval ${quoted}\n) 2>&1 | ` +
       `{ head -c ${headBytes}; ${tailStage}; } )`,
     maxBytes,
   };
