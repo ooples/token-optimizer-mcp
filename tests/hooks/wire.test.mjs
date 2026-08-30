@@ -181,6 +181,19 @@ describe('a hook that merely mentions us is not ours', () => {
         { hooks: [{ type: 'command', command: 'node ~/scripts/token-optimizer-report.mjs' }] },
         // Shares a filename with one of ours, but is not in our directory.
         { hooks: [{ type: 'command', command: 'node ~/my/stop.mjs' }] },
+        // Borrowed our name for a directory of their own. `token-optimizer`
+        // must be a path SEGMENT, not a substring, or this is claimed as ours.
+        { hooks: [{ type: 'command', command: 'node ~/token-optimizer-backup/stop.mjs' }] },
+        // Names one of our files as an ARGUMENT it merely passes along, which a
+        // scan of the whole command string reads as if it were the script.
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'node "/hooks/token-optimizer-report.mjs" --template "/hooks/stop.mjs"',
+            },
+          ],
+        },
       ],
     },
   });
@@ -189,6 +202,8 @@ describe('a hook that merely mentions us is not ours', () => {
     ['a hook whose matcher names us', 'log-optimizer.mjs'],
     ['a script of theirs whose name contains ours', 'token-optimizer-report.mjs'],
     ['a script of theirs sharing one of our filenames', '~/my/stop.mjs'],
+    ['a directory of theirs that borrowed our name', 'token-optimizer-backup/stop.mjs'],
+    ['one of our filenames passed as an argument', 'token-optimizer-report.mjs'],
   ])('installing preserves %s', (_label, fragment) => {
     expect(JSON.stringify(wire(theirs(), DIR))).toContain(fragment);
   });
@@ -201,6 +216,7 @@ describe('a hook that merely mentions us is not ours', () => {
       'log-optimizer.mjs',
       'token-optimizer-report.mjs',
       '~/my/stop.mjs',
+      'token-optimizer-backup/stop.mjs',
     ]) {
       expect(JSON.stringify(removed)).toContain(fragment);
     }
