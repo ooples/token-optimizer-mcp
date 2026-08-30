@@ -25,7 +25,8 @@ import { bumpFsGeneration } from '../../utils/fs-generation.js';
 import { writeBackup } from '../../utils/file-backup.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-import { generateCacheKey } from '../shared/hash-utils.js';
+import { generateCacheKey, lastWrittenKey } from '../shared/hash-utils.js';
+import { cacheSet } from '../../utils/cache-helper.js';
 import { generateUnifiedDiff } from '../shared/diff-utils.js';
 import { detectFileType } from '../shared/syntax-utils.js';
 
@@ -261,6 +262,16 @@ export class SmartWriteTool {
         const cacheKey = generateCacheKey('file-write', { path: filePath });
         const contentSize = Buffer.from(finalContent, 'utf-8').length;
         this.cache.set(cacheKey, finalContent, contentSize, contentSize);
+
+        // TELL THE READER WHAT THE FILE NOW CONTAINS. The entry above is in a
+        // namespace no reader consults, and it is stored raw while every reader
+        // goes through `cacheGet`, which expects base64 gzip and treats a decode
+        // failure as a miss -- so it could not have been read back even under a
+        // matching key. This second entry is the handoff: one key derived from
+        // the path alone, written through the same helper the readers use, so
+        // the next smart_read diffs against what we just wrote instead of
+        // resending the whole file.
+        cacheSet(this.cache, lastWrittenKey(filePath), finalContent);
       }
 
       // Step 8: Record metrics
