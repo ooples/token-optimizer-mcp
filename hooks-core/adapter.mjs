@@ -23,6 +23,7 @@ import {
   alreadyDenied,
   mode,
   MODE_OFF,
+  MODE_ASSIST,
   refusalsEnabled,
   largeFileBytes,
   readPayloadResult,
@@ -676,14 +677,28 @@ export function policyText(
         : registrationProven
           ? 'The host supplied a proven empty optimizer MCP inventory for this session.'
           : 'This hook received no positive evidence that optimizer MCP tools are registered in this session.';
-  const routing = routes.length
-    ? `\n\nPrefer only the registered replacements listed below; they cache, diff, or bound output:\n\n${routes.join('\n')}`
-    : "\n\nKeep the CLI's native tools available and bound their output. Do not redirect to or call an optimizer MCP tool unless its schema is visible in the current tool inventory.";
-  const enforcement = routes.length
-    ? canDeny && refusalsEnabled()
-      ? '\n\nA built-in call is denied only when its exact replacement has positive registration evidence. A second attempt at the same target remains available.'
-      : '\n\nThese are recommendations; the built-in tools remain available.'
-    : '';
+  // ASSIST SAYS NOTHING ABOUT ROUTING. The routing list plus its "these are
+  // recommendations" tail cost ~800 bytes of context in every session, and
+  // under assist they advise about a mechanism that is switched off -- which is
+  // precisely the per-session overhead assist exists to remove. Measured: 813
+  // bytes emitted under assist against 898 under enforce, where the advice is
+  // at least true.
+  //
+  // The graph guidance below is deliberately NOT suppressed: retrieval and
+  // harvest are what assist keeps, so telling the model how to record findings
+  // still earns its place.
+  const advertiseRouting = mode() !== MODE_ASSIST;
+  const routing = !advertiseRouting
+    ? ''
+    : routes.length
+      ? `\n\nPrefer only the registered replacements listed below; they cache, diff, or bound output:\n\n${routes.join('\n')}`
+      : "\n\nKeep the CLI's native tools available and bound their output. Do not redirect to or call an optimizer MCP tool unless its schema is visible in the current tool inventory.";
+  const enforcement =
+    advertiseRouting && routes.length
+      ? canDeny && refusalsEnabled()
+        ? '\n\nA built-in call is denied only when its exact replacement has positive registration evidence. A second attempt at the same target remains available.'
+        : '\n\nThese are recommendations; the built-in tools remain available.'
+      : '';
   const utilities = [
     tools.has('optimize_session')
       ? 'When the context window gets tight, call optimize_session.'

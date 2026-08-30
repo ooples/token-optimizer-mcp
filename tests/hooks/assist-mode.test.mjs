@@ -132,3 +132,31 @@ describe('assist keeps the parts off destroys', () => {
     expect(assist.stdout.trim().length).toBeGreaterThan(0);
   });
 });
+
+describe('assist does not advertise routing it will not perform', () => {
+  const startUnder = (modeValue) =>
+    runHook(SESSION_START, { hook_event_name: 'SessionStart', cwd: workspace }, modeValue)
+      .stdout;
+
+  test('the routing advisory is suppressed', () => {
+    // The routing list and its "these are recommendations" tail cost context in
+    // every session, and under assist they describe a mechanism that is off --
+    // which is the per-session overhead assist exists to remove.
+    const out = startUnder('assist');
+    expect(out).not.toContain('Prefer only the registered');
+    expect(out).not.toContain('These are recommendations');
+    expect(out).not.toContain('denied only when');
+  });
+
+  test('but the graph guidance survives, which is the point of assist', () => {
+    // Guards against over-correction: suppressing the whole payload would make
+    // assist indistinguishable from off.
+    expect(startUnder('assist')).toContain('Record what you work out');
+  });
+
+  test('enforce still advertises routing, so this is scoped to assist', () => {
+    const out = startUnder('enforce');
+    expect(out).toContain('Prefer only the registered');
+    expect(out).toContain('denied only when');
+  });
+});
