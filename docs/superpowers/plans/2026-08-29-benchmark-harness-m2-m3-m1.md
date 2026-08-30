@@ -155,8 +155,25 @@ measured effect can land in one commit."
 and `TOKEN_OPTIMIZER_WIKI_DISABLED=1`, neither of which existed when this plan
 was first written — `mode()` mapped `assist` to `enforce`, so the arm would have
 silently measured the enforcing build and produced two identical arms. Both now
-exist: `assist` in PR #352, the graph switch in PR #355, and **those must be
-merged into the tree this task builds from**.
+exist: `assist` in PR #352, the graph switch in PR #355.
+
+**They do not have to be merged first — but they must be IN THE TREE you build
+from.** Those are different requirements, and the difference matters: merge
+status is a proxy for behaviour, and the harness now checks the behaviour
+directly. Build from any tree that contains both (a local integration branch is
+fine), and:
+
+- `bench:pack` records that tree's **git tree hash**, which is folded into the
+  campaign label and stored on every run row — so the result is attributable to
+  exact content regardless of branch or merge state, and a dirty tree is flagged
+  rather than silently attributed to a commit that does not contain it;
+- the preflight **exercises each arm's declared configuration** against the
+  packaged build — the mode must round-trip, and a declared graph switch must
+  leave the writers inert.
+
+An arm whose capability is missing fails loudly before any spend, naming what it
+would otherwise have measured. Waiting for a merge would not have caught a
+capability that merged but did not work.
 
 Task 1's preflight enforces the mode half of that ordering: the campaign refuses
 to start when an arm declares a mode the packed build does not recognise, naming
