@@ -87,7 +87,16 @@ function unsafeToBound(command) {
   // `tail --follow=name`. The flag does not have to come first and does not
   // have to be short, so the guard looks anywhere in the `tail` invocation --
   // bounded to that command by stopping at a `;`, `|` or `&`.
-  if (/\btail\b[^;|&]*(\s-{1,2}(f|F|follow)\b|\s--follow=)/.test(command)) {
+  // CLUSTERED SHORT OPTIONS TOO. GNU tail accepts `-fn 1` and `-fF`, and a
+  // guard anchored on `-f\b` matches neither, because the `\b` fails against
+  // the next clustered letter. Both keep following and never reach EOF, so the
+  // bound waits forever. The character class therefore looks for f or F
+  // ANYWHERE in a short-option cluster.
+  if (
+    /\btail\b[^;|&]*(\s-[a-zA-Z]*[fF][a-zA-Z]*\b|\s--follow\b|\s--follow=)/.test(
+      command
+    )
+  ) {
     return 'follow-mode';
   }
 
@@ -110,11 +119,19 @@ function unsafeToBound(command) {
  * exited 1 once wrapped. Silently changing a command's exit status is the same
  * defect as masking one, in the other direction.
  *
- * The command therefore runs inside a subshell that restores the shell default
- * (`set +o pipefail`), while the OUTER pipeline -- ours -- keeps it. Both
- * properties hold at once, and an explicit `set -o pipefail` written by the
- * caller still takes effect, because it executes inside that subshell after
- * the reset.
+ * The command therefore runs inside a subshell that restores THE CALLER'S OWN
+ * state, while the OUTER pipeline -- ours -- keeps pipefail. `set +o` prints
+ * the current options in re-inputtable form, so the one `pipefail` line is
+ * captured before we change anything and eval'd back inside the subshell.
+ *
+ * Restoring rather than CLEARING, because clearing is the same bug mirrored: a
+ * caller running under `bash -o pipefail` would have had `false | true` return
+ * 1, and a hard `set +o pipefail` would hand them 0. Either direction is a
+ * silent change to an exit status we were only supposed to be bounding the
+ * output of.
+ *
+ * An explicit `set -o pipefail` written inside the command still takes effect,
+ * because it executes inside that subshell after the restore.
  *
  * THE PIPE STAGE IS A GROUP, NOT A BARE `head`. A bare `head -c N` exits as
  * soon as it has its bytes and SIGPIPEs the producer, which under `pipefail`
@@ -174,8 +191,9 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
   const half = Math.max(1, Math.floor(maxBytes / 2));
   return {
     command:
+      `_tok_pf=$(set +o 2>/dev/null | grep pipefail); ` +
       `{ set -o pipefail; } 2>/dev/null; ` +
-      `( { set +o pipefail; } 2>/dev/null; ${trimmed}\n) 2>&1 | ` +
+      `( eval "$_tok_pf" 2>/dev/null; ${trimmed}\n) 2>&1 | ` +
       `{ head -c ${half}; tail -c ${half}; }`,
     maxBytes,
   };
