@@ -171,8 +171,16 @@ function unsafeToBound(command) {
   // the next clustered letter. Both keep following and never reach EOF, so the
   // bound waits forever. The character class therefore looks for f or F
   // ANYWHERE in a short-option cluster.
+  //
+  // AND FOLLOW MODE IS NOT ONLY `tail`. The same `-f` that never reaches EOF is
+  // how every log streamer is invoked: `journalctl -f`, `docker logs -f`,
+  // `docker compose logs -f`, `kubectl logs -f`. For these the wrapper is
+  // strictly WORSE than leaving the command alone -- unwrapped, the model at
+  // least receives streamed output until the client's timeout; wrapped, `tail
+  // -c` emits nothing at all and the timeout is spent anyway. The same
+  // clustered-and-long-form flag matching applies to each.
   if (
-    /\btail\b[^;|&]*(\s-[a-zA-Z]*[fF][a-zA-Z]*\b|\s--follow\b|\s--follow=)/.test(
+    /\b(tail|journalctl|kubectl|docker|podman|heroku|pm2|vercel|flyctl|fly|serverless|sls|adb|stern)\b[^;|&]*(\s-[a-zA-Z]*[fF][a-zA-Z]*\b|\s--follow\b|\s--follow=)/.test(
       command
     )
   ) {
