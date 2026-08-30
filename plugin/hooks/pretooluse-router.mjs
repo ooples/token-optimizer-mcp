@@ -18,7 +18,9 @@ import {
   alreadyDenied,
   allow,
   allowWithContext,
+  allowWithRewrite,
   enforce,
+  refusalsEnabled,
   mode,
   MODE_OFF,
 } from './lib/policy.mjs';
@@ -52,6 +54,7 @@ import {
 } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { isArchived } from './lib/transcript.mjs';
+import { boundedRewrite, boundNotice } from './lib/rewrite.mjs';
 import { isFsSafePath } from './lib/paths.mjs';
 import { readFileSync } from 'node:fs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
@@ -488,6 +491,33 @@ ${nudge}`
       }
     } catch {
       // Any failure here falls back to the plain redirect, which always works.
+    }
+  }
+
+  // BOUND IT INSTEAD OF REFUSING IT.
+  //
+  // Reaching here means a verdict exists -- the no-verdict path allowed and
+  // returned long ago -- so this is a call we were about to refuse. For Bash we
+  // do not have to. A PreToolUse hook can rewrite the command through
+  // `updatedInput` and the rewritten command runs, so the same limit can be
+  // applied for ZERO extra turns instead of one.
+  //
+  // That distinction is the entire measured deficit: enforcement took turns
+  // from 12.6 to 20.9 -- about one per refusal -- for a task-mean 1.633x
+  // vanilla Claude Code, while the same build without refusals measured 0.928.
+  // A refusal "saves" fewer tokens than the round trip it spends.
+  //
+  // Only where a refusal would actually have happened. In assist and off the
+  // call was already going through untouched, and silently bounding output
+  // there would be a new behaviour rather than a cheaper spelling of an
+  // existing one.
+  if (payload.tool_name === 'Bash' && refusalsEnabled()) {
+    const bounded = boundedRewrite(payload.tool_input?.command);
+    if (bounded) {
+      allowWithRewrite(
+        { ...payload.tool_input, command: bounded.command },
+        boundNotice(bounded.maxBytes)
+      );
     }
   }
 
