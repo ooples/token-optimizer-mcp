@@ -81,6 +81,10 @@ function run(payload, env = {}) {
     decision:
       out.permissionDecision || (out.additionalContext ? 'advise' : 'allow'),
     reason: out.permissionDecisionReason || out.additionalContext || '',
+    // The command that will ACTUALLY run. A Bash dump is now bounded rather
+    // than refused, so the assertion that the bypass is closed has to look at
+    // the rewritten command, not at a decision string.
+    updatedInput: out.updatedInput || null,
   };
 }
 
@@ -142,14 +146,23 @@ describe('loop breaking bounds every failure mode', () => {
 });
 
 describe('the shell bypass is closed', () => {
-  test('cat of a large file is denied', () => {
+  test('cat of a large file is bounded, so the dump cannot reach context', () => {
+    // THE MECHANISM CHANGED, THE GUARANTEE DID NOT. This used to be a refusal.
+    // A refusal costs about one extra turn -- enforcement measured 12.6 to 20.9
+    // turns and a task-mean 1.633x -- so the same limit is now applied by
+    // rewriting the command through `updatedInput`, which costs none.
+    //
+    // Stated plainly, because it IS a trade: a refusal let zero bytes through,
+    // a bound lets the tail through. That is deliberate. The tail of a dump is
+    // worth far less than the round trip refusing it spends.
     const r = run({
       tool_name: 'Bash',
       tool_input: { command: `cat ${big}` },
       session_id: 'bash-1',
     });
-    expect(r.decision).toBe('deny');
-    expect(r.reason).toContain('smart_read');
+    expect(r.decision).toBe('allow');
+    expect(r.updatedInput.command).toContain(`cat ${big}`);
+    expect(r.updatedInput.command).toContain('tail -c');
   });
 
   test('a pipeline with no file operand is untouched', () => {
@@ -182,8 +195,12 @@ describe('the shell bypass is closed', () => {
       tool_input: { command: `cat ${msys}` },
       session_id: 'msys-1',
     });
-    expect(r.decision).toBe('deny');
-    expect(r.reason).toContain('smart_read');
+    // Bounded, not refused -- see the `cat` case above for why. The guarantee
+    // under test is unchanged and is what the rewrite proves: the MSYS path was
+    // RESOLVED. An unresolved path produces no verdict at all, so the router
+    // would have allowed the call untouched and there would be no rewrite here.
+    expect(r.decision).toBe('allow');
+    expect(r.updatedInput.command).toContain('tail -c');
   });
 
   test('the two spellings of one path are one identity, on every platform', () => {

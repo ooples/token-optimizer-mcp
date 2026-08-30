@@ -701,6 +701,41 @@ export function allowWithContext(context) {
 }
 
 /**
+ * Lets the call run, but with a rewritten input -- the zero-turn alternative to
+ * a refusal.
+ *
+ * `updatedInput` is a real PreToolUse field and the rewritten call really runs;
+ * docs/superpowers/spikes/2026-08-30-posttooluse-rewrite.md has the end-to-end
+ * verification. This emitter is what makes it usable. A refusal costs about one
+ * extra turn, and turns are the whole measured deficit -- 12.6 to 20.9 under
+ * enforcement, for a task-mean 1.633x -- so a bound applied here is free where
+ * the same bound applied by refusing is not.
+ *
+ * The notice rides along as `additionalContext` rather than being baked into
+ * the command, so the command's own output is never mangled to carry a message.
+ *
+ * IT IS NOT OPTIONAL. The spike's model noticed an unannounced rewrite and
+ * distrusted the result -- "the output does not match the command ... I'm
+ * reporting what I actually received" -- and a model that distrusts its output
+ * re-runs the command, spending the exact turn this exists to save.
+ */
+export function allowWithRewrite(updatedInput, notice) {
+  const output = {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'allow',
+      permissionDecisionReason: 'token-optimizer bounded this output',
+      updatedInput,
+      ...(notice ? { additionalContext: withEscape(notice) } : {}),
+    },
+  };
+  const serialized = JSON.stringify(output);
+  noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
+  process.stdout.write(serialized);
+  process.exit(0);
+}
+
+/**
  * Blocks the call and tells the model exactly what to call instead.
  *
  * The reason string is the whole user interface of this product for an agent.
