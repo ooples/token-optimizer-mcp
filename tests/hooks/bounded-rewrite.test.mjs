@@ -89,13 +89,21 @@ describe('the rewritten command still means what it meant', () => {
     expect(underPipefail(boundedRewrite(command).command)).toBe(1);
   });
 
-  it('still honours a pipefail the caller asked for themselves', () => {
-    // The reset must not override an explicit intent: the caller's `set -o`
-    // runs inside the subshell, after ours is undone.
+  it('refuses a command that sets a shell option for itself', () => {
+    // This used to be bounded, and to assert that the caller's own `set -o`
+    // survived our reset because it ran inside the subshell after it. Both
+    // halves were true and the conclusion was still wrong: unbounded, that
+    // `set -o` ALSO applies to the caller's later calls, and from inside a
+    // subshell it cannot. The command is now left alone rather than quietly
+    // given a shorter reach, which is the stronger guarantee.
+    //
+    // The property the old test was reaching for -- that we neither impose
+    // pipefail on a caller who did not ask for it nor take it from one who
+    // did -- is covered by the two cases above.
     const command = 'set -o pipefail; false | true';
 
     expect(run(command).status).toBe(1);
-    expect(run(boundedRewrite(command).command).status).toBe(1);
+    expect(boundedRewrite(command)).toBeNull();
   });
 
   it('captures stderr, where a failing build says what went wrong', () => {
@@ -411,6 +419,49 @@ describe('the shipped router bounds instead of refusing', () => {
 });
 
 
+describe('the command cannot restructure the wrapper', () => {
+  // The command used to be interpolated between our subshell delimiters, so it
+  // could CLOSE them. Measured before the fix: `echo one ); echo INJECTED;
+  // ( echo two` is a syntax error on its own -- exit 2, no output -- and the
+  // bounded form completed successfully and ran the middle command. Turning a
+  // command the shell refuses into one that runs is the worst thing this
+  // wrapper could do, and it is a change in meaning even with nothing hostile
+  // intended.
+  it('rejects a structure-breaking command exactly as the bare shell does', () => {
+    const command = 'echo one ); echo INJECTED; ( echo two';
+
+    const bare = run(command);
+    const bounded = run(boundedRewrite(command).command);
+
+    // A line of its own means it ran. The word also appears inside bash's own
+    // syntax-error text, which quotes the offending line, so a substring check
+    // would pass for the wrong reason.
+    const ran = (result) =>
+      result.stdout.split('\n').map((line) => line.trim()).includes('INJECTED');
+
+    expect(bare.status).toBe(2);
+    expect(bounded.status).toBe(2);
+    expect(ran(bare)).toBe(false);
+    expect(ran(bounded)).toBe(false);
+  });
+
+  // Parens are why the character could not simply be banned: these all contain
+  // one legitimately, and every one must survive being bounded.
+  it.each([
+    ['case a in a) echo CASE_OK;; esac', 'CASE_OK'],
+    ['f() { echo FN_OK; }; f', 'FN_OK'],
+    ['echo "a (b)"', 'a (b)'],
+    ['(echo SUB_OK)', 'SUB_OK'],
+    ["echo 'single quoted'", 'single quoted'],
+    ['echo $(echo nested) $((1+1))', 'nested 2'],
+  ])('%s still behaves as itself', (command, expected) => {
+    const bounded = run(boundedRewrite(command).command);
+
+    expect(bounded.status).toBe(0);
+    expect(bounded.stdout).toContain(expected);
+  });
+});
+
 describe('nothing survives the bounded command', () => {
   // The pipefail dance was written at the CALLER'S level. That fixed the leak
   // INTO the command and created its mirror on the other side: afterwards the
@@ -471,6 +522,12 @@ describe('commands whose point is to change the shell itself', () => {
     // these change the caller's directory exactly as a bare `cd` does while
     // sailing past a guard anchored on the word.
     ['builtin cd packages/api && npm test'],
+    // `set` and `shopt` were once left out of this list, on the grounds that
+    // their scope is the command they precede. True, and beside the point:
+    // unbounded, `set -e` ALSO outlives that command and applies to the
+    // caller's later calls, and bounded it does not.
+    ['set -euo pipefail; npm test'],
+    ['shopt -s globstar; npx jest'],
     ['command cd packages/api && npm test'],
     ['command builtin cd x && make'],
     ['export FOO=1; npm test'],
@@ -482,10 +539,6 @@ describe('commands whose point is to change the shell itself', () => {
   });
 
   it.each([
-    // `set` and `shopt` scope to the command they precede, which runs inside
-    // the same subshell -- a bound changes nothing about them.
-    ['set -euo pipefail; npm test'],
-    ['shopt -s globstar; npx jest'],
     // An assignment ATTACHED to a command never outlived that command anyway.
     ['CI=1 npm test'],
     // And the words must be matched as commands, not found anywhere: these two
