@@ -16,7 +16,11 @@ import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateDiff, hasMeaningfulChanges } from '../shared/diff-utils.js';
-import { hashFile, generateCacheKey, lastWrittenKey } from '../shared/hash-utils.js';
+import {
+  hashFile,
+  generateCacheKey,
+  lastWrittenKey,
+} from '../shared/hash-utils.js';
 import { cacheGet, cacheSet } from '../../utils/cache-helper.js';
 import {
   chunkBySyntax,
