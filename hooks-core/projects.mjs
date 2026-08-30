@@ -81,8 +81,34 @@ function release(lockPath) {
 }
 
 /**
+ * What this process has already registered, so a repeat never rescans.
+ *
+ * `registerProject` runs on EVERY tool call and asked one question of the whole
+ * registry: have I already registered this project, for this client, recently?
+ * Answering it by folding the registry meant reading every record and running
+ * TWO existsSync per record -- and the registry is append-only, so every project
+ * ever touched made every future call slower.
+ *
+ * Measured with 4,033 records: a trivial `get_cached` call took 127ms, with a
+ * leaf CPU profile attributing 48.8% to existsSync and 20.0% to the path
+ * normaliser feeding it. Truncating the registry to 50 records took the same
+ * call to 10ms. The cost was the scan, not the tool.
+ *
+ * A per-process Set answers the repeat case in memory. Bounded by the number of
+ * distinct project+client pairs a single process touches, which is small --
+ * unlike the registry, which is unbounded over time.
+ */
+const registeredThisProcess = new Map();
+
+
+/**
  * Folds the append-only registry into one current entry per canonical project.
  * Malformed, stale-schema, and unsafe records are ignored rather than trusted.
+ *
+ * STILL A FULL SCAN, deliberately. Its callers -- the dashboard, the fleet
+ * auditor, the discovery script -- want the complete folded view and run rarely.
+ * The fix for the hot path is not to make this cheaper but to stop calling it
+ * from `registerProject`, which never needed the fold.
  */
 export function registeredProjects() {
   const path = projectRegistryPath();
@@ -163,14 +189,31 @@ export function registerProject({ root, graphDir, client = 'unknown', name } = {
     if (!isRepository) return null;
     const id = projectIdFor(canonicalRoot);
     const now = Date.now();
-    const recent = registeredProjects().find(
-      (project) =>
-        project.id === id &&
-        project.graphDir === canonicalGraphDir &&
-        project.clients.includes(client) &&
-        now - project.lastSeenAt < 60 * 60 * 1000
-    );
-    if (recent) return recent;
+
+    // ANSWERED IN MEMORY, NOT BY RESCANNING THE REGISTRY.
+    //
+    // The question here is narrow -- "have I already appended this exact
+    // project+graphDir+client?" -- and folding the entire append-only registry
+    // to answer it made every tool call O(registry). See the note on
+    // `registeredThisProcess` for the measurement.
+    //
+    // WHAT THIS GIVES UP, STATED PLAINLY. The old check spanned processes via a
+    // one-hour window read from the registry; this one spans only this process.
+    // So a short-lived process that starts, registers and exits appends one
+    // record where it previously might have appended none.
+    //
+    // That is the right trade because the registry is a LOG OF OBSERVATIONS,
+    // not a set of unique projects: `registeredProjects()` already folds
+    // duplicates by id, so an extra record costs one line and changes no
+    // answer. The alternative -- reading the whole registry to avoid writing to
+    // it -- optimised the wrong direction: it spent 127ms of reads to save an
+    // occasional append.
+    //
+    // Growth is bounded per process by the number of distinct project+client
+    // pairs it touches, which is small.
+    const key = `${id} ${canonicalGraphDir} ${client}`;
+    const already = registeredThisProcess.get(key);
+    if (already) return already;
 
     const path = projectRegistryPath();
     const lockPath = acquire(path);
@@ -197,7 +240,7 @@ export function registerProject({ root, graphDir, client = 'unknown', name } = {
     } finally {
       release(lockPath);
     }
-    return {
+    const entry = {
       id,
       name: String(name || displayName(canonicalRoot)).slice(0, 160),
       root: canonicalRoot,
@@ -206,6 +249,10 @@ export function registerProject({ root, graphDir, client = 'unknown', name } = {
       lastSeenAt: now,
       clients: [String(client || 'unknown').slice(0, 80)],
     };
+    // Recorded only AFTER the append succeeded, so a failed write is retried
+    // by the next call rather than being remembered as done.
+    registeredThisProcess.set(key, entry);
+    return entry;
   } catch {
     return null;
   }
