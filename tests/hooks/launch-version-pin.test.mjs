@@ -123,7 +123,14 @@ describe('an explicit version pin decides what is served', () => {
     expect(r.stdout).not.toContain('SERVED 10.0.0');
   });
 
-  test.each([['^9.0.0'], ['~9.9.0'], ['latest'], ['next'], ['>=9.9.9'], ['v9.9.9']])(
+  // Invalid SemVer as well as ranges and tags. npm will never publish `01.2.3`
+  // or `1.2.3-alpha.`, so accepting them here only moved the failure to install
+  // time, where it surfaces as a registry error instead of the clear message
+  // this check exists to give.
+  test.each([
+    ['^9.0.0'], ['~9.9.0'], ['latest'], ['next'], ['>=9.9.9'], ['v9.9.9'],
+    ['01.2.3'], ['1.02.3'], ['9.9.9-01'], ['9.9.9-alpha.'], ['9.9.9-'],
+  ])(
     'a pin of %s is rejected before anything is installed',
     (spec) => {
       // npm would happily accept all of these, and resolve each to whatever the

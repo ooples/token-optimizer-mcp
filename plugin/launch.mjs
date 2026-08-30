@@ -118,8 +118,18 @@ const PINNED_VERSION = String(
  * which defeats a pin, because the value recorded would be the spec rather than
  * what actually installed. Prereleases and build metadata are allowed; a
  * leading `v` is not, so the value matches the directory name it becomes.
+ *
+ * THE OFFICIAL SEMVER GRAMMAR, not an approximation of it. A looser pattern
+ * accepted `01.2.3`, `1.02.3`, `1.2.3-01` and `1.2.3-alpha.` -- none of which
+ * are versions npm will ever publish, so each would pass validation here and
+ * then fail at install time with a registry error rather than the clear message
+ * this check exists to give. Leading zeros are rejected in the numeric
+ * identifiers, and a prerelease is dot-separated identifiers that are each
+ * either numeric-without-leading-zero or alphanumeric, which is what stops a
+ * trailing dot.
  */
-const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const EXACT_VERSION =
+  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 function numericEnv(name, fallback) {
   const raw = process.env[name];
