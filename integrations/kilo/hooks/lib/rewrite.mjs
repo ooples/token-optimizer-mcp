@@ -31,8 +31,9 @@
  * defaults to 30,000 characters (~7,500 tokens) and is capped at 150,000. So
  * output is already bounded -- generously. This default is deliberately well
  * under it, because the family being targeted is the debug loop, where the SAME
- * wall of test output arrives on every iteration and the tail is the part that
- * says what failed.
+ * wall of test output arrives on every iteration. It is split evenly between
+ * the head and the tail of the output, which is where a run says what failed
+ * and how it ended.
  */
 export const DEFAULT_BOUND_BYTES = 8_000;
 
@@ -79,20 +80,19 @@ function unsafeToBound(command) {
 /**
  * The bounded form of a command, or null when it must be left alone.
  *
- * `tail`, NOT `head`, and that choice is load-bearing twice over. A test run
- * puts its verdict at the END -- the failure summary, the counts -- so the tail
- * is the part worth keeping. And `head` closes the pipe early, which sends
- * SIGPIPE to the producer: under `pipefail` a perfectly successful search would
- * then report exit 141 and read as a failure. `tail` consumes its input, so the
- * real exit status survives.
- *
- * `pipefail` itself is what keeps the exit status honest. Without it the
- * pipeline reports `tail`'s status, which is always 0, and every failing test
+ * `pipefail` is what keeps the exit status honest. Without it the pipeline
+ * reports the LAST stage's status, which is always 0, and every failing test
  * run would look like a passing one -- a far worse outcome than any number of
- * wasted tokens, because the model would stop debugging.
+ * wasted tokens, because the model would stop debugging. The `set -o` is
+ * wrapped so a shell without `pipefail` degrades to an unbounded-status
+ * pipeline rather than erroring out before the command runs.
  *
- * The `set -o` is wrapped so a shell without `pipefail` degrades to an
- * unbounded-status pipeline rather than erroring out before the command runs.
+ * THE PIPE STAGE IS A GROUP, NOT A BARE `head`. A bare `head -c N` exits as
+ * soon as it has its bytes and SIGPIPEs the producer, which under `pipefail`
+ * turns a perfectly successful command into exit 141. Inside
+ * `{ head -c N; ...; tail -c N; }` the group keeps reading, so the producer is
+ * never signalled and the real status survives -- asserted by pushing `exit 3`
+ * and `exit 7` through it.
  */
 export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
   if (typeof command !== 'string') return null;
@@ -102,10 +102,46 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
   const unsafe = unsafeToBound(trimmed);
   if (unsafe) return null;
 
+  // A NEWLINE BEFORE THE CLOSING BRACE, NEVER `; }`. Two ordinary commands
+  // broke under the semicolon form, both of which run fine unwrapped:
+  //
+  //   echo hi # explain   ->  { echo hi # explain; }   the `; }` is INSIDE the
+  //                           comment, so the group is never closed
+  //   echo hi;            ->  { echo hi;; }            `;;` is a syntax error
+  //
+  // A newline terminates a comment and satisfies bash's requirement for a
+  // separator before `}`, so it handles both. Breaking a command that would
+  // have worked is the worst thing this module can do -- worse than any number
+  // of tokens -- because the failure looks like the user's own command is wrong.
+  //
+  // HEAD *AND* TAIL, because the client's own truncation keeps both. Claude
+  // Code caps Bash output at 30,000 characters and truncates from the MIDDLE
+  // (its binary carries `... [N characters truncated] ...` and
+  // `truncate-middle`). A tail-only bound is cheaper AND drops the head, where
+  // a failing jest run lists WHICH suites failed -- so it could read as an
+  // improvement on cost while being a regression for the model.
+  //
+  // `head -c` takes the first half and leaves the rest in the pipe; `tail -c`
+  // then keeps the last half of what remains. Verified to preserve a non-zero
+  // exit status through both stages.
+  // THE MARKER IS CONDITIONAL, because an unconditional one LIES. Printing
+  // "middle omitted" after a two-line command claims a truncation that never
+  // happened -- the same class of error as a reader reporting a windowed event
+  // log it did not actually window. A model told its output was cut will go
+  // looking for the rest, which costs the turn this whole module exists to save.
+  //
+  // `read -r -N1` is the test: it succeeds only if a byte remains after the
+  // head, which means there really is a middle. That byte is then printed back
+  // so it is not swallowed.
+  const half = Math.max(1, Math.floor(maxBytes / 2));
   return {
     command:
       `{ set -o pipefail; } 2>/dev/null; ` +
-      `{ ${trimmed}; } 2>&1 | tail -c ${maxBytes}`,
+      `{ ${trimmed}\n} 2>&1 | ` +
+      `{ head -c ${half}; ` +
+      `if IFS= read -r -N1 _tok_rest; then ` +
+      `printf '\\n... [middle omitted by token-optimizer] ...\\n'; ` +
+      `printf '%s' "$_tok_rest"; tail -c ${half}; fi; }`,
     maxBytes,
   };
 }
@@ -129,9 +165,10 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
  */
 export function boundNotice(maxBytes) {
   return (
-    `Output is bounded to the last ${maxBytes} bytes by token-optimizer, so ` +
-    `the command ran unchanged but only its tail reached you. The tail is ` +
-    `where a test run puts its verdict. Re-run with the output redirected to ` +
-    `a file, or set TOKEN_OPTIMIZER_BOUND_BYTES higher, if you need the rest.`
+    `Output is bounded to about ${maxBytes} bytes by token-optimizer: the ` +
+    `command ran unchanged, and you were given its beginning and its end with ` +
+    `the middle omitted and marked. Those are the two ends that carry a ` +
+    `verdict -- what failed, and the summary. Redirect the output to a file, ` +
+    `or raise TOKEN_OPTIMIZER_BOUND_BYTES, if you need the middle.`
   );
 }
