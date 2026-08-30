@@ -111,3 +111,27 @@ describe('bounded, so the store cannot mirror the repository', () => {
     expect(authoredContentFor(dir, 's-1', file())).toBeNull();
   });
 });
+
+describe('the cap counts persisted bytes, not UTF-16 units', () => {
+  test('multibyte content over the byte cap is rejected', () => {
+    // 100k CJK characters measure 100,000 by `content.length` -- under a
+    // 262,144 cap -- while persisting 300,000 UTF-8 bytes. Counting units let
+    // a record 15% over the limit through.
+    const multibyte = '日'.repeat(100_000);
+    expect(multibyte.length).toBeLessThan(262_144);
+    expect(Buffer.byteLength(multibyte, 'utf8')).toBeGreaterThan(262_144);
+
+    writeFileSync(file(), multibyte);
+    recordAuthoredContent(dir, 's-1', file(), multibyte);
+    expect(authoredContentFor(dir, 's-1', file())).toBeNull();
+  });
+
+  test('multibyte content under the byte cap is still recorded', () => {
+    // Guards against over-correction: the byte check must not reject content
+    // that genuinely fits.
+    const ok = '日'.repeat(1000);
+    writeFileSync(file(), ok);
+    recordAuthoredContent(dir, 's-1', file(), ok);
+    expect(authoredContentFor(dir, 's-1', file())).toBe(ok);
+  });
+});

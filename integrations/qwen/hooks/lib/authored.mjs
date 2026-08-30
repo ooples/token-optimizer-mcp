@@ -74,7 +74,12 @@ const hash = (text) =>
 export function recordAuthoredContent(projectRoot, sessionId, filePath, content) {
   try {
     if (!projectRoot || !sessionId || !filePath) return;
-    if (typeof content !== 'string' || content.length > limit()) return;
+    if (typeof content !== 'string') return;
+    // BYTES AS PERSISTED, not UTF-16 code units. `content.length` counts units,
+    // so 100k CJK characters measured 100,000 against a 262,144 cap while
+    // writing 300,000 bytes -- 15% over. The record is what has to stay bounded,
+    // so the check is on the encoded size of the field that dominates it.
+    if (Buffer.byteLength(content, 'utf8') > limit()) return;
     if (!isFsSafePath(filePath)) return;
 
     const dir = storeDir(projectRoot);

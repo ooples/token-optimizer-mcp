@@ -764,7 +764,7 @@ function projectBriefing() {
  * metrics. It never called forTouch/forCommand, so four advertised clients
  * accumulated a graph that their active model could not receive.
  */
-function observeAndInject(payload, state, episode, features) {
+function observeAndInject(payload, state, episode, features, authored = false) {
   const touched = touchedFiles(payload);
   const dirFor = (path) => wikiDir(projectRootFor(path, payload.cwd));
   const registerRoot = (root) => {
@@ -868,21 +868,31 @@ function observeAndInject(payload, state, episode, features) {
         });
         indexFile(dir, path, source);
 
-        // WHAT THIS SESSION WROTE, kept separate from the graph snapshot above
-        // because it answers a different question. `indexFile` records what a
-        // hook OBSERVED -- reads included, across sessions -- which is unusable
-        // as a diff base: it would tell a session that never saw a file that
-        // nothing had changed. This record is written only on a mutation and
-        // carries the authoring session, so `smart_read` can ask "did I write
-        // this?" rather than "has anyone seen this?".
+        // WHAT THIS SESSION WROTE -- and ONLY what it wrote.
         //
-        // Free here: the source is already in hand for the graph write.
-        recordAuthoredContent(
-          projectRootFor(path, payload.cwd),
-          payload.session_id,
-          path,
-          source
-        );
+        // GATED ON A SUCCESSFUL MUTATION, because this loop is not one. It
+        // iterates `touchedFiles`, which covers every tool that NAMES a file,
+        // reads included, and its own comment above calls that "evidence about
+        // what was touched". Recording an authored base from a read would
+        // recreate the exact defect this store exists to avoid: a later
+        // smart_read in the same session would be told "no changes" about
+        // content the model never received.
+        //
+        // A failed write is excluded for the same reason -- the bytes on disk
+        // are not what we tried to write, so they are not a truthful base.
+        // `mutationSucceeded` is the existing conservative classifier, already
+        // used to gate edit counting, so this cannot disagree with the rest of
+        // the accounting about what a successful mutation is.
+        //
+        // Free when it does apply: the source is already in hand for the graph.
+        if (authored) {
+          recordAuthoredContent(
+            projectRootFor(path, payload.cwd),
+            payload.session_id,
+            path,
+            source
+          );
+        }
       } catch {
         // Graph bookkeeping must never break the user's tool call.
       }
@@ -1391,7 +1401,20 @@ async function runHook(clientName, event, invocation) {
   remember(payload, state);
   let graphContext = null;
   try {
-    graphContext = observeAndInject(payload, state, episode, features);
+    // Computed HERE because clientName, event and raw are in scope here and
+    // not inside observeAndInject -- a first attempt referenced them there and
+    // would have thrown at runtime on the one path that matters.
+    const authoredWrite =
+      event === 'post-tool' &&
+      new Set(['Edit', 'MultiEdit', 'Write']).has(String(payload.tool_name || '')) &&
+      mutationSucceeded(clientName, raw);
+    graphContext = observeAndInject(
+      payload,
+      state,
+      episode,
+      features,
+      authoredWrite
+    );
   } catch {
     // Delivery is an optimization. Fail open.
   }
