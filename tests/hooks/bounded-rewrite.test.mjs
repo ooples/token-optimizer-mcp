@@ -411,6 +411,52 @@ describe('the shipped router bounds instead of refusing', () => {
 });
 
 
+describe('nothing survives the bounded command', () => {
+  // The pipefail dance was written at the CALLER'S level. That fixed the leak
+  // INTO the command and created its mirror on the other side: afterwards the
+  // shell was left with pipefail ON and `_tok_pf` still defined, so the user's
+  // NEXT commands changed meaning. Measured before the fix: following a bounded
+  // command, `false | true` exited 1 where it exits 0.
+  const probe = (callerFlags) =>
+    run(
+      [
+        boundedRewrite('echo hi').command,
+        'echo ===',
+        'set +o | grep pipefail',
+        'echo "_tok_pf=[${_tok_pf-<unset>}]"',
+        'false | true; echo "status=$?"',
+      ].join('\n'),
+      callerFlags
+    ).stdout.split('===')[1] || '';
+
+  it('leaves a default shell exactly as it found it', () => {
+    const after = probe([]);
+
+    expect(after).toContain('set +o pipefail');
+    expect(after).toContain('_tok_pf=[<unset>]');
+    // The caller had pipefail off, so their own pipeline keeps its 0.
+    expect(after).toContain('status=0');
+  });
+
+  it('leaves a shell that already had pipefail exactly as it found it', () => {
+    // Clearing is the same bug mirrored: this caller's `false | true` is
+    // SUPPOSED to be 1, and handing them 0 would be just as silent a change.
+    const after = probe(['-o', 'pipefail']);
+
+    expect(after).toContain('set -o pipefail');
+    expect(after).toContain('_tok_pf=[<unset>]');
+    expect(after).toContain('status=1');
+  });
+
+  it.each([
+    ['echo ok', 0],
+    ['echo bad; exit 7', 7],
+    ['false | cat', 0],
+  ])('and %s still exits %i through the extra subshell', (command, status) => {
+    expect(run(boundedRewrite(command).command).status).toBe(status);
+  });
+});
+
 describe('commands whose point is to change the shell itself', () => {
   // The wrapper runs the command in `( ... )` so the pipefail restore stays
   // local, and that same containment discards whatever the command meant to

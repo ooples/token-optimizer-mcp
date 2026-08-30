@@ -322,12 +322,27 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
   // successful command into exit 141 -- the exact status-masking this wrapper
   // exists to avoid. `cat >/dev/null` consumes the rest and emits nothing.
   const tailStage = tailBytes === 0 ? 'cat >/dev/null' : `tail -c ${tailBytes}`;
+  // AND ALL OF IT INSIDE ONE OUTER SUBSHELL, so nothing survives the command.
+  //
+  // The pipefail dance above was written at the CALLER'S level, which fixed the
+  // leak into the command and created the mirror of it on the other side: after
+  // a bounded command the caller's shell was left with `pipefail` ON and
+  // `_tok_pf` still defined. In a persistent shell that changes the meaning of
+  // everything the user runs NEXT -- verified: following a bounded command,
+  // `false | true` exited 1 where it had exited 0. Silently changing an exit
+  // status is the defect this wrapper exists to avoid, and doing it to later
+  // commands is no better than doing it to this one.
+  //
+  // Wrapping the whole construction makes both the variable and the option
+  // local to a shell that ends with the command. The exit status still comes
+  // out intact, because a subshell reports the status of the last thing in it,
+  // which is our pipeline.
   return {
     command:
-      `_tok_pf=$(set +o 2>/dev/null | grep pipefail); ` +
+      `( _tok_pf=$(set +o 2>/dev/null | grep pipefail); ` +
       `{ set -o pipefail; } 2>/dev/null; ` +
       `( eval "$_tok_pf" 2>/dev/null; ${trimmed}\n) 2>&1 | ` +
-      `{ head -c ${headBytes}; ${tailStage}; }`,
+      `{ head -c ${headBytes}; ${tailStage}; } )`,
     maxBytes,
   };
 }
