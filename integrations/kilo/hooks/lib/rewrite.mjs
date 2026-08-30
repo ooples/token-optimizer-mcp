@@ -155,24 +155,30 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
   // `head -c` takes the first half and leaves the rest in the pipe; `tail -c`
   // then keeps the last half of what remains. Verified to preserve a non-zero
   // exit status through both stages.
-  // THE MARKER IS CONDITIONAL, because an unconditional one LIES. Printing
-  // "middle omitted" after a two-line command claims a truncation that never
-  // happened -- the same class of error as a reader reporting a windowed event
-  // log it did not actually window. A model told its output was cut will go
-  // looking for the rest, which costs the turn this whole module exists to save.
+  // NO IN-STREAM MARKER, AND NO PROBE. `{ head -c H; tail -c H; }` is already
+  // exact in every regime, which two earlier attempts at a marker were not:
   //
-  // `read -r -N1` is the test: it succeeds only if a byte remains after the
-  // head, which means there really is a middle. That byte is then printed back
-  // so it is not swallowed.
+  //   total <= half        head prints it all, tail has nothing  -> COMPLETE
+  //   half < total <= max  head takes half, tail takes the rest  -> COMPLETE
+  //   total > max          head takes half, tail takes the last  -> exactly max
+  //
+  // An unconditional marker lied whenever the output fitted. Gating it on
+  // `read -r -N1` narrowed the lie to the middle band above -- where the output
+  // is returned COMPLETE and the marker still claimed an omission -- and the
+  // probe also relied on a bash-only `read -N`, which a POSIX shell rejects,
+  // skipping the tail entirely and leaking an error to stderr.
+  //
+  // Both defects came from trying to detect truncation from inside a pipe,
+  // which cannot see a total it has not yet consumed. So the announcement moves
+  // to `boundNotice`, stated as the POLICY ("output over N bytes is bounded")
+  // rather than as a claim about this particular output. A policy statement is
+  // true whether or not this command was cut, so it cannot lie.
   const half = Math.max(1, Math.floor(maxBytes / 2));
   return {
     command:
       `{ set -o pipefail; } 2>/dev/null; ` +
       `( { set +o pipefail; } 2>/dev/null; ${trimmed}\n) 2>&1 | ` +
-      `{ head -c ${half}; ` +
-      `if IFS= read -r -N1 _tok_rest; then ` +
-      `printf '\\n... [middle omitted by token-optimizer] ...\\n'; ` +
-      `printf '%s' "$_tok_rest"; tail -c ${half}; fi; }`,
+      `{ head -c ${half}; tail -c ${half}; }`,
     maxBytes,
   };
 }
@@ -196,10 +202,11 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
  */
 export function boundNotice(maxBytes) {
   return (
-    `Output is bounded to about ${maxBytes} bytes by token-optimizer: the ` +
-    `command ran unchanged, and you were given its beginning and its end with ` +
-    `the middle omitted and marked. Those are the two ends that carry a ` +
-    `verdict -- what failed, and the summary. Redirect the output to a file, ` +
-    `or raise TOKEN_OPTIMIZER_BOUND_BYTES, if you need the middle.`
+    `token-optimizer bounds this command's output: anything over ${maxBytes} ` +
+    `bytes is returned as its beginning and its end, with the middle dropped. ` +
+    `Shorter output is returned complete and untouched. The command itself ran ` +
+    `unchanged, and those two ends are where a run says what failed and how it ` +
+    `finished. Redirect the output to a file, or raise ` +
+    `TOKEN_OPTIMIZER_BOUND_BYTES, if you need the middle.`
   );
 }

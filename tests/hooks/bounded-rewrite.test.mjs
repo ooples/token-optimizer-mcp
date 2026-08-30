@@ -100,8 +100,25 @@ describe('the rewritten command still means what it meant', () => {
 
     expect(bounded.stdout.startsWith('1\n2\n3')).toBe(true);
     expect(bounded.stdout.trimEnd().endsWith('2000')).toBe(true);
-    // And it says so, rather than silently splicing two halves together.
-    expect(bounded.stdout).toContain('middle omitted');
+    expect(Buffer.byteLength(bounded.stdout, 'utf8')).toBeLessThanOrEqual(60);
+  });
+
+  it.each([
+    ['well under the bound', 'printf abcdefghij', 10],
+    ['between half and the bound', 'printf %.0sx $(seq 1 30)', 30],
+  ])('returns output %s COMPLETE and untouched', (_why, command, expected) => {
+    // The middle band is the one two earlier marker attempts got wrong. An
+    // unconditional marker lied about every output that fitted; gating it on a
+    // one-byte probe narrowed the lie to exactly this band, where head takes
+    // its half and tail takes the whole remainder -- so nothing is dropped and
+    // an omission was still announced.
+    const { command: bounded } = boundedRewrite(command, { maxBytes: 40 });
+
+    const plain = run(command);
+    const result = run(bounded);
+
+    expect(plain.stdout.length).toBe(expected);
+    expect(result.stdout).toBe(plain.stdout);
   });
 
   it.each([
@@ -129,10 +146,11 @@ describe('the rewritten command still means what it meant', () => {
     const bounded = run(command);
 
     expect(bounded.stdout.trim()).toBe('short');
-    // AND CLAIMS NOTHING. An unconditional marker would announce a truncation
-    // that never happened, sending the model looking for a middle that does
-    // not exist -- which costs the turn this module exists to save.
+    // AND CLAIMS NOTHING. Nothing is injected into output that fitted, so the
+    // model is never sent looking for a middle that does not exist -- which
+    // would cost the turn this module exists to save.
     expect(bounded.stdout).not.toContain('omitted');
+    expect(bounded.stdout).not.toContain('token-optimizer');
   });
 
   it('bounds a compound command as one unit, not just its last part', () => {
@@ -212,8 +230,11 @@ describe('the bound announces itself', () => {
 
     expect(notice).toContain(String(DEFAULT_BOUND_BYTES));
     expect(notice).toMatch(/TOKEN_OPTIMIZER_BOUND_BYTES/);
-    // And that BOTH ends were kept, not just the tail.
+    // BOTH ends, not just the tail.
     expect(notice).toMatch(/beginning and its end/);
+    // Stated as the POLICY, not as a claim about this particular output --
+    // which is what lets it be true whether or not this command was cut.
+    expect(notice).toMatch(/Shorter output is returned complete/);
   });
 });
 
@@ -281,7 +302,7 @@ describe('the shipped router bounds instead of refusing', () => {
   it('tells the model what it did, so the rewrite is not silent', () => {
     const r = router(SEARCH, { TOKEN_OPTIMIZER_MODE: 'enforce' });
 
-    expect(r.context).toMatch(/bounded/i);
+    expect(r.context).toMatch(/bounds this command/i);
     expect(r.context).toContain('TOKEN_OPTIMIZER_BOUND_BYTES');
   });
 
