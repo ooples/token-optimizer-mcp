@@ -58,6 +58,25 @@ export function hashFileMetadata(filePath: string): string {
 /**
  * Generate a cache key from namespace and parameters
  */
+/**
+ * The cache key for "the last content written to this path".
+ *
+ * ONE KEY BOTH SIDES AGREE ON, keyed on the path ALONE. The read key
+ * (`generateCacheKey('smart-read', { path, options })`) also hashes the read
+ * options, so an entry seeded under one set of options is invisible to a read
+ * that uses another -- which makes it useless as a handoff between a writer and
+ * a reader that never agreed on options. The write key
+ * (`generateCacheKey('file-write', { path })`) is a different namespace again,
+ * so a writer populating it taught the reader nothing.
+ *
+ * Anything written through this key must go through `cacheSet`, not
+ * `cache.set`: readers use `cacheGet`, which expects base64 gzip and treats a
+ * decode failure as a miss, so raw text stored here would read back as nothing.
+ */
+export function lastWrittenKey(path: string): string {
+  return generateCacheKey('file-content', { path });
+}
+
 export function generateCacheKey(
   namespace: string,
   params: Record<string, unknown>

@@ -1,0 +1,4 @@
+auth/
+results/
+*.sqlite
+thol/pkg/
