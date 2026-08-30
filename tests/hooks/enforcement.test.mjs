@@ -246,3 +246,55 @@ describe('fail-open', () => {
     expect(run(read(png, { session_id: 'bin-1' })).decision).toBe('allow');
   });
 });
+
+/**
+ * Enforcement is only ever worth issuing when the tokens it refuses have not
+ * been spent yet. That is true of Read, Grep and Glob, whose output does not
+ * exist until the tool runs -- and false of Write, whose `content` the model
+ * has ALREADY emitted in the very call being refused.
+ *
+ * Refusing a Write therefore cannot save the content: it has been paid for.
+ * What it does instead is force the model to emit an identical copy through
+ * smart_write, so the refusal costs exactly one extra copy of the file, every
+ * time, with certainty. The cache entry it was buying is obtainable for free
+ * from disk once the write lands, because the bytes are then a local file.
+ *
+ * This was observed live: a 39 KB Write was denied, and satisfying the refusal
+ * required re-sending all 39 KB from context -- a strict loss on a tool whose
+ * entire purpose is to reduce context spend.
+ */
+describe('a refusal must not cost more than the call it replaces', () => {
+  test('a large Write is allowed -- its content is already in context', () => {
+    const r = run({
+      session_id: 'write-net-loss-1',
+      tool_name: 'Write',
+      tool_input: {
+        file_path: join(workspace, 'generated.ts'),
+        content: 'x'.repeat(80_000),
+      },
+    });
+    expect(r.decision).toBe('allow');
+  });
+
+  test('the refusal reason never asks for a Write to be re-sent', () => {
+    const r = run({
+      session_id: 'write-net-loss-2',
+      tool_name: 'Write',
+      tool_input: {
+        file_path: join(workspace, 'generated2.ts'),
+        content: 'y'.repeat(80_000),
+      },
+    });
+    // An allowed call may carry no reason at all, which is the strongest form
+    // of passing -- hence the `|| ''` rather than asserting a reason exists.
+    expect(r.reason || '').not.toContain('smart_write');
+  });
+
+  test('a large Read is still denied -- those tokens are genuinely unspent', () => {
+    // Guards the fix against over-correction: the asymmetry is the point, so a
+    // change that silently disabled enforcement everywhere must fail here.
+    expect(run(read(big, { session_id: 'write-net-loss-3' })).decision).toBe(
+      'deny'
+    );
+  });
+});
