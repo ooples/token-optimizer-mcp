@@ -24,14 +24,14 @@ result.** Nobody had checked.
 | surface | can it rewrite? | evidence |
 | --- | --- | --- |
 | `PostToolUse` output | **No** | output schema is `{hookEventName, additionalContext?, classifierContext?}` — it can only *add* context |
-| `PostToolUse` on a **failed** call | **Never fires** | 4,499 / 4,499 live outcomes `success: true`, every `exit` `null` |
+| `PostToolUse` on a **failed** call | **No failure ever observed** | 0 failures in 4,499 live outcomes; every `exit` `null` |
 | `PreToolUse` input | **Yes** | `updatedInput` in the schema, and verified end-to-end |
 
 ### PostToolUse cannot rewrite output
 
 The `PostToolUse` result schema carries no field for replacing the tool result:
 
-```
+```text
 hookEventName: "PostToolUse", additionalContext?, classifierContext?
 ```
 
@@ -39,11 +39,11 @@ hookEventName: "PostToolUse", additionalContext?, classifierContext?
 `modifiedOutput`, `toolResponse`, `updatedResult` and `replaceOutput` occur zero
 times anywhere in the binary.
 
-### PostToolUse never sees a failure
+### PostToolUse was never observed to see a failure
 
 Counted over live capture on the measuring machine:
 
-```
+```text
 tool-outcome events: 4499
 success flag ->  {True: 4499}
 exit codes   ->  {None: 4499}
@@ -55,8 +55,16 @@ and sabotage experiments — **not one failure recorded, and no exit code ever
 delivered.** This reproduces the 2,238/2,238 figure already recorded in
 `hooks-core/transcript.mjs` and extends it to the current client.
 
+**Stated as what it is: an observation, not a contract.** 0 failures in 4,499
+outcomes on Claude Code 2.1.x is strong evidence that this client does not
+deliver them, and it is enough to design against — but it is an absence of
+observation, not a documented guarantee, and it is scoped to the version
+measured. A release could start firing them, which is why the invalidation note
+at the end asks for it to be re-checked.
+
 **A debug loop is a sequence of failing test runs.** So even if `PostToolUse`
-could rewrite output, it would be blind to the family P0 exists to fix.
+could rewrite output, on this client it would be blind to the family P0 exists
+to fix.
 
 **P0 as specified is not implementable.** Both halves fail independently.
 
@@ -64,7 +72,7 @@ could rewrite output, it would be blind to the family P0 exists to fix.
 
 The `PreToolUse` result schema does carry it:
 
-```
+```text
 hookEventName: "PreToolUse", permissionDecision?, permissionDecisionReason?,
 updatedInput?: Record<string, unknown>, additionalContext?
 ```
@@ -78,7 +86,7 @@ Verified end-to-end rather than inferred from strings. A throwaway hook was
 registered through `claude -p --settings <throwaway>` (never this session's
 settings), rewriting one marker command:
 
-```
+```text
 prompt:   run: echo PROBE_ORIGINAL
 hook saw: "echo PROBE_ORIGINAL"
 hook emitted: permissionDecision: allow  +  updatedInput.command = "echo PROBE_REWRITTEN"
