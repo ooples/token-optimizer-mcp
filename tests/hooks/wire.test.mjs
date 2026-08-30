@@ -22,6 +22,11 @@ const userSettings = () => ({
       { matcher: 'Bash', hooks: [{ type: 'command', command: 'node /home/me/my-own-hook.mjs' }] },
     ],
     Stop: [{ hooks: [{ type: 'command', command: 'echo done' }] }],
+    // An event this product never registers, so it can stand for "untouched".
+    // Stop used to play that role and no longer can: WIRING was missing
+    // PostToolUse and Stop entirely, which left script installs with no capture
+    // and no harvest, and adding them back made Stop a touched event.
+    Notification: [{ hooks: [{ type: 'command', command: 'echo notified' }] }],
   },
   theme: 'dark',
   permissions: { allow: ['Bash(git:*)'] },
@@ -48,7 +53,17 @@ describe('wiring is additive', () => {
 
   test('events we do not touch are left exactly as they were', () => {
     const out = wire(userSettings(), HOOKS);
-    expect(out.hooks.Stop).toEqual(userSettings().hooks.Stop);
+    expect(out.hooks.Notification).toEqual(userSettings().hooks.Notification);
+  });
+
+  test("a user's own entry on an event we DO wire survives beside ours", () => {
+    // The other half of "additive", and the half that matters more now that
+    // Stop is wired: the user already had a Stop hook, and installing must not
+    // cost them it.
+    const out = wire(userSettings(), HOOKS);
+
+    expect(JSON.stringify(out.hooks.Stop)).toContain('echo done');
+    expect(JSON.stringify(out.hooks.Stop)).toContain('stop.mjs');
   });
 
   test('unrelated settings keys are preserved', () => {
@@ -126,7 +141,14 @@ describe('the plan says what it will do before it does it', () => {
   test('it counts what is preserved as well as what is added', () => {
     const plan = wirePlan(userSettings(), HOOKS);
     expect(plan.adding).toBe(WIRING.length);
-    expect(plan.preserving).toBe(2);
+    // DERIVED from the fixture, not hardcoded. This was `2` and broke the
+    // moment a third user hook was added to userSettings() -- a literal here
+    // asserts the fixture rather than the behaviour.
+    const userEntries = Object.values(userSettings().hooks).reduce(
+      (n, arr) => n + arr.length,
+      0
+    );
+    expect(plan.preserving).toBe(userEntries);
     expect(plan.replacing).toBe(0);
   });
 

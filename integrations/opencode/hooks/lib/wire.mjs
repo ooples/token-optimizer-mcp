@@ -26,10 +26,36 @@
 export const MARKER = 'token-optimizer';
 
 /** The events we wire, and which hook file serves each. */
+/**
+ * Every event this product needs, for the SCRIPT install path.
+ *
+ * THIS LIST WAS MISSING HALF THE PRODUCT. It carried SessionStart, PreToolUse
+ * and PreCompact only, while plugin/hooks/hooks.json -- the manifest a plugin
+ * install reads -- also registers PostToolUse and Stop. Nothing compared the
+ * two, so the drift was invisible to every gate: `sync:hooks:check` verifies
+ * that the vendored hook SOURCES match hooks-core and says nothing about which
+ * events an install actually registers.
+ *
+ * What a script install therefore lost:
+ *
+ *   PostToolUse   no tool-outcome capture, no authored-content store, no eager
+ *                 staleness marking -- the measurement half records nothing
+ *   Stop          no harvest at all -- the LEARNING half never runs, so the
+ *                 knowledge graph stays empty however long the session ran
+ *
+ * A hook that is never invoked is indistinguishable from a hook that decides to
+ * do nothing, which is exactly why this survived: the code was present, tested
+ * and correct, and simply never called on that path.
+ *
+ * tests/hooks/install-paths-agree.test.mjs now compares this list against the
+ * manifest, event by event and matcher by matcher.
+ */
 export const WIRING = [
   { event: 'SessionStart', file: 'session-start.mjs', matcher: null },
-  { event: 'PreToolUse', file: 'pretooluse-router.mjs', matcher: 'Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell' },
+  { event: 'PreToolUse', file: 'pretooluse-router.mjs', matcher: 'Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell|WebFetch|WebSearch' },
+  { event: 'PostToolUse', file: 'post-tool.mjs', matcher: 'Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)' },
   { event: 'PreCompact', file: 'precompact-optimize.mjs', matcher: null },
+  { event: 'Stop', file: 'stop.mjs', matcher: null },
 ];
 
 const isOurs = (entry) => JSON.stringify(entry || {}).includes(MARKER);
