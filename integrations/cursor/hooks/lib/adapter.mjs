@@ -25,7 +25,7 @@ import {
   alreadyDenied,
   mode,
   MODE_OFF,
-  MODE_ADVISE,
+  refusalsEnabled,
   largeFileBytes,
   readPayloadResult,
   withEscape,
@@ -682,7 +682,7 @@ export function policyText(
     ? `\n\nPrefer only the registered replacements listed below; they cache, diff, or bound output:\n\n${routes.join('\n')}`
     : "\n\nKeep the CLI's native tools available and bound their output. Do not redirect to or call an optimizer MCP tool unless its schema is visible in the current tool inventory.";
   const enforcement = routes.length
-    ? canDeny && mode() !== MODE_ADVISE
+    ? canDeny && refusalsEnabled()
       ? '\n\nA built-in call is denied only when its exact replacement has positive registration evidence. A second attempt at the same target remains available.'
       : '\n\nThese are recommendations; the built-in tools remain available.'
     : '';
@@ -1310,7 +1310,7 @@ async function runHook(clientName, event, invocation) {
       client.canDeny &&
       event === 'pre-tool' &&
       !repeat &&
-      mode() !== MODE_ADVISE &&
+      refusalsEnabled() &&
       // Codex code mode presents orchestration as one outer `functions.exec`.
       // Refuse only when it contains one shell call; a multi-operation envelope
       // can include unrelated safe work that must not be discarded wholesale.
