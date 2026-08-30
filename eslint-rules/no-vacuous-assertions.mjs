@@ -58,6 +58,58 @@ const WEAK_MATCHERS = new Set(['toBeDefined', 'toBeTruthy', 'toBeFalsy']);
 const ABSENCE_MATCHERS = new Set(['toContain', 'toMatch']);
 const TEST_FNS = new Set(['it', 'test']);
 
+/**
+ * Modifiers that still declare a RUNNABLE test.
+ *
+ * `todo` is absent on purpose: it takes no callback, so there is nothing to
+ * inspect. `describe` is absent because a suite is not a test -- its assertions
+ * belong to the tests inside it.
+ */
+const TEST_MODIFIERS = new Set([
+  'only',
+  'skip',
+  'concurrent',
+  'failing',
+  'each',
+]);
+
+/**
+ * The declaring identifier behind any spelling of a test, or null.
+ *
+ * WHY THIS IS NOT JUST `callee.name`. Matching only a bare `it(...)` / `test(...)`
+ * left the gate blind to every modified form, and this repository already uses
+ * one: `it.each([...])(...)` in path-cannot-abort-the-process.test.mjs. A rule
+ * that silently skips the tests it was written to police is worse than no rule,
+ * because the green run is read as coverage.
+ *
+ *   it(name, fn)                        callee is an Identifier
+ *   it.only(name, fn)                   callee is a MemberExpression
+ *   it.each(table)(name, fn)            callee is a CallExpression
+ *   it.each`table`(name, fn)            callee is a TaggedTemplateExpression
+ *   it.concurrent.each(t)(name, fn)     both, nested
+ */
+function declaringTestName(node) {
+  let head = node.callee;
+
+  // Unwrap the `each` application, in either of its two spellings.
+  if (head.type === 'CallExpression') head = head.callee;
+  else if (head.type === 'TaggedTemplateExpression') head = head.tag;
+
+  // Then peel any chain of modifiers: .only, .concurrent.each, ...
+  while (
+    head &&
+    head.type === 'MemberExpression' &&
+    !head.computed &&
+    head.property.type === 'Identifier' &&
+    TEST_MODIFIERS.has(head.property.name)
+  ) {
+    head = head.object;
+  }
+
+  if (!head || head.type !== 'Identifier') return null;
+  return TEST_FNS.has(head.name) ? head.name : null;
+}
+
 function matcherOf(node) {
   // expect(x).not.toContain(y)  ->  { name: 'toContain', negated: true }
   let call = node;
@@ -100,12 +152,10 @@ export default {
   create(context) {
     return {
       CallExpression(node) {
-        if (
-          node.callee.type !== 'Identifier' ||
-          !TEST_FNS.has(node.callee.name)
-        ) {
-          return;
-        }
+        if (!declaringTestName(node)) return;
+        // `it.each(table)` on its own is also a CallExpression and reaches here,
+        // but it carries no callback, so the guard below rejects it and only the
+        // outer application is examined. No test is reported twice.
         const body = node.arguments[1];
         if (!body || (body.type !== 'ArrowFunctionExpression' &&
                       body.type !== 'FunctionExpression')) {

@@ -162,12 +162,18 @@ describe('every generator', () => {
     '%s cannot write bytes except through the helper',
     (file) => {
       const source = readFileSync(join(ROOT, file), 'utf8');
+      // The file really was read, and really is a generator. A source-text guard
+      // asserting only an absence passes on an empty string, so a wrong path or
+      // a renamed generator would report a clean bill of health for a file it
+      // never looked at.
+      expect(source).toMatch(/\bwriteIfChanged\s*\(/);
       expect(source).not.toMatch(/\bwriteFileSync\b/);
     }
   );
 
   it.each(GENERATORS)('%s does not compare raw file contents', (file) => {
     const source = readFileSync(join(ROOT, file), 'utf8');
+    expect(source).toMatch(/\bwriteIfChanged\s*\(/);
     // Any identifier compared against the generated `contents`, not one name.
     expect(source).not.toMatch(/\b[A-Za-z_$][\w$]*\s*(===|!==)\s*contents\b/);
     expect(source).not.toMatch(/readFileSync\s*\([^)]*\)\s*(===|!==)/);
