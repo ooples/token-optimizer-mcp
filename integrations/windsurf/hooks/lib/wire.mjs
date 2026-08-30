@@ -58,7 +58,47 @@ export const WIRING = [
   { event: 'Stop', file: 'stop.mjs', matcher: null },
 ];
 
-const isOurs = (entry) => JSON.stringify(entry || {}).includes(MARKER);
+/** The hook filenames we have ever installed. */
+const OUR_FILES = new Set(WIRING.map((w) => w.file));
+
+/**
+ * Is this entry one WE installed?
+ *
+ * IT USED TO BE `JSON.stringify(entry).includes(MARKER)`, which reads the whole
+ * entry -- matcher included -- and deletes anything that merely mentions us. A
+ * user with a hook matching `mcp__.*token-optimizer.*` to log optimizer calls,
+ * or a script of their own called `token-optimizer-report.mjs`, had it removed
+ * by our installer. Silently destroying a user's hooks is the exact behaviour
+ * the top of this file says we never engage in, so the identification has to be
+ * narrower than "mentions us somewhere".
+ *
+ * Two conditions, both on the COMMAND alone:
+ *
+ *   the marker      so a plain `node ~/my/stop.mjs` is not mistaken for ours
+ *                   just because we happen to ship a `stop.mjs`
+ *   one of OUR      so `token-optimizer-report.mjs` -- which carries the marker
+ *   filenames       but is not a file we install -- stays the user's
+ *
+ * EVERY hook in the entry must qualify. An entry holding one of ours beside one
+ * of theirs is left alone: re-installing then appends a duplicate of ours,
+ * which is untidy, while the alternative deletes work that was never ours.
+ *
+ * The filename list has held these five for the life of the file, so nothing
+ * installed by an earlier version becomes unremovable.
+ */
+const isOurs = (entry) => {
+  const hooks = Array.isArray(entry?.hooks) ? entry.hooks : [];
+  if (!hooks.length) return false;
+
+  return hooks.every((hook) => {
+    const command = typeof hook?.command === 'string' ? hook.command : '';
+    if (!command.includes(MARKER)) return false;
+
+    return (command.match(/[A-Za-z0-9._-]+\.mjs/g) || []).some((name) =>
+      OUR_FILES.has(name)
+    );
+  });
+};
 
 /**
  * Returns a NEW settings object with our hooks wired in.
