@@ -349,6 +349,15 @@ function probe(binary, payload, { timeoutMs = 8000, cwd, env } = {}) {
     // stderr is discarded exactly as the previous stdio:'ignore' did, but the
     // pipe must still be drained or a chatty hook can fill it and deadlock.
     child.stderr?.resume();
+    // EPIPE IS EXPECTED HERE AND MUST NOT BE THROWN. A hook that exits before
+    // reading its payload leaves nothing on the other end of the pipe, and the
+    // write then emits an ASYNCHRONOUS error event on stdin -- which a
+    // try/catch around .end() cannot catch, and which with no listener is an
+    // unhandled error that takes down the doctor. execFileSync handled its
+    // `input` internally, so this hazard arrived with the switch to execFile.
+    // The child's own outcome is still reported by the callback above, so
+    // swallowing this loses no diagnosis.
+    child.stdin?.on('error', () => {});
     try {
       child.stdin.end(JSON.stringify(payload));
     } catch {

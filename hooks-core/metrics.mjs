@@ -399,9 +399,13 @@ function readAll(dir) {
   if (!tail) return [];
 
   lastReadTruncation.byBytes = tail.truncatedByBytes;
-  // Counted on LINES, not on parsed events, exactly as before: a window that
-  // cut blank or torn lines still cut the record set the caller asked for.
-  if (tail.lineCount > MAX_EVENTS) lastReadTruncation.byEvents = true;
+  // MEASURED ON THE RECORDS THAT ARE ACTUALLY CUT. The slice below applies to
+  // parsed events, and events.length <= lineCount because blank and torn lines
+  // are dropped -- so counting lines here reported a truncation that had not
+  // happened whenever the window held a few unparseable lines. The flag exists
+  // to tell a reader their statistics are incomplete; saying so when they are
+  // not is the same class of error as staying silent when they are.
+  if (tail.events.length > MAX_EVENTS) lastReadTruncation.byEvents = true;
   // slice() always copies, including when the window is shorter than the cap,
   // so a caller mutating the result cannot reach into the memo.
   return tail.events.slice(-MAX_EVENTS);

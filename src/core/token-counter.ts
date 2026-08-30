@@ -118,36 +118,52 @@ export class TokenCounter {
    * gives cheap FIFO eviction via Map iteration.
    */
   private static readonly CACHE_MAX_ENTRIES = 512;
-  private static readonly CACHE_MAX_CHARS = 8 * 1024 * 1024;
-  private readonly cache = new Map<string, TokenCountResult>();
-  private cachedChars = 0;
+  private static readonly CACHE_MAX_BYTES = 8 * 1024 * 1024;
+  private readonly cache = new Map<
+    string,
+    { tokens: number; characters: number; bytes: number }
+  >();
+  private cachedBytes = 0;
 
   /**
    * Serves a memoised count, computing and storing it on a miss.
    *
-   * Text longer than the byte cap is counted and NOT stored: admitting it would
-   * evict the entire cache to hold one entry that may never be asked for again.
+   * BOUNDED IN BYTES, NOT IN `length`. `text.length` counts UTF-16 code units,
+   * so it is not a memory measure: `'\u{1F600}'.repeat(4 * 1024 * 1024)` has a
+   * length of 8 Mi but occupies about 16 MiB, and a cap written against
+   * `length` would admit twice what it claims. Each entry therefore carries the
+   * byte size it was admitted with, so eviction subtracts exactly what
+   * admission added rather than recomputing it from the key.
+   *
+   * Text past the cap is counted and NOT stored: admitting it would evict the
+   * whole cache to hold one entry that may never be asked for again.
    */
   private counted(text: string, compute: () => number): TokenCountResult {
+    // A FRESH OBJECT EVERY TIME. Handing back the stored record let any caller
+    // mutate the cache for every later caller -- `result.tokens = 0` on one
+    // report would silently rewrite the count this counter serves from then on,
+    // and nothing would fail loudly. Two numbers cost far less to copy than the
+    // encode this avoids.
     const hit = this.cache.get(text);
-    if (hit) return hit;
+    if (hit) return { tokens: hit.tokens, characters: hit.characters };
 
     const result: TokenCountResult = {
       tokens: compute(),
       characters: text.length,
     };
-    if (text.length > TokenCounter.CACHE_MAX_CHARS) return result;
+    const bytes = Buffer.byteLength(text, 'utf8');
+    if (bytes > TokenCounter.CACHE_MAX_BYTES) return result;
 
-    this.cache.set(text, result);
-    this.cachedChars += text.length;
+    this.cache.set(text, { ...result, bytes });
+    this.cachedBytes += bytes;
     while (
       this.cache.size > TokenCounter.CACHE_MAX_ENTRIES ||
-      this.cachedChars > TokenCounter.CACHE_MAX_CHARS
+      this.cachedBytes > TokenCounter.CACHE_MAX_BYTES
     ) {
-      const oldest = this.cache.keys().next();
+      const oldest = this.cache.entries().next();
       if (oldest.done) break;
-      this.cachedChars -= oldest.value.length;
-      this.cache.delete(oldest.value);
+      this.cachedBytes -= oldest.value[1].bytes;
+      this.cache.delete(oldest.value[0]);
     }
     return result;
   }
@@ -303,10 +319,10 @@ export class TokenCounter {
       this.encoder.free();
     }
     // The memo goes with the encoder. Without this a freed counter still pins
-    // up to CACHE_MAX_CHARS of text, which is the opposite of what free() is
+    // up to CACHE_MAX_BYTES of text, which is the opposite of what free() is
     // for -- and the counts would be unusable anyway once the encoder is gone.
     this.cache.clear();
-    this.cachedChars = 0;
+    this.cachedBytes = 0;
     // TokenizerFactory owns the tokenizer's lifecycle (instance cache).
   }
 }
