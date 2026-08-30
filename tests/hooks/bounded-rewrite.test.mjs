@@ -16,9 +16,9 @@ import { fileURLToPath } from 'url';
 import { boundedRewrite, boundNotice, DEFAULT_BOUND_BYTES } from '../../hooks-core/rewrite.mjs';
 
 /** Runs a command through bash exactly as the client's Bash tool would. */
-function run(command) {
+function run(command, shellFlags = []) {
   try {
-    const stdout = execFileSync('bash', ['-c', command], {
+    const stdout = execFileSync('bash', [...shellFlags, '-c', command], {
       encoding: 'utf8',
       timeout: 30_000,
     });
@@ -69,6 +69,19 @@ describe('the rewritten command still means what it meant', () => {
     // in the other direction.
     expect(run(command).status).toBe(expected);
     expect(run(boundedRewrite(command).command).status).toBe(expected);
+  });
+
+  it('preserves the pipefail state the CALLER was already running under', () => {
+    // The mirror of the leak above, and just as wrong. Under `bash -o pipefail`
+    // a caller's `false | true` returns 1; hard-clearing the option inside the
+    // subshell would hand them 0. Either direction is a silent change to an
+    // exit status we were only supposed to be bounding the output of.
+    const command = 'false | true';
+    const underPipefail = (c) =>
+      run(c, ['-o', 'pipefail']).status;
+
+    expect(underPipefail(command)).toBe(1);
+    expect(underPipefail(boundedRewrite(command).command)).toBe(1);
   });
 
   it('still honours a pipefail the caller asked for themselves', () => {
@@ -192,6 +205,11 @@ describe('commands it refuses to touch', () => {
     ['a follow flag that is not first', 'tail -n 100 -f server.log'],
     ['the long follow flag', 'tail --follow server.log'],
     ['the long follow flag with a value', 'tail --follow=name server.log'],
+    // Clustered short options: GNU tail accepts both, and a guard anchored on
+    // `-f\b` matches neither because the word boundary fails against the next
+    // letter in the cluster.
+    ['a clustered follow flag', 'tail -fn 1 server.log'],
+    ['two clustered follow flags', 'tail -fF server.log'],
   ])('leaves %s alone', (_why, command) => {
     expect(boundedRewrite(command)).toBeNull();
   });
