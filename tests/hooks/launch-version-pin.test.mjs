@@ -104,6 +104,25 @@ describe('an explicit version pin decides what is served', () => {
     expect(r.stdout).not.toContain('SERVED 9.9.7');
   });
 
+  test('the pin is found in the npx cache even when a newer copy is cached too', () => {
+    // findCachedEntry() returned only the HIGHEST cached version, so a pin that
+    // was present alongside a newer one was rejected rather than used: the
+    // lookup handed back 10.0.0, the pin declined it, and an offline launch
+    // failed with the requested build sitting right there in the cache.
+    const npxCache = mkdtempSync(join(tmpdir(), 'to-npx-'));
+    seedVersion(join(npxCache, '_npx', 'aaaa'), '9.9.9');
+    seedVersion(join(npxCache, '_npx', 'bbbb'), '10.0.0');
+
+    const r = launch({
+      TOKEN_OPTIMIZER_VERSION: '9.9.9',
+      npm_config_cache: npxCache,
+    });
+    rmSync(npxCache, { recursive: true, force: true });
+
+    expect(r.stdout).toContain('SERVED 9.9.9');
+    expect(r.stdout).not.toContain('SERVED 10.0.0');
+  });
+
   test('without a pin the runtime `current` marker still decides', () => {
     // Guards against over-correction: pinning is opt-in, and the default
     // resolution order must be untouched for everyone who sets nothing.

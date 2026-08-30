@@ -173,7 +173,7 @@ function compareVersions(a, b) {
  * Computed from the default/env cache path (no `npm` spawn); any layout surprise
  * is swallowed and we simply fall through to a synchronous install.
  */
-function findCachedEntry() {
+function findCachedEntry(wantVersion = null) {
   const cacheRoot =
     process.env.npm_config_cache ||
     (IS_WIN
@@ -184,14 +184,21 @@ function findCachedEntry() {
   try {
     for (const hash of readdirSync(npxDir)) {
       const info = pkgInfo(join(npxDir, hash, 'node_modules', PACKAGE));
-      if (info && (!best || compareVersions(info.version, best.version) > 0)) {
-        best = info;
+      if (!info) continue;
+      // A PIN ASKS A DIFFERENT QUESTION THAN "what is newest here".
+      // Returning only the highest version meant a cache holding both 9.9.9 and
+      // 10.0.0 answered a 9.9.9 pin with 10.0.0, which the caller then declined
+      // -- so an offline launch failed with the requested build already on disk.
+      if (wantVersion) {
+        if (info.version === wantVersion) return info;
+        continue;
       }
+      if (!best || compareVersions(info.version, best.version) > 0) best = info;
     }
   } catch {
     /* no npx cache dir — fall through */
   }
-  return best;
+  return wantVersion ? null : best;
 }
 
 /** Resolve the currently-pointed entry, validating it exists. */
@@ -634,8 +641,8 @@ function main() {
       // The npx cache is acceptable only when it happens to hold the pinned
       // version. Serving its newest copy is the unpinned behaviour, and is the
       // bug this branch exists to prevent.
-      const cached = findCachedEntry();
-      if (cached && cached.version === PINNED_VERSION) pinned = cached.entry;
+      const cached = findCachedEntry(PINNED_VERSION);
+      if (cached) pinned = cached.entry;
     }
 
     if (!pinned) {
