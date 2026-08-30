@@ -37,6 +37,12 @@ ruleTester.run('no-vacuous-assertions', rule, {
     `describe.each([1])('x', () => { expect(x).toBeDefined(); });`,
     // No callback at all.
     `test.todo('later');`,
+    // Assertions extracted into a helper are invisible to a rule that reads
+    // one callback, so a call to one counts as the positive assertion. This
+    // exact shape fired on generators-are-eol-insensitive.test.ts after a
+    // reviewer asked for the extraction.
+    `test('x', () => { expectRoutesThroughHelper(code); expect(code).not.toMatch(/x/); });`,
+    `test('x', () => { assertShapeOf(r); expect(r.reason).not.toContain('deny'); });`,
     // Not a test function.
     `notATest('x', () => { expect(x).toBeDefined(); });`,
   ],
@@ -61,6 +67,12 @@ ruleTester.run('no-vacuous-assertions', rule, {
     // two: `it.each(table)` alone carries no callback and is ignored.
     {
       code: `test.only('x', () => { expect(a).toBeDefined(); });`,
+      errors: VACUOUS,
+    },
+    {
+      // A bare `expect(x)` is not an assertion and must not excuse the test,
+      // and an ordinary helper call is not an assertion helper either.
+      code: `test('x', () => { doSomeSetup(a); expect(a).toBeTruthy(); });`,
       errors: VACUOUS,
     },
     {

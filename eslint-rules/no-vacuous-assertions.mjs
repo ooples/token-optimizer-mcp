@@ -56,6 +56,37 @@ const WEAK_MATCHERS = new Set(['toBeDefined', 'toBeTruthy', 'toBeFalsy']);
  * which a broken subject does not.
  */
 const ABSENCE_MATCHERS = new Set(['toContain', 'toMatch']);
+
+/**
+ * Calls that are assertions this rule CANNOT see inside.
+ *
+ * The rule reads one test callback and nothing else, so assertions extracted
+ * into a shared helper are invisible to it: the body shows only the remaining
+ * negative checks and the test looks vacuous when it is not. That is not a
+ * hypothetical -- it fired on
+ * generators-are-eol-insensitive.test.ts the moment two positive assertions
+ * were lifted into `expectRoutesThroughHelper`, which is exactly the
+ * refactor a reviewer had just asked for.
+ *
+ * Resolving a helper's body properly means cross-function analysis, which this
+ * rule deliberately does not do. The convention is the cheaper answer: a
+ * function named `expect*` or `assert*` asserts. Treating such a call as a
+ * positive assertion trades a narrow false-negative -- a badly named helper
+ * that asserts nothing -- for the false-POSITIVES that would otherwise punish
+ * every extracted assertion, and a rule that punishes good factoring is a rule
+ * people turn off.
+ *
+ * `expect` itself is excluded: `expect(x)` with no matcher asserts nothing, and
+ * the matcher forms are handled above.
+ */
+function isAssertionHelperCall(node) {
+  return (
+    node.type === 'CallExpression' &&
+    node.callee.type === 'Identifier' &&
+    node.callee.name !== 'expect' &&
+    /^(expect|assert)/.test(node.callee.name)
+  );
+}
 const TEST_FNS = new Set(['it', 'test']);
 
 /**
@@ -163,11 +194,13 @@ export default {
         }
 
         const found = [];
+        let delegates = false;
         const walk = (n) => {
           if (!n || typeof n.type !== 'string') return;
           if (n.type === 'CallExpression') {
             const m = matcherOf(n);
             if (m) found.push(m);
+            if (isAssertionHelperCall(n)) delegates = true;
           }
           for (const key of Object.keys(n)) {
             if (key === 'parent') continue;
@@ -179,6 +212,8 @@ export default {
         walk(body.body);
 
         if (found.length === 0) return;
+        // An extracted assertion helper carries assertions this rule cannot read.
+        if (delegates) return;
 
         // Only two shapes count: an absence-from-output claim, or a bare
         // existence check. Everything else asserts a specific value and can
