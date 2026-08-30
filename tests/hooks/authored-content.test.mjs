@@ -126,6 +126,20 @@ describe('the cap counts persisted bytes, not UTF-16 units', () => {
     expect(authoredContentFor(dir, 's-1', file())).toBeNull();
   });
 
+  test('control characters are counted as the record encodes them', () => {
+    // JSON escapes: a NUL costs ONE byte in `content` and SIX in the record.
+    // 200,000 NULs measure 200,000 bytes as content -- comfortably under the
+    // 262,144 cap -- and serialize to about 1.2 MiB, roughly five times it.
+    // Bounding the content instead of the record let that through.
+    const nuls = '\u0000'.repeat(200_000);
+    expect(Buffer.byteLength(nuls, 'utf8')).toBeLessThan(262_144);
+    expect(JSON.stringify({ content: nuls }).length).toBeGreaterThan(262_144);
+
+    writeFileSync(file(), nuls);
+    recordAuthoredContent(dir, 's-1', file(), nuls);
+    expect(authoredContentFor(dir, 's-1', file())).toBeNull();
+  });
+
   test('multibyte content under the byte cap is still recorded', () => {
     // Guards against over-correction: the byte check must not reject content
     // that genuinely fits.

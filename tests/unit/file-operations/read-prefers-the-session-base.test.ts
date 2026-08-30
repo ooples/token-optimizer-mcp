@@ -119,6 +119,22 @@ describe('smart_read picks its diff base', () => {
     expect(result.content).toBe('// No changes');
   });
 
+  test('honours enableCache: false by resending, not diffing', async () => {
+    // The opt-out has to cover BOTH fallbacks. A caller asking for the file is
+    // not asking for a diff against something the process remembers, whichever
+    // store that memory lives in.
+    const file = join(workspace, 'opted-out.ts');
+    const reader = new SmartReadTool(cache, tokenCounter, metrics);
+    const writer = new SmartWriteTool(cache, tokenCounter, metrics);
+
+    await writer.write(file, VIA_TOOL, EXACT);
+
+    const result = await reader.read(file, { enableCache: false });
+
+    expect(result.metadata.isDiff).toBe(false);
+    expect(result.content).toContain('viaTool0');
+  });
+
   test('gives a different session no base at all, and resends the file', async () => {
     // The safety property the session scope exists for. A caller that did not
     // author the file must get the file, not somebody else's diff.

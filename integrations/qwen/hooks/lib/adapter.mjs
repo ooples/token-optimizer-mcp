@@ -435,6 +435,18 @@ function codexStringLiteral(literal) {
   return decoded;
 }
 
+/**
+ * Cline's write tools, under the names the rest of the pipeline matches on.
+ *
+ * Cline calls them `write_to_file` and `replace_in_file`; authoredWrite tests
+ * membership of {Edit, MultiEdit, Write}, so without the rename the
+ * integration reads the right field and still never records an authored write.
+ */
+const CLINE_TOOL_NAMES = {
+  write_to_file: 'Write',
+  replace_in_file: 'Edit',
+};
+
 /** Convert client-specific lifecycle envelopes into the common tool shape. */
 function codexStringBindings(source) {
   const values = new Map();
@@ -519,17 +531,28 @@ export function normalizeClientPayload(clientName, event, raw) {
   if (clientName === 'cline') {
     const body = event === 'post-tool' ? raw.postToolUse : raw.preToolUse;
     if (!body) return raw;
+    // `toolName` IS THE FIELD CLINE SENDS. Reading only `body.tool` left
+    // `tool_name` null, and the handler exits on a null tool name -- so every
+    // Cline call fell out before authoredWrite or recordAuthoredContent could
+    // run, and the whole integration was a silent no-op. `body.tool` is kept as
+    // a fallback rather than replaced, because a payload carrying it costs
+    // nothing to accept.
+    const rawTool = body.toolName ?? body.tool;
     return {
       ...raw,
       session_id: raw.taskId ?? raw.task_id,
       cwd: raw.workspaceRoots?.[0] ?? raw.workspacePath,
       model: raw.model?.slug,
-      tool: body.tool,
+      // MAPPED TO THE CANONICAL NAMES the rest of the pipeline matches on.
+      // authoredWrite tests membership of {Edit, MultiEdit, Write}, so Cline's
+      // own spellings would still have missed even once the field was read.
+      tool: CLINE_TOOL_NAMES[rawTool] ?? rawTool,
       parameters: body.parameters,
     };
   }
 
   if (clientName === 'windsurf') {
+    // (see CLINE_TOOL_NAMES above for why the cline branch renames its tools)
     const info = raw.tool_info || {};
     const action = String(raw.agent_action_name || '');
     const tool = action.includes('read_code')

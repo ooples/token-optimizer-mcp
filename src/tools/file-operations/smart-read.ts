@@ -168,10 +168,15 @@ export class SmartReadTool {
     // Ordered session-scoped first: it is the one with a provenance argument.
     // Both are only ever a BASE, never the answer, so a stale entry costs a
     // diff rather than a wrong result.
-    const cachedData =
-      ownCached ??
-      authoredBase(filePath) ??
-      (enableCache ? cacheGet(this.cache, lastWrittenKey(filePath)) : null);
+    // BOTH fallbacks are gated on enableCache. `enableCache: false` is a
+    // caller saying 'give me the file, not a diff against something you
+    // remember'; serving `// No changes` off a persisted authored record would
+    // ignore that opt-out just as surely as serving it off the cache.
+    const cachedData = enableCache
+      ? (ownCached ??
+        authoredBase(filePath) ??
+        cacheGet(this.cache, lastWrittenKey(filePath)))
+      : null;
 
     // Deliberately NOT `cachedData !== null`. This means "my own cache entry
     // hit", which is what the metrics below report and what gates the re-seed

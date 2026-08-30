@@ -73,30 +73,39 @@ export function recordAuthoredContent(projectRoot, sessionId, filePath, content)
   try {
     if (!projectRoot || !sessionId || !filePath) return;
     if (typeof content !== 'string') return;
+    // A CHEAP LOWER BOUND FIRST. The serialized record is never smaller than
+    // its content, so this rejects the obvious cases without paying to
+    // stringify them. It is not the real check.
+    //
     // BYTES AS PERSISTED, not UTF-16 code units. `content.length` counts units,
     // so 100k CJK characters measured 100,000 against a 262,144 cap while
-    // writing 300,000 bytes -- 15% over. The record is what has to stay bounded,
-    // so the check is on the encoded size of the field that dominates it.
+    // writing 300,000 bytes -- 15% over.
     if (Buffer.byteLength(content, 'utf8') > limit()) return;
     if (!isFsSafePath(filePath)) return;
 
     const dir = storeDir(projectRoot);
     mkdirSync(dir, { recursive: true });
 
+    const record = JSON.stringify({
+      v: 1,
+      sessionId,
+      path: canonicalPath(filePath),
+      hash: hash(content),
+      content,
+      at: Date.now(),
+    });
+
+    // THE AUTHORITATIVE CHECK, ON WHAT IS ACTUALLY WRITTEN. Measuring the
+    // content alone does not bound the record, because JSON escapes: a control
+    // character costs one byte in `content` and six in the record. 262,144 NUL
+    // characters therefore passed the check above and persisted about 1.5 MiB
+    // -- six times the configured cap -- and the field the cap exists to bound
+    // is the file on disk, not the string that went into it.
+    if (Buffer.byteLength(record, 'utf8') > limit()) return;
+
     const target = recordPath(projectRoot, filePath);
     const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
-    writeFileSync(
-      tmp,
-      JSON.stringify({
-        v: 1,
-        sessionId,
-        path: canonicalPath(filePath),
-        hash: hash(content),
-        content,
-        at: Date.now(),
-      }),
-      { mode: 0o600 }
-    );
+    writeFileSync(tmp, record, { mode: 0o600 });
     renameSync(tmp, target);
   } catch {
     /* the write landed; the record is an optimization */
