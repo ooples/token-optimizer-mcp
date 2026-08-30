@@ -119,3 +119,6 @@ data/sessions.json
 # output; the incremental file is a cache that makes a nightly run resumable.
 .stryker-tmp/
 reports/mutation/
+
+# debug-loop harness recovery copy, written only while a run is in flight
+bench/debug-loop/.source-recovery
