@@ -277,7 +277,10 @@ function unsafeToBound(command) {
  * never signalled and the real status survives -- asserted by pushing `exit 3`
  * and `exit 7` through it.
  */
-export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
+export function boundedRewrite(
+  command,
+  { maxBytes = boundBytes(), compactor = null } = {}
+) {
   if (typeof command !== 'string') return null;
   const trimmed = command.trim();
   if (!trimmed) return null;
@@ -402,6 +405,29 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
   // start a new run.
   const quoted = `'${trimmed.split("'").join("'\\''")}'`;
 
+  // THE FINAL STAGE: EITHER THE SHELL'S OWN head+tail, OR THE COMPACTOR.
+  //
+  // `compactAgainstPreviousRun` swaps `{ head; tail; }` for a node stage that
+  // does the same bounding AND drops lines this command already printed on its
+  // previous run in this session. It is opt-in: without it the wrapper is
+  // byte-for-byte what it was, so nothing that depends on the shell form
+  // changes.
+  //
+  // THE INTERPRETER IS NAMED BY ABSOLUTE PATH, never as bare `node`. If `node`
+  // were not on the PATH of the shell the command runs in, the stage would
+  // print nothing and the model would receive an EMPTY result -- losing the
+  // command's output entirely, which is far worse than failing to bound it.
+  // `process.execPath` is the interpreter already running this code, so it
+  // exists by construction.
+  //
+  // Forward slashes and quotes, because these paths are absolute and on Windows
+  // contain both backslashes and spaces.
+  const shellPath = (value) => `"${String(value).split('\\').join('/')}"`;
+  const stage = compactor
+    ? `${shellPath(compactor.node)} ${shellPath(compactor.helper)} ` +
+      `${shellPath(compactor.previous)} ${maxBytes}`
+    : `{ head -c ${headBytes}; ${tailStage}; }`;
+
   // AND ALL OF IT INSIDE ONE OUTER SUBSHELL, so nothing survives the command.
   //
   // The pipefail dance above was written at the CALLER'S level, which fixed the
@@ -422,7 +448,7 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
       `( _tok_pf=$(set +o 2>/dev/null | grep pipefail); ` +
       `{ set -o pipefail; } 2>/dev/null; ` +
       `( eval "$_tok_pf" 2>/dev/null; ${NO_COLOUR} eval ${quoted}\n) 2>&1 | ` +
-      `{ head -c ${headBytes}; ${tailStage}; } )`,
+      `${stage} )`,
     maxBytes,
   };
 }
