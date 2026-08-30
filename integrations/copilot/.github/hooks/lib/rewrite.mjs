@@ -106,6 +106,18 @@ function unsafeToBound(command) {
  * wrapped so a shell without `pipefail` degrades to an unbounded-status
  * pipeline rather than erroring out before the command runs.
  *
+ * BUT IT MUST NOT LEAK INTO THE CALLER'S OWN PIPELINE. `pipefail` is a shell
+ * option, not a property of one pipe, so enabling it changed the meaning of any
+ * command that already contained a pipe: `false | true` exits 0 normally and
+ * exited 1 once wrapped. Silently changing a command's exit status is the same
+ * defect as masking one, in the other direction.
+ *
+ * The command therefore runs inside a subshell that restores the shell default
+ * (`set +o pipefail`), while the OUTER pipeline -- ours -- keeps it. Both
+ * properties hold at once, and an explicit `set -o pipefail` written by the
+ * caller still takes effect, because it executes inside that subshell after
+ * the reset.
+ *
  * THE PIPE STAGE IS A GROUP, NOT A BARE `head`. A bare `head -c N` exits as
  * soon as it has its bytes and SIGPIPEs the producer, which under `pipefail`
  * turns a perfectly successful command into exit 141. Inside
@@ -156,7 +168,7 @@ export function boundedRewrite(command, { maxBytes = boundBytes() } = {}) {
   return {
     command:
       `{ set -o pipefail; } 2>/dev/null; ` +
-      `{ ${trimmed}\n} 2>&1 | ` +
+      `( { set +o pipefail; } 2>/dev/null; ${trimmed}\n) 2>&1 | ` +
       `{ head -c ${half}; ` +
       `if IFS= read -r -N1 _tok_rest; then ` +
       `printf '\\n... [middle omitted by token-optimizer] ...\\n'; ` +
