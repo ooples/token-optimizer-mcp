@@ -110,6 +110,17 @@ const PINNED_VERSION = String(
   process.env.TOKEN_OPTIMIZER_VERSION || ''
 ).trim();
 
+/**
+ * An exact release, as opposed to anything npm would resolve for us.
+ *
+ * Ranges (`^9.0.0`), dist-tags (`latest`, `next`) and aliases are all valid
+ * `npm install` specs and all resolve to a version chosen by the registry --
+ * which defeats a pin, because the value recorded would be the spec rather than
+ * what actually installed. Prereleases and build metadata are allowed; a
+ * leading `v` is not, so the value matches the directory name it becomes.
+ */
+const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
 function numericEnv(name, fallback) {
   const raw = process.env[name];
   if (raw == null || raw === '') return fallback;
@@ -645,12 +656,44 @@ function main() {
       if (cached) pinned = cached.entry;
     }
 
+    // A PIN MUST BE AN EXACT VERSION, checked before anything is installed.
+    // `npm install <pkg>@<spec>` also accepts ranges, dist-tags and aliases,
+    // and those resolve to whatever the registry decides -- so `^9.0.0` or
+    // `latest` would install one version while this code recorded the spec
+    // string as though it were the version. A pin whose value cannot be
+    // verified afterwards is not a pin.
+    if (!EXACT_VERSION.test(PINNED_VERSION)) {
+      log(
+        `TOKEN_OPTIMIZER_VERSION must be an exact version like 6.0.2, ` +
+          `not a range, dist-tag or alias (got "${PINNED_VERSION}"). ` +
+          `Unset it to track latest.`
+      );
+      process.exit(1);
+    }
+
     if (!pinned) {
       log(`pinned to ${PINNED_VERSION}; installing that exact version…`);
       if (acquireLock()) {
         try {
           pinned = installLatest(PINNED_VERSION);
-          if (pinned) atomicWrite(CURRENT_FILE, PINNED_VERSION);
+          // VERIFY WHAT ARRIVED rather than trusting the spec. npm can resolve
+          // a spec to a different manifest version; writing PINNED_VERSION into
+          // `current` without checking would make the marker claim a version
+          // that is not what sits in the directory.
+          if (pinned) {
+            const installed = pkgInfo(
+              join(VERSIONS_DIR, PINNED_VERSION, 'node_modules', PACKAGE)
+            );
+            if (installed?.version === PINNED_VERSION) {
+              atomicWrite(CURRENT_FILE, PINNED_VERSION);
+            } else {
+              log(
+                `install of ${PACKAGE}@${PINNED_VERSION} produced version ` +
+                  `${installed?.version ?? 'unknown'}; refusing to serve it`
+              );
+              pinned = null;
+            }
+          }
         } finally {
           releaseLock();
         }

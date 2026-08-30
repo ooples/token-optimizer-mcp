@@ -123,6 +123,30 @@ describe('an explicit version pin decides what is served', () => {
     expect(r.stdout).not.toContain('SERVED 10.0.0');
   });
 
+  test.each([['^9.0.0'], ['~9.9.0'], ['latest'], ['next'], ['>=9.9.9'], ['v9.9.9']])(
+    'a pin of %s is rejected before anything is installed',
+    (spec) => {
+      // npm would happily accept all of these, and resolve each to whatever the
+      // registry decides -- so the recorded value would be the spec rather than
+      // the version that actually landed. A pin that cannot be verified
+      // afterwards is not a pin, so these fail up front rather than silently
+      // serving something else.
+      seedVersion(join(runtime, 'versions', '9.9.9'), '9.9.9');
+      const r = launch({ TOKEN_OPTIMIZER_VERSION: spec });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('must be an exact version');
+      expect(r.stdout).not.toContain('SERVED');
+    }
+  );
+
+  test('an exact pre-release pin is accepted', () => {
+    // The guard must reject ranges without also rejecting legitimate exact
+    // versions that merely look unusual.
+    seedVersion(join(runtime, 'versions', '9.9.9-rc.1'), '9.9.9-rc.1');
+    const r = launch({ TOKEN_OPTIMIZER_VERSION: '9.9.9-rc.1' });
+    expect(r.stdout).toContain('SERVED 9.9.9-rc.1');
+  });
+
   test('without a pin the runtime `current` marker still decides', () => {
     // Guards against over-correction: pinning is opt-in, and the default
     // resolution order must be untouched for everyone who sets nothing.
