@@ -25,6 +25,20 @@
 /** Anything containing this in its command is ours. */
 export const MARKER = 'token-optimizer';
 
+/**
+ * The flag we append to every hook command we install, purely to say it is ours.
+ *
+ * OWNERSHIP BY PATH SHAPE COULD ALWAYS BE IMITATED. Narrowing it twice -- to the
+ * command's entrypoint, then to a `token-optimizer` path SEGMENT plus one of our
+ * own filenames -- removed every realistic collision but not the deliberate one:
+ * a user hook at `/workspace/token-optimizer/stop.mjs` reproduces the whole
+ * shape. An argument we write and nobody else has no such failure mode.
+ *
+ * Safe to add: every hook file in this product reads its payload from stdin and
+ * none of them looks at argv, so the flag is inert.
+ */
+export const OWNERSHIP_FLAG = '--token-optimizer-hook';
+
 /** The events we wire, and which hook file serves each. */
 /**
  * Every event this product needs, for the SCRIPT install path.
@@ -116,6 +130,10 @@ const isOurs = (entry) => {
 
   return hooks.every((hook) => {
     const command = typeof hook?.command === 'string' ? hook.command : '';
+
+    // The flag settles it outright, and nothing a user writes carries it.
+    if (command.includes(OWNERSHIP_FLAG)) return true;
+
     const script = entrypointOf(command).split('\\').join('/');
     if (!script) return false;
 
@@ -129,7 +147,15 @@ const isOurs = (entry) => {
     // one -- so requiring the segment costs us nothing and stops us claiming a
     // user's `~/token-optimizer-backup/stop.mjs`, which carries the marker only
     // because it borrowed the name.
-    const inOurDirectory = new RegExp(`(^|/)${MARKER}(/|$)`).test(directory);
+    // THE LEGACY RULE, for entries written before the flag existed. Dropping it
+    // would leave every hook installed by an earlier version unremovable, so it
+    // stays -- but narrowed to the directory the installers actually build:
+    // both put our files in `<...>/hooks/token-optimizer`, the shell one from
+    // `$HOME/.claude-global/hooks` and the PowerShell one from
+    // `$env:USERPROFILE\.claude-global\hooks`. Requiring the `hooks` segment as
+    // well is what excludes `/workspace/token-optimizer/stop.mjs`, which
+    // reproduces everything else about our layout.
+    const inOurDirectory = new RegExp(`(^|/)hooks/${MARKER}$`).test(directory);
 
     return inOurDirectory && OUR_FILES.has(file);
   });
@@ -154,7 +180,14 @@ export function wire(settings, hooksDir) {
 
     const ours = {
       ...(matcher ? { matcher } : {}),
-      hooks: [{ type: 'command', command: `node "${`${hooksDir}/${file}`.split('\\').join('/')}"` }],
+      hooks: [
+        {
+          type: 'command',
+          command:
+            `node "${`${hooksDir}/${file}`.split('\\').join('/')}" ` +
+            OWNERSHIP_FLAG,
+        },
+      ],
     };
 
     hooks[event] = [...theirs, ours];
