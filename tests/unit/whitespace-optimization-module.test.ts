@@ -49,8 +49,9 @@ describe('WhitespaceOptimizationModule', () => {
       const text = 'Line 1   \nLine 2  \nLine 3 ';
       const result = await module.apply(text);
 
-      expect(result.text).not.toContain('   \n');
-      expect(result.text).not.toContain('  \n');
+      // The exact result. Two absences are also satisfied by returning '', and
+      // an optimiser that deletes the document removes the trailing spaces too.
+      expect(result.text).toBe('Line 1\nLine 2\nLine 3');
     });
 
     it('should trim leading and trailing whitespace', async () => {
@@ -173,7 +174,9 @@ More  text
       const text = `\`\`\`\nfunction  test()  {\n}\n\`\`\``;
       const result = await moduleNoPreserve.apply(text);
 
-      // Spaces inside code blocks should be optimized
+      // Optimised, not deleted: the collapsed form must be there. An empty
+      // result contains no double-spaced signature either.
+      expect(result.text).toContain('function test() {');
       expect(result.text).not.toContain('function  test()  {');
     });
 
@@ -243,7 +246,10 @@ more code
       const text = 'Text\u00A0with\u00A0non-breaking\u00A0spaces';
       const result = await module.apply(text);
 
-      expect(result.text).toBeTruthy();
+      // The words survive whatever happens to the separators. `toBeTruthy`
+      // passed on any non-empty string at all, including a mangled one.
+      expect(result.text).toContain('non-breaking');
+      expect(result.text).toContain('Text');
     });
 
     it('should handle very long text', async () => {

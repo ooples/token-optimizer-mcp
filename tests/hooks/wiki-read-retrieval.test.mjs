@@ -86,6 +86,12 @@ describe('the id wiki_read computes reaches the finding wiki_write stored', () =
       (n) => n.kind === 'finding' && n.claim === 'A conclusion later withdrawn as incorrect.'
     );
     expect(node).toBeTruthy();
+    // Retrievable BEFORE retirement. Without this the exclusion below is not
+    // attributable to the retired flag -- findingsFor never returning it at all
+    // reads exactly the same.
+    expect(findingsFor(graph, idFor(target)).map((f) => f.claim)).toContain(
+      'A conclusion later withdrawn as incorrect.'
+    );
 
     node.retired = true;
     graph.nodes.set(nodeId('finding', node.key), node);

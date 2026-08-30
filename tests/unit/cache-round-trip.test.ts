@@ -109,9 +109,30 @@ describe('compressed cache entries survive a round trip', () => {
         language: 'typescript',
       };
 
-      await expect(tool.run(args)).resolves.toBeDefined();
+      // Timings and the cache flag are EXPECTED to differ between the two
+      // calls; everything else must not. Comparing the payloads with those
+      // fields dropped is what makes 'read back what it wrote' checkable at all
+      // -- two `toBeDefined` checks passed even when the cached read came back
+      // with different content, which is the only defect this test exists for.
+      const VOLATILE = new Set(['cacheHit', 'executionTime', 'formatTime']);
+      const payload = (value: unknown) =>
+        JSON.parse(
+          JSON.stringify(value, (key, inner) =>
+            VOLATILE.has(key) ? undefined : inner
+          )
+        );
+
+      const first = (await tool.run(args)) as {
+        metadata: { cacheHit: boolean };
+      };
       // The second call is the one that reads what the first wrote.
-      await expect(tool.run(args)).resolves.toBeDefined();
+      const second = (await tool.run(args)) as {
+        metadata: { cacheHit: boolean };
+      };
+
+      expect(first.metadata.cacheHit).toBe(false);
+      expect(second.metadata.cacheHit).toBe(true);
+      expect(payload(second)).toEqual(payload(first));
     } finally {
       try {
         cache.close();

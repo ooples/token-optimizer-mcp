@@ -112,6 +112,9 @@ describe('the dashboard is self-contained', () => {
     // page may reference it with a static tag.
     for (const page of ['index.html', 'wiki.html']) {
       const html = readFileSync(join(PUBLIC, page), 'utf8');
+      // The page must actually have scripts: a page with none satisfies the
+      // absence below while being a different (and broken) page entirely.
+      expect(html).toMatch(/<script/i);
       expect(html).not.toMatch(/<script[^>]+chart\.umd/i);
     }
   });

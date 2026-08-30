@@ -167,6 +167,10 @@ describe('checklist on a plugin install', () => {
       install,
     });
 
+    // The checklist must actually have run. An empty list satisfies both
+    // absences below and would read as 'does not demand' when the truth is
+    // 'checked nothing'.
+    expect(checks.length).toBeGreaterThan(0);
     expect(failedNames(checks)).not.toContain('hooks wired into settings');
     expect(failedNames(checks)).not.toContain('settings file present');
   });
@@ -180,6 +184,7 @@ describe('checklist on a plugin install', () => {
       install,
     });
 
+    expect(checks.length).toBeGreaterThan(0);
     expect(failedNames(checks)).not.toContain('install manifest present');
   });
 

@@ -129,14 +129,18 @@ describe('generated output carries no version by default', () => {
     generate('sync-hook-core.mjs');
     // The fixture package.json says 9.9.9-fixture. If the generator reads it into
     // the output at all, this fails.
-    expect(
-      sandboxFile('plugin', 'hooks', 'lib', 'observability.mjs')
-    ).not.toMatch(STAMP);
+    const vendored = sandboxFile('plugin', 'hooks', 'lib', 'observability.mjs');
+    // Generated at all, first: a generator that emitted an empty file would
+    // satisfy the stamp check below and pass as 'version-free'.
+    expect(vendored).toMatch(/\bexport\b/);
+    expect(vendored).not.toMatch(STAMP);
   });
 
   test('the client entry points are version-free too', () => {
     generate('generate-client-entries.mjs');
-    expect(sandboxFile('plugin', 'hooks', 'stop.mjs')).not.toMatch(STAMP);
+    const entry = sandboxFile('plugin', 'hooks', 'stop.mjs');
+    expect(entry).toMatch(/\bimport\b/);
+    expect(entry).not.toMatch(STAMP);
   });
 
   test('no committed generated file carries a version literal', () => {

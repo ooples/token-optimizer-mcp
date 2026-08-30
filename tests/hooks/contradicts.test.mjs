@@ -59,8 +59,10 @@ describe('contradicts', () => {
   test('leaves the contradicted finding present, not retired', () => {
     contradict(dir, { key: 'old', byKey: 'new', reason: 're-derived' });
     const old = findingByKey(load(dir), 'old');
-    expect(old).toBeDefined();
-    expect(old.retired).toBeFalsy();
+    // Identified, not merely defined: `toBeDefined` passes on any object the
+    // finder happens to return, including the contradictOR.
+    expect(old.key).toBe('old');
+    expect(Boolean(old.retired)).toBe(false);
   });
 
   test('leaves BOTH claims readable -- the whole reason this is an edge', () => {

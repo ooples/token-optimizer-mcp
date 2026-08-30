@@ -368,14 +368,17 @@ describe('Session Analyzer - Enhanced Analytics', () => {
       const operations = createSampleOperations();
       const result = analyzeTokenUsage(operations);
 
-      // Verify all analytics are present
-      expect(result.summary).toBeDefined();
-      expect(result.topConsumers).toBeDefined();
-      expect(result.byServer).toBeDefined();
-      expect(result.hourlyTrend).toBeDefined();
-      expect(result.anomalies).toBeDefined();
-      expect(result.recommendations).toBeDefined();
-      expect(result.efficiency).toBeDefined();
+      // POPULATED, not merely present. Every one of these is an object or an
+      // array that the analyser always constructs, so `toBeDefined` passed even
+      // when the sample operations were never read and every section was empty.
+      expect(result.summary.totalOperations).toBeGreaterThan(0);
+      expect(result.summary.totalTokens).toBeGreaterThan(0);
+      expect(result.topConsumers.length).toBeGreaterThan(0);
+      expect(result.byServer.length).toBeGreaterThan(0);
+      expect(result.hourlyTrend.length).toBeGreaterThan(0);
+      expect(Array.isArray(result.anomalies)).toBe(true);
+      expect(Array.isArray(result.recommendations)).toBe(true);
+      expect(result.efficiency.tokensPerTool).toBeGreaterThan(0);
     });
 
     it('should handle empty operations array', () => {

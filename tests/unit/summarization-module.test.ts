@@ -122,8 +122,11 @@ describe('SummarizationModule', () => {
 
       const result = await moduleWithoutMetrics.summarize(text);
 
-      expect(result).toBeDefined();
-      expect(result.summary).toBeDefined();
+      // A summary that exists but is empty is not a summary. `toBeDefined`
+      // passed on '' -- which is what a module with no metrics returning early
+      // would produce.
+      expect(typeof result.summary).toBe('string');
+      expect(result.summary.length).toBeGreaterThan(0);
     });
   });
 
@@ -213,8 +216,8 @@ describe('SummarizationModule', () => {
 
       const result = await module.summarize(text);
 
-      expect(result).toBeDefined();
-      expect(result.summary).toBeDefined();
+      expect(typeof result.summary).toBe('string');
+      expect(result.summary.length).toBeGreaterThan(0);
     });
 
     it('should handle text with special characters', async () => {
@@ -222,8 +225,8 @@ describe('SummarizationModule', () => {
 
       const result = await module.summarize(text);
 
-      expect(result).toBeDefined();
-      expect(result.summary).toBeDefined();
+      expect(typeof result.summary).toBe('string');
+      expect(result.summary.length).toBeGreaterThan(0);
     });
 
     it('should handle unicode text', async () => {
@@ -231,8 +234,8 @@ describe('SummarizationModule', () => {
 
       const result = await module.summarize(text);
 
-      expect(result).toBeDefined();
-      expect(result.summary).toBeDefined();
+      expect(typeof result.summary).toBe('string');
+      expect(result.summary.length).toBeGreaterThan(0);
     });
 
     it('should calculate compression ratio correctly', async () => {

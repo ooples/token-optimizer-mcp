@@ -190,6 +190,13 @@ describe('markdown export', () => {
   test('retired findings are excluded from the export', () => {
     const path = write('a.ts', 'x');
     retire(dir, seed(path, 'f1', 'this was wrong'));
-    expect(exportMarkdown(load(dir))).not.toContain('this was wrong');
+    seed(path, 'f2', 'this one still holds');
+
+    const markdown = exportMarkdown(load(dir));
+    // The survivor is the control. Excluding retired findings and excluding
+    // ALL findings look identical to an absence check, and only one of them is
+    // the behaviour under test.
+    expect(markdown).toContain('this one still holds');
+    expect(markdown).not.toContain('this was wrong');
   });
 });

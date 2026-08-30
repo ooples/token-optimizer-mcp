@@ -71,6 +71,9 @@ describe('readTurns', () => {
   it('drops tool RESULTS, which is where file contents would enter the record', () => {
     const turns = readTurns(transcript);
     const all = JSON.stringify(turns);
+    // The conversation must still be there. Without this, `readTurns` returning
+    // [] would satisfy both absences below while dropping the record entirely.
+    expect(all).toContain('run the tests');
     expect(all).not.toContain('PASS tests/a.test.ts');
     expect(all).not.toContain('Tests: 40 passed');
   });

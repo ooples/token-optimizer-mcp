@@ -102,11 +102,12 @@ describe('CompressionModule', () => {
       const text = 'This is a longer text that will be compressed. '.repeat(30);
       const result = await module.apply(text);
 
-      expect(result.metadata).toBeDefined();
-      expect(result.metadata?.compressionRatio).toBeDefined();
-      expect(result.metadata?.percentSaved).toBeDefined();
-      expect(result.metadata?.originalSize).toBeDefined();
-      expect(result.metadata?.compressedSize).toBeDefined();
+      // Statistics that exist but read zero are the same as no statistics: the
+      // report would state a compression that did not happen.
+      expect(result.metadata?.compressionRatio).toBeGreaterThan(0);
+      expect(result.metadata?.percentSaved).toBeGreaterThan(0);
+      expect(result.metadata?.originalSize).toBe(text.length);
+      expect(result.metadata?.compressedSize).toBeGreaterThan(0);
     });
 
     it('should report compression ratio', async () => {
@@ -220,8 +221,10 @@ describe('CompressionModule', () => {
 
       const result = await module.apply(randomText);
 
-      // Random text doesn't compress well, but should still work
-      expect(result.text).toBeTruthy();
+      // Random text doesn't compress well, but must still round-trip as text
+      // rather than come back as some truthy placeholder.
+      expect(typeof result.text).toBe('string');
+      expect(result.text.length).toBeGreaterThan(0);
     });
   });
 });

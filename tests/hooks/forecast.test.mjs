@@ -543,6 +543,10 @@ describe('the credibility check divides each arm by its own event count', () => 
     }
 
     const panel = forecastPanel(dir, session, []);
+    // The panel must have rendered its forecast. An empty text satisfies the
+    // quiet-on-agreement check below while saying nothing at all, so silence
+    // and absence would be indistinguishable.
+    expect(panel.text).toMatch(/turns to compaction/);
     expect(panel.text).not.toMatch(/disagree/);
   });
 

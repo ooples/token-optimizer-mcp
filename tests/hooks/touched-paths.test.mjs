@@ -330,9 +330,14 @@ describe('every payload dialect reaches the same judgement', () => {
   // is the worst way for this to break, so every spelling is covered.
   test('the args container is found under any of its names', () => {
     const file = join(repoA, 'src/main.ts');
+    // normalizePayload canonicalises separators, so the expected value is the
+    // canonical form rather than the platform-native one it was built from.
+    const canonical = file.replace(/\\/g, '/');
     for (const key of ['tool_input', 'toolInput', 'tool_args', 'toolArgs', 'arguments', 'args', 'parameters']) {
       const payload = normalizePayload({ session_id: 's', cwd: repoA, tool_name: 'Read', [key]: { file_path: file } });
-      expect(payload.tool_input.file_path).toBeTruthy();
+      // The exact path, not merely something truthy: a normaliser that found
+      // the container but mangled the value would still be a no-op integration.
+      expect(payload.tool_input.file_path).toBe(canonical);
     }
   });
 

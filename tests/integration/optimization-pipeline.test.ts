@@ -364,8 +364,9 @@ Copyright 2024. All rights reserved.
       const result = await optimizer.optimize(text);
 
       const metadata = result.moduleResults[0].metadata;
-      expect(metadata).toBeDefined();
-      expect(metadata?.spacesRemoved).toBeDefined();
+      // The COUNT, not its existence: 'Test  text' holds one removable space, and
+      // metadata reporting 0 is the failure this test is supposed to catch.
+      expect(metadata?.spacesRemoved).toBeGreaterThan(0);
     });
 
     it('should track metadata across multiple modules', async () => {
@@ -377,8 +378,8 @@ Copyright 2024. All rights reserved.
       const text = 'Test  text.   Test  text.';
       const result = await optimizer.optimize(text);
 
-      expect(result.moduleResults[0].metadata?.spacesRemoved).toBeDefined();
-      expect(result.moduleResults[1].metadata?.duplicateSentences).toBeDefined();
+      expect(result.moduleResults[0].metadata?.spacesRemoved).toBeGreaterThan(0);
+      expect(result.moduleResults[1].metadata?.duplicateSentences).toBeGreaterThan(0);
     });
   });
 });

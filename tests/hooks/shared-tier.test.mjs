@@ -171,6 +171,10 @@ describe('a lesson learned in one project', () => {
     // The whole basis of the split. A `finding` is a claim about its anchor's
     // CONTENTS, so carrying it to another repository would assert something about
     // files that repository does not have.
+    // The control travels with it: a lesson that DOES cross, taught in the same
+    // project and triggered by the same command. Without it, a pipeline that
+    // returned nothing at all would satisfy the absence below.
+    learnIn(projectA, wikiA, NPM_LESSON);
     learnIn(projectA, wikiA, {
       type: 'finding',
       scope: 'project',
@@ -181,6 +185,7 @@ describe('a lesson learned in one project', () => {
 
     const context = runCommandIn(projectB, 'npx jest');
 
+    expect(context).toContain('From other projects on this machine');
     expect(context).not.toContain('parse() trims');
   });
 
@@ -208,6 +213,10 @@ describe('a lesson learned in one project', () => {
 
     const context = runCommandIn(projectA, 'npx jest');
 
+    // It is still SERVED -- by A's own local path. That is the whole claim:
+    // present, but not relabelled as foreign news. An empty context would
+    // satisfy the absence alone.
+    expect(context).toContain('npm test');
     expect(context).not.toContain('From other projects on this machine');
   });
 
@@ -216,7 +225,16 @@ describe('a lesson learned in one project', () => {
     // the feature could pass every test above by attaching to everything.
     learnIn(projectA, wikiA, NPM_LESSON);
 
-    const context = runCommandIn(projectB, 'git status --short');
+    // The control, in a session of its own so the once-per-session suppression
+    // cannot be what produces the silence: the same lesson DOES fire for a
+    // matching command.
+    expect(runCommandIn(projectB, 'npx jest', { sessionId: 'trigger-control' })).toContain(
+      'From other projects on this machine'
+    );
+
+    const context = runCommandIn(projectB, 'git status --short', {
+      sessionId: 'trigger-quiet',
+    });
 
     expect(context).not.toContain('From other projects on this machine');
   });
@@ -367,6 +385,14 @@ describe('a lesson learned in one project', () => {
       ],
       { sessionId: 'quiet-seed', projectRoot: projectA }
     );
+
+    // The seed must actually be in the shared tier. Silence from an empty store
+    // is not the wider matcher staying quiet -- it is the matcher never running.
+    expect(
+      [...loadGraph(sharedDirOf()).nodes.values()].filter(
+        (node) => node.kind === 'finding'
+      )
+    ).toHaveLength(1);
 
     for (const cmd of ['echo hello', 'ls -la', 'pwd', 'curl https://example.com']) {
       const context = runCommandIn(projectB, cmd, { sessionId: `quiet-${cmd.length}` });

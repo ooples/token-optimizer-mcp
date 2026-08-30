@@ -175,6 +175,9 @@ describe('the generated-config gate', () => {
     // that PR with GITHUB_TOKEN and GitHub suppresses workflow runs from it, so every
     // run sat in `action_required` having executed nothing. With `@latest` there is
     // nothing to repair, so it is gone -- and must not return on that assumption.
+    // The directory was actually read. An empty listing satisfies the absence
+    // below and would report a deleted workflow as gone from an empty repo.
+    expect(workflows).toContain('release.yml');
     expect(workflows).not.toContain('sync-release-pins.yml');
   });
 });

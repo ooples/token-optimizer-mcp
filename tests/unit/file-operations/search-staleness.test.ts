@@ -68,10 +68,15 @@ describe('smart_glob freshness', () => {
   it('stops listing a file that was deleted', async () => {
     const tool = new SmartGlobTool(...deps());
     writeFileSync(join(dir, 'src', 'gone.ts'), 'export const g = 0;\n');
+    // A sibling that SURVIVES, so the absence below is attributable to the
+    // deletion. A cached-empty or failed glob returns nothing for everything,
+    // which passes an absence check while listing no files at all.
+    writeFileSync(join(dir, 'src', 'stays.ts'), 'export const s = 0;\n');
     await tool.glob('src/*.ts', { cwd: dir });
     rmSync(join(dir, 'src', 'gone.ts'));
     const after = await tool.glob('src/*.ts', { cwd: dir });
 
+    expect(JSON.stringify(after.files)).toContain('stays.ts');
     expect(JSON.stringify(after.files)).not.toContain('gone.ts');
   });
 

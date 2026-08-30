@@ -140,7 +140,9 @@ describe('MarkerBasedOptimizer', () => {
 
       const result = await optimizer.processMarkers(prompt);
 
-      expect(result).toBeDefined();
+      // Something was produced. `toBeDefined` also passes on '' -- and an empty
+      // result contains no marker either, so the absence alone proves nothing.
+      expect(result.length).toBeGreaterThan(0);
       expect(result).not.toContain('<summarize>');
     });
 
@@ -150,7 +152,7 @@ describe('MarkerBasedOptimizer', () => {
 
       const result = await optimizer.processMarkers(prompt);
 
-      expect(result).toBeDefined();
+      expect(result.length).toBeGreaterThan(0);
       expect(result).not.toContain('<summarize>');
     });
 
@@ -160,7 +162,7 @@ describe('MarkerBasedOptimizer', () => {
 
       const result = await optimizer.processMarkers(prompt);
 
-      expect(result).toBeDefined();
+      expect(result.length).toBeGreaterThan(0);
       expect(result).not.toContain('<summarize>');
     });
 
@@ -170,7 +172,7 @@ describe('MarkerBasedOptimizer', () => {
 
       const result = await optimizer.processMarkers(prompt);
 
-      expect(result).toBeDefined();
+      expect(result.length).toBeGreaterThan(0);
       expect(result).not.toContain('<summarize>');
       expect(result).not.toContain('</summarize>');
     });
@@ -200,8 +202,12 @@ describe('MarkerBasedOptimizer', () => {
 
       const result = await optimizer.processMarkers(prompt);
 
-      expect(result).toBeDefined();
-      // Result depends on regex behavior - it will match first closing tag
+      // The exact consequence of matching the FIRST closing tag, written out
+      // rather than left to `toBeDefined`: the OUTER opening marker is consumed,
+      // the inner one is not, and the trailing text ends up outside the summary.
+      // Stating it means a change to the nesting behaviour has to be noticed and
+      // argued rather than silently absorbed by an assertion that never fails.
+      expect(result).toBe('Outer <summarize>Inner. still outer</summarize>');
     });
   });
 
@@ -215,7 +221,7 @@ Line 3 of content.
 
       const result = await optimizer.processMarkers(prompt);
 
-      expect(result).toBeDefined();
+      expect(result.length).toBeGreaterThan(0);
       expect(result).not.toContain('<summarize>');
       expect(result).not.toContain('</summarize>');
     });
@@ -233,7 +239,7 @@ This is important.
 
       const result = await optimizer.processMarkers(prompt);
 
-      expect(result).toBeDefined();
+      expect(result.length).toBeGreaterThan(0);
       expect(result).not.toContain('<summarize>');
     });
 

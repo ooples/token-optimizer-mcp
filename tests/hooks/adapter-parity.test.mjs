@@ -73,9 +73,14 @@ describe('a recorded read carries a fingerprint', () => {
   test('a read written with a fingerprint round-trips it', () => {
     const dir = wikiDir(repoA);
     mkdirSync(dir, { recursive: true });
-    recordRead(dir, { anchor: fileA, sessionId: 's1', bytes: 10, fp: fingerprint(fileA) });
+    const fp = fingerprint(fileA);
+    recordRead(dir, { anchor: fileA, sessionId: 's1', bytes: 10, fp });
     const read = readMetrics(dir).find((e) => e.kind === 'read' && e.anchor === fileA);
-    expect(read.fp).toBeTruthy();
+    // The SAME fingerprint, not merely a truthy one. 'round-trips' is a claim
+    // about identity: a store that wrote a constant, or the fingerprint of the
+    // wrong file, would satisfy `toBeTruthy` and make every later
+    // unchanged/changed comparison wrong while reporting itself measured.
+    expect(read.fp).toBe(fp);
   });
 });
 

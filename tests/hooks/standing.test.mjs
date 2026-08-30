@@ -106,8 +106,12 @@ describe('non-use is a count, not a judgement', () => {
 
   test('common words are not treated as distinctive', () => {
     const terms = distinctiveTerms('You should always make sure that this file is used when needed');
-    expect(terms).not.toContain('should');
-    expect(terms).not.toContain('always');
+    // The whole list, not two absences. `not.toContain` alone also passes when
+    // distinctiveTerms returns [] for every input -- which would make every
+    // standing instruction look unused and every verdict wrong in the same
+    // direction. 'needed' is the one word here that is both long enough and not
+    // a stopword, so it must be the only survivor.
+    expect(terms).toEqual(['needed']);
   });
 
   test('a missing transcript yields no usage rather than fabricated counts', () => {

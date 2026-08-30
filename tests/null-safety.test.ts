@@ -265,10 +265,15 @@ describe('anomaly-explainer.ts null safety', () => {
       const seasonalityHighStrength: SeasonalityPattern = { detected: true, strength: 0.8 };
 
       // Test the actual condition from the code: seasonality?.detected && seasonality.strength && seasonality.strength > 0.6
-      expect(seasonalityUndefined?.detected && seasonalityUndefined.strength && seasonalityUndefined.strength > 0.6).toBeFalsy();
-      expect(seasonalityNoStrength?.detected && seasonalityNoStrength.strength && seasonalityNoStrength.strength > 0.6).toBeFalsy();
-      expect(seasonalityLowStrength?.detected && seasonalityLowStrength.strength && seasonalityLowStrength.strength > 0.6).toBeFalsy();
-      expect(seasonalityHighStrength?.detected && seasonalityHighStrength.strength && seasonalityHighStrength.strength > 0.6).toBeTruthy();
+      // The exact value each short-circuit yields, not merely its truthiness.
+      // `&&` returns the OPERAND that stopped it, so these are `undefined`,
+      // `undefined`, `false` and `true` respectively -- and a version that
+      // returned the wrong one of those would still be falsy/truthy in the same
+      // places while behaving differently at the call site.
+      expect(seasonalityUndefined?.detected && seasonalityUndefined.strength && seasonalityUndefined.strength > 0.6).toBe(undefined);
+      expect(seasonalityNoStrength?.detected && seasonalityNoStrength.strength && seasonalityNoStrength.strength > 0.6).toBe(undefined);
+      expect(seasonalityLowStrength?.detected && seasonalityLowStrength.strength && seasonalityLowStrength.strength > 0.6).toBe(false);
+      expect(seasonalityHighStrength?.detected && seasonalityHighStrength.strength && seasonalityHighStrength.strength > 0.6).toBe(true);
     });
 
     it('should handle period in string template with nullish coalescing', () => {

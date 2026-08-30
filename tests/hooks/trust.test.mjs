@@ -180,8 +180,28 @@ describe('the doctor runs the thing rather than inspecting it', () => {
   });
 
   test('every failing check names a fix, because a diagnosis without one is a complaint', () => {
-    const checks = checklist({ root: join(workspace, 'nowhere'), settingsPath: join(workspace, 'nope.json') });
-    for (const check of checks.filter((c) => !c.pass)) expect(check.remedy).toBeTruthy();
+    const checks = checklist({
+      root: join(workspace, 'nowhere'),
+      settingsPath: join(workspace, 'nope.json'),
+      // `install` is passed EXPLICITLY, and that is the point of this test.
+      // Without it, checklist() falls through to detectInstall(), which reads
+      // the MACHINE's ~/.claude/plugins record -- valid on any developer box --
+      // so a deliberately absent `root` still resolved to a real hooks
+      // directory, every check passed, and the loop below ran zero times while
+      // reporting success. Naming an absent hooks directory is what actually
+      // produces the failing checks this test is about.
+      install: {
+        method: 'script',
+        hooksDir: join(workspace, 'nowhere', 'plugin', 'hooks'),
+      },
+    });
+    const failing = checks.filter((c) => !c.pass);
+    // Asserted before the loop, because a loop over an empty array asserts
+    // nothing and reports success. A missing root and a missing settings file
+    // MUST fail checks; if they stop doing so this test has to say so rather
+    // than quietly become a no-op.
+    expect(failing.length).toBeGreaterThan(0);
+    for (const check of failing) expect(String(check.remedy ?? '')).toMatch(/\S/);
   });
 
   test('the rendered report states the off switch', async () => {

@@ -173,6 +173,9 @@ describe('the dashboard escapes graph-derived values', () => {
       '${item.id}', '${item.key}', '${item.type}', '${item.claim}',
       '${node.kind}', '${node.type}', '${t.text}', '${t.status}',
     ];
+    // The escaping must actually be present. An empty or wrongly-read source
+    // satisfies every absence below and reads as a clean bill of health.
+    expect(markupLines).toContain('escapeHtml(');
     for (const token of risky) {
       expect(markupLines).not.toContain(token);
     }
@@ -191,6 +194,9 @@ describe('the server exposes no caller-controlled graph path', () => {
     // It flowed into wikiDir(), a plain path join accepting absolute paths and
     // `..`, and on the curate route reached mkdir + append -- a file-write
     // primitive at a caller-chosen location, on a server with no auth.
+    // The routes module was actually read: an empty string satisfies the
+    // absence below, and 'the parameter is gone' would then be vacuously true.
+    expect(routes).toContain('rejectsCrossSite');
     expect(routes).not.toContain('req.query.project');
   });
 
