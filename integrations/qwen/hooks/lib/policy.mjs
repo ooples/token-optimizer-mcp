@@ -43,6 +43,7 @@ import {
   openSync,
   closeSync,
   unlinkSync,
+  writeSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -719,6 +720,49 @@ export function allowWithContext(context) {
  * reporting what I actually received" -- and a model that distrusts its output
  * re-runs the command, spending the exact turn this exists to save.
  */
+/**
+ * Writes our answer to stdout and stops, without losing the tail of it.
+ *
+ * `process.stdout.write()` FOLLOWED BY `process.exit()` IS A TRUNCATION BUG.
+ * When stdout is a pipe -- which it always is here, because the client reads
+ * our answer -- Node's write is asynchronous, and `process.exit` terminates
+ * immediately without draining what is still queued. The host then receives
+ * half a JSON document, fails to parse it, and drops the whole decision:
+ * `updatedInput` never arrives and the command runs unbounded. The larger the
+ * answer the likelier it is, so the rewrites -- our longest outputs -- are the
+ * most exposed.
+ *
+ * `writeSync` on the file descriptor does not queue, so by the time it returns
+ * the bytes are gone. The exit is kept exactly as it was: callers rely on this
+ * function not returning, and switching to `process.exitCode` would let
+ * execution fall through and emit a SECOND decision.
+ *
+ * EAGAIN means the pipe is momentarily full on a non-blocking descriptor, not
+ * that anything failed, so the write is retried after a real pause -- a bare
+ * retry loop would spin a core against a slow reader. EPIPE means the reader
+ * has gone; there is nobody left to tell.
+ */
+function emitAndExit(serialized) {
+  const buffer = Buffer.from(serialized, 'utf8');
+  let written = 0;
+
+  while (written < buffer.length) {
+    try {
+      written += writeSync(1, buffer, written, buffer.length - written);
+    } catch (error) {
+      if (error?.code === 'EAGAIN') {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1);
+        continue;
+      }
+      // EPIPE, a closed descriptor, anything else: the answer cannot be
+      // delivered and there is no second channel to complain on.
+      break;
+    }
+  }
+
+  process.exit(0);
+}
+
 export function allowWithRewrite(updatedInput, notice) {
   const output = {
     hookSpecificOutput: {
@@ -731,8 +775,7 @@ export function allowWithRewrite(updatedInput, notice) {
   };
   const serialized = JSON.stringify(output);
   noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
-  process.stdout.write(serialized);
-  process.exit(0);
+  emitAndExit(serialized);
 }
 
 /**
@@ -752,8 +795,7 @@ export function deny(reason) {
   };
   const serialized = JSON.stringify(output);
   noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
-  process.stdout.write(serialized);
-  process.exit(0);
+  emitAndExit(serialized);
 }
 
 /**
@@ -785,8 +827,7 @@ export function advise(context) {
   };
   const serialized = JSON.stringify(output);
   noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
-  process.stdout.write(serialized);
-  process.exit(0);
+  emitAndExit(serialized);
 }
 
 /**
