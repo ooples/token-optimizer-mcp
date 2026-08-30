@@ -112,6 +112,7 @@
     "bench:screen": "bash bench/thol/run-campaign.sh",
     "bench:confirm": "REPS=3 bash bench/thol/run-campaign.sh",
     "bench:debug-loop": "node bench/debug-loop/run.mjs",
+    "bench:field": "node bench/field/report.mjs",
     "bench:pack": "node scripts/bench-pack.mjs"
   },
   "repository": {
