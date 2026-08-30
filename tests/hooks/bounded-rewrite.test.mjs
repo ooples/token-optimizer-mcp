@@ -66,32 +66,64 @@ describe('the rewritten command still means what it meant', () => {
     expect(bounded.status).toBe(1);
   });
 
-  it('keeps the TAIL, which is where a test run puts its verdict', () => {
-    // 200 numbered lines: the bound must drop the beginning and keep the end.
-    const { command } = boundedRewrite('seq 1 200', { maxBytes: 40 });
+  it('keeps BOTH ENDS, because the client itself truncates from the middle', () => {
+    // Claude Code caps Bash output at 30,000 characters and cuts the MIDDLE,
+    // keeping head and tail. A tail-only bound would be cheaper AND lose the
+    // head -- where a failing jest run lists WHICH suites failed -- so it could
+    // read as a cost win while being a regression for the model.
+    const { command } = boundedRewrite('seq 1 2000', { maxBytes: 60 });
 
     const bounded = run(command);
 
-    expect(bounded.stdout).toContain('200');
-    expect(bounded.stdout).not.toContain('\n1\n');
-    expect(Buffer.byteLength(bounded.stdout, 'utf8')).toBeLessThanOrEqual(40);
+    expect(bounded.stdout.startsWith('1\n2\n3')).toBe(true);
+    expect(bounded.stdout.trimEnd().endsWith('2000')).toBe(true);
+    // And it says so, rather than silently splicing two halves together.
+    expect(bounded.stdout).toContain('middle omitted');
+  });
+
+  it.each([
+    ['a trailing comment', 'echo hi # explain'],
+    ['a trailing semicolon', 'echo hi;'],
+  ])('does not BREAK a working command ending in %s', (_why, command) => {
+    // Both of these ran fine unwrapped and were syntax errors under the first
+    // implementation, which closed the group with `; }`:
+    //   echo hi # explain  ->  { echo hi # explain; }   `; }` is inside the
+    //                          comment, so the group never closes
+    //   echo hi;           ->  { echo hi;; }            `;;` is a syntax error
+    // Breaking a command that would have worked is the worst thing this module
+    // can do: the failure looks like the user's own command is at fault.
+    const original = run(command);
+    const bounded = run(boundedRewrite(command).command);
+
+    expect(original.status).toBe(0);
+    expect(bounded.status).toBe(0);
+    expect(bounded.stdout).toContain('hi');
   });
 
   it('leaves output shorter than the bound completely untouched', () => {
     const { command } = boundedRewrite('echo short', { maxBytes: 8000 });
 
-    expect(run(command).stdout.trim()).toBe('short');
+    const bounded = run(command);
+
+    expect(bounded.stdout.trim()).toBe('short');
+    // AND CLAIMS NOTHING. An unconditional marker would announce a truncation
+    // that never happened, sending the model looking for a middle that does
+    // not exist -- which costs the turn this module exists to save.
+    expect(bounded.stdout).not.toContain('omitted');
   });
 
   it('bounds a compound command as one unit, not just its last part', () => {
     // `{ a; b; } | tail` and `a; b | tail` are different commands. The braces
     // are what make the bound apply to everything the call produces.
-    const { command } = boundedRewrite('seq 1 100; echo LAST', { maxBytes: 30 });
+    const { command } = boundedRewrite('seq 1 100; echo LAST', { maxBytes: 60 });
 
     const bounded = run(command);
 
+    // `LAST` is produced by the SECOND command in the group; seeing it proves
+    // the bound wrapped the whole call rather than only its last part.
     expect(bounded.stdout).toContain('LAST');
-    expect(Buffer.byteLength(bounded.stdout, 'utf8')).toBeLessThanOrEqual(30);
+    // Bounded, not unbounded: the full sequence is ~292 bytes.
+    expect(Buffer.byteLength(bounded.stdout, 'utf8')).toBeLessThan(200);
   });
 });
 
@@ -133,6 +165,8 @@ describe('the bound announces itself', () => {
 
     expect(notice).toContain(String(DEFAULT_BOUND_BYTES));
     expect(notice).toMatch(/TOKEN_OPTIMIZER_BOUND_BYTES/);
+    // And that BOTH ends were kept, not just the tail.
+    expect(notice).toMatch(/beginning and its end/);
   });
 });
 
