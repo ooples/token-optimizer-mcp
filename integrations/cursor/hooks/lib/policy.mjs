@@ -53,7 +53,39 @@ import { noteHookOutput } from './observability.mjs';
 /** Enforcement modes, least to most permissive. */
 export const MODE_ENFORCE = 'enforce';
 export const MODE_ADVISE = 'advise';
+/**
+ * Refusals off, everything else on.
+ *
+ * THE POSTURE THAT WAS MISSING. `off` is not "enforcement disabled" -- it exits
+ * the hook process (see adapter.mjs and stop-harvest.mjs), taking retrieval,
+ * injection and harvest with it. The experiment arms cannot express this either:
+ * they are cumulative, and every arm carrying retrieval also carries routing.
+ *
+ * So there was no way to run the knowledge graph without also refusing tool
+ * calls -- which is exactly the configuration a benchmark needed, since the
+ * enforcing default measured 1.687x vanilla Claude Code while `off` measured
+ * 0.904 with most of the product switched off.
+ *
+ * Quieter than `advise`: no refusal AND no routing advisory, because an
+ * advisory still spends context on every matched call.
+ */
+export const MODE_ASSIST = 'assist';
 export const MODE_OFF = 'off';
+
+/**
+ * Whether this posture may refuse a tool call.
+ *
+ * A PREDICATE RATHER THAN A THIRD `!==` COMPARISON. Two call sites in
+ * adapter.mjs previously excluded only `advise` -- one gating whether a refusal
+ * is emitted, one choosing between "a built-in call is denied" and "these are
+ * recommendations" in the session-start guidance. Adding a mode without
+ * updating both would have left assist telling the model its calls would be
+ * denied while allowing every one of them, and the next mode would have to
+ * find all the sites again.
+ */
+export function refusalsEnabled() {
+  return mode() === MODE_ENFORCE;
+}
 
 /**
  * Reads the mode. Enforcement is the DEFAULT -- that is the entire point of the
@@ -64,6 +96,7 @@ export function mode() {
   const raw = (process.env.TOKEN_OPTIMIZER_MODE || '').trim().toLowerCase();
   if (raw === MODE_OFF) return MODE_OFF;
   if (raw === MODE_ADVISE) return MODE_ADVISE;
+  if (raw === MODE_ASSIST) return MODE_ASSIST;
   return MODE_ENFORCE;
 }
 
@@ -730,7 +763,10 @@ export function advise(context) {
  */
 export function enforce(reason, deniedBefore) {
   const current = mode();
-  if (current === MODE_OFF) allow();
+  // assist allows SILENTLY, like off and unlike advise: an advisory still
+  // spends context on every matched call, which is the cost assist exists to
+  // avoid while keeping the graph running.
+  if (current === MODE_OFF || current === MODE_ASSIST) allow();
   if (current === MODE_ADVISE || deniedBefore) advise(reason);
   deny(reason);
 }

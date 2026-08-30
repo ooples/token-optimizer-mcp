@@ -19,7 +19,8 @@ import { bumpFsGeneration } from '../../utils/fs-generation.js';
 import { writeBackup } from '../../utils/file-backup.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-import { generateCacheKey } from '../shared/hash-utils.js';
+import { generateCacheKey, lastWrittenKey } from '../shared/hash-utils.js';
+import { cacheSet } from '../../utils/cache-helper.js';
 import { generateUnifiedDiff } from '../shared/diff-utils.js';
 
 // Backups live in utils/file-backup.ts, shared with smart_write. They were
@@ -401,6 +402,12 @@ export class SmartEditTool {
           const cacheKey = generateCacheKey('file-edit', { path: filePath });
           const contentSize = Buffer.from(editedContent, 'utf-8').length;
           this.cache.set(cacheKey, editedContent, contentSize, contentSize);
+
+          // The entry above is a THIRD namespace no reader consults, stored raw
+          // where readers expect base64 gzip -- the same shape of gap smart_write
+          // had. This is the handoff the reader actually looks for, so a read
+          // after an edit reports the edit instead of resending the file.
+          cacheSet(this.cache, lastWrittenKey(filePath), editedContent);
         } catch {
           // The edit stands. The next read simply misses the cache.
         }

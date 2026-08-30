@@ -16,7 +16,11 @@ import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateDiff, hasMeaningfulChanges } from '../shared/diff-utils.js';
-import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
+import {
+  hashFile,
+  generateCacheKey,
+  lastWrittenKey,
+} from '../shared/hash-utils.js';
 import { cacheGet, cacheSet } from '../../utils/cache-helper.js';
 import { authoredBase } from './authored-base.js';
 import {
@@ -143,23 +147,36 @@ export class SmartReadTool {
     // Check cache
     const ownCached = enableCache ? cacheGet(this.cache, cacheKey) : null;
 
-    // FALL BACK TO WHAT THIS SESSION WROTE. Without this, the first read of a
-    // file resends it in full even when the session wrote it moments earlier
-    // through the built-in Write -- the hook recorded those bytes, but nothing
-    // consulted the record.
+    // FALL BACK TO WHAT WAS ALREADY WRITTEN, from the safer source first.
     //
-    // Session-scoped, and that is the whole safety argument. The record carries
-    // the session that authored it, so a caller that did not write the file
-    // gets nothing and resends -- which is today's behaviour, so this can never
-    // make a read worse. The knowledge-graph snapshot could NOT be used here
-    // for exactly that reason: `indexFile` runs on reads too, so it would have
-    // told a session that never saw a file that nothing had changed.
-    const cachedData = ownCached ?? authoredBase(filePath);
+    // TWO MECHANISMS LANDED FOR THE SAME PROBLEM and this merge keeps both,
+    // because neither subsumes the other:
+    //
+    //   authoredBase()  is SESSION-SCOPED and covers a write made through ANY
+    //     path, including the built-in Write, because the hook recorded those
+    //     bytes. The record carries the session that authored it, so a caller
+    //     that did not write the file gets nothing and resends -- which is
+    //     today's behaviour, so it can never make a read worse. The
+    //     knowledge-graph snapshot could NOT be used here for exactly that
+    //     reason: `indexFile` runs on reads too, so it would have told a
+    //     session that never saw a file that nothing had changed.
+    //
+    //   lastWrittenKey() is PATH-SCOPED and covers only this product's own
+    //     smart_write / smart_edit, whose entries lived under a different
+    //     namespace and so were never found on a read.
+    //
+    // Ordered session-scoped first: it is the one with a provenance argument.
+    // Both are only ever a BASE, never the answer, so a stale entry costs a
+    // diff rather than a wrong result.
+    const cachedData =
+      ownCached ??
+      authoredBase(filePath) ??
+      (enableCache ? cacheGet(this.cache, lastWrittenKey(filePath)) : null);
 
     // Deliberately NOT `cachedData !== null`. This means "my own cache entry
     // hit", which is what the metrics below report and what gates the re-seed
-    // further down -- so a read served off the fallback still populates its own
-    // key, and the next read needs no fallback.
+    // further down -- so a read served off either fallback still populates its
+    // own key, and the next read needs no fallback at all.
     const fromCache = ownCached !== null;
 
     // Read file content

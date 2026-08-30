@@ -659,6 +659,11 @@ function append(dir, record) {
 export function putNode(dir, { kind, key, ...rest }) {
   if (!NODE_KINDS.includes(kind)) throw new Error(`unknown node kind: ${kind}`);
   const id = nodeId(kind, key);
+  // DEGRADES, NEVER THROWS. The id is still computed and returned, so callers
+  // that chain on it -- indexFile mints a file node then edges symbols to it --
+  // keep working and simply persist nothing. Returning undefined here would
+  // turn a measurement switch into a crash.
+  if (wikiDisabled()) return id;
   // `rest` is spread FIRST so it can never override the bookkeeping fields.
   // Spreading it after `id` let a caller passing a whole existing node back in
   // -- which curate.mjs does on every pin, retire and correct -- carry a stale
@@ -683,6 +688,9 @@ export function putNode(dir, { kind, key, ...rest }) {
 /** Records an edge. */
 export function putEdge(dir, from, edge, to) {
   if (!EDGE_KINDS.includes(edge)) throw new Error(`unknown edge kind: ${edge}`);
+  // The kind check stays ABOVE the gate: a disabled graph should not turn a
+  // programming error into silence, or the bug reappears when it is re-enabled.
+  if (wikiDisabled()) return;
   append(dir, { t: 'e', v: GRAPH_VERSION, from, edge, to, at: Date.now() });
 }
 
@@ -813,9 +821,38 @@ function readSnapshots(dir) {
  * never sees the payload. Parsing and then discarding would have cost the same
  * as keeping it, which is the whole reason this is a separate record type.
  */
+/**
+ * Whether the graph is switched off entirely.
+ *
+ * FOR MEASUREMENT, NOT FOR USERS. A benchmark arm needs to isolate what the
+ * graph costs when it can deliver nothing -- which is its situation in any
+ * single-shot harness, because every run gets a throwaway HOME so the store
+ * starts empty and a finding harvested at Stop cannot help the session that
+ * produced it. What is left is pure overhead, and measuring it needs an arm
+ * with the graph off and everything else identical.
+ *
+ * NOT the same as pointing TOKEN_OPTIMIZER_WIKI_DIR at an empty directory: that
+ * stops delivery but leaves harvest writing, so the arm would measure something
+ * other than what it claims.
+ *
+ * Only the affirmative spellings count, so an empty or `0` value cannot switch
+ * the product's main feature off by accident.
+ */
+export function wikiDisabled() {
+  const raw = String(process.env.TOKEN_OPTIMIZER_WIKI_DISABLED || '')
+    .trim()
+    .toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
 export function load(dir, { snapshots = false } = {}) {
   const nodes = new Map();
   const edges = [];
+  // GATED AT THE STORAGE LAYER, not at the callers. This and the two writers
+  // below are the choke point every higher-level path funnels through; gating
+  // callers instead would mean finding all of them, and one missed site would
+  // leave a "disabled" arm quietly reading or writing.
+  if (wikiDisabled()) return { nodes, edges };
   const path = logPath(dir);
   if (!existsSync(path)) return { nodes, edges };
 
