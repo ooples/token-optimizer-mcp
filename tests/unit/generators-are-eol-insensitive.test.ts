@@ -14,6 +14,9 @@ import { spawnSync } from 'child_process';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
+// @ts-expect-error -- test fixtures ship as plain ESM with no type declarations.
+import { stripComments } from '../fixtures/source-scan.mjs';
+
 // @ts-expect-error -- scripts ship as plain ESM with no type declarations.
 import {
   normalizeEol,
@@ -124,6 +127,33 @@ describe('writeIfChanged', () => {
 
 describe('every generator', () => {
   const ROOT = process.cwd();
+  /**
+   * A generator's source with comments blanked.
+   *
+   * RAW TEXT IS NOT ENOUGH, and the hazard is live rather than theoretical:
+   * sync-hook-core.mjs carries the line `// writeIfChanged skips files that
+   * differ only in line endings`, so a guard matching raw text is satisfied by
+   * the COMMENT and would pass for a generator that had stopped calling the
+   * helper entirely. stripComments is the same pass the reachability guard
+   * uses, and is tested in its own right.
+   */
+  const generatorCode = (file: string): string =>
+    stripComments(readFileSync(join(ROOT, file), 'utf8'));
+
+  /**
+   * The generator both IMPORTS the shared helper and CALLS it.
+   *
+   * Two separate facts, because either alone is satisfiable without the other:
+   * a local function of the same name would be called but not imported, and an
+   * unused import would be there but do nothing.
+   */
+  const expectRoutesThroughHelper = (code: string): void => {
+    expect(code).toMatch(
+      /import[^;]*\bwriteIfChanged\b[^;]*from\s*['"][^'"]*text\.mjs['"]/
+    );
+    expect(code).toMatch(/\bwriteIfChanged\s*\(/);
+  };
+
   const GENERATORS = [
     'scripts/sync-hook-core.mjs',
     'scripts/generate-client-entries.mjs',
@@ -161,22 +191,22 @@ describe('every generator', () => {
   it.each(GENERATORS)(
     '%s cannot write bytes except through the helper',
     (file) => {
-      const source = readFileSync(join(ROOT, file), 'utf8');
-      // The file really was read, and really is a generator. A source-text guard
-      // asserting only an absence passes on an empty string, so a wrong path or
-      // a renamed generator would report a clean bill of health for a file it
+      const code = generatorCode(file);
+      // The file really was read, and really routes through the shared helper.
+      // An absence-only guard passes on an empty string, so a wrong path or a
+      // renamed generator would report a clean bill of health for a file it
       // never looked at.
-      expect(source).toMatch(/\bwriteIfChanged\s*\(/);
-      expect(source).not.toMatch(/\bwriteFileSync\b/);
+      expectRoutesThroughHelper(code);
+      expect(code).not.toMatch(/\bwriteFileSync\b/);
     }
   );
 
   it.each(GENERATORS)('%s does not compare raw file contents', (file) => {
-    const source = readFileSync(join(ROOT, file), 'utf8');
-    expect(source).toMatch(/\bwriteIfChanged\s*\(/);
+    const code = generatorCode(file);
+    expectRoutesThroughHelper(code);
     // Any identifier compared against the generated `contents`, not one name.
-    expect(source).not.toMatch(/\b[A-Za-z_$][\w$]*\s*(===|!==)\s*contents\b/);
-    expect(source).not.toMatch(/readFileSync\s*\([^)]*\)\s*(===|!==)/);
+    expect(code).not.toMatch(/\b[A-Za-z_$][\w$]*\s*(===|!==)\s*contents\b/);
+    expect(code).not.toMatch(/readFileSync\s*\([^)]*\)\s*(===|!==)/);
   });
 });
 
