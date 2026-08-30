@@ -629,6 +629,33 @@ function runServer(entry) {
   });
 }
 
+/**
+ * Installs exactly PINNED_VERSION and returns its entry, or null.
+ *
+ * VERIFIES WHAT ARRIVED rather than trusting the spec: npm can resolve a spec
+ * to a different manifest version, and writing PINNED_VERSION into `current`
+ * without checking would make the marker claim a version that is not what sits
+ * in the directory. The caller must hold the lock.
+ */
+function installPinnedVersion() {
+  const entry = installLatest(PINNED_VERSION);
+  if (!entry) return null;
+
+  const installed = pkgInfo(
+    join(VERSIONS_DIR, PINNED_VERSION, 'node_modules', PACKAGE)
+  );
+  if (installed?.version !== PINNED_VERSION) {
+    log(
+      `install of ${PACKAGE}@${PINNED_VERSION} produced version ` +
+        `${installed?.version ?? 'unknown'}; refusing to serve it`
+    );
+    return null;
+  }
+
+  atomicWrite(CURRENT_FILE, PINNED_VERSION);
+  return entry;
+}
+
 function main() {
   // Ensure the runtime dir exists BEFORE anything else — runRefresh's lock is a
   // mkdir of RUNTIME/.refresh.lock, which fails (and silently no-ops the refresh)
@@ -673,35 +700,26 @@ function main() {
 
     if (!pinned) {
       log(`pinned to ${PINNED_VERSION}; installing that exact version…`);
-      if (acquireLock()) {
-        try {
-          pinned = installLatest(PINNED_VERSION);
-          // VERIFY WHAT ARRIVED rather than trusting the spec. npm can resolve
-          // a spec to a different manifest version; writing PINNED_VERSION into
-          // `current` without checking would make the marker claim a version
-          // that is not what sits in the directory.
-          if (pinned) {
-            const installed = pkgInfo(
-              join(VERSIONS_DIR, PINNED_VERSION, 'node_modules', PACKAGE)
-            );
-            if (installed?.version === PINNED_VERSION) {
-              atomicWrite(CURRENT_FILE, PINNED_VERSION);
-            } else {
-              log(
-                `install of ${PACKAGE}@${PINNED_VERSION} produced version ` +
-                  `${installed?.version ?? 'unknown'}; refusing to serve it`
-              );
-              pinned = null;
-            }
+
+      // RETRY THE LOCK, do not merely wait for the directory. The lock is
+      // shared with `runRefresh()`, which installs `latest` rather than this
+      // pin -- so a launch that only watched VERSIONS_DIR would sit through its
+      // entire budget and exit, even though the lock became free seconds in and
+      // the refresh was never going to produce the pinned version. Each pass
+      // therefore tries the lock first, and also notices a directory that
+      // another pinned launch may have produced in the meantime.
+      for (let i = 0; i < 120 && !pinned; i++) {
+        if (acquireLock()) {
+          try {
+            pinned = installPinnedVersion();
+          } finally {
+            releaseLock();
           }
-        } finally {
-          releaseLock();
+          break; // we held the lock and attempted the install; that is the answer
         }
-      } else {
-        for (let i = 0; i < 120 && !pinned; i++) {
-          sleepSync(500);
-          pinned = entryFor(join(VERSIONS_DIR, PINNED_VERSION));
-        }
+        pinned = entryFor(join(VERSIONS_DIR, PINNED_VERSION));
+        if (pinned) break;
+        sleepSync(500);
       }
     }
 

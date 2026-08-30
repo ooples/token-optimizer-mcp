@@ -19,7 +19,7 @@
  * network, so they assert the RESOLUTION RULE rather than npm's behaviour.
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -145,6 +145,46 @@ describe('an explicit version pin decides what is served', () => {
     seedVersion(join(runtime, 'versions', '9.9.9-rc.1'), '9.9.9-rc.1');
     const r = launch({ TOKEN_OPTIMIZER_VERSION: '9.9.9-rc.1' });
     expect(r.stdout).toContain('SERVED 9.9.9-rc.1');
+  });
+
+  test('a lock held by a refresh does not strand a pinned launch', () => {
+    // The lock is shared with runRefresh(), which installs `latest` rather than
+    // this pin. A launch that only watched for the pinned directory would sit
+    // through its whole 60s budget and exit, even though the refresh was never
+    // going to produce the pinned version. Here the directory appears partway
+    // through, standing in for another pinned launch finishing first, and this
+    // one must notice rather than block to the end.
+    mkdirSync(join(runtime, '.refresh.lock'), { recursive: true });
+
+    // A DETACHED PROCESS, not setTimeout: `launch()` uses spawnSync, which
+    // blocks this thread's event loop, so an in-process timer could never fire
+    // and the first version of this test waited the full 60s for a directory
+    // nothing was ever going to create.
+    const pkgDir = join(runtime, 'versions', '9.9.9', PACKAGE_DIR).replace(/\\/g, '/');
+    const helper = spawn(
+      process.execPath,
+      [
+        '-e',
+        `setTimeout(() => {
+           const fs = require('fs');
+           fs.mkdirSync(${JSON.stringify(pkgDir)}, { recursive: true });
+           fs.writeFileSync(${JSON.stringify(pkgDir)} + '/package.json',
+             JSON.stringify({ name: '@ooples/token-optimizer-mcp', version: '9.9.9', main: 'server.js' }));
+           fs.writeFileSync(${JSON.stringify(pkgDir)} + '/server.js',
+             "process.stdout.write('SERVED 9.9.9');");
+         }, 800);`,
+      ],
+      { detached: true, stdio: 'ignore' }
+    );
+    helper.unref();
+
+    const started = Date.now();
+    const r = launch({ TOKEN_OPTIMIZER_VERSION: '9.9.9' });
+
+    expect(r.stdout).toContain('SERVED 9.9.9');
+    // Well inside the 60s budget: proves it polled and noticed rather than
+    // waiting the loop out.
+    expect(Date.now() - started).toBeLessThan(20_000);
   });
 
   test('without a pin the runtime `current` marker still decides', () => {
