@@ -384,6 +384,40 @@ describe('the shipped router bounds instead of refusing', () => {
 });
 
 
+describe('commands whose point is to change the shell itself', () => {
+  // The wrapper runs the command in `( ... )` so the pipefail restore stays
+  // local, and that same containment discards whatever the command meant to
+  // set. This client's Bash tool persists the working directory between calls,
+  // so a bounded `cd` leaves the NEXT command in the old directory with nothing
+  // to explain it.
+  it.each([
+    ['cd packages/api && npm test'],
+    ['npm test; cd ..'],
+    ['pushd src && make'],
+    ['export FOO=1; npm test'],
+    ['source venv/bin/activate && pytest -q'],
+    ['. venv/bin/activate && pytest'],
+    ['FOO=1'],
+  ])('refuses to bound %s', (command) => {
+    expect(boundedRewrite(command)).toBeNull();
+  });
+
+  it.each([
+    // `set` and `shopt` scope to the command they precede, which runs inside
+    // the same subshell -- a bound changes nothing about them.
+    ['set -euo pipefail; npm test'],
+    ['shopt -s globstar; npx jest'],
+    // An assignment ATTACHED to a command never outlived that command anyway.
+    ['CI=1 npm test'],
+    // And the words must be matched as commands, not found anywhere: these two
+    // contain `cd` and `export` and mutate nothing.
+    ['make cdrom'],
+    ['grep -n export src/a.ts'],
+  ])('still bounds %s', (command) => {
+    expect(boundedRewrite(command)).not.toBeNull();
+  });
+});
+
 describe('the configured bound is the bound', () => {
   // Both stages used to get floor(maxBytes / 2) with a floor of 1, which
   // overshoots on any odd value and DOUBLES it at the bottom: a configured
