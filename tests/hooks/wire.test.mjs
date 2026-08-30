@@ -11,7 +11,15 @@
  * the state we found.
  */
 
-import { wire, unwire, wiredEntries, wirePlan, WIRING, MARKER } from '../../hooks-core/wire.mjs';
+import {
+  wire,
+  unwire,
+  wiredEntries,
+  wirePlan,
+  WIRING,
+  MARKER,
+  OWNERSHIP_FLAG,
+} from '../../hooks-core/wire.mjs';
 
 const HOOKS = '/home/me/.claude-global/hooks/token-optimizer';
 
@@ -181,6 +189,10 @@ describe('a hook that merely mentions us is not ours', () => {
         { hooks: [{ type: 'command', command: 'node ~/scripts/token-optimizer-report.mjs' }] },
         // Shares a filename with one of ours, but is not in our directory.
         { hooks: [{ type: 'command', command: 'node ~/my/stop.mjs' }] },
+        // Reproduces our whole layout -- a `token-optimizer` directory holding
+        // a file we also ship -- which is why ownership cannot rest on the path
+        // shape alone, and why what we install carries an explicit flag.
+        { hooks: [{ type: 'command', command: 'node "/workspace/token-optimizer/stop.mjs"' }] },
         // Borrowed our name for a directory of their own. `token-optimizer`
         // must be a path SEGMENT, not a substring, or this is claimed as ours.
         { hooks: [{ type: 'command', command: 'node ~/token-optimizer-backup/stop.mjs' }] },
@@ -202,6 +214,7 @@ describe('a hook that merely mentions us is not ours', () => {
     ['a hook whose matcher names us', 'log-optimizer.mjs'],
     ['a script of theirs whose name contains ours', 'token-optimizer-report.mjs'],
     ['a script of theirs sharing one of our filenames', '~/my/stop.mjs'],
+    ['a directory of theirs laid out exactly like ours', '/workspace/token-optimizer/stop.mjs'],
     ['a directory of theirs that borrowed our name', 'token-optimizer-backup/stop.mjs'],
     ['one of our filenames passed as an argument', 'token-optimizer-report.mjs'],
   ])('installing preserves %s', (_label, fragment) => {
@@ -217,6 +230,7 @@ describe('a hook that merely mentions us is not ours', () => {
       'token-optimizer-report.mjs',
       '~/my/stop.mjs',
       'token-optimizer-backup/stop.mjs',
+      '/workspace/token-optimizer/stop.mjs',
     ]) {
       expect(JSON.stringify(removed)).toContain(fragment);
     }
@@ -225,5 +239,42 @@ describe('a hook that merely mentions us is not ours', () => {
   test('while ours are still recognised, so a re-install does not stack', () => {
     expect(wiredEntries(wire(theirs(), DIR))).toHaveLength(5);
     expect(wiredEntries(wire(wire(theirs(), DIR), DIR))).toHaveLength(5);
+  });
+});
+
+
+describe('what we install says so, rather than being recognised by its path', () => {
+  const DIR = '/home/u/.claude-global/hooks/token-optimizer';
+
+  test('every entry we write carries the ownership flag', () => {
+    const out = wire({}, DIR);
+
+    for (const { event } of WIRING) {
+      expect(JSON.stringify(out.hooks[event])).toContain(OWNERSHIP_FLAG);
+    }
+  });
+
+  test('an entry written before the flag existed is still removable', () => {
+    // Dropping the path rule outright would strand every hook an earlier
+    // version installed, so it survives -- narrowed to the directory the
+    // installers actually build, which is what excludes a user's own
+    // `/workspace/token-optimizer/stop.mjs`.
+    const legacy = {
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              {
+                type: 'command',
+                command: 'node "/home/u/.claude-global/hooks/token-optimizer/stop.mjs"',
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    expect(wiredEntries(legacy)).toHaveLength(1);
+    expect(wiredEntries(unwire(legacy))).toHaveLength(0);
   });
 });
