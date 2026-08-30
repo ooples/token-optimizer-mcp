@@ -16,7 +16,7 @@ import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateDiff, hasMeaningfulChanges } from '../shared/diff-utils.js';
-import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
+import { hashFile, generateCacheKey, lastWrittenKey } from '../shared/hash-utils.js';
 import { cacheGet, cacheSet } from '../../utils/cache-helper.js';
 import {
   chunkBySyntax,
@@ -140,8 +140,23 @@ export class SmartReadTool {
     });
 
     // Check cache
-    const cachedData = enableCache ? cacheGet(this.cache, cacheKey) : null;
-    const fromCache = cachedData !== null;
+    const ownCached = enableCache ? cacheGet(this.cache, cacheKey) : null;
+
+    // FALL BACK TO WHAT WAS LAST WRITTEN. Without this, the first read of a
+    // file always resends it in full even when this process wrote the file
+    // moments earlier -- the writer's entry lived under a different namespace,
+    // so it was never found. The fallback gives the diff a base on that first
+    // read; the entry is only ever a base, never the answer, so a stale one
+    // costs a diff rather than a wrong result.
+    const cachedData =
+      ownCached ??
+      (enableCache ? cacheGet(this.cache, lastWrittenKey(filePath)) : null);
+
+    // Deliberately NOT `cachedData !== null`. This flags "my own entry hit",
+    // which is what the metrics below report and what gates the re-seed further
+    // down -- so a read served off the fallback still populates its own key and
+    // the next read needs no fallback at all.
+    const fromCache = ownCached !== null;
 
     // Read file content
     const rawContent = readFileSync(filePath, encoding);
