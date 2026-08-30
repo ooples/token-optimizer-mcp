@@ -43,6 +43,10 @@ ruleTester.run('no-vacuous-assertions', rule, {
     // reviewer asked for the extraction.
     `test('x', () => { expectRoutesThroughHelper(code); expect(code).not.toMatch(/x/); });`,
     `test('x', () => { assertShapeOf(r); expect(r.reason).not.toContain('deny'); });`,
+    // Member-form assertion APIs: the callee is a MemberExpression, not an
+    // Identifier, so matching only the bare-call shape missed them entirely.
+    `test('x', () => { assert.deepEqual(a, b); expect(a).not.toContain('z'); });`,
+    `test('x', () => { assert.ok(a); expect(a).toBeTruthy(); });`,
     // Not a test function.
     `notATest('x', () => { expect(x).toBeDefined(); });`,
   ],
@@ -73,6 +77,12 @@ ruleTester.run('no-vacuous-assertions', rule, {
       // A bare `expect(x)` is not an assertion and must not excuse the test,
       // and an ordinary helper call is not an assertion helper either.
       code: `test('x', () => { doSomeSetup(a); expect(a).toBeTruthy(); });`,
+      errors: VACUOUS,
+    },
+    {
+      // `expect.assertions(n)` states how many assertions will run; it does not
+      // assert a value, so it must not excuse a weak test either.
+      code: `test('x', () => { expect.assertions(1); expect(a).toBeDefined(); });`,
       errors: VACUOUS,
     },
     {

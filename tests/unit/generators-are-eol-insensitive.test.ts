@@ -152,6 +152,15 @@ describe('every generator', () => {
       /import[^;]*\bwriteIfChanged\b[^;]*from\s*['"][^'"]*text\.mjs['"]/
     );
     expect(code).toMatch(/\bwriteIfChanged\s*\(/);
+    // AND NOTHING LOCAL SHADOWS IT. An unused import plus a local
+    // `function writeIfChanged()` would satisfy both checks above while the
+    // call resolved to the local definition, not to lib/text.mjs. These are
+    // ES modules with no `eval` and no `with`, so a name that is imported and
+    // not declared locally can only resolve to the import -- which makes this
+    // the binding check without needing a parser.
+    expect(code).not.toMatch(
+      /\b(?:function|const|let|var|class)\s+writeIfChanged\b/
+    );
   };
 
   const GENERATORS = [

@@ -80,12 +80,21 @@ const ABSENCE_MATCHERS = new Set(['toContain', 'toMatch']);
  * the matcher forms are handled above.
  */
 function isAssertionHelperCall(node) {
-  return (
-    node.type === 'CallExpression' &&
-    node.callee.type === 'Identifier' &&
-    node.callee.name !== 'expect' &&
-    /^(expect|assert)/.test(node.callee.name)
-  );
+  if (node.type !== 'CallExpression') return false;
+
+  // BOTH CALL SHAPES. `expectRoutesThroughHelper(code)` has an Identifier
+  // callee; `assert.deepEqual(a, b)` and `assert.ok(x)` have a MemberExpression
+  // one, and matching only the first missed every member-form assertion API.
+  let root = node.callee;
+  while (root.type === 'MemberExpression') root = root.object;
+  if (root.type !== 'Identifier') return false;
+
+  // `expect` itself is excluded in both forms: `expect(x)` with no matcher
+  // asserts nothing, and `expect.assertions(n)` states how many will run rather
+  // than asserting a value -- neither should excuse an otherwise weak test.
+  // A MemberExpression rooted at an `expect(...)` CALL is not an Identifier
+  // root, so the matcher forms never reach here.
+  return root.name !== 'expect' && /^(expect|assert)/.test(root.name);
 }
 const TEST_FNS = new Set(['it', 'test']);
 
