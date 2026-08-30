@@ -82,9 +82,22 @@ Stated here so it is never over-claimed downstream:
 - **The knowledge graph scored nothing, by construction.** Every THOL run gets a
   throwaway `HOME` and a fresh workspace, so the graph began empty on all 48
   runs, and a finding harvested at `Stop` cannot help the session that produced
-  it. The graph therefore carried its full overhead with structurally zero
-  payoff — and `off` still beat control by 9.6%. This is the worst case for the
-  graph, not a measurement of it.
+  it. This is the worst case for the graph, not a measurement of it.
+
+- **`MODE=off` is a kill switch, not "enforcement minus refusals".** Found while
+  implementing the flip, and it corrects an earlier version of this document.
+  `hooks-core/adapter.mjs` runs `if (mode() === MODE_OFF) process.exit(0);`
+  before any event handling, and `hooks-core/stop-harvest.mjs` returns early on
+  the same check. Only `policy.mjs`'s `enforce()` treats OFF as the narrow
+  "allow instead of deny". So the arm measured at 0.904 was **the product almost
+  entirely disabled** — MCP tool schemas still registered, everything else dead —
+  which is why it made only 8 voluntary smart-tool calls. Proof: flipping the
+  default to off turned 90 tests across 20 suites red, and the failures were in
+  harvest, injection, staleness and seen-state suites, not in refusal suites.
+
+  0.904 therefore remains a valid measurement of *a shippable configuration*,
+  but it is **not** a measurement of "our product without enforcement", and
+  shipping it as the default would ship a product with no knowledge graph.
 
 ## 3. Goals and non-goals
 
@@ -137,7 +150,8 @@ true.
 | decision | rejected alternative | why |
 | --- | --- | --- |
 | Compete on THOL **and** publish our own multi-session benchmark | THOL only; or ours only | THOL alone grades us on a race that excludes our differentiator. Ours alone is a benchmark run by the vendor it flatters — exactly the credibility problem THOL's own charter names. |
-| `MODE=off` as an **interim** default; enforcement returns ON once it is cost-neutral | Delete enforcement; ship off permanently; or keep it on untouched | Deleting discards the one mechanism that solved the adoption failure killing 9 of 12 THOL tools. Shipping off permanently wins the board without the differentiator. Keeping it on untouched ships a 1.687 default. The interim flip stops the loss while §6.2 makes the zero-turn path actually fire, after which enforcement returns under a measurable invariant. |
+| A new **routing-off, retrieval-on** posture as the interim default; enforcement returns ON once it is cost-neutral | `MODE=off` as the interim default; delete enforcement; ship off permanently; keep it on untouched | `MODE=off` was the original plan and is wrong: it exits the hook process, so it would ship with no knowledge graph (§2.1). The posture we want is not expressible today — every experiment arm with retrieval also has routing — so it has to be built. Deleting enforcement discards the mechanism that solved the adoption failure killing 9 of 12 THOL tools; keeping it on untouched ships a 1.687 default. |
+| `MODE_OFF` keeps meaning "disable everything" | Re-point `MODE_OFF` at the new posture | It is documented as the one-variable escape hatch and users rely on it. Re-pointing it would leave no complete off switch, which is a worse failure than an extra posture. |
 | Default to `off`, not `advise` | `advise` as the middle ground | `off` is the configuration measured at 0.904. `advise` was never measured and spends `additionalContext` tokens on every matched call, so it is plausibly harmful. It stays available, opt-in. |
 | Harness in the main repo under `bench/` | Separate public repo; keep external rig | Versioned with the code it grades, so CI and reviewers can reproduce any published claim, and a rule change ships with its number. Excluded from the npm `files` list so users never download it. |
 | Our benchmark measures **derive-then-reuse** | Compaction survival; long-lived project simulation; cross-client transfer | Directly isolates what the graph is for, and the control arm is honest: a competitor without memory re-derives and pays. Cross-client transfer is a real moat but a benchmark only we can pass reads as self-serving. |
@@ -223,12 +237,32 @@ default. Instead:
 
 ## 6. Product changes
 
-### 6.1 The default flip
+### 6.1 The default flip needs a posture that does not exist yet
 
-`TOKEN_OPTIMIZER_MODE` defaults from `enforce` to `off`. Everything except the
-refusal survives: the MCP server and tools, the knowledge graph, `SessionStart`
-guidance, and harvest. That is exactly the configuration measured at 0.904, and
-it still made 8 voluntary smart-tool calls.
+The original plan — default `TOKEN_OPTIMIZER_MODE` from `enforce` to `off` — was
+written believing that only the refusal would stop. §2.1 shows that is false:
+`off` exits the hook process, taking the graph, injection and harvest with it.
+
+The posture we actually want is **routing off, retrieval and harvest on**. It
+cannot be expressed today, by either control:
+
+- `MODE_OFF` exits before any feature check runs.
+- The experiment arms in `hooks-core/experiment.mjs` are strictly cumulative —
+  `baseline` `{routing:false, retrieval:false, harvest:false}`, `optimizer`
+  `{routing:true, retrieval:false}`, `retrieval` `{routing:true,
+  retrieval:true}`, `full` `{routing:true, retrieval:true, harvest:true}`.
+  **Every arm with retrieval also has routing.** There is no
+  `{routing:false, retrieval:true}`.
+
+So this milestone grows a code change it did not have: add that combination as a
+first-class posture, and make it the default. `MODE_OFF` keeps its documented
+meaning as the one-variable escape hatch that disables everything — users rely
+on that, and re-pointing it would remove the only complete off switch.
+
+**And it must be measured before it ships.** 0.904 is the kill switch's number.
+The new posture carries the graph's overhead with the refusals removed, so its
+cost sits somewhere between 0.904 and 1.687 and is currently **unknown**. M3
+measures it; M1 ships only once that number is in hand.
 
 **Positioning consequence, named plainly.** "Enforced by default" is the
 README's headline claim and a badge. It must go. The replacement claim is
@@ -361,9 +395,10 @@ that is not actively losing.
 
 | milestone | contents | exit criterion |
 | --- | --- | --- |
-| M1 | Default `MODE=off` as an **interim safety measure**; positioning rewrite; patch release | Released; users stop paying +63% while M4–M6 land |
+| M0 | Build the routing-off/retrieval-on posture (§6.1) — it does not exist today | The posture is selectable and the graph still runs with refusals disabled |
 | M2 | `bench/` landed: `lib/` + `thol/`, migrated from the external rig; `bench:screen` and `bench:confirm` | A maintainer reproduces §2 from a clean clone |
-| M3 | Graph-disabled arm; `--reps 3` confirmation on the decisive tasks | §2 has confidence intervals; graph overhead known |
+| M3 | Measure the new posture; graph-disabled arm; `--reps 3` confirmation on the decisive tasks | The interim default has a number, which 0.904 is not; graph overhead known |
+| M1 | Ship the new posture as the default; positioning rewrite; patch release | Released, on a measured number rather than an assumed one |
 | M4 | **P0** — Bash/test-output compaction (spike first) | Debug family ≤ 0.70; aggregate ≤ 0.82 |
 | M5 | **P1** — small-session overhead suppression | Cheap band ≤ 1.00; **aggregate < 0.810 → first place** |
 | M6 | **P2** — zero-turn refusal fires; families R1–R5 checked against the invariant | Enforcement ON with turns and `own_tool_calls` no higher than `off` |
@@ -371,8 +406,14 @@ that is not actively losing.
 | M8 | `bench/recall/` built and published | Calls-avoided measured; multi-session benchmark public |
 | M9 | P3–P5 (terseness, cache, statusline) | Upside beyond 0.777, each with its own delta |
 
-M1 is independent and ships first. M2 gates everything after it, because from M4
-onward every exit criterion is a number the harness produces. **M4 and M5
+**The order changed.** M1 was going to ship first as a one-line flip; it now
+depends on M0 (the posture does not exist) and on M3 (its number does not exist
+— 0.904 measured the kill switch, not this). So the sequence is M0 → M2 → M3 →
+M1, and the interim safety measure is no longer free. Anyone who needs relief
+before M1 has `TOKEN_OPTIMIZER_MODE=off` today, at the cost of the graph.
+
+M2 gates everything after it, because from M4 onward every exit criterion is a
+number the harness produces. **M4 and M5
 together are the path to first place; M6 and M7 are what let us hold it with the
 differentiator switched on.** M8 runs in parallel from M3. M9 is upside.
 
@@ -383,8 +424,9 @@ riskiest work, and enforcement returns as a measured feature rather than a
 restored article of faith.
 
 **Decomposition.** This is a program, not one plan. The first implementation
-plan covers **M1-M3** - the interim flip, the harness, and the confirmed
-evidence that every later exit criterion is measured against. M4 onward each
+plan covers **M0, M2, M3 and M1, in that order** - build the posture, land the
+harness, measure the posture, then ship it as the default on the number that
+measurement produces. M4 onward each
 get their own plan, because each is gated on a number the harness has not
 produced yet: writing detailed steps for the debug-loop fix today would be
 inventing them before the spike says what a hook can rewrite.
