@@ -87,6 +87,38 @@ const OUTPUT_HEAVY = [
   /^(eslint|ruff|flake8|pylint|mypy|clippy|golangci-lint)\b/,
 ];
 
+/**
+ * A run of `NAME=value ` prefixes at the start of a command.
+ *
+ * Anchored with `[^\\s=]*` rather than `\\S*` so the value cannot itself swallow
+ * the `=` of the NEXT assignment. That ambiguity is what makes the repeated
+ * group expensive: with `\\S*`, a string of `A=A=A=...` can be divided between
+ * the repetitions an exponential number of ways.
+ */
+const ASSIGNMENT_PREFIX = /^(?:[A-Za-z_]\w*=[^\s]*\s+)+/;
+
+/**
+ * Is this segment nothing but variable assignments?
+ *
+ * WRITTEN AS A SPLIT RATHER THAN A REGEX. The regex form was
+ * `/^(?:[A-Za-z_]\w*=\S*\s*)+$/`, and CodeQL flagged it as able to backtrack
+ * exponentially on `A=A=A=...`, because `\S*` can itself match `=` and leave the
+ * repetitions an exponential number of ways to divide the string.
+ *
+ * No input was found that actually makes V8 take measurable time, so this is a
+ * theoretical hazard rather than a demonstrated hang -- but the guard runs on
+ * every Bash call, the shape that reaches it is an ordinary-looking assignment
+ * list, and the linear form is the clearer code anyway.
+ *
+ * Splitting on whitespace first makes it linear: each token is checked once, and
+ * a token cannot contain whitespace by construction, so the trailing `\S*` the
+ * regex needed is implicit.
+ */
+function isAssignmentOnly(segment) {
+  const tokens = segment.split(/\s+/).filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => /^[A-Za-z_]\w*=/.test(token));
+}
+
 /** Each segment of a command line, as written. */
 function splitSegments(command) {
   return String(command)
@@ -100,7 +132,7 @@ function commandSegments(command) {
   return splitSegments(command)
     .map((segment) =>
       segment
-        .replace(/^(?:[A-Za-z_]\w*=\S*\s+)+/, '')
+        .replace(ASSIGNMENT_PREFIX, '')
         .replace(/^(?:sudo|env|time|command|npx|bunx)\s+/, '')
         .trim()
     )
@@ -205,7 +237,7 @@ function unsafeToBound(command) {
             segment
           ) ||
           /^\.\s/.test(segment) ||
-          /^(?:[A-Za-z_]\w*=\S*\s*)+$/.test(segment)
+          isAssignmentOnly(segment)
       )
   ) {
     return 'state-mutating';

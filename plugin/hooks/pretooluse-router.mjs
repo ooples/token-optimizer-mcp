@@ -548,23 +548,27 @@ ${nudge}`
  * comparison and nothing else.
  */
 function compactorFor(sessionId, command) {
-  // OFF BY DEFAULT, ON THE EVIDENCE. On the representative debug loop -- four
-  // iterations of a real failing suite -- compaction measured 0.216 of raw
-  // against the plain bound's 0.214, which is to say it saved nothing and cost
-  // the notice. The reason is visible in the capture: the runs differ in every
-  // failure block, because jest prints a code frame of the line that changed,
-  // so after eliding repeats there is still more fresh text than the head budget
-  // holds. Compaction then changes WHICH content fills the budget, not how much.
+  // ON BY DEFAULT, AND THAT DECISION WAS REVERSED BY MEASURING IT PROPERLY.
   //
-  // Where it does pay is a large stable preamble with a small delta: 8,000 bytes
-  // -> 4,080, with the summary and the new failure both intact. That shape is
-  // common in build and lint output and rare in this suite.
+  // A single run of the loop put compaction at 0.216 of raw against the plain
+  // bound's 0.214 -- no saving -- and the switch was set off on that basis. The
+  // comparison was worthless: the two arms were not using the same bound (the
+  // benchmark's own head-and-tail still carried a marker and floored both
+  // halves), and this benchmark's absolute numbers move several percent between
+  // runs, so one sample cannot separate 0.214 from 0.216 whatever the arms do.
   //
-  // So the code ships, tested, and the switch stays off: a node process in the
-  // pipeline is a real cost and a new failure surface on a wrapper that has
-  // already produced nine silent-meaning-change defects, and it is not worth
-  // paying by default for a saving that could not be measured.
-  if (!/^(1|true|on|yes)$/i.test(process.env.TOKEN_OPTIMIZER_COMPACT || '')) {
+  // Five runs with both arms on identical semantics:
+  //
+  //   compacted / bounded   median 0.821   min 0.813   max 0.857
+  //
+  // An 18% saving on top of the bound, with a spread of 5% -- tight enough to
+  // be a result rather than noise. The cost is one node process in the pipeline,
+  // measured at 41 ms (median of 9) against a shell head-and-tail's 213 ms, on
+  // commands that take seconds.
+  //
+  // The switch stays, inverted, so a single variable turns it off if the stage
+  // ever misbehaves in the field.
+  if (/^(0|false|off|no)$/i.test(process.env.TOKEN_OPTIMIZER_COMPACT || '')) {
     return null;
   }
 

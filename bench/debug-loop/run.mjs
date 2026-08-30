@@ -183,11 +183,23 @@ function truncateMiddle(text, cap) {
 function boundBytes(text, maxBytes) {
   const buffer = Buffer.from(text, 'utf8');
   if (buffer.length <= maxBytes) return text;
-  const half = Math.max(1, Math.floor(maxBytes / 2));
+
+  // NO MARKER, AND THE HALVES SUM TO maxBytes. `boundedRewrite` emits the head
+  // bytes and then the tail bytes and nothing else -- the shell has no way to
+  // announce what it dropped -- and its two stages sum to the bound rather than
+  // each being half of it. A marker here would charge the bounded arm for tokens
+  // production never sends, and two floored halves would model a smaller budget
+  // than the shell applies on any odd value.
+  //
+  // Checked against the real wrapper rather than reasoned about: at maxBytes of
+  // 1, 2, 3, 7, 101 and 8000, this function and the shell pipeline return
+  // byte-identical strings.
+  const headBytes = Math.max(1, Math.ceil(maxBytes / 2));
+  const tailBytes = Math.max(0, maxBytes - headBytes);
+
   return (
-    buffer.subarray(0, half).toString('utf8') +
-    '\n... [middle omitted by token-optimizer] ...\n' +
-    buffer.subarray(buffer.length - half).toString('utf8')
+    buffer.subarray(0, headBytes).toString('utf8') +
+    (tailBytes ? buffer.subarray(buffer.length - tailBytes).toString('utf8') : '')
   );
 }
 
