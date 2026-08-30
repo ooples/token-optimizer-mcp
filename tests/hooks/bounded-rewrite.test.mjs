@@ -132,12 +132,36 @@ describe('commands it refuses to touch', () => {
   // Returning null leaves the call exactly as the author wrote it.
   it.each([
     ['a heredoc, whose body is data', "cat <<'EOF'\nhello\nEOF"],
+    // Bash spells the delimiter several ways, and the first guard matched the
+    // DELIMITER rather than the operator -- so the escaped form slipped past it
+    // and was rewritten. Every one of these must be refused.
+    ['an escaped heredoc delimiter', 'cat <<' + String.fromCharCode(92) + 'EOF\nx\nEOF'],
+    ['a double-quoted delimiter', 'cat <<"EOF"\nx\nEOF'],
+    ['a dash heredoc', 'cat <<-EOF\nx\nEOF'],
+    ['a herestring', 'cat <<< "hello"'],
     ['a backgrounded process it no longer owns', 'npm run dev &'],
     ['output already redirected to a file', 'npm test > out.log'],
     ['an author-supplied bound', 'npm test | head -n 20'],
-    ['a streaming or interactive command', 'tail -f server.log'],
+        ['a streaming or interactive command', 'tail -f server.log'],
+    // Follow mode does not merely waste effort, it HANGS: the wrapper's own
+    // `tail -c` cannot emit until EOF and follow mode never reaches EOF. The
+    // flag need not come first and need not be short, and matching only
+    // `tail -f` left all four of these to hang.
+    ['tail -F', 'tail -F server.log'],
+    ['a follow flag that is not first', 'tail -n 100 -f server.log'],
+    ['the long follow flag', 'tail --follow server.log'],
+    ['the long follow flag with a value', 'tail --follow=name server.log'],
   ])('leaves %s alone', (_why, command) => {
     expect(boundedRewrite(command)).toBeNull();
+  });
+
+  it.each([
+    ['tail -n 5 build.log'],
+    ['tail -c 100 build.log'],
+  ])('still bounds %s, which is not follow mode', (command) => {
+    // Guards against over-correction: the follow-mode check must not swallow
+    // every use of `tail`, or an ordinary bounded read stops being bounded.
+    expect(boundedRewrite(command)).not.toBeNull();
   });
 
   it('still bounds a command containing && and ||, which are not backgrounding', () => {
