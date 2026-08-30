@@ -29,6 +29,17 @@ const ROUTER = join(
 /** An empty graph, so no stored finding can influence an enforcement decision. */
 const ISOLATED_GRAPH = mkdtempSync(join(tmpdir(), 'enforcement-graph-'));
 
+/**
+ * An empty UCR root, so no guard from the real repository can answer for us.
+ *
+ * Unset, `TOKEN_OPTIMIZER_UCR_DIR` falls back to `<cwd>/.token-optimizer/ucr`
+ * -- the working repository's own. A UCR guard can produce a verdict from the
+ * COMMAND TEXT alone, without resolving any path, and a verdict is all the
+ * rewrite below needs. The MSYS test would then have passed on evidence that
+ * says nothing about the thing it exists to prove.
+ */
+const ISOLATED_UCR = mkdtempSync(join(tmpdir(), 'enforcement-ucr-'));
+
 let workspace;
 let big;
 let small;
@@ -71,9 +82,18 @@ function run(payload, env = {}) {
         'smart_read,smart_write,smart_edit,smart_glob,smart_grep,wiki_write',
       TOKEN_OPTIMIZER_WIKI_DIR: ISOLATED_GRAPH,
       TOKEN_OPTIMIZER_SHARED_DIR: ISOLATED_GRAPH,
+      TOKEN_OPTIMIZER_UCR_DIR: ISOLATED_UCR,
       ...env,
     },
   });
+  // A CRASH IS NOT AN ALLOW. A router that dies before writing produces the
+  // same empty stdout a silent allow does, so every "it was allowed through"
+  // assertion here would pass against a router that never started.
+  if (result.status !== 0) {
+    throw new Error(
+      `router exited ${result.status}: ${result.stderr.trim().slice(0, 400)}`
+    );
+  }
   if (!result.stdout.trim()) return { decision: 'allow' };
   const parsed = JSON.parse(result.stdout);
   const out = parsed.hookSpecificOutput || {};
@@ -199,6 +219,13 @@ describe('the shell bypass is closed', () => {
     // under test is unchanged and is what the rewrite proves: the MSYS path was
     // RESOLVED. An unresolved path produces no verdict at all, so the router
     // would have allowed the call untouched and there would be no rewrite here.
+    //
+    // That inference only holds because the size check is the ONLY thing here
+    // that could have produced a verdict. A UCR guard can produce one from the
+    // command text without resolving a path at all, so `run` points
+    // TOKEN_OPTIMIZER_UCR_DIR at an empty directory; without that it defaults
+    // to the working repository's own guards and this assertion could pass
+    // while the path stayed unresolved.
     expect(r.decision).toBe('allow');
     expect(r.updatedInput.command).toContain('tail -c');
   });
