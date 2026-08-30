@@ -37,31 +37,56 @@ A local screening campaign was run against the real THOL harness in Docker.
 - **Runs:** 48, all completing `ok`
 - **Pinned:** product 6.0.2, Claude Code 2.1.251, `claude-sonnet-4-6`
 
-| arm | total cost | ratio vs control | avg turns | tool calls (ours) | avg score |
-| --- | --- | --- | --- | --- | --- |
-| control | $3.566 | 1.000 | 12.6 | 222 (0) | 0.994 |
-| enforcing (shipped default) | $6.017 | **1.687** | 20.9 | 304 (115) | **0.956** |
-| `MODE=off` | $3.225 | **0.904** | 13.1 | 194 (8) | 0.994 |
+| arm | total cost | total-cost ratio | **task-mean ratio** | avg turns | tool calls (ours) | avg score |
+| --- | --- | --- | --- | --- | --- | --- |
+| control | $3.566 | 1.000 | 1.000 | 12.6 | 222 (0) | 0.994 |
+| enforcing (shipped default) | $6.017 | 1.687 | **1.633** | 20.9 | 304 (115) | **0.956** |
+| `MODE=off` | $3.225 | 0.904 | **0.928** | 13.1 | 194 (8) | 0.994 |
+
+Both aggregations are shown because both appear in this document; §2.0 defines
+them and states that the **task-mean ratio is the figure of record**.
 
 Three conclusions.
 
-**Enforcement is what loses.** At 1.687 the shipped default would rank last of
-thirteen on THOL's published aggregate — below `headroom` at 1.557. It lost on
-13 of 16 tasks, worst case `code-settings-inventory-django` at 4.44×.
+**Enforcement is what loses.** At a task-mean 1.633 the shipped default ranks
+last of fifteen against the published board recomputed over these 16 tasks —
+below `headroom` at 1.471. It lost on 13 of 16 tasks, worst case
+`code-settings-inventory-django` at 4.44×.
 
 **Enforcement also degrades correctness.** 0.956 against 0.994. It is not
 merely expensive; it makes tasks fail. Any framing that treats this as a
 cost/benefit trade is wrong — there is no benefit column.
 
-**Everything else is already competitive.** `MODE=off` at 0.904 would rank
-second, behind `tokenade` and ahead of `claude-token-efficient`.
+**Everything else is already competitive.** `MODE=off` at a task-mean 0.928
+ranks second of fifteen, behind `tokenade` (0.810) and ahead of
+`claude-token-efficient` (0.952) — though §2.1 records what that arm actually
+was.
 
-Two different tokenade figures appear in this document and they are not a
-contradiction: **0.768** is its published aggregate over THOL's full 17-task
-battery, while **0.810** is its aggregate recomputed over only the 16 tasks we
-ran. Every head-to-head comparison here uses the like-for-like 16-task figure;
-on that basis `MODE=off` is 0.928 against tokenade's 0.810 (see the per-task
-join in the head-to-head analysis).
+### 2.0 Two aggregations, and which one to use
+
+Two numbers appear for the same arm throughout this document. They are not a
+contradiction, but leaving them undefined would make the result irreproducible,
+so:
+
+| name | definition | `off` | `enforce` |
+| --- | --- | --- | --- |
+| **total-cost ratio** | `Σ(arm cost) / Σ(control cost)` over the 16 tasks — one pooled number, so expensive tasks dominate | 0.904 | 1.687 |
+| **task-mean ratio** | geometric mean of the 16 per-task ratios `cost(arm,t) / cost(control,t)` — every task weighs the same | **0.928** | **1.633** |
+
+**The task-mean ratio is the figure of record**, for two reasons: it is what
+THOL publishes, so it is the only one comparable to a competitor; and a pooled
+total lets one expensive task carry the verdict, which is how a tool that helps
+only on huge sessions can look good everywhere.
+
+Every comparison, target and projection in this document therefore uses the
+task-mean ratio — the 0.810 threshold, the 0.777 path, and M4/M5's exit
+criteria. Total-cost ratios appear only in the §2 arm table, which reports what
+the campaign actually spent, and are labelled there.
+
+Tokenade likewise appears as two figures: **0.768** is its published aggregate
+over THOL's full 17-task battery, **0.810** the same aggregation recomputed over
+only the 16 tasks we ran. Comparisons here use 0.810, because comparing across
+different task sets is not a comparison.
 
 The mechanism is legible in the turn counts. Enforcement added ~107 tool calls
 and took turns from 12.6 to 20.9 — approximately **one extra turn per refusal**.
@@ -158,7 +183,7 @@ true.
 
 ## 5. Architecture: `bench/`
 
-```
+```text
 bench/
   lib/       sandbox construction, credential staging/segmentation,
              results schema, stream-json extraction
@@ -173,7 +198,7 @@ bench/
 Both benchmarks emit identical rows so they share a renderer and nothing is
 comparable-looking but incompatible:
 
-```
+```text
 { campaign, arm, task, rep, cost_usd,
   tokens { in, out, cache }, turns, tool_calls, own_tool_calls,
   score, wall_ms, fixture_hash, product_version, client_version }
@@ -298,17 +323,50 @@ file was "UNCHANGED since you last read it" when a *different* agent had read
 it — and it fell back to Bash, which "defeats the optimizer and costs more than
 the read it replaced."
 
-**The invariant this design adopts.** Enforcement ships on only when, with
-enforcement enabled, **turns and `own_tool_calls` do not rise above the `off`
-arm**. That is a directly measurable property of the harness, it is the exact
-quantity that produced the 1.687, and it converts "is enforcement worth it" from
-an argument into a test.
+**The invariant this design adopts.** Enforcement ships on only when, against
+the `assist` arm of the same campaign, all three hold:
+
+1. **task-mean cost ratio ≤ 1.00** — the binding gate;
+2. **turns and `own_tool_calls` do not rise** — the mechanism check;
+3. **mean `score` does not fall** — because 1.687 came with correctness at
+   0.956, and a cheaper arm that answers worse is not a win.
+
+**Cost is the gate; the call counts are diagnosis.** An earlier version of this
+invariant used only turns and `own_tool_calls`, which is unsound: input, output,
+cache tokens or injected hook text can all grow while both counts stay flat, so
+a refusal family could pass and still cost more. The counts are kept because
+they say *why* a family passed or failed — a family that satisfies the cost gate
+while raising turns is getting its win from something other than the mechanism
+we think, and that is worth knowing before shipping it.
+
+The same three conditions gate M7's return to enforcement by default, so a
+family cannot be admitted individually and then collectively lose.
 
 Refusal families are individually switchable so the invariant can be checked per
 family: R1 large first `Read`, R2 repeat `Read`, R3 `Grep`/`Glob` bounding,
 R4 Bash content dumps, R5 large `Edit`. `Write` is already removed (PR #348).
 A family is enabled only when it satisfies the invariant and does not lose
-correctness. Five families × 16 tasks ≈ 80 runs ≈ $22 per sweep.
+correctness.
+
+**The sweep's arm matrix, since the earlier count omitted its baseline.** The
+invariant compares each family against `assist`, so `assist` must be *in the
+sweep* rather than borrowed from an earlier campaign — a ratio is only valid
+against a control measured in the same campaign, on the same THOL revision and
+client version.
+
+| arm | why |
+| --- | --- |
+| `control` | required by §5.3, and the denominator of every ratio |
+| `assist` | the baseline each family is judged against |
+| R1 … R5 | one arm per family, `assist` plus that family's refusals |
+
+7 arms × 16 tasks × 3 reps = **336 runs ≈ $95** at the observed ~$0.28/run
+average. The earlier "80 runs ≈ $22" figure counted the five family arms alone,
+at one rep, with no baseline — which would have produced ratios against nothing.
+
+At that size the sweep is a milestone-boundary activity, not something to run
+casually. A cheaper screen at `--reps 1` (112 runs ≈ $31) can triage which
+families are obviously negative before spending on the full sweep.
 
 ### 6.3 Levers, reordered by measured value
 
@@ -401,16 +459,25 @@ that is not actively losing.
 | M1 | Ship the new posture as the default; positioning rewrite; patch release | Released, on a measured number rather than an assumed one |
 | M4 | **P0** — Bash/test-output compaction (spike first) | Debug family ≤ 0.70; aggregate ≤ 0.82 |
 | M5 | **P1** — small-session overhead suppression | Cheap band ≤ 1.00; **aggregate < 0.810 → first place** |
-| M6 | **P2** — zero-turn refusal fires; families R1–R5 checked against the invariant | Enforcement ON with turns and `own_tool_calls` no higher than `off` |
+| M6 | **P2** — zero-turn refusal fires; families R1–R5 checked against the invariant | Every enabled family satisfies §6.2's three conditions against `assist` |
 | M7 | Default returns to **enforcing**; THOL manifest PR upstream | A verified first-place row, measured with enforcement on |
 | M8 | `bench/recall/` built and published | Calls-avoided measured; multi-session benchmark public |
 | M9 | P3–P5 (terseness, cache, statusline) | Upside beyond 0.777, each with its own delta |
 
 **The order changed.** M1 was going to ship first as a one-line flip; it now
-depends on M0 (the posture does not exist) and on M3 (its number does not exist
-— 0.904 measured the kill switch, not this). So the sequence is M0 → M2 → M3 →
-M1, and the interim safety measure is no longer free. Anyone who needs relief
-before M1 has `TOKEN_OPTIMIZER_MODE=off` today, at the cost of the graph.
+depends on M0 (the posture did not exist) and on M3 (its number does not exist).
+So the sequence is M0 → M2 → M3 → M1, and the interim safety measure is no
+longer free. Anyone who needs relief before M1 has `TOKEN_OPTIMIZER_MODE=off`
+today, at the cost of the graph.
+
+**`assist` is the only arm that may justify the flip, and its number does not
+exist yet.** The 0.928 attributed to `MODE=off` is not a proxy for it: that arm
+ran with retrieval, injection and harvest dead (§2.1), so it measured a
+different product. `assist` carries the graph's overhead with the refusals
+removed, which places its true cost somewhere between 0.928 and 1.633 —
+unknown until M3 measures it. If `assist` does not beat `control`, M1 does not
+ship and this document is wrong somewhere; that outcome gets published rather
+than re-run.
 
 M2 gates everything after it, because from M4 onward every exit criterion is a
 number the harness produces. **M4 and M5

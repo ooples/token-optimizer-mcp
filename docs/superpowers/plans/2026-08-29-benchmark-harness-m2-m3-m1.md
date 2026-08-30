@@ -52,7 +52,10 @@ cp ../thol-rig/scripts/entrypoint.sh bench/thol/entrypoint.sh
 cp ../thol-rig/scripts/run-campaign.sh bench/thol/run-campaign.sh
 cp -r ../thol-rig/manifests/token-optimizer-mcp bench/thol/manifests/
 cp -r ../thol-rig/manifests/token-optimizer-mcp-off bench/thol/manifests/
-printf 'auth/\nresults/\n*.sqlite\n' > bench/.gitignore
+# results/ itself is NOT ignored: Task 3 commits a report there, and a number
+# nobody can trace to the versions that produced it is not evidence. Only the
+# large machine-written run data is excluded.
+printf 'auth/\nthol/pkg/\nresults/runs/\n*.sqlite\n' > bench/.gitignore
 ```
 
 - [ ] **Step 2: Fix the paths the copy broke**
@@ -148,6 +151,18 @@ measured effect can land in one commit."
 - Consumes: Task 1's manifest directory and orchestrator.
 - Produces: arms `token-optimizer-mcp-assist` and `token-optimizer-mcp-nograph`.
 
+**Prerequisites, both landed.** This task declares `TOKEN_OPTIMIZER_MODE=assist`
+and `TOKEN_OPTIMIZER_WIKI_DISABLED=1`, neither of which existed when this plan
+was first written — `mode()` mapped `assist` to `enforce`, so the arm would have
+silently measured the enforcing build and produced two identical arms. Both now
+exist: `assist` in PR #352, the graph switch in PR #355, and **those must be
+merged into the tree this task builds from**.
+
+Task 1's preflight enforces the mode half of that ordering: the campaign refuses
+to start when an arm declares a mode the packed build does not recognise, naming
+the arm and what it would actually have measured. Step 3 below covers the graph
+half, which the preflight cannot see.
+
 - [ ] **Step 1: Derive both manifests programmatically**
 
 Each arm must differ from its base in exactly one variable, or it measures something else. Derive rather than hand-copy:
@@ -184,16 +199,32 @@ diff <(node -e "const m=require('./bench/thol/manifests/token-optimizer-mcp/mani
 ```
 Expected: exactly two hunks, each changing only `TOKEN_OPTIMIZER_MODE`. Anything else invalidates the arm — fix it before spending money.
 
-- [ ] **Step 3: Give the nograph arm a real disable switch**
+- [ ] **Step 3: Confirm the disable switch behaves as the arm claims**
 
-`TOKEN_OPTIMIZER_WIKI_DISABLED` **does not exist** — the only related variable is `TOKEN_OPTIMIZER_WIKI_DIR`. Verify:
+`TOKEN_OPTIMIZER_WIKI_DISABLED` now exists (PR #355) and gates `load`, `putNode`
+and `putEdge` in `hooks-core/wiki.mjs`. Confirm its **behaviour**, not merely
+that an export is present — a module-scope read or a private helper would not
+appear in the export list, and an export that exists but does not gate the
+writers would leave the arm quietly harvesting:
 
 ```bash
 node --input-type=module -e "
+import { mkdtempSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+const dir = mkdtempSync(join(tmpdir(), 'nograph-probe-'));
+process.env.TOKEN_OPTIMIZER_WIKI_DISABLED = '1';
 const w = await import('./hooks-core/wiki.mjs');
-console.log(Object.keys(w).filter(k => /disabled|enabled/i.test(k)));
+w.putNode(dir, { kind: 'file', key: '/tmp/a.ts', hash: 'x', bytes: 1 });
+w.putEdge(dir, 'a', 'related', 'b');
+const wrote = readdirSync(dir);
+console.log('files written while disabled:', wrote.length, wrote);
+console.log(wrote.length === 0 ? 'OK: inert' : 'BROKEN: still writing');
 "
 ```
+
+Expected: `OK: inert`. Anything else means the arm would measure a graph that is
+still running, so stop and fix the gate before spending on a campaign.
 
 If that prints an empty array, **stop and add the switch** in `hooks-core/wiki.mjs` as its own committed change with a unit test, then return here. Do **not** approximate it by pointing `TOKEN_OPTIMIZER_WIKI_DIR` at an empty directory: that disables delivery but leaves harvest writing, so the arm would measure something other than what its `install_doc` claims.
 
@@ -404,7 +435,7 @@ git commit -m "docs(spike): whether posttooluse can rewrite built-in tool result
 
 ## Self-Review
 
-**Spec coverage.** M2 → Task 1. M3 → Tasks 2–3. M1 → Task 4. The P0 spike gating M4 → Task 5. M0 is complete (PR #352) and is therefore not a task here. Not covered by design: M4–M9, whose exit criteria are numbers Task 3 produces.
+**Spec coverage.** M2 → Task 1. M3 → Tasks 2–3. M1 → Task 4. The P0 spike gating M4 → Task 5. M0 is complete (PR #352) and is therefore not a task here. Not covered by design: M4-M9. Task 3 produces the M3 confirmation only; every later milestone is gated on its own campaign, which is why each gets its own plan.
 
 **Placeholders.** None. Task 2 Step 3 is a genuine conditional — verify a switch exists, and if it does not, stop and add it — because the arm is invalid without it, not because the decision is deferred.
 
