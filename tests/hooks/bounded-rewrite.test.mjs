@@ -722,13 +722,16 @@ describe('a command that only STARTS by changing the shell', () => {
   });
 
   it('still bounds the output it was hoisted for', () => {
-    const command = 'cd /tmp && for i in $(seq 1 3000); do echo "line $i"; done';
+    // Big enough to exceed the bound, which is now the client's own 30,000 cap
+    // rather than 8,000 -- below that we deliberately leave output alone,
+    // because cutting harder than the host is what drove the model to re-run.
+    const command = 'cd /tmp && for i in $(seq 1 6000); do echo "line $i padding"; done';
 
     const bare = run(command).stdout.length;
     const bounded = run(boundedRewrite(command).command).stdout.length;
 
-    expect(bare).toBeGreaterThan(20_000);
-    expect(bounded).toBeLessThanOrEqual(8_000);
+    expect(bare).toBeGreaterThan(30_000);
+    expect(bounded).toBeLessThanOrEqual(30_000);
   });
 });
 
