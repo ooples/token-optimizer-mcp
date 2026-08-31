@@ -9,8 +9,19 @@
  *
  * Ratios are per task against `control` -- same task, same model, no optimizer --
  * combined as a geometric mean, since an arithmetic mean of ratios is dominated
- * by whichever task happened to be most expensive. Only successful runs count,
- * so a competitor cannot look cheap by failing to do the work.
+ * by whichever task happened to be most expensive.
+ *
+ * SUCCESSFUL RUNS ONLY, AND THAT IS A LIMITATION RATHER THAN A SAFEGUARD. The
+ * `status = 'ok'` filter drops failed runs -- and it drops their COST with them.
+ * So this does not stop an entrant looking cheap by failing: an entrant that
+ * burns a fortune failing a task and succeeds cheaply elsewhere is scored only
+ * on the cheap half, and one that fails a task outright is simply absent from
+ * it rather than penalised for it. Reading these numbers as "cost to get the
+ * work done" therefore overstates every entrant, and overstates the ones that
+ * fail most. Ranking on failure-inclusive cost would need the failed runs'
+ * spend and a completion rate beside the ratio, which the published table does
+ * not carry -- so what is printed below is a comparison of successful runs, and
+ * nothing stronger.
  */
 import Database from 'better-sqlite3';
 import { writeSync } from 'node:fs';
@@ -183,7 +194,7 @@ say('  result with an extra round trip, and the round trip costs more.');
 /* ---- Where the leader wins and loses, task by task ---- */
 
 say('');
-say('THE LEADER TASK BY TASK -- its losses are the opening');
+say('THE LEADER TASK BY TASK -- worst ratio first, so its losses lead');
 say('');
 say('task'.padEnd(36) + 'USD'.padStart(8) + 'turns'.padStart(8));
 say('-'.repeat(52));
@@ -198,7 +209,11 @@ for (const [task, r] of tk) {
     turns: base.turns ? r.turns / base.turns : NaN,
   });
 }
-for (const d of detail.sort((a, b) => a.usd - b.usd)) {
+// DESCENDING, so the rows the heading promises are the rows at the top. This
+// sorted ascending, which put the leader's biggest WINS first under a heading
+// announcing its losses -- and the losses, the only rows this section exists to
+// find, were pushed to the bottom of a 17-row table.
+for (const d of detail.sort((a, b) => b.usd - a.usd)) {
   say(
     d.task.slice(0, 35).padEnd(36) +
       d.usd.toFixed(3).padStart(8) +
