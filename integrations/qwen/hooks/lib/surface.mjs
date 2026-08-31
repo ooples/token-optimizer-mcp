@@ -30,6 +30,7 @@ import { forecastPanel, worthSurfacing } from './forecast.mjs';
 import { observeOutcome, logForecast } from './calibration.mjs';
 import { readCacheUsage } from './cache.mjs';
 import { readBalance } from './metrics.mjs';
+import { load } from './wiki.mjs';
 
 /**
  * How long between two attempts to build the panel.
@@ -78,6 +79,45 @@ export function sessionUsage(transcriptPath, { capacity = DEFAULT_CAPACITY } = {
   return { used, capacity, turns: turns.length };
 }
 
+/**
+ * Findings this graph holds that know what they cost to derive.
+ *
+ * WIRING A PARAMETER THAT NOTHING EVER PASSED. `forecastPanel` takes `findings`
+ * and renders the consolidation line from them -- "N tokens of reasoning carried
+ * as M" -- and `forecast.test.mjs` covers it by handing the array in directly.
+ * The only caller of `maybeSurface` in the product is the PreToolUse router,
+ * which passes `{ transcriptPath, sessionId, state }` and no findings, so in
+ * production the array was always empty, `aggregateConsolidation` always
+ * returned null, and that line could never appear. Green, tested, inert -- the
+ * defect this codebase keeps naming, hiding behind a test that supplies the one
+ * input production does not.
+ *
+ * READ HERE RATHER THAN AT THE CALL SITE, and that is the whole reason this is
+ * a function instead of an argument. `maybeSurface` checks its throttle BEFORE
+ * any I/O, deliberately; loading the graph in the router to pass it in would pay
+ * for a graph read on every tool call including the throttled ones, which is
+ * exactly the cost that ordering exists to avoid.
+ *
+ * Only findings carrying `derivedCost` count, because that is what the ratio
+ * divides -- `expand.promote` is what persists it.
+ */
+function findingsWithCost(dir) {
+  try {
+    const graph = load(dir);
+    const found = [];
+    for (const node of graph.nodes.values()) {
+      if (node.kind !== 'finding' || node.retired) continue;
+      if (!Number.isFinite(node.derivedCost)) continue;
+      found.push(node);
+    }
+    return found;
+  } catch {
+    // A panel is a courtesy. An unreadable graph costs the consolidation line,
+    // never the tool call.
+    return [];
+  }
+}
+
 /** Intercepted touches recorded for this session, which converts a per-touch saving to per-turn. */
 function touchesFor(dir, sessionId) {
   try {
@@ -123,7 +163,10 @@ export function maybeSurface(dir, {
       ...usage,
       sessionId,
       touches: touchesFor(dir, sessionId),
-    }, findings);
+    // An explicit array still wins, so the tests that hand one in keep
+    // exercising the render path directly. Past the throttle, so a suppressed
+    // call still opens nothing.
+    }, findings.length ? findings : findingsWithCost(dir));
   } catch {
     return { text: null, state: { ...previous, checkedAt: now } };
   }
