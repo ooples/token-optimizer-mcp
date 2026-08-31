@@ -11,7 +11,15 @@
  * the state we found.
  */
 
-import { wire, unwire, wiredEntries, wirePlan, WIRING, MARKER } from '../../hooks-core/wire.mjs';
+import {
+  wire,
+  unwire,
+  wiredEntries,
+  wirePlan,
+  WIRING,
+  MARKER,
+  OWNERSHIP_FLAG,
+} from '../../hooks-core/wire.mjs';
 
 const HOOKS = '/home/me/.claude-global/hooks/token-optimizer';
 
@@ -22,6 +30,11 @@ const userSettings = () => ({
       { matcher: 'Bash', hooks: [{ type: 'command', command: 'node /home/me/my-own-hook.mjs' }] },
     ],
     Stop: [{ hooks: [{ type: 'command', command: 'echo done' }] }],
+    // An event this product never registers, so it can stand for "untouched".
+    // Stop used to play that role and no longer can: WIRING was missing
+    // PostToolUse and Stop entirely, which left script installs with no capture
+    // and no harvest, and adding them back made Stop a touched event.
+    Notification: [{ hooks: [{ type: 'command', command: 'echo notified' }] }],
   },
   theme: 'dark',
   permissions: { allow: ['Bash(git:*)'] },
@@ -48,7 +61,17 @@ describe('wiring is additive', () => {
 
   test('events we do not touch are left exactly as they were', () => {
     const out = wire(userSettings(), HOOKS);
-    expect(out.hooks.Stop).toEqual(userSettings().hooks.Stop);
+    expect(out.hooks.Notification).toEqual(userSettings().hooks.Notification);
+  });
+
+  test("a user's own entry on an event we DO wire survives beside ours", () => {
+    // The other half of "additive", and the half that matters more now that
+    // Stop is wired: the user already had a Stop hook, and installing must not
+    // cost them it.
+    const out = wire(userSettings(), HOOKS);
+
+    expect(JSON.stringify(out.hooks.Stop)).toContain('echo done');
+    expect(JSON.stringify(out.hooks.Stop)).toContain('stop.mjs');
   });
 
   test('unrelated settings keys are preserved', () => {
@@ -126,7 +149,14 @@ describe('the plan says what it will do before it does it', () => {
   test('it counts what is preserved as well as what is added', () => {
     const plan = wirePlan(userSettings(), HOOKS);
     expect(plan.adding).toBe(WIRING.length);
-    expect(plan.preserving).toBe(2);
+    // DERIVED from the fixture, not hardcoded. This was `2` and broke the
+    // moment a third user hook was added to userSettings() -- a literal here
+    // asserts the fixture rather than the behaviour.
+    const userEntries = Object.values(userSettings().hooks).reduce(
+      (n, arr) => n + arr.length,
+      0
+    );
+    expect(plan.preserving).toBe(userEntries);
     expect(plan.replacing).toBe(0);
   });
 
@@ -134,5 +164,117 @@ describe('the plan says what it will do before it does it', () => {
     const plan = wirePlan(wire(userSettings(), HOOKS), HOOKS);
     expect(plan.replacing).toBe(WIRING.length);
     expect(plan.adding).toBe(0);
+  });
+});
+
+
+describe('a hook that merely mentions us is not ours', () => {
+  // Ownership was `JSON.stringify(entry).includes('token-optimizer')`, which
+  // reads the whole entry -- matcher included -- so installing DELETED a user's
+  // own hooks for naming us. Verified against the pre-fix code: both of the
+  // first two below were gone after a single `wire()`.
+  const DIR = '/home/u/.claude/token-optimizer/hooks';
+
+  const theirs = () => ({
+    hooks: {
+      // Someone logging optimizer calls names us in the MATCHER.
+      PostToolUse: [
+        {
+          matcher: 'mcp__.*token-optimizer.*',
+          hooks: [{ type: 'command', command: 'node ~/scripts/log-optimizer.mjs' }],
+        },
+      ],
+      Stop: [
+        // Carries the marker, but is not a file we install.
+        { hooks: [{ type: 'command', command: 'node ~/scripts/token-optimizer-report.mjs' }] },
+        // Shares a filename with one of ours, but is not in our directory.
+        { hooks: [{ type: 'command', command: 'node ~/my/stop.mjs' }] },
+        // Reproduces our whole layout -- a `token-optimizer` directory holding
+        // a file we also ship -- which is why ownership cannot rest on the path
+        // shape alone, and why what we install carries an explicit flag.
+        { hooks: [{ type: 'command', command: 'node "/workspace/token-optimizer/stop.mjs"' }] },
+        // Borrowed our name for a directory of their own. `token-optimizer`
+        // must be a path SEGMENT, not a substring, or this is claimed as ours.
+        { hooks: [{ type: 'command', command: 'node ~/token-optimizer-backup/stop.mjs' }] },
+        // Names one of our files as an ARGUMENT it merely passes along, which a
+        // scan of the whole command string reads as if it were the script.
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'node "/hooks/token-optimizer-report.mjs" --template "/hooks/stop.mjs"',
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  test.each([
+    ['a hook whose matcher names us', 'log-optimizer.mjs'],
+    ['a script of theirs whose name contains ours', 'token-optimizer-report.mjs'],
+    ['a script of theirs sharing one of our filenames', '~/my/stop.mjs'],
+    ['a directory of theirs laid out exactly like ours', '/workspace/token-optimizer/stop.mjs'],
+    ['a directory of theirs that borrowed our name', 'token-optimizer-backup/stop.mjs'],
+    ['one of our filenames passed as an argument', 'token-optimizer-report.mjs'],
+  ])('installing preserves %s', (_label, fragment) => {
+    expect(JSON.stringify(wire(theirs(), DIR))).toContain(fragment);
+  });
+
+  test('and uninstalling preserves them too', () => {
+    const removed = unwire(wire(theirs(), DIR));
+
+    expect(wiredEntries(removed)).toHaveLength(0);
+    for (const fragment of [
+      'log-optimizer.mjs',
+      'token-optimizer-report.mjs',
+      '~/my/stop.mjs',
+      'token-optimizer-backup/stop.mjs',
+      '/workspace/token-optimizer/stop.mjs',
+    ]) {
+      expect(JSON.stringify(removed)).toContain(fragment);
+    }
+  });
+
+  test('while ours are still recognised, so a re-install does not stack', () => {
+    expect(wiredEntries(wire(theirs(), DIR))).toHaveLength(5);
+    expect(wiredEntries(wire(wire(theirs(), DIR), DIR))).toHaveLength(5);
+  });
+});
+
+
+describe('what we install says so, rather than being recognised by its path', () => {
+  const DIR = '/home/u/.claude-global/hooks/token-optimizer';
+
+  test('every entry we write carries the ownership flag', () => {
+    const out = wire({}, DIR);
+
+    for (const { event } of WIRING) {
+      expect(JSON.stringify(out.hooks[event])).toContain(OWNERSHIP_FLAG);
+    }
+  });
+
+  test('an entry written before the flag existed is still removable', () => {
+    // Dropping the path rule outright would strand every hook an earlier
+    // version installed, so it survives -- narrowed to the directory the
+    // installers actually build, which is what excludes a user's own
+    // `/workspace/token-optimizer/stop.mjs`.
+    const legacy = {
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              {
+                type: 'command',
+                command: 'node "/home/u/.claude-global/hooks/token-optimizer/stop.mjs"',
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    expect(wiredEntries(legacy)).toHaveLength(1);
+    expect(wiredEntries(unwire(legacy))).toHaveLength(0);
   });
 });

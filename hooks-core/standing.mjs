@@ -154,7 +154,49 @@ export function distinctiveTerms(text, { limit = 12 } = {}) {
 /* ------------------------------------------------------------ STALENESS */
 
 const SYMBOL = /\b([A-Za-z_][A-Za-z0-9_]{2,})\s*\(\)/g;
-const PATHISH = /\b([\w./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|cs|go|rs|java|rb|php|sql|json|ya?ml))\b/g;
+/**
+ * File paths mentioned in a line of prose.
+ *
+ * FOUND BY THE EXTENSION, THEN WALKED BACK. The single pattern this replaces was
+ * `/\b([\w./-]+\.(?:ts|...))\b/g`, whose prefix class contains `.` -- so the
+ * greedy `+` and the literal `\.` after it compete for every division of the
+ * text, at every start position. Measured at 1,044ms on 32,000 characters of
+ * `x/x/x/...`, and this runs over lines of real text.
+ *
+ * Anchoring on the extension gives one match attempt per extension rather than
+ * one per character, and the walk backwards visits each character at most twice.
+ */
+const PATH_EXTENSION =
+  /\.(?:ts|tsx|js|jsx|mjs|cjs|py|cs|go|rs|java|rb|php|sql|json|ya?ml)\b/g;
+
+/** How far back a path may reach. Longer than any real one, short enough to bound the walk. */
+const MAX_PATH_CHARS = 256;
+
+function pathsIn(line) {
+  const found = [];
+
+  for (const match of line.matchAll(PATH_EXTENSION)) {
+    const end = match.index + match[0].length;
+    let start = match.index;
+    const floor = Math.max(0, match.index - MAX_PATH_CHARS);
+
+    while (start > floor && /[\w./-]/.test(line[start - 1])) start -= 1;
+
+    // The pattern this replaces began with `\b`, so a match could only start on
+    // a word character: `./a/b.ts` was captured as `a/b.ts`, without the `./`.
+    // The walk backwards has no such rule of its own, and keeping the prefix
+    // would hand canonicalisation a different string for the same file.
+    while (start < end && !/\w/.test(line[start])) start += 1;
+
+    // A bare `.ts` is not a path: something has to precede the dot. After the
+    // trim above, that is exactly the question of whether anything survived in
+    // front of the extension -- comparing the candidate's own prefix instead got
+    // this wrong, because trimming `.ts` down to `ts` left a `t` to find.
+    if (start < match.index) found.push(line.slice(start, end));
+  }
+
+  return found;
+}
 
 /**
  * Claims in a file that can be checked against the code, and whether they hold.
@@ -171,7 +213,7 @@ export function staleClaims(entry, cwd) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const paths = [...line.matchAll(PATHISH)].map((m) => m[1]);
+    const paths = pathsIn(line);
     if (!paths.length) continue;
 
     for (const rawPath of paths) {

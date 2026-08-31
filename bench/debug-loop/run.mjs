@@ -49,6 +49,7 @@ import {
   mkdtempSync,
   rmSync,
   writeSync,
+  existsSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { compact } from '../../hooks-core/compact.mjs';
@@ -64,6 +65,21 @@ const CLIENT_CAP_CHARS = 30_000;
 
 /** The subject: a small module with a focused suite that fails loudly. */
 const SOURCE = join(ROOT, 'hooks-core', 'redact.mjs');
+
+/**
+ * Where the pristine source waits while the harness is breaking it.
+ *
+ * A FIXED PATH, BECAUSE THE POINT IS TO BE FOUND AFTER A CRASH. The backup used
+ * to go into an `mkdtemp` directory, which nothing can locate once the process
+ * that knew its name is gone -- so a killed run left a deliberately broken
+ * module in the working tree with its only copy in an unnamed temp directory.
+ *
+ * Signal handlers are not enough on their own, and this was checked rather than
+ * assumed: on Windows `kill` is `TerminateProcess`, which runs no handler at
+ * all, and a killed run really did leave the file broken. A recovery file the
+ * NEXT run reads needs nothing from the dying process.
+ */
+const RECOVERY = join(ROOT, 'bench', 'debug-loop', '.source-recovery');
 const SUITE = process.env.DEBUG_LOOP_SUITE || 'tests/hooks/redact.test.mjs';
 
 /**
@@ -185,11 +201,16 @@ function boundBytes(text, maxBytes) {
   if (buffer.length <= maxBytes) return text;
 
   // NO MARKER, AND THE HALVES SUM TO maxBytes. `boundedRewrite` emits the head
-  // bytes and then the tail bytes and nothing else -- the shell has no way to
-  // announce what it dropped -- and its two stages sum to the bound rather than
-  // each being half of it. A marker here would charge the bounded arm for tokens
-  // production never sends, and two floored halves would model a smaller budget
-  // than the shell applies on any odd value.
+  // bytes and then the tail bytes, concatenated, and nothing else -- the shell
+  // has no way to announce what it dropped. A "middle omitted" line here would
+  // be tokens this arm is charged for that production never sends, which makes
+  // the benchmark measure the harness. The byte notice IS delivered, but
+  // separately, as hook context, so it belongs in its own measurement rather
+  // than inside this arm.
+  //
+  // The two stages sum to maxBytes with the odd byte to the head, mirroring the
+  // wrapper. Giving both `floor(maxBytes / 2)` modelled a budget the command
+  // does not get.
   //
   // Checked against the real wrapper rather than reasoned about: at maxBytes of
   // 1, 2, 3, 7, 101 and 8000, this function and the shell pipeline return
@@ -220,10 +241,44 @@ const main = async () => {
   );
   const bound = boundedRewrite('jest').maxBytes;
 
+  // A PREVIOUS RUN MAY HAVE DIED MID-EDIT. Restore before reading, or the
+  // "original" captured below is the broken version and every arm measures a
+  // fixture that was never the fixture.
+  if (existsSync(RECOVERY)) {
+    writeFileSync(SOURCE, readFileSync(RECOVERY, 'utf8'));
+    rmSync(RECOVERY, { force: true });
+    say('recovered the source from a previous run that did not finish');
+  }
+
   const original = readFileSync(SOURCE, 'utf8');
   const originalHash = createHash('sha256').update(original).digest('hex');
   const scratch = mkdtempSync(join(tmpdir(), 'debug-loop-'));
   writeFileSync(join(scratch, 'source.bak'), original);
+  // Written BEFORE the first mutation, so there is no window in which the file
+  // is broken and no recovery copy exists.
+  writeFileSync(RECOVERY, original);
+
+  // A `finally` DOES NOT SURVIVE A SIGNAL. Ctrl-C or a CI cancellation delivers
+  // SIGINT/SIGTERM, whose default action terminates the process outright, so
+  // the restore below never runs and `hooks-core/redact.mjs` is left holding a
+  // deliberately broken fixture -- in the working tree, where the next command
+  // picks it up. The handler restores and then re-raises with the default
+  // behaviour, so the exit status still reports the signal.
+  const restoreSource = () => {
+    try {
+      writeFileSync(SOURCE, original);
+    } catch {
+      // Nothing further can be done from inside a dying process.
+    }
+  };
+  const onSignal = (signal) => {
+    restoreSource();
+    process.removeListener(signal, onSignal);
+    process.kill(process.pid, signal);
+  };
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) {
+    process.on(signal, onSignal);
+  }
 
   const captures = [];
   try {
@@ -257,6 +312,7 @@ const main = async () => {
       process.exit(1);
     }
     rmSync(scratch, { recursive: true, force: true });
+    rmSync(RECOVERY, { force: true });
   }
 
   /* ---------------------------------------------------- the premise */

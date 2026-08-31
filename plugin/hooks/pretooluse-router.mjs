@@ -590,6 +590,21 @@ function compactorFor(sessionId, command) {
   }
 }
 
+  // A DECISION MAY CARRY A REWRITE OF ITS OWN, and it is preferred over every
+  // refusal below. `decide` returns one when the cheapest correct answer is to
+  // change the call rather than block it -- today that is a WebFetch of a URL
+  // this session already fetched, where the page is already in the transcript
+  // and sending it again buys nothing.
+  //
+  // Zero turns, which is the whole point: a refusal costs about one, and turns
+  // are the entire measured deficit.
+  if (verdict.rewrite && refusalsEnabled()) {
+    allowWithRewrite(
+      { ...payload.tool_input, ...verdict.rewrite },
+      reason
+    );
+  }
+
   // BOUND IT INSTEAD OF REFUSING IT.
   //
   // Reaching here means a verdict exists -- the no-verdict path allowed and
