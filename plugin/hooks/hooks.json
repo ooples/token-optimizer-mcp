@@ -12,7 +12,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
+        "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell|WebFetch|WebSearch",
         "hooks": [
           {
             "type": "command",
