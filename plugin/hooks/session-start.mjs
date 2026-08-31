@@ -43,31 +43,27 @@ import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import { join } from 'node:path';
 import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
 
-// NO FABRICATED INVENTORY. This used to do
+// THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN INSTALL.
 //
-//   process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',')
+// This used to run unconditionally, on the grounds that these entry points ship
+// beside an MCP declaration for the same package. That holds for a plugin --
+// .mcp.json travels with the hooks -- and not otherwise: the script path wires
+// hooks through settings.json without the server, a user can drop the server
+// and keep the hooks, and the benchmark arm removes the mcp block outright.
 //
-// on the grounds that the plugin owns both this hook and its MCP declaration,
-// so the tools must exist. They need not: the hooks install without the server
-// on the script path, a user can keep the hooks and drop the server, and the
-// benchmark arm that removes the mcp block does exactly that. In every one of
-// those cases the fabricated list was persisted as PROVEN evidence, and the
-// model was told at session start that nine optimizer tools were available.
+// In those cases the fabricated list was persisted as PROVEN evidence and the
+// model was told to call tools that do not exist. Measured over a debug-sized
+// task with no server: 3,450 characters of advice built on the assumption,
+// including "Call the token-optimizer MCP tool smart_read" after every repeated
+// read -- a failed call and a retry each time, on a benchmark where turns
+// dominate cost. Removing it from session-start alone took the debug segment
+// from 1.309 to 1.107 and its turns from 2.231 to 2.003.
 //
-// What it then said is the damage. Not merely "these exist" but instructions to
-// act: call optimize_session when context is tight, use get_optimization_report,
-// and a paragraph directing the model to call wiki_write whenever it works
-// something out. With no server those calls fail and are retried, and the
-// wiki_write instruction asks for work the task never wanted, which costs turns
-// whether or not the tool exists.
-//
-// Measured, and the shape of it is the giveaway: with the host declaring five
-// real tools this hook injects 338 characters and names none of them, while
-// with NO server at all it injected 1,403 and named three that do not exist.
-//
-// decide.mjs already states the rule this violated -- "production never
-// converts install intent into a claim that an MCP tool exists." Absent host
-// evidence we claim nothing, and routing advice waits for evidence to arrive.
+// CLAUDE_PLUGIN_ROOT is what tells the two apart: the plugin runtime sets it,
+// a settings.json install does not. decide.mjs states the rule this protects --
+// never convert install intent into a claim that an MCP tool exists.
+if (process.env.CLAUDE_PLUGIN_ROOT)
+  process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
 
 const invocation = beginHookInvocation('claude-code', 'session-start');
 
