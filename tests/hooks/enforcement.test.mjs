@@ -9,7 +9,8 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -68,9 +69,25 @@ afterAll(() => rmSync(workspace, { recursive: true, force: true }));
  * week.
  */
 function run(payload, env = {}) {
+  const session = payload.session_id || 's-default';
+  // The bound applies only to a repeat now, so a test about what the bound does
+  // has to seed the state the compactor's pipe stage would have written. The
+  // key matches compactorFor() in the router.
+  if (payload.tool_input?.command) {
+    const key = createHash('sha256')
+      .update(`${session}\u0000${payload.tool_input.command}`)
+      .digest('hex')
+      .slice(0, 32);
+    // `.seen` is the marker the router reads; the sibling file without the
+    // suffix is the compactor's previous OUTPUT and means something else.
+    const marker = join(tmpdir(), 'token-optimizer-compact', `${key}.seen`);
+    mkdirSync(dirname(marker), { recursive: true });
+    writeFileSync(marker, 'previous run output\n');
+  }
+
   const result = spawnSync(process.execPath, [ROUTER], {
     input: JSON.stringify({
-      session_id: payload.session_id || 's-default',
+      session_id: session,
       ...payload,
     }),
     encoding: 'utf8',
