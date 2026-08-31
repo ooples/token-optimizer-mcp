@@ -107,19 +107,24 @@ const OUR_FILES = new Set(WIRING.map((w) => w.file));
  * `node "/hooks/token-optimizer-report.mjs" --template "/hooks/stop.mjs"` looked
  * like ours on the strength of a filename it merely passes along.
  */
+/** A command split into shell-ish words, with one level of quoting removed. */
+function tokenize(command) {
+  return (command.match(/"[^"]*"|'[^']*'|\S+/g) || []).map((token) =>
+    token.replace(/^["']|["']$/g, '')
+  );
+}
+
 function entrypointOf(command) {
-  const tokens = command.match(/"[^"]*"|'[^']*'|\S+/g) || [];
-  const unquote = (token) => token.replace(/^["']|["']$/g, '');
+  const tokens = tokenize(command);
 
   const nodeAt = tokens.findIndex((token) =>
-    /(^|[/\\])node(\.exe)?$/i.test(unquote(token))
+    /(^|[/\\])node(\.exe)?$/i.test(token)
   );
   if (nodeAt === -1) return '';
 
   for (const token of tokens.slice(nodeAt + 1)) {
-    const bare = unquote(token);
-    if (bare.startsWith('-')) continue;
-    return bare;
+    if (token.startsWith('-')) continue;
+    return token;
   }
   return '';
 }
@@ -132,7 +137,14 @@ const isOurs = (entry) => {
     const command = typeof hook?.command === 'string' ? hook.command : '';
 
     // The flag settles it outright, and nothing a user writes carries it.
-    if (command.includes(OWNERSHIP_FLAG)) return true;
+    //
+    // A WHOLE ARGUMENT, NOT A SUBSTRING. `includes` also matched a user's
+    // `node "/user/stop.mjs" --token-optimizer-hook-debug`, whose flag merely
+    // starts with ours -- and having just replaced a path heuristic precisely
+    // because it could be imitated, recognising a longer flag as ours would
+    // reintroduce the same class of mistake through the mechanism meant to end
+    // it.
+    if (tokenize(command).includes(OWNERSHIP_FLAG)) return true;
 
     const script = entrypointOf(command).split('\\').join('/');
     if (!script) return false;
