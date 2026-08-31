@@ -43,10 +43,31 @@ import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import { join } from 'node:path';
 import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
 
-// The plugin owns both this hook and its MCP declaration. Claude does not pass
-// the registered tool inventory to SessionStart, so make the bundled schemas
-// explicit while preserving an explicitly empty host/user override.
-process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
+// NO FABRICATED INVENTORY. This used to do
+//
+//   process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',')
+//
+// on the grounds that the plugin owns both this hook and its MCP declaration,
+// so the tools must exist. They need not: the hooks install without the server
+// on the script path, a user can keep the hooks and drop the server, and the
+// benchmark arm that removes the mcp block does exactly that. In every one of
+// those cases the fabricated list was persisted as PROVEN evidence, and the
+// model was told at session start that nine optimizer tools were available.
+//
+// What it then said is the damage. Not merely "these exist" but instructions to
+// act: call optimize_session when context is tight, use get_optimization_report,
+// and a paragraph directing the model to call wiki_write whenever it works
+// something out. With no server those calls fail and are retried, and the
+// wiki_write instruction asks for work the task never wanted, which costs turns
+// whether or not the tool exists.
+//
+// Measured, and the shape of it is the giveaway: with the host declaring five
+// real tools this hook injects 338 characters and names none of them, while
+// with NO server at all it injected 1,403 and named three that do not exist.
+//
+// decide.mjs already states the rule this violated -- "production never
+// converts install intent into a claim that an MCP tool exists." Absent host
+// evidence we claim nothing, and routing advice waits for evidence to arrive.
 
 const invocation = beginHookInvocation('claude-code', 'session-start');
 
