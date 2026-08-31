@@ -121,7 +121,7 @@ function symbolSnapshotLimit() {
  * bounded: only regions that findings actually anchor to are stored, and a
  * function is orders of magnitude smaller than the file containing it.
  */
-export function indexFile(dir, rawPath, text) {
+export function indexFile(dir, rawPath, text, { snapshots = true } = {}) {
   // This reads rawPath through its own loop rather than readAnySpelling, so it
   // needs the same guard: an unsafe path aborts libuv instead of throwing, and
   // the per-candidate try/catch below cannot catch that.
@@ -149,7 +149,19 @@ export function indexFile(dir, rawPath, text) {
   // into a second copy of the repository. Past the cap the hash still drives
   // staleness detection; only the diff degrades, and `serve` already states
   // plainly when evidence cannot be reconstructed.
-  const snapshot = source.length <= snapshotLimit() ? source : undefined;
+  // SEEDING STORES NO SNAPSHOT, and this is the difference between an index and
+  // a second copy of the repository. Measured on this repo, snapshots were 974
+  // KB against a 161 KB graph for 26 files -- so a 300-file seed would write
+  // roughly 11 MB, nearly all of it about files the model never opens, and the
+  // refusal path parses that sidecar in full.
+  //
+  // Nothing is lost that we will need. A snapshot exists to diff a file against
+  // what it was, which only matters once a file is actually in play -- and the
+  // moment it is, the ordinary capture path on PreToolUse re-indexes it WITH its
+  // snapshot. The snapshot arrives when the file becomes relevant instead of
+  // being written for every file on the chance that one of them will be.
+  const snapshot =
+    snapshots && source.length <= snapshotLimit() ? source : undefined;
   // BYTES BESIDE THE HASH, because the hash is truncated to 64 bits and content
   // identity is now read from it. `contentPeers` groups files by identical
   // content, and two unrelated files sharing a 16-hex-character digest would
@@ -181,7 +193,8 @@ export function indexFile(dir, rawPath, text) {
       hash: hash(body),
       // Bounded for the same reason the file snapshot above is, and measured:
       // unbounded spans were 95.8% of a real project's graph.
-      snapshot: body.length <= symbolSnapshotLimit() ? body : undefined,
+      snapshot:
+        snapshots && body.length <= symbolSnapshotLimit() ? body : undefined,
     });
     putEdge(dir, fileNode, 'contains', symbolNode);
   }
