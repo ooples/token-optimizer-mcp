@@ -110,12 +110,42 @@ function callersOf(graph, symbolId, limit = 2) {
   return names;
 }
 
+const slashed = (path) =>
+  String(path == null ? '' : path).replace(/\\/g, '/').replace(/\/+$/, '');
+
+/**
+ * Is this file inside the tree the session is working in?
+ *
+ * THE SCOPE IS THE WHOLE SAFETY ARGUMENT. A graph is not guaranteed to contain
+ * only this project: an unrooted directory shares one machine-level store with
+ * every other unrooted session on the host, and even a rooted graph acquires
+ * foreign file nodes through resolved imports. Without this test the advisory
+ * would confidently report a symbol from an unrelated checkout, with a path
+ * that means nothing where it is read -- and it would look exactly like a
+ * correct answer, which is the worst property a hint can have.
+ *
+ * Comparison is on the slashed form because a graph written on Windows holds
+ * backslashes while the session's cwd may arrive either way.
+ */
+function withinScope(file, scope) {
+  if (!scope) return true;
+  const path = slashed(file);
+  const base = slashed(scope);
+  // Case-insensitive, because Windows resolves `C:/Repo` and `c:/repo` to the
+  // same directory and a case difference between the payload's cwd and the
+  // stored path would silence every answer.
+  return (
+    path.toLowerCase() === base.toLowerCase() ||
+    path.toLowerCase().startsWith(`${base.toLowerCase()}/`)
+  );
+}
+
 /** Trim an absolute path to something readable and short. */
 function display(path, root) {
-  const normalised = String(path).replace(/\\/g, '/');
-  if (!root) return normalised;
-  const base = String(root).replace(/\\/g, '/').replace(/\/+$/, '');
-  return normalised.startsWith(`${base}/`)
+  const normalised = slashed(path);
+  const base = slashed(root);
+  if (!base) return normalised;
+  return normalised.toLowerCase().startsWith(`${base.toLowerCase()}/`)
     ? normalised.slice(base.length + 1)
     : normalised;
 }
@@ -139,7 +169,11 @@ const MAX_HITS = 6;
  * @param pattern the search pattern, never executed
  * @param told   fact keys already delivered this session
  */
-export function adviseSearch(graph, pattern, { told = new Set(), root = '', firstOfSession = false } = {}) {
+export function adviseSearch(
+  graph,
+  pattern,
+  { told = new Set(), root = '', scope = root, firstOfSession = false } = {}
+) {
   const identifiers = identifiersIn(pattern);
   if (!identifiers.length) return null;
 
@@ -157,6 +191,8 @@ export function adviseSearch(graph, pattern, { told = new Set(), root = '', firs
     // An identifier the graph does not hold is a case for staying quiet.
     for (const node of byName.get(identifier) || []) {
       if (typeof node.file !== 'string' || !node.line) continue;
+      // A symbol from another tree is not an answer to this session's search.
+      if (!withinScope(node.file, scope)) continue;
       const where = `${display(node.file, root)}:${node.line}${
         node.endLine && node.endLine !== node.line ? `-${node.endLine}` : ''
       }`;
