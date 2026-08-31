@@ -271,7 +271,15 @@ function linkCalls(dir, path, source, symbols) {
     const body = spanText(source, caller);
     const seen = new Set();
 
-    for (const match of body.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)) {
+    // THE LOOKBEHIND IS WHAT KEEPS THIS LINEAR. Without it every character of
+    // an identifier is a candidate start, and each one rescans to the end of the
+    // run before failing on the `(` -- quadratic, and measured at 251ms on a
+    // 16,000-character run of word characters. Refusing to start in the middle
+    // of an identifier makes those starts fail in constant time.
+    //
+    // A lookbehind rather than `\b`, because `$` is not a word character: `\b`
+    // would have changed which identifiers beginning with `$` match.
+    for (const match of body.matchAll(/(?<![\w$])([A-Za-z_$][\w$]*)\s*\(/g)) {
       const name = match[1];
       // Not itself, not a keyword, and only names this file declares.
       if (name === caller.name || seen.has(name) || !byName.has(name)) continue;
