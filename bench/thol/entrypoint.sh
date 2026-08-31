@@ -254,8 +254,7 @@ case "$MODE" in
         const p = require('/opt/optimizer-provenance.json');
         const slug = String(process.env.THOL_CAMPAIGN).replace(/[^A-Za-z0-9.-]+/g, '_');
         const out = '/results/provenance-' + slug + '.json';
-        fs.writeFileSync(out, JSON.stringify({ campaign: process.env.THOL_CAMPAIGN, ...p }, null, 2) + '
-');
+        fs.writeFileSync(out, JSON.stringify({ campaign: process.env.THOL_CAMPAIGN, ...p }, null, 2) + '\n');
         console.log('   provenance -> ' + out);
       "
     fi
