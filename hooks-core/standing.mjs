@@ -175,8 +175,20 @@ const MAX_PATH_CHARS = 256;
 function pathsIn(line) {
   const found = [];
 
-  for (const match of line.matchAll(PATH_EXTENSION)) {
+  // ONLY THE LONGEST CANDIDATE IN A CHAIN. The greedy pattern this replaces took
+  // the whole of `src/widget.ts.js`; matching each suffix separately also offers
+  // `src/widget.ts`, which does not exist, and `staleClaims` would report it as a
+  // stale reference to a file nobody wrote.
+  const matches = [...line.matchAll(PATH_EXTENSION)];
+
+  for (const [index, match] of matches.entries()) {
     const end = match.index + match[0].length;
+
+    // A suffix immediately followed by another recognised suffix is an
+    // intermediate one, not the end of the path.
+    const next = matches[index + 1];
+    if (next && next.index === end) continue;
+
     let start = match.index;
     const floor = Math.max(0, match.index - MAX_PATH_CHARS);
 

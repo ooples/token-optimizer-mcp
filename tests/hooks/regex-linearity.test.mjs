@@ -25,9 +25,16 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const DIRS = ['hooks-core', join('plugin', 'hooks')];
 
 /**
- * A budget, not a benchmark. Every linear pattern here finishes in under 5ms on
- * these inputs; the quadratic one took roughly 500ms. 250ms sits between the
- * two with enough room that a loaded CI box cannot fail it by being slow.
+ * A budget, not a benchmark.
+ *
+ * SIZED FOR A WIDE GAP, NOT A TIGHT MARGIN. At 16,000 characters the slowest of
+ * the four real offenders measured 251ms against a 250ms budget, so the gate
+ * caught it only about half the time -- a gate that reports a defect by coin
+ * toss is worse than none, because it teaches people the failure is noise.
+ * Quadrupling the input quadruples a quadratic pattern's cost and leaves a
+ * linear one where it was, which buys the separation instead of borrowing it
+ * from luck: every linear pattern here still finishes in single-digit
+ * milliseconds, and each of the four originals now takes over a second.
  */
 const BUDGET_MS = 250;
 
@@ -60,7 +67,12 @@ const withoutComments = (source) =>
 function regexLiterals(source) {
   const found =
     withoutComments(source).match(
-      /(?<![\w/\\])\/(?![/*])(?:\\.|\[(?:\\.|[^\]])*\]|[^/\n\\])+\/[gimsuy]*/g
+      // DISJOINT ALTERNATIVES. `\\.` overlapped `[^\]]`, and the generic branch
+      // overlapped the bracket branch on `[`, so a fragment that looks like an
+      // unterminated regex could be divided between them an exponential number of
+      // ways -- a ReDoS gate that can itself be stalled by the source it reads,
+      // which CodeQL caught and this test could not, since it never times itself.
+      /(?<![\w/\\])\/(?![/*])(?:\\.|\[(?:\\.|[^\\\]])*\]|[^/\n\\\[])+\/[gimsuy]*/g
     ) || [];
 
   const compiled = [];
@@ -114,7 +126,7 @@ describe('regexes on the hook path are linear', () => {
     const offenders = [];
 
     for (const { literal, regex } of regexLiterals(readFileSync(path, 'utf8'))) {
-      for (const input of attacks(16_000)) {
+      for (const input of attacks(32_000)) {
         const started = process.hrtime.bigint();
         try {
           regex.test(input);
