@@ -158,6 +158,43 @@ describe('what the index answers', () => {
     expect(Buffer.byteLength(without.text)).toBeLessThan(200);
   });
 
+  test('a symbol from another tree is never reported', () => {
+    // THE SAFETY ARGUMENT FOR SEEDING UNROOTED PROJECTS. A directory with no
+    // VCS marker shares one machine-level graph with every other unrooted
+    // session on the host, and even a rooted graph acquires foreign file nodes
+    // through resolved imports. Blocking the seed was the first attempt and was
+    // wrong twice: it disabled the feature for anyone working outside a
+    // repository, and it did not fix the hazard, since ordinary capture writes
+    // to that same store. The hazard is fixed here, where it happens.
+    //
+    // A foreign symbol is the worst kind of wrong answer, because it is
+    // indistinguishable from a correct one.
+    const elsewhere = mkdtempSync(join(tmpdir(), 'advisory-elsewhere-'));
+    try {
+      expect(
+        adviseSearch(graph, 'parse_line', { root: workspace, scope: elsewhere })
+      ).toBeNull();
+      // Same graph, same query, correct scope: the answer is there.
+      expect(
+        adviseSearch(graph, 'parse_line', { root: workspace, scope: workspace })
+      ).not.toBeNull();
+    } finally {
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
+  });
+
+  test('scoping survives separator and case differences', () => {
+    // A graph written on Windows holds backslashes while a payload's cwd may
+    // arrive either way, and `C:/Repo` and `c:/repo` are one directory. Getting
+    // this wrong silences every answer rather than failing loudly.
+    const slashed = workspace.replace(/\\/g, '/');
+    for (const variant of [slashed, slashed.toUpperCase(), `${slashed}/`]) {
+      expect(
+        adviseSearch(graph, 'parse_line', { root: workspace, scope: variant })
+      ).not.toBeNull();
+    }
+  });
+
   test('an empty graph says nothing', () => {
     expect(adviseSearch({ nodes: new Map(), edges: [] }, 'parse_line', {})).toBeNull();
   });
@@ -223,26 +260,21 @@ describe('seeding a project', () => {
     }
   });
 
-  test('an unrooted project is never seeded into the shared machine graph', () => {
-    // `projectRootFor` sends a directory with no repository marker to ONE
-    // machine-level store shared by every unrooted session on the host.
-    // Capturing a few touched files there is the existing trade; indexing 300
-    // is not the same trade at a different scale, because that store has no
-    // project boundary -- symbols from one directory would be offered as
-    // answers to searches made from an unrelated one, with a path that means
-    // nothing where it is read. Found while measuring: a scratch directory
-    // resolved to an unrooted graph already holding 4,064 file nodes.
-    const unrooted = mkdtempSync(join(tmpdir(), 'advisory-unrooted-'));
-    const previous = process.env.TOKEN_OPTIMIZER_UNROOTED_DIR;
-    process.env.TOKEN_OPTIMIZER_UNROOTED_DIR = unrooted;
+  test('the shared lesson tier is never used as a project index', () => {
+    // `sharedDir` holds only lessons that hold in ANY repository -- per machine,
+    // per user, following the person rather than the code. File and symbol
+    // nodes are the opposite kind of fact, and seeding them there would put one
+    // checkout's paths into every other checkout's briefing.
+    const shared = mkdtempSync(join(tmpdir(), 'advisory-shared-'));
+    const previous = process.env.TOKEN_OPTIMIZER_SHARED_DIR;
+    process.env.TOKEN_OPTIMIZER_SHARED_DIR = shared;
     try {
-      const inside = join(unrooted, 'proj', '.token-optimizer', 'wiki');
-      expect(seedProject(inside, workspace).stopped).toBe('unrooted');
-      expect(load(inside).nodes.size).toBe(0);
+      expect(seedProject(shared, workspace).stopped).toBe('shared-tier');
+      expect(load(shared).nodes.size).toBe(0);
     } finally {
-      if (previous === undefined) delete process.env.TOKEN_OPTIMIZER_UNROOTED_DIR;
-      else process.env.TOKEN_OPTIMIZER_UNROOTED_DIR = previous;
-      rmSync(unrooted, { recursive: true, force: true });
+      if (previous === undefined) delete process.env.TOKEN_OPTIMIZER_SHARED_DIR;
+      else process.env.TOKEN_OPTIMIZER_SHARED_DIR = previous;
+      rmSync(shared, { recursive: true, force: true });
     }
   });
 
