@@ -59,11 +59,16 @@ import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
 // dominate cost. Removing it from session-start alone took the debug segment
 // from 1.309 to 1.107 and its turns from 2.231 to 2.003.
 //
-// CLAUDE_PLUGIN_ROOT is what tells the two apart: the plugin runtime sets it,
-// a settings.json install does not. decide.mjs states the rule this protects --
-// never convert install intent into a claim that an MCP tool exists.
-if (process.env.CLAUDE_PLUGIN_ROOT)
-  process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
+// REVERTED FROM A CLAUDE_PLUGIN_ROOT GATE, for the reason recorded in the
+// router: that variable is set by the plugin runtime alone, so the gate turned
+// enforcement off for every non-plugin install and clients.test.mjs failed on
+// all eight packaged entries.
+//
+// `??=` is the opt-out. It assigns only when the variable is null or undefined,
+// so an explicitly EMPTY value survives -- which is how a benchmark arm, a host
+// or a user says "there is no server here" without disabling the default for
+// installs that do ship one.
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
 
 const invocation = beginHookInvocation('claude-code', 'session-start');
 

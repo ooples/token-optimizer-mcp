@@ -1,11 +1,11 @@
 {
-  "name": "token-optimizer-hooks-only",
-  "display_name": "Token Optimizer (hooks only, no MCP server)",
+  "name": "token-optimizer-diag",
+  "display_name": "Token Optimizer (assist, diagnostics to /results)",
   "verified": true,
   "version_pin": "6.0.2",
   "version_checked": "2026-08-29",
   "upstream": "https://github.com/ooples/token-optimizer-mcp",
-  "install_doc": "THE SCHEMA-TAX ARM. Byte-identical to the token-optimizer-mcp manifest -- same pinned 6.0.2 runtime, same five hooks, same env -- with the entire \"mcp\" block removed, so no MCP server is registered and none of its 19 tool schemas (26,286 bytes, ~7,300 tokens measured via tools/list) enter the request. Comparing this arm against token-optimizer-mcp isolates the cost of ADVERTISING the tools, which the existing token-optimizer-mcp-off arm deliberately does not: that one sets TOKEN_OPTIMIZER_MODE=off to isolate enforcement and keeps the schemas present on both sides. Verified before running that the hooks degrade correctly with no server: `npm test` is still bounded, and the router stops naming smart_* tools because it requires positive runtime inventory evidence before recommending one -- so this arm never advises a tool that does not exist. It does lose the recursive-search bound, which only fires behind a verdict.",
+  "install_doc": "DIAGNOSTIC ARM. Identical to token-optimizer-assist plus TOKEN_OPTIMIZER_LOG_DIR=/results/diag so the per-invocation JSONL survives the throwaway HOME. Every hook invocation records toolName, outputBytes, durationMs and outputShape (which says whether updatedInput was emitted), so a cheap run and an expensive run of the same task can be compared directly instead of inferred from dollars.",
   "requires": [
     "node"
   ],
@@ -13,6 +13,8 @@
     "env": {
       "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
       "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
+      "TOKEN_OPTIMIZER_MODE": "assist",
+      "TOKEN_OPTIMIZER_LOG_DIR": "/results/diag",
       "TOKEN_OPTIMIZER_MCP_CAPABILITIES": ""
     },
     "hooks": {

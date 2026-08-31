@@ -98,8 +98,17 @@ import { beginHookInvocation } from './lib/observability.mjs';
 // CLAUDE_PLUGIN_ROOT is what tells the two apart: the plugin runtime sets it,
 // a settings.json install does not. decide.mjs states the rule this protects --
 // never convert install intent into a claim that an MCP tool exists.
-if (process.env.CLAUDE_PLUGIN_ROOT)
-  process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
+// REVERTED FROM A CLAUDE_PLUGIN_ROOT GATE. That variable is set by the plugin
+// runtime and by nothing else, so gating on it disabled enforcement-by-default
+// for every install that is not a plugin -- caught by clients.test.mjs across
+// all eight packaged entries, each receiving "allow" where it must deny.
+//
+// `??=` already provides the opt-out the gate was reaching for: it assigns only
+// when the variable is null or undefined, so an explicitly EMPTY value
+// survives. A benchmark arm measuring the hooks with no server sets
+// TOKEN_OPTIMIZER_MCP_CAPABILITIES='' and gets that, without breaking installs
+// that genuinely ship the server beside these hooks.
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
 
 /**
  * Largest file the hook will read to index. Above this the touch is still
