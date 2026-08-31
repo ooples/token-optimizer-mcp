@@ -334,7 +334,22 @@ function probe(binary, payload, { timeoutMs = 8000, cwd, env } = {}) {
         encoding: 'utf8',
         timeout: timeoutMs,
         cwd,
-        env: { ...process.env, ...(env || {}) },
+        env: {
+        ...process.env,
+        // THE PROBE MUST SUPPLY ITS OWN EVIDENCE. The bundled tool inventory is
+        // now asserted only for an actual plugin install, which the runtime
+        // marks with CLAUDE_PLUGIN_ROOT -- and the doctor is a CLI, run outside
+        // that runtime, so it never has it. Without this the enforcement probe
+        // would report "not refused" for a correctly installed plugin: a false
+        // negative in the one tool whose job is to tell the user the truth.
+        //
+        // The question the probe asks is "would enforcement fire if the tools
+        // were there", so it states that they are rather than inferring it.
+        TOKEN_OPTIMIZER_MCP_CAPABILITIES:
+          process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??
+          'smart_read,smart_write,smart_edit,smart_glob,smart_grep',
+        ...(env || {}),
+      },
         windowsHide: true,
       },
       (error, stdout) => {
