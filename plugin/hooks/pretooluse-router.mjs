@@ -67,6 +67,7 @@ import { substitutionFor as outlineFor } from './lib/substitute.mjs';
 import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { adviseSearch, SESSION_CAP } from './lib/advise.mjs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
@@ -474,6 +475,33 @@ ${nudge}`
     // ship -- assist, which keeps the graph and drops the refusals -- got none of
     // this, which is the opposite of the intent. Only `off`, the kill switch,
     // skips it, and that is handled far above.
+    // ANSWER THE SEARCH BEFORE IT RUNS.
+    //
+    // The graph already holds where every indexed symbol is declared, and a
+    // Grep for one is a turn spent recovering that. Attached as context to the
+    // search the model already made, so there is nothing to adopt, no tool to
+    // learn and no fixed cost on the short tasks -- which is precisely where
+    // the leader's rules-file approach loses (their three defeats are the three
+    // shortest tasks, corr(task length, ratio) = -0.689).
+    //
+    // Gated on `retrieval`, the consumer half, while seeding is gated on
+    // `capture`. That keeps the A/B honest: an arm can index without advising.
+    if (
+      features.retrieval &&
+      (payload.tool_name === 'Grep' || payload.tool_name === 'Glob')
+    ) {
+      try {
+        const advisory = searchAdvisory(payload, state, dirFor);
+        if (advisory) {
+          saveState(payload.session_id, state, agentScope);
+          context = context ? `${context}\n\n${advisory}` : advisory;
+        }
+      } catch {
+        // An index we cannot read is silence, never a broken search.
+      }
+    }
+
+
     if (payload.tool_name === 'Read') {
       const substitution = outlineSubstitution(payload);
       if (substitution) {
@@ -579,6 +607,35 @@ ${nudge}`
       // Any failure here falls back to the plain redirect, which always works.
     }
   }
+  // THE REFUSAL PATH NEEDS THE INDEX TOO, and this was very nearly missed.
+  //
+  // A Grep is only refused when smart_grep is PROVEN present -- which is the
+  // ordinary state of a real plugin install. So an advisory wired solely into
+  // the allowed path would fire for the benchmark arm, where there is no MCP
+  // server, and never once for a user who installed the product properly. The
+  // arm we measure and the thing we ship would not have been the same feature.
+  //
+  // A refusal is also the better moment, not merely a second one: the model is
+  // being sent to another tool to find something, and if the graph already
+  // knows where that something is, the redirect may not need following at all.
+  if (
+    features.retrieval &&
+    (payload.tool_name === 'Grep' || payload.tool_name === 'Glob')
+  ) {
+    try {
+      const advisory = searchAdvisory(payload, state, (path) =>
+        wikiDir(projectRootFor(path, payload.cwd))
+      );
+      if (advisory) {
+        saveState(payload.session_id, state, agentScope);
+        reason = `${reason}\n\n${advisory}`;
+      }
+    } catch {
+      // The plain redirect always works; an unreadable index costs nothing.
+    }
+  }
+
+
 
 /**
  * Where this command's previous output is kept, so the next run can be compacted
@@ -660,6 +717,47 @@ function outlineSubstitution(payload) {
     return null;
   }
 }
+
+/**
+ * What the graph can say to a model that is about to search.
+ *
+ * THE ADDITIVE HALF, and until now the missing one. Every other mechanism in
+ * this router SUBTRACTS -- refuse, bound, compact, substitute -- and all of them
+ * argue about how big a tool result is. The measurements say that is not where
+ * we lose: turns are (corr(turns, USD) = 0.878), and a search is a whole turn
+ * spent discovering something the graph already holds.
+ *
+ * FIRES GENEROUSLY, ON PURPOSE. An advisory is roughly 1/50th of the turn it
+ * may save, so the policy that maximises expected value is to speak whenever
+ * there is an exact answer rather than only when certain. What it must not do
+ * is repeat itself: `state.advised` carries the facts already delivered,
+ * because a block the model has learned to skip is worse than no block at all.
+ *
+ * NEVER REWRITES THE SEARCH. The pattern is passed through untouched and the
+ * tool still runs. If the index is wrong or partial the model gets its search
+ * results exactly as it would have, having paid a few tokens for a hint it can
+ * ignore -- which is the only failure mode available to this.
+ */
+function searchAdvisory(payload, state, dirFor) {
+  const pattern = payload.tool_input?.pattern;
+  if (typeof pattern !== 'string' || !pattern) return null;
+
+  const root = payload.cwd || process.cwd();
+  const told = new Set(state.advised || []);
+  if (told.size >= SESSION_CAP) return null;
+
+  const graph = load(dirFor(join(root, '__search__')));
+  const advice = adviseSearch(graph, pattern, {
+    told,
+    root,
+    firstOfSession: !told.size,
+  });
+  if (!advice) return null;
+
+  state.advised = [...told, ...advice.facts].slice(0, SESSION_CAP);
+  return advice.text;
+}
+
 
 function commandKey(sessionId, command) {
   return createHash('sha256')
