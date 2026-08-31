@@ -97,6 +97,62 @@ const OUTPUT_HEAVY = [
  */
 const ASSIGNMENT_PREFIX = /^(?:[A-Za-z_]\w*=[^\s]*\s+)+/;
 
+/** Does this segment change the shell it runs in, rather than just run a program? */
+function isStateMutating(segment) {
+  const bare = segment.replace(/^(?:(?:builtin|command)\s+)+/, '');
+
+  return (
+    /^(?:cd|pushd|popd|export|source|alias|unalias|unset|umask|ulimit|set|shopt|declare|typeset|readonly|eval|exec|trap)(?:\s|$)/.test(
+      bare
+    ) ||
+    /^\.\s/.test(bare) ||
+    isAssignmentOnly(bare)
+  );
+}
+
+/**
+ * Splits `cd packages/api && npm test` into the part that must run in the
+ * caller's own shell and the part worth bounding.
+ *
+ * WHY THIS EXISTS. Refusing every state-mutating command was correct and
+ * expensive: `cd X && npm test` is one of the most common things an agent
+ * writes, and it went through unbounded, which is precisely the debug output
+ * this module exists to cap. The mutation and the noisy command are not the
+ * same command -- they are two, joined by an operator -- and only the second
+ * needs wrapping.
+ *
+ * ONLY A LEADING RUN, AND ONLY WHAT FOLLOWS IT IS BOUNDED. `npm test; cd ..`
+ * has its mutation at the END, where hoisting cannot help without reordering
+ * the command, so it stays refused. The prefix is reproduced VERBATIM, operators
+ * included, so `cd x && ...` still runs the rest only if the cd succeeded and
+ * `cd x || ...` still runs it only if the cd failed.
+ */
+function hoistablePrefix(command) {
+  // Keep the separators: they carry the conditional meaning.
+  const parts = command.split(/(\|\||&&|;|\n)/);
+
+  let taken = 0;
+  for (let i = 0; i < parts.length; i += 2) {
+    const segment = parts[i].trim().replace(/^[({]+\s*/, '').trim();
+    if (!segment) break;
+    if (!isStateMutating(segment)) break;
+    // A `(` opens a group the split cannot see the end of; leave it alone.
+    if (/^[({]/.test(parts[i].trim())) return null;
+    taken = i + 2;
+  }
+
+  if (!taken || taken >= parts.length) return null;
+
+  const rest = parts.slice(taken).join('').trim();
+  if (!rest) return null;
+
+  // Whatever follows must be ordinary, or hoisting the front would leave a
+  // mutation inside the subshell after all.
+  if (splitSegments(rest).some(isStateMutating)) return null;
+
+  return { prefix: parts.slice(0, taken).join('').trim(), rest };
+}
+
 /**
  * Is this segment nothing but variable assignments?
  *
@@ -228,18 +284,7 @@ function unsafeToBound(command) {
   // as a bare `cd` does -- while sailing past a guard anchored on the word.
   // (`env cd` and `sudo cd` are not the same: those run an external program, so
   // there is no `cd` to lose.)
-  if (
-    splitSegments(command)
-      .map((segment) => segment.replace(/^(?:(?:builtin|command)\s+)+/, ''))
-      .some(
-        (segment) =>
-          /^(?:cd|pushd|popd|export|source|alias|unalias|unset|umask|ulimit|set|shopt|declare|typeset|readonly|eval|exec|trap)(?:\s|$)/.test(
-            segment
-          ) ||
-          /^\.\s/.test(segment) ||
-          isAssignmentOnly(segment)
-      )
-  ) {
+  if (splitSegments(command).some(isStateMutating)) {
     return 'state-mutating';
   }
 
@@ -317,7 +362,14 @@ export function boundedRewrite(
   const trimmed = command.trim();
   if (!trimmed) return null;
 
-  const unsafe = unsafeToBound(trimmed);
+  // A COMMAND THAT ONLY *STARTS* BY CHANGING THE SHELL IS STILL WORTH BOUNDING.
+  // `cd packages/api && npm test` is two commands; the cd has to run in the
+  // caller's shell to persist, and the test run is exactly what we came for.
+  // Hoisting the front out of the wrapper keeps both.
+  const hoist = hoistablePrefix(trimmed);
+  const subject = hoist ? hoist.rest : trimmed;
+
+  const unsafe = unsafeToBound(subject);
   if (unsafe) return null;
 
   // A NEWLINE BEFORE THE CLOSING BRACE, NEVER `; }`. Two ordinary commands
@@ -435,7 +487,7 @@ export function boundedRewrite(
   //
   // The escape is the standard one: end the quoted run, add an escaped quote,
   // start a new run.
-  const quoted = `'${trimmed.split("'").join("'\\''")}'`;
+  const quoted = `'${subject.split("'").join("'\\''")}'`;
 
   // THE FINAL STAGE: EITHER THE SHELL'S OWN head+tail, OR THE COMPACTOR.
   //
@@ -475,9 +527,12 @@ export function boundedRewrite(
   // local to a shell that ends with the command. The exit status still comes
   // out intact, because a subshell reports the status of the last thing in it,
   // which is our pipeline.
+  // The hoisted prefix runs first, in the caller's own shell, exactly as written.
+  const lead = hoist ? `${hoist.prefix} ` : '';
+
   return {
     command:
-      `( _tok_pf=$(set +o 2>/dev/null | grep pipefail); ` +
+      `${lead}( _tok_pf=$(set +o 2>/dev/null | grep pipefail); ` +
       `{ set -o pipefail; } 2>/dev/null; ` +
       `( eval "$_tok_pf" 2>/dev/null; ${NO_COLOUR} eval ${quoted}\n) 2>&1 | ` +
       `${stage} )`,

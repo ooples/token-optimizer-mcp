@@ -90,7 +90,7 @@ describe('the rewritten command still means what it meant', () => {
     expect(underPipefail(boundedRewrite(command).command)).toBe(1);
   });
 
-  it('refuses a command that sets a shell option for itself', () => {
+  it('hoists a shell option the command sets for itself', () => {
     // This used to be bounded, and to assert that the caller's own `set -o`
     // survived our reset because it ran inside the subshell after it. Both
     // halves were true and the conclusion was still wrong: unbounded, that
@@ -101,10 +101,16 @@ describe('the rewritten command still means what it meant', () => {
     // The property the old test was reaching for -- that we neither impose
     // pipefail on a caller who did not ask for it nor take it from one who
     // did -- is covered by the two cases above.
+    // Once refused outright, on the grounds that a `set` inside the subshell
+    // would not reach the caller's later commands. True -- so the `set` is left
+    // in the caller's shell and only what follows it is wrapped, which keeps
+    // both halves of the guarantee instead of trading one for the other.
     const command = 'set -o pipefail; false | true';
+    const bounded = boundedRewrite(command);
 
     expect(run(command).status).toBe(1);
-    expect(boundedRewrite(command)).toBeNull();
+    expect(bounded.command.startsWith('set -o pipefail;')).toBe(true);
+    expect(run(bounded.command).status).toBe(1);
   });
 
   it('captures stderr, where a failing build says what went wrong', () => {
@@ -269,7 +275,6 @@ describe('the bound announces itself', () => {
     expect(notice).toMatch(/Shorter output is returned complete/);
   });
 });
-
 
 /* ------------------------------------------------------------------ *
  * The real router, end to end
@@ -449,7 +454,6 @@ describe('the shipped router bounds instead of refusing', () => {
   });
 });
 
-
 describe('colour is asked away at the source', () => {
   // Colour is not a rounding error and it does not go away on its own. With the
   // command IDENTICAL and only the invocation shape differing -- a direct node
@@ -583,6 +587,66 @@ describe('nothing survives the bounded command', () => {
   });
 });
 
+describe('a command that only STARTS by changing the shell', () => {
+  // Refusing these was correct and expensive. `cd X && npm test` is among the
+  // most common things an agent writes, and it went through unbounded -- which
+  // is exactly the debug output the bound exists to cap. The mutation and the
+  // noisy command are two commands joined by an operator; only the second needs
+  // wrapping, and the first has to stay in the caller's shell to persist.
+  it.each([
+    ['cd packages/api && npm test', 'cd packages/api &&'],
+    ['set -euo pipefail; npm test', 'set -euo pipefail;'],
+    ['export FOO=1; npm test', 'export FOO=1;'],
+    ['cd a && cd b && make', 'cd a && cd b &&'],
+    ['source venv/bin/activate && pytest -q', 'source venv/bin/activate &&'],
+    ['builtin cd packages/api && npm test', 'builtin cd packages/api &&'],
+  ])('bounds %s, with the prefix left outside', (command, prefix) => {
+    const bounded = boundedRewrite(command);
+
+    expect(bounded).not.toBeNull();
+    expect(bounded.command.startsWith(prefix)).toBe(true);
+    // The wrapper begins straight after it, so the prefix runs in the caller's
+    // own shell rather than inside the subshell.
+    expect(bounded.command.slice(prefix.length).trim().startsWith('(')).toBe(true);
+  });
+
+  it('leaves the working directory where the unbounded command would', () => {
+    // The whole reason these were refused: this client's Bash tool persists the
+    // cwd between calls, and a `cd` inside the subshell would not.
+    const original = 'cd /tmp && echo ran';
+
+    const bare = run(`${original}\npwd`).stdout.trim().split('\n').pop();
+    const bounded = run(`${boundedRewrite(original).command}\npwd`)
+      .stdout.trim()
+      .split('\n')
+      .pop();
+
+    expect(bounded).toBe(bare);
+  });
+
+  it.each([
+    ['set -o pipefail; false | true', 1],
+    ['cd /tmp && exit 7', 7],
+    ['cd /tmp && echo fine', 0],
+    // `&&` still means "only if the first succeeded".
+    ['cd /no/such/dir && echo never', 1],
+    ['export A=1; sh -c "exit 3"', 3],
+  ])('%s still exits %i', (command, status) => {
+    expect(run(command).status).toBe(status);
+    expect(run(boundedRewrite(command).command).status).toBe(status);
+  });
+
+  it('still bounds the output it was hoisted for', () => {
+    const command = 'cd /tmp && for i in $(seq 1 3000); do echo "line $i"; done';
+
+    const bare = run(command).stdout.length;
+    const bounded = run(boundedRewrite(command).command).stdout.length;
+
+    expect(bare).toBeGreaterThan(20_000);
+    expect(bounded).toBeLessThanOrEqual(8_000);
+  });
+});
+
 describe('commands whose point is to change the shell itself', () => {
   // The wrapper runs the command in `( ... )` so the pipefail restore stays
   // local, and that same containment discards whatever the command meant to
@@ -590,25 +654,20 @@ describe('commands whose point is to change the shell itself', () => {
   // so a bounded `cd` leaves the NEXT command in the old directory with nothing
   // to explain it.
   it.each([
-    ['cd packages/api && npm test'],
     ['npm test; cd ..'],
-    ['pushd src && make'],
     // `builtin` and `command` both run a builtin in the CURRENT shell, so
     // these change the caller's directory exactly as a bare `cd` does while
     // sailing past a guard anchored on the word.
-    ['builtin cd packages/api && npm test'],
     // `set` and `shopt` were once left out of this list, on the grounds that
     // their scope is the command they precede. True, and beside the point:
     // unbounded, `set -e` ALSO outlives that command and applies to the
     // caller's later calls, and bounded it does not.
-    ['set -euo pipefail; npm test'],
-    ['shopt -s globstar; npx jest'],
-    ['command cd packages/api && npm test'],
-    ['command builtin cd x && make'],
-    ['export FOO=1; npm test'],
-    ['source venv/bin/activate && pytest -q'],
-    ['. venv/bin/activate && pytest'],
     ['FOO=1'],
+    // The mutation is at the END, where hoisting cannot help without
+    // reordering the command.
+    ['npm test && export X=1'],
+    // A group whose end the segment split cannot see.
+    ['(cd a && npm test)'],
   ])('refuses to bound %s', (command) => {
     expect(boundedRewrite(command)).toBeNull();
   });
