@@ -33,7 +33,21 @@
  * the head and the tail of the output, which is where a run says what failed
  * and how it ended.
  */
-export const DEFAULT_BOUND_BYTES = 8_000;
+/**
+ * The client's own cap, deliberately -- never tighter.
+ *
+ * This was 8,000 against Claude Code's BASH_MAX_OUTPUT_LENGTH default of
+ * 30,000, so we cut 3.75x harder than the host and the model could not see
+ * which test had failed. It re-ran commands to recover the difference, and on
+ * a benchmark where turns dominate cost that trade loses: the debug segment
+ * measured 1.279 against control with turns at 2.305.
+ *
+ * Matching the host means the worst case is the baseline -- we never remove
+ * anything the client would have kept. The value moves from TRUNCATING to
+ * COMPACTING: on a repeat run the compactor drops lines the command already
+ * printed, which reduces bytes without withholding anything unseen.
+ */
+export const DEFAULT_BOUND_BYTES = 30_000;
 
 export function boundBytes() {
   const raw = Number(process.env.TOKEN_OPTIMIZER_BOUND_BYTES);
