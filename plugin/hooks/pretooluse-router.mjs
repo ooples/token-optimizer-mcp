@@ -60,7 +60,11 @@ import {
   isOutputHeavy,
 } from './lib/rewrite.mjs';
 import { isFsSafePath } from './lib/paths.mjs';
-import { readFileSync, statSync, mkdirSync, writeFileSync } from 'node:fs';
+// Aliased: the staleness path already exports a substitutionFor, and the two
+// mean different things -- that one swaps a stale claim, this one swaps a
+// large read for an outline of the same file.
+import { substitutionFor as outlineFor } from './lib/substitute.mjs';
+import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -470,6 +474,25 @@ ${nudge}`
     // ship -- assist, which keeps the graph and drops the refusals -- got none of
     // this, which is the opposite of the intent. Only `off`, the kill switch,
     // skips it, and that is handled far above.
+    if (payload.tool_name === 'Read') {
+      const substitution = outlineSubstitution(payload);
+      if (substitution) {
+        allowWithRewrite(
+          { ...payload.tool_input, file_path: substitution.target },
+          [
+            context,
+            `token-optimizer replaced this read with a structural outline of ` +
+              `${payload.tool_input.file_path} (${substitution.found.lines} lines, ` +
+              `${Math.round(substitution.found.bytes / 1024)}KB). Every symbol is ` +
+              `listed with its line number; read the original with offset and limit ` +
+              `for any region you need in full.`,
+          ]
+            .filter(Boolean)
+            .join('\n\n')
+        );
+      }
+    }
+
     if (payload.tool_name === 'Bash' && isOutputHeavy(payload.tool_input?.command)) {
       const command = payload.tool_input.command;
       // First run of this command goes through untouched -- see seenPath.
@@ -589,6 +612,55 @@ ${nudge}`
  * With compaction disabled nothing is ever written, so nothing is ever bounded,
  * which degrades to the client's own behaviour rather than to ours.
  */
+/**
+ * How many tool calls this session has made, for pricing a substitution.
+ *
+ * The floor rises as a session runs out of turns to amortise a saving over, so
+ * the decision needs a rough position in the session. The marker directory
+ * already holds one file per command seen; counting this session's is close
+ * enough and costs a readdir.
+ */
+function turnsSoFar(sessionId) {
+  try {
+    return readdirSync(stateDir()).filter((f) => f.startsWith(`${sessionId.slice(0, 8)}-`))
+      .length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Points a large Read at an outline of the same file.
+ *
+ * The model asked to read something; it gets a structural view of that same
+ * thing, with line numbers so the follow-up read is targeted rather than a
+ * guess. No tool, no rules file, no schema -- the substitution happens inside a
+ * call it already made, which is why it costs nothing on the short tasks where
+ * a fixed setup cost would sink us.
+ */
+function outlineSubstitution(payload) {
+  const filePath = payload.tool_input?.file_path;
+  if (!filePath) return null;
+
+  const found = outlineFor(filePath, {
+    turnsSoFar: turnsSoFar(payload.session_id || ''),
+  });
+  if (!found) return null;
+
+  try {
+    mkdirSync(stateDir(), { recursive: true });
+    const target = join(
+      stateDir(),
+      `${commandKey(payload.session_id || '', filePath)}.outline.txt`
+    );
+    writeFileSync(target, found.outline);
+    return { target, found };
+  } catch {
+    // Nowhere to write means no substitution, never a broken read.
+    return null;
+  }
+}
+
 function commandKey(sessionId, command) {
   return createHash('sha256')
     .update(`${sessionId}\u0000${command}`)
