@@ -60,7 +60,7 @@ import {
   isOutputHeavy,
 } from './lib/rewrite.mjs';
 import { isFsSafePath } from './lib/paths.mjs';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -454,9 +454,14 @@ ${nudge}`
     // this, which is the opposite of the intent. Only `off`, the kill switch,
     // skips it, and that is handled far above.
     if (payload.tool_name === 'Bash' && isOutputHeavy(payload.tool_input?.command)) {
-      const bounded = boundedRewrite(payload.tool_input.command, {
-        compactor: compactorFor(payload.session_id, payload.tool_input.command),
-      });
+      const command = payload.tool_input.command;
+      // First run of this command goes through untouched -- see seenPath.
+      const bounded = seenBefore(payload.session_id, command)
+        ? boundedRewrite(command, {
+            compactor: compactorFor(payload.session_id, command),
+          })
+        : null;
+      if (!bounded) markSeen(payload.session_id, command);
       if (bounded) {
         allowWithRewrite(
           { ...payload.tool_input, command: bounded.command },
@@ -547,6 +552,79 @@ ${nudge}`
  * Under the OS temp directory, since this is a cache whose loss costs one
  * comparison and nothing else.
  */
+/**
+ * Has this exact command already produced output the model has seen?
+ *
+ * THE BOUND MUST NOT CUT WHAT HAS NEVER BEEN SEEN. Measured: with the product
+ * on, SEG_1 went 0.924 -> 1.273 against control and the debug segment's turns
+ * to 2.305 -- code-debug-pipeline-py 22 -> 31 turns, code-debug-ledger-py
+ * 15 -> 24. The model could not see which test failed, so it ran the command
+ * again, and a round trip costs far more than the bytes the bound saved. It was
+ * the same failure enforcement had (turns 12.6 -> 20.9 for 1.633x), arriving
+ * through a different door.
+ *
+ * On a REPEAT the model has already read the full output, so cutting it costs
+ * nothing it did not already have -- and the compactor keeps the ending intact
+ * and emits lines that are new, so a failure that changed still arrives.
+ *
+ * The signal is free: the compactor already writes the previous run's output to
+ * a path keyed by session and command, so "seen before" is "that file exists".
+ * With compaction disabled nothing is ever written, so nothing is ever bounded,
+ * which degrades to the client's own behaviour rather than to ours.
+ */
+function commandKey(sessionId, command) {
+  return createHash('sha256')
+    .update(`${sessionId}\u0000${command}`)
+    .digest('hex')
+    .slice(0, 32);
+}
+
+/**
+ * INDEPENDENT OF THE COMPACTOR, deliberately. The first version read the
+ * compactor's previous-output file, which meant TOKEN_OPTIMIZER_COMPACT=0 --
+ * documented as the escape hatch that restores the shell bounding stage -- also
+ * silently switched bounding off altogether, because with no compact stage
+ * nothing ever recorded that a command had run. A flag that turns off more than
+ * it says is the kind of surprise this codebase keeps paying for.
+ *
+ * The marker is its own file, so it cannot corrupt the compactor's previous
+ * output either: that file holds text to diff against, and a marker written
+ * into it would be deduplicated as if the command had printed it.
+ */
+// A FUNCTION DECLARATION, NOT A CONST. The router's main flow runs at module
+// top level, above these definitions -- function declarations hoist, a const
+// arrow does not, so a const here sits in the temporal dead zone when the flow
+// calls it. Both callers wrap it in try/catch, so the ReferenceError was
+// swallowed and bounding was silently off with no error anywhere.
+function stateDir() {
+  return join(tmpdir(), 'token-optimizer-compact');
+}
+
+function seenPath(sessionId, command) {
+  return join(stateDir(), `${commandKey(sessionId, command)}.seen`);
+}
+
+function seenBefore(sessionId, command) {
+  try {
+    return statSync(seenPath(sessionId, command)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Recorded on the way through, so the NEXT run of this command is a repeat. */
+function markSeen(sessionId, command) {
+  try {
+    // The parent is known, so this needs no `dirname` -- an earlier version
+    // referenced one that was never imported, and the catch below swallowed the
+    // ReferenceError, leaving the marker unwritten and bounding silently off.
+    mkdirSync(stateDir(), { recursive: true });
+    writeFileSync(seenPath(sessionId, command), '');
+  } catch {
+    // A read-only temp directory costs bounding, not correctness.
+  }
+}
+
 function compactorFor(sessionId, command) {
   // ON BY DEFAULT, AND THAT DECISION WAS REVERSED BY MEASURING IT PROPERLY.
   //
@@ -573,10 +651,7 @@ function compactorFor(sessionId, command) {
   }
 
   try {
-    const key = createHash('sha256')
-      .update(`${sessionId}\u0000${command}`)
-      .digest('hex')
-      .slice(0, 32);
+    const key = commandKey(sessionId, command);
 
     return {
       node: process.execPath,
@@ -623,9 +698,15 @@ function compactorFor(sessionId, command) {
   // there would be a new behaviour rather than a cheaper spelling of an
   // existing one.
   if (payload.tool_name === 'Bash' && refusalsEnabled()) {
-    const bounded = boundedRewrite(payload.tool_input?.command, {
-      compactor: compactorFor(payload.session_id, payload.tool_input?.command),
-    });
+    const command = payload.tool_input?.command;
+    // Same rule on the refusal path: bounding output the model has not seen is
+    // what drove the turn inflation, whatever brought us here.
+    const bounded = seenBefore(payload.session_id, command)
+      ? boundedRewrite(command, {
+          compactor: compactorFor(payload.session_id, command),
+        })
+      : null;
+    if (!bounded && command) markSeen(payload.session_id, command);
     if (bounded) {
       allowWithRewrite(
         { ...payload.tool_input, command: bounded.command },

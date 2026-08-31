@@ -9,7 +9,8 @@
  */
 import { describe, it, expect, afterAll } from '@jest/globals';
 import { execFileSync, spawnSync } from 'child_process';
-import { mkdtempSync, rmSync } from 'fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -294,10 +295,37 @@ afterAll(() => {
   }
 });
 
+
+/**
+ * Marks a command as already run once in this session.
+ *
+ * The bound now applies only to a REPEAT -- cutting output the model has never
+ * seen is what drove the turn inflation the benchmark measured. In production
+ * the compactor's pipe stage writes this file when the command actually runs;
+ * in a test the command never runs, so the state is seeded directly. The key
+ * matches compactorFor() in the router.
+ */
+function markSeen(command, sessionId) {
+  const key = createHash('sha256')
+    .update(`${sessionId}\u0000${command}`)
+    .digest('hex')
+    .slice(0, 32);
+  const path = join(tmpdir(), 'token-optimizer-compact', `${key}.seen`);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, 'previous run output\n');
+  return path;
+}
+
 /** Drives the shipped router exactly as the client does. */
-function router(payload, env = {}) {
+function router(payload, env = {}, { seen = true } = {}) {
+  const session = payload.session_id || 's-bound';
+  // Most of these cases are about what the bound DOES, which now only happens
+  // on a repeat, so they seed the state by default. `seen: false` exercises the
+  // first run.
+  if (seen && payload.tool_input?.command) markSeen(payload.tool_input.command, session);
+
   const result = spawnSync(process.execPath, [ROUTER], {
-    input: JSON.stringify({ session_id: 's-bound', cwd: process.cwd(), ...payload }),
+    input: JSON.stringify({ session_id: session, cwd: process.cwd(), ...payload }),
     encoding: 'utf8',
     env: {
       ...process.env,
@@ -349,6 +377,63 @@ const expectBounded = (command) => {
     expect.stringMatching(/head -c \d+|compact-stage\.mjs/)
   );
 };
+
+describe('the first run of a command is never bounded', () => {
+  // UNIQUE PER SUITE RUN. The markers live in the OS temp directory and outlive
+  // the process, so a fixed session id is already "seen" the second time the
+  // suite runs -- these tests passed once and then failed for the rest of the
+  // day until this was noticed.
+  const fresh = (name) => `${name}-${process.pid}-${Date.now()}`;
+
+  // Measured, with the product actually on: bounding output the model had not
+  // yet seen took SEG_1 from 0.924 to 1.273 against control and the debug
+  // segment's turns to 2.305 -- code-debug-pipeline-py went 22 turns to 31,
+  // code-debug-ledger-py 15 to 24. The model could not see which test failed,
+  // so it ran the command again, and the round trip cost more than the bytes
+  // the bound saved.
+  it('lets a first run through untouched', () => {
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npm test' }, session_id: fresh('first-run') },
+      { TOKEN_OPTIMIZER_MODE: 'assist' },
+      { seen: false }
+    );
+
+    expect(r.updatedInput).toBeNull();
+  });
+
+  it('bounds the same command once it has been run', () => {
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npm test' }, session_id: fresh('second-run') },
+      { TOKEN_OPTIMIZER_MODE: 'assist' }
+    );
+
+    expect(r.updatedInput).not.toBeNull();
+  });
+
+  it('does not treat a DIFFERENT command as seen', () => {
+    markSeen('npm test', fresh('other-cmd'));
+
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npx jest' }, session_id: fresh('other-cmd') },
+      { TOKEN_OPTIMIZER_MODE: 'assist' },
+      { seen: false }
+    );
+
+    expect(r.updatedInput).toBeNull();
+  });
+
+  it('does not carry the state into a new session', () => {
+    markSeen('npm test', fresh('session-a'));
+
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npm test' }, session_id: fresh('session-b') },
+      { TOKEN_OPTIMIZER_MODE: 'assist' },
+      { seen: false }
+    );
+
+    expect(r.updatedInput).toBeNull();
+  });
+});
 
 describe('the shipped router bounds instead of refusing', () => {
   const SEARCH = { tool_name: 'Bash', tool_input: { command: 'grep -rn needle .' } };
