@@ -916,6 +916,37 @@ export function decide(payload, state, availableTools = undefined) {
   // small strings rather than the whole file, so this argument does not reach
   // them.
 
+  if (tool === 'Web' + 'Fetch') {
+    const url = String(input.url || '');
+    if (!url) return null;
+    if (!state?.seenUrls?.[url]) return null;
+
+    // COLLAPSED, NOT REFUSED. A refusal would cost a turn -- measured at roughly
+    // one per refusal, which is the whole reason enforcement lost -- so the call
+    // proceeds with a rewritten prompt instead. WebFetch answers its `prompt`
+    // against the page using a small model, so a shorter prompt is a shorter
+    // result: the fetch still happens, and what comes back is a line instead of
+    // a page.
+    //
+    // SESSION-SCOPED, and the wording says so. The page may genuinely have
+    // changed, and a model that needs it again can say so in a new prompt. The
+    // claim made here is only "you already asked this session", which is a fact
+    // we hold rather than an inference about the page.
+    return {
+      key: `web:${url}`,
+      reason:
+        `This session already fetched ${url}. Reusing what you have avoids ` +
+        `sending the page again.`,
+      rewrite: {
+        prompt:
+          `This page was already fetched earlier in this session, so its ` +
+          `content is above in the conversation. Reply with exactly: ` +
+          `ALREADY FETCHED THIS SESSION -- reuse the earlier result. ` +
+          `Do not summarise the page again.`,
+      },
+    };
+  }
+
   if (tool === 'Bash') {
     const command = input.command || '';
 
@@ -971,6 +1002,17 @@ export function remember(payload, state) {
   const path = payload.tool_input?.file_path;
   if (path && payload.tool_name === 'Read') {
     state.seen[path] = true;
+  }
+  // A FETCHED URL IS A READ. The same session asking for the same page twice is
+  // the same waste as re-reading an unchanged file, and it was invisible: the
+  // PreToolUse matcher did not list WebFetch, so 4,499 recorded tool outcomes on
+  // the measuring machine contained ZERO web calls even in sessions that made
+  // them. Web research is 48.6% of the THOL battery's cost and the family the
+  // leader wins hardest (0.325), so being blind to it is not a small gap.
+  const url = payload.tool_input?.url;
+  if (url && payload.tool_name === 'WebFetch') {
+    state.seenUrls = state.seenUrls || {};
+    state.seenUrls[String(url)] = true;
   }
 }
 

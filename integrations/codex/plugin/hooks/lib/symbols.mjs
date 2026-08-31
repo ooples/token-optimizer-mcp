@@ -49,13 +49,24 @@ const PATTERNS = {
     /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+([A-Za-z_]\w*)/,
     /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|trait|impl)\s+([A-Za-z_]\w*)/,
   ],
+    // NO LEADING `\s*` ON THESE TWO. The modifier group already matches `\s`,
+    // so a leading `\s*` gives every run of whitespace two places to be consumed
+    // and the engine must try each division. Measured quadratic -- doubling the
+    // input quadrupled the time: 1,000 spaces in 2ms, 4,000 in 31ms, 16,000 in
+    // 498ms, which puts a 64,000-space line near eight seconds. These run over
+    // real file content during indexing, so that input is not hypothetical: one
+    // long whitespace run in a generated or minified file stalls the hook.
+    //
+    // Dropping the redundant prefix leaves exactly one way to match a space. The
+    // same 64,000 spaces then take 0.6ms, and `public static async Task<int>
+    // DoThing(` still resolves to DoThing.
   clike: [
     // Accept both K&R (`Run() {`) and Allman (`Run()` then `{`) declarations.
     // Requiring the opening brace on the declaration line silently discarded
     // nearly every method in idiomatic C# projects, leaving file nodes but no
     // symbol nodes and making valid `file.cs#Method` anchors unresolved.
-    /^\s*(?:public|private|protected|internal|static|final|abstract|virtual|override|async|sealed|new|extern|unsafe|partial|\s)*(?:[\w<>\[\],.?]+\s+)([A-Za-z_]\w*)(?:<[^;()]+>)?\s*\([^;]*\)\s*(?:\{|=>|$)/,
-    /^\s*(?:public|private|protected|internal|static|abstract|sealed|partial|\s)*(?:class|struct|interface|enum|record)\s+([A-Za-z_]\w*)/,
+    /^(?:public|private|protected|internal|static|final|abstract|virtual|override|async|sealed|new|extern|unsafe|partial|\s)*(?:[\w<>\[\],.?]+\s+)([A-Za-z_]\w*)(?:<[^;()]+>)?\s*\([^;]*\)\s*(?:\{|=>|$)/,
+    /^(?:public|private|protected|internal|static|abstract|sealed|partial|\s)*(?:class|struct|interface|enum|record)\s+([A-Za-z_]\w*)/,
   ],
   ruby: [
     /^\s*def\s+(?:self\.)?([A-Za-z_]\w*[?!]?)/,

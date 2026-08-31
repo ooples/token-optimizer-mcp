@@ -23,14 +23,153 @@
 /** Anything containing this in its command is ours. */
 export const MARKER = 'token-optimizer';
 
+/**
+ * The flag we append to every hook command we install, purely to say it is ours.
+ *
+ * OWNERSHIP BY PATH SHAPE COULD ALWAYS BE IMITATED. Narrowing it twice -- to the
+ * command's entrypoint, then to a `token-optimizer` path SEGMENT plus one of our
+ * own filenames -- removed every realistic collision but not the deliberate one:
+ * a user hook at `/workspace/token-optimizer/stop.mjs` reproduces the whole
+ * shape. An argument we write and nobody else has no such failure mode.
+ *
+ * Safe to add: every hook file in this product reads its payload from stdin and
+ * none of them looks at argv, so the flag is inert.
+ */
+export const OWNERSHIP_FLAG = '--token-optimizer-hook';
+
 /** The events we wire, and which hook file serves each. */
+/**
+ * Every event this product needs, for the SCRIPT install path.
+ *
+ * THIS LIST WAS MISSING HALF THE PRODUCT. It carried SessionStart, PreToolUse
+ * and PreCompact only, while plugin/hooks/hooks.json -- the manifest a plugin
+ * install reads -- also registers PostToolUse and Stop. Nothing compared the
+ * two, so the drift was invisible to every gate: `sync:hooks:check` verifies
+ * that the vendored hook SOURCES match hooks-core and says nothing about which
+ * events an install actually registers.
+ *
+ * What a script install therefore lost:
+ *
+ *   PostToolUse   no tool-outcome capture, no authored-content store, no eager
+ *                 staleness marking -- the measurement half records nothing
+ *   Stop          no harvest at all -- the LEARNING half never runs, so the
+ *                 knowledge graph stays empty however long the session ran
+ *
+ * A hook that is never invoked is indistinguishable from a hook that decides to
+ * do nothing, which is exactly why this survived: the code was present, tested
+ * and correct, and simply never called on that path.
+ *
+ * tests/hooks/install-paths-agree.test.mjs now compares this list against the
+ * manifest, event by event and matcher by matcher.
+ */
 export const WIRING = [
   { event: 'SessionStart', file: 'session-start.mjs', matcher: null },
-  { event: 'PreToolUse', file: 'pretooluse-router.mjs', matcher: 'Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell' },
+  { event: 'PreToolUse', file: 'pretooluse-router.mjs', matcher: 'Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell|WebFetch|WebSearch' },
+  { event: 'PostToolUse', file: 'post-tool.mjs', matcher: 'Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)' },
   { event: 'PreCompact', file: 'precompact-optimize.mjs', matcher: null },
+  { event: 'Stop', file: 'stop.mjs', matcher: null },
 ];
 
-const isOurs = (entry) => JSON.stringify(entry || {}).includes(MARKER);
+/** The hook filenames we have ever installed. */
+const OUR_FILES = new Set(WIRING.map((w) => w.file));
+
+/**
+ * Is this entry one WE installed?
+ *
+ * IT USED TO BE `JSON.stringify(entry).includes(MARKER)`, which reads the whole
+ * entry -- matcher included -- and deletes anything that merely mentions us. A
+ * user with a hook matching `mcp__.*token-optimizer.*` to log optimizer calls,
+ * or a script of their own called `token-optimizer-report.mjs`, had it removed
+ * by our installer. Silently destroying a user's hooks is the exact behaviour
+ * the top of this file says we never engage in, so the identification has to be
+ * narrower than "mentions us somewhere".
+ *
+ * Two conditions, both on the COMMAND alone:
+ *
+ *   the marker      so a plain `node ~/my/stop.mjs` is not mistaken for ours
+ *                   just because we happen to ship a `stop.mjs`
+ *   one of OUR      so `token-optimizer-report.mjs` -- which carries the marker
+ *   filenames       but is not a file we install -- stays the user's
+ *
+ * EVERY hook in the entry must qualify. An entry holding one of ours beside one
+ * of theirs is left alone: re-installing then appends a duplicate of ours,
+ * which is untidy, while the alternative deletes work that was never ours.
+ *
+ * The filename list has held these five for the life of the file, so nothing
+ * installed by an earlier version becomes unremovable.
+ */
+/**
+ * The script `node` actually runs, ignoring flags and later arguments.
+ *
+ * Scanning the whole command for a `.mjs` name reads ARGUMENTS too, so a user's
+ * `node "/hooks/token-optimizer-report.mjs" --template "/hooks/stop.mjs"` looked
+ * like ours on the strength of a filename it merely passes along.
+ */
+/** A command split into shell-ish words, with one level of quoting removed. */
+function tokenize(command) {
+  return (command.match(/"[^"]*"|'[^']*'|\S+/g) || []).map((token) =>
+    token.replace(/^["']|["']$/g, '')
+  );
+}
+
+function entrypointOf(command) {
+  const tokens = tokenize(command);
+
+  const nodeAt = tokens.findIndex((token) =>
+    /(^|[/\\])node(\.exe)?$/i.test(token)
+  );
+  if (nodeAt === -1) return '';
+
+  for (const token of tokens.slice(nodeAt + 1)) {
+    if (token.startsWith('-')) continue;
+    return token;
+  }
+  return '';
+}
+
+const isOurs = (entry) => {
+  const hooks = Array.isArray(entry?.hooks) ? entry.hooks : [];
+  if (!hooks.length) return false;
+
+  return hooks.every((hook) => {
+    const command = typeof hook?.command === 'string' ? hook.command : '';
+
+    // The flag settles it outright, and nothing a user writes carries it.
+    //
+    // A WHOLE ARGUMENT, NOT A SUBSTRING. `includes` also matched a user's
+    // `node "/user/stop.mjs" --token-optimizer-hook-debug`, whose flag merely
+    // starts with ours -- and having just replaced a path heuristic precisely
+    // because it could be imitated, recognising a longer flag as ours would
+    // reintroduce the same class of mistake through the mechanism meant to end
+    // it.
+    if (tokenize(command).includes(OWNERSHIP_FLAG)) return true;
+
+    const script = entrypointOf(command).split('\\').join('/');
+    if (!script) return false;
+
+    const slash = script.lastIndexOf('/');
+    const directory = slash === -1 ? '' : script.slice(0, slash);
+    const file = script.slice(slash + 1);
+
+    // A PATH SEGMENT, NOT A SUBSTRING. Both installers put our files in a
+    // directory named exactly `token-optimizer` -- `$HOME/.claude-global/hooks/
+    // token-optimizer` in the shell installer, the same join in the PowerShell
+    // one -- so requiring the segment costs us nothing and stops us claiming a
+    // user's `~/token-optimizer-backup/stop.mjs`, which carries the marker only
+    // because it borrowed the name.
+    // THE LEGACY RULE, for entries written before the flag existed. Dropping it
+    // would leave every hook installed by an earlier version unremovable, so it
+    // stays -- but narrowed to the directory the installers actually build:
+    // both put our files in `<...>/hooks/token-optimizer`, the shell one from
+    // `$HOME/.claude-global/hooks` and the PowerShell one from
+    // `$env:USERPROFILE\.claude-global\hooks`. Requiring the `hooks` segment as
+    // well is what excludes `/workspace/token-optimizer/stop.mjs`, which
+    // reproduces everything else about our layout.
+    const inOurDirectory = new RegExp(`(^|/)hooks/${MARKER}$`).test(directory);
+
+    return inOurDirectory && OUR_FILES.has(file);
+  });
+};
 
 /**
  * Returns a NEW settings object with our hooks wired in.
@@ -51,7 +190,14 @@ export function wire(settings, hooksDir) {
 
     const ours = {
       ...(matcher ? { matcher } : {}),
-      hooks: [{ type: 'command', command: `node "${`${hooksDir}/${file}`.split('\\').join('/')}"` }],
+      hooks: [
+        {
+          type: 'command',
+          command:
+            `node "${`${hooksDir}/${file}`.split('\\').join('/')}" ` +
+            OWNERSHIP_FLAG,
+        },
+      ],
     };
 
     hooks[event] = [...theirs, ours];

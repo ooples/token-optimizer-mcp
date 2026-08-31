@@ -173,11 +173,39 @@ export function isImperative(claim) {
  * Returns { lessons, rejected } so a caller can report what was dropped rather
  * than silently storing less than it was given.
  */
+/**
+ * A model's JSON with any markdown fence taken off.
+ *
+ * WRITTEN WITHOUT AN UNANCHORED `\s*`. The single pattern this replaces was
+ * `/^```(?:json)?\s*|\s*```$/g`, whose second alternative can begin anywhere:
+ * on a long run of whitespace the engine starts at every position, runs `\s*`
+ * to the end and fails on the backticks. Measured quadratic -- 12ms, 50ms,
+ * 200ms as the input doubled -- and `raw` here is a model response, so it is
+ * exactly the sort of input that gets large.
+ *
+ * Every step below is a single pass: `trim`, an anchored slice, and `endsWith`.
+ */
+function unfenced(text) {
+  let out = text.trim();
+  if (!out.startsWith('```')) return out;
+
+  out = out.slice(3);
+  // The only language tag the previous pattern recognised, kept identical so a
+  // response fenced as ```yaml is treated exactly as it was before.
+  if (out.startsWith('json')) out = out.slice(4);
+  out = out.trimStart();
+
+  out = out.trimEnd();
+  if (out.endsWith('```')) out = out.slice(0, -3);
+
+  return out.trim();
+}
+
 export function validateLessons(raw, turns, { knownFiles = null } = {}) {
   let parsed = raw;
   if (typeof raw === 'string') {
     try {
-      parsed = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ''));
+      parsed = JSON.parse(unfenced(raw));
     } catch {
       return { lessons: [], rejected: [{ reason: 'unparseable', raw: String(raw).slice(0, 200) }] };
     }
