@@ -19,6 +19,7 @@ import {
 } from '../../hooks-core/surface.mjs';
 import { logForecast, observeOutcome, reliability } from '../../hooks-core/calibration.mjs';
 import { record, recordRead, readBalance } from '../../hooks-core/metrics.mjs';
+import { putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 
 let workspace;
 let dir;
@@ -134,6 +135,63 @@ describe('it interrupts only when the forecast has earned it', () => {
     });
     expect(out.text).toBeNull();
     expect(out.state.checkedAt).toBe(5_000);
+  });
+
+  test('the consolidation line reaches a caller that passes no findings', () => {
+    // THE PARAMETER NOTHING EVER PASSED. forecastPanel renders the consolidation
+    // line from `findings`, and forecast.test.mjs covers it by handing the array
+    // in directly -- but the product's only caller of maybeSurface is the
+    // PreToolUse router, which passes { transcriptPath, sessionId, state } and
+    // no findings. So the array was always empty in production,
+    // aggregateConsolidation always returned null, and the line could never
+    // appear. Green, tested and inert, behind a test supplying the one input
+    // production does not.
+    //
+    // Note what this test deliberately does NOT do: pass findings. That is the
+    // entire point -- handing them in is what the existing coverage already
+    // does, and is what let this stay broken.
+    seedArms();
+    const id = putNode(dir, {
+      kind: 'finding',
+      key: 'promoted-one',
+      claim: 'x'.repeat(80),
+      type: 'finding',
+      confidence: 0.8,
+      // Persisted by expand.promote; it is what the ratio divides.
+      derivedCost: 9_000,
+    });
+    putEdge(dir, id, 'derived_from', nodeId('file', join(workspace, 'a.ts')));
+
+    const out = maybeSurface(dir, {
+      transcriptPath: transcript(20, 190_000),
+      sessionId: 'live',
+      state: {},
+      now: 5_000,
+    });
+    expect(out.text).toMatch(/consolidation/);
+  });
+
+  test('a retired finding is not counted as carried reasoning', () => {
+    // Retired findings are excluded from every other read path; counting one
+    // here would advertise reasoning a human has explicitly withdrawn.
+    seedArms();
+    const id = putNode(dir, {
+      kind: 'finding',
+      key: 'retired-one',
+      claim: 'y'.repeat(80),
+      type: 'finding',
+      derivedCost: 9_000,
+      retired: true,
+    });
+    putEdge(dir, id, 'derived_from', nodeId('file', join(workspace, 'b.ts')));
+
+    const out = maybeSurface(dir, {
+      transcriptPath: transcript(20, 190_000),
+      sessionId: 'live',
+      state: {},
+      now: 5_000,
+    });
+    expect(out.text).not.toMatch(/consolidation/);
   });
 
   test('a short runway surfaces, once', () => {
