@@ -39,6 +39,7 @@ import {
   standingRules,
 } from './lib/inject.mjs';
 import { wikiDir, load, projectRootFor } from './lib/wiki.mjs';
+import { seedProject, alreadySeeded, seedDisabled } from './lib/seed.mjs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import { join } from 'node:path';
 import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
@@ -159,6 +160,28 @@ const blocks = [
 try {
   const cwd = payload.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+
+  // INDEX THE PROJECT BEFORE THE FIRST TURN.
+  //
+  // Capture is a PreToolUse mechanism, so without this the graph only ever
+  // holds files the model has already opened -- and a graph of what the model
+  // already knows cannot save it a search. Seeding moves the index to the one
+  // point where it is still ahead of the work.
+  //
+  // COSTS NO TOKENS AND ADDS NO CONTEXT. It writes file and symbol nodes, never
+  // findings, and every SessionStart block below is finding-driven, so nothing
+  // here reaches the prompt. It is read on demand by the search advisory.
+  //
+  // Gated on `capture`, not `retrieval`: this is the producer half.
+  if (features.capture && !seedDisabled()) {
+    try {
+      const existing = load(dir);
+      if (!alreadySeeded(existing)) seedProject(dir, cwd);
+    } catch {
+      // A project we cannot walk simply has no index; the session is unaffected.
+    }
+  }
+
   if (features.retrieval) {
     // The index renders claims and freshness state, never snapshot bodies.
     // Skipping the sidecar keeps startup bounded on mature graphs.
