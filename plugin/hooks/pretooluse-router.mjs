@@ -743,13 +743,30 @@ function searchAdvisory(payload, state, dirFor) {
   if (typeof pattern !== 'string' || !pattern) return null;
 
   const root = payload.cwd || process.cwd();
+
+  // THE SCOPE IS THE PROJECT, NOT THE WORKING DIRECTORY. A session started in
+  // `repo/src` must still be told about a symbol in `repo/lib`, so scoping to
+  // cwd would silence most correct answers. But `projectRootFor` falls back to
+  // a machine-level store when there is no VCS marker anywhere above, and that
+  // path is an ancestor of nothing -- scoping to it would silence ALL of them.
+  // Take the repository root only when it genuinely contains the session.
+  const projectRoot = projectRootFor(join(root, '__search__'), root);
+  const contains = (outer, inner) => {
+    const a = String(outer).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const b = String(inner).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    return b === a || b.startsWith(`${a}/`);
+  };
+  const scope = contains(projectRoot, root) ? projectRoot : root;
   const told = new Set(state.advised || []);
   if (told.size >= SESSION_CAP) return null;
-
   const graph = load(dirFor(join(root, '__search__')));
   const advice = adviseSearch(graph, pattern, {
     told,
-    root,
+    // Displayed relative to the project, so the path reads the way the model
+    // would write it, and scoped to the project, so nothing outside it is
+    // reported as though it were this codebase.
+    root: scope,
+    scope,
     firstOfSession: !told.size,
   });
   if (!advice) return null;

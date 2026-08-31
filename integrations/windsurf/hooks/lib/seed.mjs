@@ -33,8 +33,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { indexFile } from './staleness.mjs';
-import { withBatchedWrites, isSharedDir, unrootedRoot } from './wiki.mjs';
-import { isFsSafePath, canonicalPath } from './paths.mjs';
+import { withBatchedWrites, isSharedDir } from './wiki.mjs';
+import { isFsSafePath } from './paths.mjs';
 import { languageOf } from './symbols.mjs';
 
 /**
@@ -105,23 +105,27 @@ export function seedProject(dir, root, {
     return { files: 0, symbols: 0, stopped: 'unusable-root' };
   }
 
-  // NEVER SEED AN UNROOTED PROJECT.
+  // THE SHARED LESSON TIER IS NOT AN INDEX. `sharedDir` holds only lessons that
+  // hold in ANY repository -- deliberately per machine, per user, following the
+  // person rather than the code. File and symbol nodes are the opposite kind of
+  // fact, and seeding a project's structure into it would put one checkout's
+  // paths into every other checkout's briefing.
   //
-  // `projectRootFor` walks up for a repository marker and, finding none, sends
-  // the graph to ONE stable machine-level store shared by every unrooted
-  // session on the host. Capturing a handful of touched files there is the
-  // existing, deliberate trade. Indexing 300 files into it is not the same
-  // trade at a different scale: the store has no project boundary, so every
-  // symbol seeded from one directory would be offered as an answer to searches
-  // made from an unrelated one -- confidently, and with a file path that means
-  // nothing where it is read.
+  // AN UNROOTED PROJECT IS SEEDED, and that is a considered reversal. A
+  // directory with no VCS marker resolves to one machine-level store shared by
+  // every unrooted session on the host, which looks like the same pollution --
+  // and blocking it here was the first attempt. But blocking is the wrong
+  // instrument twice over: it would disable the feature entirely for anyone
+  // working outside a repository, and it does not actually fix the hazard,
+  // since ordinary capture writes to that same store already and a rooted graph
+  // can hold foreign files through resolved imports.
   //
-  // Measured while verifying this: a scratch directory with no repository
-  // marker resolved to an unrooted graph already holding 4,064 file nodes from
-  // other work. That is precisely the pollution, and it is invisible because
-  // the advisory looks identical whether the symbol came from here or not.
-  if (isSharedDir(dir) || canonicalPath(dir).startsWith(canonicalPath(unrootedRoot()))) {
-    return { files: 0, symbols: 0, stopped: 'unrooted' };
+  // The hazard is serving a symbol from an unrelated tree, so it is fixed where
+  // it happens: `adviseSearch` takes a scope and reports nothing outside it.
+  // Growth is bounded separately by `alreadySeeded`, which sees a store that is
+  // already populated and declines to add to it.
+  if (isSharedDir(dir)) {
+    return { files: 0, symbols: 0, stopped: 'shared-tier' };
   }
 
   const queue = [root];
