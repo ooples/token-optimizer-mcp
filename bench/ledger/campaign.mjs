@@ -45,18 +45,52 @@ function recording(execute, { storePath, onRow }) {
 }
 
 /**
- * Runs one arm on the cold track, skipping tasks already complete for this build.
+ * Runs up to `limit` jobs at once, preserving result order.
+ *
+ * Deliberately hand-rolled and tiny rather than a dependency: the whole
+ * behaviour worth having is "never more than N in flight", and a benchmark
+ * harness that pulls in a package to get it has widened its own trusted set for
+ * nine lines.
  */
-export async function coldArm(arm, { tasks, execute, provenance, storePath, precision, log }) {
+async function pooled(items, limit, run) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < items.length; i = next++) results[i] = await run(items[i], i);
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return results;
+}
+
+/**
+ * Runs one arm on the cold track, skipping tasks already complete for this build.
+ *
+ * WHY TASKS MAY OVERLAP AND REPS MAY NOT. Cold tasks are independent by
+ * construction -- each rep gets its own container and its own fresh state
+ * directory -- so running several at once changes nothing a row records. Reps
+ * within a task cannot overlap, because the stopping rule reads the reps so far
+ * to decide whether another is needed; issuing them in parallel would buy reps
+ * the precision rule had already ruled unnecessary, and the cap would stop
+ * meaning what it says.
+ *
+ * Contention slows a run down but does not move what is measured: the endpoint
+ * is dollars and tokens, not wall-clock. The one way it could bite is the
+ * executor's 900-second kill turning into a charged failure, so the default
+ * stays 1 and the ceiling is small relative to the host.
+ */
+export async function coldArm(
+  arm,
+  { tasks, execute, provenance, storePath, precision, log, concurrency = 1 }
+) {
   const existing = loadRows(storePath);
   const build = buildKey(provenance);
   const written = [];
 
-  for (const task of tasks) {
+  const runOne = async (task) => {
     const done = completedReps(existing, { arm, track: 'cold', task: task.id, build });
     if (done >= (precision?.maxReps ?? 12)) {
       log?.(`  cold/${arm}/${task.id}: ${done} reps already recorded for this build, skipping`);
-      continue;
+      return;
     }
 
     const { rows, verdict } = await runColdTask(task, {
@@ -80,7 +114,9 @@ export async function coldArm(arm, { tasks, execute, provenance, storePath, prec
           ? ` (interval ${(verdict.width * 100).toFixed(0)}%)`
           : '')
     );
-  }
+  };
+
+  await pooled(tasks, concurrency, runOne);
   return written;
 }
 
@@ -144,6 +180,7 @@ export async function runCampaign({
   commitSha,
   tracks = ['cold', 'warm'],
   precision,
+  concurrency = 1,
   log = () => {},
   // THE BATTERY IS A PARAMETER, defaulting to the shipped set. Hardcoding
   // `forTrack` here made the campaign untestable except against the real tasks
@@ -171,7 +208,15 @@ export async function runCampaign({
     log(`\nTRACK ${track} -- ${tasks.length} task(s)`);
     for (const name of ordered) {
       if (track === 'cold') {
-        await coldArm(name, { tasks, execute: wrapped, provenance, storePath, precision, log });
+        await coldArm(name, {
+          tasks,
+          execute: wrapped,
+          provenance,
+          storePath,
+          precision,
+          log,
+          concurrency,
+        });
       } else {
         await warmArm(name, { tasks, execute: wrapped, provenance, storePath, precision, log });
       }

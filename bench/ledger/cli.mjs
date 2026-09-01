@@ -37,6 +37,11 @@ export function parseArgs(argv) {
     armsFile: null,
     reportOnly: false,
     maxReps: null,
+    // Cold tasks in flight at once. 1 keeps the historical behaviour; the cap
+    // exists because the executor kills a run at 900s and a contended host is
+    // the only way a cheap task reaches that, which would be charged as a
+    // failure rather than recognised as harness overload.
+    concurrency: 1,
     // A DEFAULT, NOT AN OPTION TO REMEMBER. The first version of this guard
     // read an undefined default, so `minutes < undefined` was false and the
     // check silently never fired -- a campaign launched on a five-minute token.
@@ -55,6 +60,13 @@ export function parseArgs(argv) {
     else if (a === '--model') out.model = next();
     else if (a === '--arms-file') out.armsFile = next();
     else if (a === '--max-reps') out.maxReps = Number(next());
+    else if (a === '--concurrency') {
+      const n = Number(next());
+      if (!Number.isInteger(n) || n < 1 || n > 6) {
+        throw new Error(`--concurrency must be an integer 1..6, got ${n}`);
+      }
+      out.concurrency = n;
+    }
     else if (a === '--tasks') out.tasks = next().split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--min-credential-minutes') out.minCredentialMinutes = Number(next());
     else if (a === '--ignore-expiry') out.ignoreExpiry = true;
@@ -76,6 +88,7 @@ Ledger -- cost per unit of work delivered, failures included.
   --model NAME        model override
   --arms-file PATH    extra arm definitions as JSON
   --max-reps N        cap reps per task (spend control)
+  --concurrency N     cold tasks in flight at once, 1..6   (default: 1)
   --tasks a,b         run only these task ids (spend control)
   --ignore-expiry     run even if credentials expire soon (data may be worthless)
   --report-only       re-render the existing store without running anything
@@ -196,6 +209,7 @@ async function main(argv) {
       ? (track) => forTrack(track).filter((t) => opts.tasks.includes(t.id))
       : undefined,
     precision: opts.maxReps ? { maxReps: opts.maxReps } : undefined,
+    concurrency: opts.concurrency,
     log: (line) => process.stdout.write(line + '\n'),
   });
 
