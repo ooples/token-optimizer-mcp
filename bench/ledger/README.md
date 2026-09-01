@@ -78,8 +78,20 @@ benchmark, and the raw rows are published so you can find it.
 
 ## Status
 
-Built and tested: the measurement layer — scoring, adaptive sampling,
-provenance, ranking (23 tests, 4/4 mutations killed).
+**Built and tested, no API spend required:**
 
-Not yet built: the task runner, the per-task verifiers, and the adversarial task
-set. Those spend money to exercise; the measurement layer deliberately does not.
+- measurement layer -- scoring, adaptive sampling, provenance, ranking
+- task contract with weighted deterministic verifiers
+- campaign runner -- cold reps and warm sequences, with the executor injected
+- starter battery, including the declared adversarial families
+
+75 tests. Eight guards are mutation-verified rather than merely green: removing
+failure-charging, downgrading the build guard to a warning, folding unresolved
+tasks into the headline, swapping the median for the mean, dropping failed runs
+from the ledger, giving warm tasks separate state directories, making
+provenance optional, and letting  go undeclared each break the
+suite.
+
+**Not yet built:** the docker executor that actually drives an agent. It is a
+single injected function -- returning  -- deliberately the only part
+that costs money to exercise.
