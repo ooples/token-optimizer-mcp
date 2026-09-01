@@ -13,6 +13,7 @@ import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { normalizeTool, normalizePayload } from '../../hooks-core/decide.mjs';
 import { CLIENTS, normalizeClientPayload } from '../../hooks-core/adapter.mjs';
 import {
@@ -307,7 +308,15 @@ describe('enforcement matches protocol capability, exactly', () => {
   test.each(nativeCommandClients)(
     '$client denies a large read by default through its packaged pre-tool entry',
     ({ client, entry, payload }) => {
-      const r = runEntry(entry, payload(`fleet-default-${client}`));
+      // A FRESH SESSION ID EVERY RUN, and this is what makes the test able to
+      // fail. Hook state is persisted per session id, and a proven inventory
+      // recorded under a fixed id is rehydrated by the NEXT run -- so once a
+      // developer machine had run this suite once, the entry could stop
+      // self-establishing its bundled inventory entirely and every local run
+      // would still be green. That is not hypothetical: a CLAUDE_PLUGIN_ROOT
+      // gate disabled enforcement for all eight packaged entries, passed on
+      // every local run, and was caught only by CI's clean checkout.
+      const r = runEntry(entry, payload(`fleet-default-${client}-${randomUUID()}`));
       expect(r.decision).toBe('deny');
       expect(r.reason).toContain('smart_read');
     }
@@ -316,7 +325,7 @@ describe('enforcement matches protocol capability, exactly', () => {
   test.each(nativeCommandClients)(
     '$client fails open when the optimizer inventory is explicitly empty',
     ({ client, entry, payload }) => {
-      const r = runEntry(entry, payload(`fleet-empty-${client}`), {
+      const r = runEntry(entry, payload(`fleet-empty-${client}-${randomUUID()}`), {
         TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
       });
       expect(r.decision).not.toBe('deny');
