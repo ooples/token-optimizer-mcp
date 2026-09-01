@@ -778,6 +778,27 @@ export function policyText(
  * "the writer schema is not proven available" -- 139 tokens per session that
  * changed no decision it was ever read by.
  */
+/**
+ * The block itself, exported so a benchmark arm can deliver it the way a
+ * competitor delivers theirs -- as a CLAUDE.md, with no hooks at all.
+ *
+ * ONE SOURCE OF TRUTH, deliberately. The head-to-head compared our arm (hooks
+ * PLUS this text) against theirs (text alone) and I described it as text
+ * versus text, which it was not. Fixing that needs an arm carrying only these
+ * words; copying them into the benchmark would let the measured text drift
+ * from the shipped text, so the arm imports this constant instead.
+ */
+export const OUTPUT_DISCIPLINE = [
+  '## Keep output lean',
+  '',
+  'Every token you write is billed at output rates -- far dearer than reading.',
+  '- No preamble, recap, tool-call narration, or closing summary. Answer directly.',
+  '- Quote the shortest decisive line of a command result; never paste it whole.',
+  '- Write the least code that works; reuse what exists before adding.',
+  '- Keep identifiers, paths, API names and error strings verbatim -- never paraphrase.',
+  '- Correctness first: brevity that loses a fact is not a saving.',
+].join('\n');
+
 function outputDiscipline() {
   // THE ISOLATING SWITCH. `assist` carries the bound, the compactor and outline
   // substitution as well as this block, so a measurement of assist against
@@ -788,16 +809,7 @@ function outputDiscipline() {
   const raw = String(process.env.TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE || '').trim().toLowerCase();
   if (raw === '0' || raw === 'off' || raw === 'false' || raw === 'no') return '';
 
-  return [
-    '## Keep output lean',
-    '',
-    'Every token you write is billed at output rates -- far dearer than reading.',
-    '- No preamble, recap, tool-call narration, or closing summary. Answer directly.',
-    '- Quote the shortest decisive line of a command result; never paste it whole.',
-    '- Write the least code that works; reuse what exists before adding.',
-    '- Keep identifiers, paths, API names and error strings verbatim -- never paraphrase.',
-    '- Correctness first: brevity that loses a fact is not a saving.',
-  ].join('\n');
+  return OUTPUT_DISCIPLINE;
 }
 
 /**
