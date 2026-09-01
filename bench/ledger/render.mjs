@@ -81,7 +81,15 @@ function renderArm(name, result, { adversarialTasks }) {
 }
 
 function taskLine(t) {
-  const sig = t.significant ? '' : '  (interval spans parity)';
+  // Three states, not two, because "significant" and "significant after
+  // correction" are different claims and only the second is publishable when
+  // the table holds more than one test. Spelling out the middle state stops a
+  // reader taking an uncorrected exclusion for a result.
+  const sig = !t.significant
+    ? '  (interval spans parity)'
+    : t.survivesCorrection === false
+      ? `  (excludes parity, but NOT after correcting for ${t.familyNote || 'the family'})`
+      : '';
   const ci =
     Number.isFinite(t.ci?.low) && Number.isFinite(t.ci?.high)
       ? `[${fixed(t.ci.low)}, ${fixed(t.ci.high)}]`

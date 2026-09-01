@@ -173,7 +173,54 @@ export function ratioCI(armValues, controlValues, { resamples = 2000, alpha = 0.
   const lo = Math.floor((alpha / 2) * clean.length);
   const hi = Math.min(clean.length - 1, Math.ceil((1 - alpha / 2) * clean.length) - 1);
   const point = median(controlValues) === 0 ? NaN : median(armValues) / median(controlValues);
-  return { low: clean[lo], high: clean[hi], ratio: point };
+  return { low: clean[lo], high: clean[hi], ratio: point, p: achievedLevel(clean) };
+}
+
+/**
+ * The achieved significance level of a resampled ratio: the smallest alpha at
+ * which the interval would still exclude parity.
+ *
+ * WHY A NUMBER AND NOT JUST THE INTERVAL. An interval answers one question at
+ * one alpha, which is enough when you ask once. Across seven tasks and two
+ * arms it is not: at alpha 0.05, fourteen independent tests produce a spurious
+ * exclusion about half the time, so "one task came back significant" is the
+ * expected result of measuring nothing. Correcting for that needs the strength
+ * of each result, not merely whether it cleared a fixed bar -- hence a level
+ * per test, fed to `holm` below.
+ *
+ * Floored at 1/(resamples+1): a resample distribution entirely on one side of
+ * parity is evidence bounded by the resolution of the resampling, not proof.
+ */
+function achievedLevel(sortedRatios) {
+  const n = sortedRatios.length;
+  if (!n) return NaN;
+  let below = 0;
+  for (const r of sortedRatios) if (r < 1) below++;
+  const tail = Math.min(below, n - below) / n;
+  return Math.max(1 / (n + 1), Math.min(1, 2 * tail));
+}
+
+/**
+ * Holm-Bonferroni: adjusted levels for a family of tests, in input order.
+ *
+ * Chosen over plain Bonferroni because it is uniformly more powerful at the
+ * same guarantee, and over Benjamini-Hochberg because a false-discovery rate
+ * is the wrong contract here -- a benchmark that claims a win is making a
+ * family-wise claim, and one false win discredits the whole table.
+ */
+export function holm(pValues) {
+  const order = pValues
+    .map((p, i) => ({ p, i }))
+    .filter((x) => Number.isFinite(x.p))
+    .sort((a, b) => a.p - b.p);
+  const out = pValues.map(() => NaN);
+  const m = order.length;
+  let running = 0;
+  for (let k = 0; k < m; k++) {
+    running = Math.max(running, Math.min(1, (m - k) * order[k].p));
+    out[order[k].i] = running;
+  }
+  return out;
 }
 
 /** Does the interval exclude parity? The only basis for claiming an effect. */
