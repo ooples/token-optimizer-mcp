@@ -149,6 +149,67 @@ export function samplingVerdict(values, precision = DEFAULT_PRECISION) {
 }
 
 /**
+ * An interval for cost per unit delivered: the ratio of SUM(cost) to SUM(score).
+ *
+ * THE POINT ESTIMATE AND ITS INTERVAL MUST BE THE SAME STATISTIC, and until
+ * this existed they were not. The headline was a ratio of totals while its
+ * interval resampled a ratio of medians, which agree on tidy data and diverge
+ * on skewed data -- caught when a real task printed `0.924 [0.935, 1.030]`,
+ * a point estimate outside its own interval. A reader cannot do anything
+ * sensible with that, and the two numbers disagreeing is a stronger signal
+ * that a report is wrong than either number is a signal of anything.
+ *
+ * Totals rather than medians is also what the ledger's definition requires: a
+ * run that delivered nothing still contributes its full cost to the numerator
+ * and nothing to the denominator, so an arm cannot get cheap by failing. A
+ * median over per-run unit costs silently drops those runs entirely.
+ *
+ * Pairs are resampled as pairs, so a run's cost stays attached to what it
+ * delivered.
+ */
+export function ratioOfTotalsCI(armPairs, basePairs, { resamples = 2000, alpha = 0.05, seed } = {}) {
+  const point = (pairs) => {
+    let cost = 0;
+    let delivered = 0;
+    for (const [c, s] of pairs) {
+      cost += c;
+      delivered += s;
+    }
+    return delivered > 0 ? cost / delivered : NaN;
+  };
+  if (!armPairs.length || !basePairs.length) return { low: NaN, high: NaN, ratio: NaN, p: NaN };
+
+  const next = rng(seed ?? 0xbeef);
+  const draw = (pairs) => {
+    let cost = 0;
+    let delivered = 0;
+    for (let i = 0; i < pairs.length; i++) {
+      const [c, s] = pairs[(next() * pairs.length) | 0];
+      cost += c;
+      delivered += s;
+    }
+    return delivered > 0 ? cost / delivered : NaN;
+  };
+
+  const ratios = new Array(resamples);
+  for (let r = 0; r < resamples; r++) {
+    const b = draw(basePairs);
+    ratios[r] = b > 0 ? draw(armPairs) / b : NaN;
+  }
+  const clean = ratios.filter(Number.isFinite).sort((x, y) => x - y);
+  if (!clean.length) return { low: NaN, high: NaN, ratio: NaN, p: NaN };
+  const lo = Math.floor((alpha / 2) * clean.length);
+  const hi = Math.min(clean.length - 1, Math.ceil((1 - alpha / 2) * clean.length) - 1);
+  const base = point(basePairs);
+  return {
+    low: clean[lo],
+    high: clean[hi],
+    ratio: base > 0 ? point(armPairs) / base : NaN,
+    p: achievedLevel(clean),
+  };
+}
+
+/**
  * Is one arm's per-task ratio distinguishable from parity?
  *
  * Applied to the RATIO of arm to control, resampled jointly, so it accounts for

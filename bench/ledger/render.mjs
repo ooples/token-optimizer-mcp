@@ -15,7 +15,7 @@ const pct = (r) => (Number.isFinite(r) ? `${((r - 1) * 100).toFixed(1)}%` : '--'
 const fixed = (n, d = 3) => (Number.isFinite(n) ? n.toFixed(d) : '--');
 
 /** One arm on one track. */
-function renderArm(name, result, { adversarialTasks }) {
+function renderArm(name, result, { adversarialTasks, baseline = 'control' }) {
   const lines = [];
   const adversarial = result.perTask.filter((t) => adversarialTasks.has(t.task));
   const reuse = result.perTask.filter((t) => !adversarialTasks.has(t.task));
@@ -63,7 +63,10 @@ function renderArm(name, result, { adversarialTasks }) {
         ? ` [${fixed(ci.low)}, ${fixed(ci.high)}]`
         : '';
     lines.push(
-      `    cost per unit delivered: ${fixed(result.costRatio)}${band} of control ` +
+      // NAMED, NOT ASSUMED. Printing "of control" when the comparator was
+      // another candidate would be a false statement in the one line most
+      // likely to be quoted on its own.
+      `    cost per unit delivered: ${fixed(result.costRatio)}${band} of ${baseline} ` +
         `(${pct(result.costRatio)}) over ${result.tasksCounted} task(s)`
     );
     // SAID IN WORDS, not left to the reader to notice the interval contains 1.
@@ -72,8 +75,8 @@ function renderArm(name, result, { adversarialTasks }) {
     // shows.
     if (!result.costRatioSignificant) {
       lines.push(
-        '    NOT DISTINGUISHABLE FROM CONTROL -- the interval spans parity, so ' +
-          'this difference is not established'
+        `    NOT DISTINGUISHABLE FROM ${baseline.toUpperCase()} -- the interval spans ` +
+          'parity, so this difference is not established'
       );
     }
   }
@@ -113,16 +116,17 @@ export function renderReport(report, { adversarialTasks = new Set() } = {}) {
   lines.push('');
 
   for (const [track, data] of Object.entries(report.tracks)) {
-    lines.push(`TRACK: ${track}`);
+    const baseline = data.baseline || 'control';
+    lines.push(`TRACK: ${track}${baseline === 'control' ? '' : `  (baseline: ${baseline})`}`);
     if (!data.control) {
-      lines.push('  no control arm on this track; nothing can be compared');
+      lines.push(`  no ${baseline} arm on this track; nothing can be compared`);
       lines.push('');
       continue;
     }
     const arms = Object.entries(data.arms);
-    if (!arms.length) lines.push('  no arms besides control');
+    if (!arms.length) lines.push(`  no arms besides ${baseline}`);
     for (const [name, result] of arms) {
-      lines.push(...renderArm(name, result, { adversarialTasks }));
+      lines.push(...renderArm(name, result, { adversarialTasks, baseline }));
     }
     lines.push('');
   }
@@ -149,7 +153,8 @@ export function headline(report, { track = 'cold', arm } = {}) {
   const result = arm ? data?.arms?.[arm] : Object.values(data?.arms || {})[0];
   if (!result || !result.trustworthy) return null;
   return (
-    `${arm || 'arm'} on ${track}: ${fixed(result.costRatio)} of control's cost per unit ` +
+    `${arm || 'arm'} on ${track}: ${fixed(result.costRatio)} of ` +
+    `${data.baseline || 'control'}'s cost per unit ` +
     `delivered (${pct(result.costRatio)}) across ${result.tasksCounted} task(s)`
   );
 }

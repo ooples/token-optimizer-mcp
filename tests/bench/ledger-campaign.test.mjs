@@ -392,6 +392,118 @@ describe('the report a reader sees', () => {
   });
 });
 
+describe('a head-to-head between two candidates', () => {
+  const rowsFor = (arm, task, usds) =>
+    usds.map((usd, i) => ({
+      task,
+      arm,
+      track: 'cold',
+      rep: i + 1,
+      usd,
+      score: 1,
+      turns: 4,
+      status: 'ok',
+      image_digest: 'sha256:aaa',
+      commit_sha: 'c1',
+      started_at: '2026-09-01T00:00:00Z',
+    }));
+
+  const both = [
+    ...rowsFor('theirs', 't1', [0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10]),
+    ...rowsFor('ours', 't1', [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05]),
+  ];
+
+  test('any arm can be the comparator, not only control', () => {
+    const out = report(both, { baseline: 'theirs' });
+    expect(out.tracks.cold.arms.ours.costRatio).toBeCloseTo(0.5, 3);
+    expect(out.tracks.cold.arms.theirs).toBeUndefined();
+  });
+
+  test('the default comparator is unchanged', () => {
+    expect(report(both).baseline).toBe('control');
+  });
+
+  test('the rendered line names the comparator it actually used', () => {
+    // THE FAILURE THAT WOULD BE WORST. "0.500 of control" printed from a
+    // tokenade baseline is a false sentence in the one line most likely to be
+    // quoted alone -- and it would look entirely normal.
+    const text = renderReport(report(both, { baseline: 'theirs' }), {
+      adversarialTasks: new Set(),
+    });
+    expect(text).toContain('of theirs');
+    expect(text).not.toContain('of control');
+    expect(text).toContain('baseline: theirs');
+  });
+
+  test('the build guard still covers a non-control baseline', () => {
+    // The baseline arm previously went through assertSingleBuild only by way
+    // of being named `control`; a mixed-build comparator would otherwise sail
+    // straight through and become the denominator of every ratio.
+    const mixed = [
+      ...both,
+      ...rowsFor('theirs', 't1', [0.2]).map((r) => ({ ...r, rep: 9, image_digest: 'sha256:bbb' })),
+    ];
+    expect(() => report(mixed, { baseline: 'theirs' })).toThrow(/spans 2 builds/);
+  });
+});
+
+describe('ranking on output tokens instead of dollars', () => {
+  const tokenRow = (arm, usd, output, over = {}) => ({
+    task: 't1',
+    arm,
+    track: 'cold',
+    usd,
+    score: 1,
+    turns: 4,
+    status: 'ok',
+    tokens: { output },
+    image_digest: 'sha256:aaa',
+    commit_sha: 'c1',
+    started_at: '2026-09-01T00:00:00Z',
+    ...over,
+  });
+
+  // Dollars identical, output halved: the shape of a real output-only effect,
+  // and the case where ranking on usd would report nothing at all.
+  const rows = [
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((rep) => tokenRow('control', 0.1, 1000, { rep })),
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((rep) => tokenRow('cand', 0.1, 500, { rep })),
+  ];
+
+  test('an output-only effect is invisible on dollars and plain on tokens', () => {
+    expect(report(rows).tracks.cold.arms.cand.costRatio).toBeCloseTo(1, 3);
+    expect(report(rows, { endpoint: 'output' }).tracks.cold.arms.cand.costRatio).toBeCloseTo(0.5, 3);
+  });
+
+  test('dollars stay the default', () => {
+    expect(report(rows).tracks.cold.arms.cand.costRatio).toBeCloseTo(1, 3);
+  });
+
+  test('a row with no token breakdown is dropped, not counted as zero', () => {
+    // THE FAILURE THAT WOULD LOOK LIKE A WIN. Rows predate token capture;
+    // reading a missing breakdown as 0 output would drag an arm's median
+    // toward zero and manufacture the largest effect in the table.
+    const withGap = [
+      ...rows,
+      ...[9, 10].map((rep) => tokenRow('cand', 0.1, undefined, { rep, tokens: undefined })),
+    ];
+    const out = report(withGap, { endpoint: 'output' });
+    expect(out.tracks.cold.arms.cand.costRatio).toBeCloseTo(0.5, 3);
+    expect(out.tracks.cold.arms.cand.perTask[0].arm.n).toBe(8);
+  });
+
+  test('a ratio is never taken between two different units', () => {
+    // If only one side had a breakdown, a fallback to usd would divide tokens
+    // by dollars and print a plausible-looking number.
+    const oneSided = [
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((rep) => tokenRow('control', 0.1, undefined, { rep, tokens: undefined })),
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((rep) => tokenRow('cand', 0.1, 500, { rep })),
+    ];
+    const out = report(oneSided, { endpoint: 'output' });
+    expect(Number.isFinite(out.tracks.cold.arms.cand.costRatio)).toBe(false);
+  });
+});
+
 describe('arms are data, not code', () => {
   test('the shipped arms are data: settings, environment and an optional rules file', () => {
     // claudeMd was added because the leader cannot be represented without it --
