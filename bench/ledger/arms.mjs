@@ -88,7 +88,28 @@ export const assistNoSeed = {
   env: { ...assist.env, TOKEN_OPTIMIZER_SEED: '0' },
 };
 
-export const ARMS = { control, assist, 'assist-noseed': assistNoSeed };
+/**
+ * assist with the output-discipline block removed, and nothing else changed.
+ *
+ * THE ONLY ARM THAT CAN ATTRIBUTE THE RESULT. assist beat control at 0.818 and
+ * 0.535 cost per unit delivered with output at 0.751 and 0.428 -- but assist
+ * carries the bound, the compactor and outline substitution too, so that
+ * comparison cannot say whether the instructions or the interception did it.
+ * Everything measured in this project until now has been an arm-versus-control
+ * test of a bundle; this is the first difference of one variable.
+ */
+export const assistNoRules = {
+  name: 'assist-norules',
+  settings: assist.settings,
+  env: { ...assist.env, TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: '0' },
+};
+
+export const ARMS = {
+  control,
+  assist,
+  'assist-noseed': assistNoSeed,
+  'assist-norules': assistNoRules,
+};
 
 /** Loads extra arms from a JSON file, so an outsider can add their own. */
 export function loadArms(path) {
