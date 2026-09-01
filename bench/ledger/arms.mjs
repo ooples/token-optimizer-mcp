@@ -104,11 +104,39 @@ export const assistNoRules = {
   env: { ...assist.env, TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: '0' },
 };
 
+
+/**
+ * The leader, represented by the thing that actually moves their numbers.
+ *
+ * NOT A FAITHFUL REPLICA, and the difference is stated rather than buried:
+ * their arm requires a "tokenade" binary that is absent from this image, so
+ * their six hooks and their CLI cannot run here. What CAN run is their rules
+ * file, which their own published data says is the mechanism -- 6.1 CLI calls
+ * across 16 tasks, 0.38 per task, against output tokens at 0.722 of control.
+ *
+ * If their hooks contribute materially this arm understates them, and that is
+ * the honest caveat on any comparison drawn from it. It is included because a
+ * text-versus-text head-to-head is the experiment the analysis points at: both
+ * products reduce to a block of instructions, and theirs is 2,669 characters
+ * against our 471.
+ */
+export const tokenadeRules = {
+  name: 'tokenade-rules',
+  settings: {},
+  env: {
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW: '700000',
+    TOKEN_OPTIMIZER_MODE: 'off',
+    TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+  },
+  claudeMd: "# Project rules for AI coding agents\n\nAuto-scaffolded by tokenade on first MCP session. Safe to edit; the tokenade block below is identified by the HTML marker and will be updated in-place on future tokenade upgrades.\n\n<!-- tokenade-scaffold -->\n## Explore code with the `tokenade` CLI (cheaper than reading whole files)\nUse these only when you don't yet know where code lives — if you know the path, open it directly:\n`tokenade map` (repo structure) · `skeleton <file…>` (signatures) · `query <symbol…>` (locate a symbol) · `impact <file…>` (dependents) · `semantic \"<query>\"` (search by meaning). They take MANY targets per call (`tokenade skeleton a.rs b.rs c.rs`) — batch in ONE turn.\n\n## Compute over data with `tokenade exec`\n`tokenade exec --lang python --script '<code>'` (also sh/node/ruby/awk/jq/perl) runs in a sandbox and returns ONLY its stdout. Use it to COMPUTE over data — filter/aggregate a large or structured output, pull facts across SEVERAL files, or apply one mechanical edit across many files (migration, find-replace) — in ONE script, not one command per item. It is NOT a file reader: to read content, use the parallel reads above, not `exec`. Long or quote-heavy script? `--script-file <path>` (or `--script -` on stdin) avoids shell quoting entirely.\n\n## Commands\nIf you do not have hooks (i.e. you are not Claude Code or Gemini CLI), use `tokenade wrap '<cmd>'` to wrap all your commands. If there is an opportunity for compacting noisy output, tokenade will find it — and you will waste fewer tokens.\nCall binaries by their PATH name, not an absolute path (`git`, not `/usr/bin/git`) — an absolute path bypasses tokenade's hook and PATH shim, so that command's output isn't compacted.\n\n## Keep output lean\nKeep prose terse and code minimal — every token you write is billed as output.\n- **Prose:** answer directly — no preamble, recap, tool-call narration, summary, or emoji. Drop articles, filler (*just/really/basically/simply*) and hedging; fragments fine; short word over long.\n- **Output:** don't paste long raw output — quote the shortest decisive line. No decorative tables.\n- **Code:** write the least that works; reuse before adding (`query` / `skeleton` / `impact`, stdlib, platform feature — YAGNI).\n- **Verbatim:** keep code, identifiers, API/CLI names and error strings exact — never abbreviate or paraphrase. Keep the user's language.\n- **Correctness first:** fix root causes not symptoms, don't downgrade the algorithm, don't guess APIs/flags/versions — verify.\n- **Full prose where terseness could mislead:** security/data-loss warnings, irreversible-action confirmations, multi-step sequences.\n<!-- /tokenade-scaffold -->",
+};
+
 export const ARMS = {
   control,
   assist,
   'assist-noseed': assistNoSeed,
   'assist-norules': assistNoRules,
+  'tokenade-rules': tokenadeRules,
 };
 
 /** Loads extra arms from a JSON file, so an outsider can add their own. */
