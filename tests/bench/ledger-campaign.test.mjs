@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -200,6 +200,116 @@ describe('the campaign', () => {
       expect(written).toHaveLength(12);
       const keys = written.map((r) => `${r.task}#${r.rep}`);
       expect(new Set(keys).size).toBe(12);
+    });
+  });
+
+  describe('workspaces are released', () => {
+    test('every run frees its workspace once scoring has read it', async () => {
+      // The leak Copilot found on #370: `_release` was attached and never
+      // called, so a campaign of hundreds of runs kept every workspace.
+      const released = [];
+      const execute = async ({ task }) => ({
+        status: 'ok',
+        usd: 0.1,
+        turns: 4,
+        workspace: { pass: true, id: task.id },
+        _release() {
+          released.push(task.id);
+        },
+      });
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a', 'debug-b']),
+        execute,
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        precision: { minReps: 3, maxReps: 3 },
+      });
+      expect(released).toHaveLength(6);
+    });
+
+    test('a failed run frees its workspace too', async () => {
+      // Failures are the runs nobody inspects, so they leak worst.
+      let released = 0;
+      const execute = async () => ({
+        status: 'failed',
+        usd: 0.1,
+        turns: 1,
+        workspace: { pass: false },
+        _release: () => {
+          released += 1;
+        },
+      });
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a']),
+        execute,
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        precision: { minReps: 2, maxReps: 2 },
+      });
+      expect(released).toBe(2);
+    });
+
+    test('a kept workspace survives on disk, a freed one does not', async () => {
+      // keepWorkspaces existed as an option and did nothing: its only use was
+      // an empty if-block. Asserted against the real filesystem through the
+      // real discardWorkspace, because the bug being fixed was precisely that
+      // the intention was expressed everywhere and executed nowhere.
+      const dirs = {};
+      const execute = async ({ task }) => {
+        const failing = task.id === 'debug-keep';
+        const ws = mkdtempSync(join(tmpdir(), 'ledger-ws-'));
+        writeFileSync(join(ws, 'marker'), 'x');
+        dirs[task.id] = ws;
+        return {
+          status: failing ? 'failed' : 'ok',
+          usd: 0.1,
+          turns: 2,
+          workspace: ws,
+          keepWorkspace: failing,
+        };
+      };
+      // THROUGH runCampaign, not coldArm, because the wrapper that decides
+      // whether a workspace may be freed lives there. A test that called
+      // coldArm directly would never exercise it and would pass on a harness
+      // that frees nothing.
+      await runCampaign({
+        arms: ARMS,
+        armNames: ['control'],
+        execute,
+        storePath: store,
+        imageDigest: 'sha256:a',
+        commitSha: 'c1',
+        tracks: ['cold'],
+        precision: { minReps: 1, maxReps: 1 },
+        tasksForTrack: () => fakeTasks(['debug-keep', 'debug-ok']),
+      });
+      expect(existsSync(dirs['debug-keep'])).toBe(true);
+      expect(existsSync(dirs['debug-ok'])).toBe(false);
+      rmSync(dirs['debug-keep'], { recursive: true, force: true });
+    });
+
+    test('the row survives a release that throws', async () => {
+      // A workspace that cannot be removed is a disk problem, not a reason to
+      // lose a measurement already paid for.
+      const execute = async () => ({
+        status: 'ok',
+        usd: 0.1,
+        turns: 4,
+        workspace: { pass: true },
+        _release() {
+          throw new Error('EBUSY');
+        },
+      });
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a']),
+        execute,
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        precision: { minReps: 2, maxReps: 2 },
+      });
+      const rows = readFileSync(store, 'utf8').trim().split('\n').map(JSON.parse);
+      expect(rows).toHaveLength(2);
+      expect(rows.every((r) => r.score === 1)).toBe(true);
     });
   });
 

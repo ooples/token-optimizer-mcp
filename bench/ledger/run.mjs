@@ -47,6 +47,24 @@ async function runOnce(task, { arm, track, rep, stateDir, execute, provenance })
       ? scoreWorkspace(task, outcome.workspace)
       : zeroScore(outcome.error || `status=${outcome.status}`);
 
+  // RELEASED HERE, AND ONLY HERE, because this is the first moment the
+  // workspace is finished with: the verifier above reads it, so freeing it any
+  // earlier destroys what scoring needs, and never freeing it fills the disk
+  // over a campaign of hundreds of runs. The campaign layer attaches
+  // `_release` precisely because it knows how to discard a workspace and this
+  // layer knows when -- but nothing called it, so every run leaked. Failures
+  // leak worst: they are the runs nobody inspects.
+  //
+  // Guarded rather than assumed: a test executor returns a plain outcome with
+  // no `_release`, and a release that throws must not lose a row that has
+  // already been paid for.
+  try {
+    outcome._release?.();
+  } catch {
+    // A workspace that cannot be removed is a disk-space problem, not a reason
+    // to discard a measurement.
+  }
+
   return {
     task: task.id,
     family: task.family,

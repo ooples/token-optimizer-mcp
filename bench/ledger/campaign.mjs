@@ -38,7 +38,14 @@ function recording(execute, { storePath, onRow }) {
   return async (args) => {
     const outcome = await execute(args);
     // The runner scores from `workspace`; it is released once the row exists.
-    outcome._release = () => discardWorkspace(outcome.workspace);
+    //
+    // Not attached at all when the executor asked for the workspace to be kept,
+    // which is how `--keep-workspaces` survives: a release that is never
+    // attached cannot be called by mistake, whereas a flag checked at the call
+    // site is one refactor away from being dropped.
+    if (!outcome.keepWorkspace) {
+      outcome._release = () => discardWorkspace(outcome.workspace);
+    }
     if (onRow) onRow(outcome);
     return outcome;
   };
