@@ -37,9 +37,17 @@ function renderArm(name, result, { adversarialTasks }) {
   }
 
   if (result.unresolved.length) {
-    lines.push(
-      `    unresolved (excluded from the headline): ${result.unresolved.join(', ')}`
-    );
+    // SHOWN WITH THEIR NUMBERS, not just named. Listing only the task ids meant
+    // the figures were invisible in the report, so reading them required a
+    // hand-rolled script -- which is exactly how I mixed two builds in an
+    // ad-hoc analysis that bypassed the build guard living in report().
+    // Withholding a number from the HEADLINE is right; hiding it from the
+    // reader pushes them somewhere with no guardrails at all.
+    lines.push('    unresolved -- excluded from the headline, shown for inspection only');
+    for (const t of result.unresolvedDetail || []) lines.push(`${taskLine(t)}  UNRESOLVED`);
+    if (!result.unresolvedDetail?.length) {
+      lines.push(`      ${result.unresolved.join(', ')}`);
+    }
   }
 
   lines.push('');

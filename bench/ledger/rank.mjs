@@ -122,10 +122,21 @@ export function compareArm(armTasks, controlTasks, options = {}) {
       controlUnits: ctlUnit,
     };
 
-    if (arm.sampling.state === 'unresolved' || control.sampling.state === 'unresolved') {
+    // ONLY A CONVERGED TASK MAY ENTER THE HEADLINE. Excluding just the
+    // `unresolved` state was wrong: a task that has neither converged nor hit
+    // the rep cap returns `continue`, and those were being folded in as though
+    // settled. Observed on the warm track -- four tasks the campaign itself had
+    // reported as not converged were averaged into "1.081 of control over 4
+    // task(s)". `continue` means "not enough evidence yet", which is the same
+    // thing as `unresolved` as far as a published number is concerned; the two
+    // differ only in whether more reps would help.
+    const settled =
+      arm.sampling.state === 'converged' && control.sampling.state === 'converged';
+    if (settled) perTask.push(entry);
+    else {
+      entry.samplingState =
+        arm.sampling.state === 'converged' ? control.sampling.state : arm.sampling.state;
       unresolved.push(entry);
-    } else {
-      perTask.push(entry);
     }
   }
 
@@ -152,6 +163,7 @@ export function compareArm(armTasks, controlTasks, options = {}) {
     costRatioSignificant: significant(headlineCI),
     tasksCounted: usable.length,
     unresolved: unresolved.map((e) => e.task),
+    unresolvedDetail: unresolved.sort((a, b) => b.ratio - a.ratio),
     // The headline is withheld, not caveated, when too much of the battery
     // failed to converge. A number with a footnote gets quoted without it.
     trustworthy: total > 0 && share <= maxUnresolvedShare && usable.length > 0,
