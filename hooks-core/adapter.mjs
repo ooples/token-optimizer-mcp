@@ -779,6 +779,15 @@ export function policyText(
  * changed no decision it was ever read by.
  */
 function outputDiscipline() {
+  // THE ISOLATING SWITCH. `assist` carries the bound, the compactor and outline
+  // substitution as well as this block, so a measurement of assist against
+  // control cannot attribute anything to the text. This exists so an arm can
+  // run every hook with the block removed and nothing else changed -- the only
+  // comparison that can say whether the instructions or the interception are
+  // doing the work.
+  const raw = String(process.env.TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE || '').trim().toLowerCase();
+  if (raw === '0' || raw === 'off' || raw === 'false' || raw === 'no') return '';
+
   return [
     '## Keep output lean',
     '',
