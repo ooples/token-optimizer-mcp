@@ -271,6 +271,49 @@ describe('the shipped verifiers actually discriminate', () => {
     }
   });
 
+  test('the generation verifier accepts every idiomatic doubling', () => {
+    // CAUGHT BY A REAL CAMPAIGN. The first version required /(\*\s*2|...)/,
+    // which cannot match `delay *= 2` because the `=` sits between the `*` and
+    // the `2`. The control arm therefore completed this task 25% of the time
+    // while writing correct, documented Python -- the benchmark scoring its own
+    // regex. The first body below is verbatim what the agent actually wrote.
+    const task = TASKS.find((t) => t.id === 'pure-generation');
+    const bodies = [
+      // Real agent output, captured from a campaign run.
+      'MAX_DELAY_MS = 30000\n\ndef delays(attempts, base_ms):\n    result = []\n    delay = base_ms\n    for _ in range(attempts):\n        result.append(min(delay, MAX_DELAY_MS))\n        delay *= 2\n    return result\n',
+      // Other correct spellings that must also pass.
+      'def delays(attempts, base_ms):\n    return [min(base_ms * 2 ** i, 30000) for i in range(attempts)]\n',
+      'def delays(attempts, base_ms):\n    return [min(base_ms << i, 30_000) for i in range(attempts)]\n',
+    ];
+
+    for (const body of bodies) {
+      const dir = mkdtempSync(join(tmpdir(), 'ledger-gen-'));
+      try {
+        task.setup(dir);
+        mkdirSync(join(dir, 'util'), { recursive: true });
+        writeFileSync(join(dir, 'util/backoff.py'), body);
+        expect(scoreWorkspace(task, dir).score).toBe(1);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  test('the generation verifier still rejects a non-answer', () => {
+    // Generous about spelling, strict about the two facts that matter.
+    const task = TASKS.find((t) => t.id === 'pure-generation');
+    const dir = mkdtempSync(join(tmpdir(), 'ledger-gen-bad-'));
+    try {
+      task.setup(dir);
+      mkdirSync(join(dir, 'util'), { recursive: true });
+      // Defined, but neither doubles nor caps.
+      writeFileSync(join(dir, 'util/backoff.py'), 'def delays(attempts, base_ms):\n    return [base_ms] * attempts\n');
+      expect(scoreWorkspace(task, dir).score).toBeLessThan(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('forTrack only offers tasks that declare the track', () => {
     for (const t of forTrack('cold')) expect(t.tracks).toContain('cold');
     expect(forTrack('warm').map((t) => t.id)).toContain('repeat-comprehension');
