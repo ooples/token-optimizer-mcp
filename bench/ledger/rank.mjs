@@ -24,7 +24,7 @@
  * unfalsifiable, a failing assertion is not.
  */
 
-import { median, ratioCI, significant, samplingVerdict } from './stats.mjs';
+import { median, ratioCI, significant, samplingVerdict, rng } from './stats.mjs';
 import { assertSingleBuild, rowProblem } from './provenance.mjs';
 
 /** Groups rows by track, then arm, then task. Rejected rows are reported. */
@@ -107,9 +107,9 @@ export function compareArm(armTasks, controlTasks, options = {}) {
     const arm = taskResult(rows, options);
     const control = taskResult(controlRows, options);
 
-    const armUnit = rows.filter((r) => r.score > 0).map((r) => r.usd / r.score);
+    const armUnits = rows.filter((r) => r.score > 0).map((r) => r.usd / r.score);
     const ctlUnit = controlRows.filter((r) => r.score > 0).map((r) => r.usd / r.score);
-    const ci = ratioCI(armUnit, ctlUnit);
+    const ci = ratioCI(armUnits, ctlUnit);
 
     const entry = {
       task,
@@ -118,6 +118,8 @@ export function compareArm(armTasks, controlTasks, options = {}) {
       significant: significant(ci),
       arm,
       control,
+      armUnits,
+      controlUnits: ctlUnit,
     };
 
     if (arm.sampling.state === 'unresolved' || control.sampling.state === 'unresolved') {
@@ -135,8 +137,19 @@ export function compareArm(armTasks, controlTasks, options = {}) {
     ? Math.exp(usable.reduce((s, e) => s + Math.log(e.ratio), 0) / usable.length)
     : NaN;
 
+  // THE HEADLINE NEEDS ITS OWN INTERVAL, and shipping it without one was this
+  // report's own version of the defect it exists to prevent. The first real
+  // campaign printed "1.143 of control" while EVERY per-task interval spanned
+  // parity -- a bare point estimate, which is exactly what gets quoted as a
+  // fact. Resampling the underlying runs and recomputing the whole geometric
+  // mean gives the headline a spread, so a reader can see that +14.3% and
+  // "indistinguishable from control" are the same result.
+  const headlineCI = geometricRatioCI(usable);
+
   return {
     costRatio: geo,
+    costRatioCI: headlineCI,
+    costRatioSignificant: significant(headlineCI),
     tasksCounted: usable.length,
     unresolved: unresolved.map((e) => e.task),
     // The headline is withheld, not caveated, when too much of the battery
@@ -145,6 +158,52 @@ export function compareArm(armTasks, controlTasks, options = {}) {
     unresolvedShare: share,
     perTask: perTask.sort((a, b) => b.ratio - a.ratio),
   };
+}
+
+/**
+ * A confidence interval for the geometric mean of the per-task ratios.
+ *
+ * Resamples the RUNS inside every task and recomputes the whole statistic, so
+ * the interval carries both sources of spread: how noisy each task is, and how
+ * much the tasks disagree with each other. Resampling only the tasks would
+ * ignore the first and report a falsely tight headline on a battery of noisy
+ * tasks -- which is the situation this was written for.
+ *
+ * Seeded, like everything else here, so a published headline can be recomputed
+ * from the published rows.
+ */
+export function geometricRatioCI(perTask, { resamples = 2000, alpha = 0.05, seed = 0xf00d } = {}) {
+  const usable = perTask.filter((e) => e.armUnits?.length && e.controlUnits?.length);
+  if (!usable.length) return { low: NaN, high: NaN };
+
+  const next = rng(seed);
+  const draws = [];
+  for (let r = 0; r < resamples; r++) {
+    let sum = 0;
+    let n = 0;
+    for (const task of usable) {
+      const a = [];
+      const c = [];
+      for (let i = 0; i < task.armUnits.length; i++) {
+        a.push(task.armUnits[(next() * task.armUnits.length) | 0]);
+      }
+      for (let i = 0; i < task.controlUnits.length; i++) {
+        c.push(task.controlUnits[(next() * task.controlUnits.length) | 0]);
+      }
+      const cm = median(c);
+      if (!cm) continue;
+      const ratio = median(a) / cm;
+      if (!Number.isFinite(ratio) || ratio <= 0) continue;
+      sum += Math.log(ratio);
+      n += 1;
+    }
+    if (n) draws.push(Math.exp(sum / n));
+  }
+  if (!draws.length) return { low: NaN, high: NaN };
+  draws.sort((x, y) => x - y);
+  const lo = Math.floor((alpha / 2) * draws.length);
+  const hi = Math.min(draws.length - 1, Math.ceil((1 - alpha / 2) * draws.length) - 1);
+  return { low: draws[lo], high: draws[hi] };
 }
 
 /**

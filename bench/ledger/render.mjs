@@ -49,10 +49,25 @@ function renderArm(name, result, { adversarialTasks }) {
         `battery did not converge (${result.tasksCounted} task(s) usable)`
     );
   } else {
+    const ci = result.costRatioCI;
+    const band =
+      Number.isFinite(ci?.low) && Number.isFinite(ci?.high)
+        ? ` [${fixed(ci.low)}, ${fixed(ci.high)}]`
+        : '';
     lines.push(
-      `    cost per unit delivered: ${fixed(result.costRatio)} of control ` +
+      `    cost per unit delivered: ${fixed(result.costRatio)}${band} of control ` +
         `(${pct(result.costRatio)}) over ${result.tasksCounted} task(s)`
     );
+    // SAID IN WORDS, not left to the reader to notice the interval contains 1.
+    // A headline printed as a bare number gets quoted as a bare number, and the
+    // whole point of this report is that it cannot be quoted for more than it
+    // shows.
+    if (!result.costRatioSignificant) {
+      lines.push(
+        '    NOT DISTINGUISHABLE FROM CONTROL -- the interval spans parity, so ' +
+          'this difference is not established'
+      );
+    }
   }
   return lines;
 }
