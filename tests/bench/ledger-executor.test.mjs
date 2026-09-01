@@ -1,0 +1,247 @@
+/**
+ * The executor, tested without docker or an API key.
+ *
+ * The payloads here are real: captured from `claude -p --output-format json`
+ * running in the benchmark image, including the unauthenticated one that would
+ * have been recorded as a free success.
+ */
+
+import { describe, expect, test } from '@jest/globals';
+import { existsSync, mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import {
+  readOutcome,
+  dockerArgs,
+  writeArmSettings,
+  dockerExecutor,
+} from '../../bench/ledger/executor.mjs';
+import { singleShotExtract } from '../../bench/ledger/tasks/index.mjs';
+
+/** Captured verbatim from an unauthenticated run in the image. */
+const UNAUTHENTICATED = JSON.stringify({
+  is_error: true,
+  num_turns: 1,
+  stop_reason: null,
+  total_cost_usd: 0,
+  subtype: 'success',
+  result: 'Not logged in · Please run /login',
+  type: 'result',
+  duration_ms: 155,
+});
+
+/** Shape of a real successful run, with the fields the ledger reads. */
+const SUCCEEDED = JSON.stringify({
+  is_error: false,
+  num_turns: 7,
+  total_cost_usd: 0.064097,
+  subtype: 'success',
+  result: 'done',
+  type: 'result',
+});
+
+describe('reading the agent\'s own JSON', () => {
+  test('a successful run yields cost and turns', () => {
+    const out = readOutcome({ code: 0, stdout: SUCCEEDED, stderr: '', timedOut: false });
+    expect(out).toEqual({ status: 'ok', usd: 0.064097, turns: 7, detail: null });
+  });
+
+  test('subtype "success" with is_error true is a FAILURE', () => {
+    // THE TRAP THIS FILE EXISTS FOR. Keying on `subtype` would record an
+    // unauthenticated run as a successful run costing $0 -- an infinitely
+    // efficient optimizer, silently, for every run in a campaign whose
+    // short-lived credentials had expired.
+    const out = readOutcome({ code: 0, stdout: UNAUTHENTICATED, stderr: '', timedOut: false });
+    expect(out.status).toBe('failed');
+    expect(out.detail).toMatch(/Not logged in/);
+  });
+
+  test('a failed run still reports what it spent', () => {
+    // The ledger charges failures, so a run that burned four turns before dying
+    // must carry that cost into its row.
+    const burned = JSON.stringify({ is_error: true, num_turns: 4, total_cost_usd: 0.21, result: 'gave up' });
+    const out = readOutcome({ code: 0, stdout: burned, stderr: '', timedOut: false });
+    expect(out.status).toBe('failed');
+    expect(out.usd).toBeCloseTo(0.21, 6);
+    expect(out.turns).toBe(4);
+  });
+
+  test('a timeout is its own status, not a failure', () => {
+    const out = readOutcome({ code: null, stdout: '', stderr: '', timedOut: true });
+    expect(out.status).toBe('timeout');
+  });
+
+  test('unparseable output is an error naming what arrived', () => {
+    const out = readOutcome({ code: 1, stdout: 'Usage: claude ...', stderr: 'bad flag', timedOut: false });
+    expect(out.status).toBe('error');
+    expect(out.detail).toMatch(/unparseable/);
+  });
+
+  test('a zero exit code does not by itself mean success', () => {
+    // The CLI exits 0 while reporting is_error true, so the exit code is not
+    // the signal either.
+    expect(readOutcome({ code: 0, stdout: UNAUTHENTICATED, stderr: '', timedOut: false }).status)
+      .toBe('failed');
+  });
+});
+
+describe('the container invocation', () => {
+  const base = {
+    image: 'thol-rig:local',
+    workspace: '/host/ws',
+    stateDir: '/host/state',
+    armDir: '/host/arm',
+    credentials: '/host/creds.json',
+    prompt: 'fix the bug',
+    model: 'claude-opus-5',
+  };
+
+  test('HOME is the mounted state directory, which is the cold/warm mechanism', () => {
+    const args = dockerArgs(base);
+    expect(args).toContain('-e');
+    expect(args).toContain('HOME=/state');
+    expect(args.join(' ')).toContain('/host/state:/state');
+  });
+
+  test('the workspace is mounted writable and is the working directory', () => {
+    const args = dockerArgs(base);
+    expect(args.join(' ')).toContain('/host/ws:/work');
+    expect(args[args.indexOf('-w') + 1]).toBe('/work');
+  });
+
+  test('credentials are mounted read-only', () => {
+    // The CLI rewrites the file when refreshing a token; a writable mount would
+    // let a container corrupt the host's live credentials.
+    expect(dockerArgs(base).join(' ')).toContain('/host/creds.json:/auth/credentials.json:ro');
+  });
+
+  test('the prompt never appears in the shell script at all', () => {
+    // CAUGHT ON A REAL RUN, NOT REASONED ABOUT. The prompt used to be
+    // interpolated via JSON.stringify, which escapes quotes and backslashes but
+    // NOT backticks -- so a prompt containing inline code became command
+    // substitution inside the double-quoted shell string. sh ran `timeout_ms`,
+    // got nothing, and the agent received "the value of the  key", answered
+    // sensibly asking which key was meant, exited 0 and scored 0. The run
+    // looked exactly like the ARM failing the task.
+    const withBackticks = 'write the value of the `timeout_ms` key into ANSWER.txt';
+    const args = dockerArgs({ ...base, prompt: withBackticks });
+    const script = args.at(-1);
+
+    expect(script).not.toContain('timeout_ms');
+    expect(script).toContain('"$LEDGER_PROMPT"');
+    // It travels as an environment value, which docker passes without shell
+    // interpretation.
+    expect(args).toContain(`LEDGER_PROMPT=${withBackticks}`);
+  });
+
+  test('shell metacharacters in a prompt cannot reach the shell', () => {
+    const nasty = 'fix "the" bug; rm -rf /; $(whoami); `id`';
+    const args = dockerArgs({ ...base, prompt: nasty });
+    expect(args.at(-1)).not.toContain('whoami');
+    expect(args.at(-1)).not.toContain('rm -rf');
+    expect(args).toContain(`LEDGER_PROMPT=${nasty}`);
+  });
+
+  test('the arm settings file is what selects the arm', () => {
+    expect(dockerArgs(base).at(-1)).toContain('--settings /arm/settings.json');
+  });
+
+  test('arm environment reaches the container', () => {
+    const args = dockerArgs({ ...base, env: { TOKEN_OPTIMIZER_MODE: 'assist' } });
+    expect(args.join(' ')).toContain('TOKEN_OPTIMIZER_MODE=assist');
+  });
+});
+
+describe('the executor end to end, with a fake docker', () => {
+  const arms = {
+    control: { settings: {}, env: {} },
+    candidate: { settings: { hooks: { PreToolUse: [] } }, env: { TOKEN_OPTIMIZER_MODE: 'assist' } },
+  };
+
+  const fakeSpawn = (payload) => async () => ({ code: 0, stdout: payload, stderr: '', timedOut: false });
+
+  test('sets up the workspace on the host so the verifier can read it', async () => {
+    const execute = dockerExecutor({
+      image: 'img', credentials: '/creds', arms, spawnFn: fakeSpawn(SUCCEEDED),
+    });
+    const out = await execute({ task: singleShotExtract, arm: 'control', track: 'cold', rep: 1 });
+    try {
+      expect(out.status).toBe('ok');
+      expect(out.usd).toBeCloseTo(0.064097, 6);
+      // The fixture the task's setup() wrote must be on disk, on the host.
+      expect(existsSync(join(out.workspace, 'config/service.toml'))).toBe(true);
+      expect(readFileSync(join(out.workspace, 'config/service.toml'), 'utf8')).toContain('timeout_ms');
+    } finally {
+      rmSync(out.workspace, { recursive: true, force: true });
+    }
+  });
+
+  test('a workspace is returned even on failure, so partial work still scores', async () => {
+    const execute = dockerExecutor({
+      image: 'img', credentials: '/creds', arms, spawnFn: fakeSpawn(UNAUTHENTICATED),
+    });
+    const out = await execute({ task: singleShotExtract, arm: 'control', track: 'cold', rep: 1 });
+    try {
+      expect(out.status).toBe('failed');
+      expect(out.workspace).toBeTruthy();
+    } finally {
+      rmSync(out.workspace, { recursive: true, force: true });
+    }
+  });
+
+  test('a broken fixture is a harness fault, not a failed run', async () => {
+    // Scoring it as a failed run would charge the arm for OUR bug and quietly
+    // depress its number across the campaign.
+    const broken = { ...singleShotExtract, setup: () => { throw new Error('fixture broken'); } };
+    const execute = dockerExecutor({
+      image: 'img', credentials: '/creds', arms, spawnFn: fakeSpawn(SUCCEEDED),
+    });
+    const out = await execute({ task: broken, arm: 'control', track: 'cold', rep: 1 });
+    expect(out.status).toBe('setup-error');
+    expect(out.workspace).toBeNull();
+  });
+
+  test('an unknown arm fails loudly rather than running a default', async () => {
+    const execute = dockerExecutor({ image: 'img', credentials: '/creds', arms, spawnFn: fakeSpawn(SUCCEEDED) });
+    await expect(
+      execute({ task: singleShotExtract, arm: 'nope', track: 'cold', rep: 1 })
+    ).rejects.toThrow(/unknown arm/);
+  });
+
+  test('a warm sequence reuses the state directory it is given', async () => {
+    const seen = [];
+    const spy = async (_cmd, args) => {
+      seen.push(args.join(' '));
+      return { code: 0, stdout: SUCCEEDED, stderr: '', timedOut: false };
+    };
+    const execute = dockerExecutor({ image: 'img', credentials: '/creds', arms, spawnFn: spy });
+    const shared = mkdtempSync(join(tmpdir(), 'ledger-warm-'));
+    try {
+      const a = await execute({ task: singleShotExtract, arm: 'control', track: 'warm', rep: 1, stateDir: shared });
+      const b = await execute({ task: singleShotExtract, arm: 'control', track: 'warm', rep: 1, stateDir: shared });
+      for (const line of seen) expect(line).toContain(`${shared}:/state`);
+      rmSync(a.workspace, { recursive: true, force: true });
+      rmSync(b.workspace, { recursive: true, force: true });
+    } finally {
+      rmSync(shared, { recursive: true, force: true });
+    }
+  });
+
+  test('missing image or credentials is refused at construction', () => {
+    expect(() => dockerExecutor({ credentials: '/c', arms })).toThrow(/image/);
+    expect(() => dockerExecutor({ image: 'i', arms })).toThrow(/credentials/);
+  });
+});
+
+describe('arm settings', () => {
+  test('are written as plain settings JSON an operator could reproduce', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ledger-arm-'));
+    try {
+      const path = writeArmSettings(dir, { settings: { hooks: { SessionStart: ['x'] } } });
+      expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ hooks: { SessionStart: ['x'] } });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
