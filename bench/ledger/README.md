@@ -89,9 +89,17 @@ benchmark, and the raw rows are published so you can find it.
 failure-charging, downgrading the build guard to a warning, folding unresolved
 tasks into the headline, swapping the median for the mean, dropping failed runs
 from the ledger, giving warm tasks separate state directories, making
-provenance optional, and letting  go undeclared each break the
+provenance optional, and letting `adversarial` go undeclared each break the
 suite.
 
 **Not yet built:** the docker executor that actually drives an agent. It is a
-single injected function -- returning  -- deliberately the only part
-that costs money to exercise.
+single injected function:
+
+```js
+execute({ task, arm, track, rep, stateDir })
+  -> { status, usd, turns, workspace }
+```
+
+That is deliberately the only part which costs money to exercise. It never
+scores anything — the verifier belongs to the task, so an executor cannot
+influence its own mark.
