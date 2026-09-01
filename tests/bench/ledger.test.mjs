@@ -446,6 +446,64 @@ describe('the report', () => {
     expect(c.survivingTasks).toEqual(['clean']);
   });
 
+  test('no point estimate ever falls outside its own interval', () => {
+    // THE BUG THIS EXISTS TO PREVENT, observed in a real report as
+    // `0.924 [0.935, 1.030]`. The point was a ratio of totals; the interval
+    // resampled a ratio of medians. Both are defensible statistics and they
+    // agree on tidy data, which is why it survived every earlier test -- so
+    // the fixture here is deliberately skewed, where they diverge.
+    const skewed = [0.02, 0.02, 0.02, 0.02, 0.02, 0.03, 0.03, 0.9];
+    const flat = [0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10];
+    const out = report([
+      ...skewed.map((usd, i) => row({ arm: 'candidate', task: 'skew', rep: i + 1, usd })),
+      ...flat.map((usd, i) => row({ arm: 'control', task: 'skew', rep: i + 1, usd })),
+    ]);
+    const all = [
+      ...out.tracks.cold.arms.candidate.perTask,
+      ...out.tracks.cold.arms.candidate.unresolvedDetail,
+    ];
+    expect(all.length).toBeGreaterThan(0);
+    for (const t of all) {
+      expect([t.task, t.ratio >= t.ci.low && t.ratio <= t.ci.high]).toEqual([t.task, true]);
+    }
+  });
+
+  test('a failed run makes an arm dearer, never cheaper', () => {
+    // What ratio-of-totals buys that a median of per-run unit costs does not:
+    // a run scoring zero is dropped entirely by the median, so an arm could
+    // lower its published cost by failing.
+    const eight = [1, 2, 3, 4, 5, 6, 7, 8];
+    const base = eight.map((rep) => row({ arm: 'candidate', task: 't', rep, usd: 0.1, score: 1 }));
+    const control = eight.map((rep) => row({ arm: 'control', task: 't', rep, usd: 0.1, score: 1 }));
+    const clean = report([...base, ...control]).tracks.cold.arms.candidate.perTask[0];
+    const withFailure = report([
+      ...base,
+      row({ arm: 'candidate', task: 't', rep: 9, usd: 0.1, score: 0, status: 'failed' }),
+      ...control,
+    ]).tracks.cold.arms.candidate.perTask[0];
+    expect(withFailure.ratio).toBeGreaterThan(clean.ratio);
+  });
+
+  test('the headline is the same statistic as the rows beneath it', () => {
+    // A single converged task: its geometric mean over one entry must be that
+    // entry. If the headline resampled medians while the row reported totals,
+    // these would differ on skewed data and nothing would say so.
+    // Skewed enough that a median and a total disagree in the third digit,
+    // tight enough that the sampling rule still calls it converged -- an
+    // unconverged task is excluded from the headline and would make this
+    // assertion vacuous rather than false.
+    const skewed = [0.020, 0.020, 0.021, 0.021, 0.020, 0.022, 0.020, 0.023];
+    const flat = [0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10];
+    const c = report([
+      ...skewed.map((usd, i) => row({ arm: 'candidate', task: 'one', rep: i + 1, usd })),
+      ...flat.map((usd, i) => row({ arm: 'control', task: 'one', rep: i + 1, usd })),
+    ]).tracks.cold.arms.candidate;
+    expect(c.tasksCounted).toBe(1);
+    expect(c.costRatio).toBeCloseTo(c.perTask[0].ratio, 10);
+    expect(c.costRatio).toBeGreaterThanOrEqual(c.costRatioCI.low);
+    expect(c.costRatio).toBeLessThanOrEqual(c.costRatioCI.high);
+  });
+
   test('malformed rows are reported, not silently dropped', () => {
     const out = report([row(), { task: 'x' }]);
     expect(out.rejected).toHaveLength(1);

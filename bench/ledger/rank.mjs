@@ -24,7 +24,7 @@
  * unfalsifiable, a failing assertion is not.
  */
 
-import { median, ratioCI, significant, samplingVerdict, holm, rng } from './stats.mjs';
+import { median, ratioCI, ratioOfTotalsCI, significant, samplingVerdict, holm, rng } from './stats.mjs';
 import { assertSingleBuild, rowProblem } from './provenance.mjs';
 
 /** Groups rows by track, then arm, then task. Rejected rows are reported. */
@@ -50,6 +50,30 @@ export function organise(rows) {
 }
 
 /**
+ * What a run cost, in the unit the report is ranking on.
+ *
+ * `usd` is the endpoint that matters and stays the default. `output` exists
+ * because both products under comparison target output tokens specifically,
+ * and a null on cost has two very different explanations: the instructions did
+ * nothing, or they did what they claim and output is too small a share of the
+ * bill for it to show. Only a direct measurement separates those, and it has to
+ * come through the same ranking machinery -- the same medians, the same
+ * resampling, the same convergence rule -- or it is not comparable to the
+ * headline it is explaining.
+ *
+ * A row from before token capture has no breakdown; it yields NaN rather than 0
+ * so it is dropped from the sample instead of dragging every median toward
+ * zero.
+ */
+function metricOf(row, endpoint) {
+  if (endpoint === 'output') {
+    const t = row.tokens?.output;
+    return Number.isFinite(t) ? t : NaN;
+  }
+  return row.usd;
+}
+
+/**
  * One arm's result on one task.
  *
  * `costPerUnit` charges every run. `completion` is the share of runs that
@@ -57,8 +81,22 @@ export function organise(rows) {
  * because a reader deciding whether to adopt a tool needs to see a cheap tool
  * that fails a third of the time for what it is.
  */
-export function taskResult(rows, { completionThreshold = 0.999, precision } = {}) {
-  const usd = rows.map((r) => r.usd);
+export function taskResult(rows, { completionThreshold = 0.999, precision, endpoint = 'usd' } = {}) {
+  const usable = endpoint === 'usd' ? rows : rows.filter((r) => Number.isFinite(metricOf(r, endpoint)));
+  if (!usable.length) {
+    return {
+      n: 0,
+      spend: 0,
+      delivered: 0,
+      costPerUnit: Infinity,
+      completion: 0,
+      medianUnitCost: Infinity,
+      sampling: samplingVerdict([], precision),
+      turns: NaN,
+    };
+  }
+  rows = usable;
+  const usd = rows.map((r) => metricOf(r, endpoint));
   const score = rows.map((r) => r.score);
   const spend = usd.reduce((a, b) => a + b, 0);
   const delivered = score.reduce((a, b) => a + b, 0);
@@ -67,7 +105,7 @@ export function taskResult(rows, { completionThreshold = 0.999, precision } = {}
   // Runs that delivered nothing are included at their full cost via `spend`,
   // and contribute no denominator -- so a task an arm never completes has an
   // infinite unit cost, which is the honest answer rather than a missing row.
-  const perRun = rows.map((r) => (r.score > 0 ? r.usd / r.score : Infinity));
+  const perRun = rows.map((r) => (r.score > 0 ? metricOf(r, endpoint) / r.score : Infinity));
   const finite = perRun.filter(Number.isFinite);
 
   return {
@@ -96,7 +134,7 @@ export function taskResult(rows, { completionThreshold = 0.999, precision } = {}
  * comparison itself is marked untrustworthy rather than published.
  */
 export function compareArm(armTasks, controlTasks, options = {}) {
-  const { maxUnresolvedShare = 0.34 } = options;
+  const { maxUnresolvedShare = 0.34, endpoint = 'usd' } = options;
   const perTask = [];
   const unresolved = [];
 
@@ -107,13 +145,26 @@ export function compareArm(armTasks, controlTasks, options = {}) {
     const arm = taskResult(rows, options);
     const control = taskResult(controlRows, options);
 
-    const armUnits = rows.filter((r) => r.score > 0).map((r) => r.usd / r.score);
-    const ctlUnit = controlRows.filter((r) => r.score > 0).map((r) => r.usd / r.score);
-    const ci = ratioCI(armUnits, ctlUnit);
+    // Same endpoint on both sides of the ratio, and only runs that recorded
+    // it. Falling back to usd on one side would produce a ratio of dollars to
+    // tokens, which is a number and means nothing.
+    //
+    // Pairs, not unit costs: a failed run keeps its cost in the numerator and
+    // contributes nothing to the denominator, which is the ledger's whole
+    // point and what a per-run unit cost quietly discards.
+    const pairsOf = (rs) =>
+      rs
+        .map((r) => [metricOf(r, endpoint), r.score])
+        .filter(([c]) => Number.isFinite(c));
+    const armUnits = pairsOf(rows);
+    const ctlUnit = pairsOf(controlRows);
+    const ci = ratioOfTotalsCI(armUnits, ctlUnit);
 
     const entry = {
       task,
-      ratio: control.costPerUnit > 0 ? arm.costPerUnit / control.costPerUnit : NaN,
+      // Taken FROM the interval rather than computed alongside it, so the two
+      // cannot be different statistics wearing the same label.
+      ratio: ci.ratio,
       ci,
       significant: significant(ci),
       arm,
@@ -194,17 +245,24 @@ export function geometricRatioCI(perTask, { resamples = 2000, alpha = 0.05, seed
     let sum = 0;
     let n = 0;
     for (const task of usable) {
-      const a = [];
-      const c = [];
-      for (let i = 0; i < task.armUnits.length; i++) {
-        a.push(task.armUnits[(next() * task.armUnits.length) | 0]);
-      }
-      for (let i = 0; i < task.controlUnits.length; i++) {
-        c.push(task.controlUnits[(next() * task.controlUnits.length) | 0]);
-      }
-      const cm = median(c);
+      // Resampled as (cost, score) PAIRS and reduced to a ratio of totals --
+      // the same statistic each per-task interval reports, so the headline
+      // cannot be a summary of numbers no per-task line contains. When these
+      // were medians of per-run unit costs, the headline and the rows beneath
+      // it were different estimators.
+      const totals = (pairs) => {
+        let cost = 0;
+        let delivered = 0;
+        for (let i = 0; i < pairs.length; i++) {
+          const [pc, ps] = pairs[(next() * pairs.length) | 0];
+          cost += pc;
+          delivered += ps;
+        }
+        return delivered > 0 ? cost / delivered : NaN;
+      };
+      const cm = totals(task.controlUnits);
       if (!cm) continue;
-      const ratio = median(a) / cm;
+      const ratio = totals(task.armUnits) / cm;
       if (!Number.isFinite(ratio) || ratio <= 0) continue;
       sum += Math.log(ratio);
       n += 1;
@@ -225,18 +283,29 @@ export function geometricRatioCI(perTask, { resamples = 2000, alpha = 0.05, seed
  * than reporting, so a mixed-build store cannot produce a headline at all.
  */
 export function report(rows, options = {}) {
+  // THE COMPARATOR IS A PARAMETER, because a head-to-head between two
+  // candidates is a question this report could not previously answer. Both
+  // against control is not the same experiment: it is two ratios sharing a
+  // denominator, and dividing one by the other by hand discards the covariance
+  // and produces an interval that is simply wrong. Worse, the last time an
+  // analysis this report could not express got hand-rolled in a throwaway
+  // script, the script mixed two builds and bypassed the guard below.
+  //
+  // Defaults to `control`, so every existing caller is unaffected.
+  const { baseline = 'control' } = options;
   const { tracks, rejected } = organise(rows);
-  const out = { tracks: {}, rejected };
+  const out = { tracks: {}, rejected, baseline };
 
   for (const [track, arms] of tracks) {
-    const controlTasks = arms.get('control');
-    out.tracks[track] = { control: Boolean(controlTasks), arms: {} };
-    if (!controlTasks) continue;
+    const baselineTasks = arms.get(baseline);
+    out.tracks[track] = { control: Boolean(baselineTasks), baseline, arms: {} };
+    if (!baselineTasks) continue;
+    assertSingleBuild([...baselineTasks.values()].flat(), `${track}/${baseline}`);
 
     for (const [arm, tasks] of arms) {
-      if (arm === 'control') continue;
+      if (arm === baseline) continue;
       assertSingleBuild([...tasks.values()].flat(), `${track}/${arm}`);
-      out.tracks[track].arms[arm] = compareArm(tasks, controlTasks, options);
+      out.tracks[track].arms[arm] = compareArm(tasks, baselineTasks, options);
     }
     correctForFamilySize(out.tracks[track].arms);
   }

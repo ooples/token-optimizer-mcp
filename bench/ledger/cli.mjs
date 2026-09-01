@@ -70,6 +70,12 @@ export function parseArgs(argv) {
     else if (a === '--tasks') out.tasks = next().split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--min-credential-minutes') out.minCredentialMinutes = Number(next());
     else if (a === '--ignore-expiry') out.ignoreExpiry = true;
+    else if (a === '--baseline') out.baseline = next();
+    else if (a === '--endpoint') {
+      const e = next();
+      if (e !== 'usd' && e !== 'output') throw new Error(`--endpoint must be usd or output, got ${e}`);
+      out.endpoint = e;
+    }
     else if (a === '--report-only') out.reportOnly = true;
     else if (a === '--help' || a === '-h') out.help = true;
     else throw new Error(`unknown argument: ${a}`);
@@ -89,6 +95,8 @@ Ledger -- cost per unit of work delivered, failures included.
   --arms-file PATH    extra arm definitions as JSON
   --max-reps N        cap reps per task (spend control)
   --concurrency N     cold tasks in flight at once, 1..6   (default: 1)
+  --baseline ARM      compare every arm against ARM        (default: control)
+  --endpoint usd|output   rank on dollars or output tokens (default: usd)
   --tasks a,b         run only these task ids (spend control)
   --ignore-expiry     run even if credentials expire soon (data may be worthless)
   --report-only       re-render the existing store without running anything
@@ -142,7 +150,21 @@ async function main(argv) {
   const adversarialTasks = new Set(ADVERSARIAL.map((t) => t.id));
 
   if (opts.reportOnly) {
-    const rows = loadRows(store);
+    // `--tasks` narrows the battery here as well as during a run, because the
+    // robustness checks a pre-registration asks for -- does the headline
+    // survive dropping the task I authored last? -- are re-analyses of rows
+    // already paid for. Doing them in a throwaway script is how a previous
+    // analysis mixed two builds and bypassed the guard below; doing them here
+    // keeps the guard.
+    const all = loadRows(store);
+    const rows = opts.tasks ? all.filter((r) => opts.tasks.includes(r.task)) : all;
+    if (opts.tasks && all.length && !rows.length) {
+      process.stdout.write(
+        `no rows for task(s) ${opts.tasks.join(', ')} in ${store}\n` +
+          `present: ${[...new Set(all.map((r) => r.task))].sort().join(', ')}\n`
+      );
+      return 1;
+    }
     if (!rows.length) {
       process.stdout.write(`no rows in ${store}\n`);
       return 1;
@@ -158,7 +180,17 @@ async function main(argv) {
       );
       return 1;
     }
-    process.stdout.write(renderReport(report(rows), { adversarialTasks }) + '\n');
+    const built = report(rows, {
+      ...(opts.baseline ? { baseline: opts.baseline } : {}),
+      ...(opts.endpoint ? { endpoint: opts.endpoint } : {}),
+    });
+    if (opts.baseline && !Object.values(built.tracks).some((t) => t.control)) {
+      // A typo'd baseline would otherwise print an empty report, which reads
+      // like "no difference" rather than "you named an arm that is not here".
+      process.stdout.write(`no rows for baseline arm "${opts.baseline}" in ${store}\n`);
+      return 1;
+    }
+    process.stdout.write(renderReport(built, { adversarialTasks }) + '\n');
     return 0;
   }
 
