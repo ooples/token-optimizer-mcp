@@ -258,6 +258,32 @@ describe('the report', () => {
     expect(c.trustworthy).toBe(false);
   });
 
+  test('a task that has not converged is excluded even when it could still improve', () => {
+    // THE STATE THAT WAS SLIPPING THROUGH. samplingVerdict returns 'unresolved'
+    // only once the rep cap is reached; before that a wide interval returns
+    // 'continue'. compareArm excluded only 'unresolved', so a task with six
+    // noisy reps under a cap of twelve was folded into the headline as though
+    // settled. Observed on the real warm track: four tasks the campaign itself
+    // reported as not converged were averaged into "1.081 of control over 4
+    // task(s)".
+    //
+    // For a published number, "not enough evidence yet" and "never will be" are
+    // the same thing; they differ only in whether more reps would help.
+    const noisy = [0.05, 0.30, 0.07, 0.28, 0.06, 0.31];
+    const out = report([
+      ...noisy.map((usd, i) =>
+        row({ arm: 'control', task: 'wobbly', rep: i + 1, usd })
+      ),
+      ...noisy.map((usd, i) =>
+        row({ arm: 'candidate', task: 'wobbly', rep: i + 1, usd })
+      ),
+    ]);
+    const c = out.tracks.cold.arms.candidate;
+    expect(c.unresolved).toContain('wobbly');
+    expect(c.tasksCounted).toBe(0);
+    expect(c.trustworthy).toBe(false);
+  });
+
   test('malformed rows are reported, not silently dropped', () => {
     const out = report([row(), { task: 'x' }]);
     expect(out.rejected).toHaveLength(1);
