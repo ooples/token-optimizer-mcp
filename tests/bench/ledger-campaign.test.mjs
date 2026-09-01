@@ -121,6 +121,88 @@ describe('the campaign', () => {
     expect(order.every((a) => a === 'control')).toBe(true);
   });
 
+  describe('overlapping tasks', () => {
+    /** An executor that records how many runs were in flight when each started. */
+    const tracking = (state) => async (args) => {
+      state.live += 1;
+      state.peak = Math.max(state.peak, state.live);
+      state.peakPerTask[args.task.id] = Math.max(
+        state.peakPerTask[args.task.id] || 0,
+        state.livePerTask[args.task.id] = (state.livePerTask[args.task.id] || 0) + 1
+      );
+      await new Promise((r) => setTimeout(r, 5));
+      state.live -= 1;
+      state.livePerTask[args.task.id] -= 1;
+      return execute(args);
+    };
+    const freshState = () => ({ live: 0, peak: 0, livePerTask: {}, peakPerTask: {} });
+
+    test('tasks run at once, up to the limit and no further', async () => {
+      const state = freshState();
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c', 'debug-d', 'debug-e']),
+        execute: tracking(state),
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        precision: { minReps: 3, maxReps: 3 },
+        concurrency: 3,
+      });
+      expect(state.peak).toBeGreaterThan(1);
+      expect(state.peak).toBeLessThanOrEqual(3);
+    });
+
+    test('reps within one task never overlap, whatever the limit', async () => {
+      // THE INVARIANT THAT PROTECTS THE STOPPING RULE. Whether another rep is
+      // needed is decided from the reps so far; issuing them in parallel would
+      // buy reps the precision rule had already ruled unnecessary and the cap
+      // would stop meaning what it says.
+      const state = freshState();
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c']),
+        execute: tracking(state),
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        precision: { minReps: 4, maxReps: 4 },
+        concurrency: 6,
+      });
+      for (const [task, peak] of Object.entries(state.peakPerTask)) {
+        expect([task, peak]).toEqual([task, 1]);
+      }
+    });
+
+    test('the default is still one at a time', async () => {
+      const state = freshState();
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c']),
+        execute: tracking(state),
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        precision: { minReps: 2, maxReps: 2 },
+      });
+      expect(state.peak).toBe(1);
+    });
+
+    test('every row still lands, and lands once', async () => {
+      // Concurrent appends to one JSONL is the obvious way this breaks. The
+      // store is synchronous, which makes each append atomic within the
+      // process -- this test is what would notice if that ever stopped
+      // being true.
+      const state = freshState();
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c', 'debug-d']),
+        execute: tracking(state),
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        precision: { minReps: 3, maxReps: 3 },
+        concurrency: 4,
+      });
+      const written = readFileSync(store, 'utf8').trim().split('\n').map(JSON.parse);
+      expect(written).toHaveLength(12);
+      const keys = written.map((r) => `${r.task}#${r.rep}`);
+      expect(new Set(keys).size).toBe(12);
+    });
+  });
+
   test('a dying container is a recorded failed run, not a dead campaign', async () => {
     // A container that explodes is a RESULT -- the arm failed that run and the
     // ledger charges it. Aborting the campaign instead would throw away every
