@@ -308,16 +308,24 @@ export function dockerExecutor({
     );
 
     const outcome = readOutcome(result);
-    if (!keepWorkspaces && outcome.status !== 'ok') {
-      // Keep failures for inspection only when asked; a long campaign otherwise
-      // fills the disk with workspaces nobody reads.
-    }
 
     return {
       status: outcome.status,
       usd: outcome.usd,
       turns: outcome.turns,
       tokens: outcome.tokens || EMPTY_TOKENS,
+      // WHETHER a workspace may be freed is decided here, because this layer
+      // owns the flag; WHEN it is freed is decided in run.mjs, because that is
+      // where scoring finishes reading it. Splitting the two is deliberate --
+      // the previous attempt put both here and could not free anything, since
+      // the verifier had not run yet, so the block was left empty and
+      // `keepWorkspaces` silently did nothing at all.
+      //
+      // Only FAILURES are worth keeping: they are the ones an operator opens to
+      // find out what the agent did. A successful run's workspace is the
+      // expected output and is never inspected, so it is freed either way --
+      // otherwise the flag trades a debugging aid for a full disk.
+      keepWorkspace: keepWorkspaces && outcome.status !== 'ok',
       // The verifier reads the host directory. Handed back on failure too, so a
       // partially-completed run can still earn partial credit -- an agent that
       // fixed the bug and then timed out did do some of the work.

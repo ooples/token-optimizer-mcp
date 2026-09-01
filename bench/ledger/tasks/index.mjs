@@ -20,7 +20,7 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 
 /** Reads a workspace file, returning '' rather than throwing on absence. */
 const read = (dir, rel) => {
@@ -33,7 +33,12 @@ const read = (dir, rel) => {
 
 const write = (dir, rel, text) => {
   const path = join(dir, rel);
-  mkdirSync(join(path, '..'), { recursive: true });
+  // `dirname`, not `join(path, '..')`. The two agree on ordinary input and
+  // diverge on the edges -- a `rel` with a trailing separator makes `join`
+  // resolve one level too high, silently creating the wrong directory and
+  // writing the fixture outside the tree the verifier reads. Naming the parent
+  // directly cannot go wrong that way.
+  mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text);
 };
 
