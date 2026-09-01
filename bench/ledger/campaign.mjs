@@ -65,10 +65,14 @@ export async function coldArm(arm, { tasks, execute, provenance, storePath, prec
       freshStateDir: async () => mkdtempSync(join(tmpdir(), `ledger-cold-${arm}-`)),
       provenance,
       precision,
+      // Each rep hits disk the moment it exists, so an interrupted campaign
+      // keeps what it paid for.
+      onRow: (row) => {
+        const { rejected } = appendRows(storePath, [row]);
+        if (rejected.length) log?.(`  !! row rejected: ${rejected[0].problem}`);
+      },
     });
 
-    const { rejected } = appendRows(storePath, rows);
-    if (rejected.length) log?.(`  !! ${rejected.length} row(s) rejected: ${rejected[0].problem}`);
     written.push(...rows);
     log?.(
       `  cold/${arm}/${task.id}: ${rows.length} rep(s), ${verdict.state}` +
@@ -92,9 +96,11 @@ export async function warmArm(arm, { tasks, execute, provenance, storePath, prec
     freshStateDir: async () => mkdtempSync(join(tmpdir(), `ledger-warm-${arm}-`)),
     provenance,
     precision,
+    onRow: (row) => {
+      const { rejected } = appendRows(storePath, [row]);
+      if (rejected.length) log?.(`  !! row rejected: ${rejected[0].problem}`);
+    },
   });
-  const { rejected } = appendRows(storePath, rows);
-  if (rejected.length) log?.(`  !! ${rejected.length} row(s) rejected: ${rejected[0].problem}`);
   log?.(
     `  warm/${arm}: ${rows.length} row(s) over ${tasks.length} task(s)` +
       (unresolved.length ? `, unresolved: ${unresolved.join(', ')}` : '')

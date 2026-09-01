@@ -72,13 +72,24 @@ async function runOnce(task, { arm, track, rep, stateDir, execute, provenance })
  * a spend control and `unresolved` is its honest outcome -- a task that will not
  * converge is a fact about the task, not a number to average.
  */
-export async function runColdTask(task, { arm, execute, freshStateDir, provenance, precision } = {}) {
+export async function runColdTask(
+  task,
+  { arm, execute, freshStateDir, provenance, precision, onRow } = {}
+) {
   const rows = [];
   const limit = { ...DEFAULT_PRECISION, ...precision };
 
   for (let rep = 1; rep <= limit.maxReps; rep++) {
     const stateDir = freshStateDir ? await freshStateDir({ task, arm, rep }) : null;
-    rows.push(await runOnce(task, { arm, track: 'cold', rep, stateDir, execute, provenance }));
+    const row = await runOnce(task, { arm, track: 'cold', rep, stateDir, execute, provenance });
+    rows.push(row);
+    // PERSISTED PER REP, NOT PER TASK. Writing only after the whole task
+    // finished meant an interrupted campaign lost every rep it had paid for --
+    // observed: a run died partway through the first task and left no store
+    // file at all, discarding runs that had actually happened. The ledger's own
+    // rule is that money already spent must be recorded, and that has to hold
+    // for the harness itself.
+    onRow?.(row);
 
     // Converge on the UNIT COST, which is what the ranking compares -- not on
     // raw spend. A task whose cost is steady but whose score wobbles is not
@@ -100,7 +111,10 @@ export async function runColdTask(task, { arm, execute, freshStateDir, provenanc
  * anything -- the harness this replaces gave every run a throwaway home, which
  * made that entire class of product unmeasurable rather than merely unmeasured.
  */
-export async function runWarmSequence(tasks, { arm, execute, freshStateDir, provenance, precision } = {}) {
+export async function runWarmSequence(
+  tasks,
+  { arm, execute, freshStateDir, provenance, precision, onRow } = {}
+) {
   const limit = { ...DEFAULT_PRECISION, ...precision };
   const rows = [];
 
@@ -109,7 +123,11 @@ export async function runWarmSequence(tasks, { arm, execute, freshStateDir, prov
     // separates warm from cold.
     const stateDir = freshStateDir ? await freshStateDir({ arm, rep }) : null;
     for (const task of tasks) {
-      rows.push(await runOnce(task, { arm, track: 'warm', rep, stateDir, execute, provenance }));
+      const row = await runOnce(task, { arm, track: 'warm', rep, stateDir, execute, provenance });
+      rows.push(row);
+      // Per rep, for the reason given in runColdTask: an interrupted campaign
+      // must keep whatever it has already paid for.
+      onRow?.(row);
     }
 
     // Converged when EVERY task in the sequence has settled. One unresolved
