@@ -14,6 +14,7 @@ import {
   samplingVerdict,
   ratioCI,
   significant,
+  holm,
   rng,
   DEFAULT_PRECISION,
 } from '../../bench/ledger/stats.mjs';
@@ -158,6 +159,93 @@ describe('a ratio accounts for the control\'s own spread', () => {
     const ci = ratioCI([0.05, 0.05, 0.05, 0.05], [0.10, 0.10, 0.10, 0.10], { seed: 5 });
     expect(significant(ci)).toBe(true);
     expect(ci.ratio).toBeCloseTo(0.5, 5);
+  });
+
+  test('the achieved level agrees with the interval it came from', () => {
+    // The two must never disagree: a level above alpha alongside an interval
+    // that excludes parity would let a reader pick whichever supports the
+    // claim. They are computed from the same resample distribution precisely
+    // so that cannot happen.
+    const separated = ratioCI([0.05, 0.05, 0.05, 0.05], [0.10, 0.10, 0.10, 0.10], { seed: 5 });
+    const overlapping = ratioCI([0.10, 0.11, 0.09], [0.10, 0.11, 0.09], { seed: 4 });
+    expect(separated.p).toBeLessThan(0.05);
+    expect(overlapping.p).toBeGreaterThan(0.05);
+  });
+
+  test('a level is never claimed finer than the resampling can resolve', () => {
+    const ci = ratioCI([0.001], [1000], { seed: 6, resamples: 500 });
+    expect(ci.p).toBeCloseTo(1 / 501, 6);
+  });
+});
+
+describe('a family of tests is corrected for its own size', () => {
+  // Fourteen tests at alpha 0.05 produce a spurious exclusion about half the
+  // time. Reporting the first one that clears the bar, uncorrected, is how a
+  // benchmark measuring nothing still announces a win.
+  test('one test is left exactly as it was', () => {
+    expect(holm([0.03])).toEqual([0.03]);
+  });
+
+  test('the same evidence buys less across more tests', () => {
+    const alone = holm([0.02])[0];
+    const amongTen = holm([0.02, 0.6, 0.7, 0.8, 0.9, 0.91, 0.92, 0.93, 0.94, 0.95])[0];
+    expect(amongTen).toBeGreaterThan(alone);
+    expect(amongTen).toBeCloseTo(0.2, 10);
+  });
+
+  test('a borderline win does not survive its family', () => {
+    const raw = [0.04, 0.30, 0.55, 0.80];
+    expect(significant({ low: 0.5, high: 0.9 })).toBe(true);
+    expect(holm(raw)[0]).toBeGreaterThan(0.05);
+  });
+
+  test('adjusted levels never decrease as raw levels increase', () => {
+    // 0.03 and 0.031 are the pair that matters: step-down alone would adjust
+    // them to 0.06 and 0.031, ranking the weaker result as the stronger one.
+    const raw = [0.001, 0.03, 0.031, 0.04, 0.2];
+    const adj = holm(raw);
+    const paired = raw.map((p, i) => [p, adj[i]]).sort((a, b) => a[0] - b[0]);
+    for (let i = 1; i < paired.length; i++) {
+      expect(paired[i][1]).toBeGreaterThanOrEqual(paired[i - 1][1]);
+    }
+  });
+
+  test('an adjustment only ever costs power, never grants it', () => {
+    const raw = [0.001, 0.008, 0.02, 0.04, 0.2];
+    holm(raw).forEach((a, i) => expect(a).toBeGreaterThanOrEqual(raw[i]));
+  });
+
+  test('the level and the interval agree at the bar, across the borderline', () => {
+    // The one-sided/two-sided mistake hides here and nowhere else: halving the
+    // level would leave every interval unchanged while moving results across
+    // the bar, so only cases that straddle it can detect the error. Sweeping
+    // separations guarantees some do.
+    let straddled = 0;
+    for (let s = 0; s < 40; s++) {
+      const control = [1.00, 1.05, 0.95, 1.10, 0.90, 1.02];
+      const shift = 1 - s * 0.01;
+      const arm = control.map((v, i) => v * shift * (1 + ((i % 3) - 1) * 0.04));
+      const ci = ratioCI(arm, control, { seed: 100 + s });
+      expect(significant(ci)).toBe(ci.p < 0.05);
+      if (ci.p > 0.02 && ci.p < 0.2) straddled++;
+    }
+    expect(straddled).toBeGreaterThan(0);
+  });
+
+  test('results come back in input order, not sorted order', () => {
+    // Silently reordering would misattribute every level to the wrong task,
+    // which reads as a coherent table and is entirely wrong.
+    expect(holm([0.5, 0.01])).toEqual([0.5, 0.02]);
+  });
+
+  test('a test that could not be computed is neither corrected nor counted', () => {
+    // An unresolved task must not inflate the family size and weaken the
+    // tasks that did resolve.
+    expect(holm([0.02, NaN])).toEqual([0.02, NaN]);
+  });
+
+  test('nothing is adjusted past certainty', () => {
+    expect(holm([0.4, 0.5, 0.6]).every((p) => p <= 1)).toBe(true);
   });
 });
 
@@ -304,6 +392,58 @@ describe('the report', () => {
     expect(c.unresolved).toContain('wobbly');
     expect(c.tasksCounted).toBe(0);
     expect(c.trustworthy).toBe(false);
+  });
+
+  test('the correction spans the whole track, not one arm at a time', () => {
+    // THE BOUNDARY THAT DECIDES WHETHER A WIN IS REAL. Two arms of four tasks
+    // is eight tests. Correcting each arm as its own family of four hands back
+    // half the leniency and is the easy way to keep a result that should not
+    // have survived.
+    const flat = [0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10];
+    const half = flat.map((v) => v / 2);
+    const built = [];
+    for (const task of ['t1', 't2', 't3', 't4']) {
+      built.push(...rows('control', 'cold', flat, flat.map(() => 1)).map((r) => ({ ...r, task })));
+      built.push(...rows('a', 'cold', half, flat.map(() => 1)).map((r) => ({ ...r, task })));
+      built.push(...rows('b', 'cold', half, flat.map(() => 1)).map((r) => ({ ...r, task })));
+    }
+    const out = report(built);
+    expect(out.tracks.cold.arms.a.familySize).toBe(8);
+    expect(out.tracks.cold.arms.b.familySize).toBe(8);
+  });
+
+  test('the raw interval survives the correction that overrides it', () => {
+    // Overwriting `significant` would erase the reader's ability to see what
+    // the correction cost, which is the one thing that makes it checkable.
+    const flat = [0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10];
+    const half = flat.map((v) => v / 2);
+    const out = report([
+      ...rows('control', 'cold', flat, flat.map(() => 1)),
+      ...rows('candidate', 'cold', half, flat.map(() => 1)),
+    ]);
+    const t = out.tracks.cold.arms.candidate.perTask[0];
+    expect(t.significant).toBe(true);
+    expect(t.adjustedP).toBeGreaterThanOrEqual(t.ci.p);
+    expect(typeof t.survivesCorrection).toBe('boolean');
+  });
+
+  test('a lone strong result is not penalised for tasks that never resolved', () => {
+    // An unresolved task is excluded from the headline already; letting it
+    // count toward the family size would punish the tasks that did resolve for
+    // the failure of one that did not.
+    const flat = [0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10];
+    const half = flat.map((v) => v / 2);
+    const noisy = [0.05, 0.30, 0.07, 0.28, 0.06, 0.31];
+    const out = report([
+      ...rows('control', 'cold', flat, flat.map(() => 1)).map((r) => ({ ...r, task: 'clean' })),
+      ...rows('candidate', 'cold', half, flat.map(() => 1)).map((r) => ({ ...r, task: 'clean' })),
+      ...noisy.map((usd, i) => row({ arm: 'control', task: 'wobbly', rep: i + 1, usd })),
+      ...noisy.map((usd, i) => row({ arm: 'candidate', task: 'wobbly', rep: i + 1, usd })),
+    ]);
+    const c = out.tracks.cold.arms.candidate;
+    expect(c.unresolved).toContain('wobbly');
+    expect(c.familySize).toBe(1);
+    expect(c.survivingTasks).toEqual(['clean']);
   });
 
   test('malformed rows are reported, not silently dropped', () => {

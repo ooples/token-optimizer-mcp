@@ -24,7 +24,7 @@
  * unfalsifiable, a failing assertion is not.
  */
 
-import { median, ratioCI, significant, samplingVerdict, rng } from './stats.mjs';
+import { median, ratioCI, significant, samplingVerdict, holm, rng } from './stats.mjs';
 import { assertSingleBuild, rowProblem } from './provenance.mjs';
 
 /** Groups rows by track, then arm, then task. Rejected rows are reported. */
@@ -238,6 +238,40 @@ export function report(rows, options = {}) {
       assertSingleBuild([...tasks.values()].flat(), `${track}/${arm}`);
       out.tracks[track].arms[arm] = compareArm(tasks, controlTasks, options);
     }
+    correctForFamilySize(out.tracks[track].arms);
   }
   return out;
+}
+
+/**
+ * Every per-task interval a track publishes is one test, and they are corrected
+ * together.
+ *
+ * THE FAMILY IS THE TRACK, NOT THE ARM, and getting that boundary wrong is the
+ * easy way to keep an uncorrected win. Seven tasks against two arms is fourteen
+ * tests; a reader who sees one exclusion in that table is looking at the single
+ * most likely outcome of measuring nothing at all. Correcting inside each arm
+ * separately would treat the same table as two families of seven and quietly
+ * hand back most of the leniency.
+ *
+ * `significant` is left untouched -- the raw interval is still what it was, and
+ * overwriting it would erase the reader's ability to see the correction's
+ * cost. `survivesCorrection` is the field a published claim must cite.
+ */
+export function correctForFamilySize(armsByName, alpha = 0.05) {
+  const family = [];
+  for (const cmp of Object.values(armsByName)) {
+    for (const entry of cmp.perTask) family.push(entry);
+  }
+  const adjusted = holm(family.map((e) => e.ci?.p ?? NaN));
+  family.forEach((entry, i) => {
+    entry.adjustedP = adjusted[i];
+    entry.survivesCorrection = Number.isFinite(adjusted[i]) && adjusted[i] < alpha;
+    entry.familyNote = `${family.length} tests on this track`;
+  });
+  for (const cmp of Object.values(armsByName)) {
+    cmp.familySize = family.length;
+    cmp.survivingTasks = cmp.perTask.filter((e) => e.survivesCorrection).map((e) => e.task);
+  }
+  return family.length;
 }
