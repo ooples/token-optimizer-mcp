@@ -261,7 +261,7 @@ describe('the campaign', () => {
 describe('the report a reader sees', () => {
   const build = { image_digest: 'sha256:a', commit_sha: 'c1' };
   const rows = [];
-  for (let rep = 1; rep <= 4; rep++) {
+  for (let rep = 1; rep <= 8; rep++) {
     rows.push(row({ ...build, arm: 'control', task: 'debug-pipeline-py', rep, usd: 0.1 }));
     rows.push(row({ ...build, arm: 'assist', task: 'debug-pipeline-py', rep, usd: 0.05 }));
     rows.push(row({ ...build, arm: 'control', task: 'single-shot-extract', rep, usd: 0.1 }));
