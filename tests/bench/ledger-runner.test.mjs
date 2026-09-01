@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, test } from '@jest/globals';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -309,6 +309,55 @@ describe('the shipped verifiers actually discriminate', () => {
       // Defined, but neither doubles nor caps.
       writeFileSync(join(dir, 'util/backoff.py'), 'def delays(attempts, base_ms):\n    return [base_ms] * attempts\n');
       expect(scoreWorkspace(task, dir).score).toBeLessThan(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('the battery contains a repository big enough for an index to matter', () => {
+    // THE LIMITATION THAT NEARLY RETIRED A FEATURE. A full campaign concluded
+    // the project index bought nothing measurable -- and then the fixtures were
+    // measured: the largest was THREE FILES, 342 bytes. An index over three
+    // files cannot save anything, because the model reads the whole repository
+    // in one turn. That was a fact about the battery, not the feature.
+    const needle = TASKS.find((t) => t.id === 'needle-in-repo');
+    const dir = mkdtempSync(join(tmpdir(), 'ledger-needle-'));
+    try {
+      needle.setup(dir);
+      const files = readdirSync(join(dir, 'pkg'));
+      expect(files.length).toBeGreaterThanOrEqual(60);
+
+      // Unfixed: partial credit only, because the repository is intact.
+      expect(scoreWorkspace(needle, dir).score).toBeLessThan(0.5);
+
+      const target = join(dir, 'pkg/mod_047.py');
+      writeFileSync(
+        target,
+        readFileSync(target, 'utf8').replace('return round(amount) * rate', 'return round(amount * rate)')
+      );
+      expect(scoreWorkspace(needle, dir).score).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('rewriting the repository to force a match does not score full marks', () => {
+    // The cheapest wrong answer on a large repo: edit broadly until something
+    // matches. The collateral-damage check exists to make that unprofitable.
+    const needle = TASKS.find((t) => t.id === 'needle-in-repo');
+    const dir = mkdtempSync(join(tmpdir(), 'ledger-needle-bad-'));
+    try {
+      needle.setup(dir);
+      const target = join(dir, 'pkg/mod_047.py');
+      writeFileSync(
+        target,
+        readFileSync(target, 'utf8').replace('return round(amount) * rate', 'return round(amount * rate)')
+      );
+      // Correct fix, but another module gutted along the way.
+      writeFileSync(join(dir, 'pkg/mod_012.py'), '# emptied\n');
+      const scored = scoreWorkspace(needle, dir);
+      expect(scored.score).toBeLessThan(1);
+      expect(scored.checks.find((c) => c.name === 'the rest of the repository is untouched').passed).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
