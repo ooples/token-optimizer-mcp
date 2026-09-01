@@ -156,11 +156,27 @@ export const pureGeneration = {
       run: (dir) => /def\s+delays\s*\(\s*attempts\s*,\s*base_ms\s*\)/.test(read(dir, 'util/backoff.py')),
     },
     {
+      // A CHECK MUST ACCEPT EVERY CORRECT ANSWER, not the one the author had in
+      // mind. This originally required `/(\*\s*2|<<\s*1|2\s*\*\*)/`, which does
+      // NOT match `delay *= 2` -- the `=` sits between the `*` and the `2` -- so
+      // the most idiomatic Python solution scored 2 of 4. Measured against the
+      // control arm on eight reps, completion came out at 25%: vanilla Claude
+      // Code writing correct, documented code and being marked wrong.
+      //
+      // That is the benchmark measuring its own verifier rather than the agent,
+      // and it is the failure mode a syntactic check is most prone to. The
+      // robust form is BEHAVIOURAL -- run the function and compare its output --
+      // which is deliberately not done here because it would mean executing
+      // agent-generated code on the host. Until the verifier can run inside the
+      // sandbox, the regex must be generous about spelling and strict only
+      // about the two facts that matter: it doubles, and it caps.
       name: 'doubles and caps',
       weight: 2,
       run: (dir) => {
         const src = read(dir, 'util/backoff.py');
-        return /30000/.test(src) && /(\*\s*2|<<\s*1|2\s*\*\*)/.test(src);
+        const caps = /30_?000/.test(src);
+        const doubles = /(\*=\s*2|\*\s*2|2\s*\*\*|<<)/.test(src);
+        return caps && doubles;
       },
     },
   ],

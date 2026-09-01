@@ -15,7 +15,7 @@
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { ARMS, loadArms } from './arms.mjs';
 import { dockerExecutor } from './executor.mjs';
@@ -37,6 +37,12 @@ export function parseArgs(argv) {
     armsFile: null,
     reportOnly: false,
     maxReps: null,
+    // A DEFAULT, NOT AN OPTION TO REMEMBER. The first version of this guard
+    // read an undefined default, so `minutes < undefined` was false and the
+    // check silently never fired -- a campaign launched on a five-minute token.
+    // A safety default that must be passed to work is not a safety default.
+    minCredentialMinutes: 45,
+    ignoreExpiry: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -50,6 +56,8 @@ export function parseArgs(argv) {
     else if (a === '--arms-file') out.armsFile = next();
     else if (a === '--max-reps') out.maxReps = Number(next());
     else if (a === '--tasks') out.tasks = next().split(',').map((s) => s.trim()).filter(Boolean);
+    else if (a === '--min-credential-minutes') out.minCredentialMinutes = Number(next());
+    else if (a === '--ignore-expiry') out.ignoreExpiry = true;
     else if (a === '--report-only') out.reportOnly = true;
     else if (a === '--help' || a === '-h') out.help = true;
     else throw new Error(`unknown argument: ${a}`);
@@ -69,8 +77,36 @@ Ledger -- cost per unit of work delivered, failures included.
   --arms-file PATH    extra arm definitions as JSON
   --max-reps N        cap reps per task (spend control)
   --tasks a,b         run only these task ids (spend control)
+  --ignore-expiry     run even if credentials expire soon (data may be worthless)
   --report-only       re-render the existing store without running anything
 `;
+
+/**
+ * How long the mounted credentials remain valid.
+ *
+ * WHY THIS IS A PRE-FLIGHT CHECK AND NOT A NOTE. The CLI reports an expired
+ * token as `{ subtype: "success", is_error: true, total_cost_usd: 0 }` and
+ * exits 0. The executor classifies that correctly as a failed run -- but a
+ * campaign that crosses an expiry does not stop: it records the remaining
+ * hundred runs as failures at zero cost, and the report faithfully concludes
+ * that every arm failed every task. The data is worthless and the campaign
+ * looks like it completed.
+ *
+ * These tokens are short-lived by design, so a long campaign crossing one is
+ * the expected case rather than bad luck. Returns null when the file has no
+ * expiry, which is not an error -- an API key has none.
+ */
+export function credentialMinutesLeft(path, { now = Date.now, read = readFileSync } = {}) {
+  try {
+    const raw = JSON.parse(read(path, 'utf8'));
+    const oauth = raw.claudeAiOauth || raw;
+    const expiresAt = oauth.expiresAt ?? oauth.expires_at;
+    if (!Number.isFinite(Number(expiresAt))) return null;
+    return Math.round((Number(expiresAt) - now()) / 60000);
+  } catch {
+    return null;
+  }
+}
 
 /** Reads the identity of what is being measured, from the machine itself. */
 export function detectProvenance({ image, cwd = process.cwd(), run = execFileSync } = {}) {
@@ -117,6 +153,18 @@ async function main(argv) {
     process.stderr.write(`credentials not found at ${opts.credentials}\n`);
     return 1;
   }
+
+  const minutes = credentialMinutesLeft(opts.credentials);
+  if (minutes !== null && minutes < opts.minCredentialMinutes && !opts.ignoreExpiry) {
+    process.stderr.write(
+      `credentials expire in ${minutes} min, which is less than the ${opts.minCredentialMinutes} ` +
+        `this campaign needs.\nA campaign that crosses an expiry does not stop -- it records every ` +
+        `remaining run as a failure at zero cost, and the report concludes that every arm failed ` +
+        `every task.\nRefresh the credentials, or pass --ignore-expiry to proceed anyway.\n`
+    );
+    return 1;
+  }
+  if (minutes !== null) process.stdout.write(`credentials valid for ${minutes} min\n`);
 
   const arms = { ...ARMS, ...(opts.armsFile ? loadArms(opts.armsFile) : {}) };
   const { imageDigest, commitSha } = detectProvenance({ image: opts.image });
