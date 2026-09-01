@@ -10,6 +10,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { OUTPUT_DISCIPLINE } from '../../hooks-core/adapter.mjs';
 
 /** Vanilla Claude Code. No hooks, no MCP server, no optimizer. */
 export const control = {
@@ -131,12 +132,38 @@ export const tokenadeRules = {
   claudeMd: "# Project rules for AI coding agents\n\nAuto-scaffolded by tokenade on first MCP session. Safe to edit; the tokenade block below is identified by the HTML marker and will be updated in-place on future tokenade upgrades.\n\n<!-- tokenade-scaffold -->\n## Explore code with the `tokenade` CLI (cheaper than reading whole files)\nUse these only when you don't yet know where code lives — if you know the path, open it directly:\n`tokenade map` (repo structure) · `skeleton <file…>` (signatures) · `query <symbol…>` (locate a symbol) · `impact <file…>` (dependents) · `semantic \"<query>\"` (search by meaning). They take MANY targets per call (`tokenade skeleton a.rs b.rs c.rs`) — batch in ONE turn.\n\n## Compute over data with `tokenade exec`\n`tokenade exec --lang python --script '<code>'` (also sh/node/ruby/awk/jq/perl) runs in a sandbox and returns ONLY its stdout. Use it to COMPUTE over data — filter/aggregate a large or structured output, pull facts across SEVERAL files, or apply one mechanical edit across many files (migration, find-replace) — in ONE script, not one command per item. It is NOT a file reader: to read content, use the parallel reads above, not `exec`. Long or quote-heavy script? `--script-file <path>` (or `--script -` on stdin) avoids shell quoting entirely.\n\n## Commands\nIf you do not have hooks (i.e. you are not Claude Code or Gemini CLI), use `tokenade wrap '<cmd>'` to wrap all your commands. If there is an opportunity for compacting noisy output, tokenade will find it — and you will waste fewer tokens.\nCall binaries by their PATH name, not an absolute path (`git`, not `/usr/bin/git`) — an absolute path bypasses tokenade's hook and PATH shim, so that command's output isn't compacted.\n\n## Keep output lean\nKeep prose terse and code minimal — every token you write is billed as output.\n- **Prose:** answer directly — no preamble, recap, tool-call narration, summary, or emoji. Drop articles, filler (*just/really/basically/simply*) and hedging; fragments fine; short word over long.\n- **Output:** don't paste long raw output — quote the shortest decisive line. No decorative tables.\n- **Code:** write the least that works; reuse before adding (`query` / `skeleton` / `impact`, stdlib, platform feature — YAGNI).\n- **Verbatim:** keep code, identifiers, API/CLI names and error strings exact — never abbreviate or paraphrase. Keep the user's language.\n- **Correctness first:** fix root causes not symptoms, don't downgrade the algorithm, don't guess APIs/flags/versions — verify.\n- **Full prose where terseness could mislead:** security/data-loss warnings, irreversible-action confirmations, multi-step sequences.\n<!-- /tokenade-scaffold -->",
 };
 
+/**
+ * OUR text, delivered exactly as theirs is: a CLAUDE.md and no hooks.
+ *
+ * THE ARM THAT MAKES THE HEAD-TO-HEAD HONEST. The first comparison put `assist`
+ * -- hooks PLUS the block -- against their text alone, and I reported it as
+ * text versus text. It was not. Attribution had shown hooks-without-block is
+ * indistinguishable from control, but that does not license treating
+ * hooks-plus-text as equivalent to text; the interaction is exactly what an
+ * uncontrolled comparison cannot rule out.
+ *
+ * This arm carries the shipped constant, imported rather than copied so the
+ * measured text cannot drift from the text users get, with no hooks, no MCP,
+ * and the optimizer switched off. Against tokenade-rules it is 471 characters
+ * against 2,667, same delivery, same everything else.
+ */
+export const oursRulesOnly = {
+  name: 'ours-rules',
+  settings: {},
+  env: {
+    TOKEN_OPTIMIZER_MODE: 'off',
+    TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+  },
+  claudeMd: `# Project rules for AI coding agents\n\n${OUTPUT_DISCIPLINE}\n`,
+};
+
 export const ARMS = {
   control,
   assist,
   'assist-noseed': assistNoSeed,
   'assist-norules': assistNoRules,
   'tokenade-rules': tokenadeRules,
+  'ours-rules': oursRulesOnly,
 };
 
 /** Loads extra arms from a JSON file, so an outsider can add their own. */
