@@ -13,7 +13,7 @@ import { join } from 'node:path';
 
 import { runColdTask, runWarmSequence, campaignProvenance } from '../../bench/ledger/run.mjs';
 import { validateTask, scoreWorkspace, zeroScore } from '../../bench/ledger/task.mjs';
-import { TASKS, ADVERSARIAL, forTrack, singleShotExtract } from '../../bench/ledger/tasks/index.mjs';
+import { TASKS, ADVERSARIAL, GOLDEN, forTrack, singleShotExtract } from '../../bench/ledger/tasks/index.mjs';
 import { rowProblem } from '../../bench/ledger/provenance.mjs';
 
 const PROV = campaignProvenance({ imageDigest: 'sha256:aaa', commitSha: 'abc1234' });
@@ -361,6 +361,38 @@ describe('the shipped verifiers actually discriminate', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test.each(TASKS.map((t) => [t.id]))(
+    'a known-correct solution scores 1.000: %s',
+    (id) => {
+      // THE GATE FOR A WHOLE DEFECT CLASS. Three verifiers here have shipped
+      // coupled to exact source text, and the last one scored a PERFECTLY fixed
+      // workspace at 0.571 for ten reps across two arms -- caught only because
+      // completion came back at 0%. A check is worthless until a known-correct
+      // answer passes it, so every task must declare one and clear it.
+      const task = TASKS.find((t) => t.id === id);
+      const golden = GOLDEN[id];
+      expect(typeof golden).toBe('function');
+
+      const dir = mkdtempSync(join(tmpdir(), 'ledger-golden-'));
+      try {
+        task.setup(dir);
+        // Unsolved must NOT already be full marks, or the check proves nothing.
+        expect(scoreWorkspace(task, dir).score).toBeLessThan(1);
+        golden(dir);
+        const scored = scoreWorkspace(task, dir);
+        expect(scored.errored).toBe(0);
+        expect(scored.score).toBe(1);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  test('every task has a golden solution declared', () => {
+    // A task added without one would silently opt out of the gate above.
+    expect(Object.keys(GOLDEN).sort()).toEqual(TASKS.map((t) => t.id).sort());
   });
 
   test('forTrack only offers tasks that declare the track', () => {
