@@ -90,8 +90,28 @@ export async function coldArm(arm, { tasks, execute, provenance, storePath, prec
  */
 export async function warmArm(arm, { tasks, execute, provenance, storePath, precision, log }) {
   if (!tasks.length) return [];
+
+  // WHERE A KILLED CAMPAIGN PICKS UP. A warm rep is the whole sequence, so a
+  // rep counts as done only when every task in it has a row for this build --
+  // a sequence interrupted halfway is redone, because its later tasks never saw
+  // the state the earlier ones would have left.
+  const build = buildKey(provenance);
+  const mine = loadRows(storePath).filter(
+    (r) => r.arm === arm && r.track === 'warm' && buildKey(r) === build
+  );
+  const complete = new Set();
+  for (const rep of new Set(mine.map((r) => r.rep))) {
+    const inRep = new Set(mine.filter((r) => r.rep === rep).map((r) => r.task));
+    if (tasks.every((t) => inRep.has(t.id))) complete.add(rep);
+  }
+  const startRep = complete.size ? Math.max(...complete) + 1 : 1;
+  const priorRows = mine.filter((r) => complete.has(r.rep));
+  if (startRep > 1) log?.(`  warm/${arm}: resuming at rep ${startRep} (${priorRows.length} row(s) banked)`);
+
   const { rows, unresolved } = await runWarmSequence(tasks, {
     arm,
+    startRep,
+    priorRows,
     execute,
     freshStateDir: async () => mkdtempSync(join(tmpdir(), `ledger-warm-${arm}-`)),
     provenance,

@@ -113,12 +113,17 @@ export async function runColdTask(
  */
 export async function runWarmSequence(
   tasks,
-  { arm, execute, freshStateDir, provenance, precision, onRow } = {}
+  { arm, execute, freshStateDir, provenance, precision, onRow, startRep = 1, priorRows = [] } = {}
 ) {
   const limit = { ...DEFAULT_PRECISION, ...precision };
-  const rows = [];
+  // RESUMES FROM ROWS ALREADY BANKED. Without this a warm campaign that was
+  // interrupted restarted its whole sequence, so a track killed three times in
+  // a row could never finish no matter how much was spent. The prior rows count
+  // toward convergence too -- otherwise resuming would re-derive an interval
+  // from a fraction of the evidence and keep sampling forever.
+  const rows = [...priorRows];
 
-  for (let rep = 1; rep <= limit.maxReps; rep++) {
+  for (let rep = startRep; rep <= limit.maxReps; rep++) {
     // Fresh for the SEQUENCE, shared within it. That single distinction is what
     // separates warm from cold.
     const stateDir = freshStateDir ? await freshStateDir({ arm, rep }) : null;

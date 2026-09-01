@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { appendRows, loadRows, completedReps, buildsPresent } from '../../bench/ledger/store.mjs';
-import { runCampaign, coldArm } from '../../bench/ledger/campaign.mjs';
+import { runCampaign, coldArm, warmArm } from '../../bench/ledger/campaign.mjs';
 import { renderReport, headline } from '../../bench/ledger/render.mjs';
 import { report } from '../../bench/ledger/rank.mjs';
 import { ARMS, loadArms } from '../../bench/ledger/arms.mjs';
@@ -182,6 +182,42 @@ describe('the campaign', () => {
     expect(seen[0]).toBe(0);
     expect(seen[2]).toBeGreaterThan(0);
     expect(loadRows(store)).toHaveLength(3);
+  });
+
+  test('a killed warm track resumes instead of restarting', async () => {
+    // WITHOUT THIS A WARM TRACK CANNOT FINISH. A warm rep is the whole
+    // sequence, and warmArm previously always started at rep 1 -- so a track
+    // killed three times in a row would redo the same reps three times and
+    // never converge, however much was spent.
+    const tasks = fakeTasks(['w-a', 'w-b']).map((t) => ({ ...t, tracks: ['warm'] }));
+    const prov = { image_digest: 'sha256:a', commit_sha: 'c1' };
+
+    // Two COMPLETE reps already banked, plus a torn third missing one task.
+    const banked = [];
+    for (const rep of [1, 2]) {
+      for (const t of tasks) banked.push(row({ ...prov, arm: 'assist', track: 'warm', task: t.id, rep }));
+    }
+    banked.push(row({ ...prov, arm: 'assist', track: 'warm', task: 'w-a', rep: 3 }));
+    appendRows(store, banked);
+
+    const seen = [];
+    await warmArm('assist', {
+      tasks,
+      execute: async (args) => {
+        seen.push(args.rep);
+        return { status: 'ok', usd: 0.1, turns: 5, workspace: { pass: true } };
+      },
+      provenance: prov,
+      storePath: store,
+      precision: { minReps: 3, maxReps: 4 },
+    });
+
+    // Reps 1 and 2 are complete and skipped. Rep 3 is TORN -- one task never
+    // ran, so its later tasks never saw the state the earlier ones left -- and
+    // is therefore redone rather than trusted.
+    expect(Math.min(...seen)).toBe(3);
+    expect(seen).not.toContain(1);
+    expect(seen).not.toContain(2);
   });
 
   test('the battery is a parameter, so a campaign can be scoped to one task', async () => {
