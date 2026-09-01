@@ -269,6 +269,21 @@ export function dockerExecutor({
       return { status: 'setup-error', usd: 0, turns: 0, workspace: null, error: String(error) };
     }
 
+    // A RULES FILE IS PART OF AN ARM, because for the leader it IS the arm.
+    // Their CLI is invoked 0.38 times per task while their claude_md carries
+    // the output discipline that moves their numbers, so an arm format that
+    // could only express hooks and environment could not represent them at all
+    // -- and a head-to-head of the mechanism that actually works would have
+    // been impossible to run.
+    //
+    // Written into the WORKSPACE rather than injected, because that is how the
+    // client loads it natively and how they ship it. Delivery differs between
+    // us and them, and the comparison has to preserve that.
+    const arms_ = arms[arm];
+    if (arms_.claudeMd) {
+      writeFileSync(join(workspace, 'CLAUDE.md'), arms_.claudeMd);
+    }
+
     const state = stateDir || mkdtempSync(join(workRoot, `ledger-state-${arm}-`));
     mkdirSync(state, { recursive: true });
 
