@@ -12,3 +12,6 @@ results/runs/
 
 # NOT results/ itself. Published reports live there and MUST be committed: a
 # number nobody can trace to the versions that produced it is not evidence.
+
+# Row stores are published deliberately, not committed incidentally.
+ledger/results*.jsonl
