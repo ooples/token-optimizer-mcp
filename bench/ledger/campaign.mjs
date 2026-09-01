@@ -1,0 +1,161 @@
+/**
+ * One command: run the arms, on both tracks, and report.
+ *
+ * The orchestration is deliberately dull. Everything with an opinion in it --
+ * when to stop sampling, what a run is worth, whether a comparison may be
+ * published -- lives in modules this file calls, each of which is tested
+ * without spending anything. What is left here is sequencing and bookkeeping,
+ * and the two places it could still go wrong are guarded:
+ *
+ *   RESUMPTION IS BUILD-SCOPED   a rep only counts if it came from this image
+ *                                and this commit, so a rebuild restarts an arm
+ *                                rather than blending two products.
+ *   ROWS ARE WRITTEN AS THEY     a campaign that dies halfway has still
+ *   HAPPEN                       recorded what it spent. Buffering rows until
+ *                                the end means a crash loses the money.
+ */
+
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { runColdTask, runWarmSequence, campaignProvenance } from './run.mjs';
+import { appendRows, loadRows, completedReps } from './store.mjs';
+import { report } from './rank.mjs';
+import { forTrack } from './tasks/index.mjs';
+import { discardWorkspace } from './executor.mjs';
+import { buildKey } from './provenance.mjs';
+
+/**
+ * Wraps an executor so every finished run is scored, stored, and its workspace
+ * released before the next one starts.
+ *
+ * The workspace is discarded HERE rather than in the executor because only this
+ * layer knows the scoring has happened. Freeing it earlier would leave the
+ * verifier nothing to read; freeing it later fills the disk over a campaign.
+ */
+function recording(execute, { storePath, onRow }) {
+  return async (args) => {
+    const outcome = await execute(args);
+    // The runner scores from `workspace`; it is released once the row exists.
+    outcome._release = () => discardWorkspace(outcome.workspace);
+    if (onRow) onRow(outcome);
+    return outcome;
+  };
+}
+
+/**
+ * Runs one arm on the cold track, skipping tasks already complete for this build.
+ */
+export async function coldArm(arm, { tasks, execute, provenance, storePath, precision, log }) {
+  const existing = loadRows(storePath);
+  const build = buildKey(provenance);
+  const written = [];
+
+  for (const task of tasks) {
+    const done = completedReps(existing, { arm, track: 'cold', task: task.id, build });
+    if (done >= (precision?.maxReps ?? 12)) {
+      log?.(`  cold/${arm}/${task.id}: ${done} reps already recorded for this build, skipping`);
+      continue;
+    }
+
+    const { rows, verdict } = await runColdTask(task, {
+      arm,
+      execute,
+      freshStateDir: async () => mkdtempSync(join(tmpdir(), `ledger-cold-${arm}-`)),
+      provenance,
+      precision,
+    });
+
+    const { rejected } = appendRows(storePath, rows);
+    if (rejected.length) log?.(`  !! ${rejected.length} row(s) rejected: ${rejected[0].problem}`);
+    written.push(...rows);
+    log?.(
+      `  cold/${arm}/${task.id}: ${rows.length} rep(s), ${verdict.state}` +
+        (verdict.width && Number.isFinite(verdict.width)
+          ? ` (interval ${(verdict.width * 100).toFixed(0)}%)`
+          : '')
+    );
+  }
+  return written;
+}
+
+/**
+ * Runs one arm on the warm track: an ordered sequence sharing one state
+ * directory per rep.
+ */
+export async function warmArm(arm, { tasks, execute, provenance, storePath, precision, log }) {
+  if (!tasks.length) return [];
+  const { rows, unresolved } = await runWarmSequence(tasks, {
+    arm,
+    execute,
+    freshStateDir: async () => mkdtempSync(join(tmpdir(), `ledger-warm-${arm}-`)),
+    provenance,
+    precision,
+  });
+  const { rejected } = appendRows(storePath, rows);
+  if (rejected.length) log?.(`  !! ${rejected.length} row(s) rejected: ${rejected[0].problem}`);
+  log?.(
+    `  warm/${arm}: ${rows.length} row(s) over ${tasks.length} task(s)` +
+      (unresolved.length ? `, unresolved: ${unresolved.join(', ')}` : '')
+  );
+  return rows;
+}
+
+/**
+ * The whole campaign.
+ *
+ * `control` is always run first and on every track: without it there is nothing
+ * to compare against, and discovering that after spending on the other arms is
+ * the kind of avoidable waste this harness exists to stop.
+ */
+export async function runCampaign({
+  arms,
+  armNames,
+  execute,
+  storePath,
+  imageDigest,
+  commitSha,
+  tracks = ['cold', 'warm'],
+  precision,
+  log = () => {},
+  // THE BATTERY IS A PARAMETER, defaulting to the shipped set. Hardcoding
+  // `forTrack` here made the campaign untestable except against the real tasks
+  // -- a test that passed its own fixtures silently got the shipped ones
+  // instead, and its assertions were about runs it never configured. It also
+  // left an operator no way to re-run a single task after a failure without
+  // paying for the whole battery.
+  tasksForTrack = forTrack,
+} = {}) {
+  const provenance = campaignProvenance({ imageDigest, commitSha });
+  const ordered = ['control', ...armNames.filter((a) => a !== 'control')];
+
+  for (const name of ordered) {
+    if (!arms[name]) throw new Error(`unknown arm: ${name}`);
+  }
+
+  const wrapped = recording(execute, {
+    storePath,
+    onRow: (outcome) => outcome.workspace && null,
+  });
+
+  for (const track of tracks) {
+    const tasks = tasksForTrack(track);
+    if (!tasks.length) continue;
+    log(`\nTRACK ${track} -- ${tasks.length} task(s)`);
+    for (const name of ordered) {
+      if (track === 'cold') {
+        await coldArm(name, { tasks, execute: wrapped, provenance, storePath, precision, log });
+      } else {
+        await warmArm(name, { tasks, execute: wrapped, provenance, storePath, precision, log });
+      }
+    }
+  }
+
+  const rows = loadRows(storePath);
+  // Only this build's rows are summarised. Older rows stay in the file as
+  // evidence; `report` would throw if they were mixed in, which is the
+  // behaviour we want if this filter is ever removed.
+  const mine = rows.filter((r) => buildKey(r) === buildKey(provenance));
+  return { rows: mine, report: report(mine, { precision }) };
+}
