@@ -311,11 +311,27 @@ describe('the report a reader sees', () => {
 });
 
 describe('arms are data, not code', () => {
-  test('the shipped arms differ only in settings and environment', () => {
-    expect(Object.keys(ARMS)).toEqual(expect.arrayContaining(['control', 'assist', 'assist-noseed']));
+  test('the shipped arms are data: settings, environment and an optional rules file', () => {
+    // claudeMd was added because the leader cannot be represented without it --
+    // their CLI runs 0.38 times per task while their rules file does the work,
+    // so hooks-and-environment could not express them at all. It stays OPTIONAL
+    // so the constraint that an arm is data rather than code still holds.
+    expect(Object.keys(ARMS)).toEqual(
+      expect.arrayContaining(['control', 'assist', 'assist-noseed', 'assist-norules', 'tokenade-rules'])
+    );
+    const allowed = new Set(['env', 'name', 'settings', 'claudeMd']);
     for (const arm of Object.values(ARMS)) {
-      expect(Object.keys(arm).sort()).toEqual(['env', 'name', 'settings']);
+      for (const key of Object.keys(arm)) expect(allowed.has(key)).toBe(true);
+      expect(arm.name).toBeTruthy();
     }
+  });
+
+  test('the leader arm carries their rules file and no hooks of ours', () => {
+    const tk = ARMS['tokenade-rules'];
+    expect(tk.claudeMd).toMatch(/Keep output lean/);
+    expect(tk.claudeMd.length).toBeGreaterThan(2000);
+    expect(tk.settings).toEqual({});
+    expect(tk.env.TOKEN_OPTIMIZER_MODE).toBe('off');
   });
 
   test('control declares an empty inventory rather than assuming one', () => {

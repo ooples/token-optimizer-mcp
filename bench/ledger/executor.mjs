@@ -279,9 +279,14 @@ export function dockerExecutor({
     // Written into the WORKSPACE rather than injected, because that is how the
     // client loads it natively and how they ship it. Delivery differs between
     // us and them, and the comparison has to preserve that.
-    const arms_ = arms[arm];
-    if (arms_.claudeMd) {
-      writeFileSync(join(workspace, 'CLAUDE.md'), arms_.claudeMd);
+    // RESOLVED THROUGH ensureArmDir FIRST, which is what raises "unknown arm".
+    // Reading arms[arm] directly here bypassed that guard and turned a clear
+    // error into "Cannot read properties of undefined (reading 'claudeMd')" --
+    // I broke the loud failure while adding a feature beside it.
+    const armDir = ensureArmDir(arm);
+    const definition = arms[arm];
+    if (definition.claudeMd) {
+      writeFileSync(join(workspace, 'CLAUDE.md'), definition.claudeMd);
     }
 
     const state = stateDir || mkdtempSync(join(workRoot, `ledger-state-${arm}-`));
@@ -293,7 +298,7 @@ export function dockerExecutor({
         image,
         workspace,
         stateDir: state,
-        armDir: ensureArmDir(arm),
+        armDir,
         credentials,
         prompt: task.prompt,
         model,
