@@ -438,6 +438,74 @@ export const floodedSymbol = {
   ],
 };
 
+/**
+ * THE TASK THAT CATCHES TERSENESS BUYING COST WITH COMPLETENESS.
+ *
+ * Every other task here has a CODE deliverable, so its verifier checks files.
+ * The output-discipline block changes PROSE, which those tasks barely produce
+ * -- meaning the most likely way it could do harm was invisible to the whole
+ * battery. This closes that.
+ *
+ * The deliverable is an explanation, and the rubric is four concrete facts that
+ * an explanation of this bug must contain. That makes the incentive exactly
+ * right: an answer carrying all four facts in one terse sentence scores 1.000
+ * and costs less than a rambling one, so brevity is rewarded -- while brevity
+ * achieved by DROPPING a fact scores 0.4 and the ledger charges full price for
+ * it. Cost per unit delivered then moves in the correct direction on its own,
+ * with no separate quality metric to argue about.
+ *
+ * It is also the most sensitive test bed available for the block, because here
+ * the deliverable IS output tokens rather than a file edit.
+ */
+export const explainFailure = {
+  id: 'explain-failure',
+  family: 'explain',
+  adversarial: false,
+  tracks: ['cold', 'warm'],
+  prompt:
+    'Do not change any code. Write to ANSWER.md a short explanation of why the test in ' +
+    'tests/test_pipeline.py fails: name the function at fault, the file it lives in, the exact ' +
+    'call that is wrong, and what the observable wrong behaviour is.',
+  setup(dir) {
+    debugPipeline.setup(dir);
+  },
+  checks: [
+    {
+      name: 'names the faulty function',
+      weight: 2,
+      run: (dir) => /\bnormalise\b/.test(read(dir, 'ANSWER.md')),
+    },
+    {
+      // The heart of the explanation: not merely "it is wrong" but WHICH call.
+      name: 'identifies lstrip as the wrong call',
+      weight: 3,
+      run: (dir) => /\blstrip\b/.test(read(dir, 'ANSWER.md')),
+    },
+    {
+      name: 'states the observable behaviour',
+      weight: 3,
+      run: (dir) => {
+        const src = read(dir, 'ANSWER.md').toLowerCase();
+        // Trailing whitespace surviving, however it is phrased.
+        return /trailing|right|end of|both sides/.test(src) && /whitespace|space/.test(src);
+      },
+    },
+    {
+      name: 'gives the file path',
+      weight: 1,
+      run: (dir) => /pipeline\/clean\.py/.test(read(dir, 'ANSWER.md')),
+    },
+    {
+      // Guards the other direction: the task says explain, not fix. An arm that
+      // edits the code has done different work and must not be scored as if it
+      // answered the question.
+      name: 'left the code alone',
+      weight: 1,
+      run: (dir) => /\.lstrip\(\)/.test(read(dir, 'pipeline/clean.py')),
+    },
+  ],
+};
+
 export const GOLDEN = {
   'debug-pipeline-py': (dir) =>
     write(dir, 'pipeline/clean.py', read(dir, 'pipeline/clean.py').replace('.lstrip()', '.strip()')),
@@ -461,6 +529,16 @@ export const GOLDEN = {
   'repeat-comprehension': (dir) =>
     write(dir, 'SYMBOLS.txt', 'parse_line pipeline/parse.py:1\nnormalise pipeline/clean.py:1\n'),
 
+  // Terse and complete: all four facts, no padding. This is the answer the
+  // rules file should produce, and it must score 1.000.
+  'explain-failure': (dir) =>
+    write(
+      dir,
+      'ANSWER.md',
+      'normalise in pipeline/clean.py calls .lstrip(), which strips only the left side, ' +
+        'so trailing whitespace survives and the value is "b  " instead of "b".\n'
+    ),
+
   'flooded-symbol': (dir) =>
     write(
       dir,
@@ -477,6 +555,7 @@ export const GOLDEN = {
 };
 
 export const TASKS = [
+  explainFailure,
   floodedSymbol,
   debugPipeline,
   singleShotExtract,

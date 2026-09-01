@@ -395,6 +395,59 @@ describe('the shipped verifiers actually discriminate', () => {
     expect(Object.keys(GOLDEN).sort()).toEqual(TASKS.map((t) => t.id).sort());
   });
 
+  test('terseness is rewarded, but terseness that drops a fact is not', () => {
+    // THE WHOLE POINT OF THE PROSE TASK. The output-discipline block changes
+    // prose, and every other task in the battery has a code deliverable, so the
+    // most likely way that block could do harm was invisible. Here a SHORT
+    // complete answer scores 1.000 while a SHORTER answer missing the cause
+    // scores far less -- and the ledger charges both at full price, so cost per
+    // unit delivered moves the right way with no separate quality metric.
+    const task = TASKS.find((t) => t.id === 'explain-failure');
+    const score = (answer) => {
+      const dir = mkdtempSync(join(tmpdir(), 'ledger-prose-'));
+      try {
+        task.setup(dir);
+        writeFileSync(join(dir, 'ANSWER.md'), answer);
+        return scoreWorkspace(task, dir).score;
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    };
+
+    const terseComplete =
+      'normalise in pipeline/clean.py uses .lstrip(), stripping only the left, ' +
+      'so trailing whitespace survives.';
+    const verboseComplete =
+      'I looked at the repository and examined the test suite carefully. After some ' +
+      'investigation it turns out that the function normalise, which lives in the file ' +
+      'pipeline/clean.py, is calling .lstrip() rather than the method it ought to call. ' +
+      'The consequence is that trailing whitespace on the right hand side survives.';
+    const terseLossy = 'The whitespace handling in the pipeline is wrong.';
+
+    // Brevity costs nothing when the facts survive.
+    expect(score(terseComplete)).toBe(1);
+    expect(score(verboseComplete)).toBe(1);
+    // Brevity that loses the cause is penalised, heavily.
+    expect(score(terseLossy)).toBeLessThan(0.4);
+  });
+
+  test('answering the explain task by editing the code does not score', () => {
+    // An arm that fixes the bug has done different work than the one asked for.
+    const task = TASKS.find((t) => t.id === 'explain-failure');
+    const dir = mkdtempSync(join(tmpdir(), 'ledger-prose-edit-'));
+    try {
+      task.setup(dir);
+      GOLDEN['explain-failure'](dir);
+      expect(scoreWorkspace(task, dir).score).toBe(1);
+      // Now also "helpfully" fix it.
+      const p = join(dir, 'pipeline/clean.py');
+      writeFileSync(p, readFileSync(p, 'utf8').replace('.lstrip()', '.strip()'));
+      expect(scoreWorkspace(task, dir).score).toBeLessThan(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('forTrack only offers tasks that declare the track', () => {
     for (const t of forTrack('cold')) expect(t.tracks).toContain('cold');
     expect(forTrack('warm').map((t) => t.id)).toContain('repeat-comprehension');
