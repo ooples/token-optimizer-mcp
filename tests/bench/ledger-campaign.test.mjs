@@ -152,6 +152,38 @@ describe('the campaign', () => {
     expect(rows.every((r) => r.image_digest === 'sha256:a')).toBe(true);
   });
 
+  test('every rep hits disk as it happens, not after the task finishes', async () => {
+    // OBSERVED COSTING REAL MONEY. Rows were appended only after a task's whole
+    // rep loop returned, so a campaign interrupted partway through its FIRST
+    // task left no store file at all -- every run it had paid for was
+    // discarded. The ledger's rule is that money already spent must be
+    // recorded, and that has to hold for the harness itself.
+    const seen = [];
+    const counting = async (args) => {
+      const out = await execute(args);
+      // Snapshot the store from INSIDE the run, before the task completes.
+      seen.push(loadRows(store).length);
+      return out;
+    };
+    await runCampaign({
+      arms: ARMS,
+      armNames: [],
+      execute: counting,
+      storePath: store,
+      imageDigest: 'sha256:a',
+      commitSha: 'c1',
+      tracks: ['cold'],
+      precision: { minReps: 3, maxReps: 3 },
+      tasksForTrack: () => fakeTasks(['debug-x']),
+    });
+
+    // By the third run the store already holds the earlier reps. Under the old
+    // per-task write this array was [0, 0, 0].
+    expect(seen[0]).toBe(0);
+    expect(seen[2]).toBeGreaterThan(0);
+    expect(loadRows(store)).toHaveLength(3);
+  });
+
   test('the battery is a parameter, so a campaign can be scoped to one task', async () => {
     // Hardcoding forTrack() made this untestable except against the shipped
     // tasks, and left an operator no way to re-run one task after a failure
