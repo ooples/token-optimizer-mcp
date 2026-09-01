@@ -15,6 +15,7 @@ import {
   ratioCI,
   significant,
   rng,
+  DEFAULT_PRECISION,
 } from '../../bench/ledger/stats.mjs';
 import {
   rowProblem,
@@ -76,6 +77,27 @@ describe('the interval is honest about spread', () => {
   test('below the minimum it asks for more rather than computing anything', () => {
     expect(samplingVerdict([0.1, 0.1]).state).toBe('continue');
     expect(samplingVerdict([0.1, 0.1]).ci).toBeNull();
+  });
+
+  test('three clustered samples cannot be called converged', () => {
+    // A percentile bootstrap of the median resamples WITH REPLACEMENT, so at
+    // n=3 every resampled median is one of those same three values and the
+    // interval can never exceed [min, max] of the sample. Three draws that
+    // land close therefore report a 2-4% width on no evidence -- which
+    // published two "significant" results in a real campaign before the floor
+    // was raised.
+    for (const sample of [[0.100, 0.102, 0.104], [0.100, 0.101, 0.099]]) {
+      const ci = bootstrapMedianCI(sample, { seed: 1 });
+      // The interval really is tight -- that is the trap, not the defence.
+      expect(widthRatio(ci)).toBeLessThan(0.06);
+      // The defence is refusing to call it converged.
+      expect(samplingVerdict(sample).state).toBe('continue');
+      expect(samplingVerdict(sample).reason).toBe('below-min-reps');
+    }
+  });
+
+  test('the minimum is high enough that the median has resolution', () => {
+    expect(DEFAULT_PRECISION.minReps).toBeGreaterThanOrEqual(6);
   });
 
   test('the interval is reproducible from the same rows', () => {
@@ -226,10 +248,10 @@ describe('the report', () => {
 
   test('cold and warm are never averaged together', () => {
     const out = report([
-      ...rows('control', 'cold', [0.10, 0.10, 0.10, 0.10], [1, 1, 1, 1]),
-      ...rows('candidate', 'cold', [0.10, 0.10, 0.10, 0.10], [1, 1, 1, 1]),
-      ...rows('control', 'warm', [0.10, 0.10, 0.10, 0.10], [1, 1, 1, 1]),
-      ...rows('candidate', 'warm', [0.05, 0.05, 0.05, 0.05], [1, 1, 1, 1]),
+      ...rows('control', 'cold', [0.10,0.10,0.10,0.10,0.10,0.10,0.10,0.10], [1,1,1,1,1,1,1,1]),
+      ...rows('candidate', 'cold', [0.10,0.10,0.10,0.10,0.10,0.10,0.10,0.10], [1,1,1,1,1,1,1,1]),
+      ...rows('control', 'warm', [0.10,0.10,0.10,0.10,0.10,0.10,0.10,0.10], [1,1,1,1,1,1,1,1]),
+      ...rows('candidate', 'warm', [0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05], [1,1,1,1,1,1,1,1]),
     ]);
     expect(out.tracks.cold.arms.candidate.costRatio).toBeCloseTo(1, 3);
     expect(out.tracks.warm.arms.candidate.costRatio).toBeCloseTo(0.5, 3);

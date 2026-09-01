@@ -94,8 +94,26 @@ export const DEFAULT_PRECISION = {
   // A 10% interval is narrow enough to call a 10% effect, which is the size of
   // claim this benchmark exists to adjudicate.
   targetWidthRatio: 0.10,
-  // Below three there is no interval worth computing.
-  minReps: 3,
+  // SIX, NOT THREE, AND THIS IS A CORRECTNESS FLOOR RATHER THAN A PREFERENCE.
+  //
+  // A percentile bootstrap of the median resamples WITH REPLACEMENT, so with
+  // three observations every resampled median is one of those same three
+  // values and the interval can never be wider than [min, max] of the sample.
+  // Three draws that happen to land close therefore report a 2-4% interval and
+  // a "converged" verdict on no evidence whatever:
+  //
+  //   [0.100, 0.102, 0.104] -> CI [0.100, 0.104], width 4%, CONVERGED
+  //   [0.100, 0.101, 0.099] -> CI [0.099, 0.101], width 2%, CONVERGED
+  //
+  // That is not a tight estimate, it is three samples agreeing by chance. It
+  // produced two "significant" results in a real campaign -- flooded-symbol at
+  // 0.879 [0.789, 0.988] and pure-generation at 0.660 [0.549, 0.945], both at
+  // n=3 -- which should never have been published as intervals.
+  //
+  // Six is cheap given the measured cost of precision here: a clean task needs
+  // roughly eight reps to reach the 10% target anyway, so this floor rarely
+  // binds on anything that was going to converge honestly.
+  minReps: 6,
   // The cap is a SPEND control, and it is the reason UNRESOLVED exists: some
   // tasks will not converge at any affordable n, and the honest report says so
   // rather than quietly averaging them in.
