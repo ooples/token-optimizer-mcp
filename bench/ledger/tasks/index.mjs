@@ -48,9 +48,30 @@ export const debugPipeline = {
   family: 'debug',
   adversarial: false,
   tracks: ['cold', 'warm'],
+  // REDESIGNED FOR LOWER PATH DEPENDENCE, on measured evidence.
+  //
+  // The first version ran 8 to 13 turns across 36 reps -- a 1.9x cost spread
+  // with a long right tail -- and never converged to a 10% interval at n=12 on
+  // either track. Note what the data did NOT show: the distribution is
+  // 8 8 9x8 10x10 11x11 12 12 13x3, which is smooth and unimodal. I had twice
+  // called this task bimodal, carrying that word over from THOL's similarly
+  // named task without checking my own.
+  //
+  // The cause is discretionary exploration: cost tracks turns at corr 0.898,
+  // and the necessary work here is about five turns, so anything from three to
+  // eight further turns of looking around is pure variance. The lever is
+  // therefore to shrink DISCRETION, not to shrink the task -- the bug must
+  // still be found and fixed.
+  //
+  // Two changes, neither of which does the work for the agent: the failing
+  // assertion now names the function it is testing, so discovering WHERE to
+  // look is not itself a search; and the module is stated in the prompt. What
+  // remains is the actual debugging -- reading `lstrip`, knowing it strips only
+  // one side, and choosing `strip`.
   prompt:
-    'The test suite fails. Find and fix the bug so that `python -m pytest -q` passes. ' +
-    'Do not weaken, skip, or delete any test.',
+    'Running `python -m pytest -q` fails one test in tests/test_pipeline.py, which exercises ' +
+    '`normalise` in pipeline/clean.py. Fix the bug in that function so the test passes. ' +
+    'Do not weaken, skip, or delete any test, and change no other file.',
   setup(dir) {
     write(dir, 'pipeline/parse.py', [
       'def parse_line(raw):',
@@ -61,6 +82,7 @@ export const debugPipeline = {
     // The bug: strips the wrong side, so trailing whitespace survives.
     write(dir, 'pipeline/clean.py', [
       'def normalise(record):',
+      '    """Trim surrounding whitespace from the record value."""',
       '    record["value"] = record["value"].lstrip()',
       '    return record',
       '',
@@ -69,8 +91,9 @@ export const debugPipeline = {
       'from pipeline.parse import parse_line',
       'from pipeline.clean import normalise',
       '',
-      'def test_round_trip():',
-      '    assert normalise(parse_line("a,  b  "))["value"] == "b"',
+      'def test_normalise_trims_both_sides():',
+      '    got = normalise(parse_line("a,  b  "))["value"]',
+      '    assert got == "b", f"normalise left {got!r}; expected both sides trimmed"',
       '',
     ].join('\n'));
   },
@@ -216,7 +239,98 @@ export const repeatComprehension = {
   ],
 };
 
-export const TASKS = [debugPipeline, singleShotExtract, pureGeneration, repeatComprehension];
+/**
+ * REUSE-FRIENDLY, AND THE ONLY TASK BIG ENOUGH TO TEST AN INDEX.
+ *
+ * WHY THIS EXISTS. The first full campaign concluded that the project index
+ * bought nothing measurable -- and then the fixtures were measured: the largest
+ * was THREE FILES, 342 bytes. An index over three files cannot save anything,
+ * because the model can read the whole repository in one turn. That result was
+ * a fact about the battery, not about the feature, and acting on it would have
+ * retired a capability using an instrument incapable of detecting it.
+ *
+ * So this task generates a repository where locating a symbol is genuinely
+ * work: eighty modules, each with several plausible functions, exactly one of
+ * which contains the target. Without an index the agent must search; with one
+ * it can be told where to go. If the seed does not pay HERE, that is a real
+ * finding rather than an artefact of fixture size.
+ *
+ * Deterministic: the same eighty files every run, so the search difficulty is
+ * identical across arms and reps.
+ */
+const MODULE_COUNT = 80;
+
+export const needleInRepo = {
+  id: 'needle-in-repo',
+  family: 'locate',
+  adversarial: false,
+  tracks: ['cold', 'warm'],
+  prompt:
+    'There is a bug in the function `compute_settlement_fee`: it rounds the amount BEFORE ' +
+    'applying the rate, which loses precision. Fix it so the rate is applied first and the ' +
+    'result is rounded afterwards. Change nothing else.',
+  setup(dir) {
+    for (let i = 0; i < MODULE_COUNT; i++) {
+      const name = `mod_${String(i).padStart(3, '0')}`;
+      const lines = [
+        `"""Module ${name}."""`,
+        '',
+        `def ${name}_load(raw):`,
+        '    return [line.strip() for line in raw.splitlines() if line.strip()]',
+        '',
+        `def ${name}_summarise(rows):`,
+        '    return {"count": len(rows)}',
+        '',
+      ];
+      // The needle, in one module only, at a position that varies with nothing.
+      if (i === 47) {
+        lines.push(
+          'def compute_settlement_fee(amount, rate):',
+          '    """Fee for a settlement, in whole cents."""',
+          '    return round(amount) * rate',
+          ''
+        );
+      }
+      write(dir, `pkg/${name}.py`, lines.join('\n'));
+    }
+    write(dir, 'README.md', '# ledger service\n\nSettlement and reporting helpers.\n');
+  },
+  checks: [
+    {
+      name: 'the fix is applied',
+      weight: 3,
+      run: (dir) => /return\s+round\s*\(\s*amount\s*\*\s*rate\s*\)/.test(read(dir, 'pkg/mod_047.py')),
+    },
+    {
+      // The old expression must be GONE, not merely joined by a new one -- an
+      // agent that adds a corrected line beside the broken one has not fixed it.
+      name: 'the broken expression is gone',
+      weight: 2,
+      run: (dir) => !/round\s*\(\s*amount\s*\)\s*\*\s*rate/.test(read(dir, 'pkg/mod_047.py')),
+    },
+    {
+      // Guards against the cheapest wrong answer: rewriting half the repository
+      // until something matches.
+      name: 'the rest of the repository is untouched',
+      weight: 2,
+      run: (dir) => {
+        for (const i of [0, 12, 46, 48, 79]) {
+          const name = `mod_${String(i).padStart(3, '0')}`;
+          if (!new RegExp(`def ${name}_load`).test(read(dir, `pkg/${name}.py`))) return false;
+        }
+        return true;
+      },
+    },
+  ],
+};
+
+export const TASKS = [
+  debugPipeline,
+  singleShotExtract,
+  pureGeneration,
+  repeatComprehension,
+  needleInRepo,
+];
 
 /** The declared adversarial subset, which the report renders first. */
 export const ADVERSARIAL = TASKS.filter((t) => t.adversarial);
