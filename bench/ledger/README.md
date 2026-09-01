@@ -92,14 +92,27 @@ from the ledger, giving warm tasks separate state directories, making
 provenance optional, and letting `adversarial` go undeclared each break the
 suite.
 
-**Not yet built:** the docker executor that actually drives an agent. It is a
-single injected function:
+**The docker executor is wired and proven end to end.** One real run of
+`single-shot-extract` on the control arm: `status=ok`, `$0.071`, 3 turns,
+`score 1.000 (4/4)`, with a valid provenance-carrying row.
 
-```js
-execute({ task, arm, track, rep, stateDir })
-  -> { status, usd, turns, workspace }
-```
+It never scores anything — the verifier belongs to the task, so an executor
+cannot influence its own mark.
 
-That is deliberately the only part which costs money to exercise. It never
-scores anything — the verifier belongs to the task, so an executor cannot
-influence its own mark.
+Two things it gets right that are easy to get wrong, both established by
+running the real CLI rather than by reasoning:
+
+- **The success signal is `is_error`, not `subtype` and not the exit code.**
+  An unauthenticated run returns `subtype: "success"` with `is_error: true`,
+  `total_cost_usd: 0` and exit 0. A harness reading `subtype` would record it
+  as a successful free run — an infinitely efficient optimizer — for every run
+  in a campaign whose short-lived credentials had expired.
+- **The prompt travels as an environment variable, never inside the shell
+  script.** Interpolating it corrupted prompts containing inline code:
+  `JSON.stringify` does not escape backticks, so `` `timeout_ms` `` became
+  command substitution and the agent received "the value of the  key". It
+  answered sensibly, exited 0, and scored 0 — indistinguishable from the arm
+  failing the task. Caught by checking a score, not a status.
+
+**Still to build:** the campaign entry point that ties arms, tracks and the
+report together into one command.
