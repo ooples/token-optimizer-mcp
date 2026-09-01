@@ -352,6 +352,92 @@ export const needleInRepo = {
  * That converts "did I write the regex correctly" from a judgement into an
  * assertion, and it runs for free.
  */
+/**
+ * THE TASK THAT DECIDES WHETHER AN INDEX CAN PAY AT ALL.
+ *
+ * Built before the mechanism it is meant to justify, deliberately. Two previous
+ * attempts failed to exercise the feature: fixtures of three files, then an
+ * 81-file repo where naming the symbol reduced "find it" to one grep. Both
+ * produced clean nulls that said nothing about the feature.
+ *
+ * WHAT AN INDEX CAN DO THAT GREP CANNOT. Grep returns matching TEXT: a widely
+ * used helper's name appears once at its definition and once at every call
+ * site, all mixed together and indistinguishable by line content. An index
+ * knows which one is the DEFINITION. So the value case is not "where does this
+ * string appear" -- grep answers that in one turn and cannot be beaten -- but
+ * "which of these forty hits is the thing I need to edit".
+ *
+ * Here the target is called from forty other modules, so grepping its name
+ * returns forty-one hits and the definition has to be picked out. If the
+ * control arm does NOT spend extra turns on that, no index can help and the
+ * mechanism should not be built. That check comes before the code.
+ */
+export const floodedSymbol = {
+  id: 'flooded-symbol',
+  family: 'locate',
+  adversarial: false,
+  tracks: ['cold', 'warm'],
+  prompt:
+    'The function `compute_settlement_fee` has a bug: it rounds the amount BEFORE applying the ' +
+    'rate, which loses precision. Fix its DEFINITION so the rate is applied first and the result ' +
+    'is rounded afterwards. Do not change any of its call sites.',
+  setup(dir) {
+    for (let i = 0; i < MODULE_COUNT; i++) {
+      const name = `mod_${String(i).padStart(3, '0')}`;
+      const lines = [`"""Module ${name}."""`, ''];
+
+      if (i === 47) {
+        lines.push(
+          'def compute_settlement_fee(amount, rate):',
+          '    """Fee for a settlement, in whole cents."""',
+          '    return round(amount) * rate',
+          ''
+        );
+      } else if (i % 2 === 0) {
+        // FORTY CALL SITES. Each mentions the symbol by name, so a grep for it
+        // returns forty-one hits of which exactly one is the definition.
+        lines.push(
+          `from pkg.mod_047 import compute_settlement_fee`,
+          '',
+          `def ${name}_settle(amount, rate):`,
+          '    return compute_settlement_fee(amount, rate)',
+          ''
+        );
+      } else {
+        lines.push(`def ${name}_load(raw):`, '    return raw.splitlines()', '');
+      }
+      write(dir, `pkg/${name}.py`, lines.join('\n'));
+    }
+    write(dir, 'README.md', '# ledger service\n');
+  },
+  checks: [
+    {
+      name: 'the definition is fixed',
+      weight: 3,
+      run: (dir) => /return\s+round\s*\(\s*amount\s*\*\s*rate\s*\)/.test(read(dir, 'pkg/mod_047.py')),
+    },
+    {
+      name: 'the broken expression is gone',
+      weight: 2,
+      run: (dir) => !/round\s*\(\s*amount\s*\)\s*\*\s*rate/.test(read(dir, 'pkg/mod_047.py')),
+    },
+    {
+      // The instruction was explicit, and rewriting call sites is the obvious
+      // wrong turn when a grep returns forty of them.
+      name: 'call sites left alone',
+      weight: 2,
+      run: (dir) => {
+        for (const i of [0, 12, 46, 48, 78]) {
+          const name = `mod_${String(i).padStart(3, '0')}`;
+          const src = read(dir, `pkg/${name}.py`);
+          if (i % 2 === 0 && !/return compute_settlement_fee\(amount, rate\)/.test(src)) return false;
+        }
+        return true;
+      },
+    },
+  ],
+};
+
 export const GOLDEN = {
   'debug-pipeline-py': (dir) =>
     write(dir, 'pipeline/clean.py', read(dir, 'pipeline/clean.py').replace('.lstrip()', '.strip()')),
@@ -375,6 +461,13 @@ export const GOLDEN = {
   'repeat-comprehension': (dir) =>
     write(dir, 'SYMBOLS.txt', 'parse_line pipeline/parse.py:1\nnormalise pipeline/clean.py:1\n'),
 
+  'flooded-symbol': (dir) =>
+    write(
+      dir,
+      'pkg/mod_047.py',
+      read(dir, 'pkg/mod_047.py').replace('return round(amount) * rate', 'return round(amount * rate)')
+    ),
+
   'needle-in-repo': (dir) =>
     write(
       dir,
@@ -384,6 +477,7 @@ export const GOLDEN = {
 };
 
 export const TASKS = [
+  floodedSymbol,
   debugPipeline,
   singleShotExtract,
   pureGeneration,
