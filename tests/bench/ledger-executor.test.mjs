@@ -44,7 +44,52 @@ const SUCCEEDED = JSON.stringify({
 describe('reading the agent\'s own JSON', () => {
   test('a successful run yields cost and turns', () => {
     const out = readOutcome({ code: 0, stdout: SUCCEEDED, stderr: '', timedOut: false });
-    expect(out).toEqual({ status: 'ok', usd: 0.064097, turns: 7, detail: null });
+    expect(out.status).toBe('ok');
+    expect(out.usd).toBeCloseTo(0.064097, 6);
+    expect(out.turns).toBe(7);
+    expect(out.detail).toBeNull();
+  });
+
+  test('the token breakdown is captured, including server tool use', () => {
+    // COST ALONE CANNOT SAY WHERE THE MONEY WENT. Diagnosing the leader needed
+    // exactly this: their output tokens are 0.722 of control while cache_read
+    // is 0.784 -- and output bills at $15/M against cache_read's $0.30/M, so
+    // the smaller cut is worth more. Web search is billed separately and sits
+    // in NO token column; it was 76% of one task's cost and invisible to every
+    // token-based model of it.
+    const rich = JSON.stringify({
+      is_error: false,
+      num_turns: 9,
+      total_cost_usd: 0.5,
+      usage: {
+        input_tokens: 12,
+        output_tokens: 3400,
+        cache_creation_input_tokens: 18000,
+        cache_read_input_tokens: 210000,
+        server_tool_use: { web_search_requests: 7, web_fetch_requests: 2 },
+      },
+    });
+    const out = readOutcome({ code: 0, stdout: rich, stderr: '', timedOut: false });
+    expect(out.tokens).toEqual({
+      input: 12,
+      output: 3400,
+      cache_creation: 18000,
+      cache_read: 210000,
+      web_search: 7,
+      web_fetch: 2,
+    });
+  });
+
+  test('a run with no usage still carries every column', () => {
+    // So a report can sum without guarding each field.
+    for (const r of [
+      { code: null, stdout: '', stderr: '', timedOut: true },
+      { code: 1, stdout: 'not json', stderr: '', timedOut: false },
+    ]) {
+      expect(Object.keys(readOutcome(r).tokens).sort()).toEqual(
+        ['cache_creation', 'cache_read', 'input', 'output', 'web_fetch', 'web_search']
+      );
+    }
   });
 
   test('subtype "success" with is_error true is a FAILURE', () => {

@@ -29,6 +29,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /** Where the agent works, and where its state lives, inside the container. */
+/** A run that produced no usage still needs every column, so a report can sum. */
+export const EMPTY_TOKENS = Object.freeze({
+  input: 0,
+  output: 0,
+  cache_creation: 0,
+  cache_read: 0,
+  web_search: 0,
+  web_fetch: 0,
+});
+
 const WORK = '/work';
 const STATE = '/state';
 
@@ -74,7 +84,7 @@ export function realSpawn(command, args, { timeoutMs = 900_000, env } = {}) {
  */
 export function readOutcome({ code, stdout, stderr, timedOut }) {
   if (timedOut) {
-    return { status: 'timeout', usd: 0, turns: 0, detail: 'killed after timeout' };
+    return { status: 'timeout', usd: 0, turns: 0, tokens: EMPTY_TOKENS, detail: 'killed after timeout' };
   }
 
   let parsed = null;
@@ -87,6 +97,7 @@ export function readOutcome({ code, stdout, stderr, timedOut }) {
       status: 'error',
       usd: 0,
       turns: 0,
+      tokens: EMPTY_TOKENS,
       detail: `unparseable output (exit ${code}): ${(stderr || stdout).slice(0, 300)}`,
     };
   }
@@ -94,12 +105,35 @@ export function readOutcome({ code, stdout, stderr, timedOut }) {
   const usd = Number(parsed.total_cost_usd) || 0;
   const turns = Number(parsed.num_turns) || 0;
 
+  // THE TOKEN BREAKDOWN, because cost alone cannot say WHERE the money went.
+  //
+  // Diagnosing the leader took exactly this decomposition and Ledger could not
+  // produce it: on matched tasks their output tokens are 0.722 of control while
+  // their cache_read is 0.784 and their cache_creation 0.909 -- and output is
+  // billed at $15/M against cache_read's $0.30/M, so a 28% cut in the smallest
+  // column is worth more than a 22% cut in the largest. A harness that records
+  // only total_cost_usd can compare arms but cannot tell you which lever moved,
+  // which is how this product spent its life optimising the cheapest token
+  // class.
+  const u = parsed.usage || {};
+  const tokens = {
+    input: Number(u.input_tokens) || 0,
+    output: Number(u.output_tokens) || 0,
+    cache_creation: Number(u.cache_creation_input_tokens) || 0,
+    cache_read: Number(u.cache_read_input_tokens) || 0,
+    // Server-side tool use is billed separately and is NOT in any token column.
+    // It was 76% of one benchmark task's cost, invisible to every token-based
+    // model of that task, so it is captured rather than inferred.
+    web_search: Number(u.server_tool_use?.web_search_requests) || 0,
+    web_fetch: Number(u.server_tool_use?.web_fetch_requests) || 0,
+  };
+
   // `is_error`, not `subtype`, and not the exit code either: the CLI exits 0 on
   // an authentication failure while reporting is_error true.
   if (parsed.is_error) {
-    return { status: 'failed', usd, turns, detail: String(parsed.result || '').slice(0, 300) };
+    return { status: 'failed', usd, turns, tokens, detail: String(parsed.result || '').slice(0, 300) };
   }
-  return { status: 'ok', usd, turns, detail: null };
+  return { status: 'ok', usd, turns, tokens, detail: null };
 }
 
 /**
@@ -263,6 +297,7 @@ export function dockerExecutor({
       status: outcome.status,
       usd: outcome.usd,
       turns: outcome.turns,
+      tokens: outcome.tokens || EMPTY_TOKENS,
       // The verifier reads the host directory. Handed back on failure too, so a
       // partially-completed run can still earn partial credit -- an agent that
       // fixed the bug and then timed out did do some of the work.
