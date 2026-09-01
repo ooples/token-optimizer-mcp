@@ -57,6 +57,13 @@ async function runOnce(task, { arm, track, rep, stateDir, execute, provenance })
     status: outcome.status,
     usd: Number(outcome.usd) || 0,
     turns: Number(outcome.turns) || 0,
+    // COPIED THROUGH HERE, because the ROW is built in this file and not in the
+    // executor. The token breakdown was added to readOutcome and tested there,
+    // and every row still came out with tokens undefined -- a whole campaign
+    // reported output ratio NaN. Testing the unit is not testing the wiring,
+    // which is the same failure as verifying that an advisory fires without
+    // verifying that it changes anything.
+    tokens: outcome.tokens || null,
     score: scored.score,
     checks: scored.checks,
     verifier_errors: scored.errored,
