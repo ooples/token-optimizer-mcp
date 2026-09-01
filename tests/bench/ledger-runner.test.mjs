@@ -113,6 +113,30 @@ describe('cold sampling', () => {
     expect(verdict.state).toBe('unresolved');
   });
 
+  test('the ROW carries the token breakdown, not just the outcome object', async () => {
+    // THE WIRING, NOT THE UNIT. readOutcome was instrumented and tested, and
+    // every row still came out with tokens undefined, because the row is built
+    // here rather than in the executor -- a full campaign reported an output
+    // ratio of NaN before anyone noticed. A unit test on the producer says
+    // nothing about whether the consumer copies the field.
+    const execute = async () => ({
+      status: 'ok',
+      usd: 0.1,
+      turns: 4,
+      workspace: { pass: true },
+      tokens: { input: 5, output: 900, cache_creation: 100, cache_read: 7000, web_search: 1, web_fetch: 0 },
+    });
+    const { rows } = await runColdTask(fakeTask(), {
+      arm: 'candidate',
+      execute,
+      provenance: PROV,
+      precision: { minReps: 1, maxReps: 1 },
+    });
+    expect(rows[0].tokens).toEqual({
+      input: 5, output: 900, cache_creation: 100, cache_read: 7000, web_search: 1, web_fetch: 0,
+    });
+  });
+
   test('a failing run still produces a row that carries its cost', async () => {
     const { rows } = await runColdTask(fakeTask(), {
       arm: 'candidate',
