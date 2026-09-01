@@ -42,11 +42,22 @@ will be described as nothing more.
 
 ## Tasks
 
-All seven. Not a subset, and the subset is the reason this document exists:
-the pilot ran two, and they were the two where movement had already been seen.
+Every task the cold track has. Not a subset, and the subset is the reason this
+document exists: the pilot ran two, and they were the two where movement had
+already been seen.
 
 `explain-failure`, `flooded-symbol`, `debug-pipeline-py`, `single-shot-extract`,
-`pure-generation`, `repeat-comprehension`, `needle-in-repo`.
+`pure-generation`, `needle-in-repo`.
+
+> **Amendment, made before any result was visible.** The first version of this
+> document said "all seven" and listed `repeat-comprehension`. That task is
+> warm-only by construction -- it measures the cost of returning to material
+> already read, which a cold track has by definition never read -- so it was
+> never in the cold battery and the count was simply wrong. Corrected 90
+> seconds into the run, with rows on disk but no ratio computed and no report
+> rendered. The correction is recorded rather than applied silently, because an
+> amended pre-registration is only worth anything if its amendments are
+> visible. The battery is six.
 
 **Authorship conflict, declared:** I wrote all seven, and I wrote
 `explain-failure` *after* designing the block, with a rubric that rewards
@@ -91,7 +102,7 @@ The headline must hold under each of these, or the failure is reported:
 
 1. **Drop `explain-failure`** -- the task with the authorship conflict.
 2. **Drop the two pilot tasks** (`explain-failure`, `debug-pipeline-py`), leaving
-   five tasks whose results I have never seen for these arms.
+   four tasks whose results I have never seen for these arms.
 3. **Second build.** The whole campaign repeats on an independently rebuilt
    image. Direction must agree. One build is one day's noise.
 
