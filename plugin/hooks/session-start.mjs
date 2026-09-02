@@ -164,7 +164,19 @@ const blocks = [
 // becomes wallpaper, and a model stops reading what it always sees.
 try {
   const cwd = payload.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+  // THE ROOT IS COMPUTED ONCE AND USED FOR BOTH THE STORE AND THE WALK.
+  //
+  // The graph is keyed on the project root, but seeding walked `cwd`. A session
+  // started in `repo/src` therefore wrote a partial index -- only that subtree
+  // -- into the PROJECT-WIDE store, and `alreadySeeded` then reported the
+  // project as indexed. Every later session inherited that partial index and
+  // never completed it, so a search for anything outside `src` came back
+  // silent while the graph insisted it had been seeded.
+  //
+  // Falls back to `cwd` when there is no discoverable root, which is the
+  // unrooted case the machine-level store already handles.
+  const projectRoot = projectRootFor(join(cwd, '__session__'), cwd) || cwd;
+  const dir = wikiDir(projectRoot);
 
   // INDEX THE PROJECT BEFORE THE FIRST TURN.
   //
@@ -181,7 +193,9 @@ try {
   if (features.capture && !seedDisabled()) {
     try {
       const existing = load(dir);
-      if (!alreadySeeded(existing)) seedProject(dir, cwd);
+      // Walk the ROOT the store is keyed on, not the subdirectory this session
+      // happens to have started in.
+      if (!alreadySeeded(existing)) seedProject(dir, projectRoot);
     } catch {
       // A project we cannot walk simply has no index; the session is unaffected.
     }

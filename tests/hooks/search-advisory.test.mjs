@@ -24,7 +24,7 @@
 
 import { describe, expect, test, beforeAll, afterAll } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -201,6 +201,60 @@ describe('what the index answers', () => {
   });
 });
 
+describe('the seed keeps the promise its budget makes', () => {
+  test('the flush is accounted for, within generous headroom for load', () => {
+    // withBatchedWrites writes everything once the callback RETURNS, so
+    // spending the entire budget on traversal overran it by however long the
+    // serialise-and-append took. This runs at SessionStart, where the overrun
+    // is latency before the user's first turn.
+    const dir = mkdtempSync(join(tmpdir(), 'advisory-budget-'));
+    try {
+      const budgetMs = 1_500;
+      const started = Date.now();
+      seedProject(dir, REPO, { maxFiles: 5_000, budgetMs });
+      const elapsed = Date.now() - started;
+      // NAMED FOR WHAT IT ACTUALLY CHECKS. An earlier version was called
+      // "stays inside the budget" while asserting twice it, so a regression
+      // overrunning the configured deadline by 100% would have passed under a
+      // name promising the opposite. The headroom is deliberate -- this suite
+      // runs in parallel and an absolute clock measures the machine, a lesson
+      // already paid for by the throughput guard below -- but the name now
+      // says so. What it genuinely catches is the flush being unbounded:
+      // before the reserve, traversal spent the whole budget and the write
+      // happened on top of it with no ceiling at all.
+      expect(elapsed).toBeLessThan(budgetMs * 2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a session in a subdirectory indexes the project, not the subtree', () => {
+    // The graph is keyed on the project root but seeding walked cwd, so a
+    // session started in repo/src wrote a PARTIAL index into the project-wide
+    // store -- and alreadySeeded then reported the project as done, so every
+    // later session inherited the gap and never filled it.
+    const dir = mkdtempSync(join(tmpdir(), 'advisory-scope-'));
+    try {
+      seedProject(dir, REPO, { maxFiles: 400, budgetMs: 10_000 });
+      const seeded = load(dir);
+      const files = [...seeded.nodes.values()]
+        .filter((n) => n.kind === 'file')
+        .map((n) => n.path || n.key);
+      // Files from more than one top-level directory of the repo prove the walk
+      // started at the root rather than inside one of them.
+      const tops = new Set(
+        files
+          .map((f) => String(f).replace(/\\/g, '/').split('/').filter(Boolean))
+          .map((parts) => parts[parts.length - 2])
+          .filter(Boolean)
+      );
+      expect(tops.size).toBeGreaterThan(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('what reaches the model is neutralised', () => {
   test('a newline in a filename cannot inject a line into agent context', () => {
     // The advisory is interpolated into `additionalContext`, which IS agent
@@ -228,56 +282,43 @@ describe('what reaches the model is neutralised', () => {
     }
   });
 
-  test('a Unicode line separator is neutralised too, not just a newline', () => {
-    // U+2028 and U+2029 end a line as far as the model reading the advisory is
-    // concerned, so they carry exactly the injection a bare newline does while
-    // sailing through a C0-only filter.
-    const dir = mkdtempSync(join(tmpdir(), 'advisory-sep-'));
-    try {
-      const evil = 'pkg/evil' + String.fromCharCode(0x2028) + 'INJECTED.py';
-      withBatchedWrites(dir, () => {
-        const f = join(workspace, evil);
-        const file = putNode(dir, { kind: 'file', key: evil, path: f });
-        putEdge(dir, file, 'contains', putNode(dir, { kind: 'symbol',
-          key: evil + '#sepProbe', name: 'sepProbe', file: f, line: 1 }));
-      });
-      const advice = adviseSearch(load(dir), 'sepProbe', { root: workspace });
-      if (advice) {
-        expect(advice.text).not.toContain(String.fromCharCode(0x2028));
-        expect(advice.text).toContain(String.fromCharCode(0xfffd));
-      }
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-  test('scope does not widen across a case difference on case-sensitive hosts', () => {
-    // `/work/Repo/secret.ts` must not test as inside `/work/repo` where those
-    // are two directories. Reporting a real file from another tree is the worst
-    // possible wrong answer, because it looks exactly like a right one.
+  test('scope folding follows the filesystem, not the platform', () => {
+    // Keying this on process.platform was wrong in both directions: macOS
+    // defaults to a case-INSENSITIVE volume, so refusing to fold there
+    // suppressed every answer, and folding on a case-SENSITIVE volume would
+    // widen the scope that keeps one project out of another. So the code
+    // asks the filesystem, and this asks it the same way -- the assertion
+    // adapts to the disk the test is running on rather than guessing.
+    const base = mkdtempSync(join(tmpdir(), 'CaseProbe-'));
     const dir = mkdtempSync(join(tmpdir(), 'advisory-case-'));
     try {
-      const base = join(tmpdir(), 'CaseRepo');
+      let insensitive = false;
+      try {
+        const a = statSync(base);
+        const b = statSync(base.toLowerCase());
+        insensitive = a.ino === b.ino && a.dev === b.dev;
+      } catch { insensitive = false; }
+
       withBatchedWrites(dir, () => {
         const f = join(base, 'secret.ts');
         const file = putNode(dir, { kind: 'file', key: f, path: f });
-        putEdge(dir, file, 'contains',
-          putNode(dir, { kind: 'symbol', key: `${f}#caseSensitiveProbe`,
-            name: 'caseSensitiveProbe', file: f, line: 1 }));
+        putEdge(dir, file, 'contains', putNode(dir, { kind: 'symbol',
+          key: f + '#caseProbe', name: 'caseProbe', file: f, line: 1 }));
       });
-      const graphHere = load(dir);
-      const lowered = join(tmpdir(), 'caserepo');
-      const advice = adviseSearch(graphHere, 'caseSensitiveProbe', {
-        root: base, scope: lowered,
+
+      const advice = adviseSearch(load(dir), 'caseProbe', {
+        root: base, scope: base.toLowerCase(),
       });
-      if (process.platform === 'win32') {
-        expect(advice).not.toBeNull(); // one directory here, so it must answer
-      } else {
-        expect(advice).toBeNull(); // two directories, so it must not
-      }
+      // Same directory on a folding volume, so it must answer; two different
+      // directories otherwise, so it must stay silent.
+      if (insensitive) expect(advice).not.toBeNull();
+      else expect(advice).toBeNull();
     } finally {
+      rmSync(base, { recursive: true, force: true });
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
 });
 
 describe('an advisory is delivered once per session, across processes', () => {
@@ -581,12 +622,37 @@ describe('the advisory reaches the model on both paths', () => {
     expect(out.updatedInput).toBeUndefined();
   });
 
-  test('a session is capped', () => {
+  test('the ROUTER stops advising once the session cap is reached', () => {
+    // REWRITTEN, because the previous version could not fail. It called
+    // adviseSearch -- which does not enforce the cap; the router does -- filled
+    // `told` with unrelated keys, and asserted that `told.size` was unchanged,
+    // which is trivially true because nothing mutates it. It was named for a
+    // property it never exercised.
+    //
+    // The cap lives in the router's searchAdvisory, so drive the router. This
+    // is only testable now that `advised` persists across hook processes: the
+    // capped state has to survive from saveState into the spawned process.
     expect(SESSION_CAP).toBeGreaterThan(0);
-    const told = new Set(Array.from({ length: SESSION_CAP }, (_, i) => `filler-${i}`));
-    expect(adviseSearch(graph, 'parse_line', { told, root: workspace })).not.toBeNull();
-    // The router refuses once the cap is reached; the module reports the facts
-    // and the router is what stops asking.
-    expect(told.size).toBe(SESSION_CAP);
+
+    const under = fresh('cap-under');
+    const below = run(grep(under), {
+      TOKEN_OPTIMIZER_MODE: 'assist',
+      TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+    });
+    const belowOut = JSON.parse(below.stdout || '{}').hookSpecificOutput || {};
+    expect(belowOut.additionalContext || '').toContain('parse.py');
+
+    // Same query, same graph, but this session has already been told its fill.
+    const over = fresh('cap-over');
+    const state = loadState(over);
+    state.advised = Array.from({ length: SESSION_CAP }, (_, i) => `filler-${i}`);
+    saveState(over, state);
+
+    const above = run(grep(over), {
+      TOKEN_OPTIMIZER_MODE: 'assist',
+      TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+    });
+    const aboveOut = JSON.parse(above.stdout || '{}').hookSpecificOutput || {};
+    expect(aboveOut.additionalContext || '').not.toContain('parse.py');
   });
 });

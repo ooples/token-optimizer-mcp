@@ -95,7 +95,24 @@ export function seedProject(dir, root, {
   budgetMs = DEFAULT_BUDGET_MS,
   now = Date.now,
 } = {}) {
-  const deadline = now() + budgetMs;
+  // THE FLUSH IS INSIDE THE BUDGET, NOT ON TOP OF IT. `withBatchedWrites`
+  // buffers every record and writes them once the callback RETURNS -- one
+  // serialise, one append, and possibly a compaction. Spending the whole
+  // budget on traversal therefore overran it by however long that write took,
+  // and this runs at SessionStart, where the overrun is latency the user waits
+  // on before their first turn.
+  //
+  // A fifth of the budget, floored so a small budget still reserves something
+  // real. Traversal stops at the reserved line; the flush then has the rest.
+  // Deliberately a reserve rather than a post-hoc check: once the callback has
+  // returned there is nothing left to decide, the records are already going to
+  // be written.
+  // A zero or negative budget still means "do nothing", so the reserve is only
+  // taken out of a budget there is something to take from -- otherwise the
+  // deadline would land in the future and index a file the caller asked for
+  // none of.
+  const flushReserveMs = budgetMs > 0 ? Math.max(150, Math.round(budgetMs * 0.2)) : 0;
+  const deadline = now() + Math.max(0, budgetMs - flushReserveMs);
   let files = 0;
   let symbols = 0;
 

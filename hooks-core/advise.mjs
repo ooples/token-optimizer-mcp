@@ -40,6 +40,8 @@
  * repo already has a linearity gate for. Scanning it for identifier-shaped runs
  * with one linear expression answers the only question we have of it.
  */
+import { statSync } from 'node:fs';
+
 export function identifiersIn(pattern) {
   if (typeof pattern !== 'string' || !pattern) return [];
   const found = [];
@@ -138,13 +140,42 @@ const slashed = (path) =>
  * else's tree is the worst output this feature can produce, because it is
  * indistinguishable from a correct one.
  */
-const FOLD_CASE = process.platform === 'win32';
-const fold = (s) => (FOLD_CASE ? s.toLowerCase() : s);
+// ASKED OF THE FILESYSTEM, NOT GUESSED FROM THE PLATFORM. Keying this on
+// `platform === 'win32'` was wrong in both directions: macOS defaults to a
+// case-INSENSITIVE volume, so a case difference between the payload cwd and a
+// stored path suppressed every answer there, while a case-SENSITIVE volume on
+// any platform would have had its scope silently widened had we folded by
+// default. Both are one-line guesses about somebody else’s disk.
+//
+// So ask, once per directory, and remember: stat it, stat its case-flipped
+// name, compare identity. Same inode and device means the filesystem folded
+// the name for us. Falls back to NOT folding, which errs toward suppressing
+// an answer rather than widening scope -- the safe direction, since a symbol
+// from another tree is the worst output this feature can produce.
+const foldCache = new Map();
+function foldsCase(dir) {
+  if (foldCache.has(dir)) return foldCache.get(dir);
+  let result = false;
+  try {
+    const flipped = dir === dir.toLowerCase() ? dir.toUpperCase() : dir.toLowerCase();
+    if (flipped !== dir) {
+      const a = statSync(dir);
+      const b = statSync(flipped);
+      result = a.ino === b.ino && a.dev === b.dev;
+    }
+  } catch {
+    result = false;
+  }
+  foldCache.set(dir, result);
+  return result;
+}
+const foldWith = (insensitive) => (v) => (insensitive ? v.toLowerCase() : v);
 
 function withinScope(file, scope) {
   if (!scope) return true;
-  const path = fold(slashed(file));
-  const base = fold(slashed(scope));
+  const f = foldWith(foldsCase(scope));
+  const path = f(slashed(file));
+  const base = f(slashed(scope));
   return path === base || path.startsWith(`${base}/`);
 }
 
@@ -166,7 +197,7 @@ function display(path, root) {
   const normalised = slashed(path);
   const base = slashed(root);
   const trimmed =
-    base && fold(normalised).startsWith(`${fold(base)}/`)
+    base && (() => { const g = foldWith(foldsCase(root)); return g(normalised).startsWith(`${g(base)}/`); })()
       ? normalised.slice(base.length + 1)
       : normalised;
   // eslint-disable-next-line no-control-regex
