@@ -110,36 +110,64 @@ The fix is one outline per file per session. Asking twice is the signal: the
 hook cannot know at read time whether the model wants a symbol's location or
 its contents, and it does not need to.
 
-Re-measured on a fresh build, fixed n=30, both arms:
+Re-measured on a fresh build, fixed n=30, **all three tasks now complete**.
+Attribution -- `assist` against `ours-rules`, isolating interception from text:
 
-| task | before | after | |
+| task | before the fix | after the fix | |
 | --- | --- | --- | --- |
 | whole-file-transform | **1.356** [1.125, 1.642] | **1.143** [0.946, 1.393] | penalty no longer established |
-| noisy-command | 0.925 [0.880, 0.987] | 0.905 [0.834, 0.981] | still a win |
+| noisy-command | 0.925 [0.880, 0.987] | 0.912 [0.834, 0.991] | still a win |
+| large-file-defect | 0.926 [0.904, 0.944] | **0.973** [0.912, 1.048] | **win no longer established** |
+| **aggregate** | **1.051** [0.986, 1.119] | **0.942** [0.893, 0.992] | net cost became a net win |
 
-**What changed, stated precisely:** before the fix the penalty was *confirmed* --
-the interval excluded parity. After it, the interval spans parity. That is not
-the same as proving the penalty is zero; it means it is no longer a
-demonstrated cost. The point estimate is still above 1.0 and the honest reading
-is "interception is now roughly neutral on whole-file rewrites, where it
-previously lost".
+**The fix did what it was for, and it also cost something.** The whole-file
+rewrite penalty was confirmed before and is not confirmed now, and the aggregate
+crossed from 1.051 -- interception costing about 5% against shipping our text
+alone -- to 0.942, whose interval excludes parity. That is the headline.
 
-Against control on the same two tasks, after the fix:
+**But `large-file-defect` moved the wrong way and the earlier draft of this
+section predicted it would not.** It read "holding steady at about 0.91 --
+consistent with the 0.926 it showed before the fix, so the fix does not appear
+to have cost the tasks interception already won". At full n it is 0.973 with an
+interval spanning parity: a 7.4% win became no established effect. One outline
+per file per session is exactly the thing that helps a task whose whole shape is
+"locate a defect in a large file", so capping it removed some of what
+interception was winning there. The fix is still worth it on the aggregate, but
+it is a trade and not a free repair.
 
-| arm | vs control |
-| --- | --- |
-| `assist` | 0.671 [0.620, 0.725] |
-| `ours-rules` | 0.660 [0.597, 0.727] |
+Against control, all three tasks, after the fix:
 
-The two are now within each other's intervals, where before the hooks were a
-measurable net cost.
+| arm | vs control | |
+| --- | --- | --- |
+| `assist` | 0.699 [0.658, 0.742] | -30.1% |
+| `ours-rules` | 0.696 [0.649, 0.743] | -30.4% |
 
-**Not yet complete:** `large-file-defect` is still filling on this build (12 of
-30 reps at the time of writing, holding steady at $0.0700 against ours-rules'
-$0.0767, i.e. about 0.91 -- consistent with the 0.926 it showed before the fix,
-so the fix does not appear to have cost the tasks interception already won).
-That cell is a regression check, not the fix's target, and its n was not met, so
-no interval is quoted for it.
+**Two limits on the aggregate above, both printed by the harness itself.** It is
+computed over 2 of the 3 tasks, because `whole-file-transform` does not converge
+and is excluded from the headline by the rule in PREREGISTRATION.md. And with
+that task excluded, no adversarial task remains resolved, so the run carries the
+harness's own `NO ADVERSARIAL TASKS RESOLVED -- this comparison has no bias
+control` warning. `noisy-command` on its own excludes parity but does not
+survive correction for the 6 tests on this track. The aggregate is the strongest
+honest statement available, and it is weaker than a three-task result would be.
+
+## What I got wrong completing this cell, recorded
+
+- **The published "12 of 30 reps" was wrong twice over.** It was read from
+  `postfix-merged.jsonl`, a stale artifact holding 12 assist reps of that cell
+  while `postfix.jsonl` held **27** at the same build key. The merged file had
+  understated a paid cell by 15 runs, and the number reached this document
+  without ever being checked against the source stores.
+- **The top-up collided with existing rep labels and shadowed three paid runs.**
+  To keep the build key intact, the 3 remaining reps were run from a worktree at
+  the provenance commit `a695840` -- which predates the `nextRep` fix. At that
+  commit `coldArm` passes no `startRep` to `runColdTask`, which defaults to 1, so
+  a 3-rep top-up labelled itself 1,2,3 over labels already in use. The store held
+  30 rows and the reader, keeping the newest row per key, reported n=27. The rows
+  were relabelled to unused numbers; nothing was discarded and no measured field
+  was altered. Pinning provenance by checking out the old commit reintroduces
+  every harness defect that commit had -- the reason `--commit-sha` should exist
+  as a flag instead.
 
 ---
 

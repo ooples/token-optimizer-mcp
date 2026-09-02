@@ -5,11 +5,18 @@
  *   node bench/ledger/cli.mjs --arms assist,assist-noseed
  *   node bench/ledger/cli.mjs --report-only
  *
- * PROVENANCE IS TAKEN FROM THE MACHINE, NOT FROM A FLAG. The image digest comes
- * from `docker image inspect` and the commit from `git rev-parse`, so a row
- * cannot claim a build it did not come from. An operator who could type the
- * digest could mistype it, and a mistyped digest is exactly the silent
- * build-mixing this harness was built to end.
+ * THE IMAGE DIGEST IS TAKEN FROM THE MACHINE AND NEVER FROM A FLAG. It comes
+ * from `docker image inspect`, so a row cannot claim an artifact it did not come
+ * from. An operator who could type the digest could mistype it, and a mistyped
+ * digest is exactly the silent build-mixing this harness was built to end.
+ *
+ * The commit defaults to `git rev-parse HEAD` but MAY be stated with
+ * `--commit-sha`, because it labels the source the image was built from rather
+ * than the artifact itself -- and that label survives a rebase or a message-only
+ * rewrite while the sha does not. Without the flag the only way to top up a cell
+ * whose commit had moved was to check the old commit out and run the harness as
+ * it was then, which silently reintroduced a fixed rep-labelling defect and
+ * shadowed three paid runs. See `detectProvenance`.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -84,6 +91,18 @@ export function parseArgs(argv) {
     else if (a === '--arms') out.arms = next().split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--tracks') out.tracks = next().split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--credentials') out.credentials = next();
+    else if (a === '--commit-sha') {
+      const v = next().trim();
+      // A TYPO HERE INVENTS A BUILD, silently: an unrecognised sha simply forms
+      // a key nothing on disk shares, so the run banks a fresh arm instead of
+      // topping up the intended one and the operator sees a campaign that
+      // "restarted for no reason". Rejecting anything but a full sha turns that
+      // into an error before a single container starts.
+      if (!/^[0-9a-f]{40}$/.test(v)) {
+        throw new Error(`--commit-sha must be a full 40-character sha, got "${v}"`);
+      }
+      out.commitSha = v;
+    }
     else if (a === '--model') out.model = next();
     else if (a === '--arms-file') out.armsFile = next();
     else if (a === '--max-reps') out.maxReps = positiveInteger('--max-reps', next());
@@ -126,6 +145,8 @@ Ledger -- cost per unit of work delivered, failures included.
   --image NAME        container image               (default: thol-rig:local)
   --store PATH        row store                     (default: bench/ledger/results.jsonl)
   --credentials PATH  credentials to mount read-only
+  --commit-sha SHA    state the provenance commit instead of reading HEAD.
+                      For topping up a cell whose commit has since moved.
   --model NAME        model override
   --arms-file PATH    extra arm definitions as JSON
   --max-reps N        cap reps per task (spend control)
@@ -167,12 +188,32 @@ export function credentialMinutesLeft(path, { now = Date.now, read = readFileSyn
   }
 }
 
-/** Reads the identity of what is being measured, from the machine itself. */
-export function detectProvenance({ image, cwd = process.cwd(), run = execFileSync } = {}) {
+/**
+ * Reads the identity of what is being measured, from the machine itself.
+ *
+ * `commitSha` MAY BE STATED RATHER THAN DETECTED, and the reason is a top-up.
+ * A cell can only be extended by rows sharing its build key, so adding reps to a
+ * campaign whose commit has since moved -- a rebase, an amend, a message-only
+ * rewrite that leaves the tree byte-identical -- otherwise requires checking the
+ * old commit out and running the harness AS IT WAS AT THAT COMMIT. That
+ * reintroduces every harness defect the commit had: doing exactly this ran a
+ * `coldArm` predating the `nextRep` fix, which labelled a 3-rep top-up 1,2,3 on
+ * top of existing labels and shadowed three paid runs behind a colliding key.
+ *
+ * The image digest is NOT overridable. It identifies the artifact under
+ * measurement, so accepting it as a claim would let two different products be
+ * merged into one arm -- the failure this whole ledger is built to prevent. The
+ * commit is a label for the source the image was built from, which stays true
+ * across a message rewrite, so stating it is a bookkeeping correction rather
+ * than a claim about what ran.
+ */
+export function detectProvenance({ image, commitSha: stated, cwd = process.cwd(), run = execFileSync } = {}) {
   const imageDigest = String(
     run('docker', ['image', 'inspect', '--format', '{{.Id}}', image])
   ).trim();
-  const commitSha = String(run('git', ['-C', cwd, 'rev-parse', 'HEAD'])).trim();
+  const commitSha = stated
+    ? String(stated).trim()
+    : String(run('git', ['-C', cwd, 'rev-parse', 'HEAD'])).trim();
   if (!imageDigest || !commitSha) throw new Error('could not determine image digest or commit');
   return { imageDigest, commitSha };
 }
@@ -258,7 +299,10 @@ async function main(argv) {
   if (minutes !== null) process.stdout.write(`credentials valid for ${minutes} min\n`);
 
   const arms = { ...ARMS, ...(opts.armsFile ? loadArms(opts.armsFile) : {}) };
-  const { imageDigest, commitSha } = detectProvenance({ image: opts.image });
+  const { imageDigest, commitSha } = detectProvenance({
+    image: opts.image,
+    commitSha: opts.commitSha,
+  });
 
   const existing = loadRows(store).filter(
     (r) => buildKey(r) === buildKey({ image_digest: imageDigest, commit_sha: commitSha })

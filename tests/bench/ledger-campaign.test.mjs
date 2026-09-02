@@ -920,9 +920,7 @@ describe('the command line', () => {
     expect(() => parseArgs(['--wat'])).toThrow(/unknown argument/);
   });
 
-  test('provenance is read from the machine, never from a flag', () => {
-    // A digest an operator could type is a digest they could mistype, and a
-    // mistyped digest is the silent build-mixing this harness exists to end.
+  test('provenance is read from the machine when nothing is stated', () => {
     const calls = [];
     const run = (cmd, args) => {
       calls.push(`${cmd} ${args.join(' ')}`);
@@ -931,6 +929,49 @@ describe('the command line', () => {
     const p = detectProvenance({ image: 'img', cwd: '/repo', run });
     expect(p).toEqual({ imageDigest: 'sha256:deadbeef', commitSha: 'c0ffee123' });
     expect(calls[0]).toContain('docker image inspect');
+  });
+
+  test('the image digest can never be stated, only measured', () => {
+    // A digest an operator could type is a digest they could mistype, and a
+    // mistyped digest is the silent build-mixing this harness exists to end.
+    // The commit is different -- see the next test -- but the artifact is not.
     expect(parseArgs([])).not.toHaveProperty('imageDigest');
+    expect(() => parseArgs(['--image-digest', 'sha256:whatever'])).toThrow(/unknown argument/);
+  });
+
+  test('a stated commit sha replaces git, and nothing else', () => {
+    // Why this is allowed at all: a cell can only be topped up by rows sharing
+    // its build key, so once the commit moves -- a rebase, an amend, a
+    // message-only rewrite over an identical tree -- the only alternative was
+    // checking the old commit out and running the harness AS IT WAS THEN. Doing
+    // exactly that ran a `coldArm` predating the `nextRep` fix, which labelled a
+    // 3-rep top-up 1,2,3 over labels already in use and shadowed three paid runs
+    // behind a colliding key.
+    const sha = 'a69584024d9d6222449dbe23968615b63012d767';
+    const calls = [];
+    const run = (cmd, args) => {
+      calls.push(cmd);
+      if (cmd === 'docker') return 'sha256:deadbeef\n';
+      throw new Error('git must not be consulted when the commit is stated');
+    };
+    const p = detectProvenance({ image: 'img', cwd: '/repo', commitSha: sha, run });
+    expect(p).toEqual({ imageDigest: 'sha256:deadbeef', commitSha: sha });
+    // The digest is still measured, so stating a commit cannot smuggle in an
+    // artifact claim alongside it.
+    expect(calls).toEqual(['docker']);
+  });
+
+  test('--commit-sha refuses anything but a full sha, before a container starts', () => {
+    // An unrecognised sha is not a loud failure on its own: it simply forms a
+    // key nothing on disk shares, so the run banks a fresh arm instead of
+    // topping up the intended one and the operator sees a campaign that
+    // "restarted for no reason".
+    expect(() => parseArgs(['--commit-sha', 'a695840'])).toThrow(/full 40-character sha/);
+    expect(() => parseArgs(['--commit-sha', 'deadbeef'])).toThrow(/full 40-character sha/);
+    expect(() => parseArgs(['--commit-sha', 'A'.repeat(40)])).toThrow(/full 40-character sha/);
+    expect(() => parseArgs(['--commit-sha', 'z'.repeat(40)])).toThrow(/full 40-character sha/);
+    const ok = 'a69584024d9d6222449dbe23968615b63012d767';
+    expect(parseArgs(['--commit-sha', ok]).commitSha).toBe(ok);
+    expect(parseArgs([])).not.toHaveProperty('commitSha');
   });
 });
