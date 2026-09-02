@@ -228,6 +228,51 @@ describe('the seed keeps the promise its budget makes', () => {
     }
   });
 
+  test('SessionStart in a subdirectory still indexes the whole project', () => {
+    // THE LAYER THE BUG WAS ACTUALLY IN. seedProject always walked the root it
+    // was handed; session-start handed it `cwd`. A test calling seedProject
+    // directly therefore passes whatever session-start does -- the same
+    // wiring-versus-logic gap that let the outline regression ship. This
+    // spawns the real hook.
+    const proj = mkdtempSync(join(tmpdir(), 'ss-proj-'));
+    const graph = mkdtempSync(join(tmpdir(), 'ss-graph-'));
+    try {
+      mkdirSync(join(proj, '.git'), { recursive: true });
+      mkdirSync(join(proj, 'alpha'), { recursive: true });
+      mkdirSync(join(proj, 'beta'), { recursive: true });
+      writeFileSync(join(proj, 'alpha', 'a.mjs'), 'export function alphaOne() {}');
+      writeFileSync(join(proj, 'beta', 'b.mjs'), 'export function betaOne() {}');
+
+      const result = spawnSync(
+        process.execPath,
+        [join(REPO, 'plugin', 'hooks', 'session-start.mjs')],
+        {
+          input: JSON.stringify({ session_id: 'ss-' + Date.now(), cwd: join(proj, 'alpha') }),
+          encoding: 'utf8',
+          timeout: 30_000,
+          env: {
+            ...process.env,
+            TOKEN_OPTIMIZER_WIKI_DIR: graph,
+            TOKEN_OPTIMIZER_MODE: 'assist',
+            TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+          },
+        }
+      );
+      expect(result.status).toBe(0);
+
+      const norm = (v) => String(v).split(String.fromCharCode(92)).join('/');
+      const indexed = [...load(graph).nodes.values()]
+        .filter((n) => n.kind === 'file')
+        .map((n) => norm(n.path || n.key));
+      // The session started in alpha/. beta/ is only reachable by walking the
+      // project root, so its presence is the whole assertion.
+      expect(indexed.some((f) => f.includes('/alpha/a.mjs'))).toBe(true);
+      expect(indexed.some((f) => f.includes('/beta/b.mjs'))).toBe(true);
+    } finally {
+      rmSync(proj, { recursive: true, force: true });
+      rmSync(graph, { recursive: true, force: true });
+    }
+  });
   test('a session in a subdirectory indexes the project, not the subtree', () => {
     // The graph is keyed on the project root but seeding walked cwd, so a
     // session started in repo/src wrote a PARTIAL index into the project-wide
@@ -242,13 +287,27 @@ describe('the seed keeps the promise its budget makes', () => {
         .map((n) => n.path || n.key);
       // Files from more than one top-level directory of the repo prove the walk
       // started at the root rather than inside one of them.
+      // RELATIVE TO THE REPO ROOT, not the immediate parent. Counting parent
+      // directories proves nothing: a walk confined to REPO/bench alone yields
+      // many distinct parents, so the old assertion passed on exactly the
+      // subtree-only behaviour it exists to detect.
+      const norm = (v) => String(v).split("\\").join('/');
+      const rootPrefix = norm(REPO) + '/';
       const tops = new Set(
         files
-          .map((f) => String(f).replace(/\\/g, '/').split('/').filter(Boolean))
-          .map((parts) => parts[parts.length - 2])
+          .map(norm)
+          .filter((f) => f.startsWith(rootPrefix))
+          .map((f) => f.slice(rootPrefix.length).split('/')[0])
           .filter(Boolean)
       );
-      expect(tops.size).toBeGreaterThan(1);
+      // THE THRESHOLD IS MEASURED, NOT GUESSED, and "more than one" was too
+      // weak to detect the bug. Seeding resolves imports, so a walk confined
+      // to REPO/bench still produces file nodes under a second top-level
+      // directory and clears any >1 bar. Measured on this repository: a walk
+      // from the root reaches 15 top-level directories, a walk from
+      // REPO/bench reaches 2. Five separates them with room for the tree to
+      // change shape without becoming flaky.
+      expect(tops.size).toBeGreaterThanOrEqual(5);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
