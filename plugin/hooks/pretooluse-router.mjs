@@ -64,7 +64,7 @@ import { isFsSafePath } from './lib/paths.mjs';
 // mean different things -- that one swaps a stale claim, this one swaps a
 // large read for an outline of the same file.
 import { substitutionFor as outlineFor } from './lib/substitute.mjs';
-import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { adviseSearch, SESSION_CAP } from './lib/advise.mjs';
@@ -678,17 +678,23 @@ function outlineSubstitution(payload) {
   const filePath = payload.tool_input?.file_path;
   if (!filePath) return null;
 
+  // THE RECORD ALREADY EXISTED, it was simply never read. The outline we serve
+  // is written to a path keyed by session and file, so that file's presence is
+  // itself the evidence that this session has already been handed an outline
+  // of this file. Consulting it is what makes `alreadyRead` mean something.
+  const target = join(
+    stateDir(),
+    `${commandKey(payload.session_id || '', filePath)}.outline.txt`
+  );
+
   const found = outlineFor(filePath, {
     turnsSoFar: turnsSoFar(payload.session_id || ''),
+    alreadyRead: existsSync(target),
   });
   if (!found) return null;
 
   try {
     mkdirSync(stateDir(), { recursive: true });
-    const target = join(
-      stateDir(),
-      `${commandKey(payload.session_id || '', filePath)}.outline.txt`
-    );
     writeFileSync(target, found.outline);
     return { target, found };
   } catch {
