@@ -154,15 +154,43 @@ const slashed = (path) =>
 // the name for us. Falls back to NOT folding, which errs toward suppressing
 // an answer rather than widening scope -- the safe direction, since a symbol
 // from another tree is the worst output this feature can produce.
+/**
+ * The pair of paths whose identity answers "does this filesystem fold case".
+ *
+ * ONLY THE LAST COMPONENT DIFFERS, and that is the whole point. Flipping the
+ * entire path probes every ancestor at once, so a case-INSENSITIVE project
+ * under an ancestor with no case-flipped twin fails the stat there, the caller
+ * falls back to "case-sensitive", and valid in-scope advisories are
+ * suppressed. The question is only ever about the directory holding the entry.
+ *
+ * Exported so the property is testable without a filesystem that actually
+ * folds: on NTFS the whole-path probe succeeds anyway, so an end-to-end test
+ * cannot tell the two implementations apart.
+ */
+export function caseProbePath(dir) {
+  const normalised = slashed(dir).replace(/\/+$/, '');
+  const cut = normalised.lastIndexOf('/');
+  const parent = cut > 0 ? normalised.slice(0, cut) : normalised.slice(0, cut + 1);
+  const base = normalised.slice(cut + 1);
+  const flippedBase = base === base.toLowerCase() ? base.toUpperCase() : base.toLowerCase();
+  if (!base || flippedBase === base) return null;
+  return { actual: normalised, flipped: (parent ? parent + '/' : '') + flippedBase };
+}
 const foldCache = new Map();
 function foldsCase(dir) {
   if (foldCache.has(dir)) return foldCache.get(dir);
   let result = false;
   try {
-    const flipped = dir === dir.toLowerCase() ? dir.toUpperCase() : dir.toLowerCase();
-    if (flipped !== dir) {
-      const a = statSync(dir);
-      const b = statSync(flipped);
+    // ONLY THE LAST COMPONENT IS FLIPPED. Flipping the whole path tests every
+    // ancestor at once, so a case-INSENSITIVE project mounted under a
+    // case-SENSITIVE ancestor -- /home/User/proj on Linux, any nested mount --
+    // fails the stat at the ancestor, the probe falls back to "sensitive", and
+    // valid in-scope advisories are suppressed. The question is only ever about
+    // the directory holding this entry, so ask it about that one.
+    const probe = caseProbePath(dir);
+    if (probe) {
+      const a = statSync(probe.actual);
+      const b = statSync(probe.flipped);
       result = a.ino === b.ino && a.dev === b.dev;
     }
   } catch {
