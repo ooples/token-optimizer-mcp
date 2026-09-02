@@ -8,7 +8,8 @@
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { appendRows, loadRows, completedReps, buildsPresent } from '../../bench/ledger/store.mjs';
 import { runCampaign, coldArm, warmArm } from '../../bench/ledger/campaign.mjs';
@@ -222,6 +223,30 @@ describe('the campaign', () => {
       });
       expect(calls).toBe(3);
       expect(readFileSync(store, 'utf8').trim().split('\n')).toHaveLength(4);
+    });
+
+    test('rep numbers stay unique across a resumption', async () => {
+      // The loop restarted at 1 on every resume, so a cell interrupted at rep 1
+      // and resumed produced a SECOND rep 1 and `rep` stopped identifying a run
+      // within (arm, task, build). No measurement was double-counted -- the runs
+      // are distinct -- but a reviewer reading the store could not tell a
+      // collided label from a duplicated row without deduping on timestamps.
+      const execute = async () => ({ status: 'ok', usd: 0.1, turns: 3, workspace: { pass: true } });
+      appendRows(store, [
+        row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 1,
+              image_digest: 'sha256:a', commit_sha: 'c1' }),
+      ]);
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a']),
+        execute,
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        precision: { fixedReps: 4 },
+      });
+      const reps = readFileSync(store, 'utf8').trim().split('\n').map(JSON.parse)
+        .filter((r) => r.task === 'debug-a').map((r) => r.rep).sort((a, b) => a - b);
+      expect(reps).toEqual([1, 2, 3, 4]);
+      expect(new Set(reps).size).toBe(reps.length);
     });
 
     test('the default is still one at a time', async () => {
@@ -669,6 +694,33 @@ describe('ranking on output tokens instead of dollars', () => {
 });
 
 describe('arms are data, not code', () => {
+  test('the documented character counts match the arms they describe', () => {
+    // THE COUNTS ARE THE COMPARISON. "510 against 2,667" is the headline claim
+    // this whole head-to-head rests on, and it was stated three times in one
+    // file as 2,669, 2,667 and 471 -- two of which were wrong, because the
+    // block gained a header line after the number was written. A figure that
+    // cannot be reproduced from the arm it describes is worse than no figure.
+    //
+    // Both are measured the same way, as the WHOLE delivered claudeMd, so they
+    // are comparable. If either text changes on purpose, this fails and the
+    // prose has to be updated with it -- which is the point.
+    const ours = ARMS['ours-rules'].claudeMd;
+    const theirs = ARMS['tokenade-rules'].claudeMd;
+    expect(ours).toHaveLength(510);
+    expect(theirs).toHaveLength(2667);
+
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../bench/ledger/arms.mjs'),
+      'utf8'
+    );
+    // Every count the file states about these two arms must be one of the two
+    // real lengths -- no stale third number surviving in a comment.
+    for (const stated of source.match(/\b\d,\d{3}\b|\b\d{3}\b(?= characters)/g) || []) {
+      const n = Number(stated.replace(',', ''));
+      expect([510, 2667]).toContain(n);
+    }
+  });
+
   test('the shipped arms are data: settings, environment and an optional rules file', () => {
     // claudeMd was added because the leader cannot be represented without it --
     // their CLI runs 0.38 times per task while their rules file does the work,
@@ -710,9 +762,57 @@ describe('arms are data, not code', () => {
     writeFileSync(path, JSON.stringify({ mine: { settings: { hooks: {} }, env: { X: '1' } } }));
     expect(loadArms(path).mine.env.X).toBe('1');
   });
+
+  test('an outsider can bring a rules file, like every competitor here does', () => {
+    // loadArms rebuilt each arm from name/settings/env and silently dropped
+    // claudeMd, so the external path could not express the one thing this
+    // harness compares: every competitor reduces to a rules file. Their own
+    // CLI runs 0.38 times per task while their claudeMd does the work. An
+    // outsider could define one, have it discarded without a word, and measure
+    // their tool as though it shipped no instructions.
+    const path = join(dir, 'arms-md.json');
+    writeFileSync(
+      path,
+      JSON.stringify({ theirs: { env: {}, claudeMd: '# rules\n\nBe terse.\n' } })
+    );
+    expect(loadArms(path).theirs.claudeMd).toBe('# rules\n\nBe terse.\n');
+  });
+
+  test('an arm without a rules file does not gain an empty one', () => {
+    // The executor writes claudeMd when present; materialising an empty file
+    // would give a no-rules arm a CLAUDE.md it never asked for.
+    const path = join(dir, 'arms-none.json');
+    writeFileSync(path, JSON.stringify({ bare: { env: {} } }));
+    expect('claudeMd' in loadArms(path).bare).toBe(false);
+  });
+
+  test('a non-string rules file is refused, not coerced', () => {
+    const path = join(dir, 'arms-bad.json');
+    writeFileSync(path, JSON.stringify({ bad: { claudeMd: { oops: true } } }));
+    expect(() => loadArms(path)).toThrow(/non-string claudeMd/);
+  });
 });
 
 describe('the command line', () => {
+  test('a non-numeric guard value is refused, not turned into NaN', () => {
+    // THE DEFECT THIS REOPENS IF IT REGRESSES. Number('foo') is NaN and every
+    // comparison against NaN is false, so `minutes < NaN` never fired and a
+    // campaign could launch on a token about to expire -- the same failure the
+    // default's own comment records, arriving from the other side.
+    expect(() => parseArgs(['--min-credential-minutes', 'foo'])).toThrow(/must be a number/);
+    expect(() => parseArgs(['--min-credential-minutes', '-5'])).toThrow(/must be a number/);
+    // Zero is a legitimate "I accept the risk", distinct from a typo.
+    expect(parseArgs(['--min-credential-minutes', '0']).minCredentialMinutes).toBe(0);
+  });
+
+  test('a non-numeric rep cap is refused rather than silently ignored', () => {
+    // NaN and 0 are both falsy where precision is assembled, so the flag looked
+    // accepted while the run quietly used the default cap.
+    expect(() => parseArgs(['--max-reps', 'foo'])).toThrow(/must be an integer/);
+    expect(() => parseArgs(['--max-reps', '0'])).toThrow(/must be an integer/);
+    expect(parseArgs(['--max-reps', '9']).maxReps).toBe(9);
+  });
+
   test('defaults are the safe ones', () => {
     const o = parseArgs([]);
     expect(o.arms).toEqual(['assist']);

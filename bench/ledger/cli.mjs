@@ -26,6 +26,33 @@ import { renderReport } from './render.mjs';
 import { ADVERSARIAL, forTrack } from './tasks/index.mjs';
 import { buildKey } from './provenance.mjs';
 
+/**
+ * NaN IS NOT A NUMBER THIS HARNESS MAY ACCEPT, and letting it through reopens a
+ * defect already fixed once here.
+ *
+ * `Number('foo')` is NaN, and every comparison against NaN is false. So
+ * `--min-credential-minutes foo` made `minutes < NaN` false, the expiry
+ * pre-flight never fired, and a campaign launched on a token about to expire --
+ * which is precisely the failure the default's own comment records: a safety
+ * default that must be passed to work is not a safety default. A passed NaN
+ * re-opens it from the other side.
+ *
+ * `--max-reps` failed the same way but silently: NaN and 0 are both falsy where
+ * precision is assembled, so the flag appeared accepted and the run quietly
+ * used the default cap.
+ */
+function positiveInteger(flag, raw) {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`${flag} must be an integer >= 1, got ${raw}`);
+  return n;
+}
+
+function nonNegativeNumber(flag, raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) throw new Error(`${flag} must be a number >= 0, got ${raw}`);
+  return n;
+}
+
 export function parseArgs(argv) {
   const out = {
     image: 'thol-rig:local',
@@ -59,7 +86,7 @@ export function parseArgs(argv) {
     else if (a === '--credentials') out.credentials = next();
     else if (a === '--model') out.model = next();
     else if (a === '--arms-file') out.armsFile = next();
-    else if (a === '--max-reps') out.maxReps = Number(next());
+    else if (a === '--max-reps') out.maxReps = positiveInteger('--max-reps', next());
     else if (a === '--reps') {
       // The fixed-n switch. Distinct from --max-reps on purpose: that one is a
       // ceiling on an adaptive rule, this one turns the adaptive rule off.
@@ -75,7 +102,8 @@ export function parseArgs(argv) {
       out.concurrency = n;
     }
     else if (a === '--tasks') out.tasks = next().split(',').map((s) => s.trim()).filter(Boolean);
-    else if (a === '--min-credential-minutes') out.minCredentialMinutes = Number(next());
+    else if (a === '--min-credential-minutes')
+      out.minCredentialMinutes = nonNegativeNumber('--min-credential-minutes', next());
     else if (a === '--ignore-expiry') out.ignoreExpiry = true;
     else if (a === '--baseline') out.baseline = next();
     else if (a === '--endpoint') {

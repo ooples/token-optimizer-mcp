@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, test } from '@jest/globals';
-import { existsSync, mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -245,6 +245,26 @@ describe('the executor end to end, with a fake docker', () => {
     const out = await execute({ task: broken, arm: 'control', track: 'cold', rep: 1 });
     expect(out.status).toBe('setup-error');
     expect(out.workspace).toBeNull();
+  });
+
+  test('a broken fixture does not leak the directory it already created', async () => {
+    // This is the ONE exit that returns `workspace: null`, so nobody downstream
+    // holds a reference and the release that every other path relies on cannot
+    // fire. A fixture usually breaks for every rep, which turns one bug into
+    // hundreds of abandoned trees.
+    const root = mkdtempSync(join(tmpdir(), 'leak-check-'));
+    try {
+      const broken = { ...singleShotExtract, setup: () => { throw new Error('fixture broken'); } };
+      const execute = dockerExecutor({
+        image: 'img', credentials: '/creds', arms, workRoot: root,
+        spawnFn: fakeSpawn(SUCCEEDED),
+      });
+      await execute({ task: broken, arm: 'control', track: 'cold', rep: 1 });
+      const left = readdirSync(root).filter((n) => n.startsWith('ledger-ws-'));
+      expect(left).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test('an unknown arm fails loudly rather than running a default', async () => {
