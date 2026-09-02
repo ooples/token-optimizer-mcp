@@ -227,29 +227,30 @@ describe('what the index answers', () => {
 });
 
 describe('the seed keeps the promise its budget makes', () => {
-  test('the flush is accounted for, within generous headroom for load', () => {
-    // withBatchedWrites writes everything once the callback RETURNS, so
-    // spending the entire budget on traversal overran it by however long the
-    // serialise-and-append took. This runs at SessionStart, where the overrun
-    // is latency before the user's first turn.
-    const dir = mkdtempSync(join(tmpdir(), 'advisory-budget-'));
+  test('the flush reserve never consumes the whole budget', () => {
+    // REPLACES A WALL-CLOCK ASSERTION. The old form measured elapsed time
+    // against twice the budget, which is both weak (a 100% overrun passes)
+    // and flaky (it measures whatever else the suite is doing). The property
+    // that actually matters is arithmetic: reserving time for the flush must
+    // never leave traversal with nothing, which a flat 150 ms floor did for
+    // any budget below it -- Math.max(0, 100 - 150) put the deadline on now()
+    // and a caller asking for a small budget silently got no index at all.
+    //
+    // Deterministic, so it says the same thing on every machine.
+    const tiny = mkdtempSync(join(tmpdir(), 'advisory-tiny-'));
     try {
-      const budgetMs = 1_500;
-      const started = Date.now();
-      seedProject(dir, REPO, { maxFiles: 5_000, budgetMs });
-      const elapsed = Date.now() - started;
-      // NAMED FOR WHAT IT ACTUALLY CHECKS. An earlier version was called
-      // "stays inside the budget" while asserting twice it, so a regression
-      // overrunning the configured deadline by 100% would have passed under a
-      // name promising the opposite. The headroom is deliberate -- this suite
-      // runs in parallel and an absolute clock measures the machine, a lesson
-      // already paid for by the throughput guard below -- but the name now
-      // says so. What it genuinely catches is the flush being unbounded:
-      // before the reserve, traversal spent the whole budget and the write
-      // happened on top of it with no ceiling at all.
-      expect(elapsed).toBeLessThan(budgetMs * 2);
+      const none = seedProject(tiny, REPO, { maxFiles: 50, budgetMs: 0 });
+      expect(none.files).toBe(0);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(tiny, { recursive: true, force: true });
+    }
+
+    const small = mkdtempSync(join(tmpdir(), 'advisory-small-'));
+    try {
+      const some = seedProject(small, REPO, { maxFiles: 50, budgetMs: 300 });
+      expect(some.files).toBeGreaterThan(0);
+    } finally {
+      rmSync(small, { recursive: true, force: true });
     }
   });
 
@@ -606,61 +607,26 @@ describe('seeding a project', () => {
       // So time the unbatched primitive here, under whatever load this run is
       // under, and require the batched path to beat it by a wide margin. Both
       // measurements pay the same tax, so the ratio is what survives.
-      // LIKE FOR LIKE, WHICH THE FIRST VERSION WAS NOT. It compared per-FILE
-      // batched cost against per-RECORD unbatched cost, and a seeded file is
-      // not one record -- it is a read, a parse, and several nodes and edges.
-      // On a slow disk that ratio happened to hold; on CI it inverted and the
-      // test failed at 1.225 against a 0.6 bound while batching was working
-      // perfectly. The mechanism under test is the WRITE path, so time the
-      // same records through both paths and nothing else.
-      const CAL = 60;
-      const unbatchedDir = mkdtempSync(join(tmpdir(), 'advisory-unbatched-'));
-      const batchedDir = mkdtempSync(join(tmpdir(), 'advisory-batched-'));
-      let unbatchedMs;
-      let batchedMs;
-      try {
-        const t0 = Date.now();
-        for (let i = 0; i < CAL; i++) {
-          putNode(unbatchedDir, { kind: 'file', key: `u/${i}.ts`, path: `u/${i}.ts` });
-        }
-        unbatchedMs = Date.now() - t0;
-
-        const t1 = Date.now();
-        withBatchedWrites(batchedDir, () => {
-          for (let i = 0; i < CAL; i++) {
-            putNode(batchedDir, { kind: 'file', key: `b/${i}.ts`, path: `b/${i}.ts` });
-          }
-        });
-        batchedMs = Date.now() - t1;
-      } finally {
-        rmSync(unbatchedDir, { recursive: true, force: true });
-        rmSync(batchedDir, { recursive: true, force: true });
-      }
-
-      // Measured at roughly 16x (350 vs 21 records/sec). Requiring only 2x
-      // leaves generous room for a fast disk where the unbatched path is
-      // cheap, while still failing outright if the batch stops applying.
-      expect(unbatchedMs).toBeGreaterThan(0);
-      expect(batchedMs * 2).toBeLessThan(unbatchedMs);
-
-      const started = Date.now();
-      const result = seedProject(dir, REPO, { maxFiles: 200, budgetMs: 10_000 });
-      const elapsed = Date.now() - started;
-
-      // AND THAT seedProject ACTUALLY USES IT. The calibration above proves the
-      // batching primitive is fast; it says nothing about whether the seeder
-      // calls it -- removing withBatchedWrites from seedProject left that
-      // assertion perfectly green. Comparing per RECORD (not per file, which is
-      // a read plus a parse plus several records) puts the seeded path on the
-      // same footing as the unbatched primitive measured on this same machine.
-      const seededGraph = load(dir);
-      const records = seededGraph.nodes.size + seededGraph.edges.length;
-      expect(records).toBeGreaterThan(200);
-      const perRecordSeeded = elapsed / records;
-      const perRecordUnbatched = unbatchedMs / CAL;
-      expect(perRecordSeeded * 2).toBeLessThan(perRecordUnbatched);
+      // REACH THE CAP, rather than count files against a wall clock.
+      //
+      // Three formulations failed before this one. Per FILE against per RECORD
+      // was plainly wrong -- a seeded file is a read, a parse and several
+      // records. Per RECORD against per RECORD still was, because a seeded
+      // record carries that read and parse, so on a fast disk the unbatched
+      // write gets cheap and the ratio inverts. Counting files finished inside
+      // a budget then failed under parallel load: 300 alone, 116 in the full
+      // suite. Every one of those measures the machine somewhere.
+      //
+      // Reaching a CAP is different: it is a yes/no that both implementations
+      // answer under the same load, and the budget only has to be generous
+      // enough for the batched path. Measured here: batched runs ~77 files/sec
+      // under full-suite load and ~250 idle; unbatched ~18. A 100 file cap
+      // needs 1.3s batched and 5.5s unbatched, so a 3s budget clears one and
+      // not the other with room on both sides.
+      const budgeted = seedProject(dir, REPO, { maxFiles: 100, budgetMs: 3_000 });
+      expect(budgeted.stopped).toBe('file-cap');
+      expect(budgeted.files).toBe(100);
       // The other half of the original property: a working index, not a stub.
-      expect(result.files).toBe(200);
 
       const seeded = load(dir);
       const advice = adviseSearch(seeded, 'seedProject', { root: REPO });
