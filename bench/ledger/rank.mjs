@@ -24,7 +24,7 @@
  * unfalsifiable, a failing assertion is not.
  */
 
-import { median, ratioCI, ratioOfTotalsCI, significant, samplingVerdict, holm, rng } from './stats.mjs';
+import { median, ratioCI, ratioOfTotalsCI, significant, samplingVerdict, holm, permutationP, rng } from './stats.mjs';
 import { assertSingleBuild, rowProblem } from './provenance.mjs';
 
 /** Groups rows by track, then arm, then task. Rejected rows are reported. */
@@ -189,6 +189,14 @@ export function compareArm(armTasks, controlTasks, options = {}) {
     const armUnits = pairsOf(rows);
     const ctlUnit = pairsOf(controlRows);
     const ci = ratioOfTotalsCI(armUnits, ctlUnit);
+    // THE MULTIPLICITY INPUT IS A PERMUTATION p, NOT THE INTERVAL'S OWN TAIL
+    // MASS. The interval's achieved level resamples the observed arms and never
+    // simulates parity, and it saturates at its resolution floor whenever the
+    // ratio sits cleanly away from 1 -- so every well-separated task entered
+    // Holm looking maximally significant and the correction was decided by the
+    // resample count instead of the evidence. `ci.p` is kept on the entry for
+    // the interval it belongs to; only the family correction changed.
+    const permutation = permutationP(armUnits, ctlUnit);
 
     const entry = {
       task,
@@ -196,6 +204,7 @@ export function compareArm(armTasks, controlTasks, options = {}) {
       // cannot be different statistics wearing the same label.
       ratio: ci.ratio,
       ci,
+      permutationP: permutation,
       significant: significant(ci),
       arm,
       control,
@@ -358,11 +367,18 @@ export function report(rows, options = {}) {
  * cost. `survivesCorrection` is the field a published claim must cite.
  */
 export function correctForFamilySize(armsByName, alpha = 0.05) {
+  // UNRESOLVED TASKS ARE IN THE FAMILY, because the report PRINTS their
+  // intervals. They are excluded from the headline -- their evidence is too
+  // weak to average -- but an interval a reader can see is an interval a reader
+  // can quote, and every test whose result is shown is a test the family size
+  // has to account for. Leaving them out shrank the divisor and made the
+  // corrected tasks look stronger than the table they appear in justifies.
   const family = [];
   for (const cmp of Object.values(armsByName)) {
     for (const entry of cmp.perTask) family.push(entry);
+    for (const entry of cmp.unresolvedDetail || []) family.push(entry);
   }
-  const adjusted = holm(family.map((e) => e.ci?.p ?? NaN));
+  const adjusted = holm(family.map((e) => e.permutationP ?? NaN));
   family.forEach((entry, i) => {
     entry.adjustedP = adjusted[i];
     entry.survivesCorrection = Number.isFinite(adjusted[i]) && adjusted[i] < alpha;

@@ -297,6 +297,79 @@ function achievedLevel(sortedRatios) {
 }
 
 /**
+ * A NULL-CALIBRATED p-value for "these two arms cost the same", by permutation.
+ *
+ * REPLACES BOOTSTRAP TAIL MASS, WHICH WAS NOT A p-VALUE. The previous input to
+ * `holm` was the achieved level of the percentile interval: twice the smaller
+ * tail of the resampled ratio distribution. That resamples the OBSERVED arms
+ * and never simulates the null, and it has a failure mode that flatters us --
+ * whenever the ratio is stable and away from 1, every draw lands on one side,
+ * the level pins to its resolution floor of 1/(resamples+1), and every such
+ * task enters Holm looking maximally significant regardless of effect size.
+ * With 2,000 resamples that floor clears any family-wise threshold this
+ * benchmark will ever use, so "survives multiplicity correction" was decided by
+ * the resample count rather than by the evidence.
+ *
+ * Under the null that the arm label does not matter, a run's (cost, score) pair
+ * is exchangeable between the two arms. So: pool the pairs, deal them back into
+ * groups of the original sizes, recompute the ratio of totals, and ask how
+ * often chance alone produces a departure from parity at least as large as the
+ * observed one. That is calibrated by construction.
+ *
+ * The (+1) in numerator and denominator is Phipson-Smyth: it keeps the p-value
+ * from ever being exactly zero, which is not a floor artifact but the honest
+ * statement that a permutation test cannot resolve past its own resample count.
+ *
+ * Compared on the LOG ratio so a halving and a doubling are equally far from
+ * parity; on the raw ratio they are not.
+ */
+export function permutationP(armPairs, basePairs, { resamples = 2000, seed } = {}) {
+  const totals = (pairs) => {
+    let cost = 0;
+    let delivered = 0;
+    for (const [c, s] of pairs) {
+      cost += c;
+      delivered += s;
+    }
+    return delivered > 0 ? cost / delivered : NaN;
+  };
+  const gap = (a, b) => {
+    const x = totals(a);
+    const y = totals(b);
+    return x > 0 && y > 0 ? Math.abs(Math.log(x / y)) : NaN;
+  };
+
+  if (!armPairs?.length || !basePairs?.length) return NaN;
+  const observed = gap(armPairs, basePairs);
+  if (!Number.isFinite(observed)) return NaN;
+
+  const pool = [...armPairs, ...basePairs];
+  const n = armPairs.length;
+  const next = rng(seed ?? 0x51ed);
+  let atLeastAsExtreme = 0;
+  let usable = 0;
+
+  for (let r = 0; r < resamples; r++) {
+    // Fisher-Yates on a copy: a partial shuffle of the first n is enough, since
+    // only the split matters, not the order within each side.
+    const shuffled = pool.slice();
+    for (let i = 0; i < n; i++) {
+      const j = i + ((next() * (shuffled.length - i)) | 0);
+      const t = shuffled[i];
+      shuffled[i] = shuffled[j];
+      shuffled[j] = t;
+    }
+    const g = gap(shuffled.slice(0, n), shuffled.slice(n));
+    if (!Number.isFinite(g)) continue;
+    usable += 1;
+    if (g >= observed) atLeastAsExtreme += 1;
+  }
+
+  if (!usable) return NaN;
+  return (atLeastAsExtreme + 1) / (usable + 1);
+}
+
+/**
  * Holm-Bonferroni: adjusted levels for a family of tests, in input order.
  *
  * Chosen over plain Bonferroni because it is uniformly more powerful at the

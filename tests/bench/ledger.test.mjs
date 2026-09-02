@@ -14,6 +14,7 @@ import {
   samplingVerdict,
   ratioCI,
   significant,
+  permutationP,
   holm,
   rng,
   DEFAULT_PRECISION,
@@ -218,6 +219,76 @@ describe('a ratio accounts for the control\'s own spread', () => {
   test('a level is never claimed finer than the resampling can resolve', () => {
     const ci = ratioCI([0.001], [1000], { seed: 6, resamples: 500 });
     expect(ci.p).toBeCloseTo(1 / 501, 6);
+  });
+});
+
+describe('the multiplicity input is calibrated against the null', () => {
+  const pairs = (costs) => costs.map((c) => [c, 1]);
+
+  test('two arms drawn from the same costs are not called significant', () => {
+    // THE PROPERTY THE OLD INPUT LACKED. Bootstrap tail mass resamples the
+    // OBSERVED arms and never simulates parity, so it could not be uniform
+    // under the null by construction. A permutation test can be, and this is
+    // the case that shows it.
+    const a = pairs([0.10, 0.11, 0.09, 0.10, 0.12, 0.08, 0.10, 0.11]);
+    const b = pairs([0.11, 0.09, 0.10, 0.12, 0.08, 0.10, 0.11, 0.09]);
+    expect(permutationP(a, b)).toBeGreaterThan(0.05);
+  });
+
+  test('a large real separation is called significant', () => {
+    const a = pairs([0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05]);
+    const b = pairs([0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10]);
+    expect(permutationP(a, b)).toBeLessThan(0.05);
+  });
+
+  test('a stable small gap does NOT pin to the resolution floor', () => {
+    // THE EXACT DEFECT BEING REPLACED. With the interval's own tail mass, any
+    // ratio sitting cleanly away from 1 put every draw on one side and returned
+    // 1/(resamples+1) -- so a 4% difference and a 60% difference both entered
+    // Holm as maximally significant, and the correction was decided by the
+    // resample count rather than the evidence.
+    const small = pairs([0.096, 0.096, 0.096, 0.096, 0.096, 0.096]);
+    const base = pairs([0.100, 0.100, 0.100, 0.100, 0.100, 0.100]);
+    const huge = pairs([0.040, 0.040, 0.040, 0.040, 0.040, 0.040]);
+
+    const pSmall = permutationP(small, base);
+    const pHuge = permutationP(huge, base);
+    // Both separate perfectly, so a tail-mass level would give both the floor.
+    // A permutation test cannot tell them apart either when every value is
+    // identical -- what it CAN do is refuse to report either as stronger than
+    // the permutation resolution allows, and never below the (+1) bound.
+    const floor = 1 / 2001;
+    expect(pSmall).toBeGreaterThanOrEqual(floor);
+    expect(pHuge).toBeGreaterThanOrEqual(floor);
+  });
+
+  test('a p-value is never exactly zero, and lands on the resolution bound', () => {
+    // Phipson-Smyth: a permutation test cannot resolve past its resample count,
+    // and reporting p = 0 claims that it can.
+    //
+    // SIZED SO THE BOUND IS THE ONLY WAY TO PASS. With six against six the
+    // shuffle redraws the original split roughly twice in 2,000 tries, so the
+    // count is non-zero anyway and dropping the (+1) would still give p > 0 --
+    // a test that cannot see the bug. Ten against ten is one split in 184,756,
+    // and fifty resamples will not find it, so the count is 0 and the (+1) is
+    // the entire difference between 1/51 and a false zero.
+    const ten = (v) => pairs(Array.from({ length: 10 }, () => v));
+    const p = permutationP(ten(0.001), ten(10), { resamples: 50 });
+    expect(p).toBeGreaterThan(0);
+    expect(p).toBeCloseTo(1 / 51, 10);
+  });
+
+  test('an empty side yields NaN rather than a confident answer', () => {
+    expect(Number.isNaN(permutationP([], pairs([0.1, 0.1])))).toBe(true);
+    expect(Number.isNaN(permutationP(pairs([0.1, 0.1]), []))).toBe(true);
+  });
+
+  test('the direction of the difference does not change the p-value', () => {
+    // Two-sided on the LOG ratio, so a halving and a doubling are equally far
+    // from parity. On the raw ratio they are not.
+    const a = pairs([0.05, 0.05, 0.05, 0.05, 0.06, 0.05]);
+    const b = pairs([0.10, 0.10, 0.10, 0.10, 0.11, 0.10]);
+    expect(permutationP(a, b, { seed: 7 })).toBeCloseTo(permutationP(b, a, { seed: 7 }), 10);
   });
 });
 
@@ -470,10 +541,38 @@ describe('the report', () => {
     expect(typeof t.survivesCorrection).toBe('boolean');
   });
 
-  test('a lone strong result is not penalised for tasks that never resolved', () => {
-    // An unresolved task is excluded from the headline already; letting it
-    // count toward the family size would punish the tasks that did resolve for
-    // the failure of one that did not.
+  test('an unresolved task whose interval is printed counts toward the family', () => {
+    // renderReport prints unresolvedDetail intervals. An interval a reader can
+    // see is one a reader can quote, so every test whose result is shown must
+    // be counted -- leaving them out shrinks the divisor and makes the
+    // corrected tasks look stronger than the table they appear in justifies.
+    const flat = [0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10];
+    const half = flat.map((v) => v / 2);
+    const noisy = [0.05, 0.30, 0.07, 0.28, 0.06, 0.31];
+    const out = report([
+      ...flat.map((usd, i) => row({ arm: 'control', task: 'clean', rep: i + 1, usd })),
+      ...half.map((usd, i) => row({ arm: 'candidate', task: 'clean', rep: i + 1, usd })),
+      ...noisy.map((usd, i) => row({ arm: 'control', task: 'wobbly', rep: i + 1, usd })),
+      ...noisy.map((usd, i) => row({ arm: 'candidate', task: 'wobbly', rep: i + 1, usd })),
+    ]);
+    const c = out.tracks.cold.arms.candidate;
+    expect(c.unresolved).toContain('wobbly');
+    // Two tests are shown, so the family is two -- not one.
+    expect(c.familySize).toBe(2);
+    expect(c.unresolvedDetail[0].adjustedP).toBeDefined();
+  });
+
+  test('an unresolved task still cannot enter the headline', () => {
+    // SUPERSEDES AN EARLIER ASSERTION OF THE OPPOSITE. This test used to demand
+    // familySize 1 here, reasoning that an unresolved task is already excluded
+    // from the headline so counting it would punish the task that did resolve.
+    // That was wrong, and review caught it: the report PRINTS the unresolved
+    // interval, and an interval a reader can see is one a reader can quote. A
+    // shown test belongs in the family whatever the headline does with it.
+    //
+    // What remains true, and is what this test now pins, is the separate
+    // property: unresolved tasks stay out of the headline and out of
+    // survivingTasks.
     const flat = [0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10];
     const half = flat.map((v) => v / 2);
     const noisy = [0.05, 0.30, 0.07, 0.28, 0.06, 0.31];
@@ -485,7 +584,7 @@ describe('the report', () => {
     ]);
     const c = out.tracks.cold.arms.candidate;
     expect(c.unresolved).toContain('wobbly');
-    expect(c.familySize).toBe(1);
+    expect(c.tasksCounted).toBe(1);
     expect(c.survivingTasks).toEqual(['clean']);
   });
 
