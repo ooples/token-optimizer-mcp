@@ -60,6 +60,13 @@ export function parseArgs(argv) {
     else if (a === '--model') out.model = next();
     else if (a === '--arms-file') out.armsFile = next();
     else if (a === '--max-reps') out.maxReps = Number(next());
+    else if (a === '--reps') {
+      // The fixed-n switch. Distinct from --max-reps on purpose: that one is a
+      // ceiling on an adaptive rule, this one turns the adaptive rule off.
+      const n = Number(next());
+      if (!Number.isInteger(n) || n < 2) throw new Error(`--reps must be an integer >= 2, got ${n}`);
+      out.reps = n;
+    }
     else if (a === '--concurrency') {
       const n = Number(next());
       if (!Number.isInteger(n) || n < 1 || n > 6) {
@@ -94,6 +101,9 @@ Ledger -- cost per unit of work delivered, failures included.
   --model NAME        model override
   --arms-file PATH    extra arm definitions as JSON
   --max-reps N        cap reps per task (spend control)
+  --reps N            FIXED reps per task -- no early stopping. Use this for any
+                      published comparison: the adaptive rule is optional
+                      stopping and its intervals are too narrow.
   --concurrency N     cold tasks in flight at once, 1..6   (default: 1)
   --baseline ARM      compare every arm against ARM        (default: control)
   --endpoint usd|output   rank on dollars or output tokens (default: usd)
@@ -240,7 +250,13 @@ async function main(argv) {
     tasksForTrack: opts.tasks
       ? (track) => forTrack(track).filter((t) => opts.tasks.includes(t.id))
       : undefined,
-    precision: opts.maxReps ? { maxReps: opts.maxReps } : undefined,
+    precision:
+      opts.reps || opts.maxReps
+        ? {
+            ...(opts.reps ? { fixedReps: opts.reps } : {}),
+            ...(opts.maxReps ? { maxReps: opts.maxReps } : {}),
+          }
+        : undefined,
     concurrency: opts.concurrency,
     log: (line) => process.stdout.write(line + '\n'),
   });
