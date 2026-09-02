@@ -64,7 +64,7 @@ import { isFsSafePath } from './lib/paths.mjs';
 // mean different things -- that one swaps a stale claim, this one swaps a
 // large read for an outline of the same file.
 import { substitutionFor as outlineFor } from './lib/substitute.mjs';
-import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { adviseSearch, SESSION_CAP } from './lib/advise.mjs';
@@ -678,17 +678,23 @@ function outlineSubstitution(payload) {
   const filePath = payload.tool_input?.file_path;
   if (!filePath) return null;
 
+  // THE RECORD ALREADY EXISTED, it was simply never read. The outline we serve
+  // is written to a path keyed by session and file, so that file's presence is
+  // itself the evidence that this session has already been handed an outline
+  // of this file. Consulting it is what makes `alreadyRead` mean something.
+  const target = join(
+    stateDir(),
+    `${commandKey(payload.session_id || '', filePath)}.outline.txt`
+  );
+
   const found = outlineFor(filePath, {
     turnsSoFar: turnsSoFar(payload.session_id || ''),
+    alreadyRead: existsSync(target),
   });
   if (!found) return null;
 
   try {
     mkdirSync(stateDir(), { recursive: true });
-    const target = join(
-      stateDir(),
-      `${commandKey(payload.session_id || '', filePath)}.outline.txt`
-    );
     writeFileSync(target, found.outline);
     return { target, found };
   } catch {
@@ -912,9 +918,18 @@ function searchAdvisory(payload, state, dirFor) {
   // path is an ancestor of nothing -- scoping to it would silence ALL of them.
   // Take the repository root only when it genuinely contains the session.
   const projectRoot = projectRootFor(join(root, '__search__'), root);
+  // Folds case only where the filesystem does. On Windows `C:/Repo` and
+  // `c:/repo` are one directory and folding is required; on a case-sensitive
+  // volume they are two, and folding would let a path be treated as inside a
+  // root that does not contain it -- widening the very scope that keeps one
+  // project's symbols out of another project's session.
+  const fold = (s) =>
+    process.platform === 'win32'
+      ? String(s).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+      : String(s).replace(/\\/g, '/').replace(/\/+$/, '');
   const contains = (outer, inner) => {
-    const a = String(outer).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-    const b = String(inner).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const a = fold(outer);
+    const b = fold(inner);
     return b === a || b.startsWith(`${a}/`);
   };
   const scope = contains(projectRoot, root) ? projectRoot : root;
