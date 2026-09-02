@@ -29,7 +29,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import { identifiersIn, adviseSearch, SESSION_CAP } from '../../hooks-core/advise.mjs';
+import { identifiersIn, adviseSearch, caseProbePath, SESSION_CAP } from '../../hooks-core/advise.mjs';
 import { seedProject, alreadySeeded, seedDisabled } from '../../hooks-core/seed.mjs';
 import { loadState, saveState } from '../../hooks-core/policy.mjs';
 import { load, withBatchedWrites, putNode, putEdge } from '../../hooks-core/wiki.mjs';
@@ -282,6 +282,60 @@ describe('what reaches the model is neutralised', () => {
     }
   });
 
+  test('the case probe differs from the path in its LAST component only', () => {
+    // THE PROPERTY AN END-TO-END TEST CANNOT CHECK HERE. Flipping the whole
+    // path probes every ancestor at once, so a case-insensitive project under
+    // an ancestor with no case-flipped twin fails the stat there and valid
+    // advisories are suppressed. On NTFS the whole-path probe succeeds anyway,
+    // so only the string property distinguishes the two implementations -- and
+    // the bug is on the platforms this machine is not.
+    const probe = caseProbePath('/home/User/Deep/Proj');
+    expect(probe).not.toBeNull();
+    expect(probe.actual).toBe('/home/User/Deep/Proj');
+    expect(probe.flipped).toBe('/home/User/Deep/proj');
+    // Every component but the last is byte-identical.
+    const a = probe.actual.split('/');
+    const b = probe.flipped.split('/');
+    expect(a.length).toBe(b.length);
+    expect(a.slice(0, -1)).toEqual(b.slice(0, -1));
+    expect(a[a.length - 1]).not.toBe(b[b.length - 1]);
+  });
+
+  test('the case probe declines when there is no case to flip', () => {
+    // A basename with no letters has no flipped twin, so probing would compare
+    // a path against itself and report every filesystem as case-insensitive.
+    expect(caseProbePath('/tmp/1234')).toBeNull();
+    expect(caseProbePath('/')).toBeNull();
+  });
+  test('the probe survives an ancestor whose flipped name does not exist', () => {
+    // Flipping the WHOLE path tests every ancestor at once, so a project
+    // under an ancestor that has no case-flipped twin fails the stat there,
+    // the probe falls back to "case-sensitive", and valid in-scope advisories
+    // are suppressed. Only the last component may be flipped.
+    //
+    // mkdtemp gives a parent with random mixed-case characters, so its own
+    // flipped name reliably does not exist -- which is exactly the ancestor
+    // that broke the whole-path probe.
+    const parent = mkdtempSync(join(tmpdir(), 'AncestorProbe-'));
+    const scope = join(parent, 'proj');
+    mkdirSync(scope);
+    const dir = mkdtempSync(join(tmpdir(), 'advisory-anc-'));
+    try {
+      withBatchedWrites(dir, () => {
+        const f = join(scope, 'thing.ts');
+        const file = putNode(dir, { kind: 'file', key: f, path: f });
+        putEdge(dir, file, 'contains', putNode(dir, { kind: 'symbol',
+          key: f + '#ancestorProbe', name: 'ancestorProbe', file: f, line: 1 }));
+      });
+      // Exact-case scope: must answer regardless of how the probe behaves,
+      // and it is the whole-path probe that could wrongly suppress it.
+      const advice = adviseSearch(load(dir), 'ancestorProbe', { root: scope, scope });
+      expect(advice).not.toBeNull();
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   test('scope folding follows the filesystem, not the platform', () => {
     // Keying this on process.platform was wrong in both directions: macOS
     // defaults to a case-INSENSITIVE volume, so refusing to fold there
