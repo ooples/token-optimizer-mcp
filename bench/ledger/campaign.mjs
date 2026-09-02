@@ -111,6 +111,9 @@ export async function coldArm(
 
     const { rows, verdict } = await runColdTask(task, {
       arm,
+      // Continue the numbering rather than restarting it, so `rep` stays unique
+      // within (arm, task, build) across any number of resumptions.
+      startRep: done + 1,
       execute,
       freshStateDir: async () => mkdtempSync(join(tmpdir(), `ledger-cold-${arm}-`)),
       provenance,

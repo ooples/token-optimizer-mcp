@@ -266,6 +266,14 @@ export function dockerExecutor({
       // A fixture that cannot be built is a harness fault, not an agent result.
       // It must not be scored as a failed run -- that would charge the arm for
       // our bug and quietly depress its number.
+      //
+      // FREED HERE, because this is the one exit that returns `workspace: null`.
+      // Everywhere else the caller releases the directory once scoring has read
+      // it, and that release is driven off the returned workspace -- so on this
+      // path nobody holds a reference and the directory leaks for the life of
+      // the machine. A fixture that fails usually fails for every rep, which
+      // turns one bug into hundreds of abandoned trees.
+      discardWorkspace(workspace);
       return { status: 'setup-error', usd: 0, turns: 0, workspace: null, error: String(error) };
     }
 

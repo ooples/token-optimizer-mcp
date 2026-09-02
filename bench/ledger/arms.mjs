@@ -118,8 +118,8 @@ export const assistNoRules = {
  * If their hooks contribute materially this arm understates them, and that is
  * the honest caveat on any comparison drawn from it. It is included because a
  * text-versus-text head-to-head is the experiment the analysis points at: both
- * products reduce to a block of instructions, and theirs is 2,669 characters
- * against our 471.
+ * products reduce to a block of instructions, and theirs is 2,667 characters
+ * against our 510.
  */
 export const tokenadeRules = {
   name: 'tokenade-rules',
@@ -144,8 +144,15 @@ export const tokenadeRules = {
  *
  * This arm carries the shipped constant, imported rather than copied so the
  * measured text cannot drift from the text users get, with no hooks, no MCP,
- * and the optimizer switched off. Against tokenade-rules it is 471 characters
+ * and the optimizer switched off. Against tokenade-rules it is 510 characters
  * against 2,667, same delivery, same everything else.
+ *
+ * THE NUMBERS ARE THE DELIVERED FILES, not the block alone. 510 is this arm's
+ * whole claudeMd -- the shipped OUTPUT_DISCIPLINE constant plus the one-line
+ * header that makes it a rules file -- measured the same way as their 2,667,
+ * so the two are comparable. An earlier "471" counted the constant without the
+ * header and disagreed with itself two comments apart; a count that cannot be
+ * reproduced from the arm it describes is worse than no count.
  */
 export const oursRulesOnly = {
   name: 'ours-rules',
@@ -172,7 +179,23 @@ export function loadArms(path) {
   const out = {};
   for (const [name, arm] of Object.entries(raw)) {
     if (!arm || typeof arm !== 'object') throw new Error(`arm ${name} is not an object`);
-    out[name] = { name, settings: arm.settings ?? {}, env: arm.env ?? {} };
+    if (arm.claudeMd !== undefined && typeof arm.claudeMd !== 'string') {
+      throw new Error(`arm ${name} has a non-string claudeMd`);
+    }
+    // CARRIED THROUGH, because dropping it made the file unable to express the
+    // very thing this harness exists to compare. Every competitor here reduces
+    // to a rules file -- tokenade's own CLI runs 0.38 times per task while its
+    // claudeMd does the work -- so an outsider adding an arm by JSON could
+    // define one, watch it be silently discarded, and measure their tool as
+    // though it shipped no instructions at all. The shipped arms could do this
+    // and only the external path could not, which is the worst place for the
+    // gap to be: it is the path we do not run ourselves.
+    out[name] = {
+      name,
+      settings: arm.settings ?? {},
+      env: arm.env ?? {},
+      ...(arm.claudeMd === undefined ? {} : { claudeMd: arm.claudeMd }),
+    };
   }
   return out;
 }

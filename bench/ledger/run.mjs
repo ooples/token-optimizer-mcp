@@ -116,15 +116,25 @@ async function runOnce(task, { arm, track, rep, stateDir, execute, provenance })
  */
 export async function runColdTask(
   task,
-  { arm, execute, freshStateDir, provenance, precision, onRow } = {}
+  { arm, execute, freshStateDir, provenance, precision, onRow, startRep = 1 } = {}
 ) {
   const rows = [];
   const limit = { ...DEFAULT_PRECISION, ...precision };
 
   // A fixed-n design runs exactly its pre-specified count; the spend cap does
   // not apply, because the count IS the budget and was agreed before the run.
-  const repCeiling = limit.fixedReps || limit.maxReps;
-  for (let rep = 1; rep <= repCeiling; rep++) {
+  //
+  // REPS CONTINUE FROM WHERE THE BANK LEFT OFF. This loop used to restart at 1
+  // on every resumption, so a cell interrupted at rep 8 and resumed produced a
+  // SECOND rep 1..n and `rep` stopped being unique within (arm, task, build).
+  // No measurement was ever double-counted -- the rows are distinct runs with
+  // distinct timestamps -- but every consumer that wanted one row per rep had
+  // to dedupe on `started_at` instead, and a reviewer reading the store cannot
+  // tell a collided label from a genuinely duplicated row without doing that
+  // work themselves. An identifier that needs a second field to disambiguate
+  // is not an identifier.
+  const repCeiling = startRep - 1 + (limit.fixedReps || limit.maxReps);
+  for (let rep = startRep; rep <= repCeiling; rep++) {
     const stateDir = freshStateDir ? await freshStateDir({ task, arm, rep }) : null;
     const row = await runOnce(task, { arm, track: 'cold', rep, stateDir, execute, provenance });
     rows.push(row);

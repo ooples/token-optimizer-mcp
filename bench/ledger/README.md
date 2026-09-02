@@ -116,3 +116,34 @@ running the real CLI rather than by reasoning:
 
 **Still to build:** the campaign entry point that ties arms, tracks and the
 report together into one command.
+
+## Which store backs which published result
+
+A reviewer asked, correctly, which rows the published numbers came from, having
+noticed repeated `rep` values in the older stores. The audit and the answer:
+
+| store | backs | rows | state |
+| --- | --- | --- | --- |
+| `largecontext.jsonl` | RESULTS-LARGECONTEXT.md, the 12.2% head-to-head | 364 | 30 real reps in every one of 12 cells |
+| `postfix.jsonl`, `postfix-ours.jsonl`, `postfix-merged.jsonl` | the post-fix re-measurement | 252 | 30 in every completed cell |
+| `confirmatory*.jsonl` | RESULTS.md, the null result | 329 | as published |
+| `attribution.jsonl`, `rules-ab*.jsonl`, `headtohead.jsonl`, `results*.jsonl` | **nothing** | -- | superseded exploratory runs, withdrawn as evidence |
+
+**On the repeated `rep` values.** Checked directly: across every store there are
+**zero identical rows** -- no two rows share a `(arm, task, rep, build)` key AND
+a `started_at` AND a cost. Every row is a distinct run, so no measurement was
+ever double-counted and no interval was computed over duplicated data.
+
+What the repeats were is a labelling defect: `runColdTask` restarted its rep
+counter at 1 on every resumption, so a cell interrupted at rep 8 and resumed
+produced a second rep 1..n. That is fixed at the source -- resumption now
+continues the numbering, and a test asserts `rep` is unique within
+(arm, task, build) across a resume. The older stores keep the labels they were
+written with, because rewriting recorded data to look tidier is not something
+this ledger should ever do; consumers of those files must dedupe on
+`started_at`, which is what the merge step already did.
+
+Cell sizes in the superseded stores are uneven (9, 10 and 18 rows in
+`attribution.jsonl`) because they predate the fixed-n design and were collected
+under the adaptive stopping rule. That imbalance is one of the reasons those
+runs are withdrawn rather than reported.
