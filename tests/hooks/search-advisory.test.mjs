@@ -607,24 +607,25 @@ describe('seeding a project', () => {
       // So time the unbatched primitive here, under whatever load this run is
       // under, and require the batched path to beat it by a wide margin. Both
       // measurements pay the same tax, so the ratio is what survives.
-      // MEASURE WORK COMPLETED IN A FIXED BUDGET, NOT TIME PER UNIT.
+      // REACH THE CAP, rather than count files against a wall clock.
       //
-      // Two timing formulations failed before this one, both for the same
-      // reason: a seeded "unit" is not comparable to a bare write. Per FILE
-      // against per RECORD was plainly wrong -- a file is a read, a parse and
-      // several records. Per RECORD against per RECORD is still wrong, because
-      // a seeded record carries that read and parse with it, so on a fast disk
-      // the unbatched write gets cheap and the ratio inverts. Both passed here
-      // and failed on CI.
+      // Three formulations failed before this one. Per FILE against per RECORD
+      // was plainly wrong -- a seeded file is a read, a parse and several
+      // records. Per RECORD against per RECORD still was, because a seeded
+      // record carries that read and parse, so on a fast disk the unbatched
+      // write gets cheap and the ratio inverts. Counting files finished inside
+      // a budget then failed under parallel load: 300 alone, 116 in the full
+      // suite. Every one of those measures the machine somewhere.
       //
-      // What separates the two implementations cleanly is how much they finish
-      // before the clock runs out. Measured on this repository with a 2s
-      // budget and a 300 file cap: batched reaches the cap, unbatched reaches
-      // about 27. A faster disk lifts both, but batched is already capped, so
-      // the gap cannot close from that direction. The bar sits at 150 -- five
-      // times what unbatched manages, half of what batched does.
-      const budgeted = seedProject(dir, REPO, { maxFiles: 300, budgetMs: 1_500 });
-      expect(budgeted.files).toBeGreaterThanOrEqual(150);
+      // Reaching a CAP is different: it is a yes/no that both implementations
+      // answer under the same load, and the budget only has to be generous
+      // enough for the batched path. Measured here: batched runs ~77 files/sec
+      // under full-suite load and ~250 idle; unbatched ~18. A 100 file cap
+      // needs 1.3s batched and 5.5s unbatched, so a 3s budget clears one and
+      // not the other with room on both sides.
+      const budgeted = seedProject(dir, REPO, { maxFiles: 100, budgetMs: 3_000 });
+      expect(budgeted.stopped).toBe('file-cap');
+      expect(budgeted.files).toBe(100);
       // The other half of the original property: a working index, not a stub.
 
       const seeded = load(dir);
