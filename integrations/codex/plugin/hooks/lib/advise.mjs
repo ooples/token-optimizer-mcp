@@ -127,27 +127,52 @@ const slashed = (path) =>
  * Comparison is on the slashed form because a graph written on Windows holds
  * backslashes while the session's cwd may arrive either way.
  */
+/**
+ * Case folding that follows the filesystem rather than the whole world.
+ *
+ * WHY NOT ALWAYS toLowerCase. Windows resolves `C:/Repo` and `c:/repo` to one
+ * directory, so folding there is required or a case difference between the
+ * payload's cwd and a stored path silences every answer. On Linux and macOS
+ * with a case-sensitive volume they are DIFFERENT directories, and folding
+ * makes `/work/Repo/secret.ts` test as inside `/work/repo` -- which is the
+ * scope check that exists to stop one project's symbols being reported into
+ * another's session. A wrong answer that names a real file from somebody
+ * else's tree is the worst output this feature can produce, because it is
+ * indistinguishable from a correct one.
+ */
+const FOLD_CASE = process.platform === 'win32';
+const fold = (s) => (FOLD_CASE ? s.toLowerCase() : s);
+
 function withinScope(file, scope) {
   if (!scope) return true;
-  const path = slashed(file);
-  const base = slashed(scope);
-  // Case-insensitive, because Windows resolves `C:/Repo` and `c:/repo` to the
-  // same directory and a case difference between the payload's cwd and the
-  // stored path would silence every answer.
-  return (
-    path.toLowerCase() === base.toLowerCase() ||
-    path.toLowerCase().startsWith(`${base.toLowerCase()}/`)
-  );
+  const path = fold(slashed(file));
+  const base = fold(slashed(scope));
+  return path === base || path.startsWith(`${base}/`);
 }
 
-/** Trim an absolute path to something readable and short. */
+/**
+ * Trim an absolute path to something readable and short, and safe to hand to a
+ * model.
+ *
+ * CONTROL CHARACTERS ARE NEUTRALISED HERE. This string is interpolated into
+ * `additionalContext`, which is agent context: a path containing a newline --
+ * legal on Linux and macOS -- would end the advisory line and let the rest of
+ * the filename appear as its own instruction to the model. The graph's paths
+ * come from the filesystem, so they are attacker-influenced wherever the agent
+ * works on a checkout it did not write.
+ *
+ * Replaced rather than rejected, so a legitimately odd filename still gets an
+ * answer instead of silence.
+ */
 function display(path, root) {
   const normalised = slashed(path);
   const base = slashed(root);
-  if (!base) return normalised;
-  return normalised.toLowerCase().startsWith(`${base.toLowerCase()}/`)
-    ? normalised.slice(base.length + 1)
-    : normalised;
+  const trimmed =
+    base && fold(normalised).startsWith(`${fold(base)}/`)
+      ? normalised.slice(base.length + 1)
+      : normalised;
+  // eslint-disable-next-line no-control-regex
+  return trimmed.replace(/[\u0000-\u001f\u007f]/g, '\uFFFD');
 }
 
 /** How many facts one session may be told. */

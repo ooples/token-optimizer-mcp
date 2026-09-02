@@ -918,9 +918,18 @@ function searchAdvisory(payload, state, dirFor) {
   // path is an ancestor of nothing -- scoping to it would silence ALL of them.
   // Take the repository root only when it genuinely contains the session.
   const projectRoot = projectRootFor(join(root, '__search__'), root);
+  // Folds case only where the filesystem does. On Windows `C:/Repo` and
+  // `c:/repo` are one directory and folding is required; on a case-sensitive
+  // volume they are two, and folding would let a path be treated as inside a
+  // root that does not contain it -- widening the very scope that keeps one
+  // project's symbols out of another project's session.
+  const fold = (s) =>
+    process.platform === 'win32'
+      ? String(s).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+      : String(s).replace(/\\/g, '/').replace(/\/+$/, '');
   const contains = (outer, inner) => {
-    const a = String(outer).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-    const b = String(inner).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const a = fold(outer);
+    const b = fold(inner);
     return b === a || b.startsWith(`${a}/`);
   };
   const scope = contains(projectRoot, root) ? projectRoot : root;
