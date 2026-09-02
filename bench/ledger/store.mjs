@@ -104,6 +104,32 @@ export function completedReps(rows, { arm, track, task, build }) {
   ).length;
 }
 
+/**
+ * The next rep label that is certainly unused for this cell.
+ *
+ * SEPARATE FROM `completedReps`, AND THE SEPARATION IS THE POINT. That function
+ * answers "how many measurements do I have" and therefore excludes harness
+ * failures, which are not measurements. This one answers "what may I call the
+ * next row", which is a different question: a harness-failure row still
+ * OCCUPIES its label on disk.
+ *
+ * Conflating them lost data. With reps 1, 2 (harness failure) and 3 recorded,
+ * `completedReps` returns 2, so numbering resumed at 3 -- colliding with a real
+ * run -- and the reader, which keeps only the newest row per key, then dropped
+ * the earlier measurement entirely. Two fixes that were each correct alone
+ * combined into silent deletion.
+ */
+export function nextRep(rows, { arm, track, task, build }) {
+  let highest = 0;
+  for (const r of rows) {
+    if (r.arm !== arm || r.track !== track || r.task !== task) continue;
+    if (buildKey(r) !== build) continue;
+    const rep = Number(r.rep);
+    if (Number.isFinite(rep) && rep > highest) highest = rep;
+  }
+  return highest + 1;
+}
+
 /** A run that errored having cost nothing and attempted nothing. */
 function isHarnessFailure(row) {
   if (row.harness_failure === true) return true;

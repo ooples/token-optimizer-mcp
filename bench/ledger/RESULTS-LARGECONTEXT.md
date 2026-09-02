@@ -149,11 +149,15 @@ Review found that the value fed to Holm-Bonferroni was not a p-value. It was
 the achieved level of the percentile interval -- twice the smaller tail of the
 resampled ratio distribution -- which resamples the OBSERVED arms and never
 simulates parity. It also had a failure mode that flattered us: whenever a
-ratio sits cleanly away from 1, every bootstrap draw lands on one side and the
-level pins to its resolution floor of 1/(resamples+1). With 2,000 resamples
-that floor clears any family-wise threshold this benchmark uses, so "survives
-multiplicity correction" was being decided by the resample count rather than by
-the evidence.
+ratio sits cleanly away from 1, every bootstrap draw lands on one side, the raw
+tail is zero, and the level pins to its clamp of 1/(n+1) -- where `n` is the
+count of FINITE resampled ratios, which can be fewer than the 2,000 draws once
+invalid ones are filtered. The smallest non-zero level the raw formula can
+otherwise produce is 2/n, one draw on the short side. Either way the value that
+reaches the correction is a function of the resample count rather than of the
+effect, and at 2,000 draws it clears any family-wise threshold this benchmark
+uses -- so "survives multiplicity correction" was being decided by how many
+times we resampled.
 
 Replaced with a permutation test. Under the null that the arm label does not
 matter, a run's (cost, score) pair is exchangeable between arms: pool the
@@ -167,14 +171,29 @@ Unresolved tasks now count toward the family as well. They are still excluded
 from the headline, but the report PRINTS their intervals, and an interval a
 reader can see is one a reader can quote.
 
+**That is not in tension with `large-file-defect` above carrying no interval.**
+Two different situations wear the word "unresolved". A task that reached its
+pre-registered n and still has a wide interval IS reported, interval and all,
+and is corrected with the rest -- the width is the result. A task that never
+reached its n, as `large-file-defect` had not at 12 of 30 reps, has no result
+to report at any width, so no interval is quoted for it and it is not in any
+family. The first is an answer that happens to be imprecise; the second is not
+an answer.
+
 **No published conclusion changes.** Re-run under the corrected test:
 
 | comparison | headline | family | survives correction |
 | --- | --- | --- | --- |
-| assist vs tokenade-rules | 0.878 [0.831, 0.926] | 9 | large-file-defect, noisy-command |
-| assist vs ours-rules | 1.051 [0.986, 1.119] | 9 | all three |
+| assist vs **tokenade-rules** | 0.878 [0.831, 0.926] | 9 | large-file-defect, noisy-command |
+| assist vs **ours-rules** | 1.051 [0.986, 1.119] | 9 | all three |
 
-The two head-to-head wins survive a properly calibrated test, and
-`whole-file-transform` -- whose interval spans parity -- correctly does not
-(p = 0.106). What changed is that the claim is now defensible, not that the
-numbers moved.
+**The two rows are different comparisons, and an earlier draft of this section
+read them as one.** Against *tokenade-rules*, `whole-file-transform` does not
+survive correction (p = 0.106), which matches its interval spanning parity.
+Against *ours-rules* it does survive (p = 0.011) -- and it survives as a
+**loss**, at ratio 1.336: that is the interception penalty being confirmed, not
+a win. A task can be significant against one baseline and not another, and
+saying "survives correction" without naming the baseline invites exactly the
+contradiction that was here.
+
+What changed is that the claim is now defensible, not that the numbers moved.

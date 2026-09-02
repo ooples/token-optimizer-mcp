@@ -170,7 +170,12 @@ function display(path, root) {
       ? normalised.slice(base.length + 1)
       : normalised;
   // eslint-disable-next-line no-control-regex
-  return trimmed.replace(/[\u0000-\u001f\u007f]/g, '\uFFFD');
+  // C0 AND DEL WERE NOT THE WHOLE SET. U+2028 LINE SEPARATOR and U+2029
+  // PARAGRAPH SEPARATOR end a line as far as the model reading this text is
+  // concerned, so they carry exactly the injection a bare newline does while
+  // passing a C0-only filter. C1 (U+0080-U+009F) is invisible, legal in a
+  // filename, and no path legitimately needs one.
+  return trimmed.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, '\uFFFD');
 }
 
 /** How many facts one session may be told. */

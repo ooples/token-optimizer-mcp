@@ -431,7 +431,14 @@ export function correctForFamilySize(armsByName, alpha = 0.05) {
   });
   for (const cmp of Object.values(armsByName)) {
     cmp.familySize = family.length;
-    cmp.survivingTasks = cmp.perTask.filter((e) => e.survivesCorrection).map((e) => e.task);
+    // SPANS THE WHOLE FAMILY, because the family now includes unresolved tasks
+    // -- their intervals are printed, so they are corrected. Scanning only
+    // perTask meant a task could be marked survivesCorrection on its own entry
+    // and be missing from this list, so the summary contradicted the row it
+    // summarised. Observed: all three tasks survived and this reported one.
+    cmp.survivingTasks = [...cmp.perTask, ...(cmp.unresolvedDetail || [])]
+      .filter((e) => e.survivesCorrection)
+      .map((e) => e.task);
   }
   return family.length;
 }
