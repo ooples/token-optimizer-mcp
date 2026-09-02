@@ -138,7 +138,7 @@ function touchesFor(dir, sessionId) {
  * @returns { text, state } -- text is null when nothing should be shown.
  */
 export function maybeSurface(dir, {
-  transcriptPath, sessionId, state = {}, now = Date.now(), findings = [],
+  transcriptPath, sessionId, state = {}, now = Date.now(), findings,
 } = {}) {
   const previous = state.forecast || null;
 
@@ -163,10 +163,16 @@ export function maybeSurface(dir, {
       ...usage,
       sessionId,
       touches: touchesFor(dir, sessionId),
+    // OMITTED AND EMPTY ARE DIFFERENT ANSWERS. `findings.length ? ... :` read
+    // an explicit `findings: []` -- a caller saying "there are none" -- as an
+    // absent argument and went to disk for persisted ones instead, so a caller
+    // could not suppress the consolidation line at all. Only `undefined` means
+    // "you decide"; an array, empty or not, is the caller's answer.
+    //
     // An explicit array still wins, so the tests that hand one in keep
     // exercising the render path directly. Past the throttle, so a suppressed
     // call still opens nothing.
-    }, findings.length ? findings : findingsWithCost(dir));
+    }, findings === undefined ? findingsWithCost(dir) : findings);
   } catch {
     return { text: null, state: { ...previous, checkedAt: now } };
   }

@@ -230,6 +230,21 @@ export function compareArm(armTasks, controlTasks, options = {}) {
     }
   }
 
+  // A TASK THE ARM TOTALLY FAILED MUST NOT VANISH FROM THE HEADLINE. If an arm
+  // spends money and delivers score zero on every run, the ratio of totals is
+  // not finite, and this filter used to quietly drop the task -- so a
+  // pre-registered task the arm never completed disappeared from the geometric
+  // mean while `trustworthy` stayed true. That is precisely the defect this
+  // ledger exists to remove, arriving through the back door: the published
+  // leaderboard hides failures by filtering status, and we would have hidden
+  // the worst possible failure by filtering NaN.
+  //
+  // Withheld rather than represented as infinity: a single infinite ratio makes
+  // the geometric mean infinite and says nothing useful about the other tasks.
+  // The comparison is marked untrustworthy and the task is named.
+  const totallyFailed = perTask
+    .filter((e) => !Number.isFinite(e.ratio) || e.ratio <= 0)
+    .map((e) => e.task);
   const usable = perTask.filter((e) => Number.isFinite(e.ratio) && e.ratio > 0);
   const total = perTask.length + unresolved.length;
   const share = total ? unresolved.length / total : 0;
@@ -256,7 +271,16 @@ export function compareArm(armTasks, controlTasks, options = {}) {
     unresolvedDetail: unresolved.sort((a, b) => b.ratio - a.ratio),
     // The headline is withheld, not caveated, when too much of the battery
     // failed to converge. A number with a footnote gets quoted without it.
-    trustworthy: total > 0 && share <= maxUnresolvedShare && usable.length > 0,
+    //
+    // A task the arm delivered NOTHING on withholds it outright, at any share:
+    // an average over the tasks it did complete is not a summary of an arm that
+    // failed one of them, it is a summary of a different, easier battery.
+    trustworthy:
+      total > 0 &&
+      share <= maxUnresolvedShare &&
+      usable.length > 0 &&
+      totallyFailed.length === 0,
+    totallyFailed,
     unresolvedShare: share,
     perTask: perTask.sort((a, b) => b.ratio - a.ratio),
   };

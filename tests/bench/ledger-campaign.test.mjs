@@ -56,6 +56,28 @@ describe('the store', () => {
     expect(loadRows(store)).toHaveLength(2);
   });
 
+  test('a corrupt record in the MIDDLE is refused, not silently dropped', () => {
+    // A torn last line is a crash mid-append and costs one row. A damaged
+    // record anywhere earlier is a different event, and swallowing it deletes
+    // a paid run from the totals -- publishing a cost-per-unit computed over
+    // fewer runs than were actually bought, which is the same class of defect
+    // as the status-filtered leaderboard this ledger replaces.
+    appendRows(store, [row(), row({ rep: 2 }), row({ rep: 3 })]);
+    const lines = readFileSync(store, 'utf8').trim().split('\n');
+    lines[1] = '{"task":"corrupt';
+    writeFileSync(store, lines.join('\n') + '\n');
+    expect(() => loadRows(store)).toThrow(/record 2 of/);
+  });
+
+  test('a trailing blank line does not make the last record look interior', () => {
+    // appendRows ends every write with a newline, so the torn record is not
+    // the last ARRAY element -- an index-based check that ignored blank lines
+    // would reject the very case it is meant to forgive.
+    appendRows(store, [row(), row({ rep: 2 })]);
+    writeFileSync(store, readFileSync(store, 'utf8') + '{"task":"half\n\n');
+    expect(loadRows(store)).toHaveLength(2);
+  });
+
   test('resumption counts only reps from the SAME build', () => {
     // THE DEFECT THIS REPLACES. The old harness skipped any run already
     // recorded, so after a rebuild it topped an arm up with new-build reps and
@@ -578,6 +600,24 @@ describe('the report a reader sees', () => {
     }
     expect(headline(report(bimodal), { track: 'cold', arm: 'assist' })).toBeNull();
     expect(headline(report(rows), { track: 'cold', arm: 'assist' })).toMatch(/of control/);
+  });
+
+  test('the headline names the arm it selected, not the word "arm"', () => {
+    // With `arm` omitted this picked the first result and labelled it "arm", so
+    // a sentence destined for a commit message or PR body carried a real
+    // number against a placeholder -- and with several arms present a reader
+    // could not tell which one it described.
+    const rows = [
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((rep) =>
+        row({ arm: 'control', task: 't', rep, usd: 0.1, score: 1 })
+      ),
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((rep) =>
+        row({ arm: 'assist', task: 't', rep, usd: 0.05, score: 1 })
+      ),
+    ];
+    const line = headline(report(rows), { track: 'cold' });
+    expect(line).toMatch(/^assist on cold:/);
+    expect(line).not.toMatch(/^arm on/);
   });
 });
 

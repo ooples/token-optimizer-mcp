@@ -41,13 +41,39 @@ export function appendRows(path, rows) {
 /** Every row in the store. A torn final line is skipped, not fatal. */
 export function loadRows(path) {
   if (!existsSync(path)) return [];
+  const lines = readFileSync(path, 'utf8').split('\n');
+  // The index of the last line with content: only THAT one may be torn.
+  let lastContent = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].trim()) {
+      lastContent = i;
+      break;
+    }
+  }
+
   const rows = [];
-  for (const line of readFileSync(path, 'utf8').split('\n')) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (!line.trim()) continue;
     try {
       rows.push(JSON.parse(line));
-    } catch {
-      /* a partially written last line costs one row, not the campaign */
+    } catch (error) {
+      // ONLY THE FINAL RECORD MAY BE FORGIVEN, and the reason is the one this
+      // ledger exists to enforce: a run that happened and was paid for must
+      // appear. A crash mid-append can tear the last line and nothing else, so
+      // that case is recoverable and costs one row. A corrupt record ANYWHERE
+      // EARLIER is a different event -- disk damage, an interleaved writer, a
+      // bad hand-edit -- and swallowing it silently deletes a paid run from
+      // the totals, publishing a cost-per-unit computed over fewer runs than
+      // were actually bought. That is the same class of defect as the
+      // status-filtered leaderboard this whole ledger replaces.
+      if (i !== lastContent) {
+        throw new Error(
+          `${path}: record ${i + 1} of ${lines.length} is not valid JSON (${error.message}). ` +
+            'Only a torn FINAL record is recoverable; an earlier one means the store is ' +
+            'damaged and silently dropping it would publish a total over fewer runs than were paid for.'
+        );
+      }
     }
   }
   return rows;
