@@ -13,7 +13,8 @@
     "env": {
       "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
       "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
-      "TOKEN_OPTIMIZER_MODE": "assist"
+      "TOKEN_OPTIMIZER_MODE": "assist",
+      "TOKEN_OPTIMIZER_MCP_CAPABILITIES": ""
     },
     "hooks": {
       "SessionStart": [

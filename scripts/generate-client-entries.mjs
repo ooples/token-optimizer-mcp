@@ -92,31 +92,40 @@ for (const [dir, client, event, name] of ENTRIES) {
 // shared core so no client can drift its own thresholds or guidance.
 // Fail open: a defect in the optimizer must never cost the user a tool call.
 // Bootstrap failures are still recorded so fail-open does not become fail-silent.
-${versionStamp}// THE BUNDLED INVENTORY IS ASSERTED FOR EVERY INSTALL THAT DOES NOT OPT OUT.
+${versionStamp}// THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN INSTALL.
 //
-// These entry points ship beside an MCP declaration for the same package, so
-// the default is that the server is there. The concern that motivated a gate
-// is real -- the script path wires hooks through settings.json without the
-// server, a user can drop the server and keep the hooks, and the benchmark arm
-// removes the mcp block outright, and in those cases a fabricated list was
-// persisted as PROVEN evidence and the model was told to call tools that do
-// not exist. Measured over a debug-sized task with no server: 3,450 characters
-// of advice built on that assumption, a failed call and a retry each time.
+// This used to run unconditionally, on the grounds that these entry points ship
+// beside an MCP declaration for the same package. That holds for a plugin --
+// .mcp.json travels with the hooks -- and not otherwise: the script path wires
+// hooks through settings.json without the server, a user can drop the server
+// and keep the hooks, and the benchmark arm removes the mcp block outright.
 //
-// REVERTED FROM A CLAUDE_PLUGIN_ROOT GATE, TWICE NOW. That variable is set by
-// the Claude plugin runtime and by nothing else, so gating on it disabled
-// enforcement-by-default for every install that is not a plugin -- which is
-// all eight clients this generator emits. clients.test.mjs catches it: every
-// packaged entry returns "allow" where it must deny. It passes on a developer
-// machine only because Claude Code sets the variable, so the gate is invisible
-// locally and fails in CI.
+// In those cases the fabricated list was persisted as PROVEN evidence and the
+// model was told to call tools that do not exist. Measured over a debug-sized
+// task with no server: 3,450 characters of advice built on the assumption,
+// including "Call the token-optimizer MCP tool smart_read" after every repeated
+// read -- a failed call and a retry each time, on a benchmark where turns
+// dominate cost. Removing it from session-start alone took the debug segment
+// from 1.309 to 1.107 and its turns from 2.231 to 2.003.
 //
-// The nullish assignment below already provides the opt-out the gate was
-// reaching for: it assigns only when the variable is null or undefined, so an
-// explicitly EMPTY value
-// survives. A benchmark arm measuring the hooks with no server sets
-// TOKEN_OPTIMIZER_MCP_CAPABILITIES='' and gets exactly that, without breaking
-// installs that genuinely ship the server beside these hooks.
+// THE OPT-OUT IS THE ENV VAR, NOT CLAUDE_PLUGIN_ROOT. Gating this on
+// CLAUDE_PLUGIN_ROOT was tried and reverted: that variable is set by the Claude
+// plugin runtime and by nothing else, while THESE entries are generated for
+// codex, cursor, cline, gemini, qwen, copilot, windsurf and kilo -- whose
+// installers write the hook and the MCP server config together, and which never
+// set it. So the gate silently disabled enforcement-by-default for every one of
+// them, and clients.test.mjs caught it across all eight ("denies a large read
+// by default through its packaged pre-tool entry" -> received "allow").
+//
+// The nullish assignment below is what makes a narrower gate unnecessary: it
+// assigns only when the variable is null or undefined, so an explicitly EMPTY
+// value survives. A host, a user, or a benchmark arm measuring the hooks with
+// no server states TOKEN_OPTIMIZER_MCP_CAPABILITIES='' and gets exactly the
+// behaviour the gate reached for, without breaking installs that ship a server.
+//
+// NOTE FOR EDITORS: this whole block is inside a template literal. A backtick
+// here terminates the string and the generator dies with a SyntaxError far from
+// the cause -- which is exactly what happened writing this comment.
 process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= '${BUNDLED_MCP_CAPABILITIES}';
 try {
   const { run } = await import('./lib/adapter.mjs');

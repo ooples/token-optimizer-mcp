@@ -60,16 +60,15 @@ import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
 // dominate cost. Removing it from session-start alone took the debug segment
 // from 1.309 to 1.107 and its turns from 2.231 to 2.003.
 //
-// REVERTED FROM A CLAUDE_PLUGIN_ROOT GATE. That variable is set by the plugin
-// runtime and by nothing else, so gating on it disabled enforcement-by-default
-// for every install that is not a plugin -- caught by clients.test.mjs across
-// all eight packaged entries, each receiving "allow" where it must deny.
+// REVERTED FROM A CLAUDE_PLUGIN_ROOT GATE, for the reason recorded in the
+// router: that variable is set by the plugin runtime alone, so the gate turned
+// enforcement off for every non-plugin install and clients.test.mjs failed on
+// all eight packaged entries.
 //
-// `??=` already provides the opt-out the gate was reaching for: it assigns only
-// when the variable is null or undefined, so an explicitly EMPTY value
-// survives. A benchmark arm measuring the hooks with no server sets
-// TOKEN_OPTIMIZER_MCP_CAPABILITIES='' and gets that, without breaking installs
-// that genuinely ship the server beside these hooks.
+// `??=` is the opt-out. It assigns only when the variable is null or undefined,
+// so an explicitly EMPTY value survives -- which is how a benchmark arm, a host
+// or a user says "there is no server here" without disabling the default for
+// installs that do ship one.
 process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
 
 const invocation = beginHookInvocation('claude-code', 'session-start');

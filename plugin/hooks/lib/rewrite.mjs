@@ -164,7 +164,18 @@ function hoistablePrefix(command) {
   // mutation inside the subshell after all.
   if (splitSegments(rest).some(isStateMutating)) return null;
 
-  return { prefix: parts.slice(0, taken).join('').trim(), rest };
+  // THE SEPARATOR HAS TO SURVIVE THE TRIM. `&&`, `||` and `;` are themselves
+  // non-whitespace, so trimming leaves them attached and the caller's
+  // `${prefix} ` join stays valid. A NEWLINE is whitespace, so `cd /tmp\nnpm
+  // test` trimmed down to `cd /tmp` and the join emitted `cd /tmp ( ... )` -- a
+  // syntax error, on the one path whose entire promise is that bounding never
+  // changes what the command does. Reproduced before fixing, and `bash -n`
+  // rejects the old output while accepting this one.
+  const prefix = parts.slice(0, taken).join('').trim();
+  return {
+    prefix: /(?:&&|\|\||;)$/.test(prefix) ? prefix : `${prefix};`,
+    rest,
+  };
 }
 
 /**

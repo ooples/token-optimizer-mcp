@@ -921,7 +921,7 @@ export function decide(payload, state, availableTools = undefined) {
   if (tool === 'Web' + 'Fetch') {
     const url = String(input.url || '');
     if (!url) return null;
-    if (!state?.seenUrls?.[url]) return null;
+    if (!state?.seenUrls?.[webFetchKey(url, input.prompt)]) return null;
 
     // COLLAPSED, NOT REFUSED. A refusal would cost a turn -- measured at roughly
     // one per refusal, which is the whole reason enforcement lost -- so the call
@@ -1014,8 +1014,31 @@ export function remember(payload, state) {
   const url = payload.tool_input?.url;
   if (url && payload.tool_name === 'WebFetch') {
     state.seenUrls = state.seenUrls || {};
-    state.seenUrls[String(url)] = true;
+    state.seenUrls[webFetchKey(String(url), payload.tool_input?.prompt)] = true;
   }
+}
+
+/**
+ * What makes two WebFetch calls THE SAME call.
+ *
+ * THE URL ALONE IS NOT THE REQUEST. WebFetch answers a `prompt` against the
+ * page, so "what version does this document pin?" and "what are its breaking
+ * changes?" are two different questions about one URL -- and keying only on the
+ * URL made the second one unanswerable: it was collapsed into "ALREADY FETCHED
+ * THIS SESSION -- reuse the earlier result", which is false, because the earlier
+ * result answered a different question. The model could not recover the detail
+ * it asked for by any route, and the failure is silent.
+ *
+ * DELIBERATELY STRICT. Only whitespace is normalised -- not case, not wording --
+ * so anything short of a genuinely repeated request goes through and fetches.
+ * The asymmetry demands it: collapsing wrongly withholds information the model
+ * cannot get any other way, while failing to collapse costs one fetch.
+ */
+function webFetchKey(url, prompt) {
+  const question = String(prompt ?? '').trim().replace(/\s+/g, ' ');
+  // A newline cannot appear in the normalised question above, so it cannot be
+  // forged by a prompt that merely contains the separator.
+  return `${url}\n${question}`;
 }
 
 /**
