@@ -512,6 +512,19 @@ export function saveState(sessionId, state, agent) {
       // it. A fact once told stays told -- that is the whole point of the set
       // -- so the merge is a union, bounded by the same SESSION_CAP the router
       // applies so a long session cannot grow this without limit.
+      // BOUNDED OVERSHOOT UNDER CONCURRENCY, ACCEPTED DELIBERATELY. Two hook
+      // processes can each read a set of size CAP-1, each emit an advisory,
+      // and only then reach this merge -- so slightly more advice can reach
+      // the model than the cap nominally allows. Preventing that requires
+      // claiming capacity BEFORE emitting, which means taking the state lock
+      // on every Grep and Glob in the PreToolUse hot path.
+      //
+      // Not worth it. The overshoot is bounded by the number of concurrent
+      // hook processes, each advisory is under 200 bytes, and the persisted
+      // set is still truncated here so nothing grows without limit. Paying a
+      // lock acquisition on every search to save a few hundred bytes in a
+      // rare race would cost more than the race does -- this is a budget
+      // heuristic, not a correctness invariant.
       advised: [
         ...new Set([...(current.advised || []), ...(state.advised || [])]),
       ].slice(0, ADVISED_CAP),
