@@ -14,7 +14,8 @@ Raw rows: `confirmatory.jsonl` (build 1), `confirmatory-build2.jsonl` (build 2).
 
 Our 510-character block and their 2,667-character file are **indistinguishable
 in cost per unit of work delivered**. The point estimate favours us by 4.9% and
-every one of the six tasks points the same way, but the interval contains 1.0
+five of the six tasks favour `ours-rules` -- `explain-failure` is 1.003, a dead
+tie that very slightly favours theirs -- but the interval contains 1.0
 and the pre-registration named exactly that as falsifying.
 
 What can honestly be said: **equal measured effect at one fifth the length**.
@@ -49,7 +50,7 @@ biggest win, that number would have been worth very little.
 | --- | --- |
 | 1. Drop `explain-failure` | **cannot be evaluated** -- 40% of the remaining battery unresolved, headline withheld |
 | 2. Drop both pilot tasks (4 tasks never seen for these arms) | 0.935 [0.818, 1.069] -- **spans parity** |
-| 3. Second build | direction agrees on **all six tasks**; headline withheld (50% unresolved) |
+| 3. Second build | all six tasks favour `ours-rules` there (build 1 was five of six); headline withheld (50% unresolved) |
 
 Check 2 is the one that matters for selection bias, and it agrees with the
 primary: same direction, same failure to separate.

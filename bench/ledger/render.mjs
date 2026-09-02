@@ -36,6 +36,16 @@ function renderArm(name, result, { adversarialTasks, baseline = 'control' }) {
     for (const t of reuse) lines.push(taskLine(t));
   }
 
+  if (result.totallyFailed?.length) {
+    // Named, and loud. This arm spent money and delivered nothing at all on
+    // these tasks; averaging over the rest would summarise an easier battery
+    // than the one that was run.
+    lines.push(
+      `    DELIVERED NOTHING on: ${result.totallyFailed.join(', ')} -- headline withheld, ` +
+        'because a mean over the tasks it did complete is not a summary of this arm.'
+    );
+  }
+
   if (result.unresolved.length) {
     // SHOWN WITH THEIR NUMBERS, not just named. Listing only the task ids meant
     // the figures were invisible in the report, so reading them required a
@@ -172,10 +182,17 @@ export function renderReport(report, { adversarialTasks = new Set() } = {}) {
  */
 export function headline(report, { track = 'cold', arm } = {}) {
   const data = report.tracks?.[track];
-  const result = arm ? data?.arms?.[arm] : Object.values(data?.arms || {})[0];
+  // NAME THE ARM THAT WAS ACTUALLY SELECTED. With `arm` omitted this picked the
+  // first result and then labelled the sentence "arm", so a line destined for a
+  // commit message or a PR body reported a real number against a placeholder --
+  // and with several arms present, the reader could not tell which one it
+  // described.
+  const [firstName, firstResult] = Object.entries(data?.arms || {})[0] || [];
+  const name = arm ?? firstName;
+  const result = arm ? data?.arms?.[arm] : firstResult;
   if (!result || !result.trustworthy) return null;
   return (
-    `${arm || 'arm'} on ${track}: ${fixed(result.costRatio)} of ` +
+    `${name || 'arm'} on ${track}: ${fixed(result.costRatio)} of ` +
     `${data.baseline || 'control'}'s cost per unit ` +
     `delivered (${pct(result.costRatio)}) across ${result.tasksCounted} task(s)`
   );

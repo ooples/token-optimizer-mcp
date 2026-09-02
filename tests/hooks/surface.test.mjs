@@ -171,6 +171,27 @@ describe('it interrupts only when the forecast has earned it', () => {
     expect(out.text).toMatch(/consolidation/);
   });
 
+  test('an explicit empty findings array suppresses the line, rather than being ignored', () => {
+    // `findings.length ? findings : fromDisk` read a caller saying "there are
+    // none" as a caller saying nothing, and went to disk anyway -- so the
+    // suppression this parameter exists to provide could not be requested.
+    // Only `undefined` may mean "you decide".
+    seedArms();
+    const id = putNode(dir, {
+      kind: 'finding', key: 'promoted-one', claim: 'x'.repeat(80),
+      type: 'finding', confidence: 0.8, derivedCost: 9_000,
+    });
+    putEdge(dir, id, 'derived_from', nodeId('file', join(workspace, 'a.ts')));
+    const args = { transcriptPath: transcript(20, 190_000), sessionId: 'live', state: {}, now: 5_000 };
+
+    // Omitted: the persisted finding is loaded and the line appears.
+    expect(maybeSurface(dir, args).text).toMatch(/consolidation/);
+    // Explicitly empty: the caller has answered, and the line must not appear.
+    const suppressed = maybeSurface(dir, { ...args, findings: [] });
+    expect(suppressed.text).toMatch(/turns to compaction/);
+    expect(suppressed.text).not.toMatch(/consolidation/);
+  });
+
   test('a retired finding is not counted as carried reasoning', () => {
     // Retired findings are excluded from every other read path; counting one
     // here would advertise reasoning a human has explicitly withdrawn.

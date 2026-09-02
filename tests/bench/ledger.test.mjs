@@ -26,6 +26,7 @@ import {
   buildKey,
 } from '../../bench/ledger/provenance.mjs';
 import { taskResult, compareArm, report } from '../../bench/ledger/rank.mjs';
+import { renderReport } from '../../bench/ledger/render.mjs';
 
 /** A row with everything the ledger requires, so tests vary one thing at a time. */
 const row = (over = {}) => ({
@@ -560,6 +561,30 @@ describe('the report', () => {
     // Two tests are shown, so the family is two -- not one.
     expect(c.familySize).toBe(2);
     expect(c.unresolvedDetail[0].adjustedP).toBeDefined();
+  });
+
+  test('a task the arm never delivered on withholds the headline', () => {
+    // The published leaderboard hides failures by filtering status. Dropping a
+    // NaN ratio would have hidden the WORST failure -- money spent, nothing
+    // delivered -- through the back door: the task vanished from the geometric
+    // mean while `trustworthy` stayed true, so an arm was summarised over the
+    // easier battery it happened to complete.
+    const eight = [1, 2, 3, 4, 5, 6, 7, 8];
+    const out = report([
+      ...eight.map((rep) => row({ arm: 'control', task: 'ok', rep, usd: 0.1, score: 1 })),
+      ...eight.map((rep) => row({ arm: 'candidate', task: 'ok', rep, usd: 0.05, score: 1 })),
+      ...eight.map((rep) => row({ arm: 'control', task: 'flunked', rep, usd: 0.1, score: 1 })),
+      // Spent money, delivered nothing, every run.
+      ...eight.map((rep) =>
+        row({ arm: 'candidate', task: 'flunked', rep, usd: 0.2, score: 0, status: 'failed' })
+      ),
+    ]);
+    const c = out.tracks.cold.arms.candidate;
+    expect(c.totallyFailed).toContain('flunked');
+    expect(c.trustworthy).toBe(false);
+    // And it is named in the rendered report, not merely absent from it.
+    const text = renderReport(out, { adversarialTasks: new Set() });
+    expect(text).toMatch(/DELIVERED NOTHING on: flunked/);
   });
 
   test('an unresolved task still cannot enter the headline', () => {
