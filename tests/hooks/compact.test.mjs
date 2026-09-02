@@ -8,6 +8,11 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { compact } from '../../hooks-core/compact.mjs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const MAX = 400;
 
@@ -124,5 +129,56 @@ describe('compacting a run against its previous run', () => {
 
     expect(out).toContain('c');
     expect(out).toContain('d');
+  });
+});
+
+describe('the pipe stage survives output too large to hold', () => {
+  // THIS FILE'S FIRST RULE, BROKEN BY THE CODE ENFORCING IT. compact-stage is
+  // the only thing between the command and the model, so its doc-comment says
+  // it must never swallow output. But it retained every chunk, concatenated a
+  // second full copy, then made a third with toString(). A verbose build or a
+  // suite dumping fixtures therefore exhausted memory and the process DIED
+  // BEFORE EMITTING ANYTHING -- the model gets an empty result for a command
+  // that actually succeeded.
+  //
+  // Measured on 300MB of input under a 256MB heap cap: unbounded retention
+  // exited 134 ("JavaScript heap out of memory") having written 0 bytes;
+  // bounded retention exits 0 having written 7,967. This test uses a far
+  // smaller stream so it is fast, but drives the same truncation path -- the
+  // retention floor is 1MB, so 3MB crosses it.
+  const HERE = dirname(fileURLToPath(import.meta.url));
+  const STAGE = join(HERE, '..', '..', 'hooks-core', 'compact-stage.mjs');
+
+  it('emits a bound rather than dying, and keeps BOTH ends', () => {
+    const previous = join(mkdtempSync(join(tmpdir(), 'stage-')), 'prev.txt');
+    // Distinct first and last lines, so keeping only the head would be visible.
+    const body = [
+      'FIRST-LINE-MARKER',
+      ...Array.from({ length: 60_000 }, (_, i) => `filler line ${i} ${'y'.repeat(40)}`),
+      'LAST-LINE-MARKER',
+    ].join('\n');
+    expect(Buffer.byteLength(body)).toBeGreaterThan(1024 * 1024);
+
+    const run = spawnSync(process.execPath, ['--max-old-space-size=256', STAGE, previous, '8000'], {
+      input: body,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    });
+
+    expect(run.status).toBe(0);
+    expect(run.stdout.length).toBeGreaterThan(0);
+    // The head alone would satisfy a naive "did it emit anything" check.
+    expect(run.stdout).toContain('FIRST-LINE-MARKER');
+    expect(run.stdout).toContain('LAST-LINE-MARKER');
+  });
+
+  it('leaves output that fits completely untouched', () => {
+    const previous = join(mkdtempSync(join(tmpdir(), 'stage-')), 'prev.txt');
+    const run = spawnSync(process.execPath, [STAGE, previous, '8000'], {
+      input: 'alpha\nbeta\ngamma\n',
+      encoding: 'utf8',
+    });
+    expect(run.status).toBe(0);
+    expect(run.stdout).toBe('alpha\nbeta\ngamma\n');
   });
 });

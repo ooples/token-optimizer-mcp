@@ -191,6 +191,13 @@ describe('it interrupts only when the forecast has earned it', () => {
       state: {},
       now: 5_000,
     });
+    // The negative alone would pass if nothing surfaced at all -- if
+    // maybeSurface returned an empty panel, or the runway never tripped, or a
+    // later refactor stopped exercising this path. Then the test would keep
+    // reporting that retired findings are excluded while proving nothing.
+    // Pinning the panel that MUST still appear is what makes the absence of
+    // "consolidation" mean the exclusion actually happened.
+    expect(out.text).toMatch(/turns to compaction/);
     expect(out.text).not.toMatch(/consolidation/);
   });
 

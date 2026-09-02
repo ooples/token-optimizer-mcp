@@ -99,8 +99,17 @@ import { beginHookInvocation } from './lib/observability.mjs';
 // CLAUDE_PLUGIN_ROOT is what tells the two apart: the plugin runtime sets it,
 // a settings.json install does not. decide.mjs states the rule this protects --
 // never convert install intent into a claim that an MCP tool exists.
-if (process.env.CLAUDE_PLUGIN_ROOT)
-  process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
+// REVERTED FROM A CLAUDE_PLUGIN_ROOT GATE. That variable is set by the plugin
+// runtime and by nothing else, so gating on it disabled enforcement-by-default
+// for every install that is not a plugin -- caught by clients.test.mjs across
+// all eight packaged entries, each receiving "allow" where it must deny.
+//
+// `??=` already provides the opt-out the gate was reaching for: it assigns only
+// when the variable is null or undefined, so an explicitly EMPTY value
+// survives. A benchmark arm measuring the hooks with no server sets
+// TOKEN_OPTIMIZER_MCP_CAPABILITIES='' and gets that, without breaking installs
+// that genuinely ship the server beside these hooks.
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
 
 /**
  * Largest file the hook will read to index. Above this the touch is still
@@ -501,7 +510,6 @@ ${nudge}`
       }
     }
 
-
     if (payload.tool_name === 'Read') {
       const substitution = outlineSubstitution(payload);
       if (substitution) {
@@ -607,35 +615,6 @@ ${nudge}`
       // Any failure here falls back to the plain redirect, which always works.
     }
   }
-  // THE REFUSAL PATH NEEDS THE INDEX TOO, and this was very nearly missed.
-  //
-  // A Grep is only refused when smart_grep is PROVEN present -- which is the
-  // ordinary state of a real plugin install. So an advisory wired solely into
-  // the allowed path would fire for the benchmark arm, where there is no MCP
-  // server, and never once for a user who installed the product properly. The
-  // arm we measure and the thing we ship would not have been the same feature.
-  //
-  // A refusal is also the better moment, not merely a second one: the model is
-  // being sent to another tool to find something, and if the graph already
-  // knows where that something is, the redirect may not need following at all.
-  if (
-    features.retrieval &&
-    (payload.tool_name === 'Grep' || payload.tool_name === 'Glob')
-  ) {
-    try {
-      const advisory = searchAdvisory(payload, state, (path) =>
-        wikiDir(projectRootFor(path, payload.cwd))
-      );
-      if (advisory) {
-        saveState(payload.session_id, state, agentScope);
-        reason = `${reason}\n\n${advisory}`;
-      }
-    } catch {
-      // The plain redirect always works; an unreadable index costs nothing.
-    }
-  }
-
-
 
 /**
  * Where this command's previous output is kept, so the next run can be compacted
@@ -717,64 +696,6 @@ function outlineSubstitution(payload) {
     return null;
   }
 }
-
-/**
- * What the graph can say to a model that is about to search.
- *
- * THE ADDITIVE HALF, and until now the missing one. Every other mechanism in
- * this router SUBTRACTS -- refuse, bound, compact, substitute -- and all of them
- * argue about how big a tool result is. The measurements say that is not where
- * we lose: turns are (corr(turns, USD) = 0.878), and a search is a whole turn
- * spent discovering something the graph already holds.
- *
- * FIRES GENEROUSLY, ON PURPOSE. An advisory is roughly 1/50th of the turn it
- * may save, so the policy that maximises expected value is to speak whenever
- * there is an exact answer rather than only when certain. What it must not do
- * is repeat itself: `state.advised` carries the facts already delivered,
- * because a block the model has learned to skip is worse than no block at all.
- *
- * NEVER REWRITES THE SEARCH. The pattern is passed through untouched and the
- * tool still runs. If the index is wrong or partial the model gets its search
- * results exactly as it would have, having paid a few tokens for a hint it can
- * ignore -- which is the only failure mode available to this.
- */
-function searchAdvisory(payload, state, dirFor) {
-  const pattern = payload.tool_input?.pattern;
-  if (typeof pattern !== 'string' || !pattern) return null;
-
-  const root = payload.cwd || process.cwd();
-
-  // THE SCOPE IS THE PROJECT, NOT THE WORKING DIRECTORY. A session started in
-  // `repo/src` must still be told about a symbol in `repo/lib`, so scoping to
-  // cwd would silence most correct answers. But `projectRootFor` falls back to
-  // a machine-level store when there is no VCS marker anywhere above, and that
-  // path is an ancestor of nothing -- scoping to it would silence ALL of them.
-  // Take the repository root only when it genuinely contains the session.
-  const projectRoot = projectRootFor(join(root, '__search__'), root);
-  const contains = (outer, inner) => {
-    const a = String(outer).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-    const b = String(inner).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-    return b === a || b.startsWith(`${a}/`);
-  };
-  const scope = contains(projectRoot, root) ? projectRoot : root;
-  const told = new Set(state.advised || []);
-  if (told.size >= SESSION_CAP) return null;
-  const graph = load(dirFor(join(root, '__search__')));
-  const advice = adviseSearch(graph, pattern, {
-    told,
-    // Displayed relative to the project, so the path reads the way the model
-    // would write it, and scoped to the project, so nothing outside it is
-    // reported as though it were this codebase.
-    root: scope,
-    scope,
-    firstOfSession: !told.size,
-  });
-  if (!advice) return null;
-
-  state.advised = [...told, ...advice.facts].slice(0, SESSION_CAP);
-  return advice.text;
-}
-
 
 function commandKey(sessionId, command) {
   return createHash('sha256')
@@ -923,10 +844,94 @@ function compactorFor(sessionId, command) {
     }
   }
 
+  // THE ADVISORY BELONGS ON THE REFUSAL PATH TOO, and wiring it only to the
+  // allowed path was a real defect: Grep is REFUSED whenever smart_grep is
+  // proven, so the allowed path would fire for the benchmark arm, where there
+  // is no MCP server, and never once for a user who installed the product
+  // properly. The arm we measure and the thing we ship would not have been the
+  // same feature.
+  //
+  // A refusal is also the better moment, not merely a second one: the model is
+  // being sent to another tool to find something, and if the graph already
+  // knows where that something is, the redirect may not need following at all.
+  if (
+    features.retrieval &&
+    (payload.tool_name === 'Grep' || payload.tool_name === 'Glob')
+  ) {
+    try {
+      const advisory = searchAdvisory(payload, state, (path) =>
+        wikiDir(projectRootFor(path, payload.cwd))
+      );
+      if (advisory) {
+        saveState(payload.session_id, state, agentScope);
+        reason = `${reason}\n\n${advisory}`;
+      }
+    } catch {
+      // The plain redirect always works; an unreadable index costs nothing.
+    }
+  }
+
   // On a repeat this degrades to a note and lets the call through, which is
   // what bounds the blast radius when the MCP server is unavailable.
   enforce(reason, repeat);
 } catch (error) {
   invocation.fail(error);
   allow();
+}
+
+/**
+ * What the graph can say to a model that is about to search.
+ *
+ * THE ADDITIVE HALF, and until now the missing one. Every other mechanism in
+ * this router SUBTRACTS -- refuse, bound, compact, substitute -- and all of them
+ * argue about how big a tool result is. The measurements say that is not where
+ * we lose: turns are (corr(turns, USD) = 0.878), and a search is a whole turn
+ * spent discovering something the graph already holds.
+ *
+ * FIRES GENEROUSLY, ON PURPOSE. An advisory is roughly 1/50th of the turn it
+ * may save, so the policy that maximises expected value is to speak whenever
+ * there is an exact answer rather than only when certain. What it must not do
+ * is repeat itself: `state.advised` carries the facts already delivered,
+ * because a block the model has learned to skip is worse than no block at all.
+ *
+ * NEVER REWRITES THE SEARCH. The pattern is passed through untouched and the
+ * tool still runs. If the index is wrong or partial the model gets its search
+ * results exactly as it would have, having paid a few tokens for a hint it can
+ * ignore -- which is the only failure mode available to this.
+ */
+function searchAdvisory(payload, state, dirFor) {
+  const pattern = payload.tool_input?.pattern;
+  if (typeof pattern !== 'string' || !pattern) return null;
+
+  const root = payload.cwd || process.cwd();
+
+  // THE SCOPE IS THE PROJECT, NOT THE WORKING DIRECTORY. A session started in
+  // `repo/src` must still be told about a symbol in `repo/lib`, so scoping to
+  // cwd would silence most correct answers. But `projectRootFor` falls back to
+  // a machine-level store when there is no VCS marker anywhere above, and that
+  // path is an ancestor of nothing -- scoping to it would silence ALL of them.
+  // Take the repository root only when it genuinely contains the session.
+  const projectRoot = projectRootFor(join(root, '__search__'), root);
+  const contains = (outer, inner) => {
+    const a = String(outer).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const b = String(inner).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    return b === a || b.startsWith(`${a}/`);
+  };
+  const scope = contains(projectRoot, root) ? projectRoot : root;
+  const told = new Set(state.advised || []);
+  if (told.size >= SESSION_CAP) return null;
+  const graph = load(dirFor(join(root, '__search__')));
+  const advice = adviseSearch(graph, pattern, {
+    told,
+    // Displayed relative to the project, so the path reads the way the model
+    // would write it, and scoped to the project, so nothing outside it is
+    // reported as though it were this codebase.
+    root: scope,
+    scope,
+    firstOfSession: !told.size,
+  });
+  if (!advice) return null;
+
+  state.advised = [...told, ...advice.facts].slice(0, SESSION_CAP);
+  return advice.text;
 }

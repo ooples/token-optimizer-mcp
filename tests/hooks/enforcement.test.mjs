@@ -372,3 +372,40 @@ describe('a refusal must not cost more than the call it replaces', () => {
     );
   });
 });
+
+describe('a repeated web fetch is the same REQUEST, not the same URL', () => {
+  // WebFetch answers a `prompt` against the page, so one URL carries many
+  // questions. Keying the duplicate check on the URL alone collapsed the second
+  // question into "ALREADY FETCHED THIS SESSION -- reuse the earlier result",
+  // which is false: the earlier result answered something else, and the model
+  // had no route left to the detail it asked for. The failure is silent, which
+  // is why it needs a test rather than a comment.
+  const fetch = (prompt) => ({
+    tool_name: 'WebFetch',
+    tool_input: { url: 'https://example.dev/doc', prompt },
+  });
+
+  test('the same question twice is collapsed', async () => {
+    const { decide, remember } = await import('../../hooks-core/decide.mjs');
+    const state = {};
+    remember(fetch('what version does it pin?'), state);
+    expect(decide(fetch('what version does it pin?'), state, new Set())).not.toBeNull();
+  });
+
+  test('a different question about the same page still fetches', async () => {
+    const { decide, remember } = await import('../../hooks-core/decide.mjs');
+    const state = {};
+    remember(fetch('what version does it pin?'), state);
+    expect(decide(fetch('what are the breaking changes?'), state, new Set())).toBeNull();
+  });
+
+  test('only whitespace is normalised, so wording differences still fetch', async () => {
+    // Deliberately strict: collapsing wrongly withholds information the model
+    // cannot obtain any other way, while failing to collapse costs one fetch.
+    const { decide, remember } = await import('../../hooks-core/decide.mjs');
+    const state = {};
+    remember(fetch('what version does it pin?'), state);
+    expect(decide(fetch('  what   version does it pin?  '), state, new Set())).not.toBeNull();
+    expect(decide(fetch('What version does it pin?'), state, new Set())).toBeNull();
+  });
+});

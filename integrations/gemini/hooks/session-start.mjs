@@ -20,11 +20,25 @@
 // dominate cost. Removing it from session-start alone took the debug segment
 // from 1.309 to 1.107 and its turns from 2.231 to 2.003.
 //
-// CLAUDE_PLUGIN_ROOT is what tells the two apart: the plugin runtime sets it,
-// a settings.json install does not. decide.mjs states the rule this protects --
-// never convert install intent into a claim that an MCP tool exists.
-if (process.env.CLAUDE_PLUGIN_ROOT)
-  process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= 'smart_read,smart_write,smart_edit,smart_glob,smart_grep,optimize_session,get_optimization_report,wiki_write,wiki_query';
+// THE OPT-OUT IS THE ENV VAR, NOT CLAUDE_PLUGIN_ROOT. Gating this on
+// CLAUDE_PLUGIN_ROOT was tried and reverted: that variable is set by the Claude
+// plugin runtime and by nothing else, while THESE entries are generated for
+// codex, cursor, cline, gemini, qwen, copilot, windsurf and kilo -- whose
+// installers write the hook and the MCP server config together, and which never
+// set it. So the gate silently disabled enforcement-by-default for every one of
+// them, and clients.test.mjs caught it across all eight ("denies a large read
+// by default through its packaged pre-tool entry" -> received "allow").
+//
+// The nullish assignment below is what makes a narrower gate unnecessary: it
+// assigns only when the variable is null or undefined, so an explicitly EMPTY
+// value survives. A host, a user, or a benchmark arm measuring the hooks with
+// no server states TOKEN_OPTIMIZER_MCP_CAPABILITIES='' and gets exactly the
+// behaviour the gate reached for, without breaking installs that ship a server.
+//
+// NOTE FOR EDITORS: this whole block is inside a template literal. A backtick
+// here terminates the string and the generator dies with a SyntaxError far from
+// the cause -- which is exactly what happened writing this comment.
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= 'smart_read,smart_write,smart_edit,smart_glob,smart_grep,optimize_session,get_optimization_report,wiki_write,wiki_query';
 try {
   const { run } = await import('./lib/adapter.mjs');
   await run('gemini', 'session-start');
