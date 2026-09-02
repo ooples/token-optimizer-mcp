@@ -190,9 +190,17 @@ async function main(argv) {
       );
       return 1;
     }
+    // THE ANALYSIS MUST USE THE DESIGN THE DATA WAS COLLECTED UNDER. Without
+    // this, rows gathered at a fixed n are re-judged by the adaptive rule at
+    // report time: any cell whose interval is wider than the 10% target comes
+    // back UNRESOLVED and is dropped from the headline, even though its rep
+    // count was pre-registered and met in full. Observed on the large-context
+    // run, where a completed 30-rep cell was excluded and the headline silently
+    // covered 2 tasks of 3.
     const built = report(rows, {
       ...(opts.baseline ? { baseline: opts.baseline } : {}),
       ...(opts.endpoint ? { endpoint: opts.endpoint } : {}),
+      ...(opts.reps ? { precision: { fixedReps: opts.reps } } : {}),
     });
     if (opts.baseline && !Object.values(built.tracks).some((t) => t.control)) {
       // A typo'd baseline would otherwise print an empty report, which reads
