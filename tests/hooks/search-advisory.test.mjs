@@ -184,16 +184,41 @@ describe('what the index answers', () => {
     }
   });
 
-  test('scoping survives separator and case differences', () => {
-    // A graph written on Windows holds backslashes while a payload's cwd may
-    // arrive either way, and `C:/Repo` and `c:/repo` are one directory. Getting
-    // this wrong silences every answer rather than failing loudly.
-    const slashed = workspace.replace(/\\/g, '/');
-    for (const variant of [slashed, slashed.toUpperCase(), `${slashed}/`]) {
+  test('scoping survives separator and trailing-slash differences', () => {
+    // A graph written on Windows holds backslashes while a payload cwd may
+    // arrive either way, and a trailing slash must not silence an answer.
+    // Both are pure normalisation and hold on every filesystem.
+    const slashed = workspace.split(String.fromCharCode(92)).join('/');
+    for (const variant of [slashed, slashed + '/']) {
       expect(
         adviseSearch(graph, 'parse_line', { root: workspace, scope: variant })
       ).not.toBeNull();
     }
+  });
+
+  test('case is a scope difference only where the filesystem says it is', () => {
+    // SPLIT OUT OF THE TEST ABOVE, which asserted that an UPPERCASED scope
+    // must still match. That is case-insensitive containment applied
+    // unconditionally, and it is the behaviour flagged as scope-widening: on a
+    // case-sensitive volume it lets /work/Repo test as inside /work/repo, so a
+    // symbol from another tree can be reported as though it were in scope.
+    //
+    // Separator and trailing-slash handling are normalisation and always hold.
+    // Case is a property of the disk, so the expectation is taken from the
+    // disk -- which is also why this failed only on Linux CI while passing on
+    // the NTFS machine it was written on.
+    const slashed = workspace.split(String.fromCharCode(92)).join('/');
+    const upper = slashed.toUpperCase();
+    let insensitive = false;
+    try {
+      const a = statSync(slashed);
+      const b = statSync(upper);
+      insensitive = a.ino === b.ino && a.dev === b.dev;
+    } catch { insensitive = false; }
+
+    const advice = adviseSearch(graph, 'parse_line', { root: workspace, scope: upper });
+    if (insensitive) expect(advice).not.toBeNull();
+    else expect(advice).toBeNull();
   });
 
   test('an empty graph says nothing', () => {
@@ -581,30 +606,61 @@ describe('seeding a project', () => {
       // So time the unbatched primitive here, under whatever load this run is
       // under, and require the batched path to beat it by a wide margin. Both
       // measurements pay the same tax, so the ratio is what survives.
-      const calDir = mkdtempSync(join(tmpdir(), 'advisory-cal-'));
-      let perRecordUnbatched;
+      // LIKE FOR LIKE, WHICH THE FIRST VERSION WAS NOT. It compared per-FILE
+      // batched cost against per-RECORD unbatched cost, and a seeded file is
+      // not one record -- it is a read, a parse, and several nodes and edges.
+      // On a slow disk that ratio happened to hold; on CI it inverted and the
+      // test failed at 1.225 against a 0.6 bound while batching was working
+      // perfectly. The mechanism under test is the WRITE path, so time the
+      // same records through both paths and nothing else.
+      const CAL = 60;
+      const unbatchedDir = mkdtempSync(join(tmpdir(), 'advisory-unbatched-'));
+      const batchedDir = mkdtempSync(join(tmpdir(), 'advisory-batched-'));
+      let unbatchedMs;
+      let batchedMs;
       try {
-        const CAL = 40;
-        const calStart = Date.now();
+        const t0 = Date.now();
         for (let i = 0; i < CAL; i++) {
-          putNode(calDir, { kind: 'file', key: `cal/${i}.ts`, path: `cal/${i}.ts` });
+          putNode(unbatchedDir, { kind: 'file', key: `u/${i}.ts`, path: `u/${i}.ts` });
         }
-        perRecordUnbatched = (Date.now() - calStart) / CAL;
+        unbatchedMs = Date.now() - t0;
+
+        const t1 = Date.now();
+        withBatchedWrites(batchedDir, () => {
+          for (let i = 0; i < CAL; i++) {
+            putNode(batchedDir, { kind: 'file', key: `b/${i}.ts`, path: `b/${i}.ts` });
+          }
+        });
+        batchedMs = Date.now() - t1;
       } finally {
-        rmSync(calDir, { recursive: true, force: true });
+        rmSync(unbatchedDir, { recursive: true, force: true });
+        rmSync(batchedDir, { recursive: true, force: true });
       }
+
+      // Measured at roughly 16x (350 vs 21 records/sec). Requiring only 2x
+      // leaves generous room for a fast disk where the unbatched path is
+      // cheap, while still failing outright if the batch stops applying.
+      expect(unbatchedMs).toBeGreaterThan(0);
+      expect(batchedMs * 2).toBeLessThan(unbatchedMs);
 
       const started = Date.now();
       const result = seedProject(dir, REPO, { maxFiles: 200, budgetMs: 10_000 });
       const elapsed = Date.now() - started;
-      expect(result.files).toBe(200);
 
-      // A seeded file costs more than one record, so this is conservative:
-      // even at one record per file the batched path must be several times
-      // cheaper per record than the unbatched primitive.
-      const perFileBatched = elapsed / result.files;
-      expect(perRecordUnbatched).toBeGreaterThan(0);
-      expect(perFileBatched).toBeLessThan(perRecordUnbatched * 4);
+      // AND THAT seedProject ACTUALLY USES IT. The calibration above proves the
+      // batching primitive is fast; it says nothing about whether the seeder
+      // calls it -- removing withBatchedWrites from seedProject left that
+      // assertion perfectly green. Comparing per RECORD (not per file, which is
+      // a read plus a parse plus several records) puts the seeded path on the
+      // same footing as the unbatched primitive measured on this same machine.
+      const seededGraph = load(dir);
+      const records = seededGraph.nodes.size + seededGraph.edges.length;
+      expect(records).toBeGreaterThan(200);
+      const perRecordSeeded = elapsed / records;
+      const perRecordUnbatched = unbatchedMs / CAL;
+      expect(perRecordSeeded * 2).toBeLessThan(perRecordUnbatched);
+      // The other half of the original property: a working index, not a stub.
+      expect(result.files).toBe(200);
 
       const seeded = load(dir);
       const advice = adviseSearch(seeded, 'seedProject', { root: REPO });
