@@ -695,6 +695,31 @@ describe('a command that only STARTS by changing the shell', () => {
     expect(bounded.command.slice(prefix.length).trim().startsWith('(')).toBe(true);
   });
 
+  it.each([
+    ['cd /tmp\nnpm test'],
+    ['export FOO=1\nnpm test'],
+    ['cd a\ncd b\nmake'],
+    ['cd packages/api && npm test'],
+    ['set -euo pipefail; npm test'],
+  ])('emits shell that actually parses: %j', (command) => {
+    // A NEWLINE SEPARATOR IS WHITESPACE, and that is the whole bug. `&&`, `||`
+    // and `;` survive the prefix's trim because they are not whitespace, so the
+    // caller's `${prefix} ` join stays valid. A newline does not: `cd /tmp\nnpm
+    // test` trimmed to `cd /tmp` and emitted `cd /tmp ( ... )`, a syntax error
+    // on the one path whose entire promise is that bounding never changes what
+    // the command does.
+    //
+    // ASSERTED AGAINST THE SHELL, not against a prefix string. Every other test
+    // in this block checks that the output STARTS WITH some prefix and that a
+    // `(` follows -- and `cd /tmp ( ...` satisfies both while being unrunnable.
+    // Only bash itself can tell those apart.
+    const bounded = boundedRewrite(command);
+    expect(bounded).not.toBeNull();
+    expect(() =>
+      execFileSync('bash', ['-n', '-c', bounded.command], { stdio: 'pipe' })
+    ).not.toThrow();
+  });
+
   it('leaves the working directory where the unbounded command would', () => {
     // The whole reason these were refused: this client's Bash tool persists the
     // cwd between calls, and a `cd` inside the subshell would not.
