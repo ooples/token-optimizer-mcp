@@ -563,6 +563,33 @@ describe('the report', () => {
     expect(c.unresolvedDetail[0].adjustedP).toBeDefined();
   });
 
+  test('a redone warm rep supersedes its partial self instead of doubling it', () => {
+    // A warm rep is the whole ordered sequence, so it counts as complete only
+    // when every task in it has a row; an interrupted rep is redone from the
+    // start, because its later tasks never saw the state the earlier ones would
+    // have left. The store is append-only, so a task that DID finish first time
+    // round ends up with two rows for the same rep -- and both were ranked,
+    // double counting a run that happened once.
+    const base = (over) => row({ track: 'warm', task: 't', ...over });
+    const out = report([
+      // The partial attempt: expensive, and superseded.
+      base({ arm: 'candidate', rep: 1, usd: 0.90, started_at: '2026-09-01T10:00:00Z' }),
+      // The completed redo of the SAME rep.
+      base({ arm: 'candidate', rep: 1, usd: 0.10, started_at: '2026-09-01T11:00:00Z' }),
+      ...[2, 3, 4, 5, 6, 7, 8].map((rep) =>
+        base({ arm: 'candidate', rep, usd: 0.10, started_at: `2026-09-01T11:0${rep}:00Z` })
+      ),
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((rep) =>
+        base({ arm: 'control', rep, usd: 0.10, started_at: `2026-09-01T09:0${rep}:00Z` })
+      ),
+    ]);
+    expect(out.superseded).toBe(1);
+    const c = out.tracks.warm.arms.candidate;
+    // Eight reps, not nine, and the $0.90 partial does not inflate the cost.
+    expect(c.perTask[0].arm.n).toBe(8);
+    expect(c.perTask[0].ratio).toBeCloseTo(1, 2);
+  });
+
   test('a task the arm never delivered on withholds the headline', () => {
     // The published leaderboard hides failures by filtering status. Dropping a
     // NaN ratio would have hidden the WORST failure -- money spent, nothing
