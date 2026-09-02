@@ -734,6 +734,32 @@ describe('ranking on output tokens instead of dollars', () => {
 });
 
 describe('arms are data, not code', () => {
+  test('every hook an arm configures actually exists on disk', () => {
+    // An arm named a PreCompact hook, `pre-compact.mjs`, that is not in the
+    // package -- the real file is `precompact-optimize.mjs`. It changed no
+    // result, because no benchmark task ever reached the context window and
+    // PreCompact never fired, but an arm that quietly runs the product with a
+    // feature missing and reports it as the product is the worst kind of
+    // measurement error: invisible, and in whichever direction the missing
+    // feature would have moved things.
+    const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
+    const named = new Set();
+    for (const arm of Object.values(ARMS)) {
+      for (const entries of Object.values(arm.settings?.hooks || {})) {
+        for (const entry of entries) {
+          for (const hook of entry.hooks || []) {
+            const match = /plugin\/hooks\/([A-Za-z0-9._-]+\.mjs)/.exec(hook.command || '');
+            if (match) named.add(match[1]);
+          }
+        }
+      }
+    }
+    expect(named.size).toBeGreaterThan(3);
+    for (const file of named) {
+      expect([file, existsSync(join(root, 'plugin/hooks', file))]).toEqual([file, true]);
+    }
+  });
+
   test('the documented character counts match the arms they describe', () => {
     // THE COUNTS ARE THE COMPARISON. "510 against 2,667" is the headline claim
     // this whole head-to-head rests on, and it was stated three times in one

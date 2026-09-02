@@ -55,7 +55,16 @@ const optimizerHooks = {
   ],
   ...HOOK('PostToolUse', 'post-tool.mjs'),
   ...HOOK('Stop', 'stop.mjs'),
-  ...HOOK('PreCompact', 'pre-compact.mjs'),
+  // precompact-optimize.mjs, which is the file that exists. This said
+  // `pre-compact.mjs` and pointed both assist arms at a hook that is not
+  // there. It changed no published result -- the largest context any run
+  // reached was 125,641 tokens against a window near 200,000, so PreCompact
+  // never fired and the broken path was never taken -- but it would have
+  // silently disabled compaction on any task long enough to need it, which is
+  // exactly the kind of arm that measures the product with a feature switched
+  // off and reports it as the product. The test below now checks every hook
+  // path an arm names against the filesystem.
+  ...HOOK('PreCompact', 'precompact-optimize.mjs'),
 };
 
 /**
