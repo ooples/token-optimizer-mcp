@@ -24,7 +24,7 @@
 
 import { describe, expect, test, beforeAll, afterAll } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -202,7 +202,7 @@ describe('what the index answers', () => {
 });
 
 describe('the seed keeps the promise its budget makes', () => {
-  test('the whole call, flush included, stays inside the budget', () => {
+  test('the flush is accounted for, within generous headroom for load', () => {
     // withBatchedWrites writes everything once the callback RETURNS, so
     // spending the entire budget on traversal overran it by however long the
     // serialise-and-append took. This runs at SessionStart, where the overrun
@@ -213,8 +213,15 @@ describe('the seed keeps the promise its budget makes', () => {
       const started = Date.now();
       seedProject(dir, REPO, { maxFiles: 5_000, budgetMs });
       const elapsed = Date.now() - started;
-      // Generous headroom over the budget: the point is that the flush is
-      // accounted for at all, not that the clock is exact on a loaded machine.
+      // NAMED FOR WHAT IT ACTUALLY CHECKS. An earlier version was called
+      // "stays inside the budget" while asserting twice it, so a regression
+      // overrunning the configured deadline by 100% would have passed under a
+      // name promising the opposite. The headroom is deliberate -- this suite
+      // runs in parallel and an absolute clock measures the machine, a lesson
+      // already paid for by the throughput guard below -- but the name now
+      // says so. What it genuinely catches is the flush being unbounded:
+      // before the reserve, traversal spent the whole budget and the write
+      // happened on top of it with no ceiling at all.
       expect(elapsed).toBeLessThan(budgetMs * 2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -275,34 +282,43 @@ describe('what reaches the model is neutralised', () => {
     }
   });
 
-  test('scope does not widen across a case difference on case-sensitive hosts', () => {
-    // `/work/Repo/secret.ts` must not test as inside `/work/repo` where those
-    // are two directories. Reporting a real file from another tree is the worst
-    // possible wrong answer, because it looks exactly like a right one.
+  test('scope folding follows the filesystem, not the platform', () => {
+    // Keying this on process.platform was wrong in both directions: macOS
+    // defaults to a case-INSENSITIVE volume, so refusing to fold there
+    // suppressed every answer, and folding on a case-SENSITIVE volume would
+    // widen the scope that keeps one project out of another. So the code
+    // asks the filesystem, and this asks it the same way -- the assertion
+    // adapts to the disk the test is running on rather than guessing.
+    const base = mkdtempSync(join(tmpdir(), 'CaseProbe-'));
     const dir = mkdtempSync(join(tmpdir(), 'advisory-case-'));
     try {
-      const base = join(tmpdir(), 'CaseRepo');
+      let insensitive = false;
+      try {
+        const a = statSync(base);
+        const b = statSync(base.toLowerCase());
+        insensitive = a.ino === b.ino && a.dev === b.dev;
+      } catch { insensitive = false; }
+
       withBatchedWrites(dir, () => {
         const f = join(base, 'secret.ts');
         const file = putNode(dir, { kind: 'file', key: f, path: f });
-        putEdge(dir, file, 'contains',
-          putNode(dir, { kind: 'symbol', key: `${f}#caseSensitiveProbe`,
-            name: 'caseSensitiveProbe', file: f, line: 1 }));
+        putEdge(dir, file, 'contains', putNode(dir, { kind: 'symbol',
+          key: f + '#caseProbe', name: 'caseProbe', file: f, line: 1 }));
       });
-      const graphHere = load(dir);
-      const lowered = join(tmpdir(), 'caserepo');
-      const advice = adviseSearch(graphHere, 'caseSensitiveProbe', {
-        root: base, scope: lowered,
+
+      const advice = adviseSearch(load(dir), 'caseProbe', {
+        root: base, scope: base.toLowerCase(),
       });
-      if (process.platform === 'win32') {
-        expect(advice).not.toBeNull(); // one directory here, so it must answer
-      } else {
-        expect(advice).toBeNull(); // two directories, so it must not
-      }
+      // Same directory on a folding volume, so it must answer; two different
+      // directories otherwise, so it must stay silent.
+      if (insensitive) expect(advice).not.toBeNull();
+      else expect(advice).toBeNull();
     } finally {
+      rmSync(base, { recursive: true, force: true });
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
 });
 
 describe('an advisory is delivered once per session, across processes', () => {
