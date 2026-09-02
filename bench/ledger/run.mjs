@@ -104,7 +104,10 @@ export async function runColdTask(
   const rows = [];
   const limit = { ...DEFAULT_PRECISION, ...precision };
 
-  for (let rep = 1; rep <= limit.maxReps; rep++) {
+  // A fixed-n design runs exactly its pre-specified count; the spend cap does
+  // not apply, because the count IS the budget and was agreed before the run.
+  const repCeiling = limit.fixedReps || limit.maxReps;
+  for (let rep = 1; rep <= repCeiling; rep++) {
     const stateDir = freshStateDir ? await freshStateDir({ task, arm, rep }) : null;
     const row = await runOnce(task, { arm, track: 'cold', rep, stateDir, execute, provenance });
     rows.push(row);
@@ -148,7 +151,7 @@ export async function runWarmSequence(
   // from a fraction of the evidence and keep sampling forever.
   const rows = [...priorRows];
 
-  for (let rep = startRep; rep <= limit.maxReps; rep++) {
+  for (let rep = startRep; rep <= (limit.fixedReps || limit.maxReps); rep++) {
     // Fresh for the SEQUENCE, shared within it. That single distinction is what
     // separates warm from cold.
     const stateDir = freshStateDir ? await freshStateDir({ arm, rep }) : null;

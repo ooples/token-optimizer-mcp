@@ -114,3 +114,109 @@ flips on the second build; or the headline depends on `explain-failure`.
 
 Each of these is reported if it happens. A pre-registration whose author only
 publishes when it passes is a press release.
+
+---
+
+# Addendum: the large-context experiment
+
+Written and committed before the run it governs, as above.
+
+## Why there is a second experiment
+
+The first one measured a rules file against a rules file and drew. Two
+measurements taken afterwards explain why that was the wrong contest:
+
+**Where the money is.** Over the 173 rows of the first campaign, priced at
+Sonnet rates:
+
+| component | share of spend |
+| --- | --- |
+| output | 25.3% |
+| cache_read | 58.2% |
+| cache_creation | 16.4% |
+| input | 0.1% |
+
+A rules file can only reach the 25.3%. Interception, bounding and outline
+substitution reach the other 74.7%.
+
+**Why our own mechanism measured as nothing.** The largest file any task in
+the first battery produced was **0.3 KB**. The optimizer's substitution
+threshold is ~25 KB. Outlining, bounding and re-read substitution therefore
+never fired once, in any campaign this harness has ever run. The earlier
+finding that `assist-norules` is indistinguishable from `control` was true and
+misleading: it is a statement about a battery in which the mechanism could not
+activate, not about the mechanism.
+
+That earlier conclusion is withdrawn as evidence about the product.
+
+## The fixed-n design, and why the first experiment's numbers were soft
+
+The adaptive stopping rule is optional stopping: it runs reps until the
+interval looks narrow, so an arm stops early exactly when its sample happened
+to be tight. Measured across the 36 arm-task cells of the two confirmatory
+builds:
+
+| | cells | mean CV |
+| --- | --- | --- |
+| stopped early (n<=7) | 15 | 9.4% |
+| ran to the cap (n>=12) | 14 | 17.1% |
+
+`corr(reps run, CV) = 0.357`. The three build-2 results that survived
+multiplicity correction were all n=6-7 early stops, which is what this
+procedure manufactures. **They are withdrawn.**
+
+This experiment uses `--reps 30`, fixed, chosen before the run and never
+revised. No convergence check, no early stop, no `unresolved` state.
+
+## Arms
+
+Four, all on the same image, model and task set.
+
+| arm | carries |
+| --- | --- |
+| `control` | nothing |
+| `assist` | THE PRODUCT: hooks, interception, bounding, outline substitution, graph |
+| `ours-rules` | our 510-char block only, as a CLAUDE.md, optimizer off |
+| `tokenade-rules` | their 2,667-char file, as a CLAUDE.md |
+
+`ours-rules` is present to attribute: it separates what our text does from what
+our interception does, which is the question the first experiment could not
+answer.
+
+## Tasks
+
+The three large-context tasks, all new:
+
+- `large-file-defect` -- one wrong line in a 342 KB module
+- `noisy-command` -- a mandated `pytest -v` producing 49.5 KB of tool result
+  (measured; `-q` produces 1.3 KB, which is why the flag is mandated)
+- `whole-file-transform` -- **ADVERSARIAL**: every function in a 45 KB file must
+  change, so an outline is useless and any substitution costs a wasted turn
+
+The adversarial task is not decoration. If `assist` does not lose on it, the
+task is not adversarial enough and must be made harder -- the same rule the
+original set is held to.
+
+## Primary endpoint
+
+The geometric mean of per-task cost-per-unit ratios, cold track, **`assist`
+against `tokenade-rules`**, with its bootstrap interval.
+
+This is the product against the competitor, which is the comparison that was
+never run.
+
+## Secondary
+
+`assist` vs `control`; `assist` vs `ours-rules` (the attribution that isolates
+interception from text); output tokens; completion.
+
+## Multiplicity
+
+Holm-Bonferroni across every per-task test the track publishes, family-wise
+alpha 0.05. The primary is a single pre-specified test and is not corrected.
+
+## What would falsify the claim
+
+The primary interval spanning parity; a point estimate above 1.0; `assist`
+completing fewer tasks; or `assist` winning the adversarial task, which would
+indicate the battery is rigged rather than that we are good.

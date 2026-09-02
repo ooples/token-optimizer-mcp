@@ -95,7 +95,7 @@ export async function coldArm(
 
   const runOne = async (task) => {
     const done = completedReps(existing, { arm, track: 'cold', task: task.id, build });
-    if (done >= (precision?.maxReps ?? 12)) {
+    if (done >= (precision?.fixedReps || precision?.maxReps || 12)) {
       log?.(`  cold/${arm}/${task.id}: ${done} reps already recorded for this build, skipping`);
       return;
     }

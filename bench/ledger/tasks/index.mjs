@@ -511,7 +511,220 @@ export const explainFailure = {
   ],
 };
 
+/**
+ * Builds a large, realistic Python module: `count` functions of ordinary shape,
+ * with one of them carrying the planted defect.
+ *
+ * REAL SIZE IS THE POINT. Every task written before this one produced files of
+ * 0.1-0.3 KB, and the optimizer's substitution threshold is ~25 KB -- so
+ * outlining, bounding and re-read substitution never fired ONCE in any campaign
+ * this harness has run. `assist` measuring identical to control was therefore
+ * not a finding about the product; it was a battery in which the product's
+ * mechanism could not activate. A 200 KB module is unremarkable in a real
+ * repository; the 0.3 KB fixtures were the unrealistic ones.
+ */
+const bigModule = (count, defectAt) => {
+  const out = [
+    '"""Order processing helpers. Generated fixture: many small, similar functions."""',
+    '',
+  ];
+  for (let i = 0; i < count; i++) {
+    const bug = i === defectAt;
+    out.push(
+      `def rule_${String(i).padStart(4, '0')}(amount, rate):`,
+      `    """Applies pricing rule ${i}.`,
+      '',
+      '    The rule multiplies the amount by the rate and rounds the result to',
+      '    the nearest whole unit, because downstream ledgers store integers',
+      '    and a fractional unit would be silently truncated there instead.',
+      '    """',
+      '    if amount < 0:',
+      '        raise ValueError("amount must not be negative")',
+      // The defect: rounds before multiplying, so the rate is applied to an
+      // already-rounded amount. Same shape as every neighbour.
+      bug ? '    return round(amount) * rate' : '    return round(amount * rate)',
+      ''
+    );
+  }
+  return out.join('\n');
+};
+
+/**
+ * REUSE-FRIENDLY: one defect inside a genuinely large file.
+ *
+ * The first task in this battery where a whole-file read is expensive enough
+ * that an outline of it is worth having. Nothing about the work is easier than
+ * the small-file version -- the agent must still find the wrong line among
+ * hundreds of near-identical ones and fix it.
+ */
+export const largeFileDefect = {
+  id: 'large-file-defect',
+  family: 'debug',
+  adversarial: false,
+  tracks: ['cold', 'warm'],
+  prompt:
+    'pkg/pricing.py contains one function that rounds before multiplying instead of after, so it ' +
+    'returns the wrong price. Find it and fix that one function. Change nothing else.',
+  setup(dir) {
+    write(dir, 'pkg/pricing.py', bigModule(900, 617));
+  },
+  checks: [
+    {
+      name: 'the defect is fixed',
+      weight: 3,
+      run: (dir) => !/return round\(amount\) \* rate/.test(read(dir, 'pkg/pricing.py')),
+    },
+    {
+      name: 'fixed by correcting it, not by deleting it',
+      weight: 3,
+      run: (dir) => {
+        const src = read(dir, 'pkg/pricing.py');
+        return /def rule_0617\(/.test(src) && /return round\(amount \* rate\)/.test(src);
+      },
+    },
+    {
+      // The cheapest wrong answer is to rewrite the whole file from a summary,
+      // losing the other 899 functions. Charged as a failure.
+      name: 'the rest of the module survived',
+      weight: 2,
+      run: (dir) => {
+        const src = read(dir, 'pkg/pricing.py');
+        return (src.match(/^def rule_\d{4}\(/gm) || []).length === 900;
+      },
+    },
+  ],
+};
+
+/**
+ * REUSE-FRIENDLY: a command whose output is far larger than its answer.
+ *
+ * A test run that prints thousands of passing lines and one failure is the most
+ * ordinary thing in a real session, and it is the case a rules file cannot
+ * touch: the tokens arrive as tool RESULT, not as anything the model chose to
+ * write. Bounding what comes back is the whole mechanism, and until this task
+ * existed the battery contained nothing that produced a large tool result.
+ */
+export const noisyCommand = {
+  id: 'noisy-command',
+  family: 'debug',
+  adversarial: false,
+  tracks: ['cold', 'warm'],
+  // THE COMMAND IS MANDATED, for two separate reasons. Discretion is variance:
+  // the debug task's 1.9x cost spread came from agents choosing how much to
+  // look around, so a task that leaves the command open measures exploration
+  // style rather than the mechanism. And `-q` would defeat the task's whole
+  // purpose -- pytest's quiet mode prints a dot per test and names the failure
+  // in a two-line summary, which is a small tool result. `-v` prints a line per
+  // test, which is what a developer actually runs when they want to see which
+  // test failed, and is the large tool result this task exists to produce.
+  prompt:
+    'Run `python -m pytest -v tests/` . Exactly one test fails. Write the name of the failing ' +
+    'test function, and nothing else, into ANSWER.txt at the repository root.',
+  setup(dir) {
+    // 600 passing tests and one failure: the output is long, the answer is one
+    // line, and finding it does not require the rest.
+    for (let f = 0; f < 12; f++) {
+      const lines = ['import pytest', ''];
+      for (let i = 0; i < 50; i++) {
+        const n = f * 50 + i;
+        const fails = n === 431;
+        lines.push(
+          `def test_case_${String(n).padStart(4, '0')}():`,
+          `    # Exercises pricing rule ${n} against its recorded expectation.`,
+          `    assert ${fails ? '2 + 2 == 5' : '2 + 2 == 4'}`,
+          ''
+        );
+      }
+      write(dir, `tests/test_block_${String(f).padStart(2, '0')}.py`, lines.join('\n'));
+    }
+  },
+  checks: [
+    { name: 'answer file exists', weight: 1, run: (dir) => existsSync(join(dir, 'ANSWER.txt')) },
+    {
+      name: 'names the failing test',
+      weight: 3,
+      run: (dir) => /test_case_0431/.test(read(dir, 'ANSWER.txt')),
+    },
+    {
+      // Naming every test, or pasting the log, is not an answer.
+      name: 'answered with the one name, not the whole log',
+      weight: 2,
+      run: (dir) => {
+        const a = read(dir, 'ANSWER.txt');
+        return a.trim().length > 0 && (a.match(/test_case_\d{4}/g) || []).length === 1;
+      },
+    },
+    {
+      name: 'no test was weakened to make it pass',
+      weight: 2,
+      run: (dir) => /2 \+ 2 == 5/.test(read(dir, 'tests/test_block_08.py')),
+    },
+  ],
+};
+
+/**
+ * ADVERSARIAL: a large file that must genuinely be read in full.
+ *
+ * THE COUNTERWEIGHT TO THE TWO ABOVE, and the reason this battery can be
+ * trusted after adding them. Every function must be changed, so an outline is
+ * useless, a bounded read is missing exactly the information required, and any
+ * substitution costs a turn and then has to be undone. If our arm does not lose
+ * here, the task is not doing its job and should be made harder -- the same
+ * rule the original adversarial set is held to.
+ */
+export const wholeFileTransform = {
+  id: 'whole-file-transform',
+  family: 'generation',
+  adversarial: true,
+  tracks: ['cold', 'warm'],
+  prompt:
+    'Every function in pkg/rules.py raises ValueError("amount must not be negative"). Change every ' +
+    'one of those messages to "amount must be zero or greater". Change nothing else.',
+  setup(dir) {
+    write(dir, 'pkg/rules.py', bigModule(120, -1));
+  },
+  checks: [
+    {
+      name: 'every message was changed',
+      weight: 4,
+      run: (dir) => {
+        const src = read(dir, 'pkg/rules.py');
+        return (src.match(/amount must be zero or greater/g) || []).length === 120;
+      },
+    },
+    {
+      name: 'none of the old messages remain',
+      weight: 2,
+      run: (dir) => !/amount must not be negative/.test(read(dir, 'pkg/rules.py')),
+    },
+    {
+      name: 'the functions themselves survived',
+      weight: 2,
+      run: (dir) => (read(dir, 'pkg/rules.py').match(/^def rule_\d{4}\(/gm) || []).length === 120,
+    },
+  ],
+};
+
 export const GOLDEN = {
+  'large-file-defect': (dir) =>
+    write(
+      dir,
+      'pkg/pricing.py',
+      read(dir, 'pkg/pricing.py').replace('return round(amount) * rate', 'return round(amount * rate)')
+    ),
+
+  'noisy-command': (dir) => write(dir, 'ANSWER.txt', 'test_case_0431\n'),
+
+  'whole-file-transform': (dir) =>
+    write(
+      dir,
+      'pkg/rules.py',
+      read(dir, 'pkg/rules.py').replace(
+        /amount must not be negative/g,
+        'amount must be zero or greater'
+      )
+    ),
+
   'debug-pipeline-py': (dir) =>
     write(dir, 'pipeline/clean.py', read(dir, 'pipeline/clean.py').replace('.lstrip()', '.strip()')),
 
@@ -567,6 +780,13 @@ export const TASKS = [
   pureGeneration,
   repeatComprehension,
   needleInRepo,
+  // The large-context battery. Added because measurement showed 74.7% of spend
+  // is on the input side -- cache_read alone is 58.2% -- which no rules file
+  // can reach, while every task above produces files of 0.1-0.3 KB and so
+  // could never exercise the mechanism that does reach it.
+  largeFileDefect,
+  noisyCommand,
+  wholeFileTransform,
 ];
 
 /** The declared adversarial subset, which the report renders first. */

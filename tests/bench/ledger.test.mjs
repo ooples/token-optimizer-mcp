@@ -138,6 +138,49 @@ describe('the interval is honest about spread', () => {
   });
 });
 
+describe('a fixed-n design does not look at the data to decide when to stop', () => {
+  // WHY THIS EXISTS. The adaptive rule is optional stopping: it stops when the
+  // interval looks narrow, so an arm stops early precisely when its sample
+  // happened to be tight. Measured over our own 36 arm-task cells, cells that
+  // stopped at n<=7 had mean CV 9.4% and cells that ran to the cap had 17.1%
+  // -- the variance estimate is conditioned on the stopping decision. Three
+  // results that survived multiplicity correction were all early stops.
+  test('a tight sample does NOT end the run early', () => {
+    // The exact case the adaptive rule stops on, and must not here.
+    const tight = [0.100, 0.101, 0.100, 0.099, 0.100, 0.101];
+    expect(samplingVerdict(tight).state).toBe('converged');
+    expect(samplingVerdict(tight, { fixedReps: 20 }).state).toBe('continue');
+    expect(samplingVerdict(tight, { fixedReps: 20 }).reason).toBe('below-fixed-reps');
+  });
+
+  test('a wide sample at the pre-specified n is finished, not unresolved', () => {
+    // Under the adaptive rule this is `unresolved` and gets excluded from the
+    // headline. Under a fixed design the count was agreed in advance, so the
+    // interval is the answer -- wide is a result, not a failure to converge.
+    const wide = [0.02, 0.30, 0.05, 0.28, 0.03, 0.31];
+    expect(samplingVerdict(wide, { maxReps: 6 }).state).toBe('unresolved');
+    const fixed = samplingVerdict(wide, { fixedReps: 6 });
+    expect(fixed.state).toBe('converged');
+    expect(fixed.reason).toBe('fixed-n');
+    expect(fixed.width).toBeGreaterThan(0.10);
+  });
+
+  test('the rep floor and the width target cannot override a fixed n', () => {
+    const tight = [0.100, 0.101, 0.100];
+    // minReps would say continue, targetWidthRatio would say converged; a
+    // fixed design must ignore both and answer only on the count.
+    expect(
+      samplingVerdict(tight, { fixedReps: 3, minReps: 12, targetWidthRatio: 0.001 }).state
+    ).toBe('converged');
+  });
+
+  test('the adaptive rule is untouched when no fixed n is given', () => {
+    const tight = [0.100, 0.101, 0.100, 0.099, 0.100, 0.101];
+    expect(samplingVerdict(tight, { fixedReps: null }).state).toBe('converged');
+    expect(samplingVerdict(tight, { fixedReps: null }).reason).toBe('precise');
+  });
+});
+
 describe('a ratio accounts for the control\'s own spread', () => {
   test('a control that wanders widens the interval', () => {
     // The debug tasks' control spread was 34-42%. Treating control as an exact

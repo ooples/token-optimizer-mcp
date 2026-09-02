@@ -118,6 +118,10 @@ export const DEFAULT_PRECISION = {
   // tasks will not converge at any affordable n, and the honest report says so
   // rather than quietly averaging them in.
   maxReps: 12,
+  // Off by default, so existing callers keep the adaptive rule. Set it and the
+  // adaptive rule is bypassed entirely -- see samplingVerdict for why a
+  // published comparison should always set it.
+  fixedReps: null,
 };
 
 /**
@@ -129,7 +133,38 @@ export const DEFAULT_PRECISION = {
  * publishing a number nobody should act on.
  */
 export function samplingVerdict(values, precision = DEFAULT_PRECISION) {
-  const { targetWidthRatio, minReps, maxReps } = { ...DEFAULT_PRECISION, ...precision };
+  const { targetWidthRatio, minReps, maxReps, fixedReps } = {
+    ...DEFAULT_PRECISION,
+    ...precision,
+  };
+
+  // FIXED N: STOP LOOKING AT THE DATA TO DECIDE HOW MUCH DATA TO COLLECT.
+  //
+  // Everything below this branch is optional stopping. Running until the
+  // interval looks narrow means an arm stops early precisely when its sample
+  // happened to be tight, so the interval it stops on is too narrow and the
+  // false-positive rate is not the alpha it claims. Measured on our own two
+  // confirmatory builds, over 36 arm-task cells:
+  //
+  //   stopped early (n<=7)   mean CV  9.4%
+  //   ran to the cap (n>=12) mean CV 17.1%      corr(reps, CV) = 0.357
+  //
+  // The variance estimate is conditioned on the decision to stop. Three
+  // results that survived multiplicity correction on build 2 were all n=6-7
+  // early stops -- which is what this procedure manufactures, not evidence.
+  //
+  // With `fixedReps` the count is chosen BEFORE the run from a power
+  // calculation and never revised, so the interval means what it says. There
+  // is no `unresolved` state here: a pre-specified n either had the power or
+  // it did not, and that is a property of the design, not a discovery about
+  // the task.
+  if (Number.isFinite(fixedReps) && fixedReps > 0) {
+    if (values.length < fixedReps) {
+      return { state: 'continue', reason: 'below-fixed-reps', ci: null, width: Infinity };
+    }
+    const ci = values.length ? bootstrapMedianCI(values, { seed: 0x5eed }) : null;
+    return { state: 'converged', reason: 'fixed-n', ci, width: ci ? widthRatio(ci) : Infinity };
+  }
 
   if (values.length < minReps) {
     return { state: 'continue', reason: 'below-min-reps', ci: null, width: Infinity };

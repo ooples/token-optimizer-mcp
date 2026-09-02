@@ -170,6 +170,29 @@ describe('the campaign', () => {
       }
     });
 
+    test('a fixed n runs exactly that many reps, however tight the sample', async () => {
+      // End to end, because the count is enforced by the loop in run.mjs and
+      // the verdict in stats.mjs together -- either one alone would let an arm
+      // stop early and reintroduce optional stopping.
+      const state = freshState();
+      const counts = {};
+      const counting = async (args) => {
+        counts[args.task.id] = (counts[args.task.id] || 0) + 1;
+        return { status: 'ok', usd: 0.1, turns: 5, workspace: { pass: true } };
+      };
+      void state;
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a', 'debug-b']),
+        execute: counting,
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        // Identical costs every run: the adaptive rule would stop at its floor
+        // of 6 on a zero-width interval. A fixed design must still run 15.
+        precision: { fixedReps: 15 },
+      });
+      expect(counts).toEqual({ 'debug-a': 15, 'debug-b': 15 });
+    });
+
     test('the default is still one at a time', async () => {
       const state = freshState();
       await coldArm('control', {
