@@ -113,7 +113,15 @@ export function seedProject(dir, root, {
   // taken out of a budget there is something to take from -- otherwise the
   // deadline would land in the future and index a file the caller asked for
   // none of.
-  const flushReserveMs = budgetMs > 0 ? Math.max(150, Math.round(budgetMs * 0.2)) : 0;
+  // NEVER MORE THAN HALF. A flat 150 ms floor swallowed any budget below it
+  // -- `Math.max(0, 100 - 150)` is 0, the deadline landed on now(), and a
+  // caller asking for a small budget silently got no index at all. The
+  // reserve is a share of the budget, floored for realism and capped so
+  // traversal always keeps at least half of what was asked for.
+  const flushReserveMs =
+    budgetMs > 0
+      ? Math.min(Math.max(150, Math.round(budgetMs * 0.2)), Math.floor(budgetMs / 2))
+      : 0;
   const deadline = now() + Math.max(0, budgetMs - flushReserveMs);
   let files = 0;
   let symbols = 0;
