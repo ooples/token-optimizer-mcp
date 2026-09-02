@@ -25,7 +25,7 @@
  */
 
 import { median, ratioCI, ratioOfTotalsCI, significant, samplingVerdict, holm, permutationP, rng } from './stats.mjs';
-import { assertSingleBuild, rowProblem } from './provenance.mjs';
+import { assertSingleBuild, rowProblem, buildKey } from './provenance.mjs';
 
 /** Groups rows by track, then arm, then task. Rejected rows are reported. */
 export function organise(rows) {
@@ -56,8 +56,29 @@ export function organise(rows) {
     good.push(row);
   }
 
-  const tracks = new Map();
+  // A REDONE WARM REP SUPERSEDES ITS PARTIAL SELF, rather than being counted
+  // alongside it. A warm rep is the whole ordered sequence, so it only counts
+  // as complete when every task in it has a row; an interrupted rep is redone
+  // from the start, because its later tasks never saw the state the earlier
+  // ones would have left. The store is append-only, so the tasks that DID
+  // finish first time round end up with two rows carrying the same
+  // (build, arm, track, task, rep) -- and both were being ranked, double
+  // counting a run that happened once.
+  //
+  // Resolved on read rather than by rewriting the file: recorded data stays as
+  // it was written, and the newest row wins because it is the one whose
+  // sequence actually completed. Cold rows are unaffected -- their reps are
+  // unique by construction since resumption continues the numbering.
+  const newest = new Map();
   for (const row of good) {
+    const key = `${buildKey(row)}|${row.arm}|${row.track}|${row.task}|${row.rep}`;
+    const held = newest.get(key);
+    if (!held || String(row.started_at) > String(held.started_at)) newest.set(key, row);
+  }
+  const superseded = good.length - newest.size;
+
+  const tracks = new Map();
+  for (const row of newest.values()) {
     if (!tracks.has(row.track)) tracks.set(row.track, new Map());
     const arms = tracks.get(row.track);
     if (!arms.has(row.arm)) arms.set(row.arm, new Map());
@@ -65,7 +86,7 @@ export function organise(rows) {
     if (!tasks.has(row.task)) tasks.set(row.task, []);
     tasks.get(row.task).push(row);
   }
-  return { tracks, rejected, harnessFailures };
+  return { tracks, rejected, harnessFailures, superseded };
 }
 
 /**
@@ -356,8 +377,8 @@ export function report(rows, options = {}) {
   //
   // Defaults to `control`, so every existing caller is unaffected.
   const { baseline = 'control' } = options;
-  const { tracks, rejected, harnessFailures } = organise(rows);
-  const out = { tracks: {}, rejected, harnessFailures, baseline };
+  const { tracks, rejected, harnessFailures, superseded } = organise(rows);
+  const out = { tracks: {}, rejected, harnessFailures, superseded, baseline };
 
   for (const [track, arms] of tracks) {
     const baselineTasks = arms.get(baseline);
