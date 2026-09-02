@@ -63,8 +63,25 @@ export function loadRows(path) {
  */
 export function completedReps(rows, { arm, track, task, build }) {
   return rows.filter(
-    (r) => r.arm === arm && r.track === track && r.task === task && buildKey(r) === build
+    (r) =>
+      r.arm === arm &&
+      r.track === track &&
+      r.task === task &&
+      buildKey(r) === build &&
+      // A RUN THE HARNESS NEVER STARTED DOES NOT SATISFY THE REP COUNT. It is
+      // excluded from every figure in the report, so counting it as complete
+      // here would leave a cell permanently one rep short of its
+      // pre-registered n with no way to top it up -- observed: a cell sat at
+      // 29 real reps of 30 and the runner declined to add the last one because
+      // a killed container occupied the slot.
+      !isHarnessFailure(r)
   ).length;
+}
+
+/** A run that errored having cost nothing and attempted nothing. */
+function isHarnessFailure(row) {
+  if (row.harness_failure === true) return true;
+  return row.status === 'error' && (row.usd || 0) === 0 && (row.turns || 0) === 0;
 }
 
 /** The builds present in a store, newest activity first. Used by the CLI to warn. */
