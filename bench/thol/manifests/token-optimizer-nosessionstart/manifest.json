@@ -1,0 +1,68 @@
+{
+  "name": "token-optimizer-nosessionstart",
+  "display_name": "Token Optimizer (assist, no SessionStart)",
+  "verified": true,
+  "version_pin": "6.0.2",
+  "version_checked": "2026-08-29",
+  "upstream": "https://github.com/ooples/token-optimizer-mcp",
+  "install_doc": "ABLATION BY ELIMINATION. Per-invocation diagnostics show that on code-debug-pipeline-py our hooks make ZERO rewrites across four runs and inject exactly one context block -- SessionStart, 637 bytes of status about the optimizer itself (graph capture active, MCP tools not proven). Bound, compactor, substitution and per-call notices never fire on this task, yet it costs 1.5-1.7x control consistently. This arm removes the one remaining thing we do.",
+  "requires": [
+    "node"
+  ],
+  "settings": {
+    "env": {
+      "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
+      "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
+      "TOKEN_OPTIMIZER_MODE": "assist",
+      "TOKEN_OPTIMIZER_LOG_DIR": "/results/diag",
+      "TOKEN_OPTIMIZER_MCP_CAPABILITIES": ""
+    },
+    "hooks": {
+      "PreToolUse": [
+        {
+          "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/pretooluse-router.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/precompact-optimize.mjs\""
+            }
+          ]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "matcher": "Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/post-tool.mjs\""
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/stop.mjs\""
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "tool_prefixes": [
+    "mcp__token-optimizer__"
+  ]
+}

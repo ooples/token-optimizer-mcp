@@ -43,9 +43,31 @@ import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import { join } from 'node:path';
 import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
 
-// The plugin owns both this hook and its MCP declaration. Claude does not pass
-// the registered tool inventory to SessionStart, so make the bundled schemas
-// explicit while preserving an explicitly empty host/user override.
+// THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN INSTALL.
+//
+// This used to run unconditionally, on the grounds that these entry points ship
+// beside an MCP declaration for the same package. That holds for a plugin --
+// .mcp.json travels with the hooks -- and not otherwise: the script path wires
+// hooks through settings.json without the server, a user can drop the server
+// and keep the hooks, and the benchmark arm removes the mcp block outright.
+//
+// In those cases the fabricated list was persisted as PROVEN evidence and the
+// model was told to call tools that do not exist. Measured over a debug-sized
+// task with no server: 3,450 characters of advice built on the assumption,
+// including "Call the token-optimizer MCP tool smart_read" after every repeated
+// read -- a failed call and a retry each time, on a benchmark where turns
+// dominate cost. Removing it from session-start alone took the debug segment
+// from 1.309 to 1.107 and its turns from 2.231 to 2.003.
+//
+// REVERTED FROM A CLAUDE_PLUGIN_ROOT GATE, for the reason recorded in the
+// router: that variable is set by the plugin runtime alone, so the gate turned
+// enforcement off for every non-plugin install and clients.test.mjs failed on
+// all eight packaged entries.
+//
+// `??=` is the opt-out. It assigns only when the variable is null or undefined,
+// so an explicitly EMPTY value survives -- which is how a benchmark arm, a host
+// or a user says "there is no server here" without disabling the default for
+// installs that do ship one.
 process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
 
 const invocation = beginHookInvocation('claude-code', 'session-start');

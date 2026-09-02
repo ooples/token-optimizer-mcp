@@ -52,6 +52,7 @@ import {
   existsSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { compact } from '../../hooks-core/compact.mjs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -82,12 +83,30 @@ const RECOVERY = join(ROOT, 'bench', 'debug-loop', '.source-recovery');
 const SUITE = process.env.DEBUG_LOOP_SUITE || 'tests/hooks/redact.test.mjs';
 
 /**
- * Three iterations of a debug loop, as an agent would actually produce them:
- * a first failure, a partial fix that changes which assertions fail, and the
- * real fix. Each mutation is a single replacement in the real source.
+ * A debug loop as an agent actually produces one: a first failure, an edit that
+ * turns out to change nothing, a partial fix that moves which assertions fail,
+ * and the real fix. Each mutation is a single replacement in the real source.
+ *
+ * THE SECOND ITERATION IS THE ONE THAT WAS MISSING. The first version of this
+ * file went broken -> partial -> fixed, three runs that never produced the same
+ * output twice -- and a loop that never repeats itself cannot show what
+ * compaction is for. An edit that leaves the tests failing exactly as they were
+ * is one of the most common things that happens in a real loop, and it is
+ * precisely the case where the previous run's output can be left out.
+ *
+ * It is also the case a naive dedup gets catastrophically wrong, by eliding the
+ * unchanged failure and leaving the model to read the silence as success --
+ * which is why `compact` never touches the ending.
  */
 const ITERATIONS = [
   { label: 'broken', from: "let out = String(text ?? '');", to: "let out = '';" },
+  {
+    // A different edit with the SAME observable outcome: still empty, so every
+    // assertion fails exactly as it did a moment ago.
+    label: 'no-op edit',
+    from: "let out = String(text ?? '');",
+    to: "let out = String('');",
+  },
   {
     label: 'partial fix',
     from: "let out = String(text ?? '');",
@@ -107,7 +126,7 @@ const ITERATIONS = [
  * non-zero exit: a failing suite is the NORMAL case here, not an error. Only a
  * failure to spawn at all is worth throwing for.
  */
-function runSuite() {
+function runSuite(env = {}) {
   const result = spawnSync(
     process.execPath,
     [
@@ -115,7 +134,13 @@ function runSuite() {
       join('node_modules', 'jest', 'bin', 'jest.js'),
       SUITE,
     ],
-    { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 180_000 }
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 180_000,
+      env: { ...process.env, ...env },
+    }
   );
   if (result.error) throw result.error;
   return `${result.stdout ?? ''}${result.stderr ?? ''}`;
@@ -124,7 +149,9 @@ function runSuite() {
 /**
  * Two transforms, kept apart because only ONE of them is shippable.
  *
- * `stripColour` removes ANSI escapes. They are pure presentation -- a model
+ * `stripColour` is now a BACKSTOP, not the mechanism: the wrapper asks for no
+ * colour at the source, so these escapes are usually gone before the harness
+ * sees them. It removes ANSI escapes. They are pure presentation -- a model
  * gains nothing from them -- and they are not a rounding error: a real failing
  * `jest tests/hooks` run measured 67,634 bytes containing 3,080 ANSI sequences,
  * so stripping alone removes 22.5% of the output. Safe, free, and it applies to
@@ -173,16 +200,21 @@ function boundBytes(text, maxBytes) {
   const buffer = Buffer.from(text, 'utf8');
   if (buffer.length <= maxBytes) return text;
 
-  // NO MARKER. `boundedRewrite` emits the head bytes and then the tail bytes,
-  // concatenated, and nothing else -- the shell has no way to announce what it
-  // dropped. A "middle omitted" line here would be tokens this arm is charged
-  // for that production never sends, which makes the benchmark measure the
-  // harness. The byte notice IS delivered, but separately, as hook context, so
-  // it belongs in a separate measurement rather than inside this arm.
+  // NO MARKER, AND THE HALVES SUM TO maxBytes. `boundedRewrite` emits the head
+  // bytes and then the tail bytes, concatenated, and nothing else -- the shell
+  // has no way to announce what it dropped. A "middle omitted" line here would
+  // be tokens this arm is charged for that production never sends, which makes
+  // the benchmark measure the harness. The byte notice IS delivered, but
+  // separately, as hook context, so it belongs in its own measurement rather
+  // than inside this arm.
   //
-  // The two stages sum to maxBytes, with the odd byte to the head, mirroring
-  // the wrapper exactly. Giving both `floor(maxBytes / 2)` modelled a budget
-  // the command does not get.
+  // The two stages sum to maxBytes with the odd byte to the head, mirroring the
+  // wrapper. Giving both `floor(maxBytes / 2)` modelled a budget the command
+  // does not get.
+  //
+  // Checked against the real wrapper rather than reasoned about: at maxBytes of
+  // 1, 2, 3, 7, 101 and 8000, this function and the shell pipeline return
+  // byte-identical strings.
   const headBytes = Math.max(1, Math.ceil(maxBytes / 2));
   const tailBytes = Math.max(0, maxBytes - headBytes);
 
@@ -259,7 +291,16 @@ const main = async () => {
       } else {
         writeFileSync(SOURCE, original);
       }
-      captures.push({ label: step.label, output: runSuite() });
+      // TWICE, BECAUSE THE ARMS ARE NOT LOOKING AT THE SAME STREAM ANY MORE.
+      // The wrapper now asks for no colour at the source, so what production
+      // bounds is a genuinely different byte stream -- not the coloured one with
+      // the escapes modelled away afterwards. `raw` must keep the coloured run,
+      // because that is what the client receives with no hook in the way.
+      captures.push({
+        label: step.label,
+        coloured: runSuite(),
+        plain: runSuite({ NO_COLOR: '1', FORCE_COLOR: '0' }),
+      });
     }
   } finally {
     writeFileSync(SOURCE, original);
@@ -283,10 +324,17 @@ const main = async () => {
   say('-'.repeat(62));
 
   let previous = null;
-  const arms = { raw: 0, control: 0, bounded: 0, deduped: 0, combined: 0 };
+  // `compacted` is the SHIPPED function, imported rather than modelled. The
+  // previous arms modelled an unrestricted line dedup, which is not what we
+  // ship and never will be: eliding every repeated line takes the failure of a
+  // test that failed identically twice, and the model reads that as "fixed".
+  // `unsafeDedup` is kept alongside it purely as the ceiling that design would
+  // reach, so the price of the safety rails is visible rather than assumed.
+  const arms = { raw: 0, control: 0, bounded: 0, compacted: 0, unsafeDedup: 0 };
+  let previousPlain = '';
 
   for (const capture of captures) {
-    const current = lines(capture.output);
+    const current = lines(capture.plain);
     const seen = previous ? new Set(previous) : new Set();
     const repeated = previous ? current.filter((l) => seen.has(l)).length : 0;
     const fresh = current.length - repeated;
@@ -308,13 +356,19 @@ const main = async () => {
     //
     // `raw` is kept as a separate row precisely so the normalisation saving is
     // visible rather than smuggled into one arm.
-    const base = stripColour(capture.output);
+    // No longer a model of anything: this IS what the command emits under the
+    // wrapper. `stripColour` remains only as a belt-and-braces pass for a tool
+    // that ignores NO_COLOR, and for jest it now removes nothing.
+    const base = stripColour(capture.plain);
     // Emitted lines keep their real timings; only the comparison KEY is masked.
     const emitLines = base.split('\n');
 
-    // raw: exactly what the client delivers, ANSI and all, at its own cap.
-    const raw = truncateMiddle(capture.output, CLIENT_CAP_CHARS);
-    // control: the same wall with ANSI colour stripped. Nothing else.
+    // raw: exactly what the client delivers with no hook in the way -- the
+    // coloured run, at the client's own cap.
+    const raw = truncateMiddle(capture.coloured, CLIENT_CAP_CHARS);
+    // control: colour asked away at the source and NOTHING else -- no bound.
+    // This row is now a real production step rather than a hypothetical, and it
+    // is what the colour suppression is worth on its own.
     const control = truncateMiddle(base, CLIENT_CAP_CHARS);
     // bounded: what production ACTUALLY does, which is not what this arm used
     // to model. `boundedRewrite` does not strip ANSI, and it now keeps the head
@@ -326,25 +380,30 @@ const main = async () => {
     // Byte-based, not character-based, because `head -c`/`tail -c` count bytes:
     // on multibyte output a character slice would model a larger budget than
     // the shell actually applies.
-    const bounded = boundBytes(capture.output, bound);
-    // deduped: only lines this run did not repeat, plus a one-line summary.
-    const deduped = previous
-      ? `[${repeated} lines identical to the previous run, omitted]\n` +
-        emitLines.filter((_line, i) => !seen.has(current[i])).join('\n')
-      : truncateMiddle(base, CLIENT_CAP_CHARS);
+    const bounded = boundBytes(base, bound);
+    // compacted: what production now does. The real function, so this row cannot
+    // drift from the shipped behaviour the way a modelled arm can.
+    const compacted = compact(base, { previous: previousPlain, maxBytes: bound });
 
-    // combined: dedup FIRST, then bound what is left. They are not rivals --
-    // dedup keeps the first run in full and saves on later ones, bounding caps
-    // every run including the first. Each covers the other's blind spot.
-    const combined = boundBytes(deduped, bound);
+    // unsafeDedup: the ceiling the rails cost us. Every repeated line dropped,
+    // including a failure that repeated -- which is why it is a reference point
+    // and not a candidate.
+    const unsafeDedup = previous
+      ? boundBytes(
+          `[${repeated} lines identical to the previous run, omitted]\n` +
+            emitLines.filter((_line, i) => !seen.has(current[i])).join('\n'),
+          bound
+        )
+      : boundBytes(base, bound);
 
     arms.raw += counter.count(raw).tokens;
     arms.control += counter.count(control).tokens;
     arms.bounded += counter.count(bounded).tokens;
-    arms.deduped += counter.count(deduped).tokens;
-    arms.combined += counter.count(combined).tokens;
+    arms.compacted += counter.count(compacted).tokens;
+    arms.unsafeDedup += counter.count(unsafeDedup).tokens;
 
     previous = current;
+    previousPlain = base;
   }
 
   /* ------------------------------------------------------- the arms */

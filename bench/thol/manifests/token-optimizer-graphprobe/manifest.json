@@ -1,0 +1,80 @@
+{
+  "name": "token-optimizer-graphprobe",
+  "display_name": "Token Optimizer (graph persisted to /results for inspection)",
+  "verified": true,
+  "version_pin": "6.0.2",
+  "version_checked": "2026-08-29",
+  "upstream": "https://github.com/ooples/token-optimizer-mcp",
+  "install_doc": "GRAPH PROBE, for inspection not for scoring. The rig gives every run a throwaway HOME and the wiki/shared dirs default under it, so the living graph is created empty, filled during the task, and destroyed -- our accumulated-knowledge differentiator has never been exercised by any measurement. Pointing those dirs at the mounted volume makes the end-state readable so we can see what the graph actually learned during one real task and judge whether it could have prevented any of the turns.",
+  "requires": [
+    "node"
+  ],
+  "settings": {
+    "env": {
+      "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
+      "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
+      "TOKEN_OPTIMIZER_MODE": "assist",
+      "TOKEN_OPTIMIZER_LOG_DIR": "/results/graph/diag",
+      "TOKEN_OPTIMIZER_WIKI_DIR": "/results/graph/wiki",
+      "TOKEN_OPTIMIZER_SHARED_DIR": "/results/graph/shared",
+      "TOKEN_OPTIMIZER_MCP_CAPABILITIES": ""
+    },
+    "hooks": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/session-start.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreToolUse": [
+        {
+          "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/pretooluse-router.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/precompact-optimize.mjs\""
+            }
+          ]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "matcher": "Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/post-tool.mjs\""
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/stop.mjs\""
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "tool_prefixes": [
+    "mcp__token-optimizer__"
+  ]
+}

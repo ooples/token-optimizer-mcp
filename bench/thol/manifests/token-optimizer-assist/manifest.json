@@ -1,0 +1,77 @@
+{
+  "name": "token-optimizer-assist",
+  "display_name": "Token Optimizer (assist: product on, no refusals, no MCP)",
+  "verified": true,
+  "version_pin": "6.0.2",
+  "version_checked": "2026-08-29",
+  "upstream": "https://github.com/ooples/token-optimizer-mcp",
+  "install_doc": "THE PRODUCT AS WE INTEND TO SHIP IT, which no arm has measured yet. TOKEN_OPTIMIZER_MODE=assist means refusals off and EVERYTHING ELSE ON -- the output bound, the compactor, colour suppression -- verified directly: assist rewrites `npm test` into a bounded command and injects 458 characters of notice, where off rewrites nothing and injects nothing. The mcp block is removed so no tool schemas enter the request. THIS CORRECTS AN EARLIER MISTAKE: token-optimizer-assist-hooks-only was built by copying the mcp-off manifest and inherited TOKEN_OPTIMIZER_MODE=off, so despite its name it measured the hooks INERT. Its 1.011 across sixteen tasks is therefore a reading of \"installed but doing nothing\", which is why nothing correlated with it -- turns at -0.077 against cost is what noise looks like, especially against a control with one rep per task.",
+  "requires": [
+    "node"
+  ],
+  "settings": {
+    "env": {
+      "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
+      "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
+      "TOKEN_OPTIMIZER_MODE": "assist",
+      "TOKEN_OPTIMIZER_MCP_CAPABILITIES": ""
+    },
+    "hooks": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/session-start.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreToolUse": [
+        {
+          "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/pretooluse-router.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/precompact-optimize.mjs\""
+            }
+          ]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "matcher": "Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/post-tool.mjs\""
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/stop.mjs\""
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "tool_prefixes": [
+    "mcp__token-optimizer__"
+  ]
+}

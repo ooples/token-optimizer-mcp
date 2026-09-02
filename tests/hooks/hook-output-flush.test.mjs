@@ -15,9 +15,10 @@
 
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROUTER = fileURLToPath(
@@ -34,7 +35,25 @@ afterAll(() => {
   rmSync(GRAPH, { recursive: true, force: true });
 });
 
+/**
+ * The bound applies only to a REPEAT now, and this suite is about whether a long
+ * rewrite survives the write-then-exit -- not about when a rewrite happens. So
+ * it seeds the state the compactor's pipe stage would have written, exactly as
+ * the router's compactorFor() keys it.
+ */
+function markSeen(command, session) {
+  const key = createHash('sha256')
+    .update(`${session}\u0000${command}`)
+    .digest('hex')
+    .slice(0, 32);
+  const path = join(tmpdir(), 'token-optimizer-compact', `${key}.seen`);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, 'previous run output\n');
+}
+
 function router(command, session) {
+  markSeen(command, session);
+
   return spawnSync(process.execPath, [ROUTER], {
     input: JSON.stringify({
       session_id: session,

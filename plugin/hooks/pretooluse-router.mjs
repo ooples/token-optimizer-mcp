@@ -54,9 +54,21 @@ import {
 } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { isArchived } from './lib/transcript.mjs';
-import { boundedRewrite, boundNotice } from './lib/rewrite.mjs';
+import {
+  boundedRewrite,
+  boundNotice,
+  isOutputHeavy,
+} from './lib/rewrite.mjs';
 import { isFsSafePath } from './lib/paths.mjs';
-import { readFileSync } from 'node:fs';
+// Aliased: the staleness path already exports a substitutionFor, and the two
+// mean different things -- that one swaps a stale claim, this one swaps a
+// large read for an outline of the same file.
+import { substitutionFor as outlineFor } from './lib/substitute.mjs';
+import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import {
   HOOK_MCP_TOOLS,
@@ -67,9 +79,35 @@ import { evaluateUcrGuards } from './lib/ucr-guard.mjs';
 import { beginHookInvocation } from './lib/observability.mjs';
 
 // The Claude plugin bundles this hook and the MCP declaration as one install.
-// Claude does not include its MCP tool inventory in hook payloads, so assert the
-// bundled contract unless the host/user explicitly supplied an inventory (an
-// empty value deliberately keeps the fail-open path available).
+// THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN INSTALL.
+//
+// This used to run unconditionally, on the grounds that these entry points ship
+// beside an MCP declaration for the same package. That holds for a plugin --
+// .mcp.json travels with the hooks -- and not otherwise: the script path wires
+// hooks through settings.json without the server, a user can drop the server
+// and keep the hooks, and the benchmark arm removes the mcp block outright.
+//
+// In those cases the fabricated list was persisted as PROVEN evidence and the
+// model was told to call tools that do not exist. Measured over a debug-sized
+// task with no server: 3,450 characters of advice built on the assumption,
+// including "Call the token-optimizer MCP tool smart_read" after every repeated
+// read -- a failed call and a retry each time, on a benchmark where turns
+// dominate cost. Removing it from session-start alone took the debug segment
+// from 1.309 to 1.107 and its turns from 2.231 to 2.003.
+//
+// CLAUDE_PLUGIN_ROOT is what tells the two apart: the plugin runtime sets it,
+// a settings.json install does not. decide.mjs states the rule this protects --
+// never convert install intent into a claim that an MCP tool exists.
+// REVERTED FROM A CLAUDE_PLUGIN_ROOT GATE. That variable is set by the plugin
+// runtime and by nothing else, so gating on it disabled enforcement-by-default
+// for every install that is not a plugin -- caught by clients.test.mjs across
+// all eight packaged entries, each receiving "allow" where it must deny.
+//
+// `??=` already provides the opt-out the gate was reaching for: it assigns only
+// when the variable is null or undefined, so an explicitly EMPTY value
+// survives. A benchmark arm measuring the hooks with no server sets
+// TOKEN_OPTIMIZER_MCP_CAPABILITIES='' and gets that, without breaking installs
+// that genuinely ship the server beside these hooks.
 process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
 
 /**
@@ -426,6 +464,63 @@ ${nudge}`
         }
       }
 
+    // BOUND AN OUTPUT-HEAVY COMMAND EVEN THOUGH NOTHING WAS GOING TO REFUSE IT.
+    //
+    // This is the debug-loop path, and until now it was unreachable: the bound
+    // only ran where a refusal would otherwise have happened, and a test run is
+    // never refused. `npm test`, `npx jest`, `pytest`, `cargo test` and
+    // `npm run build` all reach here with no verdict, and all of them used to be
+    // allowed unbounded.
+    //
+    // Measured on a real three-iteration loop against `jest tests/hooks`: the
+    // client's own 30,000-character middle truncation delivers 20,852 tokens,
+    // and an 8 KB head-and-tail bound delivers 3,697 -- 0.177 of it. Debug loops
+    // are the family we measure worst on (1.248 against the leader's 0.611).
+    //
+    // NOT GATED ON REFUSALS, unlike the bound applied to a would-be refusal. A
+    // bound is not a refusal: it costs no turn, changes no decision, and is
+    // announced. Gating it on enforcement would mean the posture we intend to
+    // ship -- assist, which keeps the graph and drops the refusals -- got none of
+    // this, which is the opposite of the intent. Only `off`, the kill switch,
+    // skips it, and that is handled far above.
+    if (payload.tool_name === 'Read') {
+      const substitution = outlineSubstitution(payload);
+      if (substitution) {
+        allowWithRewrite(
+          { ...payload.tool_input, file_path: substitution.target },
+          [
+            context,
+            `token-optimizer replaced this read with a structural outline of ` +
+              `${payload.tool_input.file_path} (${substitution.found.lines} lines, ` +
+              `${Math.round(substitution.found.bytes / 1024)}KB). Every symbol is ` +
+              `listed with its line number; read the original with offset and limit ` +
+              `for any region you need in full.`,
+          ]
+            .filter(Boolean)
+            .join('\n\n')
+        );
+      }
+    }
+
+    if (payload.tool_name === 'Bash' && isOutputHeavy(payload.tool_input?.command)) {
+      const command = payload.tool_input.command;
+      // First run of this command goes through untouched -- see seenPath.
+      const bounded = seenBefore(payload.session_id, command)
+        ? boundedRewrite(command, {
+            compactor: compactorFor(payload.session_id, command),
+          })
+        : null;
+      if (!bounded) markSeen(payload.session_id, command);
+      if (bounded) {
+        allowWithRewrite(
+          { ...payload.tool_input, command: bounded.command },
+          // The graph's own context still rides along; a bound must not cost a
+          // finding that was about to be delivered.
+          [context, boundNotice(bounded.maxBytes)].filter(Boolean).join('\n\n')
+        );
+      }
+    }
+
     allowWithContext(context);
   }
 
@@ -494,6 +589,180 @@ ${nudge}`
     }
   }
 
+/**
+ * Where this command's previous output is kept, so the next run can be compacted
+ * against it.
+ *
+ * Keyed by SESSION AND COMMAND. Two different commands must not be compared to
+ * each other -- the lines they share would be elided from both for no reason --
+ * and a new session starts clean, because the model in it has not been shown
+ * anything yet.
+ *
+ * Under the OS temp directory, since this is a cache whose loss costs one
+ * comparison and nothing else.
+ */
+/**
+ * Has this exact command already produced output the model has seen?
+ *
+ * THE BOUND MUST NOT CUT WHAT HAS NEVER BEEN SEEN. Measured: with the product
+ * on, SEG_1 went 0.924 -> 1.273 against control and the debug segment's turns
+ * to 2.305 -- code-debug-pipeline-py 22 -> 31 turns, code-debug-ledger-py
+ * 15 -> 24. The model could not see which test failed, so it ran the command
+ * again, and a round trip costs far more than the bytes the bound saved. It was
+ * the same failure enforcement had (turns 12.6 -> 20.9 for 1.633x), arriving
+ * through a different door.
+ *
+ * On a REPEAT the model has already read the full output, so cutting it costs
+ * nothing it did not already have -- and the compactor keeps the ending intact
+ * and emits lines that are new, so a failure that changed still arrives.
+ *
+ * The signal is free: the compactor already writes the previous run's output to
+ * a path keyed by session and command, so "seen before" is "that file exists".
+ * With compaction disabled nothing is ever written, so nothing is ever bounded,
+ * which degrades to the client's own behaviour rather than to ours.
+ */
+/**
+ * How many tool calls this session has made, for pricing a substitution.
+ *
+ * The floor rises as a session runs out of turns to amortise a saving over, so
+ * the decision needs a rough position in the session. The marker directory
+ * already holds one file per command seen; counting this session's is close
+ * enough and costs a readdir.
+ */
+function turnsSoFar(sessionId) {
+  try {
+    return readdirSync(stateDir()).filter((f) => f.startsWith(`${sessionId.slice(0, 8)}-`))
+      .length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Points a large Read at an outline of the same file.
+ *
+ * The model asked to read something; it gets a structural view of that same
+ * thing, with line numbers so the follow-up read is targeted rather than a
+ * guess. No tool, no rules file, no schema -- the substitution happens inside a
+ * call it already made, which is why it costs nothing on the short tasks where
+ * a fixed setup cost would sink us.
+ */
+function outlineSubstitution(payload) {
+  const filePath = payload.tool_input?.file_path;
+  if (!filePath) return null;
+
+  const found = outlineFor(filePath, {
+    turnsSoFar: turnsSoFar(payload.session_id || ''),
+  });
+  if (!found) return null;
+
+  try {
+    mkdirSync(stateDir(), { recursive: true });
+    const target = join(
+      stateDir(),
+      `${commandKey(payload.session_id || '', filePath)}.outline.txt`
+    );
+    writeFileSync(target, found.outline);
+    return { target, found };
+  } catch {
+    // Nowhere to write means no substitution, never a broken read.
+    return null;
+  }
+}
+
+function commandKey(sessionId, command) {
+  return createHash('sha256')
+    .update(`${sessionId}\u0000${command}`)
+    .digest('hex')
+    .slice(0, 32);
+}
+
+/**
+ * INDEPENDENT OF THE COMPACTOR, deliberately. The first version read the
+ * compactor's previous-output file, which meant TOKEN_OPTIMIZER_COMPACT=0 --
+ * documented as the escape hatch that restores the shell bounding stage -- also
+ * silently switched bounding off altogether, because with no compact stage
+ * nothing ever recorded that a command had run. A flag that turns off more than
+ * it says is the kind of surprise this codebase keeps paying for.
+ *
+ * The marker is its own file, so it cannot corrupt the compactor's previous
+ * output either: that file holds text to diff against, and a marker written
+ * into it would be deduplicated as if the command had printed it.
+ */
+// A FUNCTION DECLARATION, NOT A CONST. The router's main flow runs at module
+// top level, above these definitions -- function declarations hoist, a const
+// arrow does not, so a const here sits in the temporal dead zone when the flow
+// calls it. Both callers wrap it in try/catch, so the ReferenceError was
+// swallowed and bounding was silently off with no error anywhere.
+function stateDir() {
+  return join(tmpdir(), 'token-optimizer-compact');
+}
+
+function seenPath(sessionId, command) {
+  return join(stateDir(), `${commandKey(sessionId, command)}.seen`);
+}
+
+function seenBefore(sessionId, command) {
+  try {
+    return statSync(seenPath(sessionId, command)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Recorded on the way through, so the NEXT run of this command is a repeat. */
+function markSeen(sessionId, command) {
+  try {
+    // The parent is known, so this needs no `dirname` -- an earlier version
+    // referenced one that was never imported, and the catch below swallowed the
+    // ReferenceError, leaving the marker unwritten and bounding silently off.
+    mkdirSync(stateDir(), { recursive: true });
+    writeFileSync(seenPath(sessionId, command), '');
+  } catch {
+    // A read-only temp directory costs bounding, not correctness.
+  }
+}
+
+function compactorFor(sessionId, command) {
+  // ON BY DEFAULT, AND THAT DECISION WAS REVERSED BY MEASURING IT PROPERLY.
+  //
+  // A single run of the loop put compaction at 0.216 of raw against the plain
+  // bound's 0.214 -- no saving -- and the switch was set off on that basis. The
+  // comparison was worthless: the two arms were not using the same bound (the
+  // benchmark's own head-and-tail still carried a marker and floored both
+  // halves), and this benchmark's absolute numbers move several percent between
+  // runs, so one sample cannot separate 0.214 from 0.216 whatever the arms do.
+  //
+  // Five runs with both arms on identical semantics:
+  //
+  //   compacted / bounded   median 0.821   min 0.813   max 0.857
+  //
+  // An 18% saving on top of the bound, with a spread of 5% -- tight enough to
+  // be a result rather than noise. The cost is one node process in the pipeline,
+  // measured at 41 ms (median of 9) against a shell head-and-tail's 213 ms, on
+  // commands that take seconds.
+  //
+  // The switch stays, inverted, so a single variable turns it off if the stage
+  // ever misbehaves in the field.
+  if (/^(0|false|off|no)$/i.test(process.env.TOKEN_OPTIMIZER_COMPACT || '')) {
+    return null;
+  }
+
+  try {
+    const key = commandKey(sessionId, command);
+
+    return {
+      node: process.execPath,
+      helper: fileURLToPath(new URL('./lib/compact-stage.mjs', import.meta.url)),
+      previous: join(tmpdir(), 'token-optimizer-compact', key),
+    };
+  } catch {
+    // Any failure here simply means no compaction: `boundedRewrite` falls back
+    // to the shell's own head and tail.
+    return null;
+  }
+}
+
   // A DECISION MAY CARRY A REWRITE OF ITS OWN, and it is preferred over every
   // refusal below. `decide` returns one when the cheapest correct answer is to
   // change the call rather than block it -- today that is a WebFetch of a URL
@@ -527,11 +796,23 @@ ${nudge}`
   // there would be a new behaviour rather than a cheaper spelling of an
   // existing one.
   if (payload.tool_name === 'Bash' && refusalsEnabled()) {
-    const bounded = boundedRewrite(payload.tool_input?.command);
+    const command = payload.tool_input?.command;
+    // Same rule on the refusal path: bounding output the model has not seen is
+    // what drove the turn inflation, whatever brought us here.
+    const bounded = seenBefore(payload.session_id, command)
+      ? boundedRewrite(command, {
+          compactor: compactorFor(payload.session_id, command),
+        })
+      : null;
+    if (!bounded && command) markSeen(payload.session_id, command);
     if (bounded) {
       allowWithRewrite(
         { ...payload.tool_input, command: bounded.command },
-        boundNotice(bounded.maxBytes)
+        // THE VERDICT'S OWN REASON RIDES ALONG. Bounding instead of refusing
+        // must not cost the guidance the refusal would have carried -- the
+        // reason names the optimizer tool that makes the NEXT call cheaper,
+        // and dropping it leaves only a byte notice that teaches nothing.
+        [reason, boundNotice(bounded.maxBytes)].filter(Boolean).join('\n\n')
       );
     }
   }

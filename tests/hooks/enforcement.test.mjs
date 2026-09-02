@@ -9,7 +9,8 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -68,9 +69,25 @@ afterAll(() => rmSync(workspace, { recursive: true, force: true }));
  * week.
  */
 function run(payload, env = {}) {
+  const session = payload.session_id || 's-default';
+  // The bound applies only to a repeat now, so a test about what the bound does
+  // has to seed the state the compactor's pipe stage would have written. The
+  // key matches compactorFor() in the router.
+  if (payload.tool_input?.command) {
+    const key = createHash('sha256')
+      .update(`${session}\u0000${payload.tool_input.command}`)
+      .digest('hex')
+      .slice(0, 32);
+    // `.seen` is the marker the router reads; the sibling file without the
+    // suffix is the compactor's previous OUTPUT and means something else.
+    const marker = join(tmpdir(), 'token-optimizer-compact', `${key}.seen`);
+    mkdirSync(dirname(marker), { recursive: true });
+    writeFileSync(marker, 'previous run output\n');
+  }
+
   const result = spawnSync(process.execPath, [ROUTER], {
     input: JSON.stringify({
-      session_id: payload.session_id || 's-default',
+      session_id: session,
       ...payload,
     }),
     encoding: 'utf8',
@@ -182,7 +199,11 @@ describe('the shell bypass is closed', () => {
     });
     expect(r.decision).toBe('allow');
     expect(r.updatedInput.command).toContain(`cat ${big}`);
-    expect(r.updatedInput.command).toContain('tail -c');
+    // Either bounding stage counts: what is under test is that the call was
+    // bounded, not which of the two spellings is currently the default.
+    expect(r.updatedInput.command).toEqual(
+      expect.stringMatching(/head -c \d+|compact-stage\.mjs/)
+    );
   });
 
   test('a pipeline with no file operand is untouched', () => {
@@ -227,7 +248,11 @@ describe('the shell bypass is closed', () => {
     // to the working repository's own guards and this assertion could pass
     // while the path stayed unresolved.
     expect(r.decision).toBe('allow');
-    expect(r.updatedInput.command).toContain('tail -c');
+    // Either bounding stage counts: what is under test is that the call was
+    // bounded, not which of the two spellings is currently the default.
+    expect(r.updatedInput.command).toEqual(
+      expect.stringMatching(/head -c \d+|compact-stage\.mjs/)
+    );
   });
 
   test('the two spellings of one path are one identity, on every platform', () => {
@@ -345,5 +370,42 @@ describe('a refusal must not cost more than the call it replaces', () => {
     expect(run(read(big, { session_id: 'write-net-loss-3' })).decision).toBe(
       'deny'
     );
+  });
+});
+
+describe('a repeated web fetch is the same REQUEST, not the same URL', () => {
+  // WebFetch answers a `prompt` against the page, so one URL carries many
+  // questions. Keying the duplicate check on the URL alone collapsed the second
+  // question into "ALREADY FETCHED THIS SESSION -- reuse the earlier result",
+  // which is false: the earlier result answered something else, and the model
+  // had no route left to the detail it asked for. The failure is silent, which
+  // is why it needs a test rather than a comment.
+  const fetch = (prompt) => ({
+    tool_name: 'WebFetch',
+    tool_input: { url: 'https://example.dev/doc', prompt },
+  });
+
+  test('the same question twice is collapsed', async () => {
+    const { decide, remember } = await import('../../hooks-core/decide.mjs');
+    const state = {};
+    remember(fetch('what version does it pin?'), state);
+    expect(decide(fetch('what version does it pin?'), state, new Set())).not.toBeNull();
+  });
+
+  test('a different question about the same page still fetches', async () => {
+    const { decide, remember } = await import('../../hooks-core/decide.mjs');
+    const state = {};
+    remember(fetch('what version does it pin?'), state);
+    expect(decide(fetch('what are the breaking changes?'), state, new Set())).toBeNull();
+  });
+
+  test('only whitespace is normalised, so wording differences still fetch', async () => {
+    // Deliberately strict: collapsing wrongly withholds information the model
+    // cannot obtain any other way, while failing to collapse costs one fetch.
+    const { decide, remember } = await import('../../hooks-core/decide.mjs');
+    const state = {};
+    remember(fetch('what version does it pin?'), state);
+    expect(decide(fetch('  what   version does it pin?  '), state, new Set())).not.toBeNull();
+    expect(decide(fetch('What version does it pin?'), state, new Set())).toBeNull();
   });
 });

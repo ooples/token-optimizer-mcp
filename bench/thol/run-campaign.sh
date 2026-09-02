@@ -37,11 +37,11 @@ HOST_CREDS="${HOST_CREDS:-$HOME/.claude/.credentials.json}"
 
 # Cheapest first. The last group is the $5/run outlier, isolated so it can be
 # dropped with SEGMENTS_MAX=4 without touching the rest.
-SEG_1="code-bugfix-py,code-refactor-split-py,log-needle-zh,code-iterate-tests"
-SEG_2="code-feature-js,code-migration-py-xl,code-migration-py,code-feature-validate-py"
-SEG_3="seo-audit,report-pdf,code-overview-cobra,code-settings-inventory-django"
-SEG_4="code-comprehension-django,code-debug-pipeline-py,code-debug-ledger-py,code-debug-cascade-py"
-SEG_5="web-research-oss-inventory"
+SEG_1="${SEG_1:-code-bugfix-py,code-refactor-split-py,log-needle-zh,code-iterate-tests}"
+SEG_2="${SEG_2:-code-feature-js,code-migration-py-xl,code-migration-py,code-feature-validate-py}"
+SEG_3="${SEG_3:-seo-audit,report-pdf,code-overview-cobra,code-settings-inventory-django}"
+SEG_4="${SEG_4:-code-comprehension-django,code-debug-pipeline-py,code-debug-ledger-py,code-debug-cascade-py}"
+SEG_5="${SEG_5:-web-research-oss-inventory}"
 SEGMENTS=("$SEG_1" "$SEG_2" "$SEG_3" "$SEG_4" "$SEG_5")
 SEGMENTS_MAX="${SEGMENTS_MAX:-5}"
 

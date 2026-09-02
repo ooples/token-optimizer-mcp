@@ -42,6 +42,12 @@ beforeEach(() => {
   cleanEnv.TOKEN_OPTIMIZER_STATE_DIR = join(workspace, '.state');
   cleanEnv.TOKEN_OPTIMIZER_WIKI_DIR = join(workspace, '.wiki');
   cleanEnv.TOKEN_OPTIMIZER_SHARED_DIR = join(workspace, '.shared');
+  // These cases are about what a PLUGIN install does with no host inventory,
+  // and the bundled list is now asserted only for an actual plugin -- the
+  // runtime sets CLAUDE_PLUGIN_ROOT, a settings.json install does not. Setting
+  // it here makes the premise the test name already claims explicit; without
+  // it these were silently exercising the settings path instead.
+  cleanEnv.CLAUDE_PLUGIN_ROOT = join(workspace, 'plugin');
 });
 
 afterEach(() => rmSync(workspace, { recursive: true, force: true }));

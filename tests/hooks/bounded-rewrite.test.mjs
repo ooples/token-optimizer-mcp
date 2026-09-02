@@ -9,18 +9,25 @@
  */
 import { describe, it, expect, afterAll } from '@jest/globals';
 import { execFileSync, spawnSync } from 'child_process';
-import { mkdtempSync, rmSync } from 'fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { boundedRewrite, boundNotice, DEFAULT_BOUND_BYTES } from '../../hooks-core/rewrite.mjs';
+import {
+  boundedRewrite,
+  boundNotice,
+  isOutputHeavy,
+  DEFAULT_BOUND_BYTES,
+} from '../../hooks-core/rewrite.mjs';
 
 /** Runs a command through bash exactly as the client's Bash tool would. */
-function run(command, shellFlags = []) {
+function run(command, shellFlags = [], env = {}) {
   try {
     const stdout = execFileSync('bash', [...shellFlags, '-c', command], {
       encoding: 'utf8',
       timeout: 30_000,
+      env: { ...process.env, ...env },
     });
     return { stdout, status: 0 };
   } catch (error) {
@@ -84,13 +91,27 @@ describe('the rewritten command still means what it meant', () => {
     expect(underPipefail(boundedRewrite(command).command)).toBe(1);
   });
 
-  it('still honours a pipefail the caller asked for themselves', () => {
-    // The reset must not override an explicit intent: the caller's `set -o`
-    // runs inside the subshell, after ours is undone.
+  it('hoists a shell option the command sets for itself', () => {
+    // This used to be bounded, and to assert that the caller's own `set -o`
+    // survived our reset because it ran inside the subshell after it. Both
+    // halves were true and the conclusion was still wrong: unbounded, that
+    // `set -o` ALSO applies to the caller's later calls, and from inside a
+    // subshell it cannot. The command is now left alone rather than quietly
+    // given a shorter reach, which is the stronger guarantee.
+    //
+    // The property the old test was reaching for -- that we neither impose
+    // pipefail on a caller who did not ask for it nor take it from one who
+    // did -- is covered by the two cases above.
+    // Once refused outright, on the grounds that a `set` inside the subshell
+    // would not reach the caller's later commands. True -- so the `set` is left
+    // in the caller's shell and only what follows it is wrapped, which keeps
+    // both halves of the guarantee instead of trading one for the other.
     const command = 'set -o pipefail; false | true';
+    const bounded = boundedRewrite(command);
 
     expect(run(command).status).toBe(1);
-    expect(run(boundedRewrite(command).command).status).toBe(1);
+    expect(bounded.command.startsWith('set -o pipefail;')).toBe(true);
+    expect(run(bounded.command).status).toBe(1);
   });
 
   it('captures stderr, where a failing build says what went wrong', () => {
@@ -256,7 +277,6 @@ describe('the bound announces itself', () => {
   });
 });
 
-
 /* ------------------------------------------------------------------ *
  * The real router, end to end
  * ------------------------------------------------------------------ */
@@ -275,10 +295,37 @@ afterAll(() => {
   }
 });
 
+
+/**
+ * Marks a command as already run once in this session.
+ *
+ * The bound now applies only to a REPEAT -- cutting output the model has never
+ * seen is what drove the turn inflation the benchmark measured. In production
+ * the compactor's pipe stage writes this file when the command actually runs;
+ * in a test the command never runs, so the state is seeded directly. The key
+ * matches compactorFor() in the router.
+ */
+function markSeen(command, sessionId) {
+  const key = createHash('sha256')
+    .update(`${sessionId}\u0000${command}`)
+    .digest('hex')
+    .slice(0, 32);
+  const path = join(tmpdir(), 'token-optimizer-compact', `${key}.seen`);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, 'previous run output\n');
+  return path;
+}
+
 /** Drives the shipped router exactly as the client does. */
-function router(payload, env = {}) {
+function router(payload, env = {}, { seen = true } = {}) {
+  const session = payload.session_id || 's-bound';
+  // Most of these cases are about what the bound DOES, which now only happens
+  // on a repeat, so they seed the state by default. `seen: false` exercises the
+  // first run.
+  if (seen && payload.tool_input?.command) markSeen(payload.tool_input.command, session);
+
   const result = spawnSync(process.execPath, [ROUTER], {
-    input: JSON.stringify({ session_id: 's-bound', cwd: process.cwd(), ...payload }),
+    input: JSON.stringify({ session_id: session, cwd: process.cwd(), ...payload }),
     encoding: 'utf8',
     env: {
       ...process.env,
@@ -289,6 +336,18 @@ function router(payload, env = {}) {
       ...env,
     },
   });
+  // A CRASH IS NOT AN ALLOW. A router that dies before it writes anything
+  // produces exactly the empty stdout a silent allow produces, so without this
+  // every "leaves it alone" assertion below would pass against a router that
+  // never started. This is not hypothetical: a stray escape in the router's
+  // source turned it into a SyntaxError, and the only reason it was caught was
+  // that a different check read stderr.
+  if (result.status !== 0) {
+    throw new Error(
+      `router exited ${result.status}: ${result.stderr.trim().slice(0, 400)}`
+    );
+  }
+
   // A silent allow emits nothing at all. Spelled out with the same shape as
   // the parsed path so a caller cannot tell them apart by accident.
   if (!result.stdout.trim()) {
@@ -303,6 +362,79 @@ function router(payload, env = {}) {
   };
 }
 
+/**
+ * Asserts that a rewritten command actually applies a bound.
+ *
+ * TWO STAGES ARE VALID, and which one is the default has already changed once.
+ * The wrapper ends either in the shell's own `head -c`/`tail -c` or in the node
+ * compactor, and pinning the assertion to one spelling made six tests fail for a
+ * deliberate default change rather than for a defect. What every one of them
+ * actually means is "this call was bounded", so that is what they say; the two
+ * mechanisms are then pinned individually, below.
+ */
+const expectBounded = (command) => {
+  expect(command).toEqual(
+    expect.stringMatching(/head -c \d+|compact-stage\.mjs/)
+  );
+};
+
+describe('the first run of a command is never bounded', () => {
+  // UNIQUE PER SUITE RUN. The markers live in the OS temp directory and outlive
+  // the process, so a fixed session id is already "seen" the second time the
+  // suite runs -- these tests passed once and then failed for the rest of the
+  // day until this was noticed.
+  const fresh = (name) => `${name}-${process.pid}-${Date.now()}`;
+
+  // Measured, with the product actually on: bounding output the model had not
+  // yet seen took SEG_1 from 0.924 to 1.273 against control and the debug
+  // segment's turns to 2.305 -- code-debug-pipeline-py went 22 turns to 31,
+  // code-debug-ledger-py 15 to 24. The model could not see which test failed,
+  // so it ran the command again, and the round trip cost more than the bytes
+  // the bound saved.
+  it('lets a first run through untouched', () => {
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npm test' }, session_id: fresh('first-run') },
+      { TOKEN_OPTIMIZER_MODE: 'assist' },
+      { seen: false }
+    );
+
+    expect(r.updatedInput).toBeNull();
+  });
+
+  it('bounds the same command once it has been run', () => {
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npm test' }, session_id: fresh('second-run') },
+      { TOKEN_OPTIMIZER_MODE: 'assist' }
+    );
+
+    expect(r.updatedInput).not.toBeNull();
+  });
+
+  it('does not treat a DIFFERENT command as seen', () => {
+    markSeen('npm test', fresh('other-cmd'));
+
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npx jest' }, session_id: fresh('other-cmd') },
+      { TOKEN_OPTIMIZER_MODE: 'assist' },
+      { seen: false }
+    );
+
+    expect(r.updatedInput).toBeNull();
+  });
+
+  it('does not carry the state into a new session', () => {
+    markSeen('npm test', fresh('session-a'));
+
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npm test' }, session_id: fresh('session-b') },
+      { TOKEN_OPTIMIZER_MODE: 'assist' },
+      { seen: false }
+    );
+
+    expect(r.updatedInput).toBeNull();
+  });
+});
+
 describe('the shipped router bounds instead of refusing', () => {
   const SEARCH = { tool_name: 'Bash', tool_input: { command: 'grep -rn needle .' } };
 
@@ -314,7 +446,7 @@ describe('the shipped router bounds instead of refusing', () => {
     expect(r.decision).toBe('allow');
     expect(r.updatedInput).not.toBeNull();
     expect(r.updatedInput.command).toContain('grep -rn needle .');
-    expect(r.updatedInput.command).toContain('tail -c');
+    expectBounded(r.updatedInput.command);
   });
 
   it('tells the model what it did, so the rewrite is not silent', () => {
@@ -333,6 +465,65 @@ describe('the shipped router bounds instead of refusing', () => {
     expect(r.decision).toBe('allow');
   });
 
+  it('keeps the verdict\'s own guidance when it bounds instead of refusing', () => {
+    // Bounding instead of refusing must not cost the guidance the refusal would
+    // have carried. The reason names the optimizer tool that makes the NEXT
+    // call cheaper; dropping it leaves a byte notice that teaches nothing, and
+    // the model repeats the expensive call it was being steered away from.
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'grep -rn foo .' } },
+      { TOKEN_OPTIMIZER_MODE: 'enforce' }
+    );
+
+    expectBounded(r.updatedInput.command);
+    expect(r.context).toContain('smart_grep');
+    expect(r.context).toContain('bounds this command');
+  });
+
+  it.each([['enforce'], ['assist']])(
+    'bounds a test run in %s, where nothing was going to refuse it',
+    (mode) => {
+      // THE DEBUG-LOOP PATH. A test run produces no verdict, so it used to
+      // reach the end of the router unbounded -- the bound only ran where a
+      // refusal would otherwise have happened.
+      //
+      // assist is included deliberately: a bound is not a refusal, it costs no
+      // turn, and gating it on enforcement would mean the posture we intend to
+      // ship got none of the win it exists for.
+      const r = router(
+        { tool_name: 'Bash', tool_input: { command: 'npm test' } },
+        { TOKEN_OPTIMIZER_MODE: mode }
+      );
+
+      expect(r.decision).toBe('allow');
+      expect(r.updatedInput.command).toContain('npm test');
+      expectBounded(r.updatedInput.command);
+    }
+  );
+
+  it.each([
+    ['on by default', {}, /compact-stage\.mjs/],
+    // One variable turns the stage off and the shell form comes back, which is
+    // the escape hatch if the compactor ever misbehaves in the field.
+    ['off by env', { TOKEN_OPTIMIZER_COMPACT: '0' }, /head -c \d+; tail -c \d+/],
+  ])('uses the %s bounding stage', (_label, env, expected) => {
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npm test' } },
+      { TOKEN_OPTIMIZER_MODE: 'assist', ...env }
+    );
+
+    expect(r.updatedInput.command).toEqual(expect.stringMatching(expected));
+  });
+
+  it('leaves a test run alone when the optimizer is off', () => {
+    const r = router(
+      { tool_name: 'Bash', tool_input: { command: 'npm test' } },
+      { TOKEN_OPTIMIZER_MODE: 'off' }
+    );
+
+    expect(r.updatedInput).toBeNull();
+  });
+
   it('does not rewrite a command it cannot bound safely', () => {
     // A heredoc body is data; wrapping it in braces moves the terminator. The
     // router must fall back to its previous behaviour rather than mangle it.
@@ -345,5 +536,385 @@ describe('the shipped router bounds instead of refusing', () => {
     );
 
     expect(r.updatedInput).toBeNull();
+  });
+});
+
+describe('colour is asked away at the source', () => {
+  // Colour is not a rounding error and it does not go away on its own. With the
+  // command IDENTICAL and only the invocation shape differing -- a direct node
+  // spawn, a plain bash pipe, and this wrapper -- a failing jest run carried 348
+  // ANSI sequences in all three. The convention that a tool drops colour when
+  // stdout is not a terminal simply does not hold for jest. Asking for no colour
+  // took that run from 7,301 bytes to 5,575 with its exit status intact.
+  //
+  // At the source rather than through a filter, because the bytes then never
+  // exist and the byte budget holds real text -- and because the obvious filter
+  // is dangerous: piping through sed measured the same saving while reporting
+  // EXIT 0 for a run that failed with 1.
+  const asked = (env) =>
+    run(
+      boundedRewrite('echo "[$NO_COLOR][$FORCE_COLOR]"').command,
+      [],
+      env
+    ).stdout.trim();
+
+  it('asks for no colour when the caller has no opinion', () => {
+    expect(asked({})).toBe('[1][0]');
+  });
+
+  it.each([
+    ['a caller who forces colour', { FORCE_COLOR: '3' }, '[1][3]'],
+    ['an empty value, which the spec treats as no opinion', { FORCE_COLOR: '' }, '[1][0]'],
+    // A default must not word-split on the way into `export`.
+    ['a value containing a space', { NO_COLOR: 'a b' }, '[a b][0]'],
+  ])('defers to %s', (_label, env, expected) => {
+    expect(asked(env)).toBe(expected);
+  });
+
+  it('and none of it survives into the caller', () => {
+    const after = run(
+      [
+        boundedRewrite('echo hi').command,
+        'echo "[${NO_COLOR-unset}][${FORCE_COLOR-unset}]"',
+      ].join('\n')
+    ).stdout.trim();
+
+    expect(after.split('\n').pop()).toBe('[unset][unset]');
+  });
+});
+
+describe('the command cannot restructure the wrapper', () => {
+  // The command used to be interpolated between our subshell delimiters, so it
+  // could CLOSE them. Measured before the fix: `echo one ); echo INJECTED;
+  // ( echo two` is a syntax error on its own -- exit 2, no output -- and the
+  // bounded form completed successfully and ran the middle command. Turning a
+  // command the shell refuses into one that runs is the worst thing this
+  // wrapper could do, and it is a change in meaning even with nothing hostile
+  // intended.
+  it('rejects a structure-breaking command exactly as the bare shell does', () => {
+    const command = 'echo one ); echo INJECTED; ( echo two';
+
+    const bare = run(command);
+    const bounded = run(boundedRewrite(command).command);
+
+    // A line of its own means it ran. The word also appears inside bash's own
+    // syntax-error text, which quotes the offending line, so a substring check
+    // would pass for the wrong reason.
+    const ran = (result) =>
+      result.stdout.split('\n').map((line) => line.trim()).includes('INJECTED');
+
+    expect(bare.status).toBe(2);
+    expect(bounded.status).toBe(2);
+    expect(ran(bare)).toBe(false);
+    expect(ran(bounded)).toBe(false);
+  });
+
+  // Parens are why the character could not simply be banned: these all contain
+  // one legitimately, and every one must survive being bounded.
+  it.each([
+    ['case a in a) echo CASE_OK;; esac', 'CASE_OK'],
+    ['f() { echo FN_OK; }; f', 'FN_OK'],
+    ['echo "a (b)"', 'a (b)'],
+    ['(echo SUB_OK)', 'SUB_OK'],
+    ["echo 'single quoted'", 'single quoted'],
+    ['echo $(echo nested) $((1+1))', 'nested 2'],
+  ])('%s still behaves as itself', (command, expected) => {
+    const bounded = run(boundedRewrite(command).command);
+
+    expect(bounded.status).toBe(0);
+    expect(bounded.stdout).toContain(expected);
+  });
+});
+
+describe('nothing survives the bounded command', () => {
+  // The pipefail dance was written at the CALLER'S level. That fixed the leak
+  // INTO the command and created its mirror on the other side: afterwards the
+  // shell was left with pipefail ON and `_tok_pf` still defined, so the user's
+  // NEXT commands changed meaning. Measured before the fix: following a bounded
+  // command, `false | true` exited 1 where it exits 0.
+  const probe = (callerFlags) =>
+    run(
+      [
+        boundedRewrite('echo hi').command,
+        'echo ===',
+        'set +o | grep pipefail',
+        'echo "_tok_pf=[${_tok_pf-<unset>}]"',
+        'false | true; echo "status=$?"',
+      ].join('\n'),
+      callerFlags
+    ).stdout.split('===')[1] || '';
+
+  it('leaves a default shell exactly as it found it', () => {
+    const after = probe([]);
+
+    expect(after).toContain('set +o pipefail');
+    expect(after).toContain('_tok_pf=[<unset>]');
+    // The caller had pipefail off, so their own pipeline keeps its 0.
+    expect(after).toContain('status=0');
+  });
+
+  it('leaves a shell that already had pipefail exactly as it found it', () => {
+    // Clearing is the same bug mirrored: this caller's `false | true` is
+    // SUPPOSED to be 1, and handing them 0 would be just as silent a change.
+    const after = probe(['-o', 'pipefail']);
+
+    expect(after).toContain('set -o pipefail');
+    expect(after).toContain('_tok_pf=[<unset>]');
+    expect(after).toContain('status=1');
+  });
+
+  it.each([
+    ['echo ok', 0],
+    ['echo bad; exit 7', 7],
+    ['false | cat', 0],
+  ])('and %s still exits %i through the extra subshell', (command, status) => {
+    expect(run(boundedRewrite(command).command).status).toBe(status);
+  });
+});
+
+describe('a command that only STARTS by changing the shell', () => {
+  // Refusing these was correct and expensive. `cd X && npm test` is among the
+  // most common things an agent writes, and it went through unbounded -- which
+  // is exactly the debug output the bound exists to cap. The mutation and the
+  // noisy command are two commands joined by an operator; only the second needs
+  // wrapping, and the first has to stay in the caller's shell to persist.
+  it.each([
+    ['cd packages/api && npm test', 'cd packages/api &&'],
+    ['set -euo pipefail; npm test', 'set -euo pipefail;'],
+    ['export FOO=1; npm test', 'export FOO=1;'],
+    ['cd a && cd b && make', 'cd a && cd b &&'],
+    ['source venv/bin/activate && pytest -q', 'source venv/bin/activate &&'],
+    ['builtin cd packages/api && npm test', 'builtin cd packages/api &&'],
+  ])('bounds %s, with the prefix left outside', (command, prefix) => {
+    const bounded = boundedRewrite(command);
+
+    expect(bounded).not.toBeNull();
+    expect(bounded.command.startsWith(prefix)).toBe(true);
+    // The wrapper begins straight after it, so the prefix runs in the caller's
+    // own shell rather than inside the subshell.
+    expect(bounded.command.slice(prefix.length).trim().startsWith('(')).toBe(true);
+  });
+
+  it.each([
+    ['cd /tmp\nnpm test'],
+    ['export FOO=1\nnpm test'],
+    ['cd a\ncd b\nmake'],
+    ['cd packages/api && npm test'],
+    ['set -euo pipefail; npm test'],
+  ])('emits shell that actually parses: %j', (command) => {
+    // A NEWLINE SEPARATOR IS WHITESPACE, and that is the whole bug. `&&`, `||`
+    // and `;` survive the prefix's trim because they are not whitespace, so the
+    // caller's `${prefix} ` join stays valid. A newline does not: `cd /tmp\nnpm
+    // test` trimmed to `cd /tmp` and emitted `cd /tmp ( ... )`, a syntax error
+    // on the one path whose entire promise is that bounding never changes what
+    // the command does.
+    //
+    // ASSERTED AGAINST THE SHELL, not against a prefix string. Every other test
+    // in this block checks that the output STARTS WITH some prefix and that a
+    // `(` follows -- and `cd /tmp ( ...` satisfies both while being unrunnable.
+    // Only bash itself can tell those apart.
+    const bounded = boundedRewrite(command);
+    expect(bounded).not.toBeNull();
+    expect(() =>
+      execFileSync('bash', ['-n', '-c', bounded.command], { stdio: 'pipe' })
+    ).not.toThrow();
+  });
+
+  it('leaves the working directory where the unbounded command would', () => {
+    // The whole reason these were refused: this client's Bash tool persists the
+    // cwd between calls, and a `cd` inside the subshell would not.
+    const original = 'cd /tmp && echo ran';
+
+    const bare = run(`${original}\npwd`).stdout.trim().split('\n').pop();
+    const bounded = run(`${boundedRewrite(original).command}\npwd`)
+      .stdout.trim()
+      .split('\n')
+      .pop();
+
+    expect(bounded).toBe(bare);
+  });
+
+  it.each([
+    ['set -o pipefail; false | true', 1],
+    ['cd /tmp && exit 7', 7],
+    ['cd /tmp && echo fine', 0],
+    // `&&` still means "only if the first succeeded".
+    ['cd /no/such/dir && echo never', 1],
+    ['export A=1; sh -c "exit 3"', 3],
+  ])('%s still exits %i', (command, status) => {
+    expect(run(command).status).toBe(status);
+    expect(run(boundedRewrite(command).command).status).toBe(status);
+  });
+
+  it('still bounds the output it was hoisted for', () => {
+    // Big enough to exceed the bound, which is now the client's own 30,000 cap
+    // rather than 8,000 -- below that we deliberately leave output alone,
+    // because cutting harder than the host is what drove the model to re-run.
+    const command = 'cd /tmp && for i in $(seq 1 6000); do echo "line $i padding"; done';
+
+    const bare = run(command).stdout.length;
+    const bounded = run(boundedRewrite(command).command).stdout.length;
+
+    expect(bare).toBeGreaterThan(30_000);
+    expect(bounded).toBeLessThanOrEqual(30_000);
+  });
+});
+
+describe('commands whose point is to change the shell itself', () => {
+  // The wrapper runs the command in `( ... )` so the pipefail restore stays
+  // local, and that same containment discards whatever the command meant to
+  // set. This client's Bash tool persists the working directory between calls,
+  // so a bounded `cd` leaves the NEXT command in the old directory with nothing
+  // to explain it.
+  it.each([
+    ['npm test; cd ..'],
+    // `builtin` and `command` both run a builtin in the CURRENT shell, so
+    // these change the caller's directory exactly as a bare `cd` does while
+    // sailing past a guard anchored on the word.
+    // `set` and `shopt` were once left out of this list, on the grounds that
+    // their scope is the command they precede. True, and beside the point:
+    // unbounded, `set -e` ALSO outlives that command and applies to the
+    // caller's later calls, and bounded it does not.
+    ['FOO=1'],
+    // The mutation is at the END, where hoisting cannot help without
+    // reordering the command.
+    ['npm test && export X=1'],
+    // A group whose end the segment split cannot see.
+    ['(cd a && npm test)'],
+  ])('refuses to bound %s', (command) => {
+    expect(boundedRewrite(command)).toBeNull();
+  });
+
+  it.each([
+    // An assignment ATTACHED to a command never outlived that command anyway.
+    ['CI=1 npm test'],
+    // And the words must be matched as commands, not found anywhere: these two
+    // contain `cd` and `export` and mutate nothing.
+    ['make cdrom'],
+    ['grep -n export src/a.ts'],
+    // The prefixes themselves mutate nothing, and `cd-report` is not `cd`.
+    ['command npm test'],
+    ['builtin echo hi; npm test'],
+    ['cd-report && npm test'],
+  ])('still bounds %s', (command) => {
+    expect(boundedRewrite(command)).not.toBeNull();
+  });
+});
+
+describe('the configured bound is the bound', () => {
+  // Both stages used to get floor(maxBytes / 2) with a floor of 1, which
+  // overshoots on any odd value and DOUBLES it at the bottom: a configured
+  // bound of 1 byte emitted two.
+  it.each([[1], [2], [3], [7], [100], [101], [8000]])(
+    'emits at most %i bytes when %i is configured',
+    (maxBytes) => {
+      const producer = 'for i in $(seq 1 3000); do echo "line $i"; done';
+      const bounded = boundedRewrite(producer, { maxBytes });
+
+      const out = run(bounded.command);
+
+      expect(out.stdout.length).toBeLessThanOrEqual(maxBytes);
+    }
+  );
+
+  it('keeps the exit status when the tail stage has no bytes to take', () => {
+    // A zero-byte tail cannot simply be dropped. A bare `head -c N` exits as
+    // soon as it has its bytes and SIGPIPEs the producer, which under pipefail
+    // reports 141 -- the status-masking this wrapper exists to avoid.
+    const bounded = boundedRewrite('exit 3', { maxBytes: 1 });
+
+    expect(run(bounded.command).status).toBe(3);
+  });
+});
+
+describe('follow mode in commands that are not tail', () => {
+  // For a streamer the wrapper is strictly WORSE than no wrapper: unwrapped the
+  // model receives output until the client timeout, wrapped it receives nothing
+  // and the timeout is spent anyway.
+  it.each([
+    ['journalctl -f'],
+    ['journalctl --follow -u nginx'],
+    ['docker logs -f web'],
+    ['docker compose logs -f'],
+    ['kubectl logs -f pod/api'],
+    ['kubectl logs --follow deploy/api'],
+    ['pm2 logs -f'],
+    ['adb logcat -f'],
+  ])('refuses to bound %s', (command) => {
+    expect(boundedRewrite(command)).toBeNull();
+  });
+
+  it.each([
+    // The same programs without the follow flag terminate, so they keep the bound.
+    ['docker logs web'],
+    ['kubectl logs pod/api'],
+    ['journalctl -u nginx -n 500'],
+  ])('still bounds %s', (command) => {
+    expect(boundedRewrite(command)).not.toBeNull();
+  });
+});
+
+describe('watch mode, which a bound would turn into a hang', () => {
+  // A word-boundary pattern needs a word boundary AFTER the word, so it caught --watch and
+  // missed --watchAll. That was harmless while only would-be refusals were
+  // bounded; now that test runners are bounded on sight, a watch run reaches
+  // the bound routinely, and `tail -c` cannot emit until an EOF that never comes.
+  it.each([
+    ['npm test -- --watch'],
+    ['npx jest --watchAll'],
+    ['npx jest --watch-all'],
+    ['vitest -w'],
+    ['vitest watch'],
+  ])('refuses to bound %s', (command) => {
+    expect(boundedRewrite(command)).toBeNull();
+  });
+
+  it.each([
+    ['npm test -- -i'],
+    ['vitest run'],
+    // `watcher` is not `watch`: widening the guard must not cost the bound on
+    // an ordinary run that merely names a file.
+    ['npm test src/watcher.test.ts'],
+  ])('still bounds %s', (command) => {
+    expect(boundedRewrite(command)).not.toBeNull();
+  });
+});
+
+describe('which commands are worth bounding at all', () => {
+  // The bound shipped applied only where a REFUSAL would otherwise have
+  // happened, and a test run is never refused -- so the family it was built for
+  // never reached it. These are the runners that reach it now.
+  it.each([
+    ['npm test'],
+    ['npx jest tests/hooks'],
+    ['pytest -q'],
+    ['cargo test'],
+    ['go test ./...'],
+    ['dotnet test'],
+    ['npm run build'],
+    ['make'],
+    ['tsc --noEmit'],
+    ['eslint src'],
+    ['CI=1 npm test'],
+    ['npm run build && npm test'],
+    ['sudo make install'],
+  ])('bounds %s', (command) => {
+    expect(isOutputHeavy(command)).toBe(true);
+  });
+
+  it.each([
+    ['git status'],
+    ['cat README.md'],
+    ['git show HEAD'],
+    ['git log --oneline'],
+    // THE THREE THAT A `\b` PATTERN GOT WRONG, and each would have been
+    // silently truncated: the words appear in a string, in a filename, and as
+    // an argument -- never as the command being run.
+    ['echo "run npm test"'],
+    ['ls src/jest-helpers.ts'],
+    ['grep -n make Makefile'],
+    ['cat Makefile'],
+  ])('leaves %s alone', (command) => {
+    expect(isOutputHeavy(command)).toBe(false);
   });
 });
