@@ -94,3 +94,49 @@ claim about their product requires their product, which needs an account.
   They are classified as harness failures, excluded, and listed in the report.
   Before that classifier existed they dragged an arm from score 1.00 to 0.30
   on a task it had never actually failed.
+
+---
+
+# After the fix: the confirmed regression is gone
+
+The whole-file-rewrite penalty above was caused by a dead parameter.
+`substitutionFor` accepted `alreadyRead`, echoed it back, consulted it nowhere,
+and no caller passed it -- so a file was replaced by an outline of itself on
+**every** read of it. When the model needs the file's bodies, an outline of its
+signatures cannot answer, so it reads again, receives another outline, and the
+loop repeats until the size floor rises with the turn count.
+
+The fix is one outline per file per session. Asking twice is the signal: the
+hook cannot know at read time whether the model wants a symbol's location or
+its contents, and it does not need to.
+
+Re-measured on a fresh build, fixed n=30, both arms:
+
+| task | before | after | |
+| --- | --- | --- | --- |
+| whole-file-transform | **1.356** [1.125, 1.642] | **1.143** [0.946, 1.393] | penalty no longer established |
+| noisy-command | 0.925 [0.880, 0.987] | 0.905 [0.834, 0.981] | still a win |
+
+**What changed, stated precisely:** before the fix the penalty was *confirmed* --
+the interval excluded parity. After it, the interval spans parity. That is not
+the same as proving the penalty is zero; it means it is no longer a
+demonstrated cost. The point estimate is still above 1.0 and the honest reading
+is "interception is now roughly neutral on whole-file rewrites, where it
+previously lost".
+
+Against control on the same two tasks, after the fix:
+
+| arm | vs control |
+| --- | --- |
+| `assist` | 0.671 [0.620, 0.725] |
+| `ours-rules` | 0.660 [0.597, 0.727] |
+
+The two are now within each other's intervals, where before the hooks were a
+measurable net cost.
+
+**Not yet complete:** `large-file-defect` is still filling on this build (12 of
+30 reps at the time of writing, holding steady at $0.0700 against ours-rules'
+$0.0767, i.e. about 0.91 -- consistent with the 0.926 it showed before the fix,
+so the fix does not appear to have cost the tasks interception already won).
+That cell is a regression check, not the fix's target, and its n was not met, so
+no interval is quoted for it.
