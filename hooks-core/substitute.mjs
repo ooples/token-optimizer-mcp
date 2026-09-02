@@ -155,6 +155,26 @@ export function substitutionFor(filePath, { turnsSoFar = 0, alreadyRead = false 
 
   if (bytes < floorBytes(turnsSoFar)) return null;
 
+  // ONE OUTLINE PER FILE PER SESSION. `alreadyRead` was accepted here, echoed
+  // back in the result, and never passed by any caller nor consulted by any
+  // decision -- a dead parameter, so a file could be outlined again on every
+  // single Read of it.
+  //
+  // That is not a small waste, it is the mechanism's worst case. When the model
+  // needs the file's BODIES -- rewriting every function, say -- an outline of
+  // its signatures cannot answer, so the model reads again, is handed another
+  // outline, and the loop repeats until the size floor rises with the turn
+  // count. Measured on whole-file-transform: assist cost 1.356 of our own
+  // text-only arm, a 35.6% penalty, while the same mechanism won 7.4% and 7.5%
+  // on the two tasks where an outline does answer.
+  //
+  // Asking twice IS the signal. The hook cannot know at Read time whether the
+  // model wants a symbol's location or its contents, and it does not need to:
+  // a second request for a file we already outlined is the model saying the
+  // outline did not answer. One wasted outline is a bounded cost; a loop is
+  // not.
+  if (alreadyRead) return null;
+
   let source;
   try {
     source = readFileSync(filePath, 'utf8');
