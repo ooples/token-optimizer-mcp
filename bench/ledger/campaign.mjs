@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { runColdTask, runWarmSequence, campaignProvenance } from './run.mjs';
-import { appendRows, loadRows, completedReps } from './store.mjs';
+import { appendRows, loadRows, completedReps, nextRep } from './store.mjs';
 import { report } from './rank.mjs';
 import { forTrack } from './tasks/index.mjs';
 import { discardWorkspace } from './executor.mjs';
@@ -111,9 +111,12 @@ export async function coldArm(
 
     const { rows, verdict } = await runColdTask(task, {
       arm,
-      // Continue the numbering rather than restarting it, so `rep` stays unique
-      // within (arm, task, build) across any number of resumptions.
-      startRep: done + 1,
+      // Labelled past the HIGHEST rep on disk, not past the count of usable
+      // ones. A harness-failure row is excluded from `done` -- it is not a
+      // measurement -- but it still occupies its label, so `done + 1` could
+      // collide with a real run and the reader, keeping only the newest row per
+      // key, would drop that measurement.
+      startRep: nextRep(existing, { arm, track: 'cold', task: task.id, build }),
       execute,
       freshStateDir: async () => mkdtempSync(join(tmpdir(), `ledger-cold-${arm}-`)),
       provenance,

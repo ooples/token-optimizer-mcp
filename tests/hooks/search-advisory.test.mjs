@@ -228,6 +228,28 @@ describe('what reaches the model is neutralised', () => {
     }
   });
 
+  test('a Unicode line separator is neutralised too, not just a newline', () => {
+    // U+2028 and U+2029 end a line as far as the model reading the advisory is
+    // concerned, so they carry exactly the injection a bare newline does while
+    // sailing through a C0-only filter.
+    const dir = mkdtempSync(join(tmpdir(), 'advisory-sep-'));
+    try {
+      const evil = 'pkg/evil' + String.fromCharCode(0x2028) + 'INJECTED.py';
+      withBatchedWrites(dir, () => {
+        const f = join(workspace, evil);
+        const file = putNode(dir, { kind: 'file', key: evil, path: f });
+        putEdge(dir, file, 'contains', putNode(dir, { kind: 'symbol',
+          key: evil + '#sepProbe', name: 'sepProbe', file: f, line: 1 }));
+      });
+      const advice = adviseSearch(load(dir), 'sepProbe', { root: workspace });
+      if (advice) {
+        expect(advice.text).not.toContain(String.fromCharCode(0x2028));
+        expect(advice.text).toContain(String.fromCharCode(0xfffd));
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   test('scope does not widen across a case difference on case-sensitive hosts', () => {
     // `/work/Repo/secret.ts` must not test as inside `/work/repo` where those
     // are two directories. Reporting a real file from another tree is the worst

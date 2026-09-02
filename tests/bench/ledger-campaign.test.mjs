@@ -271,6 +271,36 @@ describe('the campaign', () => {
       expect(new Set(reps).size).toBe(reps.length);
     });
 
+    test('a harness-failure row does not get its label reused', async () => {
+      // TWO CORRECT FIXES THAT COMBINED INTO DATA LOSS. completedReps excludes
+      // harness failures, because they are not measurements; runColdTask labels
+      // sequentially from startRep. With reps 1, 2 (harness failure) and 3 on
+      // disk, `done` is 2, numbering resumed at 3, and the reader -- which keeps
+      // only the newest row per key -- then dropped the real rep 3 entirely.
+      const execute = async () => ({ status: 'ok', usd: 0.1, turns: 3, workspace: { pass: true } });
+      appendRows(store, [
+        row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 1,
+              image_digest: 'sha256:a', commit_sha: 'c1', started_at: '2026-09-02T01:00:00Z' }),
+        row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 2,
+              image_digest: 'sha256:a', commit_sha: 'c1', started_at: '2026-09-02T02:00:00Z',
+              status: 'error', usd: 0, turns: 0, score: 0, harness_failure: true }),
+        row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 3,
+              image_digest: 'sha256:a', commit_sha: 'c1', started_at: '2026-09-02T03:00:00Z' }),
+      ]);
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a']),
+        execute,
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        precision: { fixedReps: 3 },
+      });
+      const reps = readFileSync(store, 'utf8').trim().split('\n').map(JSON.parse)
+        .filter((r) => r.task === 'debug-a').map((r) => r.rep).sort((a, b) => a - b);
+      // No label is used twice, so no real measurement can be superseded.
+      expect(new Set(reps).size).toBe(reps.length);
+      expect(reps).toContain(4);
+    });
+
     test('the default is still one at a time', async () => {
       const state = freshState();
       await coldArm('control', {
