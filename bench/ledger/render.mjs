@@ -131,6 +131,28 @@ export function renderReport(report, { adversarialTasks = new Set() } = {}) {
     lines.push('');
   }
 
+  if (report.harnessFailures?.length) {
+    // LOUD, because these rows were excluded from every number above and a
+    // reader must be able to decide whether that exclusion is doing too much
+    // work. Grouped by arm and task: 30 spawn failures concentrated in one
+    // cell is a broken campaign, while a handful spread thinly is noise.
+    const by = new Map();
+    for (const r of report.harnessFailures) {
+      const k = `${r.arm}/${r.task}`;
+      by.set(k, (by.get(k) || 0) + 1);
+    }
+    lines.push(
+      `HARNESS FAILURES: ${report.harnessFailures.length} run(s) never started ` +
+        '(errored at zero cost and zero turns) and are EXCLUDED from every figure above.'
+    );
+    for (const [k, n] of [...by].sort((a, b) => b[1] - a[1])) lines.push(`  ${n.toString().padStart(3)}  ${k}`);
+    lines.push(
+      '  These are our infrastructure, not the arm. A cell with many of them has ' +
+        'fewer real reps than its pre-registered n and should be re-run, not read.'
+    );
+    lines.push('');
+  }
+
   if (report.rejected?.length) {
     // Surfaced, because a run that happened but could not be stored is a hole
     // in the ledger and the totals will not match what was spent.

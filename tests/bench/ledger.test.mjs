@@ -547,6 +547,41 @@ describe('the report', () => {
     expect(c.costRatio).toBeLessThanOrEqual(c.costRatioCI.high);
   });
 
+  test('a run the harness never started is not scored against the arm', () => {
+    // 30 consecutive spawn failures dropped an arm from 1.00 to 0.30 on a task
+    // it had never actually failed. usd 0 + turns 0 + error means the
+    // container never ran, so the agent was never given the chance.
+    const ok = [1, 2, 3, 4, 5, 6, 7, 8].map((rep) =>
+      row({ arm: 'candidate', task: 't', rep, usd: 0.05, score: 1 })
+    );
+    const never = [9, 10, 11].map((rep) =>
+      row({ arm: 'candidate', task: 't', rep, usd: 0, turns: 0, score: 0, status: 'error' })
+    );
+    const control = [1, 2, 3, 4, 5, 6, 7, 8].map((rep) =>
+      row({ arm: 'control', task: 't', rep, usd: 0.10, score: 1 })
+    );
+    const out = report([...ok, ...never, ...control]);
+    expect(out.harnessFailures).toHaveLength(3);
+    const c = out.tracks.cold.arms.candidate;
+    expect(c.perTask[0].arm.n).toBe(8);
+    expect(c.perTask[0].ratio).toBeCloseTo(0.5, 2);
+  });
+
+  test('a real failure still pays, because it cost money', () => {
+    // THE LOOPHOLE THIS MUST NOT OPEN. An arm that burns budget and delivers
+    // nothing is the exact behaviour the ledger exists to charge for; only a
+    // run costing nothing AND attempting nothing is excluded.
+    const eight = [1, 2, 3, 4, 5, 6, 7, 8];
+    const base = eight.map((rep) => row({ arm: 'candidate', task: 't', rep, usd: 0.05, score: 1 }));
+    const control = eight.map((rep) => row({ arm: 'control', task: 't', rep, usd: 0.05, score: 1 }));
+    const burned = row({
+      arm: 'candidate', task: 't', rep: 9, usd: 0.20, turns: 7, score: 0, status: 'error',
+    });
+    const out = report([...base, burned, ...control]);
+    expect(out.harnessFailures).toHaveLength(0);
+    expect(out.tracks.cold.arms.candidate.perTask[0].ratio).toBeGreaterThan(1);
+  });
+
   test('malformed rows are reported, not silently dropped', () => {
     const out = report([row(), { task: 'x' }]);
     expect(out.rejected).toHaveLength(1);

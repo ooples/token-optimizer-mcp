@@ -100,12 +100,21 @@ export async function coldArm(
       return;
     }
 
+    // RESUMPTION TOPS UP TO THE TARGET, it does not add a fresh batch on top.
+    // Observed: a fixed-n run of 30 was interrupted with 13 reps banked, and
+    // resuming ran 30 MORE for a total of 43 -- the adaptive rule tolerated
+    // that because it stops on precision, but under a fixed design the count
+    // IS the pre-registration, so overshooting silently breaks the very
+    // guarantee fixed-n exists to provide.
+    const target = precision?.fixedReps;
+    const remaining = target ? { ...precision, fixedReps: target - done } : precision;
+
     const { rows, verdict } = await runColdTask(task, {
       arm,
       execute,
       freshStateDir: async () => mkdtempSync(join(tmpdir(), `ledger-cold-${arm}-`)),
       provenance,
-      precision,
+      precision: remaining,
       // Each rep hits disk the moment it exists, so an interrupted campaign
       // keeps what it paid for.
       onRow: (row) => {

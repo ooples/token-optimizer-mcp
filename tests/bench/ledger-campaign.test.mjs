@@ -193,6 +193,37 @@ describe('the campaign', () => {
       expect(counts).toEqual({ 'debug-a': 15, 'debug-b': 15 });
     });
 
+    test('resuming a fixed-n run tops up to the target, it does not add a batch', async () => {
+      // Observed for real: a fixed-n 30 run was interrupted with 13 banked,
+      // and resuming ran 30 MORE for 43 total. Under a fixed design the count
+      // IS the pre-registration, so overshooting breaks the guarantee the
+      // design exists to give.
+      let calls = 0;
+      const execute = async () => {
+        calls += 1;
+        return { status: 'ok', usd: 0.1, turns: 3, workspace: { pass: true } };
+      };
+      appendRows(store, [
+        row({
+          arm: 'control',
+          task: 'debug-a',
+          track: 'cold',
+          rep: 1,
+          image_digest: 'sha256:a',
+          commit_sha: 'c1',
+        }),
+      ]);
+      await coldArm('control', {
+        tasks: fakeTasks(['debug-a']),
+        execute,
+        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        storePath: store,
+        precision: { fixedReps: 4 },
+      });
+      expect(calls).toBe(3);
+      expect(readFileSync(store, 'utf8').trim().split('\n')).toHaveLength(4);
+    });
+
     test('the default is still one at a time', async () => {
       const state = freshState();
       await coldArm('control', {

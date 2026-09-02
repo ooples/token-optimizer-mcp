@@ -31,10 +31,29 @@ import { assertSingleBuild, rowProblem } from './provenance.mjs';
 export function organise(rows) {
   const good = [];
   const rejected = [];
+  const harnessFailures = [];
   for (const row of rows) {
     const problem = rowProblem(row);
-    if (problem) rejected.push({ row, problem });
-    else good.push(row);
+    if (problem) {
+      rejected.push({ row, problem });
+      continue;
+    }
+    // A RUN THE HARNESS NEVER STARTED IS NOT A MEASUREMENT OF THE ARM, and
+    // this is the one exception to "the ledger charges every run". The rule
+    // elsewhere -- a failed run pays its cost and scores zero -- exists so an
+    // arm cannot get cheap by failing. It presumes the agent RAN. A container
+    // that never started costs nothing and attempts nothing, so scoring it as
+    // a zero charges an arm for our own infrastructure: observed when 30
+    // consecutive spawn failures dropped an arm from 1.00 to 0.30 on a task it
+    // had never actually failed.
+    //
+    // Narrow on purpose, and not a loophole: a real agent failure always costs
+    // money, so `usd > 0` alone disqualifies a row from this branch.
+    if (isHarnessFailure(row)) {
+      harnessFailures.push(row);
+      continue;
+    }
+    good.push(row);
   }
 
   const tracks = new Map();
@@ -46,7 +65,18 @@ export function organise(rows) {
     if (!tasks.has(row.task)) tasks.set(row.task, []);
     tasks.get(row.task).push(row);
   }
-  return { tracks, rejected };
+  return { tracks, rejected, harnessFailures };
+}
+
+/**
+ * A run the harness never started: errored, cost nothing, attempted nothing.
+ *
+ * Read from the row's own recorded fields rather than a flag alone, so rows
+ * written before `harness_failure` existed are classified the same way.
+ */
+export function isHarnessFailure(row) {
+  if (row.harness_failure === true) return true;
+  return row.status === 'error' && (row.usd || 0) === 0 && (row.turns || 0) === 0;
 }
 
 /**
@@ -293,8 +323,8 @@ export function report(rows, options = {}) {
   //
   // Defaults to `control`, so every existing caller is unaffected.
   const { baseline = 'control' } = options;
-  const { tracks, rejected } = organise(rows);
-  const out = { tracks: {}, rejected, baseline };
+  const { tracks, rejected, harnessFailures } = organise(rows);
+  const out = { tracks: {}, rejected, harnessFailures, baseline };
 
   for (const [track, arms] of tracks) {
     const baselineTasks = arms.get(baseline);

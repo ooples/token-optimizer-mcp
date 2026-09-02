@@ -82,6 +82,23 @@ async function runOnce(task, { arm, track, rep, stateDir, execute, provenance })
     // which is the same failure as verifying that an advisory fires without
     // verifying that it changes anything.
     tokens: outcome.tokens || null,
+    // THE SAME WIRING BUG AS `tokens`, one field along, and it cost a whole
+    // campaign's diagnosis. 51 rows came back status=error with usd 0 and
+    // turns 0 and NOTHING recorded about why -- the executor builds an
+    // `error` string and the row simply dropped it, so the only evidence of
+    // what went wrong was gone the moment it happened. A ledger that records
+    // that a run failed but not why cannot be debugged from its own store.
+    error: outcome.error ? String(outcome.error).slice(0, 500) : null,
+    // A run the HARNESS failed to start is not a measurement of the arm.
+    // usd 0 AND turns 0 AND errored means the container never ran, so the
+    // agent was never given the chance to succeed or fail; scoring that as a
+    // zero would charge an arm for our own infrastructure. Recorded, counted
+    // and reported -- never silently dropped, and deliberately NOT a loophole
+    // for real failures, which always cost money.
+    harness_failure:
+      outcome.status === 'error' &&
+      (Number(outcome.usd) || 0) === 0 &&
+      (Number(outcome.turns) || 0) === 0,
     score: scored.score,
     checks: scored.checks,
     verifier_errors: scored.errored,
