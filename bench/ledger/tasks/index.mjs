@@ -739,12 +739,23 @@ export const generationAmidBulk = {
     'Create util/retry_budget.py containing a function `budget(total_ms, attempts)` that returns a ' +
     'list of per-attempt time budgets in milliseconds. The first attempt gets half of total_ms, and ' +
     "each attempt after that gets half of the previous attempt's budget, with a floor of 250 ms. " +
-    'Return exactly `attempts` entries. Do not modify any existing file.',
+    'Return exactly `attempts` entries. The code already in pkg/ is unrelated to this task and ' +
+    'does not need to be read. Do not modify any existing file.',
   setup(dir) {
     write(dir, 'README.md', '# order service\n');
     // Large, and entirely beside the point. The bulk IS the treatment being
     // controlled for: it is what makes indexing and seeding expensive without
     // making them useful.
+    //
+    // THE PROMPT TELLS THE AGENT NOT TO BOTHER READING IT, AND THAT DOES NOT
+    // WEAKEN THE TREATMENT. Our overhead here is paid by the session-start seed,
+    // which indexes the tree before the agent has decided anything; what the
+    // agent then chooses to explore is not what this task is measuring. Leaving
+    // the choice open only added variance: at n=12 the arms measured CV 26.7%
+    // (ours-rules) and 34.7% (assist), projecting to a +/-17% interval at n=30 --
+    // the band where whole-file-transform sits UNRESOLVED, not the +/-7% where
+    // large-file-defect resolves. Removing a discretionary choice the task never
+    // intended to measure buys precision without buying a different question.
     write(dir, 'pkg/pricing_bulk.py', bigModule(900, -1));
     write(dir, 'pkg/rules_bulk.py', bigModule(300, -1));
   },

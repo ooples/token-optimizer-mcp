@@ -220,3 +220,60 @@ alpha 0.05. The primary is a single pre-specified test and is not corrected.
 The primary interval spanning parity; a point estimate above 1.0; `assist`
 completing fewer tasks; or `assist` winning the adversarial task, which would
 indicate the battery is rigged rather than that we are good.
+
+---
+
+# Addendum 2: a second adversarial task, and its pre-registered n
+
+Written before the confirmatory run, after a pilot and because of it.
+
+## Why
+
+`whole-file-transform` does not converge, so the report excludes it from the
+headline -- and with it gone the attribution comparison prints its own
+`NO ADVERSARIAL TASKS RESOLVED -- this comparison has no bias control`. Every
+task left in the aggregate is one our mechanism is built to win. That is the
+shape of a rigged battery whatever the intervals say, and it is the gap this
+task closes.
+
+`generation-amid-bulk` -- **ADVERSARIAL**: the answer exists nowhere in the tree
+and the tree is 1,200 generated functions the seed must index and can never use.
+Our machinery has nothing to contribute and only its overhead to charge.
+
+## The pre-registered n is 60 for this task, and here is the arithmetic
+
+A pilot of 12 reps per arm (image `sha256:e882263...`, its own build, rows in
+`pilot-adversarial.jsonl`) measured cost CV of **26.7%** for `ours-rules` and
+**34.7%** for `assist`, giving `assist/ours-rules` = 1.057 [0.825, 1.355].
+Projected to n=30 that is a **+/-17%** interval -- the band where
+`whole-file-transform` sits unresolved, not the +/-7% where `large-file-defect`
+resolves. At the measured variance, +/-10% needs n≈81 and +/-15% needs n≈38.
+
+So n=30 was declared, in advance, insufficient for this task. **n = 60 per arm**,
+fixed, no early stopping. If the variance reduction below lands, 60 buys roughly
++/-8%; if it does not, 60 still buys about +/-12%, which is inside the resolving
+band. The number is set here so it cannot be chosen later from the data.
+
+## The one change made to reduce variance, and why it is not a change of question
+
+The prompt now states that the code in `pkg/` is unrelated and need not be read.
+Our overhead on this task is paid by the session-start seed, which indexes the
+tree before the agent decides anything, so what the agent then chooses to explore
+is not what the task measures -- it was only adding spread. The bulk itself is
+unchanged, and so is the property that makes the task adversarial.
+
+## What would falsify the claim
+
+Unchanged, and this task strengthens one clause of it: `assist` **winning** this
+task against `ours-rules` would indicate the battery is rigged rather than that
+we are good. Parity is the expected and acceptable result; a loss is acceptable.
+A win is a finding against us.
+
+## Honest limitation, stated in advance
+
+This task enters its own campaign on its own build. It cannot join the existing
+large-context aggregate, because adding a task changes the commit and therefore
+the build key, and this ledger refuses to average across builds. Folding it into
+the headline requires re-running every task and arm together; until that happens
+it is reported as a standalone bias control and the aggregate keeps its warning.
+
