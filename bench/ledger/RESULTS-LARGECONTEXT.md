@@ -1,5 +1,19 @@
 # Large-context results: the product beats their rules file, and one of our own mechanisms is costing us
 
+> **Superseded in part by [RESULTS-COMPETITORS.md](./RESULTS-COMPETITORS.md).**
+> That campaign is larger (7 arms, 4 tasks, 840 rows, one build) and includes two
+> competitors run as installed products rather than as text. Read it first.
+>
+> - **The primary endpoint REPLICATES.** `assist` vs `tokenade-rules` is 0.878
+>   [0.831, 0.926] here and 0.876 [0.821, 0.931] there, on a different image and
+>   a different commit. That claim now rests on two independent builds.
+> - **The attribution below does NOT survive.** The post-fix section reports
+>   `assist` vs `ours-rules` at 0.942 [0.893, 0.992], excluding parity, over two
+>   tasks. Over four tasks it is 0.982 [0.918, 1.050] and spans parity, so
+>   interception adding value over our text alone is **not established**. Prefer
+>   the four-task figure; it covers the tasks where interception has least to
+>   offer, which the two-task version omitted.
+
 Governed by the addendum in [PREREGISTRATION.md](./PREREGISTRATION.md), committed
 before the run. Raw rows: `largecontext.jsonl` (364 rows, 4 harness failures
 excluded and listed). Fixed n = 30 per arm per task, no early stopping.

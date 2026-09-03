@@ -20,6 +20,37 @@ Cost per unit of work delivered, failures charged, against vanilla Claude Code:
 
 Against the two competitors that were actually measured, `assist` leads.
 
+## The primary endpoint replicates; the attribution does not survive
+
+**Against the competitor's text, pre-registered as the primary endpoint:**
+`assist` vs `tokenade-rules` = **0.876 [0.821, 0.931]**, a 12.4% win over 4 tasks.
+
+That is a genuine replication. The earlier large-context campaign, on a
+*different image and a different commit* and with only three tasks, measured
+**0.878 [0.831, 0.926]**. Two independent builds, 12.2% and 12.4%. Nothing about
+this number depends on a single run.
+
+**Against our own text, which is the attribution that matters:** `assist` vs
+`ours-rules` = **0.982 [0.918, 1.050]** -- the interval spans parity, so
+**interception adds nothing measurable over shipping our rules file alone.**
+
+| task | assist vs ours-rules | |
+| --- | --- | --- |
+| noisy-command | 0.883 [0.820, 0.952] | interception helps |
+| large-file-defect | 0.964 [0.921, 1.012] | spans parity |
+| generation-amid-bulk | 0.950 [0.800, 1.120] | spans parity |
+| whole-file-transform | 1.149 [0.962, 1.395] | spans parity, point estimate against us |
+| **aggregate** | **0.982** [0.918, 1.050] | **not established** |
+
+This is weaker than the post-fix result in RESULTS-LARGECONTEXT.md, which found
+0.942 [0.893, 0.992] and excluded parity. That comparison covered two tasks; this
+one covers four, including the two where interception has least to offer. The
+honest reading is that **our win is carried mainly by the text**, and the hooks
+are not yet earning their place on the cost endpoint.
+
+Read that beside the wall-clock note below before concluding anything about the
+hooks: on `large-file-defect` they cost about six minutes per run.
+
 ## The finding that took the most work to get right
 
 **claude-token-optimizer's interception never runs on Claude Code 2.1.251.**
@@ -81,6 +112,21 @@ confirmed by feeding it the real payload. Its per-task pattern corroborates it:
 It hooks `Bash` only, and it wins exactly where commands are noisy and does
 nothing where the work is reading files. That is what a hook that really fired,
 on the surface it claims, looks like.
+
+## A defect this benchmark is structurally blind to
+
+`assist` on `large-file-defect` runs at a median **6.17 minutes per run**. Every
+other cell in this campaign is 0.16-0.56. Cost ($0.0721) and turns (5.0) are
+normal, so it is not doing more work in token terms -- it is roughly six minutes
+of our hooks per run on a 342 KB file.
+
+The endpoint here is dollars, so that stall is **free in the metric** and
+miserable for a user. Nothing this benchmark has ever published could have caught
+it, and it took looking at `started_at` gaps -- for scheduling reasons, not
+scientific ones -- to notice.
+
+It is not a regression from this image: the same cell measured 5.02 and 6.34
+min/run on the previous image. It has always been there and was never measured.
 
 ## What bounds every number above
 
