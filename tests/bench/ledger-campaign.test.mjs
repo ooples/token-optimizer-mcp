@@ -909,8 +909,25 @@ describe('arms are data, not code', () => {
     // needs a scaffold at all -- if this ever becomes absolute, the scaffold is
     // no longer what makes the arm work and the coupling should be revisited.
     expect(ctoCommands).toContain('.claude/hooks/');
-    expect(existsSync(join(cto.scaffold, '.claude', 'hooks', 'pre-tool-read-guard.sh'))).toBe(true);
     expect(existsSync(join(cto.scaffold, 'CLAUDE.md'))).toBe(true);
+
+    // EVERY hook the settings name must be in the scaffold, not just a sample.
+    // This is the tripwire for a packaging mistake rather than a code one: the
+    // repository's own `.gitignore` excludes `.claude/` at any depth, so the
+    // first commit of this scaffold silently dropped all twelve hook scripts and
+    // kept the rules file -- 5 of 20 files, no warning. An arm missing its hooks
+    // still runs, still scores, and loses to us for reasons that have nothing to
+    // do with their product. It passes on this machine, where the files exist
+    // untracked, and fails on a fresh clone, which is exactly what CI is for.
+    const referenced = [...JSON.stringify(cto.settings).matchAll(/\.claude\/hooks\/([\w.-]+\.sh)/g)]
+      .map((m) => m[1]);
+    expect(referenced.length).toBeGreaterThanOrEqual(8);
+    for (const script of new Set(referenced)) {
+      expect({
+        script,
+        present: existsSync(join(cto.scaffold, '.claude', 'hooks', script)),
+      }).toEqual({ script, present: true });
+    }
 
     // tokenjuice needs no scaffold: its installer writes only a settings block
     // pointing at the globally installed binary.
