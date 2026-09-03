@@ -24,9 +24,18 @@
  */
 
 import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  cpSync,
+  existsSync,
+  readdirSync,
+  statSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 /** Where the agent works, and where its state lives, inside the container. */
 /** A run that produced no usage still needs every column, so a report can sum. */
@@ -227,6 +236,60 @@ function containerScript({ model }) {
 }
 
 /**
+ * Copies an arm's scaffold -- the files a competitor's own installer writes into
+ * a project -- on top of the task workspace.
+ *
+ * WHY AN ARM NEEDS THIS AT ALL. An arm was settings plus environment plus a
+ * rules file, which is everything OUR product needs because our hooks live at an
+ * absolute path inside the image. A competitor's need not: `cto hooks install`
+ * writes twelve shell scripts into `.claude/hooks/` and emits a settings block
+ * that invokes them as `bash .claude/hooks/pre-tool-read-guard.sh`, relative to
+ * the project. With no way to place files in the workspace, that product could
+ * only have been represented by its rules file -- which is exactly the
+ * understatement the tokenade arm already carries, and repeating it for a
+ * competitor whose hooks we CAN run would be choosing to measure a weaker
+ * opponent.
+ *
+ * COLLISIONS ARE A HARD ERROR, not a merge. The scaffold is applied after
+ * `task.setup`, so a scaffold file landing on a fixture file would silently
+ * replace the thing under test -- an arm could then score well because it
+ * overwrote the defect it was asked to find. No legitimate scaffold needs to do
+ * that, so the case that cannot be distinguished from sabotage is refused.
+ */
+export function applyScaffold(scaffoldDir, workspace) {
+  if (!existsSync(scaffoldDir) || !statSync(scaffoldDir).isDirectory()) {
+    throw new Error(`arm scaffold is not a directory: ${scaffoldDir}`);
+  }
+  const collisions = [];
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const src = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(src);
+        continue;
+      }
+      const rel = relative(scaffoldDir, src);
+      files.push(rel);
+      if (existsSync(join(workspace, rel))) collisions.push(rel);
+    }
+  };
+  walk(scaffoldDir);
+
+  if (!files.length) throw new Error(`arm scaffold is empty: ${scaffoldDir}`);
+  if (collisions.length) {
+    throw new Error(
+      `arm scaffold would overwrite ${collisions.length} file(s) the task created ` +
+        `(${collisions.slice(0, 5).join(', ')}${collisions.length > 5 ? ', ...' : ''}). ` +
+        'A scaffold may add files to a workspace, never replace the fixture under test.'
+    );
+  }
+
+  cpSync(scaffoldDir, workspace, { recursive: true });
+  return files.length;
+}
+
+/**
  * An executor bound to an image, credentials and arm, ready to hand to the
  * campaign runner.
  *
@@ -293,6 +356,16 @@ export function dockerExecutor({
     // I broke the loud failure while adding a feature beside it.
     const armDir = ensureArmDir(arm);
     const definition = arms[arm];
+    // SCAFFOLD FIRST, THEN claudeMd, and the order is the contract: an explicit
+    // `claudeMd` overrides whatever rules file a scaffold brought. That is what
+    // makes an attribution arm possible -- a competitor's hooks with our text,
+    // or theirs with no text -- which is the only way to say whether their
+    // interception or their instructions did the work. Reversing it would make
+    // the scaffold silently win and quietly turn such an arm into a plain copy
+    // of the competitor.
+    if (definition.scaffold) {
+      applyScaffold(definition.scaffold, workspace);
+    }
     if (definition.claudeMd) {
       writeFileSync(join(workspace, 'CLAUDE.md'), definition.claudeMd);
     }

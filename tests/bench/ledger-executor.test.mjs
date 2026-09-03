@@ -16,7 +16,9 @@ import {
   dockerArgs,
   writeArmSettings,
   dockerExecutor,
+  applyScaffold,
 } from '../../bench/ledger/executor.mjs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { singleShotExtract } from '../../bench/ledger/tasks/index.mjs';
 
 /** Captured verbatim from an unauthenticated run in the image. */
@@ -307,6 +309,62 @@ describe('arm settings', () => {
       expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ hooks: { SessionStart: ['x'] } });
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('an arm scaffold', () => {
+  const mk = () => {
+    const root = mkdtempSync(join(tmpdir(), 'scaffold-'));
+    const src = join(root, 'src');
+    const ws = join(root, 'ws');
+    mkdirSync(join(src, '.claude', 'hooks'), { recursive: true });
+    mkdirSync(ws, { recursive: true });
+    writeFileSync(join(src, 'CLAUDE.md'), 'competitor rules\n');
+    writeFileSync(join(src, '.claude', 'hooks', 'guard.sh'), 'echo hi\n');
+    return { root, src, ws };
+  };
+
+  test('nested files land in the workspace, dotfiles included', () => {
+    const { root, src, ws } = mk();
+    try {
+      writeFileSync(join(ws, 'app.py'), 'print(1)\n');
+      expect(applyScaffold(src, ws)).toBe(2);
+      expect(readFileSync(join(ws, 'CLAUDE.md'), 'utf8')).toBe('competitor rules\n');
+      // The dotted directory is the whole point: the competitor's hooks are
+      // invoked as `bash .claude/hooks/...` relative to the project.
+      expect(existsSync(join(ws, '.claude', 'hooks', 'guard.sh'))).toBe(true);
+      // The fixture is untouched.
+      expect(readFileSync(join(ws, 'app.py'), 'utf8')).toBe('print(1)\n');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('it refuses to overwrite a file the task created', () => {
+    // The scaffold is applied AFTER task.setup, so without this an arm could
+    // score well by replacing the defect it was asked to find.
+    const { root, src, ws } = mk();
+    try {
+      writeFileSync(join(ws, 'CLAUDE.md'), 'the fixture owns this file\n');
+      expect(() => applyScaffold(src, ws)).toThrow(/would overwrite 1 file/);
+      // And it refused before copying anything.
+      expect(existsSync(join(ws, '.claude', 'hooks', 'guard.sh'))).toBe(false);
+      expect(readFileSync(join(ws, 'CLAUDE.md'), 'utf8')).toBe('the fixture owns this file\n');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a missing or empty scaffold fails loudly rather than doing nothing', () => {
+    const { root, ws } = mk();
+    try {
+      expect(() => applyScaffold(join(root, 'nope'), ws)).toThrow(/not a directory/);
+      const empty = join(root, 'empty');
+      mkdirSync(empty, { recursive: true });
+      expect(() => applyScaffold(empty, ws)).toThrow(/empty/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

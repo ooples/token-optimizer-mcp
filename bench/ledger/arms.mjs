@@ -9,7 +9,9 @@
  * trusting us.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { join, dirname, isAbsolute } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { OUTPUT_DISCIPLINE } from '../../hooks-core/adapter.mjs';
 
 /** Vanilla Claude Code. No hooks, no MCP server, no optimizer. */
@@ -173,6 +175,74 @@ export const oursRulesOnly = {
   claudeMd: `# Project rules for AI coding agents\n\n${OUTPUT_DISCIPLINE}\n`,
 };
 
+/** Where a competitor's own installer output is kept, verbatim. */
+const COMPETITORS = join(dirname(fileURLToPath(import.meta.url)), 'competitors');
+const competitorSettings = (name) =>
+  JSON.parse(readFileSync(join(COMPETITORS, name, 'settings.json'), 'utf8'));
+
+/**
+ * claude-token-optimizer, run as the product rather than as a quotation of it.
+ *
+ * THE FIRST COMPETITOR ARM THAT IS ACTUALLY THE COMPETITOR. tokenade could only
+ * be represented by its rules file, because its binary is not in this image and
+ * needs an account. This one is MIT with no account, so there is no excuse for a
+ * text-only stand-in: `cto init` and `cto hooks install --all` were run in a
+ * container, and BOTH the settings block and the project files below are what
+ * their tooling emitted -- not a configuration assembled by hand from reading
+ * their source. Hand-assembly is how a benchmark quietly measures a weaker
+ * opponent than the one it names.
+ *
+ * Their hooks are the same mechanism we sell: pre-tool-bash-guard.sh,
+ * pre-tool-read-guard.sh and pre-tool-token-guard.sh are PreToolUse interception
+ * of Bash and Read, which is what our pretooluse-router does.
+ *
+ * THEIR DEFAULT POSTURE IS ENFORCEMENT AND OURS IS NOT, which is the asymmetry
+ * to hold in mind when reading any cost comparison against `assist`.
+ * `pre-tool-read-guard.sh` BLOCKS a Read over 50 KB rather than substituting
+ * something cheaper. Our own reasoning about `assist` says why that matters on
+ * this endpoint: a refusal costs a whole turn to redirect, which is the most
+ * expensive thing an optimizer can do to a cost benchmark. So a loss for them
+ * here may be a loss for refusing rather than for compacting badly, and the two
+ * are worth separating before any conclusion is drawn about their compaction.
+ * Both products are measured AS SHIPPED, which is the fair comparison to run
+ * first -- but "as shipped" is doing real work in that sentence.
+ *
+ * THE CAVEAT, STATED BEFORE ANY NUMBER EXISTS. Their CLAUDE.md is a TEMPLATE:
+ * it ships saying "Tech Stack: Unknown" and "Add your common commands here",
+ * because their product expects a human to fill it in. On a generated benchmark
+ * repo nobody does, so this arm runs their scaffolding without the content it
+ * was designed to carry, and to that extent it understates them. It is the same
+ * class of caveat as tokenade's and belongs beside any result drawn from it.
+ */
+export const claudeTokenOptimizer = {
+  name: 'cto',
+  settings: competitorSettings('claude-token-optimizer'),
+  env: {
+    // Ours must be off, or the arm measures both products at once.
+    TOKEN_OPTIMIZER_MODE: 'off',
+    TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+  },
+  scaffold: join(COMPETITORS, 'claude-token-optimizer', 'scaffold'),
+};
+
+/**
+ * tokenjuice, likewise as the product.
+ *
+ * NEEDS NO SCAFFOLD, and the difference from the arm above is worth recording:
+ * `tokenjuice install claude-code` writes only a settings block pointing at the
+ * globally installed binary, so the whole product is expressible as settings
+ * plus a package in the image. Their hook wraps Bash and compacts its output,
+ * which is our bounded-output mechanism.
+ */
+export const tokenjuice = {
+  name: 'tokenjuice',
+  settings: competitorSettings('tokenjuice'),
+  env: {
+    TOKEN_OPTIMIZER_MODE: 'off',
+    TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+  },
+};
+
 export const ARMS = {
   control,
   assist,
@@ -180,6 +250,8 @@ export const ARMS = {
   'assist-norules': assistNoRules,
   'tokenade-rules': tokenadeRules,
   'ours-rules': oursRulesOnly,
+  cto: claudeTokenOptimizer,
+  tokenjuice,
 };
 
 /** Loads extra arms from a JSON file, so an outsider can add their own. */
@@ -199,11 +271,31 @@ export function loadArms(path) {
     // though it shipped no instructions at all. The shipped arms could do this
     // and only the external path could not, which is the worst place for the
     // gap to be: it is the path we do not run ourselves.
+    // A SCAFFOLD IS VALIDATED HERE, NOT AT FIRST USE. A missing or misspelled
+    // directory would otherwise surface as a throw inside the executor, midway
+    // through a paid campaign, after the arms before it had already run -- and
+    // the shipped arms are checked by a test while this path is the one an
+    // outsider uses, so it is the path that must fail early and loudly. The
+    // requirement that it be absolute is the same reasoning: a relative path
+    // would resolve against whatever directory the campaign happened to start
+    // in, which is not something an arms file can know.
+    if (arm.scaffold !== undefined) {
+      if (typeof arm.scaffold !== 'string' || !arm.scaffold) {
+        throw new Error(`arm ${name} has a non-string scaffold`);
+      }
+      if (!isAbsolute(arm.scaffold)) {
+        throw new Error(`arm ${name} scaffold must be an absolute path, got "${arm.scaffold}"`);
+      }
+      if (!existsSync(arm.scaffold) || !statSync(arm.scaffold).isDirectory()) {
+        throw new Error(`arm ${name} scaffold is not a directory: ${arm.scaffold}`);
+      }
+    }
     out[name] = {
       name,
       settings: arm.settings ?? {},
       env: arm.env ?? {},
       ...(arm.claudeMd === undefined ? {} : { claudeMd: arm.claudeMd }),
+      ...(arm.scaffold === undefined ? {} : { scaffold: arm.scaffold }),
     };
   }
   return out;

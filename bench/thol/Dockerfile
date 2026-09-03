@@ -66,6 +66,25 @@ COPY thol/pkg/optimizer.tgz /tmp/optimizer.tgz
 COPY thol/pkg/provenance.json /opt/optimizer-provenance.json
 RUN npm install -g /tmp/optimizer.tgz
 
+# The competitors, pinned, installed from the registry because that is how a
+# user gets them.
+#
+# PRESENT IN EVERY IMAGE, INCLUDING THE ONE CONTROL RUNS ON, and that is
+# deliberate: an arm is a settings file, so if a competitor were installed only
+# for its own arm the image digest would differ between arms and the ledger
+# would -- correctly -- refuse to compare them. Installed and unconfigured, they
+# do nothing: control names no hooks, so nothing of theirs is ever invoked.
+#
+# Pinned rather than floating, for the same reason the optimizer tarball is
+# built from this tree: `npm i -g name@latest` inside a rebuild would silently
+# change what a competitor arm measured while the arm definition, the settings
+# and the results file all still said the same thing.
+#
+# claude-token-optimizer's twelve hooks are shell scripts that live in the
+# PROJECT (see bench/ledger/competitors/), but nine of them shell out to `cto`,
+# so the package has to be here as well as the scaffold.
+RUN npm install -g claude-token-optimizer@2.3.20 tokenjuice@0.8.1
+
 # Pre-seed a SHARED managed runtime for plugin/launch.mjs.
 #
 # Why this is required, and not an optimisation. launch.mjs does not serve the

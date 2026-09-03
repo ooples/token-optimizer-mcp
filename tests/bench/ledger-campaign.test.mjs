@@ -6,9 +6,9 @@
  */
 
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { appendRows, loadRows, completedReps, buildsPresent } from '../../bench/ledger/store.mjs';
@@ -872,10 +872,57 @@ describe('arms are data, not code', () => {
     expect(Object.keys(ARMS)).toEqual(
       expect.arrayContaining(['control', 'assist', 'assist-noseed', 'assist-norules', 'tokenade-rules'])
     );
-    const allowed = new Set(['env', 'name', 'settings', 'claudeMd']);
+    // `scaffold` was added for the same reason and under the same restriction.
+    // A competitor whose hooks live in the PROJECT rather than at an absolute
+    // path in the image -- claude-token-optimizer writes twelve scripts into
+    // .claude/hooks/ and invokes them relatively -- could otherwise only be
+    // represented by its rules file, which is the understatement the tokenade
+    // arm already carries. A scaffold is a PATH TO FILES, so the arm stays data:
+    // it cannot express behaviour, only content, and the assertions below hold
+    // it to that.
+    const allowed = new Set(['env', 'name', 'settings', 'claudeMd', 'scaffold']);
     for (const arm of Object.values(ARMS)) {
       for (const key of Object.keys(arm)) expect(allowed.has(key)).toBe(true);
       expect(arm.name).toBeTruthy();
+      if (arm.scaffold !== undefined) {
+        // Data, and data that exists: a scaffold naming a directory that is not
+        // there fails at run time, mid-campaign, after earlier arms have already
+        // been paid for.
+        expect(typeof arm.scaffold).toBe('string');
+        expect(isAbsolute(arm.scaffold)).toBe(true);
+        expect(existsSync(arm.scaffold)).toBe(true);
+        expect(statSync(arm.scaffold).isDirectory()).toBe(true);
+      }
+    }
+  });
+
+  test('a competitor arm is the competitor, not a paraphrase of it', () => {
+    // Both were captured by running the vendor's own installer in a container.
+    // The check that matters is that their INTERCEPTION is present, because a
+    // competitor represented by its rules file alone is a weaker opponent than
+    // the one we name -- which is exactly the caveat the tokenade arm carries.
+    const cto = ARMS.cto;
+    const ctoCommands = JSON.stringify(cto.settings.hooks.PreToolUse);
+    expect(ctoCommands).toContain('pre-tool-read-guard.sh');
+    expect(ctoCommands).toContain('pre-tool-bash-guard.sh');
+    // Their hooks are invoked relative to the project, which is why the arm
+    // needs a scaffold at all -- if this ever becomes absolute, the scaffold is
+    // no longer what makes the arm work and the coupling should be revisited.
+    expect(ctoCommands).toContain('.claude/hooks/');
+    expect(existsSync(join(cto.scaffold, '.claude', 'hooks', 'pre-tool-read-guard.sh'))).toBe(true);
+    expect(existsSync(join(cto.scaffold, 'CLAUDE.md'))).toBe(true);
+
+    // tokenjuice needs no scaffold: its installer writes only a settings block
+    // pointing at the globally installed binary.
+    const tj = ARMS.tokenjuice;
+    expect(tj.scaffold).toBeUndefined();
+    expect(JSON.stringify(tj.settings.hooks.PreToolUse)).toContain('tokenjuice');
+
+    // Neither may leave our own optimizer running, or the arm measures two
+    // products at once and attributes both to the competitor.
+    for (const arm of [cto, tj]) {
+      expect(arm.env.TOKEN_OPTIMIZER_MODE).toBe('off');
+      expect(JSON.stringify(arm.settings)).not.toContain('token-optimizer-mcp');
     }
   });
 
