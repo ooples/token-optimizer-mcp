@@ -705,7 +705,105 @@ export const wholeFileTransform = {
   ],
 };
 
+/**
+ * ADVERSARIAL: nothing to read, in a repo far too large to read.
+ *
+ * THE BIAS CONTROL THIS BATTERY WAS MISSING, and it exists because the other
+ * adversarial task does not converge. With `whole-file-transform` excluded from
+ * the headline, the large-context aggregate carried the harness's own
+ * `NO ADVERSARIAL TASKS RESOLVED` warning: every remaining task was one our
+ * mechanism is designed to win, which is exactly the shape of a rigged battery.
+ *
+ * WHY THIS ONE SHOULD CONVERGE WHERE THE OTHER DOES NOT. The transform task
+ * leaves the agent a strategy choice -- 120 targeted edits or one rewrite -- and
+ * the two cost wildly different amounts, so its interval stays wide however many
+ * reps are bought. Here the deliverable is a single small file fixed by the
+ * spec, so there is one sensible strategy and the cost is close to the same
+ * every run.
+ *
+ * WHY IT IS ADVERSARIAL RATHER THAN MERELY NEUTRAL. The answer exists nowhere in
+ * the tree, so retrieval, outlining and substitution have nothing to offer and
+ * only their overhead to charge -- while the tree is large enough (1,200
+ * generated functions) that any indexing or seeding we do has real work to get
+ * through first. That is the honest question for a large-context product: does
+ * it pay for machinery it cannot use? If our arm WINS here, this battery is
+ * measuring something other than the mechanism, and the task should be made
+ * harder.
+ */
+export const generationAmidBulk = {
+  id: 'generation-amid-bulk',
+  family: 'generation',
+  adversarial: true,
+  tracks: ['cold', 'warm'],
+  prompt:
+    'Create util/retry_budget.py containing a function `budget(total_ms, attempts)` that returns a ' +
+    'list of per-attempt time budgets in milliseconds. The first attempt gets half of total_ms, and ' +
+    "each attempt after that gets half of the previous attempt's budget, with a floor of 250 ms. " +
+    'Return exactly `attempts` entries. Do not modify any existing file.',
+  setup(dir) {
+    write(dir, 'README.md', '# order service\n');
+    // Large, and entirely beside the point. The bulk IS the treatment being
+    // controlled for: it is what makes indexing and seeding expensive without
+    // making them useful.
+    write(dir, 'pkg/pricing_bulk.py', bigModule(900, -1));
+    write(dir, 'pkg/rules_bulk.py', bigModule(300, -1));
+  },
+  checks: [
+    {
+      name: 'file created',
+      weight: 1,
+      run: (dir) => existsSync(join(dir, 'util/retry_budget.py')),
+    },
+    {
+      name: 'function defined',
+      weight: 1,
+      run: (dir) =>
+        /def\s+budget\s*\(\s*total_ms\s*,\s*attempts\s*\)/.test(read(dir, 'util/retry_budget.py')),
+    },
+    {
+      // STRICT ONLY ABOUT THE TWO FACTS THAT MATTER, generous about spelling --
+      // the rule the `pure-generation` verifier had to learn the hard way, where
+      // a check that missed `delay *= 2` scored correct code 2 of 4 and dragged
+      // the control arm to 25% completion. It halves, and it floors at 250.
+      name: 'halves and floors',
+      weight: 2,
+      run: (dir) => {
+        const src = read(dir, 'util/retry_budget.py');
+        const floors = /250/.test(src);
+        const halves = /(\/\/?=?\s*2|\*\s*0?\.5|>>=?\s*1)/.test(src);
+        return floors && halves;
+      },
+    },
+    {
+      // The bulk must survive. An agent that "helpfully" rewrites the fixture has
+      // not done this task, and without this check that would still score full
+      // marks.
+      name: 'the irrelevant bulk was left alone',
+      weight: 1,
+      run: (dir) =>
+        (read(dir, 'pkg/pricing_bulk.py').match(/^def rule_\d{4}\(/gm) || []).length === 900,
+    },
+  ],
+};
+
+
 export const GOLDEN = {
+  // Terse, correct, and it leaves the bulk alone -- the answer this task is
+  // scored against, which must come out at 1.000.
+  'generation-amid-bulk': (dir) =>
+    write(dir, 'util/retry_budget.py', [
+      'FLOOR_MS = 250',
+      '',
+      'def budget(total_ms, attempts):',
+      '    out = []',
+      '    share = total_ms / 2',
+      '    for _ in range(attempts):',
+      '        out.append(max(FLOOR_MS, share))',
+      '        share /= 2',
+      '    return out',
+      '',
+    ].join('\n')),
+
   'large-file-defect': (dir) =>
     write(
       dir,
@@ -787,6 +885,10 @@ export const TASKS = [
   largeFileDefect,
   noisyCommand,
   wholeFileTransform,
+  // The bias control for the large-context set. Added last, after the aggregate
+  // was found to rest on three tasks our mechanism is built to win.
+  generationAmidBulk,
+
 ];
 
 /** The declared adversarial subset, which the report renders first. */
