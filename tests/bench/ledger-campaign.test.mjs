@@ -93,6 +93,53 @@ describe('the store', () => {
     expect(completedReps(rows, { ...args, build: buildKey({ image_digest: 'sha256:old', commit_sha: 'abc1234' }) })).toBe(2);
   });
 
+  test('a rep written twice counts once, so a cell cannot look finished early', () => {
+    // FROM A REAL INCIDENT. A campaign was launched twice against one store --
+    // the first process was still alive because `pkill` on Git Bash had not
+    // actually killed it -- so both resumed from the same point and wrote the
+    // same labels. The store held 94 rows carrying 50 distinct reps. `report`
+    // dedupes and saw n=50; this function counted rows and returned 94, so a
+    // 60-rep target was declared already met and the cell could never be topped
+    // up. Counting rows is only equal to counting reps while nothing ever writes
+    // a label twice.
+    appendRows(store, [
+      row({ rep: 1 }),
+      row({ rep: 2 }),
+      row({ rep: 2 }), // the duplicate a second writer produced
+      row({ rep: 3 }),
+      row({ rep: 3 }),
+    ]);
+    const rows = loadRows(store);
+    expect(rows).toHaveLength(5);
+    const done = completedReps(rows, {
+      arm: 'assist',
+      track: 'cold',
+      task: 'single-shot-extract',
+      build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }),
+    });
+    expect(done).toBe(3);
+  });
+
+  test('a rep whose only row is a harness failure still does not count', () => {
+    // The distinct-label fix must not quietly promote a killed container into a
+    // completed rep: the exclusion and the de-duplication have to compose.
+    appendRows(store, [
+      row({ rep: 1 }),
+      row({ rep: 2, status: 'error', usd: 0, turns: 0 }),
+      row({ rep: 3, status: 'error', usd: 0, turns: 0 }),
+      row({ rep: 3 }), // same label, but this one is a real measurement
+    ]);
+    const rows = loadRows(store);
+    const done = completedReps(rows, {
+      arm: 'assist',
+      track: 'cold',
+      task: 'single-shot-extract',
+      build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }),
+    });
+    // rep 1 and rep 3 are real; rep 2 is only a harness failure.
+    expect(done).toBe(2);
+  });
+
   test('builds present are listed newest first', () => {
     appendRows(store, [
       row({ image_digest: 'sha256:old', started_at: '2026-08-30T10:00:00Z' }),

@@ -88,20 +88,33 @@ export function loadRows(path) {
  * stale row can only ever cause a loud failure, never a quiet average.
  */
 export function completedReps(rows, { arm, track, task, build }) {
-  return rows.filter(
-    (r) =>
-      r.arm === arm &&
-      r.track === track &&
-      r.task === task &&
-      buildKey(r) === build &&
-      // A RUN THE HARNESS NEVER STARTED DOES NOT SATISFY THE REP COUNT. It is
-      // excluded from every figure in the report, so counting it as complete
-      // here would leave a cell permanently one rep short of its
-      // pre-registered n with no way to top it up -- observed: a cell sat at
-      // 29 real reps of 30 and the runner declined to add the last one because
-      // a killed container occupied the slot.
-      !isHarnessFailure(r)
-  ).length;
+  // COUNTS DISTINCT REP LABELS, NOT ROWS, because the reader counts distinct
+  // labels and these two must agree.
+  //
+  // It counted rows until a campaign was accidentally launched twice against
+  // one store. Both processes resumed from the same point, so labels 5..48 were
+  // each written twice: 94 rows carrying 50 distinct reps. `report` deduped to
+  // n=50, while this function returned 94 and therefore declared a 60-rep cell
+  // finished. The run could not be topped up -- every remaining rep was skipped
+  // as already done -- and a cell 10 reps short of its pre-registered n looked
+  // complete. Row count and rep count are only equal while nothing ever writes
+  // a label twice, which is an assumption about the world, not about the data.
+  const seen = new Set();
+  for (const r of rows) {
+    if (r.arm !== arm || r.track !== track || r.task !== task) continue;
+    if (buildKey(r) !== build) continue;
+    // A RUN THE HARNESS NEVER STARTED DOES NOT SATISFY THE REP COUNT. It is
+    // excluded from every figure in the report, so counting it as complete
+    // here would leave a cell permanently one rep short of its pre-registered
+    // n with no way to top it up -- observed: a cell sat at 29 real reps of 30
+    // and the runner declined to add the last one because a killed container
+    // occupied the slot.
+    if (isHarnessFailure(r)) continue;
+    const rep = Number(r.rep);
+    if (!Number.isFinite(rep)) continue;
+    seen.add(rep);
+  }
+  return seen.size;
 }
 
 /**
