@@ -1,9 +1,10 @@
 # Head-to-head: two competitors run as products, not as quotations
 
-One build (image `sha256:abfce039` at commit `407baf83`), cold track, fixed n=30
-per arm per task, no early stopping, **100% completion on all 28 cells**. Raw
-rows: `competitors-v1.jsonl` (840 rows, no duplicates, single build). Spend:
-$64.26.
+One build (image `sha256:abfce039` at commit `407baf83`), cold track, no early
+stopping, **100% completion on all 28 cells**. Fixed n=30 per arm per task,
+except `generation-amid-bulk` at **n=60**, which is the n its own
+pre-registration (PREREGISTRATION.md, Addendum 2) binds it to. Raw rows:
+`competitors-v1.jsonl` (1,050 rows, no duplicates, single build). Spend: $79.77.
 
 ## The result
 
@@ -11,36 +12,36 @@ Cost per unit of work delivered, failures charged, against vanilla Claude Code:
 
 | arm | vs control | | what it is |
 | --- | --- | --- | --- |
-| **`assist`** | **0.665** [0.624, 0.704] | **-33.5%** | our full product |
-| `ours-rules` | 0.677 [0.639, 0.715] | -32.3% | our text alone |
-| `tokenade-rules` | 0.759 [0.722, 0.794] | -24.1% | their text alone (see caveat) |
-| `tokenjuice` | 0.861 [0.818, 0.905] | -13.9% | their product, installed |
-| `cto-patched` | 0.972 [0.928, 1.019] | **not established** | their product, hooks repaired by us |
-| `cto` | 0.984 [0.935, 1.036] | **not a measurement** | their product as shipped -- inert |
+| **`assist`** | **0.664** [0.630, 0.697] | **-33.6%** | our full product |
+| `ours-rules` | 0.680 [0.645, 0.715] | -32.0% | our text alone |
+| `tokenade-rules` | 0.771 [0.737, 0.807] | -22.9% | their text alone (see caveat) |
+| `tokenjuice` | 0.864 [0.824, 0.903] | -13.6% | their product, installed |
+| `cto-patched` | 0.973 [0.930, 1.014] | **not established** | their product, hooks repaired by us |
+| `cto` | 0.991 [0.945, 1.036] | **not a measurement** | their product as shipped -- inert |
 
 Against the two competitors that were actually measured, `assist` leads.
 
 ## The primary endpoint replicates; the attribution does not survive
 
 **Against the competitor's text, pre-registered as the primary endpoint:**
-`assist` vs `tokenade-rules` = **0.876 [0.821, 0.931]**, a 12.4% win over 4 tasks.
+`assist` vs `tokenade-rules` = **0.861 [0.814, 0.908]**, a 13.9% win over 4 tasks.
 
 That is a genuine replication. The earlier large-context campaign, on a
 *different image and a different commit* and with only three tasks, measured
-**0.878 [0.831, 0.926]**. Two independent builds, 12.2% and 12.4%. Nothing about
-this number depends on a single run.
+**0.878 [0.831, 0.926]**. Two independent builds, 12.2% and 13.9%, intervals
+overlapping heavily. Nothing about this number depends on a single run.
 
 **Against our own text, which is the attribution that matters:** `assist` vs
-`ours-rules` = **0.982 [0.918, 1.050]** -- the interval spans parity, so
+`ours-rules` = **0.976 [0.923, 1.036]** -- the interval spans parity, so
 **interception adds nothing measurable over shipping our rules file alone.**
 
 | task | assist vs ours-rules | |
 | --- | --- | --- |
 | noisy-command | 0.883 [0.820, 0.952] | interception helps |
+| generation-amid-bulk | 0.927 [0.830, 1.031] | spans parity (n=60) |
 | large-file-defect | 0.964 [0.921, 1.012] | spans parity |
-| generation-amid-bulk | 0.950 [0.800, 1.120] | spans parity |
 | whole-file-transform | 1.149 [0.962, 1.395] | spans parity, point estimate against us |
-| **aggregate** | **0.982** [0.918, 1.050] | **not established** |
+| **aggregate** | **0.976** [0.923, 1.036] | **not established** |
 
 This is weaker than the post-fix result in RESULTS-LARGECONTEXT.md, which found
 0.942 [0.893, 0.992] and excluded parity. That comparison covered two tasks; this
@@ -115,18 +116,28 @@ on the surface it claims, looks like.
 
 ## A defect this benchmark is structurally blind to
 
-`assist` on `large-file-defect` runs at a median **6.17 minutes per run**. Every
-other cell in this campaign is 0.16-0.56. Cost ($0.0721) and turns (5.0) are
-normal, so it is not doing more work in token terms -- it is roughly six minutes
-of our hooks per run on a 342 KB file.
+`assist` on `large-file-defect` runs at a median **6.17 minutes per run** against
+**0.31** for control on the same task. Cost ($0.0721) and turns (5.0) are normal
+or better than control's, so it is not doing more work in token terms -- it is
+roughly six minutes of our hooks per run on a 342 KB file, about **15x** the
+control arm's wall clock.
 
 The endpoint here is dollars, so that stall is **free in the metric** and
 miserable for a user. Nothing this benchmark has ever published could have caught
 it, and it took looking at `started_at` gaps -- for scheduling reasons, not
 scientific ones -- to notice.
 
-It is not a regression from this image: the same cell measured 5.02 and 6.34
-min/run on the previous image. It has always been there and was never measured.
+**Measured on uncontaminated gaps only.** These campaigns ran with
+`--concurrency 2`, and `coldArm` parallelises across TASKS within an arm, so a
+raw gap between two runs of one cell can contain another task's run and overstate
+the duration. Every figure here excludes gaps with another task interleaved: 7 of
+29 gaps were dropped for this cell. The correction matters -- a first pass quoted
+5.02 min/run for `largecontext`, which is 3.44 once contaminated gaps are removed.
+
+It is not a regression from the current image. Clean-gap medians for the same
+cell: **6.17** here, **6.28** in `postfix.jsonl`, **3.44** in `largecontext.jsonl`,
+against control at 0.31-0.41 throughout. Two independent campaigns agree closely.
+It has always been there and was simply never measured.
 
 ## What bounds every number above
 
@@ -140,8 +151,11 @@ min/run on the previous image. It has always been there and was never measured.
   Stack: Unknown" and "Add your common commands here"; their product expects a
   human to fill it in and nobody does on a generated repo. To that extent both
   `cto` rows understate them.
-- **`generation-amid-bulk` is pre-registered at n=60** and ran at 30 here, so its
-  contribution to these aggregates is below its own registered power.
+- ~~`generation-amid-bulk` ran at n=30 against its registered n=60~~ **resolved**:
+  all seven arms were topped up to n=60 on that task, so every figure above meets
+  the n its own pre-registration binds it to. The deviation is recorded here
+  rather than deleted, because the first published version of this table was
+  computed at n=30 and a reader may have seen it.
 - **One client version.** Every statement about `CLAUDE_TOOL_NAME` is scoped to
   Claude Code 2.1.251; an older client may well have set it, which would mean
   these hooks worked once and were broken by a client change rather than shipped
