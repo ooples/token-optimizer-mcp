@@ -286,6 +286,13 @@ describe('the seed keeps the promise its budget makes', () => {
           timeout: 30_000,
           env: {
             ...process.env,
+            // STATED, NOT INHERITED. `...process.env` carries whatever
+            // TOKEN_OPTIMIZER_SEED the parent happens to hold, and the
+            // assist-noseed arm sets it to '0' -- so a developer or a CI job
+            // with it set watches the child correctly skip seeding and this
+            // test fail at the graph assertions, for a reason that is nowhere
+            // in the test. An integration test that seeds must say so.
+            TOKEN_OPTIMIZER_SEED: '1',
             TOKEN_OPTIMIZER_WIKI_DIR: graph,
             TOKEN_OPTIMIZER_MODE: 'assist',
             TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
