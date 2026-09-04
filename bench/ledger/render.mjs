@@ -1,0 +1,199 @@
+/**
+ * Turning a report into something a sceptic can read.
+ *
+ * ADVERSARIAL FAMILIES ARE PRINTED FIRST, before any headline. That ordering is
+ * the one editorial decision in this file and it is deliberate: a benchmark
+ * written by the authors of a tool it measures is worth nothing unless the
+ * places their tool cannot help are the first thing a reader sees. Putting them
+ * last, or in an appendix, is how a vendor benchmark becomes marketing.
+ *
+ * A WITHHELD HEADLINE IS PRINTED AS WITHHELD, never as a number with a caveat
+ * attached. Anything printed as a number gets quoted as a number.
+ */
+
+const pct = (r) => (Number.isFinite(r) ? `${((r - 1) * 100).toFixed(1)}%` : '--');
+const fixed = (n, d = 3) => (Number.isFinite(n) ? n.toFixed(d) : '--');
+
+/** One arm on one track. */
+function renderArm(name, result, { adversarialTasks, baseline = 'control' }) {
+  const lines = [];
+  const adversarial = result.perTask.filter((t) => adversarialTasks.has(t.task));
+  const reuse = result.perTask.filter((t) => !adversarialTasks.has(t.task));
+
+  lines.push(`  ${name}`);
+
+  if (adversarial.length) {
+    lines.push('    where our approach cannot help (reported first, by design)');
+    for (const t of adversarial) lines.push(taskLine(t));
+  } else {
+    // Loud, because an empty adversarial set silently removes the benchmark's
+    // only structural defence against author bias.
+    lines.push('    !! NO ADVERSARIAL TASKS RESOLVED -- this comparison has no bias control');
+  }
+
+  if (reuse.length) {
+    lines.push('    where reuse can help');
+    for (const t of reuse) lines.push(taskLine(t));
+  }
+
+  if (result.totallyFailed?.length) {
+    // Named, and loud. This arm spent money and delivered nothing at all on
+    // these tasks; averaging over the rest would summarise an easier battery
+    // than the one that was run.
+    lines.push(
+      `    DELIVERED NOTHING on: ${result.totallyFailed.join(', ')} -- headline withheld, ` +
+        'because a mean over the tasks it did complete is not a summary of this arm.'
+    );
+  }
+
+  if (result.unresolved.length) {
+    // SHOWN WITH THEIR NUMBERS, not just named. Listing only the task ids meant
+    // the figures were invisible in the report, so reading them required a
+    // hand-rolled script -- which is exactly how I mixed two builds in an
+    // ad-hoc analysis that bypassed the build guard living in report().
+    // Withholding a number from the HEADLINE is right; hiding it from the
+    // reader pushes them somewhere with no guardrails at all.
+    lines.push('    unresolved -- excluded from the headline, shown for inspection only');
+    for (const t of result.unresolvedDetail || []) lines.push(`${taskLine(t)}  UNRESOLVED`);
+    if (!result.unresolvedDetail?.length) {
+      lines.push(`      ${result.unresolved.join(', ')}`);
+    }
+  }
+
+  lines.push('');
+  if (!result.trustworthy) {
+    lines.push(
+      `    HEADLINE WITHHELD -- ${(result.unresolvedShare * 100).toFixed(0)}% of the ` +
+        `battery did not converge (${result.tasksCounted} task(s) usable)`
+    );
+  } else {
+    const ci = result.costRatioCI;
+    const band =
+      Number.isFinite(ci?.low) && Number.isFinite(ci?.high)
+        ? ` [${fixed(ci.low)}, ${fixed(ci.high)}]`
+        : '';
+    lines.push(
+      // NAMED, NOT ASSUMED. Printing "of control" when the comparator was
+      // another candidate would be a false statement in the one line most
+      // likely to be quoted on its own.
+      `    cost per unit delivered: ${fixed(result.costRatio)}${band} of ${baseline} ` +
+        `(${pct(result.costRatio)}) over ${result.tasksCounted} task(s)`
+    );
+    // SAID IN WORDS, not left to the reader to notice the interval contains 1.
+    // A headline printed as a bare number gets quoted as a bare number, and the
+    // whole point of this report is that it cannot be quoted for more than it
+    // shows.
+    if (!result.costRatioSignificant) {
+      lines.push(
+        `    NOT DISTINGUISHABLE FROM ${baseline.toUpperCase()} -- the interval spans ` +
+          'parity, so this difference is not established'
+      );
+    }
+  }
+  return lines;
+}
+
+function taskLine(t) {
+  // Three states, not two, because "significant" and "significant after
+  // correction" are different claims and only the second is publishable when
+  // the table holds more than one test. Spelling out the middle state stops a
+  // reader taking an uncorrected exclusion for a result.
+  const sig = !t.significant
+    ? '  (interval spans parity)'
+    : t.survivesCorrection === false
+      ? `  (excludes parity, but NOT after correcting for ${t.familyNote || 'the family'})`
+      : '';
+  const ci =
+    Number.isFinite(t.ci?.low) && Number.isFinite(t.ci?.high)
+      ? `[${fixed(t.ci.low)}, ${fixed(t.ci.high)}]`
+      : '[--, --]';
+  const completion = `${(t.arm.completion * 100).toFixed(0)}%`;
+  return (
+    `      ${t.task.padEnd(26)} ${fixed(t.ratio).padStart(7)} ${ci.padStart(18)}` +
+    `  completed ${completion.padStart(4)}  n=${t.arm.n}${sig}`
+  );
+}
+
+/**
+ * The whole report.
+ *
+ * Tracks are rendered separately and never combined, so a tool that wins warm
+ * and loses cold is described rather than averaged.
+ */
+export function renderReport(report, { adversarialTasks = new Set() } = {}) {
+  const lines = [];
+  lines.push('LEDGER -- cost per unit of work delivered, failures included');
+  lines.push('');
+
+  for (const [track, data] of Object.entries(report.tracks)) {
+    const baseline = data.baseline || 'control';
+    lines.push(`TRACK: ${track}${baseline === 'control' ? '' : `  (baseline: ${baseline})`}`);
+    if (!data.control) {
+      lines.push(`  no ${baseline} arm on this track; nothing can be compared`);
+      lines.push('');
+      continue;
+    }
+    const arms = Object.entries(data.arms);
+    if (!arms.length) lines.push(`  no arms besides ${baseline}`);
+    for (const [name, result] of arms) {
+      lines.push(...renderArm(name, result, { adversarialTasks, baseline }));
+    }
+    lines.push('');
+  }
+
+  if (report.harnessFailures?.length) {
+    // LOUD, because these rows were excluded from every number above and a
+    // reader must be able to decide whether that exclusion is doing too much
+    // work. Grouped by arm and task: 30 spawn failures concentrated in one
+    // cell is a broken campaign, while a handful spread thinly is noise.
+    const by = new Map();
+    for (const r of report.harnessFailures) {
+      const k = `${r.arm}/${r.task}`;
+      by.set(k, (by.get(k) || 0) + 1);
+    }
+    lines.push(
+      `HARNESS FAILURES: ${report.harnessFailures.length} run(s) never started ` +
+        '(errored at zero cost and zero turns) and are EXCLUDED from every figure above.'
+    );
+    for (const [k, n] of [...by].sort((a, b) => b[1] - a[1])) lines.push(`  ${n.toString().padStart(3)}  ${k}`);
+    lines.push(
+      '  These are our infrastructure, not the arm. A cell with many of them has ' +
+        'fewer real reps than its pre-registered n and should be re-run, not read.'
+    );
+    lines.push('');
+  }
+
+  if (report.rejected?.length) {
+    // Surfaced, because a run that happened but could not be stored is a hole
+    // in the ledger and the totals will not match what was spent.
+    lines.push(`REJECTED ROWS: ${report.rejected.length}`);
+    for (const { problem } of report.rejected.slice(0, 5)) lines.push(`  ${problem}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * A one-line verdict, for a commit message or a PR body.
+ *
+ * Returns null when nothing may be claimed. A caller that wants a sentence and
+ * gets null is being told there is no result, which is the correct outcome far
+ * more often than a benchmark usually admits.
+ */
+export function headline(report, { track = 'cold', arm } = {}) {
+  const data = report.tracks?.[track];
+  // NAME THE ARM THAT WAS ACTUALLY SELECTED. With `arm` omitted this picked the
+  // first result and then labelled the sentence "arm", so a line destined for a
+  // commit message or a PR body reported a real number against a placeholder --
+  // and with several arms present, the reader could not tell which one it
+  // described.
+  const [firstName, firstResult] = Object.entries(data?.arms || {})[0] || [];
+  const name = arm ?? firstName;
+  const result = arm ? data?.arms?.[arm] : firstResult;
+  if (!result || !result.trustworthy) return null;
+  return (
+    `${name || 'arm'} on ${track}: ${fixed(result.costRatio)} of ` +
+    `${data.baseline || 'control'}'s cost per unit ` +
+    `delivered (${pct(result.costRatio)}) across ${result.tasksCounted} task(s)`
+  );
+}

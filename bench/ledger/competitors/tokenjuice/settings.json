@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/bin/tokenjuice claude-code-pre-tool-use --wrap-launcher /usr/local/bin/tokenjuice",
+            "statusMessage": "wrapping bash through tokenjuice for compaction",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

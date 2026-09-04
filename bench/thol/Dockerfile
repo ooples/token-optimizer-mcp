@@ -21,9 +21,25 @@ ARG OPTIMIZER_VERSION=6.0.2
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 python3-venv python3-pip git curl ca-certificates \
+      python3 python3-venv python3-pip python3-pytest python-is-python3 \
+      git curl ca-certificates \
       jq sqlite3 ripgrep less procps \
     && rm -rf /var/lib/apt/lists/*
+
+# THE BENCHMARK WAS MEASURING ITS OWN ENVIRONMENT. Captured with
+# --output-format stream-json on the debug task, three of six tool calls were
+# the agent fighting this image rather than doing the work:
+#
+#   python -m pytest        -> `python` did not exist, only python3
+#   python3 -m pytest       -> pytest was not installed
+#   pip install pytest; ... -> no network, so it hand-rolled a test runner
+#
+# The task prompt says to run `python -m pytest -q`, so every debug measurement
+# taken before this line was substantially friction, not agent behaviour: the
+# ~10 median turns, the 1.9x spread, and the "discretionary exploration"
+# diagnosis all inherited it. python-is-python3 and python3-pytest make the
+# stated command work, so what remains to measure is the agent.
+RUN python3 -m pytest --version && python --version
 
 # Claude Code is the harness under test. Pin it: leaderboard.py warns on mixed
 # versions, and a campaign is only valid on a single client version.
@@ -49,6 +65,25 @@ COPY thol/pkg/optimizer.tgz /tmp/optimizer.tgz
 # content rather than to a version string that cannot tell two branches apart.
 COPY thol/pkg/provenance.json /opt/optimizer-provenance.json
 RUN npm install -g /tmp/optimizer.tgz
+
+# The competitors, pinned, installed from the registry because that is how a
+# user gets them.
+#
+# PRESENT IN EVERY IMAGE, INCLUDING THE ONE CONTROL RUNS ON, and that is
+# deliberate: an arm is a settings file, so if a competitor were installed only
+# for its own arm the image digest would differ between arms and the ledger
+# would -- correctly -- refuse to compare them. Installed and unconfigured, they
+# do nothing: control names no hooks, so nothing of theirs is ever invoked.
+#
+# Pinned rather than floating, for the same reason the optimizer tarball is
+# built from this tree: `npm i -g name@latest` inside a rebuild would silently
+# change what a competitor arm measured while the arm definition, the settings
+# and the results file all still said the same thing.
+#
+# claude-token-optimizer's twelve hooks are shell scripts that live in the
+# PROJECT (see bench/ledger/competitors/), but nine of them shell out to `cto`,
+# so the package has to be here as well as the scaffold.
+RUN npm install -g claude-token-optimizer@2.3.20 tokenjuice@0.8.1
 
 # Pre-seed a SHARED managed runtime for plugin/launch.mjs.
 #

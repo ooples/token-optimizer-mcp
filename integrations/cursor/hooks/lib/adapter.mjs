@@ -737,9 +737,81 @@ export function policyText(
     .join(' ');
   const recording = tools.has('wiki_write')
     ? `\n\n## Record what you work out\n\nCall wiki_write when you establish something durable about this project, while\nyou still hold the context. Every claim needs at least one anchor -- a real file\npath, or path#symbol -- because an unanchored claim can never be checked against\nthe code again and would be served as current forever; unanchored writes are\nrefused.\n\nWorth recording: a decision and why the alternative was rejected, a failure and\nwhat actually caused it, a command that turned out to be the one that works.\nNot worth recording: what the code plainly says. Every wiki_write must include\nthe concrete evidence, when it applies, a calibrated confidence label, its\nscope, and what would invalidate it. Prefer the thing someone had to work out,\nbecause that exists nowhere in the source tree.${extractionNotice()}`
-    : '\n\nStructural graph capture remains active through lifecycle hooks. Durable semantic MCP writes are not requested because the writer schema is not proven available.';
+    // WAS 158 CHARACTERS OF SELF-DESCRIPTION. "Structural graph capture remains
+    // active through lifecycle hooks. Durable semantic MCP writes are not
+    // requested because the writer schema is not proven available." -- true,
+    // and it changed no decision the model ever made with it. Fixed context is
+    // charged on every session; it has to earn its place by altering behaviour.
+    : '';
 
-  return `# Token optimization is active\n\nLive graph capture is active through the lifecycle adapter.\n\n${connection}${routing}${enforcement}${utilities ? `\n\n${utilities}` : ''}${recording}${projectBriefing()}`;
+  return `# Token optimization is active\n\n${outputDiscipline()}\n\n${connection}${routing}${enforcement}${utilities ? `\n\n${utilities}` : ''}${recording}${projectBriefing()}`;
+}
+
+/**
+ * The only guidance measured to move the expensive column.
+ *
+ * WHY THIS EXISTS, AND WHY IT IS SHORT. Every mechanism this product ships
+ * reduces what the model READS -- the bound, the compactor, outline
+ * substitution, the search advisory. Reads are cache_read at $0.30/M, the
+ * cheapest token class there is. What the model WRITES is output at $15/M,
+ * fifty times dearer per token.
+ *
+ * The leaderboard leader ships no interception worth the name: their own CLI is
+ * invoked 0.38 times per task. What they ship is a rules file, and on sixteen
+ * matched non-web tasks their output tokens are 0.722 of control against
+ * cache_read at 0.784 -- the smaller cut in the dearer column is worth more.
+ * They changed behaviour with instructions instead of intercepting calls.
+ *
+ * SHORTER THAN THEIRS, DELIBERATELY. Their file is 2,668 characters and roughly
+ * 60% of it advertises that barely-used CLI, paid as cache_creation on every
+ * session and re-read every turn. It is why their advantage shrinks with task
+ * length -- corr(length, ratio) = -0.689 -- and why their three losses are the
+ * three shortest tasks. Carrying only the part that works, at a fraction of the
+ * fixed cost, is how the short tasks are won rather than merely survived.
+ *
+ * THE LAST TWO LINES ARE NOT PADDING. Terseness trades against completeness,
+ * and a rule that only said "write less" would buy cost with quality -- which
+ * Ledger scores as cost per unit of work DELIVERED, so it would show up as no
+ * gain at all. Correctness and verbatim identifiers are what keep the trade
+ * honest.
+ *
+ * This block replaces internal status prose that described our own plumbing to
+ * the model -- "live graph capture is active through the lifecycle adapter",
+ * "the writer schema is not proven available" -- 139 tokens per session that
+ * changed no decision it was ever read by.
+ */
+/**
+ * The block itself, exported so a benchmark arm can deliver it the way a
+ * competitor delivers theirs -- as a CLAUDE.md, with no hooks at all.
+ *
+ * ONE SOURCE OF TRUTH, deliberately. The head-to-head compared our arm (hooks
+ * PLUS this text) against theirs (text alone) and I described it as text
+ * versus text, which it was not. Fixing that needs an arm carrying only these
+ * words; copying them into the benchmark would let the measured text drift
+ * from the shipped text, so the arm imports this constant instead.
+ */
+export const OUTPUT_DISCIPLINE = [
+  '## Keep output lean',
+  '',
+  'Every token you write is billed at output rates -- far dearer than reading.',
+  '- No preamble, recap, tool-call narration, or closing summary. Answer directly.',
+  '- Quote the shortest decisive line of a command result; never paste it whole.',
+  '- Write the least code that works; reuse what exists before adding.',
+  '- Keep identifiers, paths, API names and error strings verbatim -- never paraphrase.',
+  '- Correctness first: brevity that loses a fact is not a saving.',
+].join('\n');
+
+function outputDiscipline() {
+  // THE ISOLATING SWITCH. `assist` carries the bound, the compactor and outline
+  // substitution as well as this block, so a measurement of assist against
+  // control cannot attribute anything to the text. This exists so an arm can
+  // run every hook with the block removed and nothing else changed -- the only
+  // comparison that can say whether the instructions or the interception are
+  // doing the work.
+  const raw = String(process.env.TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE || '').trim().toLowerCase();
+  if (raw === '0' || raw === 'off' || raw === 'false' || raw === 'no') return '';
+
+  return OUTPUT_DISCIPLINE;
 }
 
 /**

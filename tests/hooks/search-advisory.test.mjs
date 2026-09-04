@@ -106,9 +106,44 @@ describe('reading a search pattern', () => {
     // A catastrophic-backtracking pattern reaching our own engine is the class
     // this repository keeps a linearity gate for. Scanning must be linear and
     // must not compile the input.
+    //
+    // ASSERTED DIRECTLY RATHER THAN WITH A STOPWATCH. This read
+    // `expect(Date.now() - started).toBeLessThan(250)`, which measures the
+    // machine: 20k characters of linear scanning takes single-digit
+    // milliseconds, so the only thing a 250 ms bound can detect on a loaded
+    // host is the load. The invariant the comment above states -- "must not
+    // compile the input" -- is exactly testable, and a test of the invariant
+    // cannot be flaked by a busy CPU or a GC pause.
+    const input = `${'a'.repeat(20_000)}!`;
+    const RealRegExp = global.RegExp;
+    const compiled = [];
+    // Constructed regexes route through here; literals in the implementation are
+    // compiled at parse time and are not affected, which is the point -- a
+    // literal cannot embed attacker input.
+    function SpyRegExp(pattern, flags) {
+      if (typeof pattern === 'string') compiled.push(pattern);
+      return new RealRegExp(pattern, flags);
+    }
+    SpyRegExp.prototype = RealRegExp.prototype;
+    global.RegExp = SpyRegExp;
+    try {
+      expect(() => identifiersIn(input)).not.toThrow();
+    } finally {
+      global.RegExp = RealRegExp;
+    }
+    // Nothing derived from the input may be handed to the regex engine.
+    expect(compiled.filter((p) => p.includes('aaaa'))).toEqual([]);
+  });
+
+  test('scanning a large pattern stays far from any backtracking blowup', () => {
+    // The loose backstop for the same defect class. Catastrophic backtracking on
+    // 20k characters does not take 300 ms, it takes effectively forever -- so a
+    // bound this generous still fails hard on a real blowup while being
+    // untouchable by ordinary contention. The tight bound it replaces is what
+    // made this file flake under full-suite load.
     const started = Date.now();
-    expect(() => identifiersIn(`${'a'.repeat(20_000)}!`)).not.toThrow();
-    expect(Date.now() - started).toBeLessThan(250);
+    identifiersIn(`${'a'.repeat(20_000)}!`);
+    expect(Date.now() - started).toBeLessThan(10_000);
   });
 
   test('malformed and empty patterns are handled, not thrown on', () => {

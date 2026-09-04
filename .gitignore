@@ -37,6 +37,17 @@ coverage/
 # Claude configuration (contains secrets)
 .claude/
 
+# ...except a competitor's captured scaffold, which is fixture DATA rather than
+# this repository's own Claude configuration and contains no secrets.
+#
+# WITHOUT THIS THE ARM MEASURES AN INERT OPPONENT. The rule above matched
+# `.claude/` at any depth, so `git add bench/ledger/competitors` committed the
+# rules file and dropped all twelve hooks -- 5 of 20 files -- without saying so.
+# A competitor arm whose hooks are missing still runs, still scores, and loses
+# to us for a reason that has nothing to do with their product.
+!bench/ledger/competitors/**/.claude/
+!bench/ledger/competitors/**/.claude/**
+
 # MCP registry tokens (secrets)
 .mcpregistry_github_token
 .mcpregistry_registry_token
