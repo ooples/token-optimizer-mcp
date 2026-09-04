@@ -1,6 +1,6 @@
 {
   "name": "io.github.ooples/token-optimizer-mcp",
-  "version": "6.0.2",
+  "version": "6.1.0",
   "description": "Intelligent token optimization for Claude Code - achieving 95%+ token reduction through caching, compression, and smart tool intelligence",
   "author": {
     "name": "ooples",
