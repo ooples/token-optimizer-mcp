@@ -895,6 +895,78 @@ describe('arms are data, not code', () => {
       }
     }
   });
+  test('the posture arms differ from assist in the mode and nothing else', () => {
+    // THE COMPARISON IS ONLY MEANINGFUL IF ONE VARIABLE MOVES. `enforce` against
+    // `assist` is meant to price refusals plus the routing advisory; if some
+    // future change adds an env var or a hook to one arm and not the other, that
+    // number silently starts pricing something else too, and nothing in the
+    // report would say so.
+    //
+    // `enforce` also matters more than an ordinary arm: mode() returns
+    // MODE_ENFORCE for any unrecognised value, so it is what a user gets out of
+    // the box, and it is the posture #357's target is denominated on.
+    const base = ARMS['assist-mcp'];
+    const { enforce, advise } = ARMS;
+    expect(enforce.env.TOKEN_OPTIMIZER_MODE).toBe('enforce');
+    expect(advise.env.TOKEN_OPTIMIZER_MODE).toBe('advise');
+    expect(base.env.TOKEN_OPTIMIZER_MODE).toBe('assist');
+
+    for (const arm of [enforce, advise]) {
+      // Same settings, byte for byte -- hooks AND the MCP server.
+      expect(JSON.stringify(arm.settings)).toEqual(JSON.stringify(base.settings));
+      // Exactly one environment key may differ, and it must be the mode.
+      const differing = Object.keys({ ...base.env, ...arm.env }).filter(
+        (k) => base.env[k] !== arm.env[k]
+      );
+      expect(differing).toEqual(['TOKEN_OPTIMIZER_MODE']);
+      // A rules file would be a second variable wearing a different name.
+      expect(arm.claudeMd).toBeUndefined();
+      // The scaffold must be the SAME one, not absent. All three postures need
+      // the MCP server installed -- without it an enforcing arm refuses a call
+      // and points at a tool that is not there -- so what keeps the comparison
+      // single-variable is that they share it, not that they lack it.
+      expect(arm.scaffold).toBe(base.scaffold);
+    }
+  });
+
+  test('the enforcing arm registers the MCP server, or it cannot refuse anything', () => {
+    // NOT A STYLE CHECK. `refusalsEnabled()` is necessary but not sufficient: a
+    // refusal only fires when the replacement tool has positive registration
+    // evidence. Measured through the real hook -- the same 200 KB Read payload
+    // gives NO output under mode=enforce with capabilities empty, and a
+    // smart_read redirect with them present. An enforce arm that inherited
+    // `TOKEN_OPTIMIZER_MCP_CAPABILITIES: ''` from `assist` would therefore never
+    // refuse, would measure identically to assist, and would be reported as
+    // "enforcement costs nothing" -- which is the opposite of true.
+    for (const name of ['enforce', 'advise', 'assist-mcp']) {
+      const arm = ARMS[name];
+      // THROUGH THE SCAFFOLD, NOT settings.mcpServers. The executor runs
+      // `claude -p ... --settings /arm/settings.json` with no --mcp-config, and
+      // --settings does not carry MCP servers. An arm declaring them there
+      // produced a transcript with zero mcp__ tools while its refusals still
+      // fired: the agent was told to call smart_read, found no such tool, and
+      // fell back to Bash. A project .mcp.json in the workspace registers it.
+      expect(arm.settings.mcpServers).toBeUndefined();
+      expect(arm.scaffold).toBeTruthy();
+      const cfg = join(arm.scaffold, '.mcp.json');
+      expect(existsSync(cfg)).toBe(true);
+      const servers = JSON.parse(readFileSync(cfg, 'utf8')).mcpServers;
+      expect(Object.keys(servers)).toContain('token-optimizer');
+      // Absolute: the workspace has no plugin root, so ${CLAUDE_PLUGIN_ROOT}
+      // would not expand.
+      const args = servers['token-optimizer'].args.join(' ');
+      expect(args).toMatch(/^\/.*launch\.mjs$/);
+      expect(args).not.toContain('${');
+      // Capabilities must NOT be blanked, or the host's real inventory is
+      // overridden with "nothing is registered" and refusals die silently.
+      expect(arm.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES).toBeUndefined();
+    }
+    // The historical assist arm is the opposite case and must stay that way:
+    // no server, capabilities explicitly blanked.
+    expect(ARMS.assist.settings.mcpServers).toBeUndefined();
+    expect(ARMS.assist.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES).toBe('');
+  });
+
 
   test('a competitor arm is the competitor, not a paraphrase of it', () => {
     // Both were captured by running the vendor's own installer in a container.
