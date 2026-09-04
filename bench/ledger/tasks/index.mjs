@@ -663,33 +663,74 @@ export const noisyCommand = {
 };
 
 /**
- * ADVERSARIAL: a large file that must genuinely be read in full.
+ * ADVERSARIAL: a large file that must genuinely be read in full, with the
+ * strategy choice removed.
  *
- * THE COUNTERWEIGHT TO THE TWO ABOVE, and the reason this battery can be
- * trusted after adding them. Every function must be changed, so an outline is
- * useless, a bounded read is missing exactly the information required, and any
- * substitution costs a turn and then has to be undone. If our arm does not lose
- * here, the task is not doing its job and should be made harder -- the same
- * rule the original adversarial set is held to.
+ * THE COUNTERWEIGHT THIS BATTERY NEEDS, and the second attempt at it. Every
+ * function must change, so an outline is useless, a bounded read is missing
+ * exactly the information required, and any substitution is paid and then has to
+ * be undone. If our arm does not lose here, the task is not doing its job.
+ *
+ * WHY THE MESSAGE CARRIES THE FUNCTION'S OWN NAME. The previous version asked
+ * for one uniform replacement across 120 functions, which left the agent a
+ * choice: 120 targeted edits, or a single find/replace, or one whole-file
+ * rewrite. Those cost wildly different amounts, and the spread is not noise that
+ * more reps can average away -- at n=30 the interval was [0.962, 1.395], about
+ * 43% wide, and the task was excluded from every headline as UNRESOLVED. It had
+ * the right direction and unusable precision.
+ *
+ * Requiring `rule_0007: ...` inside rule_0007 makes every replacement distinct,
+ * so no single find/replace can do it and the dominant cost -- emitting 120
+ * unique strings -- is the same whichever route the agent takes. The strategy
+ * choice is gone; the adversarial property is untouched.
+ *
+ * RENAMED, NOT EDITED IN PLACE. Rows for `whole-file-transform` exist in
+ * largecontext.jsonl, postfix*.jsonl and competitors-v1.jsonl. Keeping the id
+ * while changing what the task asks would leave one name meaning two different
+ * experiments, and the build key does not protect a reader who compares task ids
+ * across stores.
  */
-export const wholeFileTransform = {
-  id: 'whole-file-transform',
+export const wholeFileRetitle = {
+  id: 'whole-file-retitle',
   family: 'generation',
   adversarial: true,
   tracks: ['cold', 'warm'],
   prompt:
-    'Every function in pkg/rules.py raises ValueError("amount must not be negative"). Change every ' +
-    'one of those messages to "amount must be zero or greater". Change nothing else.',
+    'Every function in pkg/rules.py raises ValueError("amount must not be negative"). Change each ' +
+    'of those messages to "NAME: amount must be zero or greater", where NAME is the name of the ' +
+    'function the message is inside -- so rule_0007 raises ValueError("rule_0007: amount must be ' +
+    'zero or greater"). Change nothing else.',
   setup(dir) {
     write(dir, 'pkg/rules.py', bigModule(120, -1));
   },
   checks: [
     {
-      name: 'every message was changed',
+      // THE ONE THAT MAKES THE TASK WHAT IT IS. Counting occurrences would pass
+      // a file where every message says the same name, which is precisely the
+      // uniform edit this design exists to rule out -- so each message is
+      // checked against the function it is actually inside.
+      name: 'every message carries its own function name',
       weight: 4,
       run: (dir) => {
         const src = read(dir, 'pkg/rules.py');
-        return (src.match(/amount must be zero or greater/g) || []).length === 120;
+        let current = null;
+        let matched = 0;
+        let functions = 0;
+        for (const line of src.split('\n')) {
+          const def = line.match(/^def\s+(rule_\d{4})\s*\(/);
+          if (def) {
+            current = def[1];
+            functions += 1;
+            continue;
+          }
+          // Generous about quoting and spacing, strict about the two facts that
+          // matter: the function's own name, and the new wording.
+          const msg = line.match(/raise\s+ValueError\(\s*['"]([^'"]*)['"]\s*\)/);
+          if (msg && current && msg[1] === `${current}: amount must be zero or greater`) {
+            matched += 1;
+          }
+        }
+        return functions === 120 && matched === 120;
       },
     },
     {
@@ -824,15 +865,32 @@ export const GOLDEN = {
 
   'noisy-command': (dir) => write(dir, 'ANSWER.txt', 'test_case_0431\n'),
 
-  'whole-file-transform': (dir) =>
-    write(
-      dir,
-      'pkg/rules.py',
-      read(dir, 'pkg/rules.py').replace(
-        /amount must not be negative/g,
-        'amount must be zero or greater'
-      )
-    ),
+  // Tracks the enclosing function so each message gets ITS OWN name. A single
+  // regex cannot express this answer, which is exactly the property the task was
+  // redesigned to have -- if the golden solution could be a find/replace, the
+  // agent's cheapest route would be one too and the strategy spread would be
+  // back.
+  'whole-file-retitle': (dir) => {
+    let current = null;
+    const out = read(dir, 'pkg/rules.py')
+      .split('\n')
+      .map((line) => {
+        const def = line.match(/^def\s+(rule_\d{4})\s*\(/);
+        if (def) {
+          current = def[1];
+          return line;
+        }
+        if (current && line.includes('amount must not be negative')) {
+          return line.replace(
+            'amount must not be negative',
+            `${current}: amount must be zero or greater`
+          );
+        }
+        return line;
+      })
+      .join('\n');
+    write(dir, 'pkg/rules.py', out);
+  },
 
   'debug-pipeline-py': (dir) =>
     write(dir, 'pipeline/clean.py', read(dir, 'pipeline/clean.py').replace('.lstrip()', '.strip()')),
@@ -895,7 +953,8 @@ export const TASKS = [
   // could never exercise the mechanism that does reach it.
   largeFileDefect,
   noisyCommand,
-  wholeFileTransform,
+  // Replaces whole-file-transform, which was adversarial but never converged.
+  wholeFileRetitle,
   // The bias control for the large-context set. Added last, after the aggregate
   // was found to rest on three tasks our mechanism is built to win.
   generationAmidBulk,
