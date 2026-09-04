@@ -277,3 +277,62 @@ the build key, and this ledger refuses to average across builds. Folding it into
 the headline requires re-running every task and arm together; until that happens
 it is reported as a standalone bias control and the aggregate keeps its warning.
 
+
+---
+
+# Addendum 3: a third attempt at a converging adversarial task
+
+Written before the confirmatory run, after a pilot and because of it. This is the
+third attempt; the first two are recorded below so the record cannot be read as
+if this design were arrived at cleanly.
+
+## What failed twice
+
+- **`whole-file-transform`** had the right DIRECTION -- interception measured
+  1.149 [0.962, 1.395] against `ours-rules` -- and unusable precision. Excluded
+  from every headline as UNRESOLVED across three campaigns.
+- **`generation-amid-bulk`** had the right PRECISION and the wrong direction. It
+  was designed as a bias control and turned out to be a fourth task we win
+  (0.892 [0.821, 0.969] at n=60). See RESULTS-ADVERSARIAL.md.
+
+## The change, and why it should fix precision
+
+`whole-file-retitle` requires each message to carry its own function's name, so
+no single find/replace expresses the answer and the dominant cost -- emitting 120
+unique strings -- is the same on every route. The strategy choice that produced
+the spread is gone.
+
+Measured in a 12-rep pilot (`retitle-pilot.jsonl`, image `sha256:abfce039`):
+cost CV 20.4% (`ours-rules`), 24.3% (`assist`), 26.7% (control), against the old
+task's projected +/-21% at n=30. Projected here: **+/-12.0% at n=30, +/-8.4% at
+n=60**. Every one of the 36 pilot runs scored 1.000, so closing the cheap route
+did not make the task unsolvable.
+
+## The pre-registered n is 60, and the design is fixed here
+
+**n = 60 per arm, fixed, no early stopping**, on `control`, `ours-rules` and
+`assist`. 60 buys roughly +/-8.4%, inside the band where `large-file-defect`
+resolves (+/-7%) and far from where `whole-file-transform` sat. The pilot rows do
+NOT enter the result; they exist to choose this number.
+
+## What would falsify it, stated before the data
+
+The pilot's point estimate is **0.977 [0.816, 1.170]**, which is BELOW parity --
+the opposite side from the old task's 1.149. So the honest possibilities are:
+
+- **Interval spans parity** -- the intended outcome. Interception is measured and
+  shown not to help where it cannot help. This is a valid bias control and clears
+  the harness's `NO ADVERSARIAL TASKS RESOLVED` warning.
+- **Interval excludes parity ABOVE 1** -- interception costs. Also acceptable,
+  and a stronger control.
+- **Interval excludes parity BELOW 1** -- `assist` WINS this task. Then it is not
+  a bias control at all, it is a third task we win, and this attempt has failed
+  exactly as `generation-amid-bulk` did. That outcome gets published as a third
+  failure rather than reframed as a win, and the battery still has no converging
+  adversarial task.
+- **Interval still wider than +/-12%** -- the spread was never strategy choice,
+  and the diagnosis in the commit message is wrong.
+
+The pilot cannot distinguish the first three: its interval [0.816, 1.170]
+contains all of them. That is the question n=60 is being bought to answer.
+
