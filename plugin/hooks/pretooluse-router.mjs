@@ -64,9 +64,10 @@ import { isFsSafePath } from './lib/paths.mjs';
 // mean different things -- that one swaps a stale claim, this one swaps a
 // large read for an outline of the same file.
 import { substitutionFor as outlineFor } from './lib/substitute.mjs';
-import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { adviseSearch, SESSION_CAP } from './lib/advise.mjs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
@@ -483,6 +484,32 @@ ${nudge}`
     // ship -- assist, which keeps the graph and drops the refusals -- got none of
     // this, which is the opposite of the intent. Only `off`, the kill switch,
     // skips it, and that is handled far above.
+    // ANSWER THE SEARCH BEFORE IT RUNS.
+    //
+    // The graph already holds where every indexed symbol is declared, and a
+    // Grep for one is a turn spent recovering that. Attached as context to the
+    // search the model already made, so there is nothing to adopt, no tool to
+    // learn and no fixed cost on the short tasks -- which is precisely where
+    // the leader's rules-file approach loses (their three defeats are the three
+    // shortest tasks, corr(task length, ratio) = -0.689).
+    //
+    // Gated on `retrieval`, the consumer half, while seeding is gated on
+    // `capture`. That keeps the A/B honest: an arm can index without advising.
+    if (
+      features.retrieval &&
+      (payload.tool_name === 'Grep' || payload.tool_name === 'Glob')
+    ) {
+      try {
+        const advisory = searchAdvisory(payload, state, dirFor);
+        if (advisory) {
+          saveState(payload.session_id, state, agentScope);
+          context = context ? `${context}\n\n${advisory}` : advisory;
+        }
+      } catch {
+        // An index we cannot read is silence, never a broken search.
+      }
+    }
+
     if (payload.tool_name === 'Read') {
       const substitution = outlineSubstitution(payload);
       if (substitution) {
@@ -651,17 +678,23 @@ function outlineSubstitution(payload) {
   const filePath = payload.tool_input?.file_path;
   if (!filePath) return null;
 
+  // THE RECORD ALREADY EXISTED, it was simply never read. The outline we serve
+  // is written to a path keyed by session and file, so that file's presence is
+  // itself the evidence that this session has already been handed an outline
+  // of this file. Consulting it is what makes `alreadyRead` mean something.
+  const target = join(
+    stateDir(),
+    `${commandKey(payload.session_id || '', filePath)}.outline.txt`
+  );
+
   const found = outlineFor(filePath, {
     turnsSoFar: turnsSoFar(payload.session_id || ''),
+    alreadyRead: existsSync(target),
   });
   if (!found) return null;
 
   try {
     mkdirSync(stateDir(), { recursive: true });
-    const target = join(
-      stateDir(),
-      `${commandKey(payload.session_id || '', filePath)}.outline.txt`
-    );
     writeFileSync(target, found.outline);
     return { target, found };
   } catch {
@@ -817,10 +850,103 @@ function compactorFor(sessionId, command) {
     }
   }
 
+  // THE ADVISORY BELONGS ON THE REFUSAL PATH TOO, and wiring it only to the
+  // allowed path was a real defect: Grep is REFUSED whenever smart_grep is
+  // proven, so the allowed path would fire for the benchmark arm, where there
+  // is no MCP server, and never once for a user who installed the product
+  // properly. The arm we measure and the thing we ship would not have been the
+  // same feature.
+  //
+  // A refusal is also the better moment, not merely a second one: the model is
+  // being sent to another tool to find something, and if the graph already
+  // knows where that something is, the redirect may not need following at all.
+  if (
+    features.retrieval &&
+    (payload.tool_name === 'Grep' || payload.tool_name === 'Glob')
+  ) {
+    try {
+      const advisory = searchAdvisory(payload, state, (path) =>
+        wikiDir(projectRootFor(path, payload.cwd))
+      );
+      if (advisory) {
+        saveState(payload.session_id, state, agentScope);
+        reason = `${reason}\n\n${advisory}`;
+      }
+    } catch {
+      // The plain redirect always works; an unreadable index costs nothing.
+    }
+  }
+
   // On a repeat this degrades to a note and lets the call through, which is
   // what bounds the blast radius when the MCP server is unavailable.
   enforce(reason, repeat);
 } catch (error) {
   invocation.fail(error);
   allow();
+}
+
+/**
+ * What the graph can say to a model that is about to search.
+ *
+ * THE ADDITIVE HALF, and until now the missing one. Every other mechanism in
+ * this router SUBTRACTS -- refuse, bound, compact, substitute -- and all of them
+ * argue about how big a tool result is. The measurements say that is not where
+ * we lose: turns are (corr(turns, USD) = 0.878), and a search is a whole turn
+ * spent discovering something the graph already holds.
+ *
+ * FIRES GENEROUSLY, ON PURPOSE. An advisory is roughly 1/50th of the turn it
+ * may save, so the policy that maximises expected value is to speak whenever
+ * there is an exact answer rather than only when certain. What it must not do
+ * is repeat itself: `state.advised` carries the facts already delivered,
+ * because a block the model has learned to skip is worse than no block at all.
+ *
+ * NEVER REWRITES THE SEARCH. The pattern is passed through untouched and the
+ * tool still runs. If the index is wrong or partial the model gets its search
+ * results exactly as it would have, having paid a few tokens for a hint it can
+ * ignore -- which is the only failure mode available to this.
+ */
+function searchAdvisory(payload, state, dirFor) {
+  const pattern = payload.tool_input?.pattern;
+  if (typeof pattern !== 'string' || !pattern) return null;
+
+  const root = payload.cwd || process.cwd();
+
+  // THE SCOPE IS THE PROJECT, NOT THE WORKING DIRECTORY. A session started in
+  // `repo/src` must still be told about a symbol in `repo/lib`, so scoping to
+  // cwd would silence most correct answers. But `projectRootFor` falls back to
+  // a machine-level store when there is no VCS marker anywhere above, and that
+  // path is an ancestor of nothing -- scoping to it would silence ALL of them.
+  // Take the repository root only when it genuinely contains the session.
+  const projectRoot = projectRootFor(join(root, '__search__'), root);
+  // Folds case only where the filesystem does. On Windows `C:/Repo` and
+  // `c:/repo` are one directory and folding is required; on a case-sensitive
+  // volume they are two, and folding would let a path be treated as inside a
+  // root that does not contain it -- widening the very scope that keeps one
+  // project's symbols out of another project's session.
+  const fold = (s) =>
+    process.platform === 'win32'
+      ? String(s).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+      : String(s).replace(/\\/g, '/').replace(/\/+$/, '');
+  const contains = (outer, inner) => {
+    const a = fold(outer);
+    const b = fold(inner);
+    return b === a || b.startsWith(`${a}/`);
+  };
+  const scope = contains(projectRoot, root) ? projectRoot : root;
+  const told = new Set(state.advised || []);
+  if (told.size >= SESSION_CAP) return null;
+  const graph = load(dirFor(join(root, '__search__')));
+  const advice = adviseSearch(graph, pattern, {
+    told,
+    // Displayed relative to the project, so the path reads the way the model
+    // would write it, and scoped to the project, so nothing outside it is
+    // reported as though it were this codebase.
+    root: scope,
+    scope,
+    firstOfSession: !told.size,
+  });
+  if (!advice) return null;
+
+  state.advised = [...told, ...advice.facts].slice(0, SESSION_CAP);
+  return advice.text;
 }

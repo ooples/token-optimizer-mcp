@@ -613,8 +613,63 @@ function compactIfWasteful(dir) {
   }
 }
 
+/**
+ * The open batch, or null. See `withBatchedWrites`.
+ *
+ * Module-level because the writers this redirects -- `putNode`, `putEdge` --
+ * are called from deep inside `indexFile`, and threading a buffer down through
+ * them would change every signature in the store to serve one caller.
+ */
+let openBatch = null;
+
+/**
+ * Collects every write inside `fn` into ONE append.
+ *
+ * WHY THIS EXISTS. Each record costs a lock acquire (`openSync` with `wx`), an
+ * append, a compaction check and a lock release -- around six filesystem
+ * operations. That is the right trade for the ordinary case, where a tool call
+ * produces a handful of records and durability per record is what matters.
+ *
+ * It is the wrong trade by two orders of magnitude for indexing a project:
+ * measured on this repository, seeding managed 26 files in 1,221 ms, roughly
+ * 900 records at 1.3 ms each, and hit its deadline having indexed under a tenth
+ * of the tree. Disabling snapshots changed it by one file, which is what ruled
+ * out the obvious suspect and left the lock.
+ *
+ * SAFE BECAUSE THE ORDER IS PRESERVED. Records accumulate in call order, so the
+ * store's one real ordering guarantee -- a node is written before the edges that
+ * name it -- survives batching exactly as it survives a direct append. A tear
+ * during the single flush leaves a prefix, which is the same failure the
+ * unbatched path already has and which `load()` already tolerates.
+ *
+ * The flush is in a `finally`: a throw inside `fn` must not leave the batch
+ * open, or every subsequent write in the process would buffer into a scope
+ * nobody will ever flush.
+ */
+export function withBatchedWrites(dir, fn) {
+  // Nested scopes join the outer batch rather than opening a second one, which
+  // would flush the inner half early and reorder it ahead of the outer's.
+  if (openBatch) return fn();
+  const batch = { dir, records: [], snapshots: [] };
+  openBatch = batch;
+  try {
+    return fn();
+  } finally {
+    openBatch = null;
+    if (batch.records.length) appendAll(dir, batch.records);
+    for (const record of batch.snapshots) appendSnapshot(dir, record);
+  }
+}
+
 function appendAll(dir, records) {
   if (!records.length) return true;
+  // A batch for a DIFFERENT directory is not ours to hold: a session touching
+  // two checkouts writes to two graphs, and buffering one into the other's
+  // flush would put a file node in the wrong project's graph.
+  if (openBatch && openBatch.dir === dir) {
+    openBatch.records.push(...records);
+    return true;
+  }
   try {
     // 0o700 AND an explicit chmod. `recursive: true` applies the mode only to
     // directories it actually creates, and the process umask masks it further,
@@ -743,6 +798,10 @@ export function putNodeWithEdges(dir, { kind, key, ...rest }, edges = []) {
  */
 /** Appends one snapshot record. Failure here must never fail a graph write. */
 function appendSnapshot(dir, record) {
+  if (openBatch && openBatch.dir === dir) {
+    openBatch.snapshots.push(record);
+    return;
+  }
   try {
     appendFileSync(snapshotsPath(dir), JSON.stringify(record) + '\n');
   } catch {

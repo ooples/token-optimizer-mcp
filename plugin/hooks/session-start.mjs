@@ -39,6 +39,7 @@ import {
   standingRules,
 } from './lib/inject.mjs';
 import { wikiDir, load, projectRootFor } from './lib/wiki.mjs';
+import { seedProject, alreadySeeded, seedDisabled } from './lib/seed.mjs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import { join } from 'node:path';
 import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
@@ -163,7 +164,43 @@ const blocks = [
 // becomes wallpaper, and a model stops reading what it always sees.
 try {
   const cwd = payload.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+  // THE ROOT IS COMPUTED ONCE AND USED FOR BOTH THE STORE AND THE WALK.
+  //
+  // The graph is keyed on the project root, but seeding walked `cwd`. A session
+  // started in `repo/src` therefore wrote a partial index -- only that subtree
+  // -- into the PROJECT-WIDE store, and `alreadySeeded` then reported the
+  // project as indexed. Every later session inherited that partial index and
+  // never completed it, so a search for anything outside `src` came back
+  // silent while the graph insisted it had been seeded.
+  //
+  // Falls back to `cwd` when there is no discoverable root, which is the
+  // unrooted case the machine-level store already handles.
+  const projectRoot = projectRootFor(join(cwd, '__session__'), cwd) || cwd;
+  const dir = wikiDir(projectRoot);
+
+  // INDEX THE PROJECT BEFORE THE FIRST TURN.
+  //
+  // Capture is a PreToolUse mechanism, so without this the graph only ever
+  // holds files the model has already opened -- and a graph of what the model
+  // already knows cannot save it a search. Seeding moves the index to the one
+  // point where it is still ahead of the work.
+  //
+  // COSTS NO TOKENS AND ADDS NO CONTEXT. It writes file and symbol nodes, never
+  // findings, and every SessionStart block below is finding-driven, so nothing
+  // here reaches the prompt. It is read on demand by the search advisory.
+  //
+  // Gated on `capture`, not `retrieval`: this is the producer half.
+  if (features.capture && !seedDisabled()) {
+    try {
+      const existing = load(dir);
+      // Walk the ROOT the store is keyed on, not the subdirectory this session
+      // happens to have started in.
+      if (!alreadySeeded(existing)) seedProject(dir, projectRoot);
+    } catch {
+      // A project we cannot walk simply has no index; the session is unaffected.
+    }
+  }
+
   if (features.retrieval) {
     // The index renders claims and freshness state, never snapshot bodies.
     // Skipping the sidecar keeps startup bounded on mature graphs.

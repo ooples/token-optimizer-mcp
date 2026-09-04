@@ -1,0 +1,78 @@
+{
+  "name": "token-optimizer-noseed",
+  "display_name": "Token Optimizer (assist, project index OFF)",
+  "verified": true,
+  "version_pin": "6.0.2",
+  "version_checked": "2026-08-29",
+  "upstream": "https://github.com/ooples/token-optimizer-mcp",
+  "install_doc": "THE A/B PARTNER FOR THE SEARCH ADVISORY (PR #369). Identical to token-optimizer-assist in every respect except TOKEN_OPTIMIZER_SEED=0, which stops SessionStart indexing the project. Without the seed the graph holds only files the model has ALREADY read, so the advisory can almost never answer a search before it runs -- which is the state the product was in before #369. Comparing this against token-optimizer-assist on the SAME image isolates the seed, and nothing else: same mode, same bound, same compactor, same absence of MCP schemas. Both arms must be built from the same tree or the comparison repeats the earlier mistake of pricing two different build dates against each other. TOKEN_OPTIMIZER_MCP_CAPABILITIES is set EMPTY here for the same reason it is in token-optimizer-assist: the hook entries assign the bundled inventory with `??=`, so omitting the variable is not the same as emptying it -- an empty value is proven-with-no-tools while an absent one is filled in. Leaving it out made this arm differ from assist in a second way and quietly stopped isolating the seed, which is the only thing it exists to isolate.",
+  "requires": [
+    "node"
+  ],
+  "settings": {
+    "env": {
+      "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
+      "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
+      "TOKEN_OPTIMIZER_MODE": "assist",
+      "TOKEN_OPTIMIZER_MCP_CAPABILITIES": "",
+      "TOKEN_OPTIMIZER_SEED": "0"
+    },
+    "hooks": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/session-start.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreToolUse": [
+        {
+          "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/pretooluse-router.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/precompact-optimize.mjs\""
+            }
+          ]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "matcher": "Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/post-tool.mjs\""
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/stop.mjs\""
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "tool_prefixes": [
+    "mcp__token-optimizer__"
+  ]
+}
