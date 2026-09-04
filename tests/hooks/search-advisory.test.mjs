@@ -237,9 +237,17 @@ describe('the seed keeps the promise its budget makes', () => {
     // and a caller asking for a small budget silently got no index at all.
     //
     // Deterministic, so it says the same thing on every machine.
+    // THE CLOCK IS INJECTED, or this is a stopwatch again. With a real clock and
+    // budgetMs 300 the reserve takes 150 and leaves 150 for traversal, so a
+    // scheduler pause on a loaded host makes `some.files` zero and the test
+    // fails for reasons that have nothing to do with the arithmetic it exists to
+    // check. A frozen clock keeps the deadline arithmetic exactly as it is --
+    // 0 + max(0, 300-150) = 150, and 0 < 150 is always true -- while removing
+    // the machine from the assertion.
+    const now = () => 0;
     const tiny = mkdtempSync(join(tmpdir(), 'advisory-tiny-'));
     try {
-      const none = seedProject(tiny, REPO, { maxFiles: 50, budgetMs: 0 });
+      const none = seedProject(tiny, REPO, { maxFiles: 50, budgetMs: 0, now });
       expect(none.files).toBe(0);
     } finally {
       rmSync(tiny, { recursive: true, force: true });
@@ -247,7 +255,7 @@ describe('the seed keeps the promise its budget makes', () => {
 
     const small = mkdtempSync(join(tmpdir(), 'advisory-small-'));
     try {
-      const some = seedProject(small, REPO, { maxFiles: 50, budgetMs: 300 });
+      const some = seedProject(small, REPO, { maxFiles: 50, budgetMs: 300, now });
       expect(some.files).toBeGreaterThan(0);
     } finally {
       rmSync(small, { recursive: true, force: true });
