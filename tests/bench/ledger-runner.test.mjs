@@ -16,7 +16,14 @@ import { validateTask, scoreWorkspace, zeroScore } from '../../bench/ledger/task
 import { TASKS, ADVERSARIAL, GOLDEN, forTrack, singleShotExtract } from '../../bench/ledger/tasks/index.mjs';
 import { rowProblem } from '../../bench/ledger/provenance.mjs';
 
-const PROV = campaignProvenance({ imageDigest: 'sha256:aaa', commitSha: 'abc1234' });
+// Well-formed placeholders: rowProblem requires a 40-hex commit and a
+// sha256:<64 hex> digest, because a short value is the shape a hand-typed sha
+// takes and rows below are asserted to be acceptable to the ledger.
+const pad = (label, len) => (label + '0'.repeat(len)).slice(0, len);
+const PROV = campaignProvenance({
+  imageDigest: `sha256:${pad('aaa', 64)}`,
+  commitSha: pad('abc1234', 40),
+});
 
 /** A task whose score is dictated by the fixture, so the loop can be steered. */
 const fakeTask = (id = 't') => ({
@@ -253,8 +260,8 @@ describe('provenance is not optional', () => {
       provenance: PROV,
       precision: { minReps: 1, maxReps: 1 },
     });
-    expect(rows[0].image_digest).toBe('sha256:aaa');
-    expect(rows[0].commit_sha).toBe('abc1234');
+    expect(rows[0].image_digest).toBe(`sha256:${pad('aaa', 64)}`);
+    expect(rows[0].commit_sha).toBe(pad('abc1234', 40));
   });
 });
 
