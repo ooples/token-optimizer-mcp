@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { appendRows, loadRows, completedReps, buildsPresent } from '../../bench/ledger/store.mjs';
+import { appendRows, loadRows, completedReps, nextRep, buildsPresent } from '../../bench/ledger/store.mjs';
 import { runCampaign, coldArm, warmArm } from '../../bench/ledger/campaign.mjs';
 import { renderReport, headline } from '../../bench/ledger/render.mjs';
 import { report } from '../../bench/ledger/rank.mjs';
@@ -118,6 +118,38 @@ describe('the store', () => {
       build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }),
     });
     expect(done).toBe(3);
+  });
+
+  test('a failure that cost nothing is the harness, not the arm', () => {
+    // FROM A REAL CAMPAIGN. Credentials expired mid-run and produced
+    // `status: 'failed'`, `usd: 0`, `turns: 1` -- the agent burns one turn
+    // receiving an auth rejection. The classifier required `status === 'error'`
+    // AND `turns === 0`, so ten such rows were scored as genuine failures of the
+    // arm that happened to be running last. That arm showed 67% completion and
+    // 0.00 on a third of its cell, which reads as a devastating product result
+    // and was actually our expired token.
+    //
+    // It was also unrecoverable: the rows hold their rep labels, completedReps
+    // counted them, the cell looked full, and a top-up ran nothing.
+    const rows = [
+      row({ rep: 1 }),
+      row({ rep: 2, status: 'failed', usd: 0, turns: 1, score: 0 }),
+      row({ rep: 3, status: 'error', usd: 0, turns: 0 }),
+      // A REAL failure pays for its attempt, and must still count as a rep.
+      row({ rep: 4, status: 'failed', usd: 0.05, turns: 6, score: 0 }),
+    ];
+    appendRows(store, rows);
+    const loaded = loadRows(store);
+    const args = {
+      arm: 'assist',
+      track: 'cold',
+      task: 'single-shot-extract',
+      build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }),
+    };
+    // reps 1 and 4 are real work; 2 and 3 cost nothing.
+    expect(completedReps(loaded, args)).toBe(2);
+    // Labels stay occupied so a top-up cannot collide with them.
+    expect(nextRep(loaded, args)).toBe(5);
   });
 
   test('a rep whose only row is a harness failure still does not count', () => {

@@ -143,10 +143,29 @@ export function nextRep(rows, { arm, track, task, build }) {
   return highest + 1;
 }
 
-/** A run that errored having cost nothing and attempted nothing. */
+/**
+ * A run that failed having SPENT NOTHING, which means the agent never worked.
+ *
+ * KEYED ON COST, NOT ON TURN COUNT. This required `turns === 0` and `status ===
+ * 'error'`, and both halves were too narrow. Credentials expiring mid-campaign
+ * produces `status: 'failed'` with `usd: 0` and `turns: 1` -- the agent burns one
+ * turn receiving an auth rejection -- so ten such rows were classified as real
+ * failures of the arm that happened to be running. That arm then showed 67%
+ * completion and a score of 0.00 on a third of its cell, which reads as a
+ * devastating product result and is actually our expired token.
+ *
+ * Worse, it was unrecoverable: the rows occupy their rep labels, `completedReps`
+ * counted them, and the cell looked full at 30, so a top-up ran nothing and the
+ * arm was permanently stuck at 67%.
+ *
+ * A run that cost $0 cannot have done any work, whatever its turn count says.
+ * That is the invariant worth keying on, and it does not misclassify a genuine
+ * failure: an arm that really fails a task still pays for the attempt.
+ */
 function isHarnessFailure(row) {
   if (row.harness_failure === true) return true;
-  return row.status === 'error' && (row.usd || 0) === 0 && (row.turns || 0) === 0;
+  const spentNothing = (row.usd || 0) === 0;
+  return spentNothing && (row.status === 'error' || row.status === 'failed');
 }
 
 /** The builds present in a store, newest activity first. Used by the CLI to warn. */
