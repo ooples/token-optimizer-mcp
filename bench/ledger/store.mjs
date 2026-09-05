@@ -162,7 +162,7 @@ export function nextRep(rows, { arm, track, task, build }) {
  * That is the invariant worth keying on, and it does not misclassify a genuine
  * failure: an arm that really fails a task still pays for the attempt.
  */
-function isHarnessFailure(row) {
+export function isHarnessFailure(row) {
   if (row.harness_failure === true) return true;
   const spentNothing = (row.usd || 0) === 0;
   return spentNothing && (row.status === 'error' || row.status === 'failed');

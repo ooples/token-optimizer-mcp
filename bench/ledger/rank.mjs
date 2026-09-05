@@ -26,6 +26,8 @@
 
 import { median, ratioCI, ratioOfTotalsCI, significant, samplingVerdict, holm, permutationP, rng } from './stats.mjs';
 import { assertSingleBuild, rowProblem, buildKey } from './provenance.mjs';
+// ONE DEFINITION, SHARED. See the note above the re-export below.
+import { isHarnessFailure } from './store.mjs';
 
 /** Groups rows by track, then arm, then task. Rejected rows are reported. */
 export function organise(rows) {
@@ -90,15 +92,25 @@ export function organise(rows) {
 }
 
 /**
- * A run the harness never started: errored, cost nothing, attempted nothing.
+ * A run that failed having SPENT NOTHING, so the agent never worked.
  *
  * Read from the row's own recorded fields rather than a flag alone, so rows
  * written before `harness_failure` existed are classified the same way.
+ *
+ * ONE DEFINITION, NOT TWO. This file carried its own copy, and the copies
+ * drifted the moment one was fixed: `store.mjs` was widened to catch credential
+ * expiry -- `status: 'failed'`, `usd: 0`, `turns: 1`, because the agent burns a
+ * turn receiving an auth rejection -- while this one still required
+ * `status === 'error' && turns === 0`. The consequence was visible and wrong in
+ * opposite directions at once: resumption correctly saw a cell as 20 of 30 and
+ * topped it up, while the report counted the same ten dead rows as real runs and
+ * published `n=40 ... completed 75%` for an arm whose only failure was our
+ * expired token.
+ *
+ * A classifier that decides both what to re-run and what to publish cannot live
+ * in two files.
  */
-export function isHarnessFailure(row) {
-  if (row.harness_failure === true) return true;
-  return row.status === 'error' && (row.usd || 0) === 0 && (row.turns || 0) === 0;
-}
+export { isHarnessFailure };
 
 /**
  * What a run cost, in the unit the report is ranking on.
