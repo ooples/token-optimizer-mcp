@@ -311,9 +311,26 @@ did not make the task unsolvable.
 ## The pre-registered n is 60, and the design is fixed here
 
 **n = 60 per arm, fixed, no early stopping**, on `control`, `ours-rules` and
-`assist`. 60 buys roughly +/-8.4%, inside the band where `large-file-defect`
-resolves (+/-7%) and far from where `whole-file-transform` sat. The pilot rows do
-NOT enter the result; they exist to choose this number.
+`assist`. 60 buys roughly **+/-8.4%** on the pilot's variance. That is slightly
+WIDER than the +/-7% at which `large-file-defect` resolves, and far narrower than
+the +/-21% at which `whole-file-transform` never did.
+
+An earlier draft of this line said +/-8.4% was "inside the band where
+`large-file-defect` resolves (+/-7%)", which is arithmetically false -- review
+caught it. The threshold that matters is not a fixed number anyway: the harness
+resolves a task when the interval is tight enough to separate the arms, and
++/-7% is a figure one task happened to achieve rather than a bar this one must
+clear. What n=60 is bought for is stated in the falsifier below -- an interval
+that can distinguish "spans parity" from "excludes parity" -- and +/-8.4% is
+sufficient for that.
+
+*Recorded after the fact, and it does not change the design:* the confirmatory
+run came in at **+/-6.8%**, narrower than the pilot projected and inside +/-7%
+after all. The pre-registration stands as written, correction included, because
+a projection that turned out conservative is not a licence to rewrite what was
+committed to beforehand.
+
+The pilot rows do NOT enter the result; they exist to choose this number.
 
 ## What would falsify it, stated before the data
 
