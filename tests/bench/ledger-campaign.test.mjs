@@ -27,6 +27,27 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
+/**
+ * WELL-FORMED PLACEHOLDER PROVENANCE, named rather than inlined.
+ *
+ * `rowProblem` requires a 40-hex commit and a sha256:<64 hex> digest: a short
+ * value is the shape a hand-typed sha takes, and a row that cannot identify its
+ * build cannot be checked by anyone. These were 'abc1234' and 'sha256:new'.
+ *
+ * Padded rather than randomised so the placeholder stays legible -- DIGEST_OLD
+ * reads `sha256:d000...`, DIGEST_NEW `sha256:e000...` -- because several tests
+ * here exist to prove two builds are never averaged, and a failing assertion
+ * must still say which build it meant.
+ */
+const pad = (label, len) => (label + '0'.repeat(len)).slice(0, len);
+const COMMIT = pad('abc1234', 40);
+const COMMIT_C1 = pad('c1', 40);
+const DIGEST_A = pad('a', 64);
+const DIGEST_AAA = pad('aaa', 64);
+const DIGEST_BBB = pad('bbb', 64);
+const DIGEST_OLD = pad('d', 64);
+const DIGEST_NEW = pad('e', 64);
+
 const row = (over = {}) => ({
   task: 'single-shot-extract',
   arm: 'assist',
@@ -36,8 +57,8 @@ const row = (over = {}) => ({
   usd: 0.1,
   turns: 3,
   score: 1,
-  image_digest: 'sha256:new',
-  commit_sha: 'abc1234',
+  image_digest: `sha256:${DIGEST_NEW}`,
+  commit_sha: COMMIT,
   started_at: '2026-08-31T22:05:00Z',
   ...over,
 });
@@ -83,14 +104,14 @@ describe('the store', () => {
     // recorded, so after a rebuild it topped an arm up with new-build reps and
     // averaged them with old-build ones under one name.
     appendRows(store, [
-      row({ image_digest: 'sha256:old', rep: 1 }),
-      row({ image_digest: 'sha256:old', rep: 2 }),
-      row({ image_digest: 'sha256:new', rep: 1 }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, rep: 1 }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, rep: 2 }),
+      row({ image_digest: `sha256:${DIGEST_NEW}`, rep: 1 }),
     ]);
     const rows = loadRows(store);
     const args = { arm: 'assist', track: 'cold', task: 'single-shot-extract' };
-    expect(completedReps(rows, { ...args, build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }) })).toBe(1);
-    expect(completedReps(rows, { ...args, build: buildKey({ image_digest: 'sha256:old', commit_sha: 'abc1234' }) })).toBe(2);
+    expect(completedReps(rows, { ...args, build: buildKey({ image_digest: `sha256:${DIGEST_NEW}`, commit_sha: COMMIT }) })).toBe(1);
+    expect(completedReps(rows, { ...args, build: buildKey({ image_digest: `sha256:${DIGEST_OLD}`, commit_sha: COMMIT }) })).toBe(2);
   });
 
   test('a rep written twice counts once, so a cell cannot look finished early', () => {
@@ -115,7 +136,7 @@ describe('the store', () => {
       arm: 'assist',
       track: 'cold',
       task: 'single-shot-extract',
-      build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }),
+      build: buildKey({ image_digest: `sha256:${DIGEST_NEW}`, commit_sha: COMMIT }),
     });
     expect(done).toBe(3);
   });
@@ -144,7 +165,7 @@ describe('the store', () => {
       arm: 'assist',
       track: 'cold',
       task: 'single-shot-extract',
-      build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }),
+      build: buildKey({ image_digest: `sha256:${DIGEST_NEW}`, commit_sha: COMMIT }),
     };
     // reps 1 and 4 are real work; 2 and 3 cost nothing.
     expect(completedReps(loaded, args)).toBe(2);
@@ -166,7 +187,7 @@ describe('the store', () => {
       arm: 'assist',
       track: 'cold',
       task: 'single-shot-extract',
-      build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }),
+      build: buildKey({ image_digest: `sha256:${DIGEST_NEW}`, commit_sha: COMMIT }),
     });
     // rep 1 and rep 3 are real; rep 2 is only a harness failure.
     expect(done).toBe(2);
@@ -174,10 +195,10 @@ describe('the store', () => {
 
   test('builds present are listed newest first', () => {
     appendRows(store, [
-      row({ image_digest: 'sha256:old', started_at: '2026-08-30T10:00:00Z' }),
-      row({ image_digest: 'sha256:new', started_at: '2026-08-31T22:00:00Z' }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, started_at: '2026-08-30T10:00:00Z' }),
+      row({ image_digest: `sha256:${DIGEST_NEW}`, started_at: '2026-08-31T22:00:00Z' }),
     ]);
-    expect(buildsPresent(loadRows(store))[0].build).toContain('sha256:new');
+    expect(buildsPresent(loadRows(store))[0].build).toContain(DIGEST_NEW);
   });
 });
 
@@ -216,7 +237,7 @@ describe('the campaign', () => {
     await coldArm('control', {
       tasks: fakeTasks(['debug-x']),
       execute: spy,
-      provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+      provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
       storePath: store,
       precision: { minReps: 3, maxReps: 3 },
     });
@@ -244,7 +265,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c', 'debug-d', 'debug-e']),
         execute: tracking(state),
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 3, maxReps: 3 },
         concurrency: 3,
@@ -262,7 +283,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c']),
         execute: tracking(state),
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 4, maxReps: 4 },
         concurrency: 6,
@@ -286,7 +307,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b']),
         execute: counting,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         // Identical costs every run: the adaptive rule would stop at its floor
         // of 6 on a zero-width interval. A fixed design must still run 15.
@@ -311,14 +332,14 @@ describe('the campaign', () => {
           task: 'debug-a',
           track: 'cold',
           rep: 1,
-          image_digest: 'sha256:a',
-          commit_sha: 'c1',
+          image_digest: `sha256:${DIGEST_A}`,
+          commit_sha: COMMIT_C1,
         }),
       ]);
       await coldArm('control', {
         tasks: fakeTasks(['debug-a']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { fixedReps: 4 },
       });
@@ -335,12 +356,12 @@ describe('the campaign', () => {
       const execute = async () => ({ status: 'ok', usd: 0.1, turns: 3, workspace: { pass: true } });
       appendRows(store, [
         row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 1,
-              image_digest: 'sha256:a', commit_sha: 'c1' }),
+              image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 }),
       ]);
       await coldArm('control', {
         tasks: fakeTasks(['debug-a']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { fixedReps: 4 },
       });
@@ -359,17 +380,17 @@ describe('the campaign', () => {
       const execute = async () => ({ status: 'ok', usd: 0.1, turns: 3, workspace: { pass: true } });
       appendRows(store, [
         row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 1,
-              image_digest: 'sha256:a', commit_sha: 'c1', started_at: '2026-09-02T01:00:00Z' }),
+              image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1, started_at: '2026-09-02T01:00:00Z' }),
         row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 2,
-              image_digest: 'sha256:a', commit_sha: 'c1', started_at: '2026-09-02T02:00:00Z',
+              image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1, started_at: '2026-09-02T02:00:00Z',
               status: 'error', usd: 0, turns: 0, score: 0, harness_failure: true }),
         row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 3,
-              image_digest: 'sha256:a', commit_sha: 'c1', started_at: '2026-09-02T03:00:00Z' }),
+              image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1, started_at: '2026-09-02T03:00:00Z' }),
       ]);
       await coldArm('control', {
         tasks: fakeTasks(['debug-a']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { fixedReps: 3 },
       });
@@ -385,7 +406,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c']),
         execute: tracking(state),
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 2, maxReps: 2 },
       });
@@ -401,7 +422,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c', 'debug-d']),
         execute: tracking(state),
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 3, maxReps: 3 },
         concurrency: 4,
@@ -430,7 +451,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 3, maxReps: 3 },
       });
@@ -452,7 +473,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 2, maxReps: 2 },
       });
@@ -487,8 +508,8 @@ describe('the campaign', () => {
         armNames: ['control'],
         execute,
         storePath: store,
-        imageDigest: 'sha256:a',
-        commitSha: 'c1',
+        imageDigest: `sha256:${DIGEST_A}`,
+        commitSha: COMMIT_C1,
         tracks: ['cold'],
         precision: { minReps: 1, maxReps: 1 },
         tasksForTrack: () => fakeTasks(['debug-keep', 'debug-ok']),
@@ -513,7 +534,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 2, maxReps: 2 },
       });
@@ -539,8 +560,8 @@ describe('the campaign', () => {
       armNames: ['assist'],
       execute: dying,
       storePath: store,
-      imageDigest: 'sha256:a',
-      commitSha: 'c1',
+      imageDigest: `sha256:${DIGEST_A}`,
+      commitSha: COMMIT_C1,
       tracks: ['cold'],
       precision: { minReps: 3, maxReps: 3 },
       tasksForTrack: () => fakeTasks(['debug-x', 'shot-y']),
@@ -551,7 +572,7 @@ describe('the campaign', () => {
     // The successful runs kept their cost; the dead ones are error rows at zero.
     expect(stored.filter((r) => r.status === 'ok').length).toBeGreaterThan(0);
     expect(stored.filter((r) => r.status === 'error').length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.image_digest === 'sha256:a')).toBe(true);
+    expect(rows.every((r) => r.image_digest === `sha256:${DIGEST_A}`)).toBe(true);
   });
 
   test('every rep hits disk as it happens, not after the task finishes', async () => {
@@ -572,8 +593,8 @@ describe('the campaign', () => {
       armNames: [],
       execute: counting,
       storePath: store,
-      imageDigest: 'sha256:a',
-      commitSha: 'c1',
+      imageDigest: `sha256:${DIGEST_A}`,
+      commitSha: COMMIT_C1,
       tracks: ['cold'],
       precision: { minReps: 3, maxReps: 3 },
       tasksForTrack: () => fakeTasks(['debug-x']),
@@ -592,7 +613,7 @@ describe('the campaign', () => {
     // killed three times in a row would redo the same reps three times and
     // never converge, however much was spent.
     const tasks = fakeTasks(['w-a', 'w-b']).map((t) => ({ ...t, tracks: ['warm'] }));
-    const prov = { image_digest: 'sha256:a', commit_sha: 'c1' };
+    const prov = { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 };
 
     // Two COMPLETE reps already banked, plus a torn third missing one task.
     const banked = [];
@@ -631,8 +652,8 @@ describe('the campaign', () => {
       armNames: ['assist'],
       execute,
       storePath: store,
-      imageDigest: 'sha256:a',
-      commitSha: 'c1',
+      imageDigest: `sha256:${DIGEST_A}`,
+      commitSha: COMMIT_C1,
       tracks: ['cold'],
       precision: { minReps: 3, maxReps: 3 },
       tasksForTrack: () => fakeTasks(['debug-only']),
@@ -653,15 +674,15 @@ describe('the campaign', () => {
         armNames: ['nope'],
         execute,
         storePath: store,
-        imageDigest: 'sha256:a',
-        commitSha: 'c1',
+        imageDigest: `sha256:${DIGEST_A}`,
+        commitSha: COMMIT_C1,
       })
     ).rejects.toThrow(/unknown arm/);
   });
 });
 
 describe('the report a reader sees', () => {
-  const build = { image_digest: 'sha256:a', commit_sha: 'c1' };
+  const build = { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 };
   const rows = [];
   for (let rep = 1; rep <= 8; rep++) {
     rows.push(row({ ...build, arm: 'control', task: 'debug-pipeline-py', rep, usd: 0.1 }));
@@ -741,8 +762,8 @@ describe('a head-to-head between two candidates', () => {
       score: 1,
       turns: 4,
       status: 'ok',
-      image_digest: 'sha256:aaa',
-      commit_sha: 'c1',
+      image_digest: `sha256:${DIGEST_AAA}`,
+      commit_sha: COMMIT_C1,
       started_at: '2026-09-01T00:00:00Z',
     }));
 
@@ -779,7 +800,7 @@ describe('a head-to-head between two candidates', () => {
     // straight through and become the denominator of every ratio.
     const mixed = [
       ...both,
-      ...rowsFor('theirs', 't1', [0.2]).map((r) => ({ ...r, rep: 9, image_digest: 'sha256:bbb' })),
+      ...rowsFor('theirs', 't1', [0.2]).map((r) => ({ ...r, rep: 9, image_digest: `sha256:${DIGEST_BBB}` })),
     ];
     expect(() => report(mixed, { baseline: 'theirs' })).toThrow(/spans 2 builds/);
   });
@@ -795,8 +816,8 @@ describe('ranking on output tokens instead of dollars', () => {
     turns: 4,
     status: 'ok',
     tokens: { output },
-    image_digest: 'sha256:aaa',
-    commit_sha: 'c1',
+    image_digest: `sha256:${DIGEST_AAA}`,
+    commit_sha: COMMIT_C1,
     started_at: '2026-09-01T00:00:00Z',
     ...over,
   });
