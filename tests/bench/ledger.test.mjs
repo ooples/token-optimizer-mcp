@@ -28,6 +28,28 @@ import {
 import { taskResult, compareArm, report } from '../../bench/ledger/rank.mjs';
 import { renderReport } from '../../bench/ledger/render.mjs';
 
+/**
+ * WELL-FORMED PLACEHOLDER PROVENANCE, named rather than inlined.
+ *
+ * `rowProblem` requires a 40-hex commit and a sha256:<64 hex> digest, because a
+ * short or truncated value is the shape a hand-typed sha takes and a row that
+ * cannot identify its build cannot be checked by anyone. The fixtures used
+ * 'abc1234' and 'sha256:aaa', which are neither.
+ *
+ * Padded rather than randomised so the original placeholder is still legible --
+ * DIGEST_OLD reads `sha256:d000...` and DIGEST_NEW `sha256:e000...` -- and a
+ * failing assertion still says which build it meant. That distinction is
+ * load-bearing: several tests exist precisely to prove two builds are never
+ * averaged together.
+ */
+const pad = (label, len) => (label + '0'.repeat(len)).slice(0, len);
+const COMMIT = pad('abc1234', 40);
+const COMMIT_OTHER = pad('c1', 40);
+const DIGEST = pad('sha256:aaa'.slice(7), 64);
+const DIGEST_B = pad('bbb', 64);
+const DIGEST_OLD = pad('d', 64);
+const DIGEST_NEW = pad('e', 64);
+
 /** A row with everything the ledger requires, so tests vary one thing at a time. */
 const row = (over = {}) => ({
   task: 'code-bugfix-py',
@@ -38,8 +60,8 @@ const row = (over = {}) => ({
   usd: 0.1,
   turns: 6,
   score: 1,
-  image_digest: 'sha256:aaa',
-  commit_sha: 'abc1234',
+  image_digest: `sha256:${DIGEST}`,
+  commit_sha: COMMIT,
   started_at: '2026-08-31T22:05:00Z',
   ...over,
 });
@@ -410,9 +432,9 @@ describe('provenance cannot be skipped', () => {
     // The exact shape of the real incident: same arm, same task, two builds,
     // nothing in the rows to tell them apart except when they ran.
     const mixed = [
-      row({ image_digest: 'sha256:old', started_at: '2026-08-31T17:42:05Z' }),
-      row({ image_digest: 'sha256:old', started_at: '2026-08-31T17:43:34Z' }),
-      row({ image_digest: 'sha256:new', started_at: '2026-08-31T22:08:54Z' }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, started_at: '2026-08-31T17:42:05Z' }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, started_at: '2026-08-31T17:43:34Z' }),
+      row({ image_digest: `sha256:${DIGEST_NEW}`, started_at: '2026-08-31T22:08:54Z' }),
     ];
     expect(() => assertSingleBuild(mixed, 'cold/candidate')).toThrow(/spans 2 builds/);
   });
@@ -423,20 +445,20 @@ describe('provenance cannot be skipped', () => {
 
   test('recovery keeps the newest build and hands back the discards', () => {
     const mixed = [
-      row({ image_digest: 'sha256:old', started_at: '2026-08-31T17:42:05Z' }),
-      row({ image_digest: 'sha256:new', started_at: '2026-08-31T22:08:54Z' }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, started_at: '2026-08-31T17:42:05Z' }),
+      row({ image_digest: `sha256:${DIGEST_NEW}`, started_at: '2026-08-31T22:08:54Z' }),
     ];
     const { kept, dropped, build } = newestBuildOnly(mixed);
     expect(kept).toHaveLength(1);
     expect(dropped).toHaveLength(1);
-    expect(build).toContain('sha256:new');
+    expect(build).toContain(DIGEST_NEW);
     // Nothing is deleted -- the caller decides.
     expect(mixed).toHaveLength(2);
   });
 });
 
 describe('the report', () => {
-  const rows = (arm, track, usds, scores, digest = 'sha256:aaa') =>
+  const rows = (arm, track, usds, scores, digest = `sha256:${DIGEST}`) =>
     usds.map((usd, i) =>
       row({
         arm,
@@ -464,8 +486,8 @@ describe('the report', () => {
     expect(() =>
       report([
         ...rows('control', 'cold', [0.1, 0.1, 0.1], [1, 1, 1]),
-        ...rows('candidate', 'cold', [0.1, 0.1], [1, 1], 'sha256:old'),
-        ...rows('candidate', 'cold', [0.1], [1], 'sha256:new'),
+        ...rows('candidate', 'cold', [0.1, 0.1], [1, 1], `sha256:${DIGEST_OLD}`),
+        ...rows('candidate', 'cold', [0.1], [1], `sha256:${DIGEST_NEW}`),
       ])
     ).toThrow(/spans 2 builds/);
   });

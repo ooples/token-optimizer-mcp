@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { appendRows, loadRows, completedReps, buildsPresent } from '../../bench/ledger/store.mjs';
+import { appendRows, loadRows, completedReps, nextRep, buildsPresent } from '../../bench/ledger/store.mjs';
 import { runCampaign, coldArm, warmArm } from '../../bench/ledger/campaign.mjs';
 import { renderReport, headline } from '../../bench/ledger/render.mjs';
 import { report } from '../../bench/ledger/rank.mjs';
@@ -27,6 +27,27 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
+/**
+ * WELL-FORMED PLACEHOLDER PROVENANCE, named rather than inlined.
+ *
+ * `rowProblem` requires a 40-hex commit and a sha256:<64 hex> digest: a short
+ * value is the shape a hand-typed sha takes, and a row that cannot identify its
+ * build cannot be checked by anyone. These were 'abc1234' and 'sha256:new'.
+ *
+ * Padded rather than randomised so the placeholder stays legible -- DIGEST_OLD
+ * reads `sha256:d000...`, DIGEST_NEW `sha256:e000...` -- because several tests
+ * here exist to prove two builds are never averaged, and a failing assertion
+ * must still say which build it meant.
+ */
+const pad = (label, len) => (label + '0'.repeat(len)).slice(0, len);
+const COMMIT = pad('abc1234', 40);
+const COMMIT_C1 = pad('c1', 40);
+const DIGEST_A = pad('a', 64);
+const DIGEST_AAA = pad('aaa', 64);
+const DIGEST_BBB = pad('bbb', 64);
+const DIGEST_OLD = pad('d', 64);
+const DIGEST_NEW = pad('e', 64);
+
 const row = (over = {}) => ({
   task: 'single-shot-extract',
   arm: 'assist',
@@ -36,8 +57,8 @@ const row = (over = {}) => ({
   usd: 0.1,
   turns: 3,
   score: 1,
-  image_digest: 'sha256:new',
-  commit_sha: 'abc1234',
+  image_digest: `sha256:${DIGEST_NEW}`,
+  commit_sha: COMMIT,
   started_at: '2026-08-31T22:05:00Z',
   ...over,
 });
@@ -83,14 +104,14 @@ describe('the store', () => {
     // recorded, so after a rebuild it topped an arm up with new-build reps and
     // averaged them with old-build ones under one name.
     appendRows(store, [
-      row({ image_digest: 'sha256:old', rep: 1 }),
-      row({ image_digest: 'sha256:old', rep: 2 }),
-      row({ image_digest: 'sha256:new', rep: 1 }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, rep: 1 }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, rep: 2 }),
+      row({ image_digest: `sha256:${DIGEST_NEW}`, rep: 1 }),
     ]);
     const rows = loadRows(store);
     const args = { arm: 'assist', track: 'cold', task: 'single-shot-extract' };
-    expect(completedReps(rows, { ...args, build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }) })).toBe(1);
-    expect(completedReps(rows, { ...args, build: buildKey({ image_digest: 'sha256:old', commit_sha: 'abc1234' }) })).toBe(2);
+    expect(completedReps(rows, { ...args, build: buildKey({ image_digest: `sha256:${DIGEST_NEW}`, commit_sha: COMMIT }) })).toBe(1);
+    expect(completedReps(rows, { ...args, build: buildKey({ image_digest: `sha256:${DIGEST_OLD}`, commit_sha: COMMIT }) })).toBe(2);
   });
 
   test('a rep written twice counts once, so a cell cannot look finished early', () => {
@@ -115,9 +136,41 @@ describe('the store', () => {
       arm: 'assist',
       track: 'cold',
       task: 'single-shot-extract',
-      build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }),
+      build: buildKey({ image_digest: `sha256:${DIGEST_NEW}`, commit_sha: COMMIT }),
     });
     expect(done).toBe(3);
+  });
+
+  test('a failure that cost nothing is the harness, not the arm', () => {
+    // FROM A REAL CAMPAIGN. Credentials expired mid-run and produced
+    // `status: 'failed'`, `usd: 0`, `turns: 1` -- the agent burns one turn
+    // receiving an auth rejection. The classifier required `status === 'error'`
+    // AND `turns === 0`, so ten such rows were scored as genuine failures of the
+    // arm that happened to be running last. That arm showed 67% completion and
+    // 0.00 on a third of its cell, which reads as a devastating product result
+    // and was actually our expired token.
+    //
+    // It was also unrecoverable: the rows hold their rep labels, completedReps
+    // counted them, the cell looked full, and a top-up ran nothing.
+    const rows = [
+      row({ rep: 1 }),
+      row({ rep: 2, status: 'failed', usd: 0, turns: 1, score: 0 }),
+      row({ rep: 3, status: 'error', usd: 0, turns: 0 }),
+      // A REAL failure pays for its attempt, and must still count as a rep.
+      row({ rep: 4, status: 'failed', usd: 0.05, turns: 6, score: 0 }),
+    ];
+    appendRows(store, rows);
+    const loaded = loadRows(store);
+    const args = {
+      arm: 'assist',
+      track: 'cold',
+      task: 'single-shot-extract',
+      build: buildKey({ image_digest: `sha256:${DIGEST_NEW}`, commit_sha: COMMIT }),
+    };
+    // reps 1 and 4 are real work; 2 and 3 cost nothing.
+    expect(completedReps(loaded, args)).toBe(2);
+    // Labels stay occupied so a top-up cannot collide with them.
+    expect(nextRep(loaded, args)).toBe(5);
   });
 
   test('a rep whose only row is a harness failure still does not count', () => {
@@ -134,7 +187,7 @@ describe('the store', () => {
       arm: 'assist',
       track: 'cold',
       task: 'single-shot-extract',
-      build: buildKey({ image_digest: 'sha256:new', commit_sha: 'abc1234' }),
+      build: buildKey({ image_digest: `sha256:${DIGEST_NEW}`, commit_sha: COMMIT }),
     });
     // rep 1 and rep 3 are real; rep 2 is only a harness failure.
     expect(done).toBe(2);
@@ -142,10 +195,10 @@ describe('the store', () => {
 
   test('builds present are listed newest first', () => {
     appendRows(store, [
-      row({ image_digest: 'sha256:old', started_at: '2026-08-30T10:00:00Z' }),
-      row({ image_digest: 'sha256:new', started_at: '2026-08-31T22:00:00Z' }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, started_at: '2026-08-30T10:00:00Z' }),
+      row({ image_digest: `sha256:${DIGEST_NEW}`, started_at: '2026-08-31T22:00:00Z' }),
     ]);
-    expect(buildsPresent(loadRows(store))[0].build).toContain('sha256:new');
+    expect(buildsPresent(loadRows(store))[0].build).toContain(DIGEST_NEW);
   });
 });
 
@@ -184,7 +237,7 @@ describe('the campaign', () => {
     await coldArm('control', {
       tasks: fakeTasks(['debug-x']),
       execute: spy,
-      provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+      provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
       storePath: store,
       precision: { minReps: 3, maxReps: 3 },
     });
@@ -212,7 +265,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c', 'debug-d', 'debug-e']),
         execute: tracking(state),
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 3, maxReps: 3 },
         concurrency: 3,
@@ -230,7 +283,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c']),
         execute: tracking(state),
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 4, maxReps: 4 },
         concurrency: 6,
@@ -254,7 +307,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b']),
         execute: counting,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         // Identical costs every run: the adaptive rule would stop at its floor
         // of 6 on a zero-width interval. A fixed design must still run 15.
@@ -279,14 +332,14 @@ describe('the campaign', () => {
           task: 'debug-a',
           track: 'cold',
           rep: 1,
-          image_digest: 'sha256:a',
-          commit_sha: 'c1',
+          image_digest: `sha256:${DIGEST_A}`,
+          commit_sha: COMMIT_C1,
         }),
       ]);
       await coldArm('control', {
         tasks: fakeTasks(['debug-a']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { fixedReps: 4 },
       });
@@ -303,12 +356,12 @@ describe('the campaign', () => {
       const execute = async () => ({ status: 'ok', usd: 0.1, turns: 3, workspace: { pass: true } });
       appendRows(store, [
         row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 1,
-              image_digest: 'sha256:a', commit_sha: 'c1' }),
+              image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 }),
       ]);
       await coldArm('control', {
         tasks: fakeTasks(['debug-a']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { fixedReps: 4 },
       });
@@ -327,17 +380,17 @@ describe('the campaign', () => {
       const execute = async () => ({ status: 'ok', usd: 0.1, turns: 3, workspace: { pass: true } });
       appendRows(store, [
         row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 1,
-              image_digest: 'sha256:a', commit_sha: 'c1', started_at: '2026-09-02T01:00:00Z' }),
+              image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1, started_at: '2026-09-02T01:00:00Z' }),
         row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 2,
-              image_digest: 'sha256:a', commit_sha: 'c1', started_at: '2026-09-02T02:00:00Z',
+              image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1, started_at: '2026-09-02T02:00:00Z',
               status: 'error', usd: 0, turns: 0, score: 0, harness_failure: true }),
         row({ arm: 'control', task: 'debug-a', track: 'cold', rep: 3,
-              image_digest: 'sha256:a', commit_sha: 'c1', started_at: '2026-09-02T03:00:00Z' }),
+              image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1, started_at: '2026-09-02T03:00:00Z' }),
       ]);
       await coldArm('control', {
         tasks: fakeTasks(['debug-a']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { fixedReps: 3 },
       });
@@ -353,7 +406,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c']),
         execute: tracking(state),
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 2, maxReps: 2 },
       });
@@ -369,7 +422,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b', 'debug-c', 'debug-d']),
         execute: tracking(state),
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 3, maxReps: 3 },
         concurrency: 4,
@@ -398,7 +451,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a', 'debug-b']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 3, maxReps: 3 },
       });
@@ -420,7 +473,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 2, maxReps: 2 },
       });
@@ -455,8 +508,8 @@ describe('the campaign', () => {
         armNames: ['control'],
         execute,
         storePath: store,
-        imageDigest: 'sha256:a',
-        commitSha: 'c1',
+        imageDigest: `sha256:${DIGEST_A}`,
+        commitSha: COMMIT_C1,
         tracks: ['cold'],
         precision: { minReps: 1, maxReps: 1 },
         tasksForTrack: () => fakeTasks(['debug-keep', 'debug-ok']),
@@ -481,7 +534,7 @@ describe('the campaign', () => {
       await coldArm('control', {
         tasks: fakeTasks(['debug-a']),
         execute,
-        provenance: { image_digest: 'sha256:a', commit_sha: 'c1' },
+        provenance: { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 },
         storePath: store,
         precision: { minReps: 2, maxReps: 2 },
       });
@@ -507,8 +560,8 @@ describe('the campaign', () => {
       armNames: ['assist'],
       execute: dying,
       storePath: store,
-      imageDigest: 'sha256:a',
-      commitSha: 'c1',
+      imageDigest: `sha256:${DIGEST_A}`,
+      commitSha: COMMIT_C1,
       tracks: ['cold'],
       precision: { minReps: 3, maxReps: 3 },
       tasksForTrack: () => fakeTasks(['debug-x', 'shot-y']),
@@ -519,7 +572,7 @@ describe('the campaign', () => {
     // The successful runs kept their cost; the dead ones are error rows at zero.
     expect(stored.filter((r) => r.status === 'ok').length).toBeGreaterThan(0);
     expect(stored.filter((r) => r.status === 'error').length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.image_digest === 'sha256:a')).toBe(true);
+    expect(rows.every((r) => r.image_digest === `sha256:${DIGEST_A}`)).toBe(true);
   });
 
   test('every rep hits disk as it happens, not after the task finishes', async () => {
@@ -540,8 +593,8 @@ describe('the campaign', () => {
       armNames: [],
       execute: counting,
       storePath: store,
-      imageDigest: 'sha256:a',
-      commitSha: 'c1',
+      imageDigest: `sha256:${DIGEST_A}`,
+      commitSha: COMMIT_C1,
       tracks: ['cold'],
       precision: { minReps: 3, maxReps: 3 },
       tasksForTrack: () => fakeTasks(['debug-x']),
@@ -560,7 +613,7 @@ describe('the campaign', () => {
     // killed three times in a row would redo the same reps three times and
     // never converge, however much was spent.
     const tasks = fakeTasks(['w-a', 'w-b']).map((t) => ({ ...t, tracks: ['warm'] }));
-    const prov = { image_digest: 'sha256:a', commit_sha: 'c1' };
+    const prov = { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 };
 
     // Two COMPLETE reps already banked, plus a torn third missing one task.
     const banked = [];
@@ -599,8 +652,8 @@ describe('the campaign', () => {
       armNames: ['assist'],
       execute,
       storePath: store,
-      imageDigest: 'sha256:a',
-      commitSha: 'c1',
+      imageDigest: `sha256:${DIGEST_A}`,
+      commitSha: COMMIT_C1,
       tracks: ['cold'],
       precision: { minReps: 3, maxReps: 3 },
       tasksForTrack: () => fakeTasks(['debug-only']),
@@ -621,15 +674,15 @@ describe('the campaign', () => {
         armNames: ['nope'],
         execute,
         storePath: store,
-        imageDigest: 'sha256:a',
-        commitSha: 'c1',
+        imageDigest: `sha256:${DIGEST_A}`,
+        commitSha: COMMIT_C1,
       })
     ).rejects.toThrow(/unknown arm/);
   });
 });
 
 describe('the report a reader sees', () => {
-  const build = { image_digest: 'sha256:a', commit_sha: 'c1' };
+  const build = { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 };
   const rows = [];
   for (let rep = 1; rep <= 8; rep++) {
     rows.push(row({ ...build, arm: 'control', task: 'debug-pipeline-py', rep, usd: 0.1 }));
@@ -709,8 +762,8 @@ describe('a head-to-head between two candidates', () => {
       score: 1,
       turns: 4,
       status: 'ok',
-      image_digest: 'sha256:aaa',
-      commit_sha: 'c1',
+      image_digest: `sha256:${DIGEST_AAA}`,
+      commit_sha: COMMIT_C1,
       started_at: '2026-09-01T00:00:00Z',
     }));
 
@@ -747,7 +800,7 @@ describe('a head-to-head between two candidates', () => {
     // straight through and become the denominator of every ratio.
     const mixed = [
       ...both,
-      ...rowsFor('theirs', 't1', [0.2]).map((r) => ({ ...r, rep: 9, image_digest: 'sha256:bbb' })),
+      ...rowsFor('theirs', 't1', [0.2]).map((r) => ({ ...r, rep: 9, image_digest: `sha256:${DIGEST_BBB}` })),
     ];
     expect(() => report(mixed, { baseline: 'theirs' })).toThrow(/spans 2 builds/);
   });
@@ -763,8 +816,8 @@ describe('ranking on output tokens instead of dollars', () => {
     turns: 4,
     status: 'ok',
     tokens: { output },
-    image_digest: 'sha256:aaa',
-    commit_sha: 'c1',
+    image_digest: `sha256:${DIGEST_AAA}`,
+    commit_sha: COMMIT_C1,
     started_at: '2026-09-01T00:00:00Z',
     ...over,
   });
@@ -895,6 +948,78 @@ describe('arms are data, not code', () => {
       }
     }
   });
+  test('the posture arms differ from assist in the mode and nothing else', () => {
+    // THE COMPARISON IS ONLY MEANINGFUL IF ONE VARIABLE MOVES. `enforce` against
+    // `assist` is meant to price refusals plus the routing advisory; if some
+    // future change adds an env var or a hook to one arm and not the other, that
+    // number silently starts pricing something else too, and nothing in the
+    // report would say so.
+    //
+    // `enforce` also matters more than an ordinary arm: mode() returns
+    // MODE_ENFORCE for any unrecognised value, so it is what a user gets out of
+    // the box, and it is the posture #357's target is denominated on.
+    const base = ARMS['assist-mcp'];
+    const { enforce, advise } = ARMS;
+    expect(enforce.env.TOKEN_OPTIMIZER_MODE).toBe('enforce');
+    expect(advise.env.TOKEN_OPTIMIZER_MODE).toBe('advise');
+    expect(base.env.TOKEN_OPTIMIZER_MODE).toBe('assist');
+
+    for (const arm of [enforce, advise]) {
+      // Same settings, byte for byte -- hooks AND the MCP server.
+      expect(JSON.stringify(arm.settings)).toEqual(JSON.stringify(base.settings));
+      // Exactly one environment key may differ, and it must be the mode.
+      const differing = Object.keys({ ...base.env, ...arm.env }).filter(
+        (k) => base.env[k] !== arm.env[k]
+      );
+      expect(differing).toEqual(['TOKEN_OPTIMIZER_MODE']);
+      // A rules file would be a second variable wearing a different name.
+      expect(arm.claudeMd).toBeUndefined();
+      // The scaffold must be the SAME one, not absent. All three postures need
+      // the MCP server installed -- without it an enforcing arm refuses a call
+      // and points at a tool that is not there -- so what keeps the comparison
+      // single-variable is that they share it, not that they lack it.
+      expect(arm.scaffold).toBe(base.scaffold);
+    }
+  });
+
+  test('the enforcing arm registers the MCP server, or it cannot refuse anything', () => {
+    // NOT A STYLE CHECK. `refusalsEnabled()` is necessary but not sufficient: a
+    // refusal only fires when the replacement tool has positive registration
+    // evidence. Measured through the real hook -- the same 200 KB Read payload
+    // gives NO output under mode=enforce with capabilities empty, and a
+    // smart_read redirect with them present. An enforce arm that inherited
+    // `TOKEN_OPTIMIZER_MCP_CAPABILITIES: ''` from `assist` would therefore never
+    // refuse, would measure identically to assist, and would be reported as
+    // "enforcement costs nothing" -- which is the opposite of true.
+    for (const name of ['enforce', 'advise', 'assist-mcp']) {
+      const arm = ARMS[name];
+      // THROUGH THE SCAFFOLD, NOT settings.mcpServers. The executor runs
+      // `claude -p ... --settings /arm/settings.json` with no --mcp-config, and
+      // --settings does not carry MCP servers. An arm declaring them there
+      // produced a transcript with zero mcp__ tools while its refusals still
+      // fired: the agent was told to call smart_read, found no such tool, and
+      // fell back to Bash. A project .mcp.json in the workspace registers it.
+      expect(arm.settings.mcpServers).toBeUndefined();
+      expect(arm.scaffold).toBeTruthy();
+      const cfg = join(arm.scaffold, '.mcp.json');
+      expect(existsSync(cfg)).toBe(true);
+      const servers = JSON.parse(readFileSync(cfg, 'utf8')).mcpServers;
+      expect(Object.keys(servers)).toContain('token-optimizer');
+      // Absolute: the workspace has no plugin root, so ${CLAUDE_PLUGIN_ROOT}
+      // would not expand.
+      const args = servers['token-optimizer'].args.join(' ');
+      expect(args).toMatch(/^\/.*launch\.mjs$/);
+      expect(args).not.toContain('${');
+      // Capabilities must NOT be blanked, or the host's real inventory is
+      // overridden with "nothing is registered" and refusals die silently.
+      expect(arm.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES).toBeUndefined();
+    }
+    // The historical assist arm is the opposite case and must stay that way:
+    // no server, capabilities explicitly blanked.
+    expect(ARMS.assist.settings.mcpServers).toBeUndefined();
+    expect(ARMS.assist.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES).toBe('');
+  });
+
 
   test('a competitor arm is the competitor, not a paraphrase of it', () => {
     // Both were captured by running the vendor's own installer in a container.

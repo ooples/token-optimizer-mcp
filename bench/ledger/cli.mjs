@@ -31,7 +31,7 @@ import { loadRows, buildsPresent } from './store.mjs';
 import { report } from './rank.mjs';
 import { renderReport } from './render.mjs';
 import { ADVERSARIAL, forTrack } from './tasks/index.mjs';
-import { buildKey } from './provenance.mjs';
+import { buildKey, unresolvableCommits } from './provenance.mjs';
 
 /**
  * NaN IS NOT A NUMBER THIS HARNESS MAY ACCEPT, and letting it through reopens a
@@ -246,6 +246,25 @@ async function main(argv) {
     }
     if (!rows.length) {
       process.stdout.write(`no rows in ${store}\n`);
+      return 1;
+    }
+    // A COMMIT THAT DOES NOT EXIST IS A LOUD FAILURE, not a footnote. Rows
+    // reach a report through an explicit --store, so a quarantined or
+    // hand-edited file can be summarised as though it were a campaign. The
+    // provenance is what makes a row checkable by someone else, and a sha
+    // resolving to nothing means nobody can ever reproduce that run.
+    //
+    // Refuses rather than warns because the number would otherwise be printed
+    // and quoted, and the warning scrolls away above it.
+    const unresolvable = unresolvableCommits(rows, { run: execFileSync });
+    if (unresolvable.length) {
+      process.stdout.write(
+        `refusing to summarise: ${unresolvable.length} commit(s) in this store do not exist ` +
+          `in this repository, so those runs cannot be reproduced or checked:\n` +
+          unresolvable.map((s) => `  ${s}`).join('\n') +
+          `\nIf the store is a quarantined or hand-edited file, that is the finding. ` +
+          `If the commit is real but unfetched, fetch it and re-run.\n`
+      );
       return 1;
     }
     const builds = buildsPresent(rows);
