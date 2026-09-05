@@ -712,25 +712,45 @@ export const wholeFileRetitle = {
       name: 'every message carries its own function name',
       weight: 4,
       run: (dir) => {
+        // PER FUNCTION, NOT AGGREGATE COUNTS. Review raised this and the premise
+        // deserved testing rather than agreement: the aggregate form here did
+        // already reject the specific cheat described, because `matched` only
+        // increments when a message equals its ENCLOSING function's name -- a
+        // file whose messages all say `rule_0119` scored 0.50, as did one
+        // stacking 120 valid messages inside rule_0119.
+        //
+        // But `matched === 120` is still a count, and a count can be reached by
+        // routes a per-function check forbids: duplicates inside one function
+        // offsetting a function with none. Requiring each of rule_0000..rule_0119
+        // to exist exactly once and carry exactly one matching message removes
+        // the whole class instead of the instance, which is worth doing even
+        // though the instance was already covered.
         const src = read(dir, 'pkg/rules.py');
+        const seen = new Map();
         let current = null;
-        let matched = 0;
-        let functions = 0;
         for (const line of src.split('\n')) {
           const def = line.match(/^def\s+(rule_\d{4})\s*\(/);
           if (def) {
             current = def[1];
-            functions += 1;
+            const entry = seen.get(current) || { defs: 0, msgs: 0 };
+            entry.defs += 1;
+            seen.set(current, entry);
             continue;
           }
           // Generous about quoting and spacing, strict about the two facts that
           // matter: the function's own name, and the new wording.
           const msg = line.match(/raise\s+ValueError\(\s*['"]([^'"]*)['"]\s*\)/);
           if (msg && current && msg[1] === `${current}: amount must be zero or greater`) {
-            matched += 1;
+            const entry = seen.get(current);
+            if (entry) entry.msgs += 1;
           }
         }
-        return functions === 120 && matched === 120;
+        if (seen.size !== 120) return false;
+        for (let i = 0; i < 120; i += 1) {
+          const entry = seen.get(`rule_${String(i).padStart(4, '0')}`);
+          if (!entry || entry.defs !== 1 || entry.msgs !== 1) return false;
+        }
+        return true;
       },
     },
     {
