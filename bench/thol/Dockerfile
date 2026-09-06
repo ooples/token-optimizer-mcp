@@ -4,12 +4,19 @@
 # sanitized PATH. This image reproduces that faithfully so the numbers we get
 # are comparable in shape to a submittable campaign.
 #
-# We install ONLY what our three arms need (control, token-optimizer-mcp
-# enforced, token-optimizer-mcp with enforcement off). The Rust/uv toolchain
-# in THOL's setup/install_competitors.sh exists for codegraph, rtk, squeez,
-# graphify, headroom and code-review-graph -- none of which we are measuring --
-# so it is deliberately skipped. Adding it back is a one-line RUN if we ever
-# want to reproduce the full board locally.
+# THE COMPETITOR TOOLCHAIN IS INSTALLED, and the reason it was skipped no longer
+# holds. The original note said the Rust/uv toolchain existed "for codegraph,
+# rtk, squeez, graphify, headroom and code-review-graph -- none of which we are
+# measuring". That was the whole problem: not measuring them meant a week of
+# work produced a benchmark we controlled and no idea where we stood against
+# anyone. THOL registers 46 competitors, 12 of them verified with pinned
+# versions, and every one installs without an account -- including tokenade,
+# which was wrongly reported here as blocked on an activation key.
+#
+# Everything is version-pinned by THOL's own setup script: npm packages at exact
+# versions, cargo from a git tag, uv tools at exact versions, and one release
+# binary verified by sha256. So the board is reproducible rather than "whatever
+# was latest the day we built".
 
 FROM node:22-bookworm
 
@@ -136,6 +143,28 @@ RUN git clone https://github.com/pi-infected/token-harness-optimizer-leaderboard
 # and every verify.py import stdlib only. So there is nothing to pip install,
 # and no venv is needed to work around Debian's PEP 668 protection.
 ENV THOL_HOME=/home/bench/thol
+# The competitor field, installed from THOL's own pinned setup script.
+#
+# RUN AS ROOT then handed back to `bench`: cargo and uv drop binaries into
+# root-owned prefixes, and the runner needs them on PATH for every sandbox.
+#
+# `|| true` on the script as a whole would hide a competitor failing to install,
+# which is how a benchmark ends up silently missing an arm -- so it is NOT used.
+# A competitor that cannot be installed should fail the build loudly, and the
+# board should say who is absent and why.
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable \
+    && curl -fsSL https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.cargo/bin:/root/.local/bin:${PATH}"
+RUN cd ${THOL_HOME} && bash setup/install_competitors.sh 2>&1 | tail -40
+# uv and cargo install into root's home; expose them to every user on PATH.
+RUN for d in /root/.cargo/bin /root/.local/bin; do \
+      [ -d "$d" ] && find "$d" -maxdepth 1 -type f -executable -exec ln -sf {} /usr/local/bin/ \; ; \
+    done; true
+USER bench
+
 
 # Pin the optimizer's warm-launch shim to the installed copy. launch.mjs
 # background-refreshes to @latest every 6h by default, which would let the

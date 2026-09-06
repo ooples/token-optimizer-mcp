@@ -959,13 +959,40 @@ export const GOLDEN = {
     ),
 };
 
+/**
+ * ORDER IS THE WARM TRACK'S EXPERIMENT, not a list.
+ *
+ * A warm rep runs this sequence against ONE state directory, so whatever the
+ * graph learns in an earlier task is present for a later one. That makes the
+ * order load-bearing in a way it is not for cold, where `pooled()` runs tasks
+ * independently and this array is merely a set.
+ *
+ * TWO REUSE PAIRS, both now ordered discoverer-then-beneficiary:
+ *
+ *   floodedSymbol -> needleInRepo    the same defect in the same function
+ *                                    (`compute_settlement_fee` rounds before
+ *                                    applying the rate) hidden in two different
+ *                                    haystacks.
+ *   debugPipeline -> explainFailure   the same failing test
+ *                                    (tests/test_pipeline.py, `normalise`):
+ *                                    one fixes it, the next must explain why it
+ *                                    failed.
+ *
+ * explainFailure USED TO RUN FIRST, ahead of the task that discovers the bug it
+ * asks about, so the graph had nothing to offer it and half the reuse evidence
+ * was structurally impossible to observe. Caught by inspecting the order before
+ * the first warm campaign rather than by a weak result afterwards.
+ */
 export const TASKS = [
-  explainFailure,
   floodedSymbol,
   debugPipeline,
+  // Placed after debugPipeline: it asks why a test failed that debugPipeline has
+  // just diagnosed.
+  explainFailure,
   singleShotExtract,
   pureGeneration,
   repeatComprehension,
+  // Placed after floodedSymbol: same defect, different haystack.
   needleInRepo,
   // The large-context battery. Added because measurement showed 74.7% of spend
   // is on the input side -- cache_read alone is 58.2% -- which no rules file
