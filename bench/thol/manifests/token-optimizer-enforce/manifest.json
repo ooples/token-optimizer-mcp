@@ -1,0 +1,85 @@
+{
+  "name": "token-optimizer-enforce",
+  "display_name": "Token Optimizer (enforce: the shipped default, refusals ON)",
+  "verified": true,
+  "version_pin": "6.0.2",
+  "version_checked": "2026-08-29",
+  "upstream": "https://github.com/ooples/token-optimizer-mcp",
+  "install_doc": "THE SHIPPED DEFAULT, and the posture #357 is denominated on. mode() returns MODE_ENFORCE for anything unrecognised, so this is what a user gets out of the box, and no manifest declared it until now -- the ten existing arms are off, assist, or unset. IDENTICAL TO token-optimizer-assist EXCEPT the mode and the capability declaration, so enforce-vs-assist prices refusals and nothing else. CAPABILITIES MUST NOT BE BLANK: a refusal only fires when the replacement tool has positive registration evidence, so an enforce arm inheriting TOKEN_OPTIMIZER_MCP_CAPABILITIES=\"\" is INERT -- measured directly, the same 200 KB Read payload gives no output with it blank and a smart_read redirect with it set. It is omitted here so the host inventory decides, and the MCP server is declared so the redirect lands on a tool that exists.",
+  "requires": [
+    "node"
+  ],
+  "settings": {
+    "env": {
+      "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
+      "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
+      "TOKEN_OPTIMIZER_MODE": "enforce"
+    },
+    "hooks": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/session-start.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreToolUse": [
+        {
+          "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/pretooluse-router.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/precompact-optimize.mjs\""
+            }
+          ]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "matcher": "Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/post-tool.mjs\""
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/stop.mjs\""
+            }
+          ]
+        }
+      ]
+    },
+    "mcpServers": {
+      "token-optimizer": {
+        "command": "node",
+        "args": [
+          "/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/launch.mjs"
+        ],
+        "env": {}
+      }
+    }
+  },
+  "tool_prefixes": [
+    "mcp__token-optimizer__"
+  ]
+}
