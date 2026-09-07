@@ -49,6 +49,14 @@ import { selectForConsolidation } from './consolidate.mjs';
 import { writeHarvested } from './harvest-write.mjs';
 import { load } from './wiki.mjs';
 import { ORIGIN_HARVESTED } from './curate.mjs';
+// The search half of the locate detector below reuses the SAME extractor the
+// router advises from, so a command the advisory recognises as a search and a
+// command this records as one cannot diverge.
+import {
+  identifiersIn,
+  searchPatternFromCommand,
+  symbolIndex,
+} from './advise.mjs';
 
 /**
  * Ceilings, ordered by how much the evidence actually supports.
@@ -59,7 +67,17 @@ import { ORIGIN_HARVESTED } from './curate.mjs';
  * command. A correction is a lexical guess about what a human meant. Churn
  * describes our own reading behaviour and says nothing about the code at all.
  */
-export const CONFIDENCE = { command: 0.9, test: 0.85, correction: 0.6, churn: 0.4 };
+export const CONFIDENCE = {
+  command: 0.9,
+  test: 0.85,
+  correction: 0.6,
+  // LOWEST CEILING IN THE SET, because the pairing is the weakest evidence here.
+  // A file opened after a search is ordered, not caused: the model may have been
+  // going there anyway, and nothing in the record distinguishes the two. The
+  // claim text says only that the two were observed in sequence.
+  locate: 0.55,
+  churn: 0.4,
+};
 
 /** Claim text cap. A finding is one sentence; a paragraph is evidence. */
 const CLAIM_MAX = 300;
@@ -67,6 +85,17 @@ const EVIDENCE_MAX = 400;
 
 /** Bounded so a pathological log cannot turn session end into real work. */
 const MAX_CANDIDATES = 200;
+
+/**
+ * How far after a search the locate detector will look for the file it led to.
+ *
+ * Small on purpose. The pairing is already the weakest evidence this module
+ * emits, and its only justification is adjacency -- a file opened eight tool
+ * calls later is not "where the search led", it is just the next thing that
+ * happened. Widening this would not find more real associations, it would
+ * manufacture spurious ones at the same confidence.
+ */
+const LOCATE_WINDOW = 4;
 
 /**
  * The anchor cap a command surface is stored under, restated here as a TEST.
@@ -746,6 +775,105 @@ export function derive(dir, options = {}) {
   } catch {
     // One detector, never the session.
   }
+  // ---- N: a search the index could NOT have answered ---------------------
+  //
+  // THE ONLY DETECTOR HERE THAT FIRES ON SUCCESS. Every other one keys on a
+  // failure, a red-to-green transition or a correction, and on the primary
+  // client those have no input at all: Claude Code never fires PostToolUse for a
+  // failed tool call, so all 21 `tool-outcome` events in a measured warm rep
+  // carried `success: true`, and eight `derive` runs produced one candidate and
+  // wrote nothing. A task that succeeds first try teaches this layer nothing
+  // whatsoever, which is why that warm graph held 7,946 symbols and zero
+  // findings.
+  //
+  // WHAT IT RECORDS, AND WHAT IT DELIBERATELY DOES NOT. The sequence is already
+  // in the events -- a command-surface outcome whose anchor is a search,
+  // followed by a file-surface outcome:
+  //
+  //   {surface:'command', anchor:'grep -rn "compute_settlement_fee" /work ...'}
+  //   {surface:'file',    anchor:'/work/pkg/mod_047.py'}
+  //
+  // But a search whose term the SYMBOL INDEX already resolves is skipped, and
+  // that exclusion is the whole point. The router now answers those directly
+  // from the index, so recording them again would spend the retrieval budget
+  // restating what a cheaper mechanism already delivers -- and would crowd out
+  // the case this exists for: a search for something the indexer never
+  // extracted, such as a config key, an error string, a literal, or a symbol in
+  // a file type it does not parse. Those are invisible to the index and are
+  // exactly the turns nobody gets back.
+  try {
+    if (projectRoot) {
+      const index = symbolIndex(load(dir));
+      const ordered = events
+        .filter(
+          (event) =>
+            event &&
+            event.kind === 'tool-outcome' &&
+            event.success !== false &&
+            event.anchor
+        )
+        .sort((a, b) => (a.at || 0) - (b.at || 0));
+
+      for (let i = 0; i < ordered.length; i += 1) {
+        const search = ordered[i];
+        if (search.surface !== 'command') continue;
+        const pattern = searchPatternFromCommand(search.anchor);
+        if (!pattern) continue;
+
+        // Identifier-shaped terms only. A glob or a bare punctuation pattern
+        // names nothing a later session could look up, so a finding about it
+        // would be budget spent on noise.
+        const names = identifiersIn(pattern);
+        if (!names.length) continue;
+        // ALREADY ANSWERABLE, so not worth storing -- see above.
+        if (names.some((name) => index.has(name))) continue;
+
+        // The file the session opened next. Bounded to a short window: the
+        // further apart the two are, the less the ordering means, and beyond it
+        // this would be pairing unrelated work.
+        const led = ordered
+          .slice(i + 1, i + 1 + LOCATE_WINDOW)
+          .find((event) => event.surface === 'file');
+        if (!led) continue;
+        // A search run against one named file that then opens that same file
+        // reports nothing a reader did not already have.
+        if (String(search.anchor).includes(String(led.anchor))) continue;
+
+        const confidence = CONFIDENCE.locate;
+        add({
+          type: 'locate',
+          claim: redact(
+            `Searching this project for \`${pattern}\` was followed by opening ${led.anchor}`,
+            { max: CLAIM_MAX }
+          ),
+          evidence: redact(
+            `observed in one session: \`${search.anchor}\` ran, then ${led.anchor} was opened. ` +
+              'The two are ordered, not proven causal -- the file may have been the ' +
+              'destination regardless of what the search returned. Recorded because ' +
+              `the symbol index cannot answer \`${pattern}\`: no indexed symbol carries ` +
+              'that name, so a later session would have to run the search again.',
+            { max: EVIDENCE_MAX }
+          ),
+          applicability: `when searching this project for \`${pattern}\` again`,
+          confidence,
+          confidenceLabel: labelFor(confidence),
+          scope: 'project',
+          invalidators: [
+            `${led.anchor} no longer contains ${pattern}`,
+            'the symbol index gains an entry for this name, which answers it directly',
+          ],
+          trigger: triggerFor(search.anchor),
+          anchors: [anchorPath],
+          derivedBy: 'search-then-open',
+          sessionId,
+          at: search.at || Date.now(),
+        });
+      }
+    }
+  } catch {
+    // One detector, never the session.
+  }
+
 
   // ---- storage, under a budget -------------------------------------------
   //
