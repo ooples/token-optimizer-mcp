@@ -81,6 +81,141 @@ const STOPWORDS = new Set([
   'except', 'raise', 'throw', 'new', 'int', 'str', 'bool', 'float',
 ]);
 
+/**
+ * Search programs whose first operand is a pattern.
+ *
+ * WHY THIS LIST EXISTS AT ALL. The advisory above answers a search from the
+ * index before it runs, and it was wired only to the `Grep` and `Glob` TOOLS.
+ * Measured on the warm benchmark, that is the wrong half of the surface: in the
+ * needle-in-repo runs the agent searched entirely through Bash --
+ *
+ *   Bash  grep -rn "compute_settlement_fee" /work --include=* 2>/dev/null | head -50
+ *   Bash  cat /work/pkg/mod_047.py
+ *   Edit  /work/pkg/mod_047.py
+ *
+ * -- zero Grep calls, zero Glob calls, and so zero advisories delivered, while
+ * the graph for that very session held
+ * `compute_settlement_fee -> pkg/mod_047.py:9-12` and returned it correctly to a
+ * direct call. Two turns were spent rediscovering a fact already indexed.
+ */
+const SEARCH_PROGRAMS = new Set(['grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack']);
+
+/**
+ * Flags that consume the NEXT token, so its value is never the pattern.
+ *
+ * `grep -n "needle" -A 30 -B 10 file` is real observed input: without this, the
+ * walk would stop at `30`. The `--flag=value` spelling needs no entry here --
+ * it is one token, and the `=` test below skips it.
+ */
+const VALUED_FLAGS = new Set([
+  '-e', '--regexp', '-f', '--file', '-m', '--max-count',
+  '-A', '--after-context', '-B', '--before-context', '-C', '--context',
+  '-d', '--directories', '-t', '--type', '-g', '--glob',
+  '--include', '--exclude', '--exclude-dir', '--color', '--colour',
+]);
+
+/**
+ * Splits a command into tokens, honouring quotes.
+ *
+ * A CHARACTER LOOP RATHER THAN A REGEX, deliberately. This runs on the hook's
+ * critical path against a string the model composed, which is the exact input
+ * class this repo keeps a linearity gate for; a single forward pass cannot
+ * backtrack at all.
+ */
+function tokenize(command) {
+  const tokens = [];
+  let current = '';
+  let quote = null;
+  let started = false;
+  for (let i = 0; i < command.length; i += 1) {
+    const ch = command[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      else current += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      started = true;
+      continue;
+    }
+    if (ch === '\\' && i + 1 < command.length) {
+      current += command[i + 1];
+      i += 1;
+      started = true;
+      continue;
+    }
+    if (ch === ' ' || ch === '\t' || ch === '\n') {
+      if (current || started) tokens.push(current);
+      current = '';
+      started = false;
+      continue;
+    }
+    current += ch;
+    started = true;
+  }
+  if (current || started) tokens.push(current);
+  return tokens;
+}
+
+/**
+ * The pattern a shell search command is about to look for, or null.
+ *
+ * Splits on pipeline and sequencing operators first, because `cat x | grep foo`
+ * and `a && grep foo` both carry a search the graph may be able to answer, and
+ * the search is never the first segment there. `git grep foo` is handled by
+ * skipping a leading `git`, and `find . -name "*.py"` by reading the -name
+ * value: a glob yields no identifiers and so costs nothing, but
+ * `find . -name "compute_settlement*"` does.
+ *
+ * Returns the raw pattern rather than identifiers, so the caller hands it to the
+ * same `adviseSearch` the Grep tool path uses and the two surfaces cannot drift.
+ */
+export function searchPatternFromCommand(command) {
+  if (typeof command !== 'string' || !command) return null;
+  // Bounded before any work: a pathological command is not worth parsing, and
+  // the advisory is an optimisation that must never become the slow path.
+  if (command.length > 4_000) return null;
+
+  for (const segment of command.split(/\||&&|\|\||;|\n/)) {
+    const tokens = tokenize(segment.trim()).filter(Boolean);
+    if (!tokens.length) continue;
+    // `env FOO=bar grep ...` and `sudo grep ...` are not worth chasing, but a
+    // leading `git` is: `git grep` is ordinary.
+    let at = 0;
+    if (tokens[at] === 'git') at += 1;
+    const program = String(tokens[at] || '').split(/[/\\]/).pop();
+
+    if (program === 'find') {
+      for (let i = at + 1; i < tokens.length - 1; i += 1) {
+        if (tokens[i] === '-name' || tokens[i] === '-iname') return tokens[i + 1];
+      }
+      continue;
+    }
+    if (!SEARCH_PROGRAMS.has(program)) continue;
+
+    for (let i = at + 1; i < tokens.length; i += 1) {
+      const token = tokens[i];
+      // An explicit -e/--regexp names the pattern outright and wins over
+      // position, which is the whole reason the flag exists.
+      if (VALUED_FLAGS.has(token)) {
+        if (token === '-e' || token === '--regexp') return tokens[i + 1] || null;
+        i += 1;
+        continue;
+      }
+      if (token.startsWith('--') && token.includes('=')) {
+        const [name, ...rest] = token.split('=');
+        if (name === '--regexp') return rest.join('=') || null;
+        continue;
+      }
+      if (token.startsWith('-') && token.length > 1) continue;
+      // The first bare operand is the pattern; everything after it is a path.
+      return token || null;
+    }
+  }
+  return null;
+}
+
 /** Symbol nodes grouped by name, for one lookup per identifier. */
 export function symbolIndex(graph) {
   const byName = new Map();
