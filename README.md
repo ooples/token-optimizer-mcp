@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/enforced-by%20default-2ea043" alt="Enforced by default">
+  <img src="https://img.shields.io/badge/measured-on%20two%20harnesses-2ea043" alt="Measured on two independent harnesses">
   <img src="https://img.shields.io/badge/clients-16-8b5cf6" alt="16 clients">
   <img src="https://img.shields.io/badge/direct%20savings-before%20%2F%20actual%20return-3b82f6" alt="Direct savings measured before and after">
   <img src="https://img.shields.io/badge/telemetry-none-2ea043" alt="No telemetry">
@@ -578,9 +578,10 @@ enforcement.
 ### Enforcing tier — the wasteful call is refused
 
 These ten clients expose a pre-execution hook. Their packaged lifecycle bundle
-defaults to enforcement and shares one capability-aware decision engine; set
-`TOKEN_OPTIMIZER_MODE=advise` or `off` only when you deliberately want the
-escape hatch.
+shares one capability-aware decision engine and defaults to `assist`: routing,
+retrieval, capture and harvest all on, no refusals. Set
+`TOKEN_OPTIMIZER_MODE=enforce` if you want expensive built-in calls vetoed, or
+`off` to disable the hooks entirely.
 
 | Client                 | Installable lifecycle surface                                                                                                                    |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -649,7 +650,7 @@ Start a new Codex conversation after installation so the new tools are discovere
 
 The plugin supplies both automatically. For an MCP-only installation, add the guidance from [`integrations/AGENTS.md`](./integrations/AGENTS.md) to a project or global `AGENTS.md`. A ready-made standalone hook is also available under [`integrations/codex/hooks`](./integrations/codex/hooks); merge its `hooks.json` into `~/.codex/hooks.json`, copy the script to `~/.codex/hooks/`, and review it once with `/hooks`.
 
-The Codex hook injects guidance at `SessionStart` and blocks expensive native operations by default when the bundled MCP has an exact replacement. That includes a single unambiguous code-mode shell call such as `cat` or `Get-Content`; multi-operation orchestration remains advisory so unrelated work is not discarded. A second attempt at the same target passes through if the MCP is unavailable. Set `TOKEN_OPTIMIZER_MODE=advise` for guidance without vetoes or `TOKEN_OPTIMIZER_MODE=off` to disable the hooks. The `AGENTS.md`/skill guidance remains important.
+The Codex hook injects guidance at `SessionStart`. Under `TOKEN_OPTIMIZER_MODE=enforce` it blocks expensive native operations when the bundled MCP has an exact replacement, including a single unambiguous code-mode shell call such as `cat` or `Get-Content`; multi-operation orchestration remains advisory so unrelated work is not discarded, and a second attempt at the same target passes through if the MCP is unavailable. The default is `assist`, which keeps retrieval and capture but never vetoes; `TOKEN_OPTIMIZER_MODE=advise` adds the routing advisory without vetoes, and `off` disables the hooks. The `AGENTS.md`/skill guidance remains important.
 
 If you prefer a smaller instruction block:
 
@@ -819,7 +820,7 @@ New-Item -ItemType Directory -Force .github/hooks | Out-Null
 Copy-Item integrations/copilot/.github/hooks/token-optimizer* .github/hooks/
 ```
 
-The hooks inject optimization guidance at `sessionStart` and deny a large built-in `view` by default so Copilot retries with `smart_read`. Partial reads and files below 25 KB pass through unchanged, and `TOKEN_OPTIMIZER_MODE=advise` restores non-blocking guidance. Repository hooks work without overwriting user-level files; global hooks can instead be placed in `~/.copilot/hooks/` with their script paths adjusted for that directory.
+The hooks inject optimization guidance at `sessionStart`. Under `TOKEN_OPTIMIZER_MODE=enforce` they deny a large built-in `view` so Copilot retries with `smart_read`; the default `assist` leaves the call alone. Partial reads and files below 25 KB always pass through unchanged, and `TOKEN_OPTIMIZER_MODE=advise` gives recommendations without vetoes. Repository hooks work without overwriting user-level files; global hooks can instead be placed in `~/.copilot/hooks/` with their script paths adjusted for that directory.
 
 Restart Copilot CLI after changing hook files. See GitHub's official [MCP setup guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) and [hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference).
 
@@ -904,7 +905,7 @@ New-Item -ItemType Directory -Force .opencode/plugins | Out-Null
 Copy-Item integrations/opencode/.opencode/plugins/token-optimizer.js .opencode/plugins/
 ```
 
-The plugin preserves Token Optimizer usage state in OpenCode's compaction prompt. Its `tool.execute.before` hook rejects full-file reads over 25 KB by default and steers the agent to `smart_read`; small and partial reads pass normally. Set `TOKEN_OPTIMIZER_MODE=advise` for non-blocking guidance. Restart OpenCode after adding the plugin. See the official [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/) and [plugin hook guide](https://opencode.ai/docs/plugins/).
+The plugin preserves Token Optimizer usage state in OpenCode's compaction prompt. Under `TOKEN_OPTIMIZER_MODE=enforce` its `tool.execute.before` hook rejects full-file reads over 25 KB and steers the agent to `smart_read`; the default `assist` lets them through. Small and partial reads always pass normally, and `TOKEN_OPTIMIZER_MODE=advise` gives non-blocking guidance. Restart OpenCode after adding the plugin. See the official [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/) and [plugin hook guide](https://opencode.ai/docs/plugins/).
 
 ### Generic MCP configuration
 
@@ -1343,7 +1344,7 @@ get_session_stats({});
 
 The MCP server is identical in every client, but lifecycle APIs are not. The repository ships client-native adapters instead of copying Claude event names into tools that would silently ignore them.
 
-| Client             | Native integration events                   | Default enforcement                                    | Non-blocking mode             |
+| Client             | Native integration events                   | Refusal under `MODE=enforce`                           | Advisory escape hatch         |
 | ------------------ | ------------------------------------------- | ------------------------------------------------------ | ----------------------------- |
 | Codex              | `SessionStart`, `PreToolUse`                | Deny replaceable large reads and single shell dumps    | `TOKEN_OPTIMIZER_MODE=advise` |
 | Claude Code        | `PreToolUse` plus optional global pipeline  | Deny replaceable large reads and noisy searches        | `TOKEN_OPTIMIZER_MODE=advise` |
@@ -1351,7 +1352,7 @@ The MCP server is identical in every client, but lifecycle APIs are not. The rep
 | Gemini CLI         | `SessionStart`, `BeforeTool`, `AfterTool`   | Deny replaceable large reads before they enter context | `TOKEN_OPTIMIZER_MODE=advise` |
 | OpenCode           | `tool.execute.before`, compaction hook      | Reject large full-file reads and steer to `smart_read` | `TOKEN_OPTIMIZER_MODE=advise` |
 
-Enforcement is the default and uses a 25,600-byte threshold. Override the threshold with `TOKEN_OPTIMIZER_LARGE_READ_BYTES`, use `TOKEN_OPTIMIZER_MODE=advise` to keep recommendations without vetoes, or use `TOKEN_OPTIMIZER_MODE=off` to disable the lifecycle integration. Partial reads pass through because they may already be more efficient than a full cached read, and one repeated attempt is allowed so a failed MCP server cannot permanently block work.
+The default is `assist`: routing, retrieval, capture and harvest are on and nothing is ever refused. That is the posture two independent harnesses measured as our best -- on THOL, assist ran $20.48 at score 0.971 against control's $21.13 at 0.969, while enforce ran $23.33 at 0.935 and lost 12 of 17 tasks. Set `TOKEN_OPTIMIZER_MODE=enforce` for the refusals described above, which use a 25,600-byte threshold; override it with `TOKEN_OPTIMIZER_LARGE_READ_BYTES`, use `TOKEN_OPTIMIZER_MODE=advise` for the routing advisory without vetoes, or `TOKEN_OPTIMIZER_MODE=off` to disable the lifecycle integration. Partial reads always pass through because they may already be more efficient than a full cached read, and under `enforce` one repeated attempt is allowed so a failed MCP server cannot permanently block work.
 
 #### Analytics workflow and storage
 

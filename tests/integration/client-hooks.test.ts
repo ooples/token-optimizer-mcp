@@ -62,6 +62,11 @@ function runHook(
     encoding: 'utf8',
     env: {
       ...process.env,
+      // ASKED FOR, NOT INHERITED. These cases assert refusals and the routing
+      // guidance that names replacements; policy.mjs#mode now defaults to
+      // `assist`, which emits neither. Placed before the `...env` spread so the
+      // cases that deliberately pass `advise` or `off` still override it.
+      TOKEN_OPTIMIZER_MODE: 'enforce',
       // This suite exercises the registered-tool path. Unknown or empty
       // inventories are covered separately by mcp-capability-negotiation.
       TOKEN_OPTIMIZER_MCP_CAPABILITIES:
@@ -419,7 +424,7 @@ describe('native CLI hook integrations', () => {
     ['OpenCode', openCodePlugin],
     ['Kilo', kiloPlugin],
   ])(
-    '%s executes its staged shared hook and enforces by default',
+    '%s executes its staged shared hook, refuses when enforcing, and allows by default',
     async (_name, pluginPath) => {
       const previousMode = process.env.TOKEN_OPTIMIZER_MODE;
       const previousCapabilities = process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
@@ -438,12 +443,29 @@ describe('native CLI hook integrations', () => {
           directory: fixtureDir,
         });
 
+        // THE SUBJECT IS THAT THE STAGED HOOK REALLY RUNS AND CAN REFUSE, which
+        // is why this asks for `enforce` rather than inheriting. The default is
+        // now `assist` (policy.mjs#mode, on THOL and ledger measurement), so an
+        // inherited default would prove only that nothing happened -- and this
+        // plugin path has shipped broken before, which is why the test exists.
+        process.env.TOKEN_OPTIMIZER_MODE = 'enforce';
+        await expect(
+          hooks['tool.execute.before'](
+            { tool: 'read', sessionID: `enforce-${_name}` },
+            { args: { filePath: largeFile } }
+          )
+        ).rejects.toThrow('smart_read');
+
+        // AND THE NEW DEFAULT IS PINNED HERE, so a silent revert to an enforcing
+        // default fails this suite rather than passing it. Unset must mean
+        // assist: the large read goes through untouched.
+        delete process.env.TOKEN_OPTIMIZER_MODE;
         await expect(
           hooks['tool.execute.before'](
             { tool: 'read', sessionID: `default-${_name}` },
             { args: { filePath: largeFile } }
           )
-        ).rejects.toThrow('smart_read');
+        ).resolves.toBeUndefined();
 
         process.env.TOKEN_OPTIMIZER_MODE = 'advise';
         await expect(
@@ -453,7 +475,11 @@ describe('native CLI hook integrations', () => {
           )
         ).resolves.toBeUndefined();
 
-        delete process.env.TOKEN_OPTIMIZER_MODE;
+        // FAIL-OPEN ON AN EMPTY INVENTORY, checked under `enforce` for the same
+        // reason: "it was allowed" is only evidence when something could have
+        // refused. Left on the default this would pass against a hook that had
+        // stopped working altogether.
+        process.env.TOKEN_OPTIMIZER_MODE = 'enforce';
         process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES = '';
         await expect(
           hooks['tool.execute.before'](

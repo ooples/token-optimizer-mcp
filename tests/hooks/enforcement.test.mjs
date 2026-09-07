@@ -93,6 +93,20 @@ function run(payload, env = {}) {
     encoding: 'utf8',
     env: {
       ...process.env,
+      // ASKED FOR EXPLICITLY, because the default is no longer enforce.
+      //
+      // These assertions are about what enforcement DOES -- a large read is
+      // denied, a second read of the same target degrades to an advisory -- and
+      // they used to get that posture by inheriting the default. Now that assist
+      // is the default (see policy.mjs#mode, on THOL and ledger measurement),
+      // inheriting it would test a posture that never refuses, and every
+      // "expected deny" here would report an allow.
+      //
+      // Naming the mode keeps every assertion exactly as strong as it was: the
+      // suite still proves refusals work, under the posture that has them.
+      // Placed BEFORE the `...env` spread so the cases below that deliberately
+      // ask for `off` and `advise` still override it.
+      TOKEN_OPTIMIZER_MODE: 'enforce',
       // These tests exercise enforcement, so they provide the same positive
       // runtime inventory evidence production now requires before redirecting.
       TOKEN_OPTIMIZER_MCP_CAPABILITIES:

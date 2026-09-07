@@ -113,6 +113,21 @@ describe('inventory evidence', () => {
 });
 
 describe('fail-open routing', () => {
+  // ROUTING IS ASKED FOR, because the default no longer advertises it.
+  //
+  // These cases are about WHICH call a router redirects once a replacement is
+  // proven registered -- the fail-open contract. policy.mjs#mode now defaults to
+  // `assist`, whose defining property is that it emits no routing advisory and
+  // never refuses (see the MODE_ASSIST docblock), so inheriting the default
+  // would make every "expected deny" here report an allow and the suite would
+  // be asserting that routing does not happen.
+  //
+  // The outer beforeEach rebuilds cleanEnv from scratch, so this must run after
+  // it -- a nested beforeEach does.
+  beforeEach(() => {
+    cleanEnv.TOKEN_OPTIMIZER_MODE = 'enforce';
+  });
+
   const grep = {
     tool_name: 'Grep',
     tool_input: { pattern: 'needle', path: '.' },
@@ -217,6 +232,25 @@ describe('fail-open routing', () => {
 });
 
 describe('session policy honesty', () => {
+  // These assert properties OF THE ROUTING ADVISORY -- that it names no schema
+  // it cannot prove is registered, and names every one it can. `assist`, now the
+  // default, deliberately emits no routing advisory at all (policyText computes
+  // `advertiseRouting = mode() !== MODE_ASSIST`), so under the default there is
+  // no text for these to be honest or dishonest about and both assertions fail
+  // against a product that is behaving exactly as designed.
+  //
+  // Set on process.env rather than a spawn env because policyText is called
+  // in-process here, and restored afterwards so no later suite inherits it.
+  let priorMode;
+  beforeEach(() => {
+    priorMode = process.env.TOKEN_OPTIMIZER_MODE;
+    process.env.TOKEN_OPTIMIZER_MODE = 'enforce';
+  });
+  afterEach(() => {
+    if (priorMode === undefined) delete process.env.TOKEN_OPTIMIZER_MODE;
+    else process.env.TOKEN_OPTIMIZER_MODE = priorMode;
+  });
+
   test('does not claim or name unavailable schemas', () => {
     const text = policyText(true, new Set(), false);
     expect(text).toMatch(/no positive evidence/i);
