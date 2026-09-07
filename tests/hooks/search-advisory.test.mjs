@@ -29,7 +29,13 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import { identifiersIn, adviseSearch, caseProbePath, SESSION_CAP } from '../../hooks-core/advise.mjs';
+import {
+  identifiersIn,
+  adviseSearch,
+  caseProbePath,
+  searchPatternFromCommand,
+  SESSION_CAP,
+} from '../../hooks-core/advise.mjs';
 import { seedProject, alreadySeeded, seedDisabled } from '../../hooks-core/seed.mjs';
 import { loadState, saveState } from '../../hooks-core/policy.mjs';
 import { load, withBatchedWrites, putNode, putEdge } from '../../hooks-core/wiki.mjs';
@@ -839,5 +845,250 @@ describe('the advisory reaches the model on both paths', () => {
     });
     const aboveOut = JSON.parse(above.stdout || '{}').hookSpecificOutput || {};
     expect(aboveOut.additionalContext || '').not.toContain('parse.py');
+  });
+});
+
+/**
+ * The two ways the advisory was reaching nobody.
+ *
+ * BOTH WERE MEASURED ON THE WARM TRACK, not imagined. That campaign ran 107
+ * assist runs and the needle-in-repo task -- written expressly to demonstrate
+ * this reuse -- came back at 0.932 while the ADVERSARIAL set, whose tasks cannot
+ * reuse anything by construction, averaged 0.681. Tasks that could not benefit
+ * were benefiting most, which is the signature of a retrieval path that never
+ * fires.
+ *
+ *   1. THE POSTURE. Under `assist` the advisory was computed and then thrown
+ *      away: it rides on `reason`, and enforce() allows silently under assist,
+ *      exiting before `reason` is delivered. The existing coverage above missed
+ *      this because its assist cases all pass an EMPTY capability list, which
+ *      produces no verdict and so takes the allowed path, where context is
+ *      delivered by allowWithContext. Assist WITH a proven server -- an ordinary
+ *      plugin install, and now the default posture -- was never exercised.
+ *
+ *   2. THE TOOL. The gate named `Grep` and `Glob`. The observed agents searched
+ *      through the shell and were never eligible at all:
+ *
+ *        Bash  grep -rn "compute_settlement_fee" /work --include=* | head -50
+ *
+ * This is the same defect class as the output bound that was wired into the
+ * refusal branch and so never touched the family it was built for. A capability
+ * that works only while refusing is not shipped.
+ */
+describe('the advisory survives the posture and the tool', () => {
+  let seq = 0;
+  const fresh = (name) => `${name}-${Date.now()}-${++seq}`;
+
+  const run = (payload, env) =>
+    spawnSync(process.execPath, [ROUTER], {
+      input: JSON.stringify(payload),
+      encoding: 'utf8',
+      timeout: 30_000,
+      env: {
+        ...process.env,
+        TOKEN_OPTIMIZER_WIKI_DIR: graphDir,
+        TOKEN_OPTIMIZER_SHARED_DIR: graphDir,
+        ...env,
+      },
+    });
+
+  const out = (result) =>
+    JSON.parse(result.stdout || '{}').hookSpecificOutput || {};
+
+  // A real install: the server IS present, which is what produces a verdict and
+  // sends the call down the path that was dropping the answer.
+  const INSTALLED = {
+    TOKEN_OPTIMIZER_MCP_CAPABILITIES:
+      'smart_read,smart_write,smart_edit,smart_glob,smart_grep',
+  };
+
+  test('assist delivers the answer to a properly installed plugin', () => {
+    const result = out(
+      run(
+        {
+          session_id: fresh('assist-installed'),
+          cwd: workspace,
+          tool_name: 'Grep',
+          tool_input: { pattern: 'parse_line' },
+        },
+        { ...INSTALLED, TOKEN_OPTIMIZER_MODE: 'assist' }
+      )
+    );
+    // Allowed, because assist never refuses -- and carrying the fact anyway.
+    expect(result.permissionDecision).not.toBe('deny');
+    expect(result.additionalContext || '').toContain('parse.py');
+  });
+
+  test('a shell grep is answered, not only the Grep tool', () => {
+    const result = out(
+      run(
+        {
+          session_id: fresh('bash-grep'),
+          cwd: workspace,
+          tool_name: 'Bash',
+          tool_input: { command: `grep -rn "parse_line" ${workspace}` },
+        },
+        { ...INSTALLED, TOKEN_OPTIMIZER_MODE: 'assist' }
+      )
+    );
+    expect(result.additionalContext || '').toContain('parse.py');
+  });
+
+  test('the shell search still runs exactly as written', () => {
+    // The whole feature is additive. Rewriting the command the model asked for
+    // would make a wrong index cost the turn it exists to save.
+    const command = `grep -rn "parse_line" ${workspace}`;
+    const result = out(
+      run(
+        {
+          session_id: fresh('bash-intact'),
+          cwd: workspace,
+          tool_name: 'Bash',
+          tool_input: { command },
+        },
+        { ...INSTALLED, TOKEN_OPTIMIZER_MODE: 'assist' }
+      )
+    );
+    expect(result.updatedInput?.command ?? command).toBe(command);
+  });
+
+  test('assist stays silent when the graph has no answer', () => {
+    // THE PROPERTY ASSIST EXISTS FOR. It speaks only when it holds a fact, so
+    // widening the gate to every Bash call must not put a byte of context on
+    // calls the index cannot help. A regression here is invisible in the
+    // pass/fail of the tests above and shows up only as a cost.
+    const result = out(
+      run(
+        {
+          session_id: fresh('assist-silent'),
+          cwd: workspace,
+          tool_name: 'Bash',
+          tool_input: { command: `grep -rn "totally_unknown_symbol_xyz" ${workspace}` },
+        },
+        { ...INSTALLED, TOKEN_OPTIMIZER_MODE: 'assist' }
+      )
+    );
+    expect(result.additionalContext || '').not.toContain('token-optimizer index');
+  });
+
+  test('assist carries the answer without the routing advisory', () => {
+    // The two used to travel together in `reason`, which is why assist dropped
+    // both. Splitting them must not let the generic redirect back in: that text
+    // fires on every matched call and is the context cost assist exists to
+    // avoid, where the answer fires only when the index has one.
+    const result = out(
+      run(
+        {
+          session_id: fresh('assist-noroute'),
+          cwd: workspace,
+          tool_name: 'Grep',
+          tool_input: { pattern: 'parse_line' },
+        },
+        { ...INSTALLED, TOKEN_OPTIMIZER_MODE: 'assist' }
+      )
+    );
+    const text = result.additionalContext || '';
+    expect(text).toContain('parse.py');
+    expect(text).not.toContain('Call the token-optimizer MCP tool');
+  });
+
+  test('enforce still refuses and still carries the answer', () => {
+    // The split must not cost the refusal path what it already delivered.
+    const result = out(
+      run(
+        {
+          session_id: fresh('enforce-still'),
+          cwd: workspace,
+          tool_name: 'Grep',
+          tool_input: { pattern: 'parse_line' },
+        },
+        { ...INSTALLED, TOKEN_OPTIMIZER_MODE: 'enforce' }
+      )
+    );
+    expect(result.permissionDecision).toBe('deny');
+    expect(result.permissionDecisionReason || '').toContain('parse.py');
+  });
+});
+
+describe('lifting a search pattern out of a shell command', () => {
+  test.each([
+    // The exact command observed on the warm track, head-pipe and all.
+    [
+      'grep -rn "compute_settlement_fee" /work --include=* 2>/dev/null | head -50',
+      'compute_settlement_fee',
+    ],
+    // Context flags take a value, so a positional walk must skip past `30`.
+    ['grep -n "needle" -A 30 -B 10 file.py', 'needle'],
+    ['grep -rn bare_identifier .', 'bare_identifier'],
+    ["rg 'parse_line' src/", 'parse_line'],
+    ['rg -t py --glob "*.py" settle_fee .', 'settle_fee'],
+    // The search is not the first segment of either of these.
+    ['cat notes.txt | grep needle_name', 'needle_name'],
+    ['make build && grep needle_name .', 'needle_name'],
+    ['git grep normalise', 'normalise'],
+    // An explicit -e names the pattern and outranks position.
+    ['grep -e my_symbol -rn .', 'my_symbol'],
+    ['grep --regexp=my_symbol .', 'my_symbol'],
+    ['find . -name "compute_settlement*"', 'compute_settlement*'],
+
+    // THE COLOUR OPTION IS THE ONE FLAG WHOSE ARITY VARIES BY PROGRAM, so
+    // neither "always valued" nor "never valued" parses all of these. Treating
+    // it as valued returned `file.py` for grep and `.` for ag/ack; treating it
+    // as valueless returns `never` for rg. Every row below failed under one of
+    // those two global rules.
+    ['grep --color needle file.py', 'needle'],
+    ['grep --colour needle file.py', 'needle'],
+    ['grep --color=always needle file.py', 'needle'],
+    ['egrep --color needle file.py', 'needle'],
+    ['fgrep --color needle file.py', 'needle'],
+    // ripgrep is the exception: WHEN is a separate, required token.
+    ['rg --color never needle .', 'needle'],
+    ['rg --color=never needle .', 'needle'],
+    // Valueless toggles.
+    ['ag --color needle .', 'needle'],
+    ['ack --color needle .', 'needle'],
+
+    // AN OPERATOR INSIDE QUOTES IS A CHARACTER, NOT A SEPARATOR. Splitting the
+    // raw string before tokenizing cut through quoted text and silently
+    // truncated the pattern, so the identifiers after the first branch never
+    // reached adviseSearch and a matching advisory could be dropped.
+    ['grep -E "foo|bar" .', 'foo|bar'],
+    ["grep 'a|b' .", 'a|b'],
+    ['rg "a;b" .', 'a;b'],
+    ['grep "x&&y" .', 'x&&y'],
+    ['grep "semi;colon" f.py', 'semi;colon'],
+    // ...while real pipelines and sequencing still segment, which is what lets
+    // a search that is not the first command be found at all.
+    ['a || grep fallback_sym .', 'fallback_sym'],
+    ['x ; grep after_semi .', 'after_semi'],
+  ])('%s', (command, expected) => {
+    expect(searchPatternFromCommand(command)).toBe(expected);
+  });
+
+  test.each([
+    ['ls -la /work'],
+    ['python3 -c "print(1)"'],
+    ['cat file.py'],
+    // `grep` as an argument to something else is not a search.
+    ['echo grep'],
+    [''],
+  ])('no pattern in: %s', (command) => {
+    expect(searchPatternFromCommand(command)).toBeNull();
+  });
+
+  test('malformed input is answered, not thrown on', () => {
+    expect(searchPatternFromCommand(undefined)).toBeNull();
+    expect(searchPatternFromCommand(null)).toBeNull();
+    expect(searchPatternFromCommand(42)).toBeNull();
+    expect(searchPatternFromCommand('grep "unterminated')).toBe('unterminated');
+  });
+
+  test('a pathological command is bounded rather than parsed', () => {
+    // This runs on the hook's critical path against a string the model wrote.
+    // The advisory is an optimisation and must never become the slow path.
+    const huge = `grep -rn "x" ${'a'.repeat(50_000)}`;
+    const started = Date.now();
+    expect(searchPatternFromCommand(huge)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(100);
   });
 });

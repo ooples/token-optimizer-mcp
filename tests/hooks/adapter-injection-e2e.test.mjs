@@ -191,6 +191,11 @@ describe('Windsurf adapter', () => {
         encoding: 'utf8',
         env: {
           ...process.env,
+          // The exit-2 veto IS a refusal, so this asks for the posture that
+          // refuses. policy.mjs#mode defaults to `assist` now, under which the
+          // adapter correctly exits 0 and this assertion would be testing that
+          // Windsurf declines to veto -- the opposite of its subject.
+          TOKEN_OPTIMIZER_MODE: 'enforce',
           TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_read',
           TOKEN_OPTIMIZER_STATE_DIR: join(project, '.state'),
         },

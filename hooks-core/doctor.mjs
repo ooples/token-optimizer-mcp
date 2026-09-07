@@ -521,6 +521,19 @@ export async function probeEnforcement({ root, workspace, hooksDir, install }) {
     // on the same session file, and the failure would be intermittent and
     // wrong-looking rather than loud. The concurrency win is taken in
     // diagnose(), across probes that share no state.
+    // ENFORCE IS ASKED FOR, NOT INHERITED -- for the same reason the capability
+    // evidence in `probe` is stated rather than inferred. The question this probe
+    // asks is "would enforcement fire if it were switched on", and policy.mjs#mode
+    // now defaults to `assist`, which never refuses (THOL and ledger measurement).
+    // Inheriting the default would make the probe report "not refused" on a
+    // perfectly healthy install: a false negative in the one tool whose job is to
+    // tell the user the truth.
+    //
+    // BOTH probes take it, not just the refusal one. "Small reads are left alone"
+    // is evidence of something only under a posture that COULD have refused;
+    // under assist it would pass against a hook that does nothing whatsoever,
+    // which is precisely the broken install it exists to catch.
+    const enforcing = { env: { TOKEN_OPTIMIZER_MODE: 'enforce' } };
     const denied = await probe(
       binary,
       {
@@ -528,13 +541,14 @@ export async function probeEnforcement({ root, workspace, hooksDir, install }) {
         tool_input: { file_path: big },
         cwd: workspace,
         session_id: probeId,
-      }
+      },
+      enforcing
     );
     const deniedOk = typeof denied === 'string' && denied.includes('deny');
     checks.push(deniedOk
       ? ok('enforcement refuses a large read', 'the refusal came back from the real hook')
       : bad('enforcement refuses a large read', `hook returned: ${String(denied).slice(0, 200) || '(nothing)'}`,
-        'check TOKEN_OPTIMIZER_MODE is not "off" or "advise", then reinstall the hooks'));
+        'the probe asks for enforce explicitly, so a failure is the hook itself rather than your mode -- reinstall the hooks'));
 
     const allowed = await probe(
       binary,
@@ -543,7 +557,8 @@ export async function probeEnforcement({ root, workspace, hooksDir, install }) {
         tool_input: { file_path: small },
         cwd: workspace,
         session_id: probeId,
-      }
+      },
+      enforcing
     );
     // `allowed === null` is "the probe never ran", NOT "the hook allowed it".
     // allow() writes nothing and exits 0, so '' is a legitimate allow -- but null

@@ -1222,6 +1222,12 @@ async function runHook(clientName, event, invocation) {
         candidates: derived.candidates.length,
         observations: derived.observations.length,
         written: derived.written.length,
+        // Whether a locate detector would have anything to catch: `named` is
+        // searches carrying an identifier, `gap` the subset the symbol index
+        // cannot answer. Recorded rather than acted on -- a `gap` that stays
+        // near zero says the detector written for it should stay unmerged.
+        searchesNamed: derived.searchGap?.named ?? 0,
+        searchGap: derived.searchGap?.gap ?? 0,
       });
     } catch {
       // A detector failing must never cost a user the end of their session.

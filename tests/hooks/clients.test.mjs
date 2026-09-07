@@ -305,8 +305,18 @@ describe('payload shapes normalize across clients', () => {
 });
 
 describe('enforcement matches protocol capability, exactly', () => {
+  // ENFORCE IS NAMED IN BOTH PROBES BELOW, because it is no longer the default.
+  //
+  // policy.mjs#mode now returns `assist` for an unset variable, on THOL and
+  // ledger measurement showing enforce is the worst posture we ship. That makes
+  // "by default" the wrong claim for a refusal test -- and, less obviously, it
+  // would make the fail-open probe VACUOUS: under a posture that never denies,
+  // "not denied" is satisfied by a hook that does nothing at all, which is the
+  // exact breakage that probe exists to detect.
+  const ENFORCING = { TOKEN_OPTIMIZER_MODE: 'enforce' };
+
   test.each(nativeCommandClients)(
-    '$client denies a large read by default through its packaged pre-tool entry',
+    '$client denies a large read when enforcing, through its packaged pre-tool entry',
     ({ client, entry, payload }) => {
       // A FRESH SESSION ID EVERY RUN, and this is what makes the test able to
       // fail. Hook state is persisted per session id, and a proven inventory
@@ -316,7 +326,11 @@ describe('enforcement matches protocol capability, exactly', () => {
       // would still be green. That is not hypothetical: a CLAUDE_PLUGIN_ROOT
       // gate disabled enforcement for all eight packaged entries, passed on
       // every local run, and was caught only by CI's clean checkout.
-      const r = runEntry(entry, payload(`fleet-default-${client}-${randomUUID()}`));
+      const r = runEntry(
+        entry,
+        payload(`fleet-default-${client}-${randomUUID()}`),
+        ENFORCING
+      );
       expect(r.decision).toBe('deny');
       expect(r.reason).toContain('smart_read');
     }
@@ -326,6 +340,7 @@ describe('enforcement matches protocol capability, exactly', () => {
     '$client fails open when the optimizer inventory is explicitly empty',
     ({ client, entry, payload }) => {
       const r = runEntry(entry, payload(`fleet-empty-${client}-${randomUUID()}`), {
+        ...ENFORCING,
         TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
       });
       expect(r.decision).not.toBe('deny');

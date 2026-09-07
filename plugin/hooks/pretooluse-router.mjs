@@ -23,6 +23,7 @@ import {
   refusalsEnabled,
   mode,
   MODE_OFF,
+  MODE_ASSIST,
 } from './lib/policy.mjs';
 import {
   decide,
@@ -67,7 +68,11 @@ import { substitutionFor as outlineFor } from './lib/substitute.mjs';
 import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { adviseSearch, SESSION_CAP } from './lib/advise.mjs';
+import {
+  adviseSearch,
+  searchPatternFromCommand,
+  SESSION_CAP,
+} from './lib/advise.mjs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
@@ -118,6 +123,30 @@ process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
  */
 const HARVEST_MAX_BYTES =
   Number(process.env.TOKEN_OPTIMIZER_HARVEST_MAX_BYTES) || 4_000_000;
+
+/**
+ * Tools whose call may be a search the index can already answer.
+ *
+ * BASH IS HERE BECAUSE OF WHAT THE WARM TRACK MEASURED. The advisory was wired
+ * to `Grep` and `Glob` only, and on the needle-in-repo task -- the one written
+ * to demonstrate exactly this reuse -- the agent searched entirely through the
+ * shell:
+ *
+ *   Bash  grep -rn "compute_settlement_fee" /work --include=* 2>/dev/null | head -50
+ *   Bash  cat /work/pkg/mod_047.py
+ *   Edit  /work/pkg/mod_047.py
+ *
+ * Zero Grep calls, zero Glob calls, so zero advisories -- while that session's
+ * own graph held `compute_settlement_fee -> pkg/mod_047.py:9-12` and handed it
+ * straight back to a direct `adviseSearch` call. Two turns went on rediscovering
+ * an indexed fact, and the task scored 0.932 against an adversarial-set mean of
+ * 0.681: the tasks that CANNOT reuse anything were gaining most, which is the
+ * signature of a retrieval path that never fires.
+ *
+ * `searchAdvisory` returns null for a Bash command carrying no search, so
+ * widening the gate costs an extraction on shell calls and nothing else.
+ */
+const SEARCH_TOOLS = new Set(['Grep', 'Glob', 'Bash']);
 const invocation = beginHookInvocation('claude-code', 'pre-tool');
 
 // Wrapped whole. Any defect in this hook must cost the user nothing: an
@@ -497,7 +526,7 @@ ${nudge}`
     // `capture`. That keeps the A/B honest: an arm can index without advising.
     if (
       features.retrieval &&
-      (payload.tool_name === 'Grep' || payload.tool_name === 'Glob')
+      SEARCH_TOOLS.has(payload.tool_name)
     ) {
       try {
         const advisory = searchAdvisory(payload, state, dirFor);
@@ -862,7 +891,7 @@ function compactorFor(sessionId, command) {
   // knows where that something is, the redirect may not need following at all.
   if (
     features.retrieval &&
-    (payload.tool_name === 'Grep' || payload.tool_name === 'Glob')
+    SEARCH_TOOLS.has(payload.tool_name)
   ) {
     try {
       const advisory = searchAdvisory(payload, state, (path) =>
@@ -870,7 +899,34 @@ function compactorFor(sessionId, command) {
       );
       if (advisory) {
         saveState(payload.session_id, state, agentScope);
-        reason = `${reason}\n\n${advisory}`;
+        // AN ANSWER IS NOT A REDIRECT, and until now the two travelled together
+        // in `reason` -- which meant `assist` threw the answer away.
+        //
+        // enforce() allows SILENTLY under assist (policy.mjs), so everything
+        // accumulated in `reason` is discarded before the model sees it. That is
+        // right for the routing advisory `reason` normally carries: "call
+        // smart_grep instead" fires on every matched call and buys nothing,
+        // which is the context cost assist exists to avoid. It is exactly wrong
+        // for this: a specific fact from the graph, emitted only when the index
+        // actually has the answer, that can save the whole turn the search was
+        // about to spend.
+        //
+        // MEASURED, NOT SUPPOSED. Under assist the advisory reached the model
+        // for no tool at all -- Grep, Glob or Bash -- while advise and enforce
+        // delivered it correctly. The warm campaign ran assist, so the crown
+        // jewel was switched off for all 107 of its runs, and needle-in-repo,
+        // written to demonstrate precisely this reuse, came back at 0.932
+        // against an adversarial-set mean of 0.681.
+        //
+        // This is the same defect class as the output bound that was wired into
+        // the refusal branch and so never touched the family it was built for.
+        // A capability that only works while refusing is not shipped.
+        if (mode() === MODE_ASSIST) {
+          // Allows the call and carries the fact: no refusal, no routing noise.
+          allowWithContext(advisory);
+        } else {
+          reason = `${reason}\n\n${advisory}`;
+        }
       }
     } catch {
       // The plain redirect always works; an unreadable index costs nothing.
@@ -906,7 +962,17 @@ function compactorFor(sessionId, command) {
  * ignore -- which is the only failure mode available to this.
  */
 function searchAdvisory(payload, state, dirFor) {
-  const pattern = payload.tool_input?.pattern;
+  // EITHER SURFACE, RESOLVED HERE rather than at the two call sites, so the
+  // Grep tool and a shell `grep` cannot drift into answering differently.
+  // `Grep`/`Glob` carry the pattern as an argument; Bash carries a whole command
+  // and the pattern has to be lifted out of it -- which is the case the warm
+  // benchmark showed us losing, the needle-in-repo agent having searched only
+  // through Bash and so received nothing the index already knew.
+  const direct = payload.tool_input?.pattern;
+  const pattern =
+    typeof direct === 'string' && direct
+      ? direct
+      : searchPatternFromCommand(payload.tool_input?.command);
   if (typeof pattern !== 'string' || !pattern) return null;
 
   const root = payload.cwd || process.cwd();

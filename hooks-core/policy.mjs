@@ -8,9 +8,18 @@
  * listed in `/mcp`, and save nothing at all. The skill did not help: skills are
  * model-invoked, so it only loads if the model already decided it cared.
  *
- * The redesign inverts the default. Optimized tooling is the path of least
- * resistance: expensive built-in calls are DENIED with a message naming the
- * exact replacement to call. Everything here exists to make that safe.
+ * The redesign inverted the default so that optimized tooling was the path of
+ * least resistance: expensive built-in calls were DENIED with a message naming
+ * the exact replacement to call. Most of this module exists to make that safe.
+ *
+ * REFUSALS ARE NOW OPT-IN, because measurement did not support them. Two
+ * independent harnesses agree that enforcing is the worst posture we ship --
+ * THOL: enforce $23.33/score 0.935 against assist $20.48/0.971 and control
+ * $21.13/0.969, losing 12 of 17 tasks; ledger cold: enforce/advise 1.147
+ * [1.065, 1.235] while advise/assist-mcp is 1.028 [0.951, 1.114]. So the cost is
+ * the refusals themselves, not the routing advisory or retrieval, and the
+ * machinery below is retained and exercised rather than deleted: `enforce`
+ * remains one variable away for anyone who wants it. See `mode()`.
  *
  * FOUR SAFETY PROPERTIES, none of which are optional:
  *
@@ -25,7 +34,8 @@
  *      human intervention and no permanent breakage.
  *
  *   3. AN ESCAPE HATCH THAT IS ONE VARIABLE. TOKEN_OPTIMIZER_MODE=off disables
- *      everything; =advise restores the old non-blocking behaviour.
+ *      everything; =advise restores the old non-blocking behaviour; =enforce
+ *      turns refusals back on now that they are no longer the default.
  *
  *   4. NO BLOCKING OF CHEAP CALLS. Small files, paged reads, and searches that
  *      already read from a pipe cost little and are left alone. Blocking them
@@ -90,16 +100,40 @@ export function refusalsEnabled() {
 }
 
 /**
- * Reads the mode. Enforcement is the DEFAULT -- that is the entire point of the
- * redesign. An unrecognised value falls back to enforce rather than silently
- * disabling, so a typo cannot quietly turn the product off.
+ * Reads the mode. ASSIST IS THE DEFAULT, on measurement.
+ *
+ * This said "Enforcement is the DEFAULT -- that is the entire point of the
+ * redesign". The redesign's point was to make the product pay for itself, and
+ * enforcement was the assumed way there rather than a measured one. Two
+ * independent harnesses now say it is the worst posture we ship:
+ *
+ *   THOL 2.1.251, 17 tasks x 3 reps x 3 arms, 153 runs, zero errors
+ *     control  $21.13  score 0.969  turns 16.2
+ *     assist   $20.48  score 0.971  turns 14.4   <- better on all three
+ *     enforce  $23.33  score 0.935  turns 17.6   <- worse on all three,
+ *                                                   losing 12 of 17 tasks
+ *   Ledger cold track
+ *     enforce/advise    1.147 [1.065, 1.235]  refusals cost 14.7%
+ *     advise/assist-mcp 1.028 [0.951, 1.114]  the advisory itself is free
+ *
+ * So the refusals are the whole cost: not the routing advisory, not retrieval.
+ * Enforce's worst tasks are the small cheap ones, where one refused turn is a
+ * large fraction of the total (code-bugfix-py 1.599, log-needle-zh 1.589).
+ * Shipping assist is worth ~12% cost and 3.6 score points against what users
+ * receive today.
+ *
+ * THE TYPO PROPERTY IS PRESERVED, which is what the old comment was really
+ * protecting. An unrecognised value still falls back to a posture with routing,
+ * retrieval, capture and harvest all ON -- `off` is the only value that exits
+ * the hook process, and it remains reachable only by asking for it exactly. A
+ * typo cannot quietly turn the product off; it can now only decline to refuse.
  */
 export function mode() {
   const raw = (process.env.TOKEN_OPTIMIZER_MODE || '').trim().toLowerCase();
   if (raw === MODE_OFF) return MODE_OFF;
   if (raw === MODE_ADVISE) return MODE_ADVISE;
-  if (raw === MODE_ASSIST) return MODE_ASSIST;
-  return MODE_ENFORCE;
+  if (raw === MODE_ENFORCE) return MODE_ENFORCE;
+  return MODE_ASSIST;
 }
 
 function intEnv(name, fallback) {

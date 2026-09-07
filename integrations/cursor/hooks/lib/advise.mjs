@@ -81,6 +81,204 @@ const STOPWORDS = new Set([
   'except', 'raise', 'throw', 'new', 'int', 'str', 'bool', 'float',
 ]);
 
+/**
+ * Search programs whose first operand is a pattern.
+ *
+ * WHY THIS LIST EXISTS AT ALL. The advisory above answers a search from the
+ * index before it runs, and it was wired only to the `Grep` and `Glob` TOOLS.
+ * Measured on the warm benchmark, that is the wrong half of the surface: in the
+ * needle-in-repo runs the agent searched entirely through Bash --
+ *
+ *   Bash  grep -rn "compute_settlement_fee" /work --include=* 2>/dev/null | head -50
+ *   Bash  cat /work/pkg/mod_047.py
+ *   Edit  /work/pkg/mod_047.py
+ *
+ * -- zero Grep calls, zero Glob calls, and so zero advisories delivered, while
+ * the graph for that very session held
+ * `compute_settlement_fee -> pkg/mod_047.py:9-12` and returned it correctly to a
+ * direct call. Two turns were spent rediscovering a fact already indexed.
+ */
+const SEARCH_PROGRAMS = new Set(['grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack']);
+
+/**
+ * Flags that consume the NEXT token, so its value is never the pattern.
+ *
+ * `grep -n "needle" -A 30 -B 10 file` is real observed input: without this, the
+ * walk would stop at `30`. The `--flag=value` spelling needs no entry here --
+ * it is one token, and the `=` test below skips it.
+ *
+ * THE COLOUR FLAGS ARE NOT HERE, because their arity is the one thing in this
+ * list that differs by program. See COLOR_TAKES_SEPARATE_VALUE.
+ */
+const VALUED_FLAGS = new Set([
+  '-e', '--regexp', '-f', '--file', '-m', '--max-count',
+  '-A', '--after-context', '-B', '--before-context', '-C', '--context',
+  '-d', '--directories', '-t', '--type', '-g', '--glob',
+  '--include', '--exclude', '--exclude-dir',
+]);
+
+/** The spellings of the colour option, across the programs handled here. */
+const COLOR_FLAGS = new Set(['--color', '--colour']);
+
+/**
+ * Programs whose colour flag takes a SEPARATE value token.
+ *
+ * The one option in this parser whose arity cannot be decided globally, and
+ * getting it wrong silently returns a path or a keyword as the search pattern:
+ *
+ *   grep --color needle file   GNU: the value is optional and inline-only, so
+ *                              `needle` is the pattern. Treating --color as
+ *                              valued consumed `needle` and returned `file`.
+ *   rg --color never needle .  ripgrep REQUIRES a separate WHEN, so `never` is
+ *                              the flag's value and `needle` is the pattern.
+ *                              Treating --color as valueless returns `never`.
+ *   ag --color needle .        a valueless toggle, like ack. Same failure as
+ *   ack --color needle .       grep: returned `.` instead of `needle`.
+ *
+ * So neither "always valued" nor "never valued" is correct, and the contract has
+ * to come from the program. Only ripgrep is in this set.
+ */
+const COLOR_TAKES_SEPARATE_VALUE = new Set(['rg']);
+
+/**
+ * Splits a command into segments of tokens, honouring quotes and escapes.
+ *
+ * SEGMENTING AND TOKENIZING ARE ONE PASS, and they have to be. Splitting the raw
+ * string on `|`, `&&` and `;` before tokenizing cut straight through quoted
+ * text, so a perfectly ordinary alternation lost everything after the first
+ * branch:
+ *
+ *   grep -E "foo|bar" .   returned `foo`   -- `bar` never reached adviseSearch
+ *   rg "a;b" .            returned `a`
+ *   grep "x&&y" .         returned `x`
+ *
+ * A quote-aware scan cannot make that mistake, because an operator inside a
+ * quoted run is just a character. Pipelines still split, which is what lets
+ * `cat x | grep foo` be recognised at all -- the search is never the first
+ * segment there.
+ *
+ * A CHARACTER LOOP RATHER THAN A REGEX, deliberately. This runs on the hook's
+ * critical path against a string the model composed, which is the exact input
+ * class this repo keeps a linearity gate for; a single forward pass cannot
+ * backtrack at all.
+ */
+function commandSegments(command) {
+  const segments = [];
+  let tokens = [];
+  let current = '';
+  let quote = null;
+  let started = false;
+
+  const endToken = () => {
+    if (current || started) tokens.push(current);
+    current = '';
+    started = false;
+  };
+  const endSegment = () => {
+    endToken();
+    if (tokens.length) segments.push(tokens);
+    tokens = [];
+  };
+
+  for (let i = 0; i < command.length; i += 1) {
+    const ch = command[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      else current += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      started = true;
+      continue;
+    }
+    if (ch === '\\' && i + 1 < command.length) {
+      current += command[i + 1];
+      i += 1;
+      started = true;
+      continue;
+    }
+    // UNQUOTED ONLY -- reaching here means the quote branches above did not.
+    if (ch === '|' || ch === ';' || ch === '&' || ch === '\n') {
+      endSegment();
+      // `||` and `&&` are one operator, not two empty segments.
+      while (i + 1 < command.length && command[i + 1] === ch) i += 1;
+      continue;
+    }
+    if (ch === ' ' || ch === '\t') {
+      endToken();
+      continue;
+    }
+    current += ch;
+    started = true;
+  }
+  endSegment();
+  return segments;
+}
+
+/**
+ * The pattern a shell search command is about to look for, or null.
+ *
+ * Splits on pipeline and sequencing operators first, because `cat x | grep foo`
+ * and `a && grep foo` both carry a search the graph may be able to answer, and
+ * the search is never the first segment there. `git grep foo` is handled by
+ * skipping a leading `git`, and `find . -name "*.py"` by reading the -name
+ * value: a glob yields no identifiers and so costs nothing, but
+ * `find . -name "compute_settlement*"` does.
+ *
+ * Returns the raw pattern rather than identifiers, so the caller hands it to the
+ * same `adviseSearch` the Grep tool path uses and the two surfaces cannot drift.
+ */
+export function searchPatternFromCommand(command) {
+  if (typeof command !== 'string' || !command) return null;
+  // Bounded before any work: a pathological command is not worth parsing, and
+  // the advisory is an optimisation that must never become the slow path.
+  if (command.length > 4_000) return null;
+
+  for (const tokens of commandSegments(command)) {
+    if (!tokens.length) continue;
+    // `env FOO=bar grep ...` and `sudo grep ...` are not worth chasing, but a
+    // leading `git` is: `git grep` is ordinary.
+    let at = 0;
+    if (tokens[at] === 'git') at += 1;
+    const program = String(tokens[at] || '').split(/[/\\]/).pop();
+
+    if (program === 'find') {
+      for (let i = at + 1; i < tokens.length - 1; i += 1) {
+        if (tokens[i] === '-name' || tokens[i] === '-iname') return tokens[i + 1];
+      }
+      continue;
+    }
+    if (!SEARCH_PROGRAMS.has(program)) continue;
+
+    // Whether a flag eats the next token, decided per program: only the colour
+    // option varies, and only ripgrep requires a separate value for it.
+    const consumesNext = (token) =>
+      VALUED_FLAGS.has(token) ||
+      (COLOR_FLAGS.has(token) && COLOR_TAKES_SEPARATE_VALUE.has(program));
+
+    for (let i = at + 1; i < tokens.length; i += 1) {
+      const token = tokens[i];
+      // An explicit -e/--regexp names the pattern outright and wins over
+      // position, which is the whole reason the flag exists.
+      if (consumesNext(token)) {
+        if (token === '-e' || token === '--regexp') return tokens[i + 1] || null;
+        i += 1;
+        continue;
+      }
+      if (token.startsWith('--') && token.includes('=')) {
+        const [name, ...rest] = token.split('=');
+        if (name === '--regexp') return rest.join('=') || null;
+        continue;
+      }
+      if (token.startsWith('-') && token.length > 1) continue;
+      // The first bare operand is the pattern; everything after it is a path.
+      return token || null;
+    }
+  }
+  return null;
+}
+
 /** Symbol nodes grouped by name, for one lookup per identifier. */
 export function symbolIndex(graph) {
   const byName = new Map();

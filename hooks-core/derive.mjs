@@ -47,6 +47,14 @@ import { selectForConsolidation } from './consolidate.mjs';
 import { writeHarvested } from './harvest-write.mjs';
 import { load } from './wiki.mjs';
 import { ORIGIN_HARVESTED } from './curate.mjs';
+// Counting only -- see `searchGap` below. The SAME extractor the router advises
+// from, so what this counts as a search and what the advisory treats as one
+// cannot diverge.
+import {
+  identifiersIn,
+  searchPatternFromCommand,
+  symbolIndex,
+} from './advise.mjs';
 
 /**
  * Ceilings, ordered by how much the evidence actually supports.
@@ -395,12 +403,56 @@ const storageBudget = () =>
  *   defaulting would promote any caller's string to trusted. Also returned, so a
  *   caller can see what it handed over.
  * @returns {object} `{ candidates, observations, written, selected, dropped,
- *   selectedTokens, sessionId, authoritativeSessionId }`. `candidates` is
- *   everything derived; `written` is the subset of keys the graph actually
- *   holds, which is smaller for three independent reasons -- the budget, the
- *   anchor discipline, and the duplicate collapse that returns an EXISTING key
- *   when a later session derives the same claim again.
+ *   selectedTokens, searchGap, sessionId, authoritativeSessionId }`.
+ *   `candidates` is everything derived; `written` is the subset of keys the
+ *   graph actually holds, which is smaller for three independent reasons -- the
+ *   budget, the anchor discipline, and the duplicate collapse that returns an
+ *   EXISTING key when a later session derives the same claim again.
  */
+
+/**
+ * How many searches this session ran that the symbol index could NOT answer.
+ *
+ * MEASUREMENT, NOT A FEATURE. A detector that turns these into findings is
+ * written and deliberately unmerged, because on the only workload we have
+ * measured it produces nothing: replayed against a real warm rep, all seven
+ * searches were for symbols the index already resolves --
+ * `compute_settlement_fee` three times, `def parse_line` once, and three terms
+ * with no identifier-shaped word at all. The search advisory answers every one
+ * of those directly, so storing them again would spend the retrieval budget
+ * restating a cheaper mechanism.
+ *
+ * The case that would justify the detector is a search for something the indexer
+ * never extracts -- a config key, an error string, a literal, a symbol in a file
+ * type it cannot parse. Eleven synthetic Python tasks cannot show whether that
+ * happens in real work. This counts it instead of guessing: `gap` is the number
+ * of searches carrying an identifier the index has no entry for, `named` the
+ * number carrying one at all. A `gap` that stays near zero says the detector
+ * should stay unmerged.
+ *
+ * Counting only. Nothing is stored, nothing is claimed, and it runs at session
+ * end where the cost is already paid.
+ */
+export function searchGap(dir, events) {
+  const out = { named: 0, gap: 0 };
+  try {
+    const index = symbolIndex(load(dir));
+    for (const event of events) {
+      if (!event || event.kind !== 'tool-outcome') continue;
+      if (event.success === false || event.surface !== 'command') continue;
+      const pattern = searchPatternFromCommand(event.anchor);
+      if (!pattern) continue;
+      const names = identifiersIn(pattern);
+      if (!names.length) continue;
+      out.named += 1;
+      if (!names.some((name) => index.has(name))) out.gap += 1;
+    }
+  } catch {
+    // A count is never worth failing a session for.
+  }
+  return out;
+}
+
 export function derive(dir, options = {}) {
   // `options || {}` rather than a destructuring default. A default only fires on
   // `undefined`, so a caller passing an explicitly null options object -- which
@@ -429,6 +481,10 @@ export function derive(dir, options = {}) {
     return result;
   }
   if (!Array.isArray(events)) return result;
+
+  // Measured, not stored. See `searchGap`: this decides whether the locate
+  // detector is worth merging, and nothing here acts on it.
+  result.searchGap = searchGap(dir, events);
 
   // ONE anchor for the whole run, so every candidate from this session points at
   // the same node and the duplicate collapse in `writeHarvested` can recognise

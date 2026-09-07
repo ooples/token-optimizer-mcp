@@ -482,4 +482,25 @@ describe('the local derivation metric has a reader', () => {
       /Local derivation: 5 candidate\(s\) from 12 observation\(s\); 3 stored across 2 Stop run\(s\)\./
     );
   });
+
+  test('reports how many searches fell outside the symbol index', () => {
+    // THE READER MUST ACTUALLY RENDER IT. The census guard is satisfied by any
+    // reference to the field, so a reader that reads the number and prints
+    // nothing would pass it while leaving the counter exactly as unobserved as
+    // if it had never been written -- and this number is what decides whether
+    // the locate detector held out of the build ever gets merged.
+    record(dir, { kind: 'derive', searchesNamed: 4, searchGap: 0 });
+    record(dir, { kind: 'derive', searchesNamed: 6, searchGap: 3 });
+
+    expect(renderAudit(dir, []).text).toMatch(
+      /3 of 10 named search\(es\) were outside the symbol index\./
+    );
+  });
+
+  test('says nothing about searches in a project that never searched', () => {
+    // A line of zeroes on every audit is noise, and noise is what trains a
+    // reader to skip the whole section.
+    record(dir, { kind: 'derive', observations: 1, candidates: 0, written: 0 });
+    expect(renderAudit(dir, []).text).not.toMatch(/named search\(es\)/);
+  });
 });
