@@ -353,3 +353,71 @@ the opposite side from the old task's 1.149. So the honest possibilities are:
 The pilot cannot distinguish the first three: its interval [0.816, 1.170]
 contains all of them. That is the question n=60 is being bought to answer.
 
+
+---
+
+# Addendum 4 -- does the graph pay off, now that it can actually speak?
+
+Registered **before** the campaign completes. Build `de05b1ca @ 5048f812`,
+warm track, control vs assist, 11 tasks, fixed n=10.
+
+## What the first warm campaign found
+
+The warm track ran for the first time at 217 runs and produced a NULL result --
+but the shape of the null is what matters, because it is the inverse of what a
+working graph predicts:
+
+| group | median assist/control | can these tasks reuse anything? |
+| --- | --- | --- |
+| adversarial (4 tasks) | **0.681** | no, by construction |
+| beneficiary (2 tasks) | **0.890** | yes, written to demonstrate it |
+| other (5 tasks) | 0.839 | incidentally |
+
+Tasks that CANNOT benefit from accumulated knowledge benefited most. Tasks
+written expressly to show reuse benefited least. That is not a weak positive, it
+is a signature: a retrieval path that never fires, with the whole ~16% assist
+margin coming from within-session output discipline.
+
+Two faults were then found and fixed, both proven against the real router:
+
+1. Under `assist` the advisory was computed and DISCARDED -- it rides on
+   `reason`, and `enforce()` allows silently under assist, exiting first. The
+   warm campaign ran assist for all 107 of its runs, so the advisory reached no
+   model at any point.
+2. The gate named `Grep` and `Glob` only, while the observed agents searched
+   entirely through the shell (`grep -rn "compute_settlement_fee" /work ...`).
+
+## The prediction
+
+If those two faults were the cause, the inversion should close: the BENEFICIARY
+ratio should fall relative to the ADVERSARIAL ratio. The adversarial set is the
+control here -- its tasks cannot reuse anything, so Fix A should not move them,
+and any change in them is telling us about the build rather than the graph.
+
+The registered statistic is the **gap**, `beneficiary_mean - adversarial_mean`,
+which was **+0.209** (0.890 - 0.681). It is a within-campaign comparison, so it
+is not confounded by the build change that the new image forces.
+
+## What would falsify it, stated before the data
+
+- **Gap narrows toward zero or goes negative** -- the fixes worked and the graph
+  pays where it was designed to. The claim survives.
+- **Gap is unchanged (within noise of +0.209)** -- delivery was NOT the binding
+  constraint. Something else stops the graph paying, and the two fixes, though
+  independently correct, bought nothing measurable. This must be reported as the
+  fixes failing to move the number, not as "directionally encouraging".
+- **Gap WIDENS** -- the advisory is actively costing the tasks it targets, most
+  plausibly by spending context on an answer the model then re-verifies anyway.
+  That would argue for reverting delivery on the beneficiary path.
+- **The adversarial set moves substantially** -- the comparison is contaminated
+  by the build, and the gap cannot be read at all. Then n=10 on two arms was the
+  wrong instrument and the honest answer is that this campaign settles nothing.
+
+## The limitation, stated in advance
+
+n=10 across 11 tasks resolves a per-task ratio to roughly +/-10% at best, and the
+gap is a difference of two means over 4 and 2 tasks. A change smaller than about
+0.05 in the gap is not distinguishable from noise at this n, so only a clear
+narrowing counts as support. A null here does NOT prove the graph worthless; it
+proves that these two fixes did not move this battery, which is a narrower and
+more honest claim.
