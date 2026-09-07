@@ -78,9 +78,21 @@ export function derivationNote(dir, { events = readMetrics(dir) } = {}) {
   const candidates = sum('candidates');
   const observations = sum('observations');
   const written = sum('written');
+  // THE SEARCH GAP RIDES HERE because a counter nobody reads is exactly the cost
+  // this note exists to prevent -- and because the number decides something: a
+  // locate detector is written and held unmerged until this says the gap is
+  // real. `named` is searches carrying an identifier, `gap` the subset the
+  // symbol index could not answer. Reported only once a search has been seen,
+  // so a project that never searches does not get a line of zeroes.
+  const named = sum('searchesNamed');
+  const gap = sum('searchGap');
+  const searchLine = named
+    ? ` ${gap.toLocaleString()} of ${named.toLocaleString()} named search(es) were ` +
+      'outside the symbol index.'
+    : '';
   return `Local derivation: ${candidates.toLocaleString()} candidate(s) from ` +
     `${observations.toLocaleString()} observation(s); ${written.toLocaleString()} stored ` +
-    `across ${runs.length.toLocaleString()} Stop run(s).`;
+    `across ${runs.length.toLocaleString()} Stop run(s).${searchLine}`;
 }
 
 const idOf = (finding) =>

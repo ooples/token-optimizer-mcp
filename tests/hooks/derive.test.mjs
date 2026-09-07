@@ -28,6 +28,7 @@ import { canonicalPath } from '../../hooks-core/paths.mjs';
 import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from '../../hooks-core/curate.mjs';
 import {
   derive,
+  searchGap,
   CONFIDENCE,
   attemptKey,
   commandBody,
@@ -1214,5 +1215,84 @@ describe('a failure that exists only in the transcript', () => {
     expect(failedResultsFromTranscript(join(dir, 'missing.jsonl'))).toEqual([]);
     writeFileSync(join(dir, 'junk.jsonl'), 'not json\n{"half":\n');
     expect(failedResultsFromTranscript(join(dir, 'junk.jsonl'))).toEqual([]);
+  });
+});
+
+/**
+ * The counter that decides whether a locate detector is worth having.
+ *
+ * A detector turning search-then-open into findings is written and deliberately
+ * unmerged, because replayed against a real warm rep it produced nothing: all
+ * seven searches were for symbols the index already resolves. `searchGap`
+ * measures whether that holds in real use instead of assuming it either way, so
+ * these tests are about the MEASUREMENT being trustworthy -- a counter that
+ * silently reads zero is indistinguishable from a gap that does not exist, and
+ * would retire a feature on no evidence.
+ */
+describe('measuring what the symbol index cannot answer', () => {
+  const outcome = (anchor, surface = 'command') => ({
+    kind: 'tool-outcome',
+    surface,
+    anchor,
+    success: true,
+    at: Date.now(),
+  });
+
+  it('counts a search the index cannot answer as a gap', () => {
+    // Nothing indexed at all, so every named search is unanswerable.
+    expect(searchGap(dir, [outcome('grep -rn "settlement_rate" .')])).toEqual({
+      named: 1,
+      gap: 1,
+    });
+  });
+
+  it('counts a search the index CAN answer as named but not a gap', () => {
+    const file = join(dir, 'pay.py');
+    writeFileSync(file, 'def compute_settlement_fee(a, r):\n    return a * r\n');
+    indexFile(dir, file);
+
+    expect(
+      searchGap(dir, [outcome('grep -rn "compute_settlement_fee" .')])
+    ).toEqual({ named: 1, gap: 0 });
+  });
+
+  it('ignores commands that are not searches', () => {
+    expect(
+      searchGap(dir, [outcome('ls -la'), outcome('cat pay.py'), outcome('python3 x.py')])
+    ).toEqual({ named: 0, gap: 0 });
+  });
+
+  it('ignores a search with no identifier-shaped term', () => {
+    // `*.py` and `return` name nothing a later session could look up -- the
+    // first has no word characters worth indexing, the second is a keyword.
+    expect(
+      searchGap(dir, [outcome('find . -name "*.py"'), outcome('grep -n "return" x.py')])
+    ).toEqual({ named: 0, gap: 0 });
+  });
+
+  it('ignores a file-surface event, which is not a search', () => {
+    expect(searchGap(dir, [outcome('/work/pay.py', 'file')])).toEqual({
+      named: 0,
+      gap: 0,
+    });
+  });
+
+  it('reads zero from junk rather than throwing', () => {
+    // Session end must cost nothing, so a malformed event log degrades to a
+    // count of zero rather than failing the hook.
+    expect(searchGap(dir, [null, undefined, {}, { kind: 'read' }])).toEqual({
+      named: 0,
+      gap: 0,
+    });
+    expect(searchGap(join(dir, 'nowhere'), [])).toEqual({ named: 0, gap: 0 });
+  });
+
+  it('is reported by derive so a session actually records it', () => {
+    // The counter existing is not the same as it being observable. Without this
+    // the number would be computed and dropped, which is the exact failure the
+    // advisory itself just had.
+    record(dir, outcome('grep -rn "settlement_rate" .'));
+    const result = derive(dir, { sessionId: 's1', projectRoot: dir });
+    expect(result.searchGap).toEqual({ named: 1, gap: 1 });
   });
 });
