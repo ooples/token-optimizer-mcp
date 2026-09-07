@@ -643,6 +643,65 @@ describe('the campaign', () => {
     expect(seen).not.toContain(2);
   });
 
+  test('a rep of harness failures is redone, not counted as complete', async () => {
+    // MEASURED, NOT HYPOTHETICAL. Docker died 26 runs into a 220-run warm
+    // campaign, and the runner then wrote 194 rows at `status: error` with
+    // `usd: 0` -- one for every task of every remaining rep. Those rows name
+    // every task, so the completeness check counted all ten reps of both arms as
+    // done. A resume would have skipped the entire campaign and reported it
+    // finished on 26 real runs.
+    //
+    // `completedReps` already states this rule for the cold track -- "a run the
+    // harness never started does not satisfy the rep count" -- and warmArm did
+    // not apply it.
+    const tasks = fakeTasks(['w-a', 'w-b']).map((t) => ({ ...t, tracks: ['warm'] }));
+    const prov = { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 };
+
+    const banked = [];
+    // Rep 1 is real. Rep 2 is a full sequence of harness failures -- every task
+    // present, every one costing nothing.
+    for (const t of tasks) {
+      banked.push(row({ ...prov, arm: 'assist', track: 'warm', task: t.id, rep: 1 }));
+      banked.push(
+        row({
+          ...prov,
+          arm: 'assist',
+          track: 'warm',
+          task: t.id,
+          rep: 2,
+          // THE SHAPE THE RUNNER ACTUALLY WROTE, not an approximation of it. A
+          // first attempt at this fixture set only status and usd and was
+          // REJECTED by appendRows -- "a non-ok run must score 0" -- so rep 2
+          // never reached the store and the test passed against the unfixed
+          // code for a reason that had nothing to do with its subject.
+          status: 'error',
+          usd: 0,
+          turns: 0,
+          score: 0,
+          harness_failure: true,
+          error: 'unparseable output (exit 1): dockerDesktopLinuxEngine/_ping 500',
+        })
+      );
+    }
+    appendRows(store, banked);
+
+    const seen = [];
+    await warmArm('assist', {
+      tasks,
+      execute: async (args) => {
+        seen.push(args.rep);
+        return { status: 'ok', usd: 0.1, turns: 5, workspace: { pass: true } };
+      },
+      provenance: prov,
+      storePath: store,
+      precision: { minReps: 2, maxReps: 3 },
+    });
+
+    // Rep 1 banked and skipped; rep 2 bought nothing and must be re-run.
+    expect(seen).not.toContain(1);
+    expect(seen).toContain(2);
+  });
+
   test('the battery is a parameter, so a campaign can be scoped to one task', async () => {
     // Hardcoding forTrack() made this untestable except against the shipped
     // tasks, and left an operator no way to re-run one task after a failure

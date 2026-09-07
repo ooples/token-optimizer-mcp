@@ -20,7 +20,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { runColdTask, runWarmSequence, campaignProvenance } from './run.mjs';
-import { appendRows, loadRows, completedReps, nextRep } from './store.mjs';
+import {
+  appendRows,
+  loadRows,
+  completedReps,
+  nextRep,
+  isHarnessFailure,
+} from './store.mjs';
 import { report } from './rank.mjs';
 import { forTrack } from './tasks/index.mjs';
 import { discardWorkspace } from './executor.mjs';
@@ -153,9 +159,23 @@ export async function warmArm(arm, { tasks, execute, provenance, storePath, prec
   // rep counts as done only when every task in it has a row for this build --
   // a sequence interrupted halfway is redone, because its later tasks never saw
   // the state the earlier ones would have left.
+  //
+  // A RUN THE HARNESS NEVER STARTED DOES NOT SATISFY THE REP COUNT, which is the
+  // rule `completedReps` already states for the cold track and this function did
+  // not apply. Observed: Docker died 26 runs into a 220-run campaign, and the
+  // runner wrote 194 rows at `status: error` and `usd: 0` -- one for every task
+  // of every remaining rep. Those rows name every task, so `complete` counted
+  // all ten reps of both arms as done, and a resume would have skipped the whole
+  // campaign and reported it finished on 26 real runs. The failures are excluded
+  // from `priorRows` for the same reason: a zero-cost row is not evidence, and
+  // feeding it to `samplingVerdict` would converge an interval on nothing.
   const build = buildKey(provenance);
   const mine = loadRows(storePath).filter(
-    (r) => r.arm === arm && r.track === 'warm' && buildKey(r) === build
+    (r) =>
+      r.arm === arm &&
+      r.track === 'warm' &&
+      buildKey(r) === build &&
+      !isHarnessFailure(r)
   );
   const complete = new Set();
   for (const rep of new Set(mine.map((r) => r.rep))) {
