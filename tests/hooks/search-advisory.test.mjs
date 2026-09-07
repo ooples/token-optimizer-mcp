@@ -1030,6 +1030,23 @@ describe('lifting a search pattern out of a shell command', () => {
     ['grep -e my_symbol -rn .', 'my_symbol'],
     ['grep --regexp=my_symbol .', 'my_symbol'],
     ['find . -name "compute_settlement*"', 'compute_settlement*'],
+
+    // THE COLOUR OPTION IS THE ONE FLAG WHOSE ARITY VARIES BY PROGRAM, so
+    // neither "always valued" nor "never valued" parses all of these. Treating
+    // it as valued returned `file.py` for grep and `.` for ag/ack; treating it
+    // as valueless returns `never` for rg. Every row below failed under one of
+    // those two global rules.
+    ['grep --color needle file.py', 'needle'],
+    ['grep --colour needle file.py', 'needle'],
+    ['grep --color=always needle file.py', 'needle'],
+    ['egrep --color needle file.py', 'needle'],
+    ['fgrep --color needle file.py', 'needle'],
+    // ripgrep is the exception: WHEN is a separate, required token.
+    ['rg --color never needle .', 'needle'],
+    ['rg --color=never needle .', 'needle'],
+    // Valueless toggles.
+    ['ag --color needle .', 'needle'],
+    ['ack --color needle .', 'needle'],
   ])('%s', (command, expected) => {
     expect(searchPatternFromCommand(command)).toBe(expected);
   });
