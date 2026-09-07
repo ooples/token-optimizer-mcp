@@ -139,18 +139,45 @@ const COLOR_FLAGS = new Set(['--color', '--colour']);
 const COLOR_TAKES_SEPARATE_VALUE = new Set(['rg']);
 
 /**
- * Splits a command into tokens, honouring quotes.
+ * Splits a command into segments of tokens, honouring quotes and escapes.
+ *
+ * SEGMENTING AND TOKENIZING ARE ONE PASS, and they have to be. Splitting the raw
+ * string on `|`, `&&` and `;` before tokenizing cut straight through quoted
+ * text, so a perfectly ordinary alternation lost everything after the first
+ * branch:
+ *
+ *   grep -E "foo|bar" .   returned `foo`   -- `bar` never reached adviseSearch
+ *   rg "a;b" .            returned `a`
+ *   grep "x&&y" .         returned `x`
+ *
+ * A quote-aware scan cannot make that mistake, because an operator inside a
+ * quoted run is just a character. Pipelines still split, which is what lets
+ * `cat x | grep foo` be recognised at all -- the search is never the first
+ * segment there.
  *
  * A CHARACTER LOOP RATHER THAN A REGEX, deliberately. This runs on the hook's
  * critical path against a string the model composed, which is the exact input
  * class this repo keeps a linearity gate for; a single forward pass cannot
  * backtrack at all.
  */
-function tokenize(command) {
-  const tokens = [];
+function commandSegments(command) {
+  const segments = [];
+  let tokens = [];
   let current = '';
   let quote = null;
   let started = false;
+
+  const endToken = () => {
+    if (current || started) tokens.push(current);
+    current = '';
+    started = false;
+  };
+  const endSegment = () => {
+    endToken();
+    if (tokens.length) segments.push(tokens);
+    tokens = [];
+  };
+
   for (let i = 0; i < command.length; i += 1) {
     const ch = command[i];
     if (quote) {
@@ -169,17 +196,22 @@ function tokenize(command) {
       started = true;
       continue;
     }
-    if (ch === ' ' || ch === '\t' || ch === '\n') {
-      if (current || started) tokens.push(current);
-      current = '';
-      started = false;
+    // UNQUOTED ONLY -- reaching here means the quote branches above did not.
+    if (ch === '|' || ch === ';' || ch === '&' || ch === '\n') {
+      endSegment();
+      // `||` and `&&` are one operator, not two empty segments.
+      while (i + 1 < command.length && command[i + 1] === ch) i += 1;
+      continue;
+    }
+    if (ch === ' ' || ch === '\t') {
+      endToken();
       continue;
     }
     current += ch;
     started = true;
   }
-  if (current || started) tokens.push(current);
-  return tokens;
+  endSegment();
+  return segments;
 }
 
 /**
@@ -201,8 +233,7 @@ export function searchPatternFromCommand(command) {
   // the advisory is an optimisation that must never become the slow path.
   if (command.length > 4_000) return null;
 
-  for (const segment of command.split(/\||&&|\|\||;|\n/)) {
-    const tokens = tokenize(segment.trim()).filter(Boolean);
+  for (const tokens of commandSegments(command)) {
     if (!tokens.length) continue;
     // `env FOO=bar grep ...` and `sudo grep ...` are not worth chasing, but a
     // leading `git` is: `git grep` is ordinary.

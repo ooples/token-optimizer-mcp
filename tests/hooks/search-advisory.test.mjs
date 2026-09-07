@@ -1047,6 +1047,20 @@ describe('lifting a search pattern out of a shell command', () => {
     // Valueless toggles.
     ['ag --color needle .', 'needle'],
     ['ack --color needle .', 'needle'],
+
+    // AN OPERATOR INSIDE QUOTES IS A CHARACTER, NOT A SEPARATOR. Splitting the
+    // raw string before tokenizing cut through quoted text and silently
+    // truncated the pattern, so the identifiers after the first branch never
+    // reached adviseSearch and a matching advisory could be dropped.
+    ['grep -E "foo|bar" .', 'foo|bar'],
+    ["grep 'a|b' .", 'a|b'],
+    ['rg "a;b" .', 'a;b'],
+    ['grep "x&&y" .', 'x&&y'],
+    ['grep "semi;colon" f.py', 'semi;colon'],
+    // ...while real pipelines and sequencing still segment, which is what lets
+    // a search that is not the first command be found at all.
+    ['a || grep fallback_sym .', 'fallback_sym'],
+    ['x ; grep after_semi .', 'after_semi'],
   ])('%s', (command, expected) => {
     expect(searchPatternFromCommand(command)).toBe(expected);
   });
