@@ -430,10 +430,16 @@ const DOTNET_MARKER = /\.(sln|slnx|csproj|fsproj|vbproj)$/i;
  * Returns null when nothing resolves, which leaves the caller's original root
  * untouched -- a wrong project is worse than the status quo.
  */
-export function projectRootFromActivity(events, { resolve, cwd } = {}) {
+export function projectRootFromActivity(events, { resolve, cwd, sessionId = null } = {}) {
   if (typeof resolve !== 'function' || !Array.isArray(events)) return null;
   const counts = new Map();
   for (const event of events) {
+    // SCOPED TO THIS SESSION when the caller knows its id. A graph outlives the
+    // session that wrote it, so counting every event ever recorded lets a busy
+    // session from last week outvote the one now ending -- and the question
+    // being asked is "where did THIS session work", not "where is this graph
+    // busiest". Callers that pass no id keep the whole-graph count.
+    if (sessionId && event?.sessionId && event.sessionId !== sessionId) continue;
     const anchor = event?.anchor;
     // File surfaces only. A command anchor is the command text, and resolving
     // `npm test -- x` as a path would invent a project out of a sentence.
@@ -454,13 +460,22 @@ export function projectRootFromActivity(events, { resolve, cwd } = {}) {
   }
   let best = null;
   let most = 0;
+  let tied = false;
   for (const [root, n] of counts) {
     if (n > most) {
       most = n;
       best = root;
+      tied = false;
+    } else if (n === most) {
+      // A Map iterates in insertion order, so a tie would otherwise be broken by
+      // whichever file the session happened to touch first -- deterministic, but
+      // arbitrary, and wrong half the time. Findings would then be stored against
+      // a project the evidence does not single out. Decline instead; the caller
+      // keeps cwdRoot, which is at least a root the user chose.
+      tied = true;
     }
   }
-  return best;
+  return tied ? null : best;
 }
 
 export function projectAnchor(projectRoot) {

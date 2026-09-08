@@ -55,6 +55,7 @@ import {
   load,
   wikiDir,
   projectRootFor,
+  unrootedRoot,
 } from './wiki.mjs';
 import { join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -78,7 +79,7 @@ import { recordAuthoredContent } from './authored.mjs';
 import { observedWrites, queueInvalidation } from './pending.mjs';
 import { archive, isArchived } from './transcript.mjs';
 import { harvestMode } from './harvest.mjs';
-import { isFsSafePath } from './paths.mjs';
+import { canonicalPath, isFsSafePath } from './paths.mjs';
 import {
   isSubstantive,
   recordingNudge,
@@ -94,7 +95,7 @@ import {
 import { episodeMeta, featuresForArm, usageFrom } from './experiment.mjs';
 import { evaluateUcrGuards } from './ucr-guard.mjs';
 import { beginHookInvocation, noteHookOutput } from './observability.mjs';
-import { registerProject } from './projects.mjs';
+import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
 
 /**
@@ -109,6 +110,62 @@ export const CLIENTS = nativeClientProfiles();
 /** Never synchronously hash an unbounded build artifact on a hook path. */
 const HARVEST_MAX_BYTES =
   Number(process.env.TOKEN_OPTIMIZER_HARVEST_MAX_BYTES) || 4_000_000;
+
+/**
+ * How many registered project graphs a session-end sweep may open.
+ *
+ * The registry is append-only and unbounded over time -- 4,033 records on this
+ * machine -- and each graph read is a tail of up to 2 MB. Bounded to the most
+ * recently seen handful, which is the only part of the registry a single
+ * session can plausibly have written to.
+ */
+const CROSS_PROJECT_SCAN_LIMIT =
+  Number(process.env.TOKEN_OPTIMIZER_CROSS_PROJECT_SCAN) || 12;
+
+/** A project the current session cannot have touched is not worth opening. */
+const CROSS_PROJECT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The activity this session recorded, gathered from every graph that could hold
+ * it.
+ *
+ * Capture is keyed on where the FILE lives (`recordToolOutcome(wikiDir(root))`,
+ * post-tool), not on the session's cwd. So when the client is started outside a
+ * repository -- a home directory, the common case -- the session's own file
+ * activity is written into each touched project's graph, and the unrooted graph
+ * that `cwd` resolves to holds none of it. Reading only that graph is why the
+ * inference below returned null in exactly the case it exists for: measured on
+ * this machine, the unrooted store holds 12,376 file anchors and ZERO of them
+ * under a repository.
+ *
+ * The sweep is confined to that case. A cwd that IS a repository already owns
+ * the graph its own files were captured into, so it pays nothing.
+ */
+export function sessionActivity(cwdRoot) {
+  let events = [];
+  try {
+    events = readMetrics(wikiDir(cwdRoot));
+  } catch {
+    events = [];
+  }
+  if (canonicalPath(cwdRoot) !== canonicalPath(unrootedRoot())) return events;
+  const cutoff = Date.now() - CROSS_PROJECT_MAX_AGE_MS;
+  let projects = [];
+  try {
+    // Sorted most-recently-seen first by `registeredProjects`.
+    projects = registeredProjects().filter((p) => (p.lastSeenAt || 0) >= cutoff);
+  } catch {
+    return events;
+  }
+  for (const project of projects.slice(0, CROSS_PROJECT_SCAN_LIMIT)) {
+    try {
+      events = events.concat(readMetrics(project.graphDir));
+    } catch {
+      // One unreadable store must not cost the session its inference.
+    }
+  }
+  return events;
+}
 
 /**
  * The response envelopes a completed tool call can arrive in.
@@ -1223,13 +1280,21 @@ async function runHook(clientName, event, invocation) {
       // router already keys capture on where the FILE lives rather than on the
       // session's cwd; this applies that rule to derivation too, and falls back
       // to the cwd answer when the session touched nothing resolvable.
+      //
+      // The evidence is gathered by `sessionActivity`, NOT from the cwd graph
+      // alone: capture keyed on the file's project means an unrooted session's
+      // own activity was written into the graphs of the projects it touched.
+      // Reading only the unrooted graph found 12,376 file anchors and not one
+      // under a repository, so the inference was inert in precisely the case it
+      // was written for.
       const cwdRoot = projectRootFor(join(cwd, '__session__'), cwd);
       let projectRoot = cwdRoot;
       try {
         projectRoot =
-          projectRootFromActivity(readMetrics(wikiDir(cwdRoot)), {
+          projectRootFromActivity(sessionActivity(cwdRoot), {
             resolve: (anchor) => projectRootFor(anchor, cwd),
             cwd,
+            sessionId,
           }) || cwdRoot;
       } catch {
         // Inferring the project is an improvement, never a precondition.

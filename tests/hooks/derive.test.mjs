@@ -11,7 +11,14 @@
  * So most of what is tested here is refusal.
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
+  readFileSync,
+  appendFileSync,
+} from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,7 +29,15 @@ import {
   safeName,
   failedResultsFromTranscript,
 } from '../../hooks-core/transcript.mjs';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
+import {
+  load,
+  putNode,
+  putEdge,
+  nodeId,
+  projectRootFor,
+} from '../../hooks-core/wiki.mjs';
+import { registerProject, projectIdFor } from '../../hooks-core/projects.mjs';
+import { sessionActivity } from '../../hooks-core/adapter.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
 import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from '../../hooks-core/curate.mjs';
@@ -1513,6 +1528,67 @@ describe('inferring the project from what the session touched', () => {
     expect(projectRootFromActivity(events, { resolve: wide })).toBe(REPO);
   });
 
+  it('declines rather than letting touch order break a tie', () => {
+    // Two projects touched equally often. A Map iterates in insertion order, so
+    // picking the first maximum would answer with whichever file the session
+    // happened to open first -- deterministic, and arbitrary. Both orderings
+    // must give the same answer, and the only honest one is "I don't know".
+    const OTHER = '/repos/other';
+    const wide = (anchor) => (anchor.includes('/repos/other') ? OTHER : resolve(anchor));
+    const repoFirst = [
+      { kind: 'read', anchor: `${REPO}/a` },
+      { kind: 'read', anchor: `${OTHER}/c` },
+    ];
+    const otherFirst = [
+      { kind: 'read', anchor: `${OTHER}/c` },
+      { kind: 'read', anchor: `${REPO}/a` },
+    ];
+    expect(projectRootFromActivity(repoFirst, { resolve: wide })).toBeNull();
+    expect(projectRootFromActivity(otherFirst, { resolve: wide })).toBeNull();
+  });
+
+  it('still answers when a later project overtakes an earlier tie', () => {
+    // The tie flag must reset once a strict maximum appears, or one incidental
+    // pair of equal counts would suppress an otherwise clear winner.
+    const OTHER = '/repos/other';
+    const wide = (anchor) => (anchor.includes('/repos/other') ? OTHER : resolve(anchor));
+    const events = [
+      { kind: 'read', anchor: `${REPO}/a` },
+      { kind: 'read', anchor: `${OTHER}/c` },
+      { kind: 'read', anchor: `${OTHER}/d` },
+    ];
+    expect(projectRootFromActivity(events, { resolve: wide })).toBe(OTHER);
+  });
+
+  it('counts only the session that is ending, not the whole graph', () => {
+    // A graph outlives the session that wrote it, and a cross-project sweep
+    // concatenates several of them. Without this filter a busy session from
+    // last week outvotes the one now ending, and its findings are filed against
+    // that other project.
+    const OTHER = '/repos/other';
+    const wide = (anchor) => (anchor.includes('/repos/other') ? OTHER : resolve(anchor));
+    const events = [
+      { kind: 'read', anchor: `${OTHER}/a`, sessionId: 'yesterday' },
+      { kind: 'read', anchor: `${OTHER}/b`, sessionId: 'yesterday' },
+      { kind: 'read', anchor: `${OTHER}/c`, sessionId: 'yesterday' },
+      { kind: 'read', anchor: `${REPO}/x`, sessionId: 'now' },
+    ];
+    expect(projectRootFromActivity(events, { resolve: wide, sessionId: 'now' })).toBe(REPO);
+    // Without the id the whole graph is counted, which is the old behaviour and
+    // the wrong answer for a session that only touched REPO.
+    expect(projectRootFromActivity(events, { resolve: wide })).toBe(OTHER);
+  });
+
+  it('keeps an event that carries no session id at all', () => {
+    // Older records predate the field. Dropping them would make the inference
+    // weaker on exactly the graphs that have the most history.
+    const events = [
+      { kind: 'read', anchor: `${REPO}/a` },
+      { kind: 'read', anchor: `${REPO}/b`, sessionId: 'now' },
+    ];
+    expect(projectRootFromActivity(events, { resolve, sessionId: 'now' })).toBe(REPO);
+  });
+
   it('returns null rather than guessing when nothing resolves', () => {
     // The caller keeps its cwd-derived answer in that case. A wrong project is
     // worse than the status quo: it would file findings about one codebase into
@@ -1529,5 +1605,150 @@ describe('inferring the project from what the session touched', () => {
       throw new Error('nope');
     };
     expect(projectRootFromActivity([{ kind: 'read', anchor: `${REPO}/a` }], { resolve: boom })).toBeNull();
+  });
+});
+
+/**
+ * The sweep that makes the inference above reach the evidence.
+ *
+ * Capture is keyed on where the FILE lives, so a session started outside a
+ * repository writes its file activity into each touched PROJECT's graph while
+ * `cwd` resolves to the unrooted fallback. Reading only the unrooted graph
+ * therefore found nothing to infer from -- measured on this machine, 12,376
+ * file anchors in that store and not one under a repository.
+ */
+describe('gathering session activity from the graphs that hold it', () => {
+  let sandbox;
+  let unrooted;
+  let saved;
+
+  const makeProject = (name, { register = true } = {}) => {
+    const root = join(sandbox, name);
+    mkdirSync(join(root, '.git'), { recursive: true });
+    const graphDir = join(root, '.token-optimizer', 'wiki');
+    mkdirSync(graphDir, { recursive: true });
+    if (register) registerProject({ root, graphDir, client: 'test' });
+    return { root, graphDir };
+  };
+
+  beforeEach(() => {
+    sandbox = mkdtempSync(join(tmpdir(), 'session-activity-'));
+    unrooted = join(sandbox, 'unrooted');
+    mkdirSync(unrooted, { recursive: true });
+    mkdirSync(join(unrooted, '.token-optimizer', 'wiki'), { recursive: true });
+    saved = {
+      unrootedDir: process.env.TOKEN_OPTIMIZER_UNROOTED_DIR,
+      registry: process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY,
+      wikiDir: process.env.TOKEN_OPTIMIZER_WIKI_DIR,
+    };
+    process.env.TOKEN_OPTIMIZER_UNROOTED_DIR = unrooted;
+    process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(sandbox, 'projects.jsonl');
+    // wikiDir() short-circuits to this for EVERY project when set, which would
+    // collapse the very separation this test exists to cross.
+    delete process.env.TOKEN_OPTIMIZER_WIKI_DIR;
+  });
+
+  afterEach(() => {
+    for (const [key, value] of [
+      ['TOKEN_OPTIMIZER_UNROOTED_DIR', saved.unrootedDir],
+      ['TOKEN_OPTIMIZER_PROJECT_REGISTRY', saved.registry],
+      ['TOKEN_OPTIMIZER_WIKI_DIR', saved.wikiDir],
+    ]) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    rmSync(sandbox, { recursive: true, force: true });
+  });
+
+  it('reaches the project graph an unrooted session actually wrote to', () => {
+    const project = makeProject('repo-a');
+    record(project.graphDir, {
+      kind: 'read',
+      anchor: join(project.root, 'src', 'a.mjs'),
+      sessionId: 'now',
+      tokens: 10,
+    });
+
+    const events = sessionActivity(unrooted);
+    const anchors = events.map((e) => e.anchor).filter(Boolean);
+    expect(anchors).toContain(join(project.root, 'src', 'a.mjs'));
+
+    // The whole point: the inference now resolves to the repository, where the
+    // finding can be anchored, instead of to the unrooted fallback where
+    // `indexFile` refuses a directory and the finding is dropped.
+    expect(
+      projectRootFromActivity(events, {
+        resolve: (anchor) => projectRootFor(anchor, unrooted),
+        sessionId: 'now',
+      })
+    ).toBe(canonicalPath(project.root));
+  });
+
+  it('reads only its own graph when the cwd is already a repository', () => {
+    const other = makeProject('repo-b');
+    record(other.graphDir, {
+      kind: 'read',
+      anchor: join(other.root, 'src', 'b.mjs'),
+      sessionId: 'now',
+      tokens: 10,
+    });
+    const here = makeProject('repo-here');
+    record(here.graphDir, {
+      kind: 'read',
+      anchor: join(here.root, 'src', 'h.mjs'),
+      sessionId: 'now',
+      tokens: 10,
+    });
+
+    const anchors = sessionActivity(here.root).map((e) => e.anchor).filter(Boolean);
+    expect(anchors).toContain(join(here.root, 'src', 'h.mjs'));
+    // A rooted session pays nothing for the sweep, and cannot be dragged into
+    // another repository by it.
+    expect(anchors).not.toContain(join(other.root, 'src', 'b.mjs'));
+  });
+
+  it('ignores a registered project the session is too old to have touched', () => {
+    const stale = makeProject('repo-stale', { register: false });
+    // Registered with a timestamp outside the 24h window the sweep considers.
+    appendFileSync(
+      process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY,
+      `${JSON.stringify({
+        v: 1,
+        id: projectIdFor(stale.root),
+        root: canonicalPath(stale.root),
+        graphDir: canonicalPath(stale.graphDir),
+        name: 'repo-stale',
+        client: 'test',
+        at: Date.now() - 72 * 60 * 60 * 1000,
+      })}
+`,
+      'utf8'
+    );
+    record(stale.graphDir, {
+      kind: 'read',
+      anchor: join(stale.root, 'src', 'old.mjs'),
+      sessionId: 'now',
+      tokens: 10,
+    });
+
+    // A project registered inside the window, so the sweep demonstrably ran
+    // and the exclusion below is the age filter rather than a no-op.
+    const fresh = makeProject('repo-fresh');
+    record(fresh.graphDir, {
+      kind: 'read',
+      anchor: join(fresh.root, 'src', 'new.mjs'),
+      sessionId: 'now',
+      tokens: 10,
+    });
+
+    const anchors = sessionActivity(unrooted).map((e) => e.anchor).filter(Boolean);
+    expect(anchors).toContain(join(fresh.root, 'src', 'new.mjs'));
+    expect(anchors).not.toContain(join(stale.root, 'src', 'old.mjs'));
+  });
+
+  it('survives an unreadable registry rather than failing the session', () => {
+    process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(sandbox, 'nope', 'missing.jsonl');
+    expect(() => sessionActivity(unrooted)).not.toThrow();
+    expect(Array.isArray(sessionActivity(unrooted))).toBe(true);
   });
 });
