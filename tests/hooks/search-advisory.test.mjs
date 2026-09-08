@@ -968,6 +968,12 @@ describe('the advisory survives the posture and the tool', () => {
         { ...INSTALLED, TOKEN_OPTIMIZER_MODE: 'assist' }
       )
     );
+    // PINNED POSITIVELY FIRST. The negative below also passes when the router
+    // crashes, writes nothing, or is never reached -- so on its own it would
+    // report success for a hook that had stopped working, which is the exact
+    // breakage this test exists to catch. Asserting the call was ALLOWED proves
+    // the router ran and produced a decision; only then is its silence evidence.
+    expect(result.permissionDecision ?? 'allow').toBe('allow');
     expect(result.additionalContext || '').not.toContain('token-optimizer index');
   });
 
