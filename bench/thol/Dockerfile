@@ -238,12 +238,33 @@ RUN if [ -d "$HOME/.local/bin" ]; then \
 # breakage survived a build. A competitor the runner cannot execute is a missing
 # arm, and a missing arm must fail the build rather than the campaign.
 RUN chmod -R a+rX /usr/local/cargo /usr/local/rustup /usr/local/uv-tools 2>/dev/null || true
-USER bench
+
+# LINKED INTO /usr/local/bin SO A LOGIN SHELL CANNOT LOSE THEM. The image's
+# ENV PATH carries /usr/local/cargo/bin, but `bash -l` sources /etc/profile and
+# replaces PATH with /usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games --
+# measured, not assumed. Under that PATH uv, edgee and headroom survive because
+# they live in /usr/local/bin, while cargo, rustc, rtk and squeez disappear.
+# Whether THOL's runner ever uses a login shell is not something this image
+# should depend on, so the cargo-built competitors are reachable either way.
+# Symlinks are safe here, unlike the /root arrangement they replace: the target
+# is world-readable, and the rustup shims resolve through CARGO_HOME/RUSTUP_HOME
+# which are ENV and survive a PATH reset.
 RUN set -eu; \
-    for t in cargo rustc uv rtk squeez edgee; do \
-      command -v "$t" >/dev/null 2>&1 || { echo "FATAL: $t not on PATH for $(id -un)"; exit 1; }; \
+    for f in /usr/local/cargo/bin/*; do \
+      [ -e "$f" ] || continue; \
+      ln -sf "$f" "/usr/local/bin/$(basename "$f")"; \
+    done
+
+USER bench
+# ASSERTED UNDER A LOGIN SHELL, deliberately the harsher case. An earlier version
+# of this check ran in the build's default shell, passed, and a probe with
+# `bash -lc` then found cargo, rustc, rtk and squeez missing -- the assertion had
+# been testing the easy path.
+RUN bash -lc 'set -eu; \
+    for t in cargo rustc uv uvx rtk squeez edgee headroom; do \
+      command -v "$t" >/dev/null 2>&1 || { echo "FATAL: $t not on PATH for $(id -un) under a login shell"; exit 1; }; \
     done; \
-    echo "competitor toolchain reachable as $(id -un)"
+    echo "competitor toolchain reachable as $(id -un), login shell included"'
 
 
 # Pin the optimizer's warm-launch shim to the installed copy. launch.mjs
