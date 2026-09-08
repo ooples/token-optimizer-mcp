@@ -728,15 +728,40 @@ export const wholeFileRetitle = {
         const src = read(dir, 'pkg/rules.py');
         const seen = new Map();
         let current = null;
+        // Whether the NEXT statement is the first one inside this function's
+        // `if amount < 0:` guard, and how far that guard was indented.
+        let awaitingGuardBody = false;
+        let guardIndent = 0;
         for (const line of src.split('\n')) {
           const def = line.match(/^def\s+(rule_\d{4})\s*\(/);
           if (def) {
             current = def[1];
+            awaitingGuardBody = false;
             const entry = seen.get(current) || { defs: 0, msgs: 0 };
             entry.defs += 1;
             seen.set(current, entry);
             continue;
           }
+          // THE RAISE HAS TO BE THE ONE THAT ACTUALLY FIRES.
+          //
+          // Review found the remaining route: replace the real raise with
+          // `pass` and put a matching one under `if False:` in the same
+          // function. Every check passed -- the message sits inside its own
+          // function, on a code line, exactly once -- while a negative amount
+          // sailed straight through. POSITION was the missing constraint. The
+          // fixture generates the raise as the FIRST statement inside
+          // `if amount < 0:`, and a solution told to change nothing but the
+          // message leaves it there; anything nested a level deeper, or moved
+          // out of the guard, is by construction not the raise that fires.
+          const guard = line.match(/^(\s*)if\s+amount\s*<\s*0\s*:\s*$/);
+          if (guard) {
+            awaitingGuardBody = true;
+            guardIndent = guard[1].length;
+            continue;
+          }
+          // Blank lines and comments do not open the body. Anything else does,
+          // and gets exactly one chance to be the raise.
+          if (awaitingGuardBody && (!line.trim() || /^\s*#/.test(line))) continue;
           // Generous about quoting and spacing, strict about three facts: the
           // function's own name, the new wording, and that the raise is CODE.
           //
@@ -747,9 +772,19 @@ export const wholeFileRetitle = {
           // longer rejected a negative amount at all -- a verifier passing work
           // that does not do the thing the task asked for.
           const msg = line.match(
-            /^\s*raise\s+ValueError\(\s*['"]([^'"]*)['"]\s*\)/
+            /^(\s*)raise\s+ValueError\(\s*['"]([^'"]*)['"]\s*\)/
           );
-          if (msg && current && msg[1] === `${current}: amount must be zero or greater`) {
+          const firstInGuard =
+            awaitingGuardBody && msg !== null && msg[1].length > guardIndent;
+          // Consumed either way: the first statement in the body is the only
+          // candidate, so a `pass` sitting there closes the opportunity rather
+          // than deferring it to some later line in the function.
+          if (awaitingGuardBody) awaitingGuardBody = false;
+          if (
+            firstInGuard &&
+            current &&
+            msg[2] === `${current}: amount must be zero or greater`
+          ) {
             const entry = seen.get(current);
             if (entry) entry.msgs += 1;
           }

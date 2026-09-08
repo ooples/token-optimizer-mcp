@@ -892,8 +892,35 @@ describe('the advisory survives the posture and the tool', () => {
       },
     });
 
-  const out = (result) =>
-    JSON.parse(result.stdout || '{}').hookSpecificOutput || {};
+  // A CRASH MUST NOT READ AS AN ALLOW. This used to parse stdout and throw the
+  // spawn result away, so a router that died produced `{}` -- indistinguishable
+  // from the bare allow that legitimately writes nothing. Every silence
+  // assertion in this block rested on that indistinguishability.
+  const out = (result) => {
+    if (result.error) throw result.error;
+    expect(result.status).toBe(0);
+    const stdout = (result.stdout || '').trim();
+    if (!stdout) return {};
+    try {
+      return JSON.parse(stdout).hookSpecificOutput || {};
+    } catch {
+      throw new Error(
+        `router emitted non-JSON: ${stdout.slice(0, 400)}
+--- stderr ---
+${result.stderr}`
+      );
+    }
+  };
+
+  /**
+   * The decision the router actually reached.
+   *
+   * `allow()` exits 0 having written nothing (policy.mjs:736), so an ABSENT
+   * decision really is an allow -- but only once `out` has proved the process
+   * exited cleanly. Defaulting a raw parse with `?? 'allow'` could not tell
+   * those apart, which made the assertion it guarded unfalsifiable.
+   */
+  const decisionOf = (result) => out(result).permissionDecision || 'allow';
 
   // A real install: the server IS present, which is what produces a verdict and
   // sends the call down the path that was dropping the answer.
@@ -957,23 +984,23 @@ describe('the advisory survives the posture and the tool', () => {
     // widening the gate to every Bash call must not put a byte of context on
     // calls the index cannot help. A regression here is invisible in the
     // pass/fail of the tests above and shows up only as a cost.
-    const result = out(
-      run(
-        {
-          session_id: fresh('assist-silent'),
-          cwd: workspace,
-          tool_name: 'Bash',
-          tool_input: { command: `grep -rn "totally_unknown_symbol_xyz" ${workspace}` },
-        },
-        { ...INSTALLED, TOKEN_OPTIMIZER_MODE: 'assist' }
-      )
+    const raw = run(
+      {
+        session_id: fresh('assist-silent'),
+        cwd: workspace,
+        tool_name: 'Bash',
+        tool_input: { command: `grep -rn "totally_unknown_symbol_xyz" ${workspace}` },
+      },
+      { ...INSTALLED, TOKEN_OPTIMIZER_MODE: 'assist' }
     );
     // PINNED POSITIVELY FIRST. The negative below also passes when the router
     // crashes, writes nothing, or is never reached -- so on its own it would
     // report success for a hook that had stopped working, which is the exact
-    // breakage this test exists to catch. Asserting the call was ALLOWED proves
-    // the router ran and produced a decision; only then is its silence evidence.
-    expect(result.permissionDecision ?? 'allow').toBe('allow');
+    // breakage this test exists to catch. `decisionOf` can only answer 'allow'
+    // after the process exited 0 and its output parsed, so this pins that the
+    // router RAN and allowed; only then is its silence evidence.
+    expect(decisionOf(raw)).toBe('allow');
+    const result = out(raw);
     expect(result.additionalContext || '').not.toContain('token-optimizer index');
   });
 

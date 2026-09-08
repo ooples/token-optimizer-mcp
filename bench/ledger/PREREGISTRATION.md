@@ -421,3 +421,118 @@ gap is a difference of two means over 4 and 2 tasks. A change smaller than about
 narrowing counts as support. A null here does NOT prove the graph worthless; it
 proves that these two fixes did not move this battery, which is a narrower and
 more honest claim.
+
+---
+
+# Correction 4a -- what Addendum 4 got wrong, before its campaign is read
+
+Review raised two problems with Addendum 4 above. Both are real. This is
+appended rather than edited into it, because silently rewriting a
+pre-registration destroys the only property that makes it worth writing.
+
+## 1. The provenance of "217 runs", and where n is not 10
+
+Addendum 4 says "fixed n=10" and "217 runs" without reconciling the two. The
+store is `bench/ledger/warm-baseline.jsonl`. It holds **220 rows: 110 control
+and 110 assist**, reps 1 through 10, across 11 tasks.
+
+Three assist rows failed and cost nothing:
+
+| task | arm | rep | status | usd | error |
+| --- | --- | --- | --- | --- | --- |
+| noisy-command | assist | 10 | failed | 0 | OAuth session expired and could not be refreshed |
+| whole-file-retitle | assist | 10 | failed | 0 | OAuth session expired and could not be refreshed |
+| generation-amid-bulk | assist | 10 | failed | 0 | OAuth session expired and could not be refreshed |
+
+`isHarnessFailure` (`bench/ledger/store.mjs:165`) treats a zero-cost `failed`
+row as a harness failure, so all three are excluded from analysis. 220 - 3 =
+**217**, which is where that number comes from.
+
+**So "fixed n=10" describes the design, not three of the cells.** On the assist
+side `noisy-command`, `whole-file-retitle` and `generation-amid-bulk` each have
+**n=9**. Two of those three are adversarial tasks, which is the group the
+registered statistic leans on hardest.
+
+Recomputed from the ledger both ways, per-task ratio = median(assist unit cost)
+/ median(control unit cost), unit cost = `usd / score`:
+
+| group | harness rule (217 rows) | failures retained at usd 0 (220 rows) |
+| --- | --- | --- |
+| adversarial (4 tasks) | mean **0.681**, median 0.689 | mean 0.672, median 0.672 |
+| beneficiary (2 tasks) | mean **0.890**, median 0.890 | mean 0.890, median 0.890 |
+| other (5 tasks) | mean 0.839, median 0.864 | mean 0.839, median 0.864 |
+| **gap** (beneficiary_mean - adversarial_mean) | **+0.209** | **+0.218** |
+
+The 217-row column reproduces Addendum 4's table exactly, so the numbers
+published there were computed under the harness rule as intended. Retaining the
+three failures at `usd 0` moves the gap by 0.009 -- far below the ~0.05 the
+addendum itself calls the noise floor -- so the choice of rule does not change
+the registered comparison. That is a reconciliation, not a defence: it had to be
+checked before it could be said.
+
+The reproduction is `median(usd/score)` per arm per task over
+`warm-baseline.jsonl`, grouped as adversarial = {single-shot-extract,
+pure-generation, whole-file-retitle, generation-amid-bulk}, beneficiary =
+{needle-in-repo, explain-failure} (the second half of each reuse pair defined in
+`bench/ledger/tasks/index.mjs`), other = the remaining five.
+
+## 2. `control` is not a graph-only counterfactual, and the adversarial set is not inert
+
+Addendum 4 claims "the adversarial set is the control here -- its tasks cannot
+reuse anything, so Fix A should not move them, and any change in them is telling
+us about the build rather than the graph."
+
+That does not follow, and `bench/ledger/arms.mjs` is why:
+
+- `control` (line 18) installs **no hooks at all** and sets
+  `TOKEN_OPTIMIZER_MODE=off`.
+- `assist` (line 80) installs `optimizerHooks`: a `SessionStart` hook and a
+  `PreToolUse` matcher over `Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell`.
+
+Every assist/control ratio in the table therefore prices the **whole bundle** --
+session seeding, output discipline, outline substitution, the search advisory --
+and not graph retrieval. Worse for the specific argument made: the `PreToolUse`
+matcher includes `Bash`, and Fix A is exactly the advisory that now fires on
+shell searches. It applies to adversarial tasks like every other. So the
+adversarial set cannot serve as a within-campaign control for Fix A: the
+intervention reaches it directly.
+
+**What this costs the registered claim.** The gap can still be read as a
+description -- did the beneficiary group move relative to the adversarial group
+-- but not as attribution. A narrowing gap is consistent with the graph starting
+to pay AND with the advisory simply costing adversarial tasks more than
+beneficiary ones. Addendum 4's falsifier "the adversarial set moves
+substantially -> contaminated by the build" is incomplete for the same reason:
+that movement is at least as likely to be Fix A acting on the adversarial set as
+it is to be the build.
+
+**The instrument that would attribute it already exists in this repo.**
+`arms.mjs` defines matched single-variable partners built for precisely this:
+
+- `assist-noseed` (line 97) -- `assist` with `TOKEN_OPTIMIZER_SEED=0`, "identical
+  in every other respect, so the difference between them is the seed and nothing
+  else".
+- `assist-norules` (line 113) -- `assist` with the output-discipline block
+  removed, described in its own docblock as "THE ONLY ARM THAT CAN ATTRIBUTE THE
+  RESULT", written because "everything measured in this project until now has
+  been an arm-versus-control test of a bundle".
+
+That docblock is a verdict on Addendum 4 written before Addendum 4 existed.
+A graph-only counterfactual needs the same treatment: `assist` against an arm
+identical but for retrieval, with the same hooks, the same `Bash` matcher and
+the same advisory envelope on both sides.
+
+## What changes, concretely
+
+1. The Addendum 4 campaign is still worth reading, and its result is reported as
+   what it measures: **hooks-bundle vs no-hooks**, described per group. It is not
+   reported as evidence about the graph specifically.
+2. The registered gap keeps its falsifiers, with one added: a change in the
+   adversarial set is no longer attributable to the build alone, so a
+   substantially moving adversarial set means the gap is uninterpretable rather
+   than merely contaminated.
+3. The graph claim is denominated on a matched pair -- `assist` against a
+   retrieval-disabled arm sharing its hooks and advisory envelope -- registered
+   before it runs, in the style `assist-norules` established.
+4. Every warm result cites `warm-baseline.jsonl` and states its usable n per
+   cell, not just the design n.

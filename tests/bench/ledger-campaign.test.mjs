@@ -643,6 +643,64 @@ describe('the campaign', () => {
     expect(seen).not.toContain(2);
   });
 
+  test('a gap below the highest complete rep is still paid for', async () => {
+    // REVIEW FOUND THIS ONE, and it is the quiet half of the bug above. With
+    // reps 1 and 3 complete and rep 2 nothing but harness failures, the next
+    // label is 4 -- correct -- but the sequence compared 4 against fixedReps 3
+    // and ran nothing at all. The campaign then reported itself finished on two
+    // usable reps, and `samplingVerdict` settled an interval below the sample
+    // size the pre-registration commits to. The budget has to be counted in
+    // COMPLETE reps, not in the highest label reached.
+    const tasks = fakeTasks(['w-a', 'w-b']).map((t) => ({ ...t, tracks: ['warm'] }));
+    const prov = { image_digest: `sha256:${DIGEST_A}`, commit_sha: COMMIT_C1 };
+
+    const banked = [];
+    for (const t of tasks) {
+      banked.push(row({ ...prov, arm: 'assist', track: 'warm', task: t.id, rep: 1 }));
+      banked.push(
+        row({
+          ...prov,
+          arm: 'assist',
+          track: 'warm',
+          task: t.id,
+          rep: 2,
+          status: 'error',
+          usd: 0,
+          turns: 0,
+          score: 0,
+          harness_failure: true,
+          error: 'unparseable output (exit 1): dockerDesktopLinuxEngine/_ping 500',
+        })
+      );
+      banked.push(row({ ...prov, arm: 'assist', track: 'warm', task: t.id, rep: 3 }));
+    }
+    appendRows(store, banked);
+
+    const seen = [];
+    await warmArm('assist', {
+      tasks,
+      execute: async (args) => {
+        seen.push(args.rep);
+        return { status: 'ok', usd: 0.1, turns: 5, workspace: { pass: true } };
+      },
+      provenance: prov,
+      storePath: store,
+      precision: { fixedReps: 3 },
+    });
+
+    // Exactly one rep is owed -- two are complete and three were registered --
+    // and it is labelled 4, above everything on disk, so neither banked rep is
+    // superseded by it.
+    expect(new Set(seen)).toEqual(new Set([4]));
+    expect(seen).toHaveLength(tasks.length);
+
+    // And the store ends with three reps that are actually usable.
+    const usable = loadRows(store).filter(
+      (r) => r.arm === 'assist' && r.track === 'warm' && !r.harness_failure
+    );
+    expect(new Set(usable.map((r) => r.rep))).toEqual(new Set([1, 3, 4]));
+  });
+
   test('a rep of harness failures is redone, not counted as complete', async () => {
     // MEASURED, NOT HYPOTHETICAL. Docker died 26 runs into a 220-run warm
     // campaign, and the runner then wrote 194 rows at `status: error` with

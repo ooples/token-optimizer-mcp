@@ -779,8 +779,16 @@ describe('the report', () => {
 describe('whole-file-retitle rejects commented-out work', () => {
   const task = () => TASKS.find((t) => t.id === 'whole-file-retitle');
 
-  /** Rewrites every raise line in the fixture, optionally commenting it out. */
-  const solve = ({ commentOut }) => {
+  /**
+   * Rewrites every raise line in the fixture.
+   *
+   * `mode` selects what is written in its place:
+   *   clean       the honest solution -- same line, new message
+   *   commented   `# raise ...`, which is not code
+   *   unreachable `pass` in the guard, and a matching raise under `if False:`
+   *   nested      the guard kept, but the raise buried under `if False:`
+   */
+  const solve = ({ mode = 'clean' } = {}) => {
     const dir = mkdtempSync(join(tmpdir(), 'retitle-verify-'));
     task().setup(dir);
     const path = join(dir, 'pkg', 'rules.py');
@@ -798,7 +806,18 @@ describe('whole-file-retitle rejects commented-out work', () => {
           /ValueError\((['"]).*?\1\)/,
           `ValueError("${fn}: amount must be zero or greater")`
         );
-        return commentOut ? renamed.replace(/^(\s*)raise/, '$1# raise') : renamed;
+        const indent = (line.match(/^\s*/) || [''])[0];
+        const outer = indent.slice(0, Math.max(0, indent.length - 4));
+        if (mode === 'commented') return renamed.replace(/^(\s*)raise/, '$1# raise');
+        if (mode === 'unreachable') {
+          // The guard still exists and still does nothing; the message that
+          // satisfies the checker lives somewhere that never executes.
+          return [`${indent}pass`, `${outer}if False:`, renamed].join('\n');
+        }
+        if (mode === 'nested') {
+          return [`${indent}if False:`, `    ${renamed}`].join('\n');
+        }
+        return renamed;
       })
       .join('\n');
     writeFileSync(path, src);
@@ -812,7 +831,7 @@ describe('whole-file-retitle rejects commented-out work', () => {
     // The positive half matters as much as the negative one: a matcher tightened
     // until nothing passes would also reject the commented cheat, and would be
     // useless.
-    const dir = solve({ commentOut: false });
+    const dir = solve({ mode: 'clean' });
     try {
       expect(Object.values(results(dir)).every(Boolean)).toBe(true);
     } finally {
@@ -821,13 +840,41 @@ describe('whole-file-retitle rejects commented-out work', () => {
   });
 
   test('commenting the raises out fails the message check', () => {
-    const dir = solve({ commentOut: true });
+    const dir = solve({ mode: 'commented' });
     try {
       const scored = results(dir);
       expect(scored['every message carries its own function name']).toBe(false);
       // The other two still pass, which is exactly why this was dangerous: two
       // of three checks green and the task scored as done.
       expect(scored['the functions themselves survived']).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a matching raise under `if False:` fails the message check', () => {
+    // Review found this one. The raise is real code, sits inside its own
+    // function, carries the exact required message, and appears exactly once --
+    // so every constraint the checker had was satisfied while `if amount < 0:`
+    // was left doing nothing at all. Only its POSITION gives it away.
+    const dir = solve({ mode: 'unreachable' });
+    try {
+      const scored = results(dir);
+      expect(scored['every message carries its own function name']).toBe(false);
+      // Same danger as the commented cheat: the other two checks stay green.
+      expect(scored['none of the old messages remain']).toBe(true);
+      expect(scored['the functions themselves survived']).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('burying the raise deeper inside the guard fails too', () => {
+    // The variant the first fix would have missed: the guard is kept and the
+    // raise is still inside it, just one level further down and unreachable.
+    const dir = solve({ mode: 'nested' });
+    try {
+      expect(results(dir)['every message carries its own function name']).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
