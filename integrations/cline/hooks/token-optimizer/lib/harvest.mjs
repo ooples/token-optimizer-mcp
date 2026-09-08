@@ -41,6 +41,47 @@ const ENDPOINT = () => process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT
 // was wrong, which is why it is kept distinguishable from an ordinary finding.
 export const FINDING_TYPES = ['finding', 'decision', 'failure', 'command', 'map', 'feedback'];
 
+/**
+ * The shape a reply must take, for servers that can enforce one.
+ *
+ * A SMALL LOCAL MODEL WILL NOT FOLLOW THE PROMPT ON ITS OWN. Measured against
+ * qwen2.5:3b through ollama on the real digest from this session:
+ *
+ *   no constraint                    prose summary, 0 findings
+ *   response_format json_object      valid JSON, an invented schema
+ *   response_format json_schema      1 finding in the exact shape, 9s
+ *
+ * That is the difference between the free private path working and not, so
+ * the schema is sent rather than hoped for. The wrapper object exists because
+ * the OpenAI structured-output contract takes an object at the root; `extract`
+ * already locates the array inside whatever it is handed, so nothing
+ * downstream needs to know.
+ */
+export const FINDINGS_SCHEMA = Object.freeze({
+  type: 'object',
+  required: ['findings'],
+  additionalProperties: false,
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['type', 'claim', 'evidence', 'applicability', 'confidenceLabel', 'anchors'],
+        properties: {
+          type: { type: 'string', enum: FINDING_TYPES },
+          claim: { type: 'string' },
+          evidence: { type: 'string' },
+          applicability: { type: 'string' },
+          confidenceLabel: { type: 'string', enum: ['verified', 'probable', 'speculative'] },
+          anchors: { type: 'array', items: { type: 'string' } },
+          trigger: { type: 'string' },
+        },
+      },
+    },
+  },
+});
+
 export function apiKey() {
   return process.env.TOKEN_OPTIMIZER_API_KEY || process.env.ANTHROPIC_API_KEY || null;
 }
@@ -359,8 +400,15 @@ export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
-    const response = await fetch(endpoint, {
+  /**
+   * One request. `structured` asks the server to enforce FINDINGS_SCHEMA.
+   *
+   * Separated out so the schema can be dropped and the call retried WITHOUT
+   * repeating the request shape in two places, which is how the two would
+   * drift.
+   */
+  const send = (structured) =>
+    fetch(endpoint, {
       method: 'POST',
       signal: controller.signal,
       headers: {
@@ -384,6 +432,14 @@ export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}
                 { role: 'system', content: system },
                 { role: 'user', content: digest },
               ],
+              ...(structured
+                ? {
+                    response_format: {
+                      type: 'json_schema',
+                      json_schema: { name: 'findings', schema: FINDINGS_SCHEMA },
+                    },
+                  }
+                : {}),
             }
           : {
               model: MODEL(),
@@ -393,6 +449,21 @@ export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}
             }
       ),
     });
+
+  try {
+    // Structured output only where the contract exists. Anthropic Messages has
+    // no `response_format`, and sending one is at best ignored.
+    let response = await send(dialect === 'openai');
+
+    // RETRIED ONCE, AND ONLY FOR A REFUSAL OF THE SCHEMA ITSELF. A server that
+    // predates structured outputs rejects the request outright, and the
+    // unconstrained call still works there -- that is the configuration this
+    // whole function used to be. Narrow on purpose: a 4xx is the server saying
+    // it will not take what was sent, while a 5xx or a timeout is a condition a
+    // second identical call would only pay for twice, on a hook path.
+    if (!response.ok && dialect === 'openai' && response.status >= 400 && response.status < 500) {
+      response = await send(false);
+    }
 
     if (!response.ok) return failed(`endpoint returned HTTP ${response.status}`);
     const body = await response.json();

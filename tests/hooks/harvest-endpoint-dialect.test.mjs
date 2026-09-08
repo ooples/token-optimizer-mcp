@@ -17,7 +17,12 @@
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import { createServer } from 'node:http';
 
-import { extract, harvestFailure, endpointDialect } from '../../hooks-core/harvest.mjs';
+import {
+  extract,
+  harvestFailure,
+  endpointDialect,
+  FINDINGS_SCHEMA,
+} from '../../hooks-core/harvest.mjs';
 
 const FINDING = [
   {
@@ -33,10 +38,12 @@ const FINDING = [
 let server;
 let port;
 let seen;
+/** One entry per request reaching the server: did it carry a schema? */
+let attempts;
 let saved;
 
 /** Answers in whichever dialect the path asks for, and records the request. */
-const start = ({ status = 200, shape = 'auto' } = {}) =>
+const start = ({ status = 200, shape = 'auto', rejectSchema = false } = {}) =>
   new Promise((resolve) => {
     server = createServer((req, res) => {
       let raw = '';
@@ -44,7 +51,15 @@ const start = ({ status = 200, shape = 'auto' } = {}) =>
         raw += c;
       });
       req.on('end', () => {
-        seen = { url: req.url, headers: req.headers, body: raw ? JSON.parse(raw) : null };
+        const parsed = raw ? JSON.parse(raw) : null;
+        seen = { url: req.url, headers: req.headers, body: parsed };
+        attempts.push(Boolean(parsed && parsed.response_format));
+        // A server that predates structured outputs refuses the request whole.
+        if (rejectSchema && parsed && parsed.response_format) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end('{"error":"response_format is not supported"}');
+          return;
+        }
         if (status !== 200) {
           res.writeHead(status, { 'content-type': 'application/json' });
           res.end('{}');
@@ -70,6 +85,7 @@ const start = ({ status = 200, shape = 'auto' } = {}) =>
 
 beforeEach(() => {
   seen = null;
+  attempts = [];
   saved = {
     endpoint: process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT,
     key: process.env.TOKEN_OPTIMIZER_API_KEY,
@@ -204,5 +220,70 @@ describe('the harvester speaks the dialect its endpoint speaks', () => {
     expect(endpointDialect('http://127.0.0.1:11434/v1/chat/completions')).toBe('openai');
     expect(endpointDialect('https://api.anthropic.com/v1/messages')).toBe('anthropic');
     expect(endpointDialect('')).toBe('anthropic');
+  });
+});
+
+/**
+ * A small local model will not follow the prompt without being made to.
+ *
+ * Measured against qwen2.5:3b through ollama on this session's real digest:
+ * unconstrained it answered with a prose summary and zero findings;
+ * `json_object` gave valid JSON in a schema it invented; `json_schema` gave one
+ * finding in the exact required shape in 9s. Since the whole point of the local
+ * path is that a modest model can run it for free, the schema is sent rather
+ * than hoped for.
+ */
+describe('the reply shape is enforced where the server can enforce it', () => {
+  test('the OpenAI request carries the findings schema', async () => {
+    await start();
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = `http://127.0.0.1:${port}/v1/chat/completions`;
+
+    const out = await extract('a digest', { timeoutMs: 4000 });
+
+    expect(out).toHaveLength(1);
+    expect(seen.body.response_format.type).toBe('json_schema');
+    expect(seen.body.response_format.json_schema.schema).toEqual(FINDINGS_SCHEMA);
+    // One request only: nothing to fall back from.
+    expect(attempts).toEqual([true]);
+  });
+
+  test('the Anthropic request carries none, because that dialect has none', async () => {
+    await start();
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = `http://127.0.0.1:${port}/v1/messages`;
+
+    await extract('a digest', { timeoutMs: 4000 });
+
+    expect(seen.body.response_format).toBeUndefined();
+    expect(attempts).toEqual([false]);
+  });
+
+  test('a server that refuses the schema still gets an answer', async () => {
+    // THE COMPATIBILITY CASE. A server predating structured outputs rejects the
+    // request outright, and the unconstrained call is exactly what this
+    // function used to send -- so refusing the schema must cost the reply, not
+    // the harvest.
+    await start({ rejectSchema: true });
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = `http://127.0.0.1:${port}/v1/chat/completions`;
+
+    const out = await extract('a digest', { timeoutMs: 4000 });
+
+    expect(out).toHaveLength(1);
+    expect(harvestFailure()).toBeNull();
+    // Exactly two attempts, the second without the schema. Not three, and not
+    // a retry loop.
+    expect(attempts).toEqual([true, false]);
+  });
+
+  test('a server error is NOT retried', async () => {
+    // A 5xx or a timeout is a condition a second identical call would only pay
+    // for twice, on a hook path. Only a refusal of what was sent is retried.
+    await start({ status: 503 });
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = `http://127.0.0.1:${port}/v1/chat/completions`;
+
+    const out = await extract('a digest', { timeoutMs: 4000 });
+
+    expect(out).toEqual([]);
+    expect(harvestFailure()).toContain('503');
+    expect(attempts).toHaveLength(1);
   });
 });
