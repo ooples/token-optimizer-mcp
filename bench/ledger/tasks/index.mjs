@@ -737,9 +737,18 @@ export const wholeFileRetitle = {
             seen.set(current, entry);
             continue;
           }
-          // Generous about quoting and spacing, strict about the two facts that
-          // matter: the function's own name, and the new wording.
-          const msg = line.match(/raise\s+ValueError\(\s*['"]([^'"]*)['"]\s*\)/);
+          // Generous about quoting and spacing, strict about three facts: the
+          // function's own name, the new wording, and that the raise is CODE.
+          //
+          // ANCHORED TO THE START OF THE LINE, because an unanchored match
+          // accepts `# raise ValueError(...)`. Replacing every real raise with a
+          // matching comment then satisfied this check, the old-message check
+          // AND the function-count check together, while the generated rules no
+          // longer rejected a negative amount at all -- a verifier passing work
+          // that does not do the thing the task asked for.
+          const msg = line.match(
+            /^\s*raise\s+ValueError\(\s*['"]([^'"]*)['"]\s*\)/
+          );
           if (msg && current && msg[1] === `${current}: amount must be zero or greater`) {
             const entry = seen.get(current);
             if (entry) entry.msgs += 1;

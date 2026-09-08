@@ -27,6 +27,10 @@ import {
 } from '../../bench/ledger/provenance.mjs';
 import { taskResult, compareArm, report } from '../../bench/ledger/rank.mjs';
 import { renderReport } from '../../bench/ledger/render.mjs';
+import { TASKS } from '../../bench/ledger/tasks/index.mjs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 /**
  * WELL-FORMED PLACEHOLDER PROVENANCE, named rather than inlined.
@@ -759,5 +763,73 @@ describe('the report', () => {
     const out = report([row(), { task: 'x' }]);
     expect(out.rejected).toHaveLength(1);
     expect(out.rejected[0].problem).toMatch(/missing/);
+  });
+});
+
+/**
+ * A verifier must not accept work that was commented out.
+ *
+ * The `raise` matcher for whole-file-retitle was not anchored to the start of a
+ * code line, so `# raise ValueError("rule_0001: ...")` satisfied it. An agent
+ * could comment out all 120 raises, rename the text inside the comments, and
+ * pass every check on this task -- while the generated rules stopped rejecting
+ * negative amounts entirely. A benchmark that scores that as success is
+ * measuring the wrong thing and reporting it confidently.
+ */
+describe('whole-file-retitle rejects commented-out work', () => {
+  const task = () => TASKS.find((t) => t.id === 'whole-file-retitle');
+
+  /** Rewrites every raise line in the fixture, optionally commenting it out. */
+  const solve = ({ commentOut }) => {
+    const dir = mkdtempSync(join(tmpdir(), 'retitle-verify-'));
+    task().setup(dir);
+    const path = join(dir, 'pkg', 'rules.py');
+    let fn = null;
+    const src = readFileSync(path, 'utf8')
+      .split('\n')
+      .map((line) => {
+        const def = line.match(/^def\s+(rule_\d{4})\s*\(/);
+        if (def) {
+          fn = def[1];
+          return line;
+        }
+        if (!fn || !/^\s*raise\s+ValueError\(/.test(line)) return line;
+        const renamed = line.replace(
+          /ValueError\((['"]).*?\1\)/,
+          `ValueError("${fn}: amount must be zero or greater")`
+        );
+        return commentOut ? renamed.replace(/^(\s*)raise/, '$1# raise') : renamed;
+      })
+      .join('\n');
+    writeFileSync(path, src);
+    return dir;
+  };
+
+  const results = (dir) =>
+    Object.fromEntries(task().checks.map((c) => [c.name, !!c.run(dir)]));
+
+  test('the real solution passes every check', () => {
+    // The positive half matters as much as the negative one: a matcher tightened
+    // until nothing passes would also reject the commented cheat, and would be
+    // useless.
+    const dir = solve({ commentOut: false });
+    try {
+      expect(Object.values(results(dir)).every(Boolean)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('commenting the raises out fails the message check', () => {
+    const dir = solve({ commentOut: true });
+    try {
+      const scored = results(dir);
+      expect(scored['every message carries its own function name']).toBe(false);
+      // The other two still pass, which is exactly why this was dangerous: two
+      // of three checks green and the task scored as done.
+      expect(scored['the functions themselves survived']).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
