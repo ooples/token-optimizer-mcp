@@ -544,16 +544,7 @@ ${nudge}`
       if (substitution) {
         allowWithRewrite(
           { ...payload.tool_input, file_path: substitution.target },
-          [
-            context,
-            `token-optimizer replaced this read with a structural outline of ` +
-              `${payload.tool_input.file_path} (${substitution.found.lines} lines, ` +
-              `${Math.round(substitution.found.bytes / 1024)}KB). Every symbol is ` +
-              `listed with its line number; read the original with offset and limit ` +
-              `for any region you need in full.`,
-          ]
-            .filter(Boolean)
-            .join('\n\n')
+          [context, outlineNotice(payload, substitution)].filter(Boolean).join('\n\n')
         );
       }
     }
@@ -703,6 +694,25 @@ function turnsSoFar(sessionId) {
  * call it already made, which is why it costs nothing on the short tasks where
  * a fixed setup cost would sink us.
  */
+/**
+ * What the model is told when its read is answered with an outline.
+ *
+ * ONE WORDING FOR BOTH PATHS. The allowed path and the refusal path now both
+ * substitute, and two copies of this sentence would drift -- which matters more
+ * than usual here, because an unannounced rewrite is the failure mode
+ * `allowWithRewrite` documents: a model that distrusts its output re-reads, and
+ * spends the exact turn the substitution exists to save.
+ */
+function outlineNotice(payload, substitution) {
+  return (
+    `token-optimizer replaced this read with a structural outline of ` +
+    `${payload.tool_input.file_path} (${substitution.found.lines} lines, ` +
+    `${Math.round(substitution.found.bytes / 1024)}KB). Every symbol is ` +
+    `listed with its line number; read the original with offset and limit ` +
+    `for any region you need in full.`
+  );
+}
+
 function outlineSubstitution(payload) {
   const filePath = payload.tool_input?.file_path;
   if (!filePath) return null;
@@ -875,6 +885,40 @@ function compactorFor(sessionId, command) {
         // reason names the optimizer tool that makes the NEXT call cheaper,
         // and dropping it leaves only a byte notice that teaches nothing.
         [reason, boundNotice(bounded.maxBytes)].filter(Boolean).join('\n\n')
+      );
+    }
+  }
+
+  // AND THE SAME FOR A READ, which is where the turn actually goes.
+  //
+  // `outlineSubstitution` was reachable only from the allowed path above, and a
+  // Read large enough to be worth outlining is precisely a Read that earns a
+  // verdict -- so the substitution was unreachable for every file it was built
+  // for. Measured on a 156 KB Python file with smart_read registered: the
+  // router answered `deny` with no `updatedInput`, while `substitutionFor` on
+  // that same path offered an 8,379-character outline, 5.2% of the file. The
+  // cheaper answer existed and was never consulted.
+  //
+  // This is the same shape as the two defects already recorded in this file --
+  // the output bound wired only to the refusal branch, and the advisory wired
+  // only to the allowed one. A capability reachable from one branch is not
+  // shipped; it is half shipped, on whichever side nobody measured.
+  //
+  // WHY IT PAYS. A refusal costs about one extra turn, and turns are the whole
+  // measured deficit: on the 16 THOL tasks with complete data, enforce ran 20.0
+  // turns against control's 14.4 for a median cost of 1.724x, and the extra
+  // turns track the MCP redirects at 0.90 turns per redirected call. A rewrite
+  // delivers the same substitution for none of that.
+  //
+  // Gated on `refusalsEnabled()` for the reason the Bash arm gives: under assist
+  // this read is already going through untouched, and bounding it there would
+  // be new behaviour rather than a cheaper spelling of an existing refusal.
+  if (payload.tool_name === 'Read' && refusalsEnabled()) {
+    const substitution = outlineSubstitution(payload);
+    if (substitution) {
+      allowWithRewrite(
+        { ...payload.tool_input, file_path: substitution.target },
+        [reason, outlineNotice(payload, substitution)].filter(Boolean).join('\n\n')
       );
     }
   }
