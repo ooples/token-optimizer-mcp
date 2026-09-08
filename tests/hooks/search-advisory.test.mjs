@@ -1002,6 +1002,20 @@ ${result.stderr}`
     expect(decisionOf(raw)).toBe('allow');
     const result = out(raw);
     expect(result.additionalContext || '').not.toContain('token-optimizer index');
+    // The same gate, same mode, same workspace DOES answer for a symbol the
+    // index holds, so the silence above is the empty graph and not a dead gate.
+    const known = out(
+      run(
+        {
+          session_id: fresh('assist-silent-control'),
+          cwd: workspace,
+          tool_name: 'Bash',
+          tool_input: { command: `grep -rn "parse_line" ${workspace}` },
+        },
+        { ...INSTALLED, TOKEN_OPTIMIZER_MODE: 'assist' }
+      )
+    );
+    expect(known.additionalContext || '').toContain('parse.py');
   });
 
   test('assist carries the answer without the routing advisory', () => {

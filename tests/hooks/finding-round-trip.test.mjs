@@ -143,6 +143,9 @@ describe('a lesson learned in one session reaches the next', () => {
     // The cost of speaking is paid on every call; a finding that fires on
     // everything is worse than one that fires on nothing.
     derive(wiki, { sessionId: 'first', projectRoot: proj, transcriptPath: transcript });
+    // The same router, same graph, same mode DOES speak for the command the
+    // finding is about -- so the silence below is selectivity, not a dead path.
+    expect(askRouter(FAILED, 'assist')).toContain('known from previous sessions');
     expect(askRouter('ls -la', 'assist')).not.toContain('known from previous sessions');
   });
 });
