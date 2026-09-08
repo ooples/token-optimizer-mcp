@@ -152,18 +152,98 @@ ENV THOL_HOME=/home/bench/thol
 # which is how a benchmark ends up silently missing an arm -- so it is NOT used.
 # A competitor that cannot be installed should fail the build loudly, and the
 # board should say who is absent and why.
+# A SHARED PREFIX, NOT ROOT'S HOME, and this was not a style preference.
+#
+# The previous form installed into /root/.cargo and /root/.local and then tried
+# to expose them with `find -type f -executable ... -exec ln -sf`. Measured in
+# the built image, running as `bench`, that left EVERY competitor unreachable:
+#
+#   rtk squeez uv uvx cargo rustc   ->  all "NOT ON PATH"
+#   ls /root/.cargo/bin             ->  permission denied
+#
+# Two independent faults. `-type f` skips rustup's shims, which are symlinks
+# (`cargo -> rustup`), so cargo and rustc were never linked at all. And the
+# links that WERE made pointed inside /root, which 0700 keeps `bench` out of --
+# so even `rtk` and `uv`, which did get symlinked, dangle for the user that
+# actually runs the benchmark.
+#
+# The consequence is not cosmetic: the whole reason this toolchain exists is to
+# measure the cargo/uv competitors -- rtk, squeez, graphifyy, code-review-graph
+# and headroom-ai -- and not one of them could be executed by the runner.
+#
+# CARGO_HOME/RUSTUP_HOME/UV_TOOL_BIN_DIR put everything under /usr/local, which
+# is already on every user's PATH and world-readable, so no symlink pass is
+# needed and there is nothing left to dangle.
+# CARGO_BUILD_JOBS IS A MEMORY BOUND, not a speed preference. Cargo defaults to
+# one job per core and each rustc holds its own working set, so on a 4-core VM
+# the competitor crates peaked hard enough to get the docker daemon OOM-killed
+# mid-build -- twice. Two jobs builds slower and finishes, which is strictly
+# better than fast and dead.
+ENV CARGO_HOME=/usr/local/cargo \
+    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_BUILD_JOBS=2 \
+    UV_TOOL_BIN_DIR=/usr/local/bin \
+    UV_TOOL_DIR=/usr/local/uv-tools \
+    UV_INSTALL_DIR=/usr/local/bin
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+# python3-dev IS REQUIRED, and pipefail is what revealed it. `headroom-ai[all]`
+# depends on hnswlib, which builds a C++ extension and needs Python.h:
+#
+#   fatal error: Python.h: No such file or directory
+#   hint: `hnswlib` (v0.8.0) was included because `headroom-ai[all]` (v0.27.0)
+#
+# That failure has been happening on every build and was invisible, because the
+# installer's output went through `tail` and the RUN reported tail's status. So
+# headroom -- a registered THOL competitor, and one we specifically want to
+# measure against -- was silently absent from the board.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential python3-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable \
+    && curl -fsSL https://sh.rustup.rs \
+       | sh -s -- -y --profile minimal --default-toolchain stable --no-modify-path \
     && curl -fsSL https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:/root/.local/bin:${PATH}"
-RUN cd ${THOL_HOME} && bash setup/install_competitors.sh 2>&1 | tail -40
-# uv and cargo install into root's home; expose them to every user on PATH.
-RUN for d in /root/.cargo/bin /root/.local/bin; do \
-      [ -d "$d" ] && find "$d" -maxdepth 1 -type f -executable -exec ln -sf {} /usr/local/bin/ \; ; \
-    done; true
+ENV PATH="/usr/local/cargo/bin:${PATH}"
+
+# PIPEFAIL, because the shell form reports the LAST command's status. `bash
+# setup/install_competitors.sh 2>&1 | tail -40` returns tail's exit code, so a
+# competitor failing to install left the build green and the board quietly
+# short an arm -- the exact outcome the comment above says must not happen.
+# This repository has already been bitten once by `$?` after a pipe.
+# `$HOME/.local/bin` MUST EXIST FIRST. Not every step of the installer honours
+# the uv variables above: the edgee step ends in
+#
+#   install -m755 "$EDGEE_TMP/edgee" "$HOME/.local/bin/edgee"
+#
+# which writes to that path directly. It used to exist only as a side effect of
+# the uv installer defaulting there; pointing UV_INSTALL_DIR at /usr/local/bin
+# removed that side effect and edgee started failing -- a regression introduced
+# by this very change, and visible only because pipefail now reports it.
+RUN mkdir -p "$HOME/.local/bin"
+
+# The EXEC form with an explicit bash, because RUN's shell form is `/bin/sh -c`
+# and Debian's sh is dash, which has no `pipefail` -- `set -o pipefail` there
+# exits 2 and fails the build for the wrong reason.
+RUN ["/bin/bash", "-o", "pipefail", "-c", \
+     "cd \"$THOL_HOME\" && bash setup/install_competitors.sh 2>&1 | tail -40"]
+
+# COPIED, NOT SYMLINKED, for anything the installer still puts in root's home.
+# A symlink into /root dangles for `bench` -- that is half of why the previous
+# arrangement left every competitor unreachable -- so the files themselves are
+# moved somewhere world-readable.
+RUN if [ -d "$HOME/.local/bin" ]; then \
+      cp -a "$HOME/.local/bin/." /usr/local/bin/ && chmod -R a+rX /usr/local/bin; \
+    fi
+
+# THE TOOLCHAIN IS VERIFIED AS THE USER THAT WILL RUN IT, not as root, because
+# root could reach the old location perfectly well and that is precisely why the
+# breakage survived a build. A competitor the runner cannot execute is a missing
+# arm, and a missing arm must fail the build rather than the campaign.
+RUN chmod -R a+rX /usr/local/cargo /usr/local/rustup /usr/local/uv-tools 2>/dev/null || true
 USER bench
+RUN set -eu; \
+    for t in cargo rustc uv rtk squeez edgee; do \
+      command -v "$t" >/dev/null 2>&1 || { echo "FATAL: $t not on PATH for $(id -un)"; exit 1; }; \
+    done; \
+    echo "competitor toolchain reachable as $(id -un)"
 
 
 # Pin the optimizer's warm-launch shim to the installed copy. launch.mjs
