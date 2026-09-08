@@ -285,12 +285,52 @@ export function validate(raw, { knownFiles = null } = {}) {
 }
 
 /**
+ * Which wire format the configured endpoint speaks.
+ *
+ * THE ADVERTISED LOCAL PATH DID NOT WORK. Both the SessionStart notice and
+ * `doctor` tell the user to point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local
+ * model, and this client only ever spoke the Anthropic Messages dialect --
+ * `system` as a top-level field, `content[]` blocks in the reply. ollama, LM
+ * Studio and llama.cpp all serve OpenAI-compatible /v1/chat/completions,
+ * which takes the system prompt as a message and answers with
+ * `choices[].message.content`. Measured against a stand-in server answering
+ * both dialects with the identical finding: the Anthropic path returned 1 and
+ * the OpenAI path returned 0.
+ *
+ * Chosen from the URL rather than by trying one and falling back. A fallback
+ * doubles the latency of every genuine failure on a hook path, and the user
+ * configures the whole URL here, so the path is something they stated rather
+ * than something we guess.
+ */
+export function endpointDialect(endpoint = ENDPOINT()) {
+  return /\/chat\/completions\b/.test(String(endpoint || '')) ? 'openai' : 'anthropic';
+}
+
+/**
+ * The last reason a harvest produced nothing, or null.
+ *
+ * `return []` on every failure made a misconfigured endpoint IDENTICAL to a
+ * session with nothing to learn -- which is how a local endpoint answering the
+ * wrong dialect stayed invisible. The empty result is kept, because a caller
+ * on the hook path must not care; the reason is recorded beside it so
+ * `doctor` and a human can tell the two apart.
+ */
+let lastHarvestFailure = null;
+export const harvestFailure = () => lastHarvestFailure;
+const failed = (reason) => {
+  lastHarvestFailure = reason;
+  return [];
+};
+
+/**
  * Calls the model. Returns [] on any failure -- a harvest that errors must be
  * indistinguishable, from the caller's side, from a session with nothing to
- * learn.
+ * learn. `harvestFailure()` carries why, for the diagnostics that do care.
  */
 export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}) {
-  if (!digest || !harvestEnabled()) return [];
+  lastHarvestFailure = null;
+  if (!digest) return failed('no digest');
+  if (!harvestEnabled()) return failed(`harvest is ${harvestMode()}`);
 
   // A local endpoint usually has no auth at all, so requiring a key there would
   // make the free, private path unreachable -- the one the design now prefers.
@@ -298,41 +338,90 @@ export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}
   // exists and that the user opted in.
   const key = apiKey();
   const local = Boolean(localEndpoint());
-  if (!local && !key) return [];
+  if (!local && !key) return failed('no api key for a remote endpoint');
+
+  const endpoint = ENDPOINT();
+  const dialect = endpointDialect(endpoint);
+  const system = prompt || PROMPT;
+
+  // AN AMBIENT KEY IS NOT CONSENT TO SEND IT TO A LOCAL SERVER.
+  //
+  // `apiKey()` falls back to ANTHROPIC_API_KEY, which is set on most
+  // machines that run Claude at all and says nothing about the endpoint the
+  // user pointed this at -- which may be any process listening on loopback.
+  // A local server that genuinely wants auth is still reachable: set
+  // TOKEN_OPTIMIZER_API_KEY, which is explicit about being for this.
+  //
+  // Remote is unchanged; there the key is the whole reason the call is
+  // allowed to happen.
+  const credential = local ? process.env.TOKEN_OPTIMIZER_API_KEY || null : key;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(ENDPOINT(), {
+    const response = await fetch(endpoint, {
       method: 'POST',
       signal: controller.signal,
       headers: {
         'content-type': 'application/json',
-        ...(key ? { 'x-api-key': key } : {}),
-        'anthropic-version': '2023-06-01',
+        // A local server usually wants no credential at all, and sending one
+        // to localhost is a leak, not a courtesy -- so a key is attached only
+        // when there is one, in the scheme the dialect expects.
+        ...(credential && dialect === 'anthropic' ? { 'x-api-key': credential } : {}),
+        ...(credential && dialect === 'openai'
+          ? { authorization: `Bearer ${credential}` }
+          : {}),
+        ...(dialect === 'anthropic' ? { 'anthropic-version': '2023-06-01' } : {}),
       },
-      body: JSON.stringify({
-        model: MODEL(),
-        max_tokens: 2048,
-        system: prompt || PROMPT,
-        messages: [{ role: 'user', content: digest }],
-      }),
+      body: JSON.stringify(
+        dialect === 'openai'
+          ? {
+              model: MODEL(),
+              max_tokens: 2048,
+              // No top-level `system` in this dialect; it is the first message.
+              messages: [
+                { role: 'system', content: system },
+                { role: 'user', content: digest },
+              ],
+            }
+          : {
+              model: MODEL(),
+              max_tokens: 2048,
+              system,
+              messages: [{ role: 'user', content: digest }],
+            }
+      ),
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) return failed(`endpoint returned HTTP ${response.status}`);
     const body = await response.json();
-    const text = (body.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+
+    // BOTH SHAPES READ, whichever dialect was sent. A gateway may answer in the
+    // other one, and reading both costs a property access.
+    const text =
+      (Array.isArray(body.content)
+        ? body.content.filter((b) => b?.type === 'text').map((b) => b.text).join('')
+        : '') ||
+      (Array.isArray(body.choices)
+        ? body.choices.map((c) => c?.message?.content || '').join('')
+        : '') ||
+      '';
+    if (!text) return failed('endpoint answered in an unrecognised shape');
 
     // Models wrap JSON in prose or fences often enough that finding the array
     // is more reliable than insisting the whole response parse.
     const start = text.indexOf('[');
     const end = text.lastIndexOf(']');
-    if (start === -1 || end <= start) return [];
+    if (start === -1 || end <= start) return failed('no JSON array in the reply');
 
-    return JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return [];
+    try {
+      return JSON.parse(text.slice(start, end + 1));
+    } catch {
+      return failed('the JSON array in the reply did not parse');
+    }
+  } catch (error) {
+    return failed(error?.name === 'AbortError' ? `timed out after ${timeoutMs}ms` : `${error?.message || error}`);
   } finally {
     clearTimeout(timer);
   }
