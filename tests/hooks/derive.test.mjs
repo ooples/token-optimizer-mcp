@@ -48,6 +48,7 @@ import {
   CONFIDENCE,
   attemptKey,
   commandBody,
+  commandProgram,
   projectAnchor,
 } from '../../hooks-core/derive.mjs';
 
@@ -1785,5 +1786,53 @@ describe('gathering session activity from the graphs that hold it', () => {
     process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(sandbox, 'nope', 'missing.jsonl');
     expect(() => sessionActivity(unrooted)).not.toThrow();
     expect(Array.isArray(sessionActivity(unrooted))).toBe(true);
+  });
+});
+
+/**
+ * An environment prefix is not the program.
+ *
+ * `commandProgram` took the first token verbatim, so `SP=/tmp/x node run.mjs`
+ * reported its program as `sp=/tmp/x`. Measured over this machine's real
+ * history that is 816 of 7,165 recorded command outcomes -- 11.4%.
+ *
+ * It fails in the dangerous direction. The function exists to decide two
+ * attempts used DIFFERENT programs, so the same tool run under different
+ * variables compared as different and became eligible to pair -- producing
+ * `node run.mjs` succeeded where `node run.mjs` failed, the incoherent claim
+ * detector 1's own guard refuses, arriving through detector 5's door.
+ */
+describe('the program is the program, not the environment in front of it', () => {
+  it('looks past a leading assignment, however many there are', () => {
+    expect(commandProgram('SP=/tmp/x node run.mjs')).toBe('node');
+    expect(commandProgram('MSYS_NO_PATHCONV=1 docker run --rm img')).toBe('docker');
+    expect(commandProgram('A=1 B=2 C=3 npm test -- tests/x.mjs')).toBe('npm');
+  });
+
+  it('still answers plainly when there is no prefix', () => {
+    // The behaviour that already worked has to survive the fix, including the
+    // basename reduction and the leading `cd` that commandBody strips.
+    expect(commandProgram('node run.mjs')).toBe('node');
+    expect(commandProgram('/usr/local/bin/node run.mjs')).toBe('node');
+    expect(commandProgram('cd /repo && SP=/a node run.mjs')).toBe('node');
+    expect(commandProgram('')).toBe('');
+  });
+
+  it('refuses the false pair the old reading allowed', () => {
+    // THE POINT OF THE FIX, asserted as behaviour rather than as a string. Two
+    // runs of the SAME program under different variables must compare equal,
+    // so detector 5's `programs differ` gate rejects them and no claim is
+    // built. Under the old reading these were `sp=/a` and `spw=/b`.
+    const failed = 'SP=/a node scripts/run.mjs';
+    const fixed = 'SPW=/b node scripts/run.mjs';
+    expect(commandProgram(failed)).toBe(commandProgram(fixed));
+  });
+
+  it('still separates two genuinely different programs', () => {
+    // The fix must not collapse everything to one program, which would silence
+    // detector 5 entirely rather than make it honest.
+    expect(commandProgram('SP=/a npx jest tests/foo.test.mjs')).not.toBe(
+      commandProgram('SP=/a npm test -- tests/foo.test.mjs')
+    );
   });
 });

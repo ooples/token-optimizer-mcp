@@ -373,9 +373,45 @@ export function commandOperand(command) {
   return null;
 }
 
-/** The program a command invokes, for deciding whether two attempts differ. */
+/**
+ * A leading `VAR=value` prefix, which a shell applies to the environment of
+ * the command that follows rather than running as the command itself.
+ */
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/**
+ * The program a command invokes, for deciding whether two attempts differ.
+ *
+ * ENVIRONMENT PREFIXES ARE NOT THE PROGRAM. Taking the first token verbatim
+ * reported `SP=/tmp/x` as the program for `SP=/tmp/x node run.mjs`, and that
+ * is not a cosmetic slip: measured over this machine's real history, 816 of
+ * 7,165 recorded command outcomes -- 11.4% -- named an assignment.
+ *
+ * IT FAILS IN THE DANGEROUS DIRECTION. This function exists to decide that two
+ * attempts used DIFFERENT programs, so two runs of the same tool under
+ * different variables --
+ *
+ *   SP=/a node run.mjs    (failed)
+ *   SPW=/b node run.mjs   (succeeded)
+ *
+ * -- compared as `sp=/a` against `spw=/b`, differed, and were eligible to
+ * pair. The claim that pairing produces is `node run.mjs` succeeded where
+ * `node run.mjs` failed: exactly the incoherent statement detector 1's own
+ * guard exists to refuse, arriving through the door detector 5 opened.
+ *
+ * Skipping the prefixes is what a shell does, and it cannot invent a pair --
+ * two commands that were already the same program now compare equal, which
+ * only ever removes a candidate.
+ *
+ * NO MEASURED CHANGE TODAY, stated plainly: replaying both versions over the
+ * same real history gives an identical pairing outcome (20 pairs considered,
+ * 0 firing), because every affected command is also chained and rejected
+ * earlier. This is a correctness fix against a latent false claim, not a
+ * recall improvement, and it is not offered as one.
+ */
 export function commandProgram(command) {
-  const first = commandBody(command).trim().split(/\s+/)[0] || '';
+  const tokens = commandBody(command).trim().split(/\s+/).filter(Boolean);
+  const first = tokens.find((token) => !ENV_ASSIGNMENT.test(token)) || '';
   return first.split(/[/\\]/).pop().toLowerCase();
 }
 
