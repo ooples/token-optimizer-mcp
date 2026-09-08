@@ -106,12 +106,29 @@ const askRouter = (command, mode) => {
       TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_read,smart_grep',
     },
   });
-  let out = {};
+  // A CRASH MUST NOT BE READABLE AS SILENCE. The catch below used to swallow
+  // everything, so a router that threw, printed a stack trace, or emitted
+  // malformed JSON returned the same empty string as a clean allow -- and every
+  // `not.toContain` in this file would have passed on a router that never ran.
+  // The router expresses a refusal in JSON and always exits 0 (policy.mjs:736,
+  // 767, 829), so a non-zero status is a genuine failure in every mode.
+  if (result.error) throw result.error;
+  expect(result.status).toBe(0);
+  const stdout = (result.stdout || '').trim();
+  // An allow may legitimately write nothing at all; that is the only empty
+  // output accepted, and only after the status check above.
+  if (!stdout) return '';
+  let parsed;
   try {
-    out = JSON.parse(result.stdout).hookSpecificOutput || {};
+    parsed = JSON.parse(stdout);
   } catch {
-    /* an allow writes nothing */
+    throw new Error(
+      `router emitted non-JSON: ${stdout.slice(0, 400)}
+--- stderr ---
+${result.stderr}`
+    );
   }
+  const out = parsed.hookSpecificOutput || {};
   return (out.additionalContext || '') + (out.permissionDecisionReason || '');
 };
 

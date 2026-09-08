@@ -51,6 +51,7 @@ import { ORIGIN_HARVESTED } from './curate.mjs';
 // from, so what this counts as a search and what the advisory treats as one
 // cannot diverge.
 import {
+  commandSegments,
   identifiersIn,
   searchPatternFromCommand,
   symbolIndex,
@@ -180,11 +181,38 @@ const COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&']);
  * longer fires on the directory-change case it was written for.
  * One check per pair is enough: both halves share the key by construction.
  */
-const hasAttemptIdentity = (command) =>
-  attemptKey(command)
+/**
+ * THE WHOLE BODY, NOT THE FIRST THREE TOKENS.
+ *
+ * This used to read the separator set off `attemptKey`, which keeps only the
+ * first three non-flag tokens -- so it caught a separator only when one landed
+ * early by luck of position. Verified against the real functions:
+ *
+ *   git fetch && npx jest tests/foo   key `git fetch &&`        -> rejected
+ *   npx jest tests/foo && node x.mjs  key `npx jest tests/foo`  -> ACCEPTED
+ *   grep -rn foo src | head -20       key `grep foo src`        -> ACCEPTED
+ *
+ * The last two are exactly the claims this guard exists to stop: the key names
+ * `npx`, so a pair would blame `npx` for a failure `node` may have caused.
+ * Every existing test placed the separator in the first three tokens, so none
+ * of them could see it.
+ *
+ * `commandSegments` is reused rather than a fresh scan because it is already
+ * the quote-aware one: splitting the raw string would cut through `grep -E
+ * "foo|bar"` and reject an ordinary alternation as a pipeline.
+ *
+ * A LEADING `cd <path> &&` is still accepted, because `commandBody` strips it
+ * before this sees it -- that case is one command spelled two ways.
+ */
+const hasAttemptIdentity = (command) => {
+  const body = commandBody(command);
+  if (!body.trim()) return false;
+  if (commandSegments(body).length > 1) return false;
+  return attemptKey(command)
     .split(' ')
     .filter(Boolean)
     .every((token) => !COMMAND_SEPARATORS.has(token));
+};
 
 /**
  * Commands whose red-to-green transition is usually explained by the CODE
@@ -433,11 +461,20 @@ export function projectRootFromActivity(events, { resolve, cwd, sessionId = null
   const counts = new Map();
   for (const event of events) {
     // SCOPED TO THIS SESSION when the caller knows its id. A graph outlives the
-    // session that wrote it, so counting every event ever recorded lets a busy
-    // session from last week outvote the one now ending -- and the question
-    // being asked is "where did THIS session work", not "where is this graph
-    // busiest". Callers that pass no id keep the whole-graph count.
-    if (sessionId && event?.sessionId && event.sessionId !== sessionId) continue;
+    // session that wrote it, and the caller concatenates several graphs, so
+    // counting every event ever recorded lets a busy session from last week
+    // outvote the one now ending -- and the question being asked is "where did
+    // THIS session work", not "where is this graph busiest". Callers that pass
+    // no id keep the whole-graph count.
+    //
+    // AN EVENT THAT CANNOT NAME ITS SESSION IS EXCLUDED, not exempted. Exempting
+    // it was a deliberate concession to older records, and measurement says the
+    // concession buys nothing: across the three live stores on this machine, 2
+    // of 22,321 file/read events lack the field -- 0.01%. Set against that, an
+    // unstamped event sitting in ANOTHER project's graph would vote for that
+    // project on the strength of no evidence at all, which is precisely the
+    // failure this filter exists to prevent.
+    if (sessionId && event?.sessionId !== sessionId) continue;
     const anchor = event?.anchor;
     // File surfaces only. A command anchor is the command text, and resolving
     // `npm test -- x` as a path would invent a project out of a sentence.

@@ -1463,6 +1463,32 @@ describe('detector 5 refuses chained commands', () => {
     cmd('npm test -- tests/foo.test.mjs', true, 45_000);
     expect(retargets()).toHaveLength(1);
   });
+
+  it('refuses a chain whose separator falls AFTER the third token', () => {
+    // The hole every test above missed. `git fetch && ...` is rejected only
+    // because the separator lands inside the three tokens attemptKey keeps;
+    // move it later and the same chain passed. The key here is `npx jest
+    // tests/foo.test.mjs`, so a pair would blame `npx` for a failure that
+    // `node scripts/x.mjs` may have caused.
+    cmd('npx jest tests/foo.test.mjs && node scripts/x.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses a late separator on the SUCCEEDING side too', () => {
+    cmd('npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs | tee out.log', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('does not reject an ordinary quoted alternation as a pipeline', () => {
+    // The guard scans with the quote-aware segmenter for this reason: a raw
+    // split on `|` would cut through `grep -E "foo|bar"` and silently drop a
+    // perfectly single command.
+    cmd('npx jest "tests/foo|bar.test.mjs"', false, 0);
+    cmd('npm test -- "tests/foo|bar.test.mjs"', true, 45_000);
+    expect(retargets()).toHaveLength(1);
+  });
 });
 
 /**
@@ -1579,14 +1605,23 @@ describe('inferring the project from what the session touched', () => {
     expect(projectRootFromActivity(events, { resolve: wide })).toBe(OTHER);
   });
 
-  it('keeps an event that carries no session id at all', () => {
-    // Older records predate the field. Dropping them would make the inference
-    // weaker on exactly the graphs that have the most history.
+  it('drops an event that cannot say which session it came from', () => {
+    // Measured before deciding: 2 of 22,321 file/read events across the three
+    // live stores on this machine lack the field, so exempting them buys 0.01%
+    // of recall. What it costs is the whole point of the filter -- an unstamped
+    // event in ANOTHER project's graph would vote for that project on no
+    // evidence, and the sweep reads several graphs at once.
+    const OTHER = '/repos/other';
+    const wide = (anchor) => (anchor.includes('/repos/other') ? OTHER : resolve(anchor));
     const events = [
-      { kind: 'read', anchor: `${REPO}/a` },
-      { kind: 'read', anchor: `${REPO}/b`, sessionId: 'now' },
+      { kind: 'read', anchor: `${OTHER}/a` },
+      { kind: 'read', anchor: `${OTHER}/b` },
+      { kind: 'read', anchor: `${REPO}/x`, sessionId: 'now' },
     ];
-    expect(projectRootFromActivity(events, { resolve, sessionId: 'now' })).toBe(REPO);
+    // Two unstamped events for OTHER would outvote this session's single read.
+    expect(projectRootFromActivity(events, { resolve: wide, sessionId: 'now' })).toBe(REPO);
+    // And with no id requested the old whole-graph count still applies.
+    expect(projectRootFromActivity(events, { resolve: wide })).toBe(OTHER);
   });
 
   it('returns null rather than guessing when nothing resolves', () => {

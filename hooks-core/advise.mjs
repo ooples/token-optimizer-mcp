@@ -160,7 +160,7 @@ const COLOR_TAKES_SEPARATE_VALUE = new Set(['rg']);
  * class this repo keeps a linearity gate for; a single forward pass cannot
  * backtrack at all.
  */
-function commandSegments(command) {
+export function commandSegments(command) {
   const segments = [];
   let tokens = [];
   let current = '';
