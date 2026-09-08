@@ -1836,3 +1836,69 @@ describe('the program is the program, not the environment in front of it', () =>
     );
   });
 });
+
+/**
+ * A claim that says "one session" has to come from one session.
+ *
+ * Every claim these detectors build opens `observed in one session:`, and the
+ * store holds every session's outcomes -- so nothing but the ten-minute window
+ * stopped a failure from one session pairing with a success from another and
+ * asserting a provenance that never happened.
+ *
+ * Never observed in the wild, and recorded as such: across both live stores on
+ * this machine, 5,155 and 298 adjacent in-window pairs, ZERO crossing a
+ * session. Sessions are long and rarely interleave inside ten minutes. This is
+ * a guard against a false claim, not a fix for observed damage.
+ */
+describe('a pair comes from one session, or it is not a pair', () => {
+  // Its own clock: `t0` above belongs to another block's fixtures.
+  const base = Date.parse('2026-03-04T10:00:00Z');
+  const cmd = (anchor, success, offset, session) =>
+    record(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor,
+      success,
+      exit: success ? 0 : 1,
+      at: base + offset,
+      sessionId: session,
+      output: success ? '' : 'boom',
+    });
+
+  const proj = () => {
+    const p = join(dir, 'proj-scope');
+    mkdirSync(p, { recursive: true });
+    writeFileSync(join(p, 'package.json'), '{"name":"x"}');
+    return p;
+  };
+
+  const candidatesFor = (sessionId) =>
+    derive(dir, { sessionId, projectRoot: proj() }).candidates;
+
+  it('refuses to pair across two sessions', () => {
+    // Same target, well inside the window, different sessions. Under the old
+    // reading these paired and the claim said they were one session's work.
+    cmd('npx jest tests/foo.test.mjs', false, 0, 'session-a');
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000, 'session-b');
+
+    expect(candidatesFor('session-b').filter((c) => c.derivedBy === 'retarget')).toHaveLength(0);
+  });
+
+  it('still pairs within one session', () => {
+    // The guard must not silence the detector outright, which is the failure
+    // mode of every over-tightened filter in this file.
+    cmd('npx jest tests/bar.test.mjs', false, 0, 'session-a');
+    cmd('npm test -- tests/bar.test.mjs', true, 45_000, 'session-a');
+
+    expect(candidatesFor('session-a').filter((c) => c.derivedBy === 'retarget')).toHaveLength(1);
+  });
+
+  it('keeps an outcome recorded before the field existed', () => {
+    // Older rows carry no sessionId. Dropping them would shrink the evidence
+    // pool on exactly the graphs with the most history.
+    cmd('npx jest tests/baz.test.mjs', false, 0, undefined);
+    cmd('npm test -- tests/baz.test.mjs', true, 45_000, 'session-a');
+
+    expect(candidatesFor('session-a').filter((c) => c.derivedBy === 'retarget')).toHaveLength(1);
+  });
+});

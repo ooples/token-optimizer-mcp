@@ -739,6 +739,27 @@ export function derive(dir, options = {}) {
   let outcomes = [];
   try {
     if (projectRoot) {
+      // SCOPED TO THE SESSION THE CLAIM WILL NAME.
+      //
+      // Every claim these detectors build opens `observed in one session:`,
+      // and the store holds every session's outcomes -- so nothing but the
+      // ten-minute window stopped a failure from one session pairing with a
+      // success from another and asserting a provenance that never happened.
+      //
+      // NEVER OBSERVED, SAID PLAINLY. Across both live stores on this machine
+      // -- 7,173 command outcomes over 3 sessions here, 543 over 9 sessions in
+      // the unrooted one -- 5,155 and 298 adjacent in-window pairs respectively
+      // and ZERO of them crossed a session. Sessions are long and rarely
+      // interleave inside ten minutes. This is a correctness fix against a
+      // false claim, not a fix for observed damage, and it is not offered as
+      // one. Concurrent sessions do occur -- one was recorded on this machine
+      // while this was being written -- and they share the unrooted store.
+      //
+      // The merged transcript failures below are deliberately NOT filtered:
+      // `failedResultsFromTranscript` carries no sessionId, and the transcript
+      // it read is this session's, so they are already scoped by construction.
+      // Filtering them here would drop the only source of command failures
+      // that exists -- Claude Code never fires PostToolUse on a non-zero exit.
       outcomes = events
         .filter(
           (e) =>
@@ -746,7 +767,10 @@ export function derive(dir, options = {}) {
             e.kind === 'tool-outcome' &&
             e.surface === 'command' &&
             typeof e.anchor === 'string' &&
-            e.anchor.trim()
+            e.anchor.trim() &&
+            // An event predating the field still counts; a DIFFERENT session
+            // never does.
+            (!sessionId || !e.sessionId || e.sessionId === sessionId)
         )
         .map((e) => ({
           command: e.anchor.trim(),
