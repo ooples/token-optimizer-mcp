@@ -915,6 +915,20 @@ export function derive(dir, options = {}) {
           const failed = lastFailure;
           lastFailure = null;
 
+          // BOTH SIDES MUST NAME A SINGLE COMMAND, the same rule detector 1
+          // applies. `commandBody` strips only a LEADING directory change, and
+          // `commandProgram` reads the first token, so a chained command
+          // attributes the failure to the wrong program entirely:
+          //
+          //   git fetch && npx jest tests/foo.test.mjs   -> program "git"
+          //   cat x | npx jest tests/foo.test.mjs        -> program "cat"
+          //
+          // Paired against `npm test -- tests/foo.test.mjs` those would ship
+          // "npm test succeeded where git fetch failed" and tell a later session
+          // to avoid `git`. Checked per side rather than once, because unlike
+          // detector 1 these two do NOT share a key by construction.
+          if (!hasAttemptIdentity(failed.command)) continue;
+          if (!hasAttemptIdentity(outcome.command)) continue;
           // Same program is detector 1's case, whether it pairs there or not.
           if (commandProgram(failed.command) === commandProgram(outcome.command)) continue;
           // A fix follows its failure closely. Hours apart is two unrelated

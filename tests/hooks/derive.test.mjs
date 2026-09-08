@@ -1387,3 +1387,64 @@ describe('a different command against the same target', () => {
     expect(retargets()).toHaveLength(0);
   });
 });
+
+/**
+ * Compound commands must not be attributed to the wrong program.
+ *
+ * `commandBody` strips only a LEADING directory change and `commandProgram`
+ * reads the first token, so a chained command names the wrong thing: `git fetch
+ * && npx jest tests/foo.test.mjs` has program `git`. Paired against a working
+ * `npm test`, detector 5 would have shipped "npm test succeeded where git fetch
+ * failed" and told a later session to avoid `git`.
+ */
+describe('detector 5 refuses chained commands', () => {
+  const t0 = Date.now();
+  const proj = () => {
+    const p = join(dir, 'proj');
+    mkdirSync(p, { recursive: true });
+    writeFileSync(join(p, 'package.json'), '{"name":"x"}');
+    return p;
+  };
+  const cmd = (anchor, success, offset) =>
+    record(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor,
+      success,
+      exit: success ? 0 : 1,
+      at: t0 + offset,
+      output: success ? '' : 'boom',
+    });
+  const retargets = () =>
+    derive(dir, { sessionId: 's', projectRoot: proj() }).candidates.filter(
+      (c) => c.derivedBy === 'retarget'
+    );
+
+  it('refuses an && chain on the failing side', () => {
+    cmd('git fetch && npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses a pipeline on the failing side', () => {
+    cmd('cat x | npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses a chain on the SUCCEEDING side too', () => {
+    // Checked per side: unlike detector 1, these two do not share a key by
+    // construction, so one check cannot stand for both.
+    cmd('npx jest tests/foo.test.mjs', false, 0);
+    cmd('git pull && npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('still accepts a LEADING cd, which names one attempt', () => {
+    // commandBody removes it, so `cd repo && npx jest x` is one command spelled
+    // two ways -- the case hasAttemptIdentity was explicitly fixed not to reject.
+    cmd('cd repo && npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(1);
+  });
+});
