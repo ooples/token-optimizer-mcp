@@ -196,11 +196,26 @@ USER root
 # installer's output went through `tail` and the RUN reported tail's status. So
 # headroom -- a registered THOL competitor, and one we specifically want to
 # measure against -- was silently absent from the board.
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential python3-dev \
+# PINNED, for the same reason THOL_REV is pinned: a benchmark whose ruler moves
+# cannot compare two campaigns. `stable` and an unversioned installer script are
+# moving targets, so the same THOL revision could be measured against different
+# compilers on two different days with nothing in this repo having changed.
+#
+# These are the versions the image ACTUALLY resolved and that the competitor
+# crates are known to build against, read out of the built image rather than
+# guessed: build-essential 12.9, python3-dev 3.11.2-1+b1, rustc/cargo 1.98.1,
+# uv 0.12.10. Bumping any of them starts a new campaign, exactly as bumping
+# THOL_REV does, and the bump should be recorded with the results it produced.
+ARG RUST_VERSION=1.98.1
+ARG UV_VERSION=0.12.10
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+         build-essential=12.9 \
+         python3-dev=3.11.2-1+b1 \
     && rm -rf /var/lib/apt/lists/* \
     && curl -fsSL https://sh.rustup.rs \
-       | sh -s -- -y --profile minimal --default-toolchain stable --no-modify-path \
-    && curl -fsSL https://astral.sh/uv/install.sh | sh
+       | sh -s -- -y --profile minimal --default-toolchain "${RUST_VERSION}" --no-modify-path \
+    && curl -fsSL "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
 ENV PATH="/usr/local/cargo/bin:${PATH}"
 
 # PIPEFAIL, because the shell form reports the LAST command's status. `bash
@@ -222,8 +237,26 @@ RUN mkdir -p "$HOME/.local/bin"
 # The EXEC form with an explicit bash, because RUN's shell form is `/bin/sh -c`
 # and Debian's sh is dash, which has no `pipefail` -- `set -o pipefail` there
 # exits 2 and fails the build for the wrong reason.
+# RETRIED THREE TIMES, AND STILL FAILS LOUDLY. Now that pipefail actually
+# propagates the installer's status, a single transient upstream hiccup costs the
+# whole build: observed once as
+#
+#   >> edgee v0.2.13 (pinned release binary, sha256-verified)
+#   curl: (22) The requested URL returned error: 500
+#
+# from GitHub's release CDN, where the same URL returned 200 on the next attempt.
+# That is worth retrying and NOT worth hiding -- the previous `| tail` swallow
+# turned exactly this into a silently missing competitor. A bounded retry keeps
+# the guarantee that a real failure stops the build while not making a ten-minute
+# image hostage to one bad response. The installer's steps are re-runnable: npm,
+# cargo and uv installs are idempotent and the edgee step re-downloads.
 RUN ["/bin/bash", "-o", "pipefail", "-c", \
-     "cd \"$THOL_HOME\" && bash setup/install_competitors.sh 2>&1 | tail -40"]
+     "cd \"$THOL_HOME\"; for attempt in 1 2 3; do \
+        if bash setup/install_competitors.sh 2>&1 | tail -40; then exit 0; fi; \
+        echo \"install_competitors.sh failed (attempt $attempt of 3)\"; \
+        sleep $((attempt * 10)); \
+      done; \
+      echo 'FATAL: competitor install failed three times'; exit 1"]
 
 # COPIED, NOT SYMLINKED, for anything the installer still puts in root's home.
 # A symlink into /root dangles for `bench` -- that is half of why the previous
