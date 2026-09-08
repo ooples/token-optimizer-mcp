@@ -44,8 +44,9 @@ import {
   fingerprint,
   recordToolOutcome,
   recordEpisodeOutcome,
+  readMetrics,
 } from './metrics.mjs';
-import { derive } from './derive.mjs';
+import { derive, projectRootFromActivity } from './derive.mjs';
 import {
   contentHash,
   harvest,
@@ -1205,7 +1206,32 @@ async function runHook(clientName, event, invocation) {
       // one figure alone cannot distinguish "nothing to derive" from "derived
       // plenty and stored none of it".
       const cwd = raw.cwd || raw.working_directory || process.cwd();
-      const projectRoot = projectRootFor(join(cwd, '__session__'), cwd);
+      // WHERE THE WORK HAPPENED, NOT WHERE THE CLIENT WAS LAUNCHED.
+      //
+      // `projectRootFor` on a cwd with no VCS marker -- a home directory, which
+      // is how this client is commonly started -- returns the synthetic fallback
+      // `~/.token-optimizer/unrooted`. That is not null, so every `if
+      // (projectRoot)` gate downstream passes, and `projectAnchor` then hands
+      // back the directory itself because the fallback holds no project marker.
+      // `writeHarvested` resolves anchors through `indexFile`, which returns
+      // null for a directory, and the finding is refused as unanchorable.
+      //
+      // Measured consequence on this machine: 937 derive runs, 8 candidates,
+      // ZERO findings written, beside 2,965 symbol nodes in the same graph. The
+      // router already keys capture on where the FILE lives rather than on the
+      // session's cwd; this applies that rule to derivation too, and falls back
+      // to the cwd answer when the session touched nothing resolvable.
+      const cwdRoot = projectRootFor(join(cwd, '__session__'), cwd);
+      let projectRoot = cwdRoot;
+      try {
+        projectRoot =
+          projectRootFromActivity(readMetrics(wikiDir(cwdRoot)), {
+            resolve: (anchor) => projectRootFor(anchor, cwd),
+            cwd,
+          }) || cwdRoot;
+      } catch {
+        // Inferring the project is an improvement, never a precondition.
+      }
       const dir = wikiDir(projectRoot);
       const derived = derive(dir, {
         sessionId,

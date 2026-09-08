@@ -29,6 +29,7 @@ import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from '../../hooks-core/curate.mjs';
 import {
   derive,
   searchGap,
+  projectRootFromActivity,
   CONFIDENCE,
   attemptKey,
   commandBody,
@@ -1446,5 +1447,87 @@ describe('detector 5 refuses chained commands', () => {
     cmd('cd repo && npx jest tests/foo.test.mjs', false, 0);
     cmd('npm test -- tests/foo.test.mjs', true, 45_000);
     expect(retargets()).toHaveLength(1);
+  });
+});
+
+/**
+ * Which project a session belongs to, when the cwd cannot say.
+ *
+ * `projectRootFor(join(cwd,'__session__'), cwd)` returns the synthetic
+ * `~/.token-optimizer/unrooted` for a cwd with no VCS marker -- a home
+ * directory, which is how this client is commonly launched. That value is not
+ * null, so every `if (projectRoot)` gate downstream passes, `projectAnchor`
+ * then returns the directory itself, and `indexFile` refuses a directory, so
+ * the finding is dropped as unanchorable.
+ *
+ * Measured: the unrooted store holds 937 derive runs, 8 candidates and ZERO
+ * written findings, while this repository's own store holds 317 runs, 121
+ * candidates and 121 written. The write path was never broken -- it was being
+ * handed a root nothing could anchor to.
+ */
+describe('inferring the project from what the session touched', () => {
+  const REPO = '/repos/thing';
+  // Stands in for projectRootFor: repo paths resolve to the repo, anything
+  // under the optimizer's own store resolves to the unrooted fallback.
+  const resolve = (anchor) =>
+    anchor.includes('/repos/thing')
+      ? REPO
+      : anchor.includes('.token-optimizer')
+        ? '/home/u/.token-optimizer/unrooted'
+        : null;
+
+  it('picks the project the session actually worked in', () => {
+    const events = [
+      { kind: 'read', anchor: `${REPO}/src/a.mjs` },
+      { kind: 'read', anchor: `${REPO}/src/b.mjs` },
+      { kind: 'tool-outcome', surface: 'file', anchor: `${REPO}/package.json` },
+    ];
+    expect(projectRootFromActivity(events, { resolve })).toBe(REPO);
+  });
+
+  it('ignores command anchors, which are command text and not paths', () => {
+    // A command surface's anchor is the command itself. Resolving `npm test --
+    // x` as a path would invent a project out of a sentence.
+    const events = [
+      { kind: 'tool-outcome', surface: 'command', anchor: 'npm test -- /repos/thing/x' },
+    ];
+    expect(projectRootFromActivity(events, { resolve })).toBeNull();
+  });
+
+  it('ignores the optimizer store, which is nobody s project', () => {
+    const events = [
+      { kind: 'read', anchor: '/home/u/.token-optimizer/wiki/graph.jsonl' },
+      { kind: 'read', anchor: '/home/u/.token-optimizer/unrooted/x' },
+    ];
+    expect(projectRootFromActivity(events, { resolve })).toBeNull();
+  });
+
+  it('picks the majority project when a session spans two', () => {
+    const OTHER = '/repos/other';
+    const wide = (anchor) => (anchor.includes('/repos/other') ? OTHER : resolve(anchor));
+    const events = [
+      { kind: 'read', anchor: `${REPO}/a` },
+      { kind: 'read', anchor: `${REPO}/b` },
+      { kind: 'read', anchor: `${OTHER}/c` },
+    ];
+    expect(projectRootFromActivity(events, { resolve: wide })).toBe(REPO);
+  });
+
+  it('returns null rather than guessing when nothing resolves', () => {
+    // The caller keeps its cwd-derived answer in that case. A wrong project is
+    // worse than the status quo: it would file findings about one codebase into
+    // another's graph.
+    expect(projectRootFromActivity([], { resolve })).toBeNull();
+    expect(projectRootFromActivity([{ kind: 'read', anchor: '/elsewhere/x' }], { resolve })).toBeNull();
+  });
+
+  it('survives junk input rather than throwing at session end', () => {
+    expect(projectRootFromActivity(null, { resolve })).toBeNull();
+    expect(projectRootFromActivity([null, {}, { kind: 'read' }], { resolve })).toBeNull();
+    // A resolver that throws must not take the Stop hook down with it.
+    const boom = () => {
+      throw new Error('nope');
+    };
+    expect(projectRootFromActivity([{ kind: 'read', anchor: `${REPO}/a` }], { resolve: boom })).toBeNull();
   });
 });

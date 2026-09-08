@@ -401,6 +401,66 @@ const DOTNET_MARKER = /\.(sln|slnx|csproj|fsproj|vbproj)$/i;
  * against a fabricated anchor. That is the fail-open direction: no finding
  * beats a finding anchored to something that is not what the claim is about.
  */
+
+/**
+ * The project a session actually worked in, read off what it touched.
+ *
+ * WHY THE SESSION'S CWD IS THE WRONG ANSWER. `adapter.mjs` resolves the root
+ * with `projectRootFor(join(cwd, '__session__'), cwd)`, and when Claude Code is
+ * launched from a directory with no VCS marker -- a home directory, which is how
+ * this machine runs it -- that returns the synthetic fallback
+ * `~/.token-optimizer/unrooted`. It is NOT null, so every `if (projectRoot)`
+ * gate passes, and then `projectAnchor` hands back the directory itself because
+ * the fallback contains no project marker. `writeHarvested` resolves anchors
+ * through `indexFile`, `indexFile` on a directory returns null, and the finding
+ * is refused as unanchorable.
+ *
+ * That is the whole reason this machine's graph holds 2,965 symbols and ONE
+ * finding: 937 derive runs produced candidates and stored none of them, while
+ * every layer reported success.
+ *
+ * The router already solved this for capture -- "THE GRAPH IS PER PROJECT, so it
+ * is keyed on where the FILE lives, not on where the client happens to be
+ * running" -- and derivation simply never adopted it. This applies the same
+ * rule at Stop time: take the file anchors the session recorded, resolve each to
+ * its own project, and pick the one that holds the most of them.
+ *
+ * Returns null when nothing resolves, which leaves the caller's original root
+ * untouched -- a wrong project is worse than the status quo.
+ */
+export function projectRootFromActivity(events, { resolve, cwd } = {}) {
+  if (typeof resolve !== 'function' || !Array.isArray(events)) return null;
+  const counts = new Map();
+  for (const event of events) {
+    const anchor = event?.anchor;
+    // File surfaces only. A command anchor is the command text, and resolving
+    // `npm test -- x` as a path would invent a project out of a sentence.
+    if (!anchor || typeof anchor !== 'string') continue;
+    if (event.kind !== 'read' && !(event.kind === 'tool-outcome' && event.surface === 'file')) {
+      continue;
+    }
+    let root;
+    try {
+      root = resolve(anchor, cwd);
+    } catch {
+      continue;
+    }
+    // The fallback resolves to a path inside the optimizer's own store, which is
+    // never a project someone is working in.
+    if (!root || String(root).includes('.token-optimizer')) continue;
+    counts.set(root, (counts.get(root) || 0) + 1);
+  }
+  let best = null;
+  let most = 0;
+  for (const [root, n] of counts) {
+    if (n > most) {
+      most = n;
+      best = root;
+    }
+  }
+  return best;
+}
+
 export function projectAnchor(projectRoot) {
   if (!projectRoot) return null;
   let entries;
