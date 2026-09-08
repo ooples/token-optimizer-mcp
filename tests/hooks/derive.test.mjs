@@ -1296,3 +1296,94 @@ describe('measuring what the symbol index cannot answer', () => {
     expect(result.searchGap).toEqual({ named: 1, gap: 1 });
   });
 });
+
+/**
+ * The lesson the command detector could not reach.
+ *
+ * MEASURED, NOT SUPPOSED: across 937 real derive runs on the development
+ * machine, the whole module produced 8 candidates and stored ZERO findings. The
+ * cause is structural rather than a bug. `attemptKey` is program-plus-operands,
+ * so the correction actually worth recording -- reaching for a different tool
+ * against the same target -- lands in two groups that never meet:
+ *
+ *   npx jest tests/foo.test.mjs     key "npx jest tests/foo.test.mjs"
+ *   npm test -- tests/foo.test.mjs  key "npm test tests/foo.test.mjs"
+ *
+ * What detector 1 CAN pair is the identical command re-run, which its own guard
+ * then correctly discards as incoherent. Between the key and the guard the
+ * command family had almost no reachable evidence.
+ */
+describe('a different command against the same target', () => {
+  const t0 = Date.now();
+  const proj = () => {
+    const p = join(dir, 'proj');
+    mkdirSync(p, { recursive: true });
+    writeFileSync(join(p, 'package.json'), '{"name":"x"}');
+    return p;
+  };
+  const cmd = (anchor, success, offset) =>
+    record(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor,
+      success,
+      exit: success ? 0 : 1,
+      at: t0 + offset,
+      output: success ? '' : 'boom',
+    });
+  const retargets = () =>
+    derive(dir, { sessionId: 's', projectRoot: proj() }).candidates.filter(
+      (c) => c.derivedBy === 'retarget'
+    );
+
+  it('records the fix, and stores it', () => {
+    cmd('npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+
+    const result = derive(dir, { sessionId: 's', projectRoot: proj() });
+    const found = result.candidates.filter((c) => c.derivedBy === 'retarget');
+    expect(found).toHaveLength(1);
+    expect(found[0].claim).toContain('npm test -- tests/foo.test.mjs');
+    expect(found[0].claim).toContain('npx jest tests/foo.test.mjs');
+    // Speculative, not probable: sharing a target is weaker evidence than
+    // repeating an invocation, and the ceiling has to say so.
+    expect(found[0].confidenceLabel).toBe('speculative');
+    // STORED. Producing a candidate that the write path then drops is the state
+    // this whole change exists to fix -- 8 candidates, 0 written.
+    expect(result.written.length).toBeGreaterThan(0);
+  });
+
+  it('leaves same-program pairs to the detector that owns them', () => {
+    cmd('npm test -- tests/a.test.mjs', false, 0);
+    cmd('npm run test tests/a.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses a bare word as a shared target', () => {
+    // `npm run build` and `make build` share the token `build`, which is a
+    // coincidence of vocabulary rather than evidence of one intent. Without
+    // this, every project's two build commands would pair.
+    cmd('npm run build', false, 0);
+    cmd('make build', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses two attempts hours apart', () => {
+    // Proximity is doing the work command identity does in detector 1. Two
+    // unrelated pieces of work touching one file must not become one story.
+    cmd('npx jest tests/a.test.mjs', false, 0);
+    cmd('npm test -- tests/a.test.mjs', true, 3 * 60 * 60 * 1000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses commands whose targets differ', () => {
+    cmd('npx jest tests/a.test.mjs', false, 0);
+    cmd('npm test -- tests/b.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('claims nothing from a success with no preceding failure', () => {
+    cmd('npm test -- tests/a.test.mjs', true, 0);
+    expect(retargets()).toHaveLength(0);
+  });
+});

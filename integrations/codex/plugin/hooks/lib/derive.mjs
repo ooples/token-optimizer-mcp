@@ -67,7 +67,16 @@ import {
  * command. A correction is a lexical guess about what a human meant. Churn
  * describes our own reading behaviour and says nothing about the code at all.
  */
-export const CONFIDENCE = { command: 0.9, test: 0.85, correction: 0.6, churn: 0.4 };
+export const CONFIDENCE = {
+  command: 0.9,
+  test: 0.85,
+  // Below `command` because the inference is weaker: two commands sharing a
+  // target is good evidence of one intent, but not the same evidence as the
+  // identical invocation being retried. Labelled speculative, deliberately.
+  retarget: 0.6,
+  correction: 0.6,
+  churn: 0.4,
+};
 
 /** Claim text cap. A finding is one sentence; a paragraph is evidence. */
 const CLAIM_MAX = 300;
@@ -75,6 +84,17 @@ const EVIDENCE_MAX = 400;
 
 /** Bounded so a pathological log cannot turn session end into real work. */
 const MAX_CANDIDATES = 200;
+
+/**
+ * How close a fix must follow its failure to count as the same attempt.
+ *
+ * Detector 5 pairs across DIFFERENT programs, so it cannot lean on command
+ * identity to know the two are related -- proximity is doing that work instead.
+ * Ten minutes is long enough for a real correction, including reading an error
+ * and looking something up, and short enough that two unrelated pieces of work
+ * touching one file in an afternoon are not reported as one story.
+ */
+const RETARGET_WINDOW_MS = 10 * 60 * 1000;
 
 /**
  * The anchor cap a command surface is stored under, restated here as a TEST.
@@ -287,6 +307,50 @@ export function attemptKey(command) {
     .join(' ')
     .toLowerCase();
 }
+/**
+ * The thing a command ACTS ON -- a path, a test file, a target.
+ *
+ * WHY `attemptKey` IS NOT ENOUGH, measured rather than supposed. That key is
+ * program-plus-operands, so the single most valuable lesson a session can teach
+ * cannot pair by construction:
+ *
+ *   npx jest tests/foo      -> key "npx jest tests/foo"
+ *   npm test -- tests/foo   -> key "npm test tests/foo"
+ *
+ * Different keys, no pair, no finding -- yet that is exactly the correction
+ * worth recording, because the fix was to run a DIFFERENT program against the
+ * same target. The existing detector can only catch the same command re-run and
+ * succeeding, which its own guard then discards as incoherent.
+ *
+ * The measured cost of that: across 937 real derive runs on this machine, 8
+ * candidates were produced and ZERO were stored.
+ *
+ * So this returns the shared operand -- `tests/foo` above -- which is what the
+ * two attempts genuinely have in common. Only operands that NAME something are
+ * admitted: a path separator or a file extension. A bare word like `build` is
+ * refused, because `npm run build` and `make build` sharing the token `build`
+ * is a coincidence of vocabulary, not evidence of one intent.
+ */
+export function commandOperand(command) {
+  const tokens = commandBody(command)
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token && !token.startsWith('-'));
+  // Skipping the first token: the PROGRAM is what differs between the two
+  // attempts, so including it would reproduce attemptKey's blind spot.
+  for (const token of tokens.slice(1)) {
+    const named = /[/\\]/.test(token) || /\.[A-Za-z0-9]{1,5}$/.test(token);
+    if (named && token.length >= 4) return token.toLowerCase();
+  }
+  return null;
+}
+
+/** The program a command invokes, for deciding whether two attempts differ. */
+export function commandProgram(command) {
+  const first = commandBody(command).trim().split(/\s+/)[0] || '';
+  return first.split(/[/\\]/).pop().toLowerCase();
+}
+
 
 /** Normalised claim text, so the same lesson derived twice is one candidate. */
 const claimKey = (type, claim) =>
@@ -519,9 +583,15 @@ export function derive(dir, options = {}) {
   // a transcript failure that pairs with nothing stays unclaimed, which is also
   // what keeps a failure from ANOTHER project's directory out of this project's
   // graph -- a candidate cannot be emitted without a success recorded HERE.
+  // HOISTED so detector 5 can pair over the SAME merged list -- events plus the
+  // transcript failures folded in below. Rebuilding it there would duplicate the
+  // de-duplication logic and let the two detectors drift; leaving it block-scoped
+  // gave detector 5 a ReferenceError that its own try/catch swallowed, which is
+  // silent nothing rather than a visible failure.
+  let outcomes = [];
   try {
     if (projectRoot) {
-      const outcomes = events
+      outcomes = events
         .filter(
           (e) =>
             e &&
@@ -802,6 +872,92 @@ export function derive(dir, options = {}) {
   } catch {
     // One detector, never the session.
   }
+  // ---- 5: a DIFFERENT command against the same target succeeded -----------
+  //
+  // THE LESSON DETECTOR 1 CANNOT REACH. Its `attemptKey` is program-plus-
+  // operands, so the correction worth recording -- reaching for a different
+  // tool against the same target -- lands in two groups that never meet:
+  //
+  //   npx jest tests/foo.test.mjs     key "npx jest tests/foo.test.mjs"
+  //   npm test -- tests/foo.test.mjs  key "npm test tests/foo.test.mjs"
+  //
+  // What detector 1 CAN pair is the identical command re-run, and its own guard
+  // then correctly discards that as incoherent -- "`npm run build` works where
+  // `npm run build` failed" claims nothing. So between the key and the guard,
+  // the command family had almost no reachable evidence: measured across 937
+  // real derive runs on this machine, 8 candidates and ZERO stored findings.
+  //
+  // This pairs on the shared OPERAND instead, and only when the PROGRAM differs
+  // -- same-program pairs are detector 1's business and are left to it. The
+  // conservatism the original key was protecting is kept in three other places:
+  // the operand must NAME something (a path or an extension, never a bare word
+  // like `build`), the two attempts must be close in time, and the ceiling is
+  // 0.6 rather than 0.9 because sharing a target is weaker evidence than
+  // repeating an invocation.
+  try {
+    if (projectRoot && outcomes?.length) {
+      const byTarget = new Map();
+      for (const outcome of outcomes) {
+        const target = commandOperand(outcome.command);
+        if (!target) continue;
+        if (!byTarget.has(target)) byTarget.set(target, []);
+        byTarget.get(target).push(outcome);
+      }
+
+      for (const [target, run] of byTarget) {
+        let lastFailure = null;
+        for (const outcome of run) {
+          if (outcome.failed) {
+            lastFailure = outcome;
+            continue;
+          }
+          if (!lastFailure) continue;
+          const failed = lastFailure;
+          lastFailure = null;
+
+          // Same program is detector 1's case, whether it pairs there or not.
+          if (commandProgram(failed.command) === commandProgram(outcome.command)) continue;
+          // A fix follows its failure closely. Hours apart is two unrelated
+          // pieces of work that happened to touch one file.
+          const apart = Math.abs((outcome.at || 0) - (failed.at || 0));
+          if (!apart || apart > RETARGET_WINDOW_MS) continue;
+          // Same rule as detector 1: nothing quotable, nothing claimed.
+          if (!quotable(failed.command) || !quotable(outcome.command)) continue;
+
+          const confidence = CONFIDENCE.retarget;
+          add({
+            type: 'command',
+            claim: redact(
+              `In this project \`${commandBody(outcome.command)}\` succeeded on ${target} where ` +
+                `\`${commandBody(failed.command)}\` had failed`,
+              { max: CLAIM_MAX }
+            ),
+            evidence: redact(
+              `observed in one session: \`${failed.command}\` failed` +
+                `${Number.isInteger(failed.exit) ? ` (exit ${failed.exit})` : ''}, then ` +
+                `\`${outcome.command}\` succeeded against the same target \`${target}\` ` +
+                `${Math.round(apart / 1000)}s later. Different programs, one target: ordered ` +
+                'and close, but not proven causal -- an intervening edit explains the same pair.',
+              { max: EVIDENCE_MAX }
+            ),
+            applicability: `when about to run \`${commandProgram(failed.command)}\` against ${target} in this project`,
+            confidence,
+            confidenceLabel: labelFor(confidence),
+            scope: 'project',
+            invalidators: [`\`${commandBody(failed.command)}\` later succeeds unchanged`],
+            trigger: triggerFor(failed.command),
+            anchors: [anchorPath],
+            derivedBy: 'retarget',
+            sessionId,
+            at: outcome.at || Date.now(),
+          });
+        }
+      }
+    }
+  } catch {
+    // One detector, never the session.
+  }
+
 
   // ---- storage, under a budget -------------------------------------------
   //
