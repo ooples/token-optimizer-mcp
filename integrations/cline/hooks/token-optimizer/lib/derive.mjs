@@ -205,11 +205,26 @@ const COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&']);
  *
  * A LEADING `cd <path> &&` is still accepted, because `commandBody` strips it
  * before this sees it -- that case is one command spelled two ways.
+ *
+ * A TRAILING SEPARATOR LEAVES NOTHING TO COUNT, which is the hole in reading
+ * the segment count alone. `commandSegments` pushes only non-empty token
+ * lists, so `npx jest tests/foo &&` is ONE segment, and `attemptKey` -- the
+ * first three non-flag tokens -- never sees the `&&` either. The command is
+ * still half of something, and `cmd &` on its own is a background job whose
+ * exit code belongs to the shell rather than to the program named. Appending a
+ * sentinel token makes the missing segment materialise, which reuses the one
+ * scanner that already understands quotes instead of adding a second,
+ * differently-wrong one: `grep -E "foo|bar" src/x.mjs` stays a single segment
+ * with the sentinel attached, exactly as it does without it.
  */
+// Not a plausible argument to anything, so it can only ever be the token this
+// function appended.
+const SEGMENT_SENTINEL = '__token_optimizer_segment_probe__';
+
 const hasAttemptIdentity = (command) => {
   const body = commandBody(command);
   if (!body.trim()) return false;
-  if (commandSegments(body).length > 1) return false;
+  if (commandSegments(`${body} ${SEGMENT_SENTINEL}`).length > 1) return false;
   return attemptKey(command)
     .split(' ')
     .filter(Boolean)
@@ -368,7 +383,13 @@ export function commandOperand(command) {
   // attempts, so including it would reproduce attemptKey's blind spot.
   for (const token of tokens.slice(1)) {
     const named = /[/\\]/.test(token) || /\.[A-Za-z0-9]{1,5}$/.test(token);
-    if (named && token.length >= 4) return token.toLowerCase();
+    // AS WRITTEN, not folded. This value is the grouping key AND the text of
+    // the stored claim, and folding it made the claim name a path that does
+    // not exist on a case-sensitive filesystem: `src/Foo.test.mjs` was
+    // recorded, and served to a later session, as `src/foo.test.mjs`. The
+    // caller folds a copy for the key instead, so matching stays
+    // case-insensitive without the claim paying for it.
+    if (named && token.length >= 4) return token;
   }
   return null;
 }
@@ -1068,15 +1089,23 @@ export function derive(dir, options = {}) {
   // repeating an invocation.
   try {
     if (projectRoot && outcomes?.length) {
+      // KEYED FOLDED, DISPLAYED AS WRITTEN. Two invocations naming the same
+      // file with different capitalisation are the same target on Windows and
+      // macOS, so the key folds; the text stored in the finding must not,
+      // because a claim naming `src/foo.test.mjs` for a file called
+      // `src/Foo.test.mjs` is a path that does not resolve on Linux -- and
+      // that text is what a later session reads. The first spelling seen wins,
+      // which is the one the failing attempt actually used.
       const byTarget = new Map();
       for (const outcome of outcomes) {
-        const target = commandOperand(outcome.command);
-        if (!target) continue;
-        if (!byTarget.has(target)) byTarget.set(target, []);
-        byTarget.get(target).push(outcome);
+        const operand = commandOperand(outcome.command);
+        if (!operand) continue;
+        const key = operand.toLowerCase();
+        if (!byTarget.has(key)) byTarget.set(key, { target: operand, run: [] });
+        byTarget.get(key).run.push(outcome);
       }
 
-      for (const [target, run] of byTarget) {
+      for (const { target, run } of byTarget.values()) {
         let lastFailure = null;
         for (const outcome of run) {
           if (outcome.failed) {

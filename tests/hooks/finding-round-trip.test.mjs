@@ -16,7 +16,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,11 +35,15 @@ let root;
 let wiki;
 let proj;
 let transcript;
+let logs;
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'roundtrip-'));
   wiki = join(root, 'wiki');
   proj = join(root, 'proj');
+  // Per test, so the completion event read below can only be this test's.
+  logs = join(root, 'logs');
+  mkdirSync(logs, { recursive: true });
   mkdirSync(join(proj, '.git'), { recursive: true });
   mkdirSync(wiki, { recursive: true });
   // A real anchor: writeHarvested resolves anchors through indexFile, and a
@@ -88,6 +92,35 @@ beforeEach(() => {
 
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
+/**
+ * The outcome the router recorded for the invocation that just ran.
+ *
+ * `hook.completed` carries `outcome: 'success' | 'failure' | 'timeout'`, and it
+ * is written even when the hook swallowed the error and allowed the call --
+ * which is precisely the case stdout cannot show.
+ */
+const completion = () => {
+  const files = readdirSync(logs).filter((name) => /^hook-events-.*\.jsonl$/.test(name));
+  const events = files.flatMap((name) =>
+    readFileSync(join(logs, name), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line)];
+        } catch {
+          return [];
+        }
+      })
+  );
+  const completed = events.filter((e) => e.event === 'hook.completed');
+  // Named rather than defaulted: no event at all means the router never got as
+  // far as its own instrumentation, which is a failure too and must not read
+  // as success.
+  if (!completed.length) return 'no hook.completed event was written';
+  return completed[completed.length - 1].outcome;
+};
+
 /** A LATER, DIFFERENT session about to run the command that failed before. */
 const askRouter = (command, mode) => {
   const result = spawnSync(process.execPath, [ROUTER], {
@@ -104,6 +137,7 @@ const askRouter = (command, mode) => {
       TOKEN_OPTIMIZER_WIKI_DIR: wiki,
       TOKEN_OPTIMIZER_SHARED_DIR: wiki,
       TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_read,smart_grep',
+      TOKEN_OPTIMIZER_LOG_DIR: logs,
     },
   });
   // A CRASH MUST NOT BE READABLE AS SILENCE. The catch below used to swallow
@@ -114,6 +148,14 @@ const askRouter = (command, mode) => {
   // 767, 829), so a non-zero status is a genuine failure in every mode.
   if (result.error) throw result.error;
   expect(result.status).toBe(0);
+  // NOR MUST A CAUGHT CRASH BE READABLE AS SILENCE, which the status check
+  // above cannot see. The router's outer catch records `invocation.fail(error)`
+  // and then calls `allow()`, and an allow exits 0 with no stdout -- byte for
+  // byte what a clean allow produces. So a router that threw on every input
+  // would satisfy everything above it and every `not.toContain` in this file
+  // would pass while the product did nothing. The completion event is the only
+  // place the two are distinguishable.
+  expect(completion()).toBe('success');
   const stdout = (result.stdout || '').trim();
   // An allow may legitimately write nothing at all; that is the only empty
   // output accepted, and only after the status check above.

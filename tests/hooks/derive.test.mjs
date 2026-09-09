@@ -1490,6 +1490,54 @@ describe('detector 5 refuses chained commands', () => {
     cmd('npm test -- "tests/foo|bar.test.mjs"', true, 45_000);
     expect(retargets()).toHaveLength(1);
   });
+
+  it.each([
+    ['&&', 'npx jest tests/foo.test.mjs &&'],
+    ['|', 'npx jest tests/foo.test.mjs |'],
+    [';', 'npx jest tests/foo.test.mjs ;'],
+    ['&', 'npx jest tests/foo.test.mjs &'],
+  ])('refuses a command ending in a bare %s', (_sep, failing) => {
+    // THE SEGMENT COUNT CANNOT SEE THIS ONE. `commandSegments` pushes only
+    // non-empty token lists, so a trailing separator produces exactly ONE
+    // segment, and attemptKey -- the first three non-flag tokens -- never sees
+    // the separator either. The command is still half of something, and
+    // `cmd &` is a background job whose exit code belongs to the shell rather
+    // than to the program named in the claim.
+    cmd(failing, false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses a trailing separator on the SUCCEEDING side too', () => {
+    cmd('npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs &&', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('keeps the target spelled the way the command spelled it', () => {
+    // The operand is both the grouping key and the text of the stored claim.
+    // Folding it to lower case made the claim name `src/foo.test.mjs` for a
+    // file called `src/Foo.test.mjs` -- a path that does not resolve on a
+    // case-sensitive filesystem, in the sentence a later session reads.
+    cmd('npx jest tests/Foo.test.mjs', false, 0);
+    cmd('npm test -- tests/Foo.test.mjs', true, 45_000);
+    const [found] = retargets();
+    expect(found).toBeDefined();
+    expect(found.claim).toContain('tests/Foo.test.mjs');
+    expect(found.claim).not.toContain('tests/foo.test.mjs');
+    expect(found.applicability).toContain('tests/Foo.test.mjs');
+  });
+
+  it('still pairs two spellings of one target, because the KEY folds', () => {
+    // Case-insensitive matching is right on Windows and macOS; only the stored
+    // text had to stop paying for it. The first spelling seen wins, which is
+    // the one the failing attempt used.
+    cmd('npx jest tests/Foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.TEST.mjs', true, 45_000);
+    const [found] = retargets();
+    expect(found).toBeDefined();
+    expect(found.claim).toContain('tests/Foo.test.mjs');
+  });
 });
 
 /**
