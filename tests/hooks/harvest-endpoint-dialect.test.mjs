@@ -21,6 +21,7 @@ import {
   extract,
   harvestFailure,
   endpointDialect,
+  credentialFor,
   FINDINGS_SCHEMA,
 } from '../../hooks-core/harvest.mjs';
 
@@ -91,12 +92,23 @@ beforeEach(() => {
     key: process.env.TOKEN_OPTIMIZER_API_KEY,
     anthropic: process.env.ANTHROPIC_API_KEY,
     mode: process.env.TOKEN_OPTIMIZER_MODE,
+    // harvestMode() reads this BEFORE it looks at the endpoint, so an
+    // inherited '0' would return off:opted-out and no request would ever
+    // reach the server -- every request assertion below would fail for a
+    // reason that has nothing to do with its subject.
+    harvest: process.env.TOKEN_OPTIMIZER_HARVEST,
+    model: process.env.TOKEN_OPTIMIZER_HARVEST_MODEL,
   };
   // A local endpoint needs no key, which is the path under test. An ambient key
   // would otherwise change which branch runs.
   delete process.env.TOKEN_OPTIMIZER_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.TOKEN_OPTIMIZER_MODE;
+  delete process.env.TOKEN_OPTIMIZER_HARVEST;
+  // The OpenAI dialect now refuses to guess a model, since the Anthropic
+  // default names something no local server serves. These tests are about
+  // the request, not that guard, so they state one.
+  process.env.TOKEN_OPTIMIZER_HARVEST_MODEL = 'test-model';
 });
 
 afterEach(async () => {
@@ -105,6 +117,8 @@ afterEach(async () => {
     ['TOKEN_OPTIMIZER_API_KEY', saved.key],
     ['ANTHROPIC_API_KEY', saved.anthropic],
     ['TOKEN_OPTIMIZER_MODE', saved.mode],
+    ['TOKEN_OPTIMIZER_HARVEST', saved.harvest],
+    ['TOKEN_OPTIMIZER_HARVEST_MODEL', saved.model],
   ]) {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
@@ -338,5 +352,70 @@ describe('the model is given the anchors rather than asked for them', () => {
     await extract('a digest', { timeoutMs: 4000, knownFiles: new Set() });
 
     expect(anchorSpec().items.enum).toBeUndefined();
+  });
+});
+
+/**
+ * A credential belongs to the endpoint it was issued for, and nowhere else.
+ *
+ * `apiKey()` falls back to ANTHROPIC_API_KEY, which is set on most machines
+ * that run Claude and says nothing about where a request is going. The first
+ * version of this scoped on locality alone -- closing the loopback leak and
+ * leaving open the one that matters more, an Anthropic key sent as a Bearer
+ * token to a third-party OpenAI-compatible gateway.
+ */
+describe('an Anthropic key travels only to Anthropic', () => {
+  const ambient = { ANTHROPIC_API_KEY: 'sk-ant-ambient' };
+  const explicit = { ANTHROPIC_API_KEY: 'sk-ant-ambient', TOKEN_OPTIMIZER_API_KEY: 'sk-explicit' };
+
+  test('only a remote Anthropic endpoint receives the ambient key', () => {
+    expect(credentialFor('anthropic', false, ambient)).toBe('sk-ant-ambient');
+    expect(credentialFor('anthropic', true, ambient)).toBeNull();
+    expect(credentialFor('openai', true, ambient)).toBeNull();
+    // The case review caught: remote, but not Anthropic.
+    expect(credentialFor('openai', false, ambient)).toBeNull();
+  });
+
+  test('an explicit key reaches every destination, because it was chosen', () => {
+    for (const dialect of ['anthropic', 'openai']) {
+      for (const local of [true, false]) {
+        expect(credentialFor(dialect, local, explicit)).toBe('sk-explicit');
+      }
+    }
+  });
+});
+
+/**
+ * The default model is an Anthropic one, and a local server has never heard of
+ * it. A user following the documented advice sets only the endpoint, so the
+ * request asks ollama for `claude-haiku-...` and is refused -- silently, before
+ * this. Refused with a reason naming the variable instead of guessed at: a
+ * default like `llama3.2` is a guess about what the user pulled, and being
+ * wrong costs the same silent nothing.
+ */
+describe('an OpenAI endpoint must be told which model to use', () => {
+  test('it refuses, naming the variable, rather than asking for a Claude model', async () => {
+    await start();
+    delete process.env.TOKEN_OPTIMIZER_HARVEST_MODEL;
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = `http://127.0.0.1:${port}/v1/chat/completions`;
+
+    const out = await extract('a digest', { timeoutMs: 4000 });
+
+    expect(out).toEqual([]);
+    expect(harvestFailure()).toContain('TOKEN_OPTIMIZER_HARVEST_MODEL');
+    // And it never reached the server, so no wrong-model request was made.
+    expect(seen).toBeNull();
+  });
+
+  test('the Anthropic dialect keeps its default, which is correct there', async () => {
+    await start();
+    delete process.env.TOKEN_OPTIMIZER_HARVEST_MODEL;
+    process.env.TOKEN_OPTIMIZER_API_KEY = 'sk-explicit';
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = `http://127.0.0.1:${port}/v1/messages`;
+
+    const out = await extract('a digest', { timeoutMs: 4000 });
+
+    expect(out).toHaveLength(1);
+    expect(seen.body.model).toContain('claude');
   });
 });

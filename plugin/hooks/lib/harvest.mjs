@@ -343,6 +343,29 @@ export function validate(raw, { knownFiles = null } = {}) {
  * configures the whole URL here, so the path is something they stated rather
  * than something we guess.
  */
+/**
+ * Which credential, if any, may travel to this endpoint.
+ *
+ * `apiKey()` falls back to ANTHROPIC_API_KEY, which is set on most machines
+ * that run Claude and says nothing about where this request is going. There is
+ * exactly one destination that key belongs to: a REMOTE ANTHROPIC endpoint.
+ *
+ *   anthropic + remote   the key -- this is what it is for
+ *   anthropic + local    explicit only -- loopback is not Anthropic
+ *   openai    + remote   explicit only -- a third-party gateway must not
+ *                        receive an Anthropic credential as a Bearer token
+ *   openai    + local    explicit only
+ *
+ * The first version of this scoped on `local` alone, which review caught: it
+ * closed the loopback leak and left the remote-gateway one wide open. Exported
+ * so all four combinations are testable without contriving DNS.
+ */
+export function credentialFor(dialect, local, env = process.env) {
+  const explicit = env.TOKEN_OPTIMIZER_API_KEY || null;
+  if (dialect === 'openai' || local) return explicit;
+  return explicit || env.ANTHROPIC_API_KEY || null;
+}
+
 export function endpointDialect(endpoint = ENDPOINT()) {
   return /\/chat\/completions\b/.test(String(endpoint || '')) ? 'openai' : 'anthropic';
 }
@@ -435,7 +458,24 @@ export async function extract(
   //
   // Remote is unchanged; there the key is the whole reason the call is
   // allowed to happen.
-  const credential = local ? process.env.TOKEN_OPTIMIZER_API_KEY || null : key;
+  const credential = credentialFor(dialect, local);
+
+  // THE DEFAULT MODEL IS AN ANTHROPIC ONE, AND A LOCAL SERVER HAS NEVER HEARD
+  // OF IT. `MODEL()` falls back to claude-haiku, so an endpoint configured per
+  // the documented advice -- which names only TOKEN_OPTIMIZER_HARVEST_ENDPOINT --
+  // asks ollama for a model it does not have and is refused. I hit this myself
+  // while proving the dialect fix and set the variable by hand without noticing
+  // that a user could not know to.
+  //
+  // Refused with an actionable reason rather than guessed at. Picking a default
+  // like `llama3.2` would be a guess about what the user pulled, and being wrong
+  // costs the same silent nothing this whole branch exists to remove.
+  if (dialect === 'openai' && !process.env.TOKEN_OPTIMIZER_HARVEST_MODEL) {
+    return failed(
+      'set TOKEN_OPTIMIZER_HARVEST_MODEL for an OpenAI-compatible endpoint ' +
+        `(the default ${MODEL()} is an Anthropic model no local server serves)`
+    );
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -501,8 +541,24 @@ export async function extract(
     // whole function used to be. Narrow on purpose: a 4xx is the server saying
     // it will not take what was sent, while a 5xx or a timeout is a condition a
     // second identical call would only pay for twice, on a hook path.
-    if (!response.ok && dialect === 'openai' && response.status >= 400 && response.status < 500) {
-      response = await send(false);
+    // NARROWED FROM ANY 4xx. Review is right that the first version retried
+    // things a retry cannot help and should not touch: a 429 is a rate limit
+    // and an immediate repeat makes it worse, while 401/403/404 are settled
+    // answers about credentials and routing. Only a 400/422 whose body names
+    // `response_format` is the server saying it will not take THE SCHEMA,
+    // which is the one case where the same request without it still works.
+    if (
+      !response.ok
+      && dialect === 'openai'
+      && (response.status === 400 || response.status === 422)
+    ) {
+      let complaint = '';
+      try {
+        complaint = await response.clone().text();
+      } catch {
+        complaint = '';
+      }
+      if (/response_format|json_schema/i.test(complaint)) response = await send(false);
     }
 
     if (!response.ok) return failed(`endpoint returned HTTP ${response.status}`);
