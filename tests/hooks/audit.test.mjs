@@ -502,12 +502,11 @@ describe('the local derivation metric has a reader', () => {
     // reader to skip the whole section.
     record(dir, { kind: 'derive', observations: 1, candidates: 0, written: 0 });
     const text = renderAudit(dir, []).text;
-    // PINNED POSITIVELY FIRST. On its own the negative below also passes when
-    // renderAudit throws, returns undefined, or never runs the derivation note
-    // at all -- so it would report success for a reader that had stopped
-    // working entirely. Asserting the note IS rendered proves the code path was
-    // exercised, and only then does its silence about searches mean anything.
-    expect(text).toMatch(/Local derivation: .* 1 observation\(s\)/);
+    // Pins that the derivation section rendered at all, so the silence below
+    // is a decision about the search line and not an empty report.
+    expect(text).toMatch(
+      /Local derivation: 0 candidate\(s\) from 1 observation\(s\); 0 stored across 1 Stop run\(s\)\./
+    );
     expect(text).not.toMatch(/named search\(es\)/);
   });
 });

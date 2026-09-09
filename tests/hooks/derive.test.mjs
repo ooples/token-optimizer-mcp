@@ -11,7 +11,14 @@
  * So most of what is tested here is refusal.
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
+  readFileSync,
+  appendFileSync,
+} from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,16 +29,26 @@ import {
   safeName,
   failedResultsFromTranscript,
 } from '../../hooks-core/transcript.mjs';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
+import {
+  load,
+  putNode,
+  putEdge,
+  nodeId,
+  projectRootFor,
+} from '../../hooks-core/wiki.mjs';
+import { registerProject, projectIdFor } from '../../hooks-core/projects.mjs';
+import { sessionActivity } from '../../hooks-core/adapter.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
 import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from '../../hooks-core/curate.mjs';
 import {
   derive,
   searchGap,
+  projectRootFromActivity,
   CONFIDENCE,
   attemptKey,
   commandBody,
+  commandProgram,
   projectAnchor,
 } from '../../hooks-core/derive.mjs';
 
@@ -1294,5 +1311,642 @@ describe('measuring what the symbol index cannot answer', () => {
     record(dir, outcome('grep -rn "settlement_rate" .'));
     const result = derive(dir, { sessionId: 's1', projectRoot: dir });
     expect(result.searchGap).toEqual({ named: 1, gap: 1 });
+  });
+});
+
+/**
+ * The lesson the command detector could not reach.
+ *
+ * MEASURED, NOT SUPPOSED: across 937 real derive runs on the development
+ * machine, the whole module produced 8 candidates and stored ZERO findings. The
+ * cause is structural rather than a bug. `attemptKey` is program-plus-operands,
+ * so the correction actually worth recording -- reaching for a different tool
+ * against the same target -- lands in two groups that never meet:
+ *
+ *   npx jest tests/foo.test.mjs     key "npx jest tests/foo.test.mjs"
+ *   npm test -- tests/foo.test.mjs  key "npm test tests/foo.test.mjs"
+ *
+ * What detector 1 CAN pair is the identical command re-run, which its own guard
+ * then correctly discards as incoherent. Between the key and the guard the
+ * command family had almost no reachable evidence.
+ */
+describe('a different command against the same target', () => {
+  const t0 = Date.now();
+  const proj = () => {
+    const p = join(dir, 'proj');
+    mkdirSync(p, { recursive: true });
+    writeFileSync(join(p, 'package.json'), '{"name":"x"}');
+    return p;
+  };
+  const cmd = (anchor, success, offset) =>
+    record(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor,
+      success,
+      exit: success ? 0 : 1,
+      at: t0 + offset,
+      output: success ? '' : 'boom',
+    });
+  const retargets = () =>
+    derive(dir, { sessionId: 's', projectRoot: proj() }).candidates.filter(
+      (c) => c.derivedBy === 'retarget'
+    );
+
+  it('records the fix, and stores it', () => {
+    cmd('npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+
+    const result = derive(dir, { sessionId: 's', projectRoot: proj() });
+    const found = result.candidates.filter((c) => c.derivedBy === 'retarget');
+    expect(found).toHaveLength(1);
+    expect(found[0].claim).toContain('npm test -- tests/foo.test.mjs');
+    expect(found[0].claim).toContain('npx jest tests/foo.test.mjs');
+    // Speculative, not probable: sharing a target is weaker evidence than
+    // repeating an invocation, and the ceiling has to say so.
+    expect(found[0].confidenceLabel).toBe('speculative');
+    // STORED. Producing a candidate that the write path then drops is the state
+    // this whole change exists to fix -- 8 candidates, 0 written.
+    expect(result.written.length).toBeGreaterThan(0);
+  });
+
+  it('leaves same-program pairs to the detector that owns them', () => {
+    cmd('npm test -- tests/a.test.mjs', false, 0);
+    cmd('npm run test tests/a.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses a bare word as a shared target', () => {
+    // `npm run build` and `make build` share the token `build`, which is a
+    // coincidence of vocabulary rather than evidence of one intent. Without
+    // this, every project's two build commands would pair.
+    cmd('npm run build', false, 0);
+    cmd('make build', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses two attempts hours apart', () => {
+    // Proximity is doing the work command identity does in detector 1. Two
+    // unrelated pieces of work touching one file must not become one story.
+    cmd('npx jest tests/a.test.mjs', false, 0);
+    cmd('npm test -- tests/a.test.mjs', true, 3 * 60 * 60 * 1000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses commands whose targets differ', () => {
+    cmd('npx jest tests/a.test.mjs', false, 0);
+    cmd('npm test -- tests/b.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('claims nothing from a success with no preceding failure', () => {
+    cmd('npm test -- tests/a.test.mjs', true, 0);
+    expect(retargets()).toHaveLength(0);
+  });
+});
+
+/**
+ * Compound commands must not be attributed to the wrong program.
+ *
+ * `commandBody` strips only a LEADING directory change and `commandProgram`
+ * reads the first token, so a chained command names the wrong thing: `git fetch
+ * && npx jest tests/foo.test.mjs` has program `git`. Paired against a working
+ * `npm test`, detector 5 would have shipped "npm test succeeded where git fetch
+ * failed" and told a later session to avoid `git`.
+ */
+describe('detector 5 refuses chained commands', () => {
+  const t0 = Date.now();
+  const proj = () => {
+    const p = join(dir, 'proj');
+    mkdirSync(p, { recursive: true });
+    writeFileSync(join(p, 'package.json'), '{"name":"x"}');
+    return p;
+  };
+  const cmd = (anchor, success, offset) =>
+    record(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor,
+      success,
+      exit: success ? 0 : 1,
+      at: t0 + offset,
+      output: success ? '' : 'boom',
+    });
+  const retargets = () =>
+    derive(dir, { sessionId: 's', projectRoot: proj() }).candidates.filter(
+      (c) => c.derivedBy === 'retarget'
+    );
+
+  it('refuses an && chain on the failing side', () => {
+    cmd('git fetch && npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses a pipeline on the failing side', () => {
+    cmd('cat x | npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses a chain on the SUCCEEDING side too', () => {
+    // Checked per side: unlike detector 1, these two do not share a key by
+    // construction, so one check cannot stand for both.
+    cmd('npx jest tests/foo.test.mjs', false, 0);
+    cmd('git pull && npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('still accepts a LEADING cd, which names one attempt', () => {
+    // commandBody removes it, so `cd repo && npx jest x` is one command spelled
+    // two ways -- the case hasAttemptIdentity was explicitly fixed not to reject.
+    cmd('cd repo && npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(1);
+  });
+
+  it('refuses a chain whose separator falls AFTER the third token', () => {
+    // The hole every test above missed. `git fetch && ...` is rejected only
+    // because the separator lands inside the three tokens attemptKey keeps;
+    // move it later and the same chain passed. The key here is `npx jest
+    // tests/foo.test.mjs`, so a pair would blame `npx` for a failure that
+    // `node scripts/x.mjs` may have caused.
+    cmd('npx jest tests/foo.test.mjs && node scripts/x.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses a late separator on the SUCCEEDING side too', () => {
+    cmd('npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs | tee out.log', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('does not reject an ordinary quoted alternation as a pipeline', () => {
+    // The guard scans with the quote-aware segmenter for this reason: a raw
+    // split on `|` would cut through `grep -E "foo|bar"` and silently drop a
+    // perfectly single command.
+    cmd('npx jest "tests/foo|bar.test.mjs"', false, 0);
+    cmd('npm test -- "tests/foo|bar.test.mjs"', true, 45_000);
+    expect(retargets()).toHaveLength(1);
+  });
+
+  it.each([
+    ['&&', 'npx jest tests/foo.test.mjs &&'],
+    ['|', 'npx jest tests/foo.test.mjs |'],
+    [';', 'npx jest tests/foo.test.mjs ;'],
+    ['&', 'npx jest tests/foo.test.mjs &'],
+  ])('refuses a command ending in a bare %s', (_sep, failing) => {
+    // THE SEGMENT COUNT CANNOT SEE THIS ONE. `commandSegments` pushes only
+    // non-empty token lists, so a trailing separator produces exactly ONE
+    // segment, and attemptKey -- the first three non-flag tokens -- never sees
+    // the separator either. The command is still half of something, and
+    // `cmd &` is a background job whose exit code belongs to the shell rather
+    // than to the program named in the claim.
+    cmd(failing, false, 0);
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('refuses a trailing separator on the SUCCEEDING side too', () => {
+    cmd('npx jest tests/foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.test.mjs &&', true, 45_000);
+    expect(retargets()).toHaveLength(0);
+  });
+
+  it('keeps the target spelled the way the command spelled it', () => {
+    // The operand is both the grouping key and the text of the stored claim.
+    // Folding it to lower case made the claim name `src/foo.test.mjs` for a
+    // file called `src/Foo.test.mjs` -- a path that does not resolve on a
+    // case-sensitive filesystem, in the sentence a later session reads.
+    cmd('npx jest tests/Foo.test.mjs', false, 0);
+    cmd('npm test -- tests/Foo.test.mjs', true, 45_000);
+    const [found] = retargets();
+    expect(found).toBeDefined();
+    expect(found.claim).toContain('tests/Foo.test.mjs');
+    expect(found.claim).not.toContain('tests/foo.test.mjs');
+    expect(found.applicability).toContain('tests/Foo.test.mjs');
+  });
+
+  it('still pairs two spellings of one target, because the KEY folds', () => {
+    // Case-insensitive matching is right on Windows and macOS; only the stored
+    // text had to stop paying for it. The first spelling seen wins, which is
+    // the one the failing attempt used.
+    cmd('npx jest tests/Foo.test.mjs', false, 0);
+    cmd('npm test -- tests/foo.TEST.mjs', true, 45_000);
+    const [found] = retargets();
+    expect(found).toBeDefined();
+    expect(found.claim).toContain('tests/Foo.test.mjs');
+  });
+});
+
+/**
+ * Which project a session belongs to, when the cwd cannot say.
+ *
+ * `projectRootFor(join(cwd,'__session__'), cwd)` returns the synthetic
+ * `~/.token-optimizer/unrooted` for a cwd with no VCS marker -- a home
+ * directory, which is how this client is commonly launched. That value is not
+ * null, so every `if (projectRoot)` gate downstream passes, `projectAnchor`
+ * then returns the directory itself, and `indexFile` refuses a directory, so
+ * the finding is dropped as unanchorable.
+ *
+ * Measured: the unrooted store holds 937 derive runs, 8 candidates and ZERO
+ * written findings, while this repository's own store holds 317 runs, 121
+ * candidates and 121 written. The write path was never broken -- it was being
+ * handed a root nothing could anchor to.
+ */
+describe('inferring the project from what the session touched', () => {
+  const REPO = '/repos/thing';
+  // Stands in for projectRootFor: repo paths resolve to the repo, anything
+  // under the optimizer's own store resolves to the unrooted fallback.
+  const resolve = (anchor) =>
+    anchor.includes('/repos/thing')
+      ? REPO
+      : anchor.includes('.token-optimizer')
+        ? '/home/u/.token-optimizer/unrooted'
+        : null;
+
+  it('picks the project the session actually worked in', () => {
+    const events = [
+      { kind: 'read', anchor: `${REPO}/src/a.mjs` },
+      { kind: 'read', anchor: `${REPO}/src/b.mjs` },
+      { kind: 'tool-outcome', surface: 'file', anchor: `${REPO}/package.json` },
+    ];
+    expect(projectRootFromActivity(events, { resolve })).toBe(REPO);
+  });
+
+  it('ignores command anchors, which are command text and not paths', () => {
+    // A command surface's anchor is the command itself. Resolving `npm test --
+    // x` as a path would invent a project out of a sentence.
+    const events = [
+      { kind: 'tool-outcome', surface: 'command', anchor: 'npm test -- /repos/thing/x' },
+    ];
+    expect(projectRootFromActivity(events, { resolve })).toBeNull();
+  });
+
+  it('ignores the optimizer store, which is nobody s project', () => {
+    const events = [
+      { kind: 'read', anchor: '/home/u/.token-optimizer/wiki/graph.jsonl' },
+      { kind: 'read', anchor: '/home/u/.token-optimizer/unrooted/x' },
+    ];
+    expect(projectRootFromActivity(events, { resolve })).toBeNull();
+  });
+
+  it('picks the majority project when a session spans two', () => {
+    const OTHER = '/repos/other';
+    const wide = (anchor) => (anchor.includes('/repos/other') ? OTHER : resolve(anchor));
+    const events = [
+      { kind: 'read', anchor: `${REPO}/a` },
+      { kind: 'read', anchor: `${REPO}/b` },
+      { kind: 'read', anchor: `${OTHER}/c` },
+    ];
+    expect(projectRootFromActivity(events, { resolve: wide })).toBe(REPO);
+  });
+
+  it('declines rather than letting touch order break a tie', () => {
+    // Two projects touched equally often. A Map iterates in insertion order, so
+    // picking the first maximum would answer with whichever file the session
+    // happened to open first -- deterministic, and arbitrary. Both orderings
+    // must give the same answer, and the only honest one is "I don't know".
+    const OTHER = '/repos/other';
+    const wide = (anchor) => (anchor.includes('/repos/other') ? OTHER : resolve(anchor));
+    const repoFirst = [
+      { kind: 'read', anchor: `${REPO}/a` },
+      { kind: 'read', anchor: `${OTHER}/c` },
+    ];
+    const otherFirst = [
+      { kind: 'read', anchor: `${OTHER}/c` },
+      { kind: 'read', anchor: `${REPO}/a` },
+    ];
+    expect(projectRootFromActivity(repoFirst, { resolve: wide })).toBeNull();
+    expect(projectRootFromActivity(otherFirst, { resolve: wide })).toBeNull();
+  });
+
+  it('still answers when a later project overtakes an earlier tie', () => {
+    // The tie flag must reset once a strict maximum appears, or one incidental
+    // pair of equal counts would suppress an otherwise clear winner.
+    const OTHER = '/repos/other';
+    const wide = (anchor) => (anchor.includes('/repos/other') ? OTHER : resolve(anchor));
+    const events = [
+      { kind: 'read', anchor: `${REPO}/a` },
+      { kind: 'read', anchor: `${OTHER}/c` },
+      { kind: 'read', anchor: `${OTHER}/d` },
+    ];
+    expect(projectRootFromActivity(events, { resolve: wide })).toBe(OTHER);
+  });
+
+  it('counts only the session that is ending, not the whole graph', () => {
+    // A graph outlives the session that wrote it, and a cross-project sweep
+    // concatenates several of them. Without this filter a busy session from
+    // last week outvotes the one now ending, and its findings are filed against
+    // that other project.
+    const OTHER = '/repos/other';
+    const wide = (anchor) => (anchor.includes('/repos/other') ? OTHER : resolve(anchor));
+    const events = [
+      { kind: 'read', anchor: `${OTHER}/a`, sessionId: 'yesterday' },
+      { kind: 'read', anchor: `${OTHER}/b`, sessionId: 'yesterday' },
+      { kind: 'read', anchor: `${OTHER}/c`, sessionId: 'yesterday' },
+      { kind: 'read', anchor: `${REPO}/x`, sessionId: 'now' },
+    ];
+    expect(projectRootFromActivity(events, { resolve: wide, sessionId: 'now' })).toBe(REPO);
+    // Without the id the whole graph is counted, which is the old behaviour and
+    // the wrong answer for a session that only touched REPO.
+    expect(projectRootFromActivity(events, { resolve: wide })).toBe(OTHER);
+  });
+
+  it('drops an event that cannot say which session it came from', () => {
+    // Measured before deciding: 2 of 22,321 file/read events across the three
+    // live stores on this machine lack the field, so exempting them buys 0.01%
+    // of recall. What it costs is the whole point of the filter -- an unstamped
+    // event in ANOTHER project's graph would vote for that project on no
+    // evidence, and the sweep reads several graphs at once.
+    const OTHER = '/repos/other';
+    const wide = (anchor) => (anchor.includes('/repos/other') ? OTHER : resolve(anchor));
+    const events = [
+      { kind: 'read', anchor: `${OTHER}/a` },
+      { kind: 'read', anchor: `${OTHER}/b` },
+      { kind: 'read', anchor: `${REPO}/x`, sessionId: 'now' },
+    ];
+    // Two unstamped events for OTHER would outvote this session's single read.
+    expect(projectRootFromActivity(events, { resolve: wide, sessionId: 'now' })).toBe(REPO);
+    // And with no id requested the old whole-graph count still applies.
+    expect(projectRootFromActivity(events, { resolve: wide })).toBe(OTHER);
+  });
+
+  it('returns null rather than guessing when nothing resolves', () => {
+    // The caller keeps its cwd-derived answer in that case. A wrong project is
+    // worse than the status quo: it would file findings about one codebase into
+    // another's graph.
+    expect(projectRootFromActivity([], { resolve })).toBeNull();
+    expect(projectRootFromActivity([{ kind: 'read', anchor: '/elsewhere/x' }], { resolve })).toBeNull();
+  });
+
+  it('survives junk input rather than throwing at session end', () => {
+    expect(projectRootFromActivity(null, { resolve })).toBeNull();
+    expect(projectRootFromActivity([null, {}, { kind: 'read' }], { resolve })).toBeNull();
+    // A resolver that throws must not take the Stop hook down with it.
+    const boom = () => {
+      throw new Error('nope');
+    };
+    expect(projectRootFromActivity([{ kind: 'read', anchor: `${REPO}/a` }], { resolve: boom })).toBeNull();
+  });
+});
+
+/**
+ * The sweep that makes the inference above reach the evidence.
+ *
+ * Capture is keyed on where the FILE lives, so a session started outside a
+ * repository writes its file activity into each touched PROJECT's graph while
+ * `cwd` resolves to the unrooted fallback. Reading only the unrooted graph
+ * therefore found nothing to infer from -- measured on this machine, 12,376
+ * file anchors in that store and not one under a repository.
+ */
+describe('gathering session activity from the graphs that hold it', () => {
+  let sandbox;
+  let unrooted;
+  let saved;
+
+  const makeProject = (name, { register = true } = {}) => {
+    const root = join(sandbox, name);
+    mkdirSync(join(root, '.git'), { recursive: true });
+    const graphDir = join(root, '.token-optimizer', 'wiki');
+    mkdirSync(graphDir, { recursive: true });
+    if (register) registerProject({ root, graphDir, client: 'test' });
+    return { root, graphDir };
+  };
+
+  beforeEach(() => {
+    sandbox = mkdtempSync(join(tmpdir(), 'session-activity-'));
+    unrooted = join(sandbox, 'unrooted');
+    mkdirSync(unrooted, { recursive: true });
+    mkdirSync(join(unrooted, '.token-optimizer', 'wiki'), { recursive: true });
+    saved = {
+      unrootedDir: process.env.TOKEN_OPTIMIZER_UNROOTED_DIR,
+      registry: process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY,
+      wikiDir: process.env.TOKEN_OPTIMIZER_WIKI_DIR,
+    };
+    process.env.TOKEN_OPTIMIZER_UNROOTED_DIR = unrooted;
+    process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(sandbox, 'projects.jsonl');
+    // wikiDir() short-circuits to this for EVERY project when set, which would
+    // collapse the very separation this test exists to cross.
+    delete process.env.TOKEN_OPTIMIZER_WIKI_DIR;
+  });
+
+  afterEach(() => {
+    for (const [key, value] of [
+      ['TOKEN_OPTIMIZER_UNROOTED_DIR', saved.unrootedDir],
+      ['TOKEN_OPTIMIZER_PROJECT_REGISTRY', saved.registry],
+      ['TOKEN_OPTIMIZER_WIKI_DIR', saved.wikiDir],
+    ]) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    rmSync(sandbox, { recursive: true, force: true });
+  });
+
+  it('reaches the project graph an unrooted session actually wrote to', () => {
+    const project = makeProject('repo-a');
+    record(project.graphDir, {
+      kind: 'read',
+      anchor: join(project.root, 'src', 'a.mjs'),
+      sessionId: 'now',
+      tokens: 10,
+    });
+
+    const events = sessionActivity(unrooted);
+    const anchors = events.map((e) => e.anchor).filter(Boolean);
+    expect(anchors).toContain(join(project.root, 'src', 'a.mjs'));
+
+    // The whole point: the inference now resolves to the repository, where the
+    // finding can be anchored, instead of to the unrooted fallback where
+    // `indexFile` refuses a directory and the finding is dropped.
+    expect(
+      projectRootFromActivity(events, {
+        resolve: (anchor) => projectRootFor(anchor, unrooted),
+        sessionId: 'now',
+      })
+    ).toBe(canonicalPath(project.root));
+  });
+
+  it('reads only its own graph when the cwd is already a repository', () => {
+    const other = makeProject('repo-b');
+    record(other.graphDir, {
+      kind: 'read',
+      anchor: join(other.root, 'src', 'b.mjs'),
+      sessionId: 'now',
+      tokens: 10,
+    });
+    const here = makeProject('repo-here');
+    record(here.graphDir, {
+      kind: 'read',
+      anchor: join(here.root, 'src', 'h.mjs'),
+      sessionId: 'now',
+      tokens: 10,
+    });
+
+    const anchors = sessionActivity(here.root).map((e) => e.anchor).filter(Boolean);
+    expect(anchors).toContain(join(here.root, 'src', 'h.mjs'));
+    // A rooted session pays nothing for the sweep, and cannot be dragged into
+    // another repository by it.
+    expect(anchors).not.toContain(join(other.root, 'src', 'b.mjs'));
+  });
+
+  it('ignores a registered project the session is too old to have touched', () => {
+    const stale = makeProject('repo-stale', { register: false });
+    // Registered with a timestamp outside the 24h window the sweep considers.
+    appendFileSync(
+      process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY,
+      `${JSON.stringify({
+        v: 1,
+        id: projectIdFor(stale.root),
+        root: canonicalPath(stale.root),
+        graphDir: canonicalPath(stale.graphDir),
+        name: 'repo-stale',
+        client: 'test',
+        at: Date.now() - 72 * 60 * 60 * 1000,
+      })}
+`,
+      'utf8'
+    );
+    record(stale.graphDir, {
+      kind: 'read',
+      anchor: join(stale.root, 'src', 'old.mjs'),
+      sessionId: 'now',
+      tokens: 10,
+    });
+
+    // A project registered inside the window, so the sweep demonstrably ran
+    // and the exclusion below is the age filter rather than a no-op.
+    const fresh = makeProject('repo-fresh');
+    record(fresh.graphDir, {
+      kind: 'read',
+      anchor: join(fresh.root, 'src', 'new.mjs'),
+      sessionId: 'now',
+      tokens: 10,
+    });
+
+    const anchors = sessionActivity(unrooted).map((e) => e.anchor).filter(Boolean);
+    expect(anchors).toContain(join(fresh.root, 'src', 'new.mjs'));
+    expect(anchors).not.toContain(join(stale.root, 'src', 'old.mjs'));
+  });
+
+  it('survives an unreadable registry rather than failing the session', () => {
+    process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(sandbox, 'nope', 'missing.jsonl');
+    expect(() => sessionActivity(unrooted)).not.toThrow();
+    expect(Array.isArray(sessionActivity(unrooted))).toBe(true);
+  });
+});
+
+/**
+ * An environment prefix is not the program.
+ *
+ * `commandProgram` took the first token verbatim, so `SP=/tmp/x node run.mjs`
+ * reported its program as `sp=/tmp/x`. Measured over this machine's real
+ * history that is 816 of 7,165 recorded command outcomes -- 11.4%.
+ *
+ * It fails in the dangerous direction. The function exists to decide two
+ * attempts used DIFFERENT programs, so the same tool run under different
+ * variables compared as different and became eligible to pair -- producing
+ * `node run.mjs` succeeded where `node run.mjs` failed, the incoherent claim
+ * detector 1's own guard refuses, arriving through detector 5's door.
+ */
+describe('the program is the program, not the environment in front of it', () => {
+  it('looks past a leading assignment, however many there are', () => {
+    expect(commandProgram('SP=/tmp/x node run.mjs')).toBe('node');
+    expect(commandProgram('MSYS_NO_PATHCONV=1 docker run --rm img')).toBe('docker');
+    expect(commandProgram('A=1 B=2 C=3 npm test -- tests/x.mjs')).toBe('npm');
+  });
+
+  it('still answers plainly when there is no prefix', () => {
+    // The behaviour that already worked has to survive the fix, including the
+    // basename reduction and the leading `cd` that commandBody strips.
+    expect(commandProgram('node run.mjs')).toBe('node');
+    expect(commandProgram('/usr/local/bin/node run.mjs')).toBe('node');
+    expect(commandProgram('cd /repo && SP=/a node run.mjs')).toBe('node');
+    expect(commandProgram('')).toBe('');
+  });
+
+  it('refuses the false pair the old reading allowed', () => {
+    // THE POINT OF THE FIX, asserted as behaviour rather than as a string. Two
+    // runs of the SAME program under different variables must compare equal,
+    // so detector 5's `programs differ` gate rejects them and no claim is
+    // built. Under the old reading these were `sp=/a` and `spw=/b`.
+    const failed = 'SP=/a node scripts/run.mjs';
+    const fixed = 'SPW=/b node scripts/run.mjs';
+    expect(commandProgram(failed)).toBe(commandProgram(fixed));
+  });
+
+  it('still separates two genuinely different programs', () => {
+    // The fix must not collapse everything to one program, which would silence
+    // detector 5 entirely rather than make it honest.
+    expect(commandProgram('SP=/a npx jest tests/foo.test.mjs')).not.toBe(
+      commandProgram('SP=/a npm test -- tests/foo.test.mjs')
+    );
+  });
+});
+
+/**
+ * A claim that says "one session" has to come from one session.
+ *
+ * Every claim these detectors build opens `observed in one session:`, and the
+ * store holds every session's outcomes -- so nothing but the ten-minute window
+ * stopped a failure from one session pairing with a success from another and
+ * asserting a provenance that never happened.
+ *
+ * Never observed in the wild, and recorded as such: across both live stores on
+ * this machine, 5,155 and 298 adjacent in-window pairs, ZERO crossing a
+ * session. Sessions are long and rarely interleave inside ten minutes. This is
+ * a guard against a false claim, not a fix for observed damage.
+ */
+describe('a pair comes from one session, or it is not a pair', () => {
+  // Its own clock: `t0` above belongs to another block's fixtures.
+  const base = Date.parse('2026-03-04T10:00:00Z');
+  const cmd = (anchor, success, offset, session) =>
+    record(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor,
+      success,
+      exit: success ? 0 : 1,
+      at: base + offset,
+      sessionId: session,
+      output: success ? '' : 'boom',
+    });
+
+  const proj = () => {
+    const p = join(dir, 'proj-scope');
+    mkdirSync(p, { recursive: true });
+    writeFileSync(join(p, 'package.json'), '{"name":"x"}');
+    return p;
+  };
+
+  const candidatesFor = (sessionId) =>
+    derive(dir, { sessionId, projectRoot: proj() }).candidates;
+
+  it('refuses to pair across two sessions', () => {
+    // Same target, well inside the window, different sessions. Under the old
+    // reading these paired and the claim said they were one session's work.
+    cmd('npx jest tests/foo.test.mjs', false, 0, 'session-a');
+    cmd('npm test -- tests/foo.test.mjs', true, 45_000, 'session-b');
+
+    expect(candidatesFor('session-b').filter((c) => c.derivedBy === 'retarget')).toHaveLength(0);
+  });
+
+  it('still pairs within one session', () => {
+    // The guard must not silence the detector outright, which is the failure
+    // mode of every over-tightened filter in this file.
+    cmd('npx jest tests/bar.test.mjs', false, 0, 'session-a');
+    cmd('npm test -- tests/bar.test.mjs', true, 45_000, 'session-a');
+
+    expect(candidatesFor('session-a').filter((c) => c.derivedBy === 'retarget')).toHaveLength(1);
+  });
+
+  it('keeps an outcome recorded before the field existed', () => {
+    // Older rows carry no sessionId. Dropping them would shrink the evidence
+    // pool on exactly the graphs with the most history.
+    cmd('npx jest tests/baz.test.mjs', false, 0, undefined);
+    cmd('npm test -- tests/baz.test.mjs', true, 45_000, 'session-a');
+
+    expect(candidatesFor('session-a').filter((c) => c.derivedBy === 'retarget')).toHaveLength(1);
   });
 });

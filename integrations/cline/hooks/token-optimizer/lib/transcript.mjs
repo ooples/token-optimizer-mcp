@@ -289,6 +289,23 @@ const ANCHOR_MAX = 120;
  */
 const EXIT_CODE_RESULT = /^(?:Error:\s*)?Exit code (\d+)\b/;
 
+/**
+ * A run the HARNESS stopped, which is not the command failing.
+ *
+ * The allowlist above admits anything shaped `Exit code N`, and a killed
+ * command reports `Exit code 143` with `Command timed out after 2m 0s` -- so
+ * it walks straight in. Nothing about it is a lesson about the command: it did
+ * not fail, it was not allowed to finish, and the same command run with a
+ * longer budget may well pass. Pairing one with a later success would claim a
+ * red-to-green transition that never happened.
+ *
+ * MEASURED, on a 237 MB transcript of ordinary feature work: of 130 admitted
+ * failures, 25 were timeouts -- 19%. At the 64 MB scan it was 11 of 23, 48%.
+ * User declines are NOT in this class and need no rule; the positive allowlist
+ * already excludes them, verified at every scan size on the same transcript.
+ */
+const HARNESS_TIMEOUT = /^\s*Command timed out after\b/m;
+
 /** Reads at most `bytes` from the END of a file, without loading the rest. */
 function readTail(path, bytes) {
   let fd;
@@ -390,6 +407,8 @@ export function failedResultsFromTranscript(transcriptPath, options = {}) {
       if (typeof block.content !== 'string') continue;
       const match = EXIT_CODE_RESULT.exec(block.content);
       if (!match) continue;
+      // The command ran, but the harness ended it. See HARNESS_TIMEOUT.
+      if (HARNESS_TIMEOUT.test(block.content)) continue;
       const command = commands.get(String(block.tool_use_id || ''));
       // No command means no claim. The result says something failed; without
       // the text of what failed there is nothing to say about it, and nothing

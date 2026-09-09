@@ -51,6 +51,7 @@ import { ORIGIN_HARVESTED } from './curate.mjs';
 // from, so what this counts as a search and what the advisory treats as one
 // cannot diverge.
 import {
+  commandSegments,
   identifiersIn,
   searchPatternFromCommand,
   symbolIndex,
@@ -65,7 +66,16 @@ import {
  * command. A correction is a lexical guess about what a human meant. Churn
  * describes our own reading behaviour and says nothing about the code at all.
  */
-export const CONFIDENCE = { command: 0.9, test: 0.85, correction: 0.6, churn: 0.4 };
+export const CONFIDENCE = {
+  command: 0.9,
+  test: 0.85,
+  // Below `command` because the inference is weaker: two commands sharing a
+  // target is good evidence of one intent, but not the same evidence as the
+  // identical invocation being retried. Labelled speculative, deliberately.
+  retarget: 0.6,
+  correction: 0.6,
+  churn: 0.4,
+};
 
 /** Claim text cap. A finding is one sentence; a paragraph is evidence. */
 const CLAIM_MAX = 300;
@@ -73,6 +83,17 @@ const EVIDENCE_MAX = 400;
 
 /** Bounded so a pathological log cannot turn session end into real work. */
 const MAX_CANDIDATES = 200;
+
+/**
+ * How close a fix must follow its failure to count as the same attempt.
+ *
+ * Detector 5 pairs across DIFFERENT programs, so it cannot lean on command
+ * identity to know the two are related -- proximity is doing that work instead.
+ * Ten minutes is long enough for a real correction, including reading an error
+ * and looking something up, and short enough that two unrelated pieces of work
+ * touching one file in an afternoon are not reported as one story.
+ */
+const RETARGET_WINDOW_MS = 10 * 60 * 1000;
 
 /**
  * The anchor cap a command surface is stored under, restated here as a TEST.
@@ -160,11 +181,53 @@ const COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&']);
  * longer fires on the directory-change case it was written for.
  * One check per pair is enough: both halves share the key by construction.
  */
-const hasAttemptIdentity = (command) =>
-  attemptKey(command)
+/**
+ * THE WHOLE BODY, NOT THE FIRST THREE TOKENS.
+ *
+ * This used to read the separator set off `attemptKey`, which keeps only the
+ * first three non-flag tokens -- so it caught a separator only when one landed
+ * early by luck of position. Verified against the real functions:
+ *
+ *   git fetch && npx jest tests/foo   key `git fetch &&`        -> rejected
+ *   npx jest tests/foo && node x.mjs  key `npx jest tests/foo`  -> ACCEPTED
+ *   grep -rn foo src | head -20       key `grep foo src`        -> ACCEPTED
+ *
+ * The last two are exactly the claims this guard exists to stop: the key names
+ * `npx`, so a pair would blame `npx` for a failure `node` may have caused.
+ * Every existing test placed the separator in the first three tokens, so none
+ * of them could see it.
+ *
+ * `commandSegments` is reused rather than a fresh scan because it is already
+ * the quote-aware one: splitting the raw string would cut through `grep -E
+ * "foo|bar"` and reject an ordinary alternation as a pipeline.
+ *
+ * A LEADING `cd <path> &&` is still accepted, because `commandBody` strips it
+ * before this sees it -- that case is one command spelled two ways.
+ *
+ * A TRAILING SEPARATOR LEAVES NOTHING TO COUNT, which is the hole in reading
+ * the segment count alone. `commandSegments` pushes only non-empty token
+ * lists, so `npx jest tests/foo &&` is ONE segment, and `attemptKey` -- the
+ * first three non-flag tokens -- never sees the `&&` either. The command is
+ * still half of something, and `cmd &` on its own is a background job whose
+ * exit code belongs to the shell rather than to the program named. Appending a
+ * sentinel token makes the missing segment materialise, which reuses the one
+ * scanner that already understands quotes instead of adding a second,
+ * differently-wrong one: `grep -E "foo|bar" src/x.mjs` stays a single segment
+ * with the sentinel attached, exactly as it does without it.
+ */
+// Not a plausible argument to anything, so it can only ever be the token this
+// function appended.
+const SEGMENT_SENTINEL = '__token_optimizer_segment_probe__';
+
+const hasAttemptIdentity = (command) => {
+  const body = commandBody(command);
+  if (!body.trim()) return false;
+  if (commandSegments(`${body} ${SEGMENT_SENTINEL}`).length > 1) return false;
+  return attemptKey(command)
     .split(' ')
     .filter(Boolean)
     .every((token) => !COMMAND_SEPARATORS.has(token));
+};
 
 /**
  * Commands whose red-to-green transition is usually explained by the CODE
@@ -285,6 +348,92 @@ export function attemptKey(command) {
     .join(' ')
     .toLowerCase();
 }
+/**
+ * The thing a command ACTS ON -- a path, a test file, a target.
+ *
+ * WHY `attemptKey` IS NOT ENOUGH, measured rather than supposed. That key is
+ * program-plus-operands, so the single most valuable lesson a session can teach
+ * cannot pair by construction:
+ *
+ *   npx jest tests/foo      -> key "npx jest tests/foo"
+ *   npm test -- tests/foo   -> key "npm test tests/foo"
+ *
+ * Different keys, no pair, no finding -- yet that is exactly the correction
+ * worth recording, because the fix was to run a DIFFERENT program against the
+ * same target. The existing detector can only catch the same command re-run and
+ * succeeding, which its own guard then discards as incoherent.
+ *
+ * The measured cost of that: across 937 real derive runs on this machine, 8
+ * candidates were produced and ZERO were stored.
+ *
+ * So this returns the shared operand -- `tests/foo` above -- which is what the
+ * two attempts genuinely have in common. Only operands that NAME something are
+ * admitted: a path separator or a file extension. A bare word like `build` is
+ * refused, because `npm run build` and `make build` sharing the token `build`
+ * is a coincidence of vocabulary, not evidence of one intent.
+ */
+export function commandOperand(command) {
+  const tokens = commandBody(command)
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token && !token.startsWith('-'));
+  // Skipping the first token: the PROGRAM is what differs between the two
+  // attempts, so including it would reproduce attemptKey's blind spot.
+  for (const token of tokens.slice(1)) {
+    const named = /[/\\]/.test(token) || /\.[A-Za-z0-9]{1,5}$/.test(token);
+    // AS WRITTEN, not folded. This value is the grouping key AND the text of
+    // the stored claim, and folding it made the claim name a path that does
+    // not exist on a case-sensitive filesystem: `src/Foo.test.mjs` was
+    // recorded, and served to a later session, as `src/foo.test.mjs`. The
+    // caller folds a copy for the key instead, so matching stays
+    // case-insensitive without the claim paying for it.
+    if (named && token.length >= 4) return token;
+  }
+  return null;
+}
+
+/**
+ * A leading `VAR=value` prefix, which a shell applies to the environment of
+ * the command that follows rather than running as the command itself.
+ */
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/**
+ * The program a command invokes, for deciding whether two attempts differ.
+ *
+ * ENVIRONMENT PREFIXES ARE NOT THE PROGRAM. Taking the first token verbatim
+ * reported `SP=/tmp/x` as the program for `SP=/tmp/x node run.mjs`, and that
+ * is not a cosmetic slip: measured over this machine's real history, 816 of
+ * 7,165 recorded command outcomes -- 11.4% -- named an assignment.
+ *
+ * IT FAILS IN THE DANGEROUS DIRECTION. This function exists to decide that two
+ * attempts used DIFFERENT programs, so two runs of the same tool under
+ * different variables --
+ *
+ *   SP=/a node run.mjs    (failed)
+ *   SPW=/b node run.mjs   (succeeded)
+ *
+ * -- compared as `sp=/a` against `spw=/b`, differed, and were eligible to
+ * pair. The claim that pairing produces is `node run.mjs` succeeded where
+ * `node run.mjs` failed: exactly the incoherent statement detector 1's own
+ * guard exists to refuse, arriving through the door detector 5 opened.
+ *
+ * Skipping the prefixes is what a shell does, and it cannot invent a pair --
+ * two commands that were already the same program now compare equal, which
+ * only ever removes a candidate.
+ *
+ * NO MEASURED CHANGE TODAY, stated plainly: replaying both versions over the
+ * same real history gives an identical pairing outcome (20 pairs considered,
+ * 0 firing), because every affected command is also chained and rejected
+ * earlier. This is a correctness fix against a latent false claim, not a
+ * recall improvement, and it is not offered as one.
+ */
+export function commandProgram(command) {
+  const tokens = commandBody(command).trim().split(/\s+/).filter(Boolean);
+  const first = tokens.find((token) => !ENV_ASSIGNMENT.test(token)) || '';
+  return first.split(/[/\\]/).pop().toLowerCase();
+}
+
 
 /** Normalised claim text, so the same lesson derived twice is one candidate. */
 const claimKey = (type, claim) =>
@@ -337,6 +486,90 @@ const DOTNET_MARKER = /\.(sln|slnx|csproj|fsproj|vbproj)$/i;
  * against a fabricated anchor. That is the fail-open direction: no finding
  * beats a finding anchored to something that is not what the claim is about.
  */
+
+/**
+ * The project a session actually worked in, read off what it touched.
+ *
+ * WHY THE SESSION'S CWD IS THE WRONG ANSWER. `adapter.mjs` resolves the root
+ * with `projectRootFor(join(cwd, '__session__'), cwd)`, and when Claude Code is
+ * launched from a directory with no VCS marker -- a home directory, which is how
+ * this machine runs it -- that returns the synthetic fallback
+ * `~/.token-optimizer/unrooted`. It is NOT null, so every `if (projectRoot)`
+ * gate passes, and then `projectAnchor` hands back the directory itself because
+ * the fallback contains no project marker. `writeHarvested` resolves anchors
+ * through `indexFile`, `indexFile` on a directory returns null, and the finding
+ * is refused as unanchorable.
+ *
+ * That is the whole reason this machine's graph holds 2,965 symbols and ONE
+ * finding: 937 derive runs produced candidates and stored none of them, while
+ * every layer reported success.
+ *
+ * The router already solved this for capture -- "THE GRAPH IS PER PROJECT, so it
+ * is keyed on where the FILE lives, not on where the client happens to be
+ * running" -- and derivation simply never adopted it. This applies the same
+ * rule at Stop time: take the file anchors the session recorded, resolve each to
+ * its own project, and pick the one that holds the most of them.
+ *
+ * Returns null when nothing resolves, which leaves the caller's original root
+ * untouched -- a wrong project is worse than the status quo.
+ */
+export function projectRootFromActivity(events, { resolve, cwd, sessionId = null } = {}) {
+  if (typeof resolve !== 'function' || !Array.isArray(events)) return null;
+  const counts = new Map();
+  for (const event of events) {
+    // SCOPED TO THIS SESSION when the caller knows its id. A graph outlives the
+    // session that wrote it, and the caller concatenates several graphs, so
+    // counting every event ever recorded lets a busy session from last week
+    // outvote the one now ending -- and the question being asked is "where did
+    // THIS session work", not "where is this graph busiest". Callers that pass
+    // no id keep the whole-graph count.
+    //
+    // AN EVENT THAT CANNOT NAME ITS SESSION IS EXCLUDED, not exempted. Exempting
+    // it was a deliberate concession to older records, and measurement says the
+    // concession buys nothing: across the three live stores on this machine, 2
+    // of 22,321 file/read events lack the field -- 0.01%. Set against that, an
+    // unstamped event sitting in ANOTHER project's graph would vote for that
+    // project on the strength of no evidence at all, which is precisely the
+    // failure this filter exists to prevent.
+    if (sessionId && event?.sessionId !== sessionId) continue;
+    const anchor = event?.anchor;
+    // File surfaces only. A command anchor is the command text, and resolving
+    // `npm test -- x` as a path would invent a project out of a sentence.
+    if (!anchor || typeof anchor !== 'string') continue;
+    if (event.kind !== 'read' && !(event.kind === 'tool-outcome' && event.surface === 'file')) {
+      continue;
+    }
+    let root;
+    try {
+      root = resolve(anchor, cwd);
+    } catch {
+      continue;
+    }
+    // The fallback resolves to a path inside the optimizer's own store, which is
+    // never a project someone is working in.
+    if (!root || String(root).includes('.token-optimizer')) continue;
+    counts.set(root, (counts.get(root) || 0) + 1);
+  }
+  let best = null;
+  let most = 0;
+  let tied = false;
+  for (const [root, n] of counts) {
+    if (n > most) {
+      most = n;
+      best = root;
+      tied = false;
+    } else if (n === most) {
+      // A Map iterates in insertion order, so a tie would otherwise be broken by
+      // whichever file the session happened to touch first -- deterministic, but
+      // arbitrary, and wrong half the time. Findings would then be stored against
+      // a project the evidence does not single out. Decline instead; the caller
+      // keeps cwdRoot, which is at least a root the user chose.
+      tied = true;
+    }
+  }
+  return tied ? null : best;
+}
+
 export function projectAnchor(projectRoot) {
   if (!projectRoot) return null;
   let entries;
@@ -517,16 +750,46 @@ export function derive(dir, options = {}) {
   // a transcript failure that pairs with nothing stays unclaimed, which is also
   // what keeps a failure from ANOTHER project's directory out of this project's
   // graph -- a candidate cannot be emitted without a success recorded HERE.
+  // HOISTED so detector 5 can pair over the SAME merged list -- events plus the
+  // transcript failures folded in below. Rebuilding it there would duplicate the
+  // de-duplication logic and let the two detectors drift; leaving it block-scoped
+  // gave detector 5 a ReferenceError that its own try/catch swallowed, which is
+  // silent nothing rather than a visible failure.
+  let outcomes = [];
   try {
     if (projectRoot) {
-      const outcomes = events
+      // SCOPED TO THE SESSION THE CLAIM WILL NAME.
+      //
+      // Every claim these detectors build opens `observed in one session:`,
+      // and the store holds every session's outcomes -- so nothing but the
+      // ten-minute window stopped a failure from one session pairing with a
+      // success from another and asserting a provenance that never happened.
+      //
+      // NEVER OBSERVED, SAID PLAINLY. Across both live stores on this machine
+      // -- 7,173 command outcomes over 3 sessions here, 543 over 9 sessions in
+      // the unrooted one -- 5,155 and 298 adjacent in-window pairs respectively
+      // and ZERO of them crossed a session. Sessions are long and rarely
+      // interleave inside ten minutes. This is a correctness fix against a
+      // false claim, not a fix for observed damage, and it is not offered as
+      // one. Concurrent sessions do occur -- one was recorded on this machine
+      // while this was being written -- and they share the unrooted store.
+      //
+      // The merged transcript failures below are deliberately NOT filtered:
+      // `failedResultsFromTranscript` carries no sessionId, and the transcript
+      // it read is this session's, so they are already scoped by construction.
+      // Filtering them here would drop the only source of command failures
+      // that exists -- Claude Code never fires PostToolUse on a non-zero exit.
+      outcomes = events
         .filter(
           (e) =>
             e &&
             e.kind === 'tool-outcome' &&
             e.surface === 'command' &&
             typeof e.anchor === 'string' &&
-            e.anchor.trim()
+            e.anchor.trim() &&
+            // An event predating the field still counts; a DIFFERENT session
+            // never does.
+            (!sessionId || !e.sessionId || e.sessionId === sessionId)
         )
         .map((e) => ({
           command: e.anchor.trim(),
@@ -800,6 +1063,114 @@ export function derive(dir, options = {}) {
   } catch {
     // One detector, never the session.
   }
+  // ---- 5: a DIFFERENT command against the same target succeeded -----------
+  //
+  // THE LESSON DETECTOR 1 CANNOT REACH. Its `attemptKey` is program-plus-
+  // operands, so the correction worth recording -- reaching for a different
+  // tool against the same target -- lands in two groups that never meet:
+  //
+  //   npx jest tests/foo.test.mjs     key "npx jest tests/foo.test.mjs"
+  //   npm test -- tests/foo.test.mjs  key "npm test tests/foo.test.mjs"
+  //
+  // What detector 1 CAN pair is the identical command re-run, and its own guard
+  // then correctly discards that as incoherent -- "`npm run build` works where
+  // `npm run build` failed" claims nothing. So between the key and the guard,
+  // the command family had almost no reachable evidence: measured across 937
+  // real derive runs on this machine, 8 candidates and ZERO stored findings.
+  //
+  // This pairs on the shared OPERAND instead, and only when the PROGRAM differs
+  // -- same-program pairs are detector 1's business and are left to it. The
+  // conservatism the original key was protecting is kept in three other places:
+  // the operand must NAME something (a path or an extension, never a bare word
+  // like `build`), the two attempts must be close in time, and the ceiling is
+  // 0.6 rather than 0.9 because sharing a target is weaker evidence than
+  // repeating an invocation.
+  try {
+    if (projectRoot && outcomes?.length) {
+      // KEYED FOLDED, DISPLAYED AS WRITTEN. Two invocations naming the same
+      // file with different capitalisation are the same target on Windows and
+      // macOS, so the key folds; the text stored in the finding must not,
+      // because a claim naming `src/foo.test.mjs` for a file called
+      // `src/Foo.test.mjs` is a path that does not resolve on Linux -- and
+      // that text is what a later session reads. The first spelling seen wins,
+      // which is the one the failing attempt actually used.
+      const byTarget = new Map();
+      for (const outcome of outcomes) {
+        const operand = commandOperand(outcome.command);
+        if (!operand) continue;
+        const key = operand.toLowerCase();
+        if (!byTarget.has(key)) byTarget.set(key, { target: operand, run: [] });
+        byTarget.get(key).run.push(outcome);
+      }
+
+      for (const { target, run } of byTarget.values()) {
+        let lastFailure = null;
+        for (const outcome of run) {
+          if (outcome.failed) {
+            lastFailure = outcome;
+            continue;
+          }
+          if (!lastFailure) continue;
+          const failed = lastFailure;
+          lastFailure = null;
+
+          // BOTH SIDES MUST NAME A SINGLE COMMAND, the same rule detector 1
+          // applies. `commandBody` strips only a LEADING directory change, and
+          // `commandProgram` reads the first token, so a chained command
+          // attributes the failure to the wrong program entirely:
+          //
+          //   git fetch && npx jest tests/foo.test.mjs   -> program "git"
+          //   cat x | npx jest tests/foo.test.mjs        -> program "cat"
+          //
+          // Paired against `npm test -- tests/foo.test.mjs` those would ship
+          // "npm test succeeded where git fetch failed" and tell a later session
+          // to avoid `git`. Checked per side rather than once, because unlike
+          // detector 1 these two do NOT share a key by construction.
+          if (!hasAttemptIdentity(failed.command)) continue;
+          if (!hasAttemptIdentity(outcome.command)) continue;
+          // Same program is detector 1's case, whether it pairs there or not.
+          if (commandProgram(failed.command) === commandProgram(outcome.command)) continue;
+          // A fix follows its failure closely. Hours apart is two unrelated
+          // pieces of work that happened to touch one file.
+          const apart = Math.abs((outcome.at || 0) - (failed.at || 0));
+          if (!apart || apart > RETARGET_WINDOW_MS) continue;
+          // Same rule as detector 1: nothing quotable, nothing claimed.
+          if (!quotable(failed.command) || !quotable(outcome.command)) continue;
+
+          const confidence = CONFIDENCE.retarget;
+          add({
+            type: 'command',
+            claim: redact(
+              `In this project \`${commandBody(outcome.command)}\` succeeded on ${target} where ` +
+                `\`${commandBody(failed.command)}\` had failed`,
+              { max: CLAIM_MAX }
+            ),
+            evidence: redact(
+              `observed in one session: \`${failed.command}\` failed` +
+                `${Number.isInteger(failed.exit) ? ` (exit ${failed.exit})` : ''}, then ` +
+                `\`${outcome.command}\` succeeded against the same target \`${target}\` ` +
+                `${Math.round(apart / 1000)}s later. Different programs, one target: ordered ` +
+                'and close, but not proven causal -- an intervening edit explains the same pair.',
+              { max: EVIDENCE_MAX }
+            ),
+            applicability: `when about to run \`${commandProgram(failed.command)}\` against ${target} in this project`,
+            confidence,
+            confidenceLabel: labelFor(confidence),
+            scope: 'project',
+            invalidators: [`\`${commandBody(failed.command)}\` later succeeds unchanged`],
+            trigger: triggerFor(failed.command),
+            anchors: [anchorPath],
+            derivedBy: 'retarget',
+            sessionId,
+            at: outcome.at || Date.now(),
+          });
+        }
+      }
+    }
+  } catch {
+    // One detector, never the session.
+  }
+
 
   // ---- storage, under a budget -------------------------------------------
   //

@@ -16,6 +16,7 @@ import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { load, nodeId } from '../../hooks-core/wiki.mjs';
+import { failedResultsFromTranscript } from '../../hooks-core/transcript.mjs';
 
 let dir;
 let transcript;
@@ -239,4 +240,83 @@ describe('the never-transmit guarantee is enforced, not merely stated', () => {
       }
     }
   }, 60_000);
+});
+
+/**
+ * A run the harness stopped is not the command failing.
+ *
+ * The allowlist admits anything shaped `Exit code N`, and a killed command
+ * reports `Exit code 143` with `Command timed out after 2m 0s`. Nothing about
+ * that is a lesson: the command did not fail, it was not allowed to finish,
+ * and the same command with a longer budget may pass. Pairing one with a
+ * later success claims a red-to-green transition that never happened.
+ *
+ * Measured on a 237 MB transcript of ordinary feature work: 25 of 130
+ * admitted failures were timeouts, 19%; at a 64 MB scan, 11 of 23. User
+ * declines are a different matter -- the positive allowlist already excludes
+ * them at every scan size, and the third test pins that so nobody adds a
+ * redundant rule for it later.
+ */
+describe('what counts as a command failure', () => {
+  const attempt = (id, command, resultText) => [
+    {
+      type: 'assistant',
+      timestamp: '2026-03-04T10:00:00Z',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id, input: { command } }],
+      },
+    },
+    {
+      type: 'user',
+      timestamp: '2026-03-04T10:00:30Z',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: id, is_error: true, content: resultText },
+        ],
+      },
+    },
+  ];
+
+  it('keeps a command that ran and exited non-zero', () => {
+    const p = writeTranscript(
+      attempt('t1', 'npm test -- tests/a.test.mjs', 'Exit code 1\nAssertionError: expected 2')
+    );
+    const out = failedResultsFromTranscript(p);
+    expect(out).toHaveLength(1);
+    expect(out[0].command).toBe('npm test -- tests/a.test.mjs');
+    expect(out[0].exit).toBe(1);
+  });
+
+  it('drops a run the harness timed out', () => {
+    const p = writeTranscript(
+      attempt('t2', 'npm test', 'Exit code 143\nCommand timed out after 2m 0s')
+    );
+    expect(failedResultsFromTranscript(p)).toEqual([]);
+  });
+
+  it('still drops a user decline, which needs no rule of its own', () => {
+    const p = writeTranscript(
+      attempt(
+        't3',
+        'rm -rf build',
+        "The user doesn't want to proceed with this tool use. The tool use was rejected"
+      )
+    );
+    expect(failedResultsFromTranscript(p)).toEqual([]);
+  });
+
+  it('keeps a real failure that merely MENTIONS a timeout', () => {
+    // The guard matches the harness's own report, not any mention of one -- a
+    // test asserting on timeout behaviour is a genuine failure worth learning.
+    const p = writeTranscript(
+      attempt(
+        't4',
+        'npm test -- tests/timeout.test.mjs',
+        'Exit code 1\nexpected the request to have timed out after 30s'
+      )
+    );
+    expect(failedResultsFromTranscript(p)).toHaveLength(1);
+  });
 });
