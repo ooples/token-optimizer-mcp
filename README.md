@@ -333,6 +333,57 @@ days, and live under `.token-optimizer/logs` when a state directory is set (or
 
 ## What it does that other optimizers do not
 
+### Compression that does not break the cache, or lose the needle
+
+An optional local proxy compresses tool results, search output, logs and
+conversation history on the way to the model. A hook cannot do this: the
+`PostToolUse` output schema is `{hookEventName, additionalContext?,
+classifierContext?}` and `updatedOutput` occurs nowhere in the client, so a hook
+can add context but never replace a result. The proxy never tries to -- it
+rewrites the outbound request, where those results already sit as history.
+
+Two things make it different from simply compressing harder.
+
+**It never rewrites cached content.** A cached prefix bills at 0.1x and a cache
+write at 1.25x, so compressing history can cut tokens while multiplying the
+bill. Measured on our own benchmark: compressing behind the cache breakpoint
+removes more raw tokens on every workload and costs more money on every
+workload. Compression stops at the frontier, and cache-weighted tokens are
+reported beside raw ones so the trap is visible rather than inferred.
+
+**It keeps the rows that matter.** Eliding a long array after the first few rows
+scored 95.7% on a search payload here and destroyed both the UUID record and the
+error record planted in it -- the only two rows anyone would have searched for.
+The engine now keeps every row that departs from the shape, wherever it sits:
+92.4% with the needles intact. A gate in the benchmark fails the build if a
+planted needle disappears, because a size metric alone cannot tell compression
+from truncation.
+
+Reduction over the content each strategy is permitted to rewrite, on fixtures
+matching the four workloads HeadRoom publishes (their figures from their
+README; ours from `bench/compression`, which anyone can run):
+
+| workload | ours | theirs |
+| --- | --- | --- |
+| issue triage | 98.9% | 72.8% |
+| code search | 98.2% | 92.1% |
+| SRE debugging | 92.8% | 92.2% |
+| codebase exploration | 61.3% | 47.4% |
+
+These are not their corpora, which are unpublished; the code workloads read real
+files out of this repository and the rest are generated to the shape and scale
+of their published ones, from their own benchmark generator's definition.
+
+**What is not yet measured: end-to-end task outcome.** Reduction is not the same
+as a cheaper session -- this project has already measured a posture that cut
+nothing and cost 1.471x through extra turns alone. Until the proxy has run
+through THOL, treat the figures above as compression numbers and nothing more.
+
+Off by default. `TOKEN_OPTIMIZER_PROXY=1` turns it on, it binds loopback only,
+credentials are forwarded and never stored, no payload is written anywhere, and
+`doctor` reports whether your client is actually routed through it -- the silent
+failure being a proxy that is running while the agent talks past it.
+
 ### Compaction is consolidation, not loss
 
 Everyone else checkpoints and restores what you _had_ — which spends the

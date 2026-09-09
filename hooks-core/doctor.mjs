@@ -24,6 +24,7 @@ import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSyn
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { harvestMode, harvestFailure } from './harvest.mjs';
+import { proxyEnvFor } from './capabilities.mjs';
 import { readManifest, verifyManifest, residue, manifestSize } from './manifest.mjs';
 import { mcpClientsSeen } from './metrics.mjs';
 
@@ -272,6 +273,58 @@ export function probeHarvest() {
   return [ok('finding extraction is available',
     'active-model wiki_write remains available; separate-model fallback extraction is off by ' +
     'your choice (TOKEN_OPTIMIZER_HARVEST is set to a false value)')];
+}
+
+/**
+ * Is the compression proxy on, and can the client actually reach it?
+ *
+ * REPORTED BECAUSE IT IS INVISIBLE OTHERWISE. The proxy is opt-in, and the
+ * failure that matters is silent: the variable is set but the client was
+ * never pointed at it, so traffic goes straight to the provider and the user
+ * sees no savings and no error. Naming both halves -- enabled, and actually
+ * routed -- is the whole point of the check.
+ */
+export function probeProxy(env = process.env) {
+  if (env.TOKEN_OPTIMIZER_MODE === 'off') return [];
+
+  const on = /^(1|true|yes|on)$/i.test(env.TOKEN_OPTIMIZER_PROXY || '');
+  if (!on) {
+    return [
+      ok('request compression is available',
+        'the compression proxy is off. It compresses tool results and history on the ' +
+        'way to the model, which a hook cannot do -- PostToolUse can add context but ' +
+        'not replace a result. Set TOKEN_OPTIMIZER_PROXY=1 to turn it on'),
+    ];
+  }
+
+  const variable = proxyEnvFor(env.TOKEN_OPTIMIZER_CLIENT);
+  if (!variable) {
+    return [
+      bad('the compression proxy cannot serve this client',
+        (env.TOKEN_OPTIMIZER_CLIENT || 'this client') +
+          ' exposes no supported way to redirect its model traffic',
+        'unset TOKEN_OPTIMIZER_PROXY, or run a client that reads a base-URL variable'),
+    ];
+  }
+
+  const pointed = env[variable];
+  const loopback = /^https?:[/][/](127[.]0[.]0[.]1|localhost|\[::1\])/.test(pointed || '');
+  if (!loopback) {
+    return [
+      bad('the compression proxy is on but nothing is routed through it',
+        variable + ' is ' + (pointed ? 'set to ' + pointed : 'not set') +
+          ', so this client talks straight to the provider',
+        'set ' + variable + ' to the address the proxy is listening on; until then ' +
+          'nothing is compressed'),
+    ];
+  }
+
+  return [
+    ok('request compression is available',
+      'the compression proxy is on and ' + variable + ' points at it. Tool results ' +
+      'and history are compressed on the way to the model, and the cached prefix is ' +
+      'never rewritten'),
+  ];
 }
 
 export function probeVersion({ install }) {
@@ -1103,6 +1156,7 @@ export async function diagnose({
     ...checklist({ root, settingsPath, install }),
     ...probeVersion({ install }),
     ...probeHarvest(),
+    ...probeProxy(),
     ...enforcement,
     ...sessionStart,
     ...probeGraph({ dir: graphDir }),

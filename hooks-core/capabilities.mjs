@@ -192,6 +192,62 @@ const native = (profile) => ({
   ...profile,
 });
 
+/**
+ * How each client is pointed at a local compression proxy.
+ *
+ * THE PROXY IS OPT-IN AND THE CLIENT HAS TO BE TOLD, so this is the table that
+ * says how. Every one of these reads a base-URL variable; the name differs per
+ * client, and getting it wrong is silent -- the agent talks straight to the
+ * provider, the user sees no savings, and nothing reports an error. probeProxy
+ * in doctor.mjs exists to make that state visible.
+ *
+ * VERIFIED means the variable was confirmed against the client. DOCUMENTED
+ * means it comes from the vendor and has not been exercised here -- the same
+ * distinction CLIENT_HARVEST_CLI draws, for the same reason: a wrong
+ * DOCUMENTED row should fail loudly in doctor rather than look like it works.
+ *
+ * A null means the client offers no supported way to redirect its model
+ * traffic, so the proxy cannot serve it and says so.
+ */
+export const CLIENT_PROXY_ENV = Object.freeze({
+  // VERIFIED: Claude Code reads ANTHROPIC_BASE_URL for its provider, and this
+  // package's own harvest already relies on endpoint redirection working.
+  'claude-code': 'ANTHROPIC_BASE_URL',
+  // DOCUMENTED: OpenAI-compatible clients read OPENAI_BASE_URL; codex also
+  // accepts a model_provider base_url in its config file.
+  codex: 'OPENAI_BASE_URL',
+  copilot: 'OPENAI_BASE_URL',
+  gemini: 'GOOGLE_GEMINI_BASE_URL',
+  qwen: 'OPENAI_BASE_URL',
+  opencode: 'OPENAI_BASE_URL',
+  crush: 'OPENAI_BASE_URL',
+  droid: 'OPENAI_BASE_URL',
+  amp: 'AMP_URL',
+  continue: 'OPENAI_BASE_URL',
+
+  // Editor-hosted clients route model traffic through the extension host and
+  // expose no documented redirect. Declaring null keeps that a stated fact
+  // rather than an omission, exactly as the harvest table does.
+  cursor: null,
+  cline: null,
+  windsurf: null,
+  kilo: null,
+  roo: null,
+  zed: null,
+});
+
+/**
+ * The base-URL variable for a client, or null when it has none.
+ *
+ * Normalised and own-property guarded, for the reasons harvestCliFor records:
+ * a bare index disagreed with capabilityFor on casing and reached the
+ * prototype.
+ */
+export function proxyEnvFor(client) {
+  const key = String(client || '').toLowerCase();
+  return Object.hasOwn(CLIENT_PROXY_ENV, key) ? CLIENT_PROXY_ENV[key] : null;
+}
+
 export const CLIENT_CAPABILITIES = Object.freeze({
   'claude-code': native({
     name: 'Claude Code',
