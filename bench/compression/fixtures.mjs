@@ -204,6 +204,50 @@ function buildLog(r, lines) {
   return out.join('\n');
 }
 
+/**
+ * Search results in the shape HeadRoom actually benchmarks.
+ *
+ * THIS IS THEIR code-search WORKLOAD, and assuming otherwise cost a lot of
+ * wasted tuning. Their generator lives in benchmarks/scenarios/
+ * tool_outputs.py as `generate_search_results`, and it emits
+ * Elasticsearch-style JSON -- {id, score, title, snippet, source,
+ * metadata{author, created_at, category}} -- not grep output. Feeding it
+ * ripgrep text compared our number against the wrong one of theirs.
+ *
+ * IT ALSO PLANTS NEEDLES, and that is the more important half. The
+ * generator takes `include_uuid_needles` and `include_errors`, inserting
+ * marked records at random positions specifically for relevance testing.
+ * A compressor is not allowed to hit a high ratio by dropping them.
+ */
+function searchJson(r, rows) {
+  const items = [];
+  for (let i = 0; i < rows; i += 1) {
+    items.push({
+      id: `doc_${i}`,
+      score: Number(Math.max(0.1, 1 - (i * 0.8) / rows).toFixed(4)),
+      title: `${pick(r, VERBS)} the ${pick(r, NOUNS).toLowerCase()} correctly`,
+      snippet:
+        'The retry budget is applied before the operation is abandoned, and the caller receives the last error rather than a generic failure.',
+      source: pick(r, ['web', 'internal', 'docs', 'api']),
+      metadata: {
+        author: `${pick(r, NOUNS)} ${pick(r, VERBS)}`,
+        created_at: `2026-0${1 + (i % 9)}-1${i % 10}`,
+        category: pick(r, ['technical', 'guide', 'reference', 'tutorial']),
+      },
+    });
+  }
+  // The needles, at fixed positions so the gate is deterministic.
+  items[Math.floor(rows * 0.78)].uuid = NEEDLE_UUID;
+  items[Math.floor(rows * 0.78)].is_needle = true;
+  items[Math.floor(rows * 0.39)].error = NEEDLE_ERROR;
+  items[Math.floor(rows * 0.39)].status = 'failed';
+  return JSON.stringify(items, null, 2);
+}
+
+/** Values the gate looks for in the compressed output. */
+export const NEEDLE_UUID = '9f1c2b3a-7d4e-4a1b-9c6f-abcdefabcdef';
+export const NEEDLE_ERROR = 'Permission denied';
+
 /** An issue-triage payload: a JSON array of realistic issue objects. */
 function issueJson(r, rows) {
   const items = [];
@@ -270,13 +314,12 @@ export function fixtures() {
     {
       name: 'code-search',
       theirs: { before: 17765, after: 1408 },
+      // Needles must survive this one; see needles below.
+      needles: true,
       request: request(
         'You are a coding agent.',
-        [
-          searchResults(join(REPO, 'hooks-core'), /function |=> \{/, 12_000),
-          'Searching for the retry helper.',
-        ],
-        [searchResults(join(REPO, 'src', 'tools'), /function |=> \{/, 60_000)]
+        [searchJson(r, 40), 'Searching for the retry helper.'],
+        [searchJson(r, 260)]
       ),
     },
     {
@@ -295,6 +338,17 @@ export function fixtures() {
         'You are triaging issues.',
         [issueJson(r, 20), 'Grouping by root cause.'],
         [issueJson(r, 220)]
+      ),
+    },
+    {
+      // Kept as a fifth workload: ripgrep text is real tool output we handle,
+      // it is simply not what their code-search figure measures.
+      name: 'grep-output',
+      theirs: null,
+      request: request(
+          'You are a coding agent.',
+        [searchResults(join(REPO, 'hooks-core'), /function |=> \{/, 12_000), 'Reading hits.'],
+        [searchResults(join(REPO, 'src', 'tools'), /function |=> \{/, 60_000)]
       ),
     },
     {

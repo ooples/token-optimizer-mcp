@@ -19,6 +19,20 @@
  * truncated array with no marker cannot tell it was truncated at all, and will
  * reason confidently from a partial list. That failure is silent, which makes
  * it worse than the tokens it saves.
+ *
+ * AND THE ROWS THAT DIFFER ARE NEVER IN THE TAIL, which is the harder half and
+ * the one this got wrong first. Keeping the head and eliding the rest reads as
+ * a 95.7% reduction and is really a truncation: measured on a 60-row search
+ * payload with a UUID record at index 47 and an error record at index 23,
+ * BOTH WERE DESTROYED. The number looked like the best in the module and the
+ * output had thrown away the only two rows anybody would have searched for.
+ *
+ * HeadRoom's SmartCrusher lists "statistical anomaly preservation" among its
+ * transforms, and their benchmark generator plants exactly these: UUID needles
+ * and error rows, inserted for relevance testing. A homogeneous tail is
+ * genuinely redundant; a row that breaks the shape is the signal. So the shape
+ * is computed first, every row that departs from it is kept wherever it sits,
+ * and only the rows that truly repeat are elided.
  */
 
 import { count, inlineMarker } from './annotate.js';
@@ -78,6 +92,47 @@ function shapeOf(row: unknown): string {
   return `${typeof row}s`;
 }
 
+/** Keys present in at least this fraction of rows define the common shape. */
+const COMMON_KEY_SHARE = 0.8;
+
+/**
+ * Which rows depart from the shape the rest of the array shares.
+ *
+ * A row is anomalous when it carries a key most rows lack -- `uuid`,
+ * `is_needle`, `error`, `status` -- or lacks one most rows carry. Both
+ * directions matter: an extra field marks a special record, and a missing
+ * field marks an incomplete one, and a reader wants each.
+ */
+function anomalousRows(rows: readonly unknown[]): Set<number> {
+  const frequency = new Map<string, number>();
+  let objects = 0;
+
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    objects += 1;
+    for (const key of Object.keys(row as Record<string, unknown>)) {
+      frequency.set(key, (frequency.get(key) ?? 0) + 1);
+    }
+  }
+  if (!objects) return new Set();
+
+  const common = new Set(
+    [...frequency.entries()]
+      .filter(([, n]) => n / objects >= COMMON_KEY_SHARE)
+      .map(([key]) => key)
+  );
+
+  const odd = new Set<number>();
+  rows.forEach((row, index) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return;
+    const keys = Object.keys(row as Record<string, unknown>);
+    const extra = keys.some((key) => !common.has(key));
+    const missing = [...common].some((key) => !keys.includes(key));
+    if (extra || missing) odd.add(index);
+  });
+  return odd;
+}
+
 /**
  * Compresses a JSON document.
  *
@@ -117,23 +172,36 @@ export function compressJson(text: string, ctx: EngineContext = {}): Compression
 
   // A long top-level array is where the remaining bulk lives.
   if (Array.isArray(stripped) && stripped.length >= MIN_ROWS_TO_ELIDE) {
-    const head = stripped.slice(0, KEEP_ROWS);
-    const tail = stripped.slice(KEEP_ROWS);
+    const odd = anomalousRows(stripped);
+    // Head rows for shape, plus every row that departs from it, in order.
+    const keep = new Set<number>(odd);
+    for (let i = 0; i < Math.min(KEEP_ROWS, stripped.length); i += 1) keep.add(i);
+
+    const dropped = stripped.length - keep.size;
+    if (dropped < MIN_ROWS_TO_ELIDE - KEEP_ROWS) {
+      // Almost everything is exceptional, so there is no redundant tail to
+      // remove and eliding a handful of rows would not pay for the marker.
+      return { text: minified, elisions, lossless: true };
+    }
+
     const recoverAt = ctx.spill ? ctx.spill(JSON.stringify(stripped), 'rows.json') : null;
-    const headText = JSON.stringify(head);
+    const kept = [...keep].sort((a, b) => a - b).map((i) => stripped[i]);
+    const sample = stripped.find((_row, i) => !keep.has(i));
+    const keptText = JSON.stringify(kept);
     const body =
-      headText.slice(0, -1) +
+      keptText.slice(0, -1) +
       ',' +
-      inlineMarker(`${count(tail.length, 'more row')}, ${shapeOf(tail[0])}`, recoverAt) +
+      inlineMarker(
+        `${count(dropped, 'more row')}, ${shapeOf(sample)}` +
+          (odd.size ? `; all ${count(odd.size, 'row')} that differ are kept above` : ''),
+        recoverAt
+      ) +
       ']';
     return {
       text: body,
-      elisions: [
-        ...elisions,
-        { removed: count(tail.length, 'row'), recoverAt },
-      ],
-      // The tail is gone from the text; only a spill makes it recoverable, and
-      // even then it is a lookup rather than a reconstruction.
+      elisions: [...elisions, { removed: count(dropped, 'repeating row'), recoverAt }],
+      // The repeating tail is gone from the text; only a spill makes it
+      // recoverable, and even then it is a lookup rather than a reconstruction.
       lossless: false,
     };
   }

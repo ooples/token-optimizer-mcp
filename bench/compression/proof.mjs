@@ -26,7 +26,7 @@
  * Run: node bench/compression/proof.mjs
  */
 
-import { fixtures } from './fixtures.mjs';
+import { fixtures, NEEDLE_UUID, NEEDLE_ERROR } from './fixtures.mjs';
 import { STRATEGIES } from '../../dist/compress/strategy.js';
 import { lastCacheBreakpoint, isAfter } from '../../dist/compress/frontier.js';
 
@@ -113,6 +113,7 @@ function main() {
   console.log('gross = payload only (their methodology) | net = whole request | effective = cache-weighted\n');
 
   const failures = [];
+  const needleFailures = [];
 
   for (const fixture of fixtures()) {
     const before = fixture.request;
@@ -124,7 +125,9 @@ function main() {
     console.log(`=== ${fixture.name}`);
     console.log(
       `    baseline           gross ${g0}  net ${n0}  effective ${e0.toFixed(0)}` +
-        `   (theirs: ${fixture.theirs.before} -> ${fixture.theirs.after}, ${pct(fixture.theirs.before, fixture.theirs.after)})`
+        (fixture.theirs
+          ? `   (theirs: ${fixture.theirs.before} -> ${fixture.theirs.after}, ${pct(fixture.theirs.before, fixture.theirs.after)})`
+          : '   (no published comparator)')
     );
 
     const scores = {};
@@ -137,6 +140,20 @@ function main() {
       const e = effectiveTokens(before, result.request);
       const t = touchableTokens(result.request);
       scores[name] = e;
+
+      // SIZE IS NOT THE ONLY GATE. A compressor can post any ratio it likes
+      // by discarding the rows somebody was searching for -- ours hit 95.7%
+      // on a needle payload while destroying both planted records. Their
+      // generator plants needles for exactly this reason, so the benchmark
+      // has to check for them.
+      if (fixture.needles) {
+        const body = JSON.stringify(result.request);
+        const lost = [
+          body.includes(NEEDLE_UUID) ? null : 'uuid',
+          body.includes(NEEDLE_ERROR) ? null : 'error',
+        ].filter(Boolean);
+        if (lost.length) needleFailures.push(`${fixture.name}/${name}: lost ${lost.join(" and ")}`);
+      }
       console.log(
         `    ${name.padEnd(16)}   gross ${String(g).padStart(6)} (${pct(g0, g).padStart(6)})` +
           `  net ${String(n).padStart(6)} (${pct(n0, n).padStart(6)})` +
@@ -151,6 +168,15 @@ function main() {
       );
     }
     console.log('');
+  }
+
+  console.log('--- gate 2: planted needles must survive every arm ---');
+  if (needleFailures.length) {
+    console.log('NEEDLE GATE FAILED:');
+    for (const f of needleFailures) console.log(`  ${f}`);
+    process.exitCode = 1;
+  } else {
+    console.log('NEEDLE GATE PASSED.');
   }
 
   console.log('--- gate: v1-frontier must beat ccr on effective tokens, every workload ---');
