@@ -221,7 +221,14 @@ describe('every supported client declares how it can be harvested', () => {
   test('the arg-stdin flag value carries nothing a shell can break', () => {
     // It ends up on a Windows command line, where cmd.exe cannot carry a
     // newline inside an argument and every double quote has to be doubled.
-    expect(ARG_STDIN_INSTRUCTION).not.toContain('\\n');
+    //
+    // PINNED POSITIVELY FIRST. Three `not.toContain` assertions pass just as
+    // happily against an undefined export as against a correct one -- which is
+    // the repository's own no-vacuous-assertions rule, and it caught this test
+    // rather than a reviewer. The single-line check is the property that
+    // matters, stated as an equality.
+    expect(ARG_STDIN_INSTRUCTION.split('\n')).toHaveLength(1);
+    expect(ARG_STDIN_INSTRUCTION).toContain('JSON array');
     expect(ARG_STDIN_INSTRUCTION).not.toContain('"');
     expect(ARG_STDIN_INSTRUCTION).not.toContain("'");
   });
