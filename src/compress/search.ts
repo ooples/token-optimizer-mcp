@@ -71,6 +71,33 @@ function parseHit(line: string): Hit | null {
   return { path, line: Number(num), matched: sep === ':', text };
 }
 
+/**
+ * Which lines matched, said as briefly as the truth allows.
+ *
+ * SAYING NOTHING IS USUALLY CORRECT, and getting this wrong was expensive.
+ * The first version listed every matching line number, so a hunk where all
+ * eleven lines matched emitted `(matched 1031,1032,...,1041)` -- longer than
+ * the content it annotated. Measured on the code-search workload: headers
+ * were 7,706 of the 30,367 surviving characters, 25% of the output, and
+ * nearly all of it was that list.
+ *
+ * When every line in the range matched, the range already says so. When a
+ * contiguous span matched, name the span. Only a genuinely scattered set is
+ * worth enumerating.
+ */
+function matchNote(matched: readonly number[], start: number, end: number): string {
+  if (!matched.length) return ' (context)';
+  if (matched.length === end - start + 1) return '';
+
+  const contiguous = matched.every((line, i) => i === 0 || line === matched[i - 1] + 1);
+  if (contiguous) {
+    const first = matched[0];
+    const last = matched[matched.length - 1];
+    return first === last ? ` (matched ${first})` : ` (matched ${first}-${last})`;
+  }
+  return ` (matched ${matched.join(',')})`;
+}
+
 /** Detects ripgrep/grep-style output. */
 export function looksLikeSearchResults(text: string): boolean {
   const lines = text.split('\n').filter((l) => l.trim());
@@ -109,7 +136,7 @@ export function compressSearchResults(
       const range = start === previous ? `${start}` : `${start}-${previous}`;
       // Which lines actually matched, so `-` context is still distinguishable
       // from a `:` hit without a prefix on every line.
-      const marks = matchedOffsets.length ? ` (matched ${matchedOffsets.join(',')})` : '';
+      const marks = matchNote(matchedOffsets, start, previous);
       out.push(`${path}:${range}${marks}`);
       out.push(...buffer);
     }

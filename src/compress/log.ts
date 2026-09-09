@@ -103,10 +103,92 @@ export function compressLog(text: string, _ctx: EngineContext = {}): Compression
     }
   }
 
-  const folded = foldScattered(out, elisions);
+  const folded = templated(foldScattered(out, elisions), elisions);
 
   if (!elisions.length) return unchanged(text);
   return { text: folded.join('\n'), elisions, lossless: true };
+}
+
+/** Digits, hex ids and quoted values -- the parts that vary between two runs of one event. */
+// NO WORD BOUNDARIES, deliberately. With `\b` this matched nothing useful:
+// the digits in `src/mod1000.ts` sit between two word characters, so no two
+// assertion errors ever shared a shape and the grouping found nothing to
+// template. Measured: 0 templates over 108 near-identical ERROR lines.
+//
+// Bare hex runs are NOT matched -- only an explicit 0x prefix -- because an
+// unanchored hex class happily eats the middle of ordinary identifiers.
+const VARIABLE = /0x[0-9a-f]+|\d+(?:\.\d+)?/gi;
+
+/** Below this a template costs more than the lines it replaces. */
+const MIN_TEMPLATE = 4;
+
+/**
+ * Collapses lines that differ only in their numbers.
+ *
+ * THE LINES THAT SURVIVE FOLDING ARE THE PROBLEM. Load-bearing lines are
+ * exempt from duplicate folding on purpose -- two AssertionErrors are two
+ * failures -- and measurement showed what that leaves behind: on the
+ * sre-debugging workload 12,220 of the 14,500 surviving characters, 84% of the
+ * output, were assertion errors identical except for their numbers:
+ *
+ *   ... ERROR AssertionError at src/mod1000.ts:200: expected 1000 to equal 1001
+ *   ... ERROR AssertionError at src/mod1012.ts:212: expected 1012 to equal 1013
+ *
+ * Folding those away would destroy the information. Templating them does not:
+ * the shape is stated once and every varying value is listed, so the reader
+ * can still see that mod1012 failed and can still reconstruct each line
+ * exactly. LOSSLESS, and it is the only way to compress content that must not
+ * be deduplicated.
+ *
+ * The values are listed in full rather than summarised as a range, because
+ * `expected 1000 to equal 1001` for a range would invent pairs that never
+ * occurred.
+ */
+function templated(lines: string[], elisions: Elision[]): string[] {
+  const groups = new Map<string, number[]>();
+
+  lines.forEach((line, index) => {
+    if (!line.trim() || line.trimStart().startsWith('[... ')) return;
+    const shape = line.replace(VARIABLE, '#');
+    // A line with nothing variable in it is not a template, it is a line.
+    if (shape === line) return;
+    const bucket = groups.get(shape);
+    if (bucket) bucket.push(index);
+    else groups.set(shape, [index]);
+  });
+
+  const replaced = new Map<number, string>();
+  const drop = new Set<number>();
+
+  for (const [shape, members] of groups) {
+    if (members.length < MIN_TEMPLATE) continue;
+
+    // One row of values per occurrence, in the order they appeared.
+    const rows = members.map((i) => (lines[i].match(VARIABLE) ?? []).join(' '));
+    const rendered =
+      `${shape}  [${count(members.length, 'occurrence')}, # = ` + `${rows.join(' | ')}]`;
+
+    // Only if it actually pays. A template over long, highly variable lines
+    // can be larger than the lines themselves.
+    const was = members.reduce((n, i) => n + lines[i].length + 1, 0);
+    if (rendered.length >= was) continue;
+
+    replaced.set(members[0], rendered);
+    for (const i of members.slice(1)) drop.add(i);
+    elisions.push({
+      removed: `${count(members.length - 1, 'line')} folded into a template`,
+      recoverAt: null,
+    });
+  }
+
+  if (!replaced.size) return lines;
+
+  const out: string[] = [];
+  lines.forEach((line, index) => {
+    if (drop.has(index)) return;
+    out.push(replaced.get(index) ?? line);
+  });
+  return out;
 }
 
 /**

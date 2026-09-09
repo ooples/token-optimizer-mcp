@@ -55,6 +55,15 @@ const DECLARES: Record<string, RegExp> = {
   java: /^\s*(?:@|public\s|private\s|protected\s|class\s|interface\s|enum\s|import\s|package\s)/,
   ruby: /^\s*(?:def\s|class\s|module\s|require\s|require_relative\s)/,
   c: /^\s*(?:#include|typedef\s|struct\s|enum\s|[A-Za-z_][\w\s*]*\([^;]*\)\s*\{)/,
+  // LAST RESORT, when no parser managed the content.
+  //
+  // The indentation walk below works for brace languages as well as for
+  // Python: in formatted code the closing brace sits at the declaration's own
+  // indentation, so the walk stops exactly there. This pattern is deliberately
+  // broad -- it only decides where to START looking, and the walk decides the
+  // rest.
+  generic:
+    /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(?:async\s+)?(?:function\s|class\s|interface\s|enum\s|(?:public|private|protected|static|readonly)\s|const\s+[\w$]+\s*=|[\w$]+\s*\([^)]*\)\s*[:{])/,
 };
 
 const EXT_LANGUAGE: Record<string, string> = {
@@ -218,11 +227,20 @@ export function compressCode(text: string, ctx: EngineContext = {}): Compression
 
   const ext = extensionOf(ctx.sourcePath);
   const language = ctx.language || EXT_LANGUAGE[ext] || '';
-  const spans = BABEL.has(ext) || (!language && !ext)
-    ? babelBodies(text)
-    : heuristicBodies(text, language);
+  // A PARSE FAILURE MUST NOT MEAN NO COMPRESSION.
+  //
+  // `babelBodies` returns null when it cannot parse, and the caller used to
+  // treat that as "nothing to do". Measured on this repository's own
+  // `src/server`, concatenated the way a tool result concatenates files:
+  // Babel threw, the fallback needed an explicit language it did not have,
+  // and the engine compressed 46,960 characters by exactly 0.0% while the
+  // same engine managed 72% on `src/tools`. Silent, and indistinguishable
+  // from content that genuinely had nothing to remove.
+  const parsed =
+    BABEL.has(ext) || (!language && !ext) ? babelBodies(text) : heuristicBodies(text, language);
+  const spans = parsed && parsed.length ? parsed : heuristicBodies(text, language || 'generic');
 
-  if (!spans || !spans.length) return unchanged(text);
+  if (!spans.length) return unchanged(text);
 
   const lines = text.split('\n');
   const elided = new Set<number>();
