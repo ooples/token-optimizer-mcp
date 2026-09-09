@@ -38,7 +38,10 @@ export function marker(elision: Elision): string {
 }
 
 /** An inline elision, written where the content used to be. */
-export function inlineMarker(removed: string, recoverAt: string | null): string {
+export function inlineMarker(
+  removed: string,
+  recoverAt: string | null
+): string {
   return marker({ removed, recoverAt });
 }
 
@@ -48,7 +51,11 @@ export function inlineMarker(removed: string, recoverAt: string | null): string 
  * Small thing, but "1 duplicate lines" reads as a bug in the tool and invites a
  * model to distrust the number beside it.
  */
-export function count(n: number, singular: string, plural = `${singular}s`): string {
+export function count(
+  n: number,
+  singular: string,
+  plural = `${singular}s`
+): string {
   return `${n} ${n === 1 ? singular : plural}`;
 }
 

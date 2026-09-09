@@ -108,8 +108,12 @@ export function lastCacheBreakpoint(request: ProviderRequest): Position | null {
 }
 
 /** Is this position strictly after the frontier, and therefore compressible? */
-export function isAfter(position: Position, frontier: Position | null): boolean {
+export function isAfter(
+  position: Position,
+  frontier: Position | null
+): boolean {
   if (!frontier) return true;
-  if (position.message !== frontier.message) return position.message > frontier.message;
+  if (position.message !== frontier.message)
+    return position.message > frontier.message;
   return position.block > frontier.block;
 }

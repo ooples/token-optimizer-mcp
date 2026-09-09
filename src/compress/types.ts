@@ -52,7 +52,13 @@ export interface CompressionResult {
 }
 
 /** Content classes the router can distinguish. */
-export type ContentKind = 'json' | 'code' | 'log' | 'prose' | 'search' | 'unknown';
+export type ContentKind =
+  | 'json'
+  | 'code'
+  | 'log'
+  | 'prose'
+  | 'search'
+  | 'unknown';
 
 /**
  * Per-call state handed to an engine.

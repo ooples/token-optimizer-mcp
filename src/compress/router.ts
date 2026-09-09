@@ -52,7 +52,10 @@ export function classify(text: string, ctx: EngineContext = {}): ContentKind {
  * prompt size"), and it is trivially preventable by measuring rather than
  * trusting.
  */
-export function compressBlock(text: string, ctx: EngineContext = {}): CompressionResult {
+export function compressBlock(
+  text: string,
+  ctx: EngineContext = {}
+): CompressionResult {
   const kind = classify(text, ctx);
 
   let result: CompressionResult;

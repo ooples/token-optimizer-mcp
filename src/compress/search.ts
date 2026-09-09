@@ -85,15 +85,23 @@ function parseHit(line: string): Hit | null {
  * contiguous span matched, name the span. Only a genuinely scattered set is
  * worth enumerating.
  */
-function matchNote(matched: readonly number[], start: number, end: number): string {
+function matchNote(
+  matched: readonly number[],
+  start: number,
+  end: number
+): string {
   if (!matched.length) return ' (context)';
   if (matched.length === end - start + 1) return '';
 
-  const contiguous = matched.every((line, i) => i === 0 || line === matched[i - 1] + 1);
+  const contiguous = matched.every(
+    (line, i) => i === 0 || line === matched[i - 1] + 1
+  );
   if (contiguous) {
     const first = matched[0];
     const last = matched[matched.length - 1];
-    return first === last ? ` (matched ${first})` : ` (matched ${first}-${last})`;
+    return first === last
+      ? ` (matched ${first})`
+      : ` (matched ${first}-${last})`;
   }
   return ` (matched ${matched.join(',')})`;
 }

@@ -70,7 +70,8 @@ function dropNulls(value: unknown): unknown {
 
 /** Counts nulls before they are dropped, so the marker can be honest. */
 function countNulls(value: unknown): number {
-  if (Array.isArray(value)) return value.reduce<number>((n, v) => n + countNulls(v), 0);
+  if (Array.isArray(value))
+    return value.reduce<number>((n, v) => n + countNulls(v), 0);
   if (value && typeof value === 'object') {
     let n = 0;
     for (const v of Object.values(value as Record<string, unknown>)) {
@@ -87,7 +88,9 @@ function shapeOf(row: unknown): string {
   if (Array.isArray(row)) return 'arrays';
   if (row && typeof row === 'object') {
     const keys = Object.keys(row as Record<string, unknown>);
-    return keys.length ? `objects keyed ${keys.slice(0, 4).join(', ')}` : 'objects';
+    return keys.length
+      ? `objects keyed ${keys.slice(0, 4).join(', ')}`
+      : 'objects';
   }
   return `${typeof row}s`;
 }
@@ -141,7 +144,10 @@ function anomalousRows(rows: readonly unknown[]): Set<number> {
  * payload that fits comfortably once minified should not pay a marker to lose
  * rows it could have carried whole.
  */
-export function compressJson(text: string, ctx: EngineContext = {}): CompressionResult {
+export function compressJson(
+  text: string,
+  ctx: EngineContext = {}
+): CompressionResult {
   if (!looksLikeJson(text)) return unchanged(text);
 
   let parsed: unknown;
@@ -175,7 +181,8 @@ export function compressJson(text: string, ctx: EngineContext = {}): Compression
     const odd = anomalousRows(stripped);
     // Head rows for shape, plus every row that departs from it, in order.
     const keep = new Set<number>(odd);
-    for (let i = 0; i < Math.min(KEEP_ROWS, stripped.length); i += 1) keep.add(i);
+    for (let i = 0; i < Math.min(KEEP_ROWS, stripped.length); i += 1)
+      keep.add(i);
 
     const dropped = stripped.length - keep.size;
     if (dropped < MIN_ROWS_TO_ELIDE - KEEP_ROWS) {
@@ -184,7 +191,9 @@ export function compressJson(text: string, ctx: EngineContext = {}): Compression
       return { text: minified, elisions, lossless: true };
     }
 
-    const recoverAt = ctx.spill ? ctx.spill(JSON.stringify(stripped), 'rows.json') : null;
+    const recoverAt = ctx.spill
+      ? ctx.spill(JSON.stringify(stripped), 'rows.json')
+      : null;
     const kept = [...keep].sort((a, b) => a - b).map((i) => stripped[i]);
     const sample = stripped.find((_row, i) => !keep.has(i));
     const keptText = JSON.stringify(kept);
@@ -193,13 +202,18 @@ export function compressJson(text: string, ctx: EngineContext = {}): Compression
       ',' +
       inlineMarker(
         `${count(dropped, 'more row')}, ${shapeOf(sample)}` +
-          (odd.size ? `; all ${count(odd.size, 'row')} that differ are kept above` : ''),
+          (odd.size
+            ? `; all ${count(odd.size, 'row')} that differ are kept above`
+            : ''),
         recoverAt
       ) +
       ']';
     return {
       text: body,
-      elisions: [...elisions, { removed: count(dropped, 'repeating row'), recoverAt }],
+      elisions: [
+        ...elisions,
+        { removed: count(dropped, 'repeating row'), recoverAt },
+      ],
       // The repeating tail is gone from the text; only a spill makes it
       // recoverable, and even then it is a lookup rather than a reconstruction.
       lossless: false,

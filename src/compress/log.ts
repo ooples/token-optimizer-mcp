@@ -55,7 +55,8 @@ export function looksLikeLog(text: string): boolean {
   let levelled = 0;
   for (const line of lines) {
     if (TIMESTAMP.test(line)) stamped += 1;
-    if (/\b(DEBUG|INFO|WARN|WARNING|ERROR|TRACE|FATAL)\b/.test(line)) levelled += 1;
+    if (/\b(DEBUG|INFO|WARN|WARNING|ERROR|TRACE|FATAL)\b/.test(line))
+      levelled += 1;
   }
   const signal = Math.max(stamped, levelled);
   return signal / lines.length > 0.3;
@@ -69,7 +70,10 @@ export function looksLikeLog(text: string): boolean {
  * description of it, and the model can reconstruct the original exactly without
  * asking anyone for anything. No spill, no path, no lookup.
  */
-export function compressLog(text: string, _ctx: EngineContext = {}): CompressionResult {
+export function compressLog(
+  text: string,
+  _ctx: EngineContext = {}
+): CompressionResult {
   const lines = text.split('\n');
   if (lines.length < MIN_RUN) return unchanged(text);
 
@@ -94,8 +98,13 @@ export function compressLog(text: string, _ctx: EngineContext = {}): Compression
     if (run >= MIN_RUN) {
       out.push(line);
       const dropped = run - 1;
-      out.push(inlineMarker(`the same line, ${count(dropped, 'more time')}`, null));
-      elisions.push({ removed: count(dropped, 'duplicate line'), recoverAt: null });
+      out.push(
+        inlineMarker(`the same line, ${count(dropped, 'more time')}`, null)
+      );
+      elisions.push({
+        removed: count(dropped, 'duplicate line'),
+        recoverAt: null,
+      });
       i += run;
     } else {
       for (let k = 0; k < run; k += 1) out.push(lines[i + k]);
@@ -166,7 +175,8 @@ function templated(lines: string[], elisions: Elision[]): string[] {
     // One row of values per occurrence, in the order they appeared.
     const rows = members.map((i) => (lines[i].match(VARIABLE) ?? []).join(' '));
     const rendered =
-      `${shape}  [${count(members.length, 'occurrence')}, # = ` + `${rows.join(' | ')}]`;
+      `${shape}  [${count(members.length, 'occurrence')}, # = ` +
+      `${rows.join(' | ')}]`;
 
     // Only if it actually pays. A template over long, highly variable lines
     // can be larger than the lines themselves.
@@ -240,8 +250,16 @@ function foldScattered(lines: string[], elisions: Elision[]): string[] {
     out.push(line);
     const more = extra.get(index);
     if (more) {
-      out.push(inlineMarker(`the same line, ${count(more, 'more time')} elsewhere`, null));
-      elisions.push({ removed: count(more, 'duplicate line'), recoverAt: null });
+      out.push(
+        inlineMarker(
+          `the same line, ${count(more, 'more time')} elsewhere`,
+          null
+        )
+      );
+      elisions.push({
+        removed: count(more, 'duplicate line'),
+        recoverAt: null,
+      });
     }
   });
   return out;

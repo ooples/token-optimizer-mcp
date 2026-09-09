@@ -140,12 +140,17 @@ function babelBodies(text: string): Array<[number, number]> | null {
       );
     // A big literal is bulk data behind a declaration the model still sees.
     const isLiteral =
-      typeof n.type === 'string' && /^(ObjectExpression|ArrayExpression)$/.test(n.type);
+      typeof n.type === 'string' &&
+      /^(ObjectExpression|ArrayExpression)$/.test(n.type);
 
     if (isFunction || isLiteral) {
       const target = isFunction
-        ? (n.body as { loc?: { start: { line: number }; end: { line: number } } } | undefined)
-        : (n as unknown as { loc?: { start: { line: number }; end: { line: number } } });
+        ? (n.body as
+            | { loc?: { start: { line: number }; end: { line: number } } }
+            | undefined)
+        : (n as unknown as {
+            loc?: { start: { line: number }; end: { line: number } };
+          });
       if (target?.loc) {
         // The braces stay so the declaration still reads as a declaration;
         // only the lines strictly between them go.
@@ -190,7 +195,10 @@ function babelBodies(text: string): Array<[number, number]> | null {
  * declaration's indentation. Crude, and deliberately conservative: anything it
  * is unsure about it leaves alone.
  */
-function heuristicBodies(text: string, language: string): Array<[number, number]> {
+function heuristicBodies(
+  text: string,
+  language: string
+): Array<[number, number]> {
   const declare = DECLARES[language];
   if (!declare) return [];
   const lines = text.split('\n');
@@ -222,7 +230,10 @@ function heuristicBodies(text: string, language: string): Array<[number, number]
  * Signatures, imports, class and type declarations and decorators all survive,
  * which is what makes the output still answer "what is in this file".
  */
-export function compressCode(text: string, ctx: EngineContext = {}): CompressionResult {
+export function compressCode(
+  text: string,
+  ctx: EngineContext = {}
+): CompressionResult {
   if (looksLikeDiff(text)) return unchanged(text);
 
   const ext = extensionOf(ctx.sourcePath);
@@ -237,8 +248,13 @@ export function compressCode(text: string, ctx: EngineContext = {}): Compression
   // same engine managed 72% on `src/tools`. Silent, and indistinguishable
   // from content that genuinely had nothing to remove.
   const parsed =
-    BABEL.has(ext) || (!language && !ext) ? babelBodies(text) : heuristicBodies(text, language);
-  const spans = parsed && parsed.length ? parsed : heuristicBodies(text, language || 'generic');
+    BABEL.has(ext) || (!language && !ext)
+      ? babelBodies(text)
+      : heuristicBodies(text, language);
+  const spans =
+    parsed && parsed.length
+      ? parsed
+      : heuristicBodies(text, language || 'generic');
 
   if (!spans.length) return unchanged(text);
 
@@ -281,8 +297,14 @@ export function compressCode(text: string, ctx: EngineContext = {}): Compression
 
     for (let line = from; line <= to; line += 1) elided.add(line);
     const indent = lines[from - 1]?.match(/^\s*/)?.[0] ?? '  ';
-    markerAt.set(from, indent + inlineMarker(`body, ${count(lineCount, 'line')}`, where));
-    elisions.push({ removed: `body, ${count(lineCount, 'line')}`, recoverAt: where });
+    markerAt.set(
+      from,
+      indent + inlineMarker(`body, ${count(lineCount, 'line')}`, where)
+    );
+    elisions.push({
+      removed: `body, ${count(lineCount, 'line')}`,
+      recoverAt: where,
+    });
   }
 
   if (!elisions.length) return unchanged(text);

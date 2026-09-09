@@ -41,7 +41,8 @@ const FILLER =
   /\b(as (?:we|you) (?:can see|mentioned|noted)|it (?:is|'s) (?:worth|important) (?:noting|to note)|in (?:other words|general|summary)|please note|generally speaking|of course|needless to say|that said|it should be noted|this (?:means|is to say) that)\b/i;
 
 /** Hedges: a sentence made mostly of these is rarely load-bearing. */
-const HEDGE = /\b(might|maybe|perhaps|possibly|arguably|somewhat|fairly|quite|rather|often|usually|typically|tends? to)\b/gi;
+const HEDGE =
+  /\b(might|maybe|perhaps|possibly|arguably|somewhat|fairly|quite|rather|often|usually|typically|tends? to)\b/gi;
 
 /** Splits on sentence boundaries without mangling code spans or version numbers. */
 function sentences(text: string): string[] {
@@ -101,7 +102,10 @@ export function looksLikeProse(text: string): boolean {
  * sentences" knows the shape of what it is missing, which is the difference
  * between compression and quiet damage.
  */
-export function compressProse(text: string, ctx: EngineContext = {}): CompressionResult {
+export function compressProse(
+  text: string,
+  ctx: EngineContext = {}
+): CompressionResult {
   const parts = sentences(text);
   if (parts.length < MIN_SENTENCES) return unchanged(text);
 

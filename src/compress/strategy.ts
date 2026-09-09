@@ -27,7 +27,11 @@ import {
 } from './frontier.js';
 import type { Elision } from './types.js';
 
-export type StrategyName = 'v1-frontier' | 'v2-speculative' | 'v3-history' | 'ccr';
+export type StrategyName =
+  | 'v1-frontier'
+  | 'v2-speculative'
+  | 'v3-history'
+  | 'ccr';
 
 export interface StrategyOptions {
   /** Writes content with no file of its own somewhere readable. */
@@ -72,7 +76,8 @@ const CCR_TOOL = {
     properties: {
       hash: {
         type: 'string',
-        description: "Hash key from the compression marker (e.g., 'abc123' from hash=abc123)",
+        description:
+          "Hash key from the compression marker (e.g., 'abc123' from hash=abc123)",
       },
     },
     required: ['hash'],
@@ -81,7 +86,10 @@ const CCR_TOOL = {
 
 /** Their opaque marker form, from ccr/marker_resolution.py:36. */
 function ccrMarker(content: string, index: number): string {
-  const hash = Buffer.from(`${index}:${content.length}`).toString('hex').slice(0, 12).padEnd(12, '0');
+  const hash = Buffer.from(`${index}:${content.length}`)
+    .toString('hex')
+    .slice(0, 12)
+    .padEnd(12, '0');
   return `<<ccr:${hash},blob,${content.length}>>`;
 }
 
@@ -133,7 +141,10 @@ function pathAddressed(
 }
 
 /** V1: the recommended design. */
-export function v1Frontier(request: ProviderRequest, options: StrategyOptions = {}): StrategyResult {
+export function v1Frontier(
+  request: ProviderRequest,
+  options: StrategyOptions = {}
+): StrategyResult {
   return pathAddressed(request, options, true);
 }
 
@@ -166,7 +177,10 @@ export function v2Speculative(
 }
 
 /** V3: V1's markers with no frontier restriction. */
-export function v3History(request: ProviderRequest, options: StrategyOptions = {}): StrategyResult {
+export function v3History(
+  request: ProviderRequest,
+  options: StrategyOptions = {}
+): StrategyResult {
   return pathAddressed(request, options, false);
 }
 
@@ -177,7 +191,10 @@ export function v3History(request: ProviderRequest, options: StrategyOptions = {
  * markers redeemable. `injectedChars` is what those cost -- the number their
  * published reduction figures do not appear to include.
  */
-export function ccrStyle(request: ProviderRequest, options: StrategyOptions = {}): StrategyResult {
+export function ccrStyle(
+  request: ProviderRequest,
+  options: StrategyOptions = {}
+): StrategyResult {
   const elisions: Elision[] = [];
   const hashes: string[] = [];
   let index = 0;
@@ -197,7 +214,10 @@ export function ccrStyle(request: ProviderRequest, options: StrategyOptions = {}
 
   if (!index) return { request: out, elisions, injectedChars: 0 };
 
-  const systemText = CCR_SYSTEM.replace('{HASHES}', hashes.slice(0, 5).join(', '));
+  const systemText = CCR_SYSTEM.replace(
+    '{HASHES}',
+    hashes.slice(0, 5).join(', ')
+  );
   const withInjection: ProviderRequest = {
     ...out,
     system: Array.isArray(out.system)
