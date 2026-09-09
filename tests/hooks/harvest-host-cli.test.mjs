@@ -26,6 +26,7 @@ import {
   harvestMode,
   harvestEnabled,
   hostCliHarvest,
+  ARG_STDIN_INSTRUCTION,
 } from '../../hooks-core/harvest.mjs';
 import { CLIENT_CAPABILITIES, CLIENT_HARVEST_CLI, harvestCliFor } from '../../hooks-core/capabilities.mjs';
 
@@ -56,10 +57,12 @@ const STUB = `
 import { readFileSync, writeFileSync } from 'node:fs';
 const out = process.env.STUB_RECORD;
 let stdin = '';
-try {
-  stdin = readFileSync(0, 'utf8');
-} catch {
-  stdin = '';
+if (!process.env.STUB_IGNORE_STDIN) {
+  try {
+    stdin = readFileSync(0, 'utf8');
+  } catch {
+    stdin = '';
+  }
 }
 const named = (process.argv.slice(2).join(' ').match(/(\\S+token-optimizer-harvest-\\S+\\.txt)/) || [])[1];
 writeFileSync(
@@ -105,6 +108,7 @@ beforeEach(() => {
   process.env.STUB_REPLY = JSON.stringify([FINDING]);
   delete process.env.STUB_BANNER;
   delete process.env.STUB_SILENT;
+  delete process.env.STUB_IGNORE_STDIN;
   delete process.env.STUB_EXIT;
   if (existsSync(record)) rmSync(record);
 });
@@ -121,6 +125,10 @@ const asStdinCli = () => {
   // Quoted: on Windows process.execPath is under `C:\Program Files`, and an
   // unquoted split reported `C:\Program exited 1`.
   process.env.TOKEN_OPTIMIZER_HARVEST_CLI_COMMAND = `"${process.execPath}" "${stub}"`;
+};
+const asArgStdinCli = () => {
+  process.env.TOKEN_OPTIMIZER_HARVEST_CLI = '1';
+  process.env.TOKEN_OPTIMIZER_HARVEST_CLI_COMMAND = `"${process.execPath}" "${stub}" {-}`;
 };
 const asFileCli = () => {
   process.env.TOKEN_OPTIMIZER_HARVEST_CLI = '1';
@@ -185,6 +193,37 @@ describe('every supported client declares how it can be harvested', () => {
   test('a trailing {} in the override asks for a prompt file', () => {
     const row = harvestCliFor('zed', { TOKEN_OPTIMIZER_HARVEST_CLI_COMMAND: 'my-llm run {}' });
     expect(row).toMatchObject({ command: 'my-llm', args: ['run'], delivery: 'prompt-file' });
+  });
+
+  test('the client key is normalised, like every other lookup here', () => {
+    // capabilityFor lower-cases and this did not, so TOKEN_OPTIMIZER_CLIENT
+    // =Codex resolved a capability profile and NO harvest CLI -- harvestMode
+    // then fell through to off:no-key and an opted-in harvest silently did
+    // nothing on a client that plainly has one.
+    expect(harvestCliFor('Codex')).toEqual(harvestCliFor('codex'));
+    expect(harvestCliFor('CLAUDE-CODE')).toEqual(harvestCliFor('claude-code'));
+  });
+
+  test('a prototype key is not a client', () => {
+    // A bare index reached Object.prototype: harvestCliFor('constructor')
+    // returned a function whose `command` is undefined, and runHostCli would
+    // have handed that straight to spawn.
+    for (const key of ['constructor', 'toString', 'hasOwnProperty']) {
+      expect(harvestCliFor(key)).toBeNull();
+    }
+  });
+
+  test('an override can name arg-stdin, the shape gemini and qwen use', () => {
+    const row = harvestCliFor('zed', { TOKEN_OPTIMIZER_HARVEST_CLI_COMMAND: 'my-llm -p {-}' });
+    expect(row).toMatchObject({ command: 'my-llm', args: ['-p'], delivery: 'arg-stdin' });
+  });
+
+  test('the arg-stdin flag value carries nothing a shell can break', () => {
+    // It ends up on a Windows command line, where cmd.exe cannot carry a
+    // newline inside an argument and every double quote has to be doubled.
+    expect(ARG_STDIN_INSTRUCTION).not.toContain('\\n');
+    expect(ARG_STDIN_INSTRUCTION).not.toContain('"');
+    expect(ARG_STDIN_INSTRUCTION).not.toContain("'");
   });
 
   test('a quoted path in the override survives the split', () => {
@@ -356,6 +395,59 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     });
     expect(found).toHaveLength(1);
     expect(harvestFailure()).toBeNull();
+  });
+
+  test('an arg-stdin flag value is one line, and the payload rides stdin', async () => {
+    // THE SAME WINDOWS CONSTRAINT prompt-file exists for. Pushing `system`
+    // here put the multi-line PROMPT -- extended by withAnchorChoices with a
+    // newline-separated file list, and full of the JSON prompt's double
+    // quotes -- onto a cmd.exe command line, which cannot carry a newline in
+    // an argument at all.
+    asArgStdinCli();
+    const found = await extract('## Files touched\\nhooks-core/harvest.mjs\\n', {
+      knownFiles: new Set(['hooks-core/harvest.mjs']),
+    });
+    expect(harvestFailure()).toBeNull();
+    expect(found).toHaveLength(1);
+    const got = handed();
+    expect(got.argv).toEqual([ARG_STDIN_INSTRUCTION]);
+    // Nothing is lost by shortening the argument: the whole payload, prompt
+    // included, is on stdin, which these CLIs document as their input.
+    expect(got.stdin).toContain('## Files touched');
+    expect(got.stdin).toContain('JSON array');
+  });
+
+  test('the prompt file is named unguessably, not merely uniquely', async () => {
+    // mode 0o600 governs a file this call creates and says nothing about one
+    // already at the path, and pid plus clock is guessable enough for another
+    // local user to pre-create it as a symlink in the shared temp directory.
+    // `flag: 'wx'` closes the race; a random name removes the guess.
+    asFileCli();
+    await extract('## Files touched\\nhooks-core/harvest.mjs\\n', {
+      knownFiles: new Set(['hooks-core/harvest.mjs']),
+    });
+    const named = handed().argv[0].match(/(\S+token-optimizer-harvest-\S+\.txt)/)[1];
+    expect(named).not.toContain(String(process.pid));
+    expect(named).toMatch(
+      /token-optimizer-harvest-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.txt$/
+    );
+  });
+
+  test('a child that never reads stdin is reported, not thrown', async () => {
+    // EPIPE arrives as an event on child.stdin, which the try/catch cannot
+    // see. With no listener it is an uncaught exception that takes the hook
+    // process down instead of resolving runHostCli -- and copilot, which
+    // exits 0 without reading stdin, is exactly this child. The proof that
+    // the listener works is that this test completes at all: an uncaught
+    // exception here fails the run regardless of the assertions.
+    asStdinCli();
+    process.env.STUB_IGNORE_STDIN = '1';
+    process.env.STUB_SILENT = '1';
+    const found = await extract('x'.repeat(600_000), {
+      knownFiles: new Set(['hooks-core/harvest.mjs']),
+    });
+    expect(found).toEqual([]);
+    expect(harvestFailure()).toBeTruthy();
   });
 
   test('a command that does not exist fails with a reason', async () => {

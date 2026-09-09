@@ -23,6 +23,7 @@
 import { readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { harvestCliFor } from './capabilities.mjs';
 
@@ -588,6 +589,14 @@ function withAnchorChoices(system, choices) {
   );
 }
 
+/**
+ * The `-p` value for a CLI whose prompt flag needs one but which still reads
+ * stdin. One line, no quotes, no newlines: everything a Windows command line
+ * cannot carry.
+ */
+export const ARG_STDIN_INSTRUCTION =
+  'Follow the instructions in the input above and reply with only the JSON array they ask for.';
+
 /** Restated at the end of a prompt file, where an agent skimming will see it. */
 const TRAILER =
   'END OF SESSION DIGEST. Now follow the instructions at the top of this file: ' +
@@ -652,7 +661,11 @@ async function runHostCli(cli, system, digest, timeoutMs) {
     // under the OS temp directory, which every one of these CLIs can read by
     // default, and removed in `finish` whatever the outcome.
     try {
-      promptFile = join(tmpdir(), `token-optimizer-harvest-${process.pid}-${Date.now()}.txt`);
+      // UNGUESSABLE, NOT MERELY UNIQUE. pid and clock are both predictable
+      // enough for another local user to pre-create the path in a shared temp
+      // directory; randomUUID removes the guess, and `flag: 'wx'` below
+      // removes the race that remains.
+      promptFile = join(tmpdir(), `token-optimizer-harvest-${randomUUID()}.txt`);
       // 0600. This is a digest of the user's session -- paths, commands and
       // prompts -- sitting in a shared temp directory for as long as the child
       // takes to read it. It is removed in `finish`, but a kill between the two
@@ -669,6 +682,12 @@ async function runHostCli(cli, system, digest, timeoutMs) {
       writeFileSync(promptFile, `${payload}\n\n${TRAILER}`, {
         encoding: 'utf8',
         mode: 0o600,
+        // EXCLUSIVE CREATE. `mode` governs a file this call makes; it does
+        // nothing about one that already exists, and the default flag 'w'
+        // happily follows a symlink someone else placed at the path -- which
+        // would redirect a digest of the user's session wherever they chose.
+        // 'wx' fails instead of following.
+        flag: 'wx',
       });
     } catch (error) {
       return { ok: false, reason: `could not write the harvest prompt file: ${error?.message || error}` };
@@ -679,9 +698,16 @@ async function runHostCli(cli, system, digest, timeoutMs) {
         'instructions and output the JSON array they ask for, and nothing else.'
     );
   } else if (cli.delivery === 'arg-stdin') {
-    // The flag needs a value and the CLI appends it after stdin, so the short
-    // instruction is the argument and the bulky digest still rides stdin.
-    args.push(system);
+    // A SHORT SINGLE LINE, NEVER THE PROMPT. The flag needs a value, and the
+    // obvious value -- `system` -- is the multi-line PROMPT, which
+    // withAnchorChoices extends with a newline-separated file list and which
+    // is full of the JSON prompt's double quotes. That is the exact payload
+    // the prompt-file route exists to keep off a Windows command line:
+    // cmd.exe cannot carry a newline inside an argument, and the quoting
+    // doubles every `"`. These CLIs document the flag value as being
+    // APPENDED to stdin, so the whole payload rides stdin and the argument
+    // is one line of ASCII that any shell survives.
+    args.push(ARG_STDIN_INSTRUCTION);
   }
 
   if (process.platform === 'win32' && file === cli.command) {
@@ -750,12 +776,26 @@ async function runHostCli(cli, system, digest, timeoutMs) {
         : finish({ ok: false, reason: `${cli.command} exited ${code}` })
     );
 
+    // EPIPE ARRIVES AS AN EVENT, NOT AS A THROW. The try/catch below sees
+    // only a synchronous failure; a child that exits without reading stdin
+    // fails the write asynchronously, and Node delivers that on the stream.
+    // With no listener it is an uncaught exception that takes down the hook
+    // process instead of resolving this promise -- and the path is not
+    // hypothetical: copilot, asked to read a prompt on stdin, answers that it
+    // cannot and exits 0, which is why its row is prompt-file at all.
+    child.stdin.on('error', (error) =>
+      finish({
+        ok: false,
+        reason: `could not write the digest to ${cli.command}: ${error?.message || error}`,
+      })
+    );
+
     try {
       // Closed either way: a child left waiting on a pipe that will never
       // carry anything hangs until the timeout, which is the slowest possible
       // way to produce nothing.
       if (fileMode) child.stdin.end();
-      else child.stdin.end(cli.delivery === 'arg-stdin' ? digest : payload);
+      else child.stdin.end(payload);
     } catch {
       finish({ ok: false, reason: `could not write the digest to ${cli.command}` });
     }

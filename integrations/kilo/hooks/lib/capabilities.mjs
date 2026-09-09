@@ -353,21 +353,40 @@ function commandWords(line) {
  * TOKEN_OPTIMIZER_HARVEST_CLI_COMMAND overrides the table entirely, so a
  * client with no row -- or one whose vendor changed its flags after this
  * shipped -- is a configuration away from working rather than a release away.
- * The value is a command and its arguments. The payload goes to stdin unless
- * the string ends in `{}`, which is replaced by the path of a file holding
- * the payload -- the delivery an agentic CLI that ignores stdin needs.
+ * The value is a command and its arguments, and its last word may name a
+ * delivery:
+ *   (nothing)  the payload goes to the command's stdin.
+ *   `{}`       it is written to a file and the path becomes the last
+ *              argument -- what an agentic CLI that ignores stdin needs.
+ *   `{-}`      the payload goes to stdin and a short instruction becomes the
+ *              last argument, for a CLI whose prompt flag demands a value
+ *              but which still reads stdin. gemini and qwen are shaped this
+ *              way, and without this an override could not reach that shape
+ *              at all.
  */
 export function harvestCliFor(client, env = process.env) {
   const override = (env.TOKEN_OPTIMIZER_HARVEST_CLI_COMMAND || '').trim();
   if (override) {
     const parts = commandWords(override);
-    const arg = parts[parts.length - 1] === '{}';
-    if (arg) parts.pop();
+    const last = parts[parts.length - 1];
+    const delivery =
+      last === '{}' ? 'prompt-file' : last === '{-}' ? 'arg-stdin' : 'stdin';
+    if (delivery !== 'stdin') parts.pop();
     const [command, ...args] = parts;
     if (!command) return null;
-    return harvestCli(command, args, { delivery: arg ? 'prompt-file' : 'stdin' });
+    return harvestCli(command, args, { delivery });
   }
-  return CLIENT_HARVEST_CLI[client] || null;
+  // NORMALISED AND OWN-PROPERTY ONLY, matching `capabilityFor` below.
+  //
+  // A bare index disagreed with its own sibling and reached the prototype.
+  // Reproduced: TOKEN_OPTIMIZER_CLIENT=Codex resolved a capability profile
+  // through capabilityFor -- which lower-cases -- and NO harvest CLI here, so
+  // harvestMode() fell through to off:no-key and an opted-in harvest silently
+  // did nothing on a client that plainly has one. And
+  // harvestCliFor('constructor') returned a function, whose `command` is
+  // undefined, which runHostCli would have handed straight to spawn.
+  const key = String(client || '').toLowerCase();
+  return Object.hasOwn(CLIENT_HARVEST_CLI, key) ? CLIENT_HARVEST_CLI[key] : null;
 }
 export const CLIENT_CAPABILITIES = Object.freeze({
   'claude-code': native({
