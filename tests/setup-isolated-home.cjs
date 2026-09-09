@@ -16,6 +16,18 @@
  * A test that wants to assert on backup contents still can: it overrides the
  * same variable with a directory of its own.
  *
+ * THE HARVEST FAILURE RECORD IS HERE FOR THE SAME REASON. The reason a
+ * harvest produced nothing is now written to disk so it can cross a process
+ * boundary -- the harvest runs in a detached worker and `doctor` runs in a
+ * separate node invocation, so a module variable could never reach the
+ * reader. That made every test calling `extract()` a writer into the real
+ * `~/.token-optimizer/last-harvest.json`, and the leak was immediate: a stub
+ * transport in one suite left `transport stubbed` behind, and
+ * doctor-reports-harvest-state then failed on a local endpoint it had never
+ * touched. Same lesson as the backups: the suites that know about the file
+ * can redirect it, and the ones that merely call extract() cannot be expected
+ * to know they need to.
+ *
  * CommonJS on purpose -- Jest runs `setupFiles` before the ESM loader is in
  * play, so an `import` statement here fails to parse.
  */
@@ -28,3 +40,17 @@ if (!process.env.TOKEN_OPTIMIZER_BACKUP_DIR) {
     join(tmpdir(), 'token-optimizer-test-backups-')
   );
 }
+
+// FRESH FOR EVERY TEST FILE, unlike the backup directory above. Jest reuses a
+// worker process across suites, so the `if (!...)` guard would hand the second
+// suite in a worker the first one's file -- which is exactly what happened: a
+// stub transport in one suite wrote `transport stubbed`, and
+// doctor-reports-harvest-state, running later in the same worker, reported a
+// failed harvest on a local endpoint it had never called. setupFiles runs per
+// test FILE, so assigning unconditionally is what makes it per suite. A suite
+// that wants to control the path still overrides it in beforeEach, which runs
+// after this.
+process.env.TOKEN_OPTIMIZER_HARVEST_STATE = join(
+  mkdtempSync(join(tmpdir(), 'token-optimizer-test-harvest-')),
+  'last-harvest.json'
+);

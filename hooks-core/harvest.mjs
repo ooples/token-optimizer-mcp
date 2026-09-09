@@ -18,7 +18,9 @@
  * must be defensible without anyone reading the docs.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 
 const MODEL = () => process.env.TOKEN_OPTIMIZER_HARVEST_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -38,6 +40,69 @@ const ENDPOINT = () => process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT
 // code -- the only finding type whose source is a person telling the agent it
 // was wrong, which is why it is kept distinguishable from an ordinary finding.
 export const FINDING_TYPES = ['finding', 'decision', 'failure', 'command', 'map', 'feedback'];
+
+/**
+ * The shape a reply must take, for servers that can enforce one.
+ *
+ * A SMALL LOCAL MODEL WILL NOT FOLLOW THE PROMPT ON ITS OWN. Measured against
+ * qwen2.5:3b through ollama on the real digest from this session:
+ *
+ *   no constraint                    prose summary, 0 findings
+ *   response_format json_object      valid JSON, an invented schema
+ *   response_format json_schema      1 finding in the exact shape, 9s
+ *
+ * That is the difference between the free private path working and not, so
+ * the schema is sent rather than hoped for. The wrapper object exists because
+ * the OpenAI structured-output contract takes an object at the root; `extract`
+ * already locates the array inside whatever it is handed, so nothing
+ * downstream needs to know.
+ *
+ * EVERY FIELD THE PROMPT ASKS FOR HAS TO BE DECLARED HERE, because the
+ * object is closed. `PROMPT` asks for `scope` and `invalidators`; the schema
+ * did not declare them and `additionalProperties: false` therefore FORBADE
+ * them, so an enforcing server could not return either one. `validate` then
+ * substituted `project` and `[]` for every finding, and the substitution is
+ * silent: on the schema path, organization- and global-scope findings could
+ * not be promoted and no finding could ever carry an invalidator. Both are
+ * required, matching the prompt -- a finding with nothing that would
+ * invalidate it is declared as an empty array rather than omitted, which is a
+ * claim the model has to make on purpose.
+ */
+export const FINDINGS_SCHEMA = Object.freeze({
+  type: 'object',
+  required: ['findings'],
+  additionalProperties: false,
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'type',
+          'claim',
+          'evidence',
+          'applicability',
+          'confidenceLabel',
+          'scope',
+          'invalidators',
+          'anchors',
+        ],
+        properties: {
+          type: { type: 'string', enum: FINDING_TYPES },
+          claim: { type: 'string' },
+          evidence: { type: 'string' },
+          applicability: { type: 'string' },
+          confidenceLabel: { type: 'string', enum: ['verified', 'probable', 'speculative'] },
+          scope: { type: 'string', enum: ['project', 'organization', 'global'] },
+          invalidators: { type: 'array', items: { type: 'string' } },
+          anchors: { type: 'array', items: { type: 'string' } },
+          trigger: { type: 'string' },
+        },
+      },
+    },
+  },
+});
 
 export function apiKey() {
   return process.env.TOKEN_OPTIMIZER_API_KEY || process.env.ANTHROPIC_API_KEY || null;
@@ -283,12 +348,140 @@ export function validate(raw, { knownFiles = null } = {}) {
 }
 
 /**
+ * Which wire format the configured endpoint speaks.
+ *
+ * THE ADVERTISED LOCAL PATH DID NOT WORK. Both the SessionStart notice and
+ * `doctor` tell the user to point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local
+ * model, and this client only ever spoke the Anthropic Messages dialect --
+ * `system` as a top-level field, `content[]` blocks in the reply. ollama, LM
+ * Studio and llama.cpp all serve OpenAI-compatible /v1/chat/completions,
+ * which takes the system prompt as a message and answers with
+ * `choices[].message.content`. Measured against a stand-in server answering
+ * both dialects with the identical finding: the Anthropic path returned 1 and
+ * the OpenAI path returned 0.
+ *
+ * Chosen from the URL rather than by trying one and falling back. A fallback
+ * doubles the latency of every genuine failure on a hook path, and the user
+ * configures the whole URL here, so the path is something they stated rather
+ * than something we guess.
+ */
+/**
+ * Which credential, if any, may travel to this endpoint.
+ *
+ * `apiKey()` falls back to ANTHROPIC_API_KEY, which is set on most machines
+ * that run Claude and says nothing about where this request is going. There is
+ * exactly one destination that key belongs to: a REMOTE ANTHROPIC endpoint.
+ *
+ *   anthropic + remote   the key -- this is what it is for
+ *   anthropic + local    explicit only -- loopback is not Anthropic
+ *   openai    + remote   explicit only -- a third-party gateway must not
+ *                        receive an Anthropic credential as a Bearer token
+ *   openai    + local    explicit only
+ *
+ * The first version of this scoped on `local` alone, which review caught: it
+ * closed the loopback leak and left the remote-gateway one wide open. Exported
+ * so all four combinations are testable without contriving DNS.
+ */
+export function credentialFor(dialect, local, env = process.env) {
+  const explicit = env.TOKEN_OPTIMIZER_API_KEY || null;
+  if (dialect === 'openai' || local) return explicit;
+  return explicit || env.ANTHROPIC_API_KEY || null;
+}
+
+export function endpointDialect(endpoint = ENDPOINT()) {
+  return /\/chat\/completions\b/.test(String(endpoint || '')) ? 'openai' : 'anthropic';
+}
+
+/**
+ * The last reason a harvest produced nothing, or null.
+ *
+ * `return []` on every failure made a misconfigured endpoint IDENTICAL to a
+ * session with nothing to learn -- which is how a local endpoint answering the
+ * wrong dialect stayed invisible. The empty result is kept, because a caller
+ * on the hook path must not care; the reason is recorded beside it so
+ * `doctor` and a human can tell the two apart.
+ */
+// A MODULE VARIABLE CANNOT CROSS A PROCESS, and every reader of this is in a
+// different one. The harvest runs in a DETACHED worker spawned at Stop
+// (stop-harvest.mjs), while `doctor` is a separate `node` invocation that
+// imports a fresh copy of this module. So `probeHarvest` read `null` no matter
+// what the harvest had done, and the failure branch it was given -- the whole
+// point of recording a reason -- could never be reached from the diagnostic
+// that exists to surface it. The reason is written where the next process can
+// find it.
+//
+// Per user, not per project: the worker resolves a project root and `doctor`
+// often cannot, and the failures recorded here (a wrong dialect, a missing
+// model name, an unreachable endpoint, a CLI that is not on PATH) are
+// properties of the machine's configuration rather than of a repository.
+const FAILURE_FILE = () =>
+  process.env.TOKEN_OPTIMIZER_HARVEST_STATE ||
+  join(homedir(), '.token-optimizer', 'last-harvest.json');
+
+// Old enough to be about a configuration that no longer exists. A harvest runs
+// at the end of every session, so a record older than this means the harvest
+// has not run since -- reporting it as the current state would be a guess.
+const FAILURE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+let lastHarvestFailure = null;
+/** True once this process has recorded an outcome, so the file is not consulted. */
+let outcomeThisProcess = false;
+
+function recordOutcome(reason) {
+  lastHarvestFailure = reason;
+  outcomeThisProcess = true;
+  try {
+    const file = FAILURE_FILE();
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ reason, at: Date.now() }), 'utf8');
+  } catch {
+    // Best effort. A harvest must never fail because it could not write a
+    // diagnostic about itself.
+  }
+}
+
+export function harvestFailure() {
+  if (outcomeThisProcess) return lastHarvestFailure;
+  try {
+    const { reason, at } = JSON.parse(readFileSync(FAILURE_FILE(), 'utf8'));
+    if (!reason || typeof at !== 'number') return null;
+    return Date.now() - at > FAILURE_TTL_MS ? null : reason;
+  } catch {
+    return null;
+  }
+}
+
+const failed = (reason) => {
+  recordOutcome(reason);
+  return [];
+};
+
+/**
+ * Clears the recorded failure, because the harvest just worked.
+ *
+ * Without this the file is a one-way latch: a user fixes their endpoint, the
+ * harvest starts working, and `doctor` keeps reporting the failure that was
+ * true a week ago. The TTL alone would not do it -- it expires a stale record,
+ * not a wrong one.
+ */
+const succeeded = (findings) => {
+  recordOutcome(null);
+  return findings;
+};
+
+/**
  * Calls the model. Returns [] on any failure -- a harvest that errors must be
  * indistinguishable, from the caller's side, from a session with nothing to
- * learn.
+ * learn. `harvestFailure()` carries why, for the diagnostics that do care.
  */
-export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}) {
-  if (!digest || !harvestEnabled()) return [];
+export async function extract(
+  digest,
+  { timeoutMs = 30_000, prompt = null, knownFiles = null } = {}
+) {
+  lastHarvestFailure = null;
+  outcomeThisProcess = false;
+  if (!digest) return failed('no digest');
+  if (!harvestEnabled()) return failed(`harvest is ${harvestMode()}`);
 
   // A local endpoint usually has no auth at all, so requiring a key there would
   // make the free, private path unreachable -- the one the design now prefers.
@@ -296,41 +489,190 @@ export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}
   // exists and that the user opted in.
   const key = apiKey();
   const local = Boolean(localEndpoint());
-  if (!local && !key) return [];
+  if (!local && !key) return failed('no api key for a remote endpoint');
+
+  const endpoint = ENDPOINT();
+  const dialect = endpointDialect(endpoint);
+  const system = prompt || PROMPT;
+
+  // ANCHORS OFFERED AS A CHOICE, NOT REQUESTED IN PROSE.
+  //
+  // `validate` holds anchors to the files the session actually touched, and a
+  // model asked in English for a path writes a plausible one instead of a real
+  // one -- so every finding was discarded at the gate. Measured over four runs
+  // of qwen2.5:7b on this session's real digest, against that same gate:
+  //
+  //   anchors unconstrained     4 extracted -> 0 accepted
+  //   anchors enum-constrained  4 extracted -> 4 accepted
+  //
+  // Nothing else differed. The server enforces the enum, so the model picks
+  // from the real list rather than inventing one, and the gate stops being
+  // the thing that silently eats the harvest.
+  //
+  // Only when the caller knows the list. `buildFullDelta` is raw transcript
+  // with no file heading, and its caller passes no knownFiles for the same
+  // reason -- an empty enum would forbid every anchor rather than free it.
+  const anchorChoices = knownFiles ? [...knownFiles].filter(Boolean) : [];
+  const schema = anchorChoices.length
+    ? {
+        ...FINDINGS_SCHEMA,
+        properties: {
+          ...FINDINGS_SCHEMA.properties,
+          findings: {
+            ...FINDINGS_SCHEMA.properties.findings,
+            items: {
+              ...FINDINGS_SCHEMA.properties.findings.items,
+              properties: {
+                ...FINDINGS_SCHEMA.properties.findings.items.properties,
+                anchors: { type: 'array', items: { type: 'string', enum: anchorChoices } },
+              },
+            },
+          },
+        },
+      }
+    : FINDINGS_SCHEMA;
+
+  // AN AMBIENT KEY IS NOT CONSENT TO SEND IT TO A LOCAL SERVER.
+  //
+  // `apiKey()` falls back to ANTHROPIC_API_KEY, which is set on most
+  // machines that run Claude at all and says nothing about the endpoint the
+  // user pointed this at -- which may be any process listening on loopback.
+  // A local server that genuinely wants auth is still reachable: set
+  // TOKEN_OPTIMIZER_API_KEY, which is explicit about being for this.
+  //
+  // Remote is unchanged; there the key is the whole reason the call is
+  // allowed to happen.
+  const credential = credentialFor(dialect, local);
+
+  // THE DEFAULT MODEL IS AN ANTHROPIC ONE, AND A LOCAL SERVER HAS NEVER HEARD
+  // OF IT. `MODEL()` falls back to claude-haiku, so an endpoint configured per
+  // the documented advice -- which names only TOKEN_OPTIMIZER_HARVEST_ENDPOINT --
+  // asks ollama for a model it does not have and is refused. I hit this myself
+  // while proving the dialect fix and set the variable by hand without noticing
+  // that a user could not know to.
+  //
+  // Refused with an actionable reason rather than guessed at. Picking a default
+  // like `llama3.2` would be a guess about what the user pulled, and being wrong
+  // costs the same silent nothing this whole branch exists to remove.
+  if (dialect === 'openai' && !process.env.TOKEN_OPTIMIZER_HARVEST_MODEL) {
+    return failed(
+      'set TOKEN_OPTIMIZER_HARVEST_MODEL for an OpenAI-compatible endpoint ' +
+        `(the default ${MODEL()} is an Anthropic model no local server serves)`
+    );
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
-    const response = await fetch(ENDPOINT(), {
+  /**
+   * One request. `structured` asks the server to enforce FINDINGS_SCHEMA.
+   *
+   * Separated out so the schema can be dropped and the call retried WITHOUT
+   * repeating the request shape in two places, which is how the two would
+   * drift.
+   */
+  const send = (structured) =>
+    fetch(endpoint, {
       method: 'POST',
       signal: controller.signal,
       headers: {
         'content-type': 'application/json',
-        ...(key ? { 'x-api-key': key } : {}),
-        'anthropic-version': '2023-06-01',
+        // A local server usually wants no credential at all, and sending one
+        // to localhost is a leak, not a courtesy -- so a key is attached only
+        // when there is one, in the scheme the dialect expects.
+        ...(credential && dialect === 'anthropic' ? { 'x-api-key': credential } : {}),
+        ...(credential && dialect === 'openai'
+          ? { authorization: `Bearer ${credential}` }
+          : {}),
+        ...(dialect === 'anthropic' ? { 'anthropic-version': '2023-06-01' } : {}),
       },
-      body: JSON.stringify({
-        model: MODEL(),
-        max_tokens: 2048,
-        system: prompt || PROMPT,
-        messages: [{ role: 'user', content: digest }],
-      }),
+      body: JSON.stringify(
+        dialect === 'openai'
+          ? {
+              model: MODEL(),
+              max_tokens: 2048,
+              // No top-level `system` in this dialect; it is the first message.
+              messages: [
+                { role: 'system', content: system },
+                { role: 'user', content: digest },
+              ],
+              ...(structured
+                ? {
+                    response_format: {
+                      type: 'json_schema',
+                      json_schema: { name: 'findings', schema },
+                    },
+                  }
+                : {}),
+            }
+          : {
+              model: MODEL(),
+              max_tokens: 2048,
+              system,
+              messages: [{ role: 'user', content: digest }],
+            }
+      ),
     });
 
-    if (!response.ok) return [];
+  try {
+    // Structured output only where the contract exists. Anthropic Messages has
+    // no `response_format`, and sending one is at best ignored.
+    let response = await send(dialect === 'openai');
+
+    // RETRIED ONCE, AND ONLY FOR A REFUSAL OF THE SCHEMA ITSELF. A server that
+    // predates structured outputs rejects the request outright, and the
+    // unconstrained call still works there -- that is the configuration this
+    // whole function used to be. Narrow on purpose: a 4xx is the server saying
+    // it will not take what was sent, while a 5xx or a timeout is a condition a
+    // second identical call would only pay for twice, on a hook path.
+    // NARROWED FROM ANY 4xx. Review is right that the first version retried
+    // things a retry cannot help and should not touch: a 429 is a rate limit
+    // and an immediate repeat makes it worse, while 401/403/404 are settled
+    // answers about credentials and routing. Only a 400/422 whose body names
+    // `response_format` is the server saying it will not take THE SCHEMA,
+    // which is the one case where the same request without it still works.
+    if (
+      !response.ok
+      && dialect === 'openai'
+      && (response.status === 400 || response.status === 422)
+    ) {
+      let complaint = '';
+      try {
+        complaint = await response.clone().text();
+      } catch {
+        complaint = '';
+      }
+      if (/response_format|json_schema/i.test(complaint)) response = await send(false);
+    }
+
+    if (!response.ok) return failed(`endpoint returned HTTP ${response.status}`);
     const body = await response.json();
-    const text = (body.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+
+    // BOTH SHAPES READ, whichever dialect was sent. A gateway may answer in the
+    // other one, and reading both costs a property access.
+    const text =
+      (Array.isArray(body.content)
+        ? body.content.filter((b) => b?.type === 'text').map((b) => b.text).join('')
+        : '') ||
+      (Array.isArray(body.choices)
+        ? body.choices.map((c) => c?.message?.content || '').join('')
+        : '') ||
+      '';
+    if (!text) return failed('endpoint answered in an unrecognised shape');
 
     // Models wrap JSON in prose or fences often enough that finding the array
     // is more reliable than insisting the whole response parse.
     const start = text.indexOf('[');
     const end = text.lastIndexOf(']');
-    if (start === -1 || end <= start) return [];
+    if (start === -1 || end <= start) return failed('no JSON array in the reply');
 
-    return JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return [];
+    try {
+      return succeeded(JSON.parse(text.slice(start, end + 1)));
+    } catch {
+      return failed('the JSON array in the reply did not parse');
+    }
+  } catch (error) {
+    return failed(error?.name === 'AbortError' ? `timed out after ${timeoutMs}ms` : `${error?.message || error}`);
   } finally {
     clearTimeout(timer);
   }

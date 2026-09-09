@@ -25,7 +25,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { harvestMode } from './harvest.mjs';
+import { harvestMode, harvestFailure } from './harvest.mjs';
 import { readManifest, verifyManifest, residue, manifestSize } from './manifest.mjs';
 import { mcpClientsSeen } from './metrics.mjs';
 
@@ -228,6 +228,20 @@ export function probeHarvest() {
   // credential, no billing and no digest leaving the machine -- so the two facts
   // that decide whether someone wants it are the two facts stated first.
   if (mode === 'local') {
+    // WHY THE LAST ONE PRODUCED NOTHING, when it produced nothing.
+    //
+    // `extract` returns [] on every failure so a hook-path caller need not
+    // care, which made a misconfigured endpoint indistinguishable from a
+    // session with nothing to learn -- the exact reason a client speaking the
+    // wrong dialect went unnoticed. `harvestFailure()` carries the reason, and
+    // this is the reader it was added for.
+    const reason = harvestFailure();
+    if (reason) {
+      return [bad('finding extraction is configured but returned nothing',
+        `the last harvest attempt ended: ${reason}`,
+        'check the endpoint URL and, for an OpenAI-compatible server, that ' +
+        'TOKEN_OPTIMIZER_HARVEST_MODEL names a model it actually serves')];
+    }
     return [ok('finding extraction is available',
       'local model found -- semantic harvest is on, free and private: no credential, no billing, ' +
       'and nothing leaves this machine. Active-model wiki_write remains the primary path')];
