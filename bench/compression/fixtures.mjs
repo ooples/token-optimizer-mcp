@@ -184,7 +184,86 @@ function tsModule(r, functions) {
   return parts.join('\n');
 }
 
+/**
+ * Structured log entries in the shape HeadRoom actually benchmarks.
+ *
+ * READ FROM THEIR GENERATOR, not inferred -- the same mistake as code-search,
+ * made twice. benchmarks/scenarios/tool_outputs.py::generate_log_entries emits
+ * JSON DICTIONARIES, not text lines: timestamp, level, logger, message,
+ * service, hostname and a unique trace_id, with ERROR and CRITICAL entries
+ * carrying an extra exception object. Messages come from eight templates, and
+ * only include_errors + include_critical entries out of n are outside them.
+ *
+ * That shape routes to the JSON engine rather than the log engine, which is
+ * why their figure is achievable with a unique id on every entry: the bulk is
+ * repeated keys and templated messages, not the ids.
+ *
+ * The exception-carrying entries are needles by construction -- they hold a
+ * key the other 99% lack -- so anomaly preservation must keep them.
+ */
+function structuredLog(r, n) {
+  const messages = [
+    'Request processed successfully for user {user}',
+    'Database query completed in {ms}ms',
+    'Cache hit for key {key}',
+    'API call to {service} returned {status}',
+    'Background job {job} started',
+    'Background job {job} completed',
+    'Health check passed for {component}',
+    'Metrics exported: {count} datapoints',
+  ];
+  const errors = [
+    'Connection failed to {service}: timeout after {ms}ms',
+    'Database error: {error_type}',
+    'Failed to process request: {error}',
+    'Rate limit exceeded for user {user}',
+  ];
+  const fill = (t) =>
+    t.replace(/\{(\w+)\}/g, (_m, k) => `${k}-${Math.floor(r() * 900) + 100}`);
+  const hex = (i) => ((i * 2654435761) >>> 0).toString(16).padStart(8, '0');
+
+  const entries = [];
+  for (let i = 0; i < n; i += 1) {
+    const critical = i < 1;
+    const error = !critical && i < 6;
+    const level = critical
+      ? 'CRITICAL'
+      : error
+        ? 'ERROR'
+        : r() < 0.1
+          ? 'WARNING'
+          : r() < 0.1
+            ? 'DEBUG'
+            : 'INFO';
+    const message = fill(pick(r, error || critical ? errors : messages));
+    const entry = {
+      timestamp: `2026-01-06T00:${String(Math.floor(i / 120) % 60).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}Z`,
+      level,
+      logger: pick(r, ['app', 'api', 'worker', 'scheduler']),
+      message,
+      service: 'token-optimizer-benchmark',
+      hostname: `worker-${String((i % 10) + 1).padStart(2, '0')}`,
+      trace_id: `trace_${hex(i)}${hex(i + 1)}`,
+    };
+    if (error || critical) {
+      entry.exception = {
+        type: pick(r, ['TimeoutError', 'ConnectionError', 'ValueError', 'RuntimeError']),
+        message,
+        stacktrace: `Traceback (most recent call last):\n  File "app/handler.py", line ${100 + i}, in handle\n    return dispatch(request)\n  File "app/dispatch.py", line ${200 + i}, in dispatch`,
+      };
+    }
+    entries.push(entry);
+  }
+  return JSON.stringify(entries, null, 2);
+}
+
 /** A build/test log: heavy repetition, with genuine failures that must survive. */
+/** A stable, UUID-shaped correlation id per request. */
+function reqId(i) {
+  const h = (n) => ((n * 2654435761) >>> 0).toString(16).padStart(8, '0');
+  return `${h(i)}-${h(i + 1).slice(0, 4)}-4${h(i + 2).slice(0, 3)}-9${h(i + 3).slice(0, 3)}-${h(i + 4)}${h(i + 5).slice(0, 4)}`;
+}
+
 function buildLog(r, lines) {
   const out = [];
   const stamp = (i) => `2026-09-09T18:${String(10 + (i % 50)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}Z`;
@@ -193,7 +272,12 @@ function buildLog(r, lines) {
     if (roll < 0.55) {
       out.push(`${stamp(i)} INFO  webpack: compiled module ${i % 9} successfully`);
     } else if (roll < 0.8) {
-      out.push(`${stamp(i)} DEBUG resolving dependency graph for package-${i % 12}`);
+      // A correlation id on the line, because real logs carry them and a
+      // fixture without one cannot exercise the identifier floor at all --
+      // which is why the benchmark could not have caught the shredding bug.
+      out.push(
+        `${stamp(i)} DEBUG resolving dependency graph for package-${i % 12} req=${reqId(i)}`
+      );
     } else if (roll < 0.94) {
       out.push(`${stamp(i)} WARN  peer dependency mismatch for lib-${i % 30}`);
     } else {
@@ -325,6 +409,18 @@ export function fixtures() {
     {
       name: 'sre-debugging',
       theirs: { before: 65694, after: 5118 },
+      request: request(
+        'You are an SRE agent.',
+        [structuredLog(r, 120), 'Investigating the failed deploy.'],
+        [structuredLog(r, 900)]
+      ),
+    },
+    {
+      // OUR OWN, HARDER CASE, kept because real build output is raw text with a
+      // correlation id per line and no JSON structure to exploit. No published
+      // comparator, so it is reported rather than compared.
+      name: 'raw-build-log',
+      theirs: null,
       request: request(
         'You are an SRE agent.',
         [buildLog(r, 200), 'Investigating the failed deploy.'],

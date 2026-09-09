@@ -23,6 +23,7 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
+import { containsStructural } from './structural.js';
 import type { CompressionResult, EngineContext } from './types.js';
 import { unchanged } from './types.js';
 
@@ -60,6 +61,13 @@ function sentences(text: string): string[] {
  */
 export function score(sentence: string, index: number, total: number): number {
   let value = 0;
+
+  // AN IDENTIFIER OUTRANKS EVERYTHING, because it is the one thing in a
+  // passage that cannot be paraphrased, inferred or looked up again. A
+  // sentence carrying a correlation id, a key or a commit hash is the
+  // sentence a reader came for, and dropping it is unrecoverable in a way
+  // that dropping an explanation is not.
+  if (containsStructural(sentence)) value += 14;
 
   // Something the reader must act on. Dominant term by design: a false
   // negative here deletes the point of the document.

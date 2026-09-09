@@ -17,6 +17,7 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
+import { overlapsStructural, structuralRanges } from './structural.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { unchanged } from './types.js';
 
@@ -118,6 +119,74 @@ export function compressLog(
   return { text: folded.join('\n'), elisions, lossless: true };
 }
 
+/**
+ * Splits a line into its fixed shape and its varying values.
+ *
+ * A VARIABLE SPAN IS A WHOLE TOKEN, NEVER PART OF ONE. Substituting every
+ * digit run turned
+ *
+ *   request 3f2a9c14-8b7d-4e56-9a01-ffedcba98765 authorised with sk-ant-...
+ *
+ * into
+ *
+ *   request #f#a#c#-#b#d-#e#-#a#-ffedcba# authorised with sk-ant-api#-QmFz...
+ *
+ * which is neither the original nor a placeholder -- still identifier-shaped
+ * enough for a model to quote back or search for. A dropped value is visibly
+ * missing; a shredded one is invisibly wrong.
+ *
+ * THE FIRST FIX WENT TOO FAR, and the benchmark said so. Refusing to touch
+ * identifiers at all meant a log carrying one correlation id per line could
+ * not be templated at all: the sre workload fell from 92.8% to 58.8% on
+ * touchable content the moment the fixture carried realistic ids.
+ *
+ * The requirement was never "do not substitute an identifier" -- it was "do
+ * not substitute PART of one". So a structural range is itself a variable
+ * span: the whole id is replaced by one placeholder and recorded verbatim
+ * among the values, which is lossless and compresses like anything else.
+ */
+function variableSpans(line: string): Array<[number, number]> {
+  const protectedRanges = structuralRanges(line);
+  const spans: Array<[number, number]> = protectedRanges.map(([a, b]) => [
+    a,
+    b,
+  ]);
+
+  VARIABLE.lastIndex = 0;
+  for (let m = VARIABLE.exec(line); m; m = VARIABLE.exec(line)) {
+    const start = m.index;
+    const end = start + m[0].length;
+    // Digits inside an identifier are already covered by its own span.
+    if (overlapsStructural(protectedRanges, start, end)) continue;
+    spans.push([start, end]);
+  }
+
+  return spans.sort((a, b) => a[0] - b[0]);
+}
+
+/** The line with every variable span replaced by a single placeholder. */
+function shapeOf(line: string): string {
+  let out = '';
+  let cursor = 0;
+  for (const [start, end] of variableSpans(line)) {
+    if (start < cursor) continue;
+    out += line.slice(cursor, start) + '#';
+    cursor = end;
+  }
+  return out + line.slice(cursor);
+}
+
+/** The values that shape stands in for, in order and verbatim. */
+function valuesOf(line: string): string[] {
+  const values: string[] = [];
+  let cursor = 0;
+  for (const [start, end] of variableSpans(line)) {
+    if (start < cursor) continue;
+    values.push(line.slice(start, end));
+    cursor = end;
+  }
+  return values;
+}
 /** Digits, hex ids and quoted values -- the parts that vary between two runs of one event. */
 // NO WORD BOUNDARIES, deliberately. With `\b` this matched nothing useful:
 // the digits in `src/mod1000.ts` sit between two word characters, so no two
@@ -158,7 +227,7 @@ function templated(lines: string[], elisions: Elision[]): string[] {
 
   lines.forEach((line, index) => {
     if (!line.trim() || line.trimStart().startsWith('[... ')) return;
-    const shape = line.replace(VARIABLE, '#');
+    const shape = shapeOf(line);
     // A line with nothing variable in it is not a template, it is a line.
     if (shape === line) return;
     const bucket = groups.get(shape);
@@ -173,7 +242,7 @@ function templated(lines: string[], elisions: Elision[]): string[] {
     if (members.length < MIN_TEMPLATE) continue;
 
     // One row of values per occurrence, in the order they appeared.
-    const rows = members.map((i) => (lines[i].match(VARIABLE) ?? []).join(' '));
+    const rows = members.map((i) => valuesOf(lines[i]).join(' '));
     const rendered =
       `${shape}  [${count(members.length, 'occurrence')}, # = ` +
       `${rows.join(' | ')}]`;
