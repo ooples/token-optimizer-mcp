@@ -663,33 +663,138 @@ export const noisyCommand = {
 };
 
 /**
- * ADVERSARIAL: a large file that must genuinely be read in full.
+ * ADVERSARIAL: a large file that must genuinely be read in full, with the
+ * strategy choice removed.
  *
- * THE COUNTERWEIGHT TO THE TWO ABOVE, and the reason this battery can be
- * trusted after adding them. Every function must be changed, so an outline is
- * useless, a bounded read is missing exactly the information required, and any
- * substitution costs a turn and then has to be undone. If our arm does not lose
- * here, the task is not doing its job and should be made harder -- the same
- * rule the original adversarial set is held to.
+ * THE COUNTERWEIGHT THIS BATTERY NEEDS, and the second attempt at it. Every
+ * function must change, so an outline is useless, a bounded read is missing
+ * exactly the information required, and any substitution is paid and then has to
+ * be undone. If our arm does not lose here, the task is not doing its job.
+ *
+ * WHY THE MESSAGE CARRIES THE FUNCTION'S OWN NAME. The previous version asked
+ * for one uniform replacement across 120 functions, which left the agent a
+ * choice: 120 targeted edits, or a single find/replace, or one whole-file
+ * rewrite. Those cost wildly different amounts, and the spread is not noise that
+ * more reps can average away -- at n=30 the interval was [0.962, 1.395], about
+ * 43% wide, and the task was excluded from every headline as UNRESOLVED. It had
+ * the right direction and unusable precision.
+ *
+ * Requiring `rule_0007: ...` inside rule_0007 makes every replacement distinct,
+ * so no single find/replace can do it and the dominant cost -- emitting 120
+ * unique strings -- is the same whichever route the agent takes. The strategy
+ * choice is gone; the adversarial property is untouched.
+ *
+ * RENAMED, NOT EDITED IN PLACE. Rows for `whole-file-transform` exist in
+ * largecontext.jsonl, postfix*.jsonl and competitors-v1.jsonl. Keeping the id
+ * while changing what the task asks would leave one name meaning two different
+ * experiments, and the build key does not protect a reader who compares task ids
+ * across stores.
  */
-export const wholeFileTransform = {
-  id: 'whole-file-transform',
+export const wholeFileRetitle = {
+  id: 'whole-file-retitle',
   family: 'generation',
   adversarial: true,
   tracks: ['cold', 'warm'],
   prompt:
-    'Every function in pkg/rules.py raises ValueError("amount must not be negative"). Change every ' +
-    'one of those messages to "amount must be zero or greater". Change nothing else.',
+    'Every function in pkg/rules.py raises ValueError("amount must not be negative"). Change each ' +
+    'of those messages to "NAME: amount must be zero or greater", where NAME is the name of the ' +
+    'function the message is inside -- so rule_0007 raises ValueError("rule_0007: amount must be ' +
+    'zero or greater"). Change nothing else.',
   setup(dir) {
     write(dir, 'pkg/rules.py', bigModule(120, -1));
   },
   checks: [
     {
-      name: 'every message was changed',
+      // THE ONE THAT MAKES THE TASK WHAT IT IS. Counting occurrences would pass
+      // a file where every message says the same name, which is precisely the
+      // uniform edit this design exists to rule out -- so each message is
+      // checked against the function it is actually inside.
+      name: 'every message carries its own function name',
       weight: 4,
       run: (dir) => {
+        // PER FUNCTION, NOT AGGREGATE COUNTS. Review raised this and the premise
+        // deserved testing rather than agreement: the aggregate form here did
+        // already reject the specific cheat described, because `matched` only
+        // increments when a message equals its ENCLOSING function's name -- a
+        // file whose messages all say `rule_0119` scored 0.50, as did one
+        // stacking 120 valid messages inside rule_0119.
+        //
+        // But `matched === 120` is still a count, and a count can be reached by
+        // routes a per-function check forbids: duplicates inside one function
+        // offsetting a function with none. Requiring each of rule_0000..rule_0119
+        // to exist exactly once and carry exactly one matching message removes
+        // the whole class instead of the instance, which is worth doing even
+        // though the instance was already covered.
         const src = read(dir, 'pkg/rules.py');
-        return (src.match(/amount must be zero or greater/g) || []).length === 120;
+        const seen = new Map();
+        let current = null;
+        // Whether the NEXT statement is the first one inside this function's
+        // `if amount < 0:` guard, and how far that guard was indented.
+        let awaitingGuardBody = false;
+        let guardIndent = 0;
+        for (const line of src.split('\n')) {
+          const def = line.match(/^def\s+(rule_\d{4})\s*\(/);
+          if (def) {
+            current = def[1];
+            awaitingGuardBody = false;
+            const entry = seen.get(current) || { defs: 0, msgs: 0 };
+            entry.defs += 1;
+            seen.set(current, entry);
+            continue;
+          }
+          // THE RAISE HAS TO BE THE ONE THAT ACTUALLY FIRES.
+          //
+          // Review found the remaining route: replace the real raise with
+          // `pass` and put a matching one under `if False:` in the same
+          // function. Every check passed -- the message sits inside its own
+          // function, on a code line, exactly once -- while a negative amount
+          // sailed straight through. POSITION was the missing constraint. The
+          // fixture generates the raise as the FIRST statement inside
+          // `if amount < 0:`, and a solution told to change nothing but the
+          // message leaves it there; anything nested a level deeper, or moved
+          // out of the guard, is by construction not the raise that fires.
+          const guard = line.match(/^(\s*)if\s+amount\s*<\s*0\s*:\s*$/);
+          if (guard) {
+            awaitingGuardBody = true;
+            guardIndent = guard[1].length;
+            continue;
+          }
+          // Blank lines and comments do not open the body. Anything else does,
+          // and gets exactly one chance to be the raise.
+          if (awaitingGuardBody && (!line.trim() || /^\s*#/.test(line))) continue;
+          // Generous about quoting and spacing, strict about three facts: the
+          // function's own name, the new wording, and that the raise is CODE.
+          //
+          // ANCHORED TO THE START OF THE LINE, because an unanchored match
+          // accepts `# raise ValueError(...)`. Replacing every real raise with a
+          // matching comment then satisfied this check, the old-message check
+          // AND the function-count check together, while the generated rules no
+          // longer rejected a negative amount at all -- a verifier passing work
+          // that does not do the thing the task asked for.
+          const msg = line.match(
+            /^(\s*)raise\s+ValueError\(\s*['"]([^'"]*)['"]\s*\)/
+          );
+          const firstInGuard =
+            awaitingGuardBody && msg !== null && msg[1].length > guardIndent;
+          // Consumed either way: the first statement in the body is the only
+          // candidate, so a `pass` sitting there closes the opportunity rather
+          // than deferring it to some later line in the function.
+          if (awaitingGuardBody) awaitingGuardBody = false;
+          if (
+            firstInGuard &&
+            current &&
+            msg[2] === `${current}: amount must be zero or greater`
+          ) {
+            const entry = seen.get(current);
+            if (entry) entry.msgs += 1;
+          }
+        }
+        if (seen.size !== 120) return false;
+        for (let i = 0; i < 120; i += 1) {
+          const entry = seen.get(`rule_${String(i).padStart(4, '0')}`);
+          if (!entry || entry.defs !== 1 || entry.msgs !== 1) return false;
+        }
+        return true;
       },
     },
     {
@@ -824,15 +929,32 @@ export const GOLDEN = {
 
   'noisy-command': (dir) => write(dir, 'ANSWER.txt', 'test_case_0431\n'),
 
-  'whole-file-transform': (dir) =>
-    write(
-      dir,
-      'pkg/rules.py',
-      read(dir, 'pkg/rules.py').replace(
-        /amount must not be negative/g,
-        'amount must be zero or greater'
-      )
-    ),
+  // Tracks the enclosing function so each message gets ITS OWN name. A single
+  // regex cannot express this answer, which is exactly the property the task was
+  // redesigned to have -- if the golden solution could be a find/replace, the
+  // agent's cheapest route would be one too and the strategy spread would be
+  // back.
+  'whole-file-retitle': (dir) => {
+    let current = null;
+    const out = read(dir, 'pkg/rules.py')
+      .split('\n')
+      .map((line) => {
+        const def = line.match(/^def\s+(rule_\d{4})\s*\(/);
+        if (def) {
+          current = def[1];
+          return line;
+        }
+        if (current && line.includes('amount must not be negative')) {
+          return line.replace(
+            'amount must not be negative',
+            `${current}: amount must be zero or greater`
+          );
+        }
+        return line;
+      })
+      .join('\n');
+    write(dir, 'pkg/rules.py', out);
+  },
 
   'debug-pipeline-py': (dir) =>
     write(dir, 'pipeline/clean.py', read(dir, 'pipeline/clean.py').replace('.lstrip()', '.strip()')),
@@ -881,13 +1003,40 @@ export const GOLDEN = {
     ),
 };
 
+/**
+ * ORDER IS THE WARM TRACK'S EXPERIMENT, not a list.
+ *
+ * A warm rep runs this sequence against ONE state directory, so whatever the
+ * graph learns in an earlier task is present for a later one. That makes the
+ * order load-bearing in a way it is not for cold, where `pooled()` runs tasks
+ * independently and this array is merely a set.
+ *
+ * TWO REUSE PAIRS, both now ordered discoverer-then-beneficiary:
+ *
+ *   floodedSymbol -> needleInRepo    the same defect in the same function
+ *                                    (`compute_settlement_fee` rounds before
+ *                                    applying the rate) hidden in two different
+ *                                    haystacks.
+ *   debugPipeline -> explainFailure   the same failing test
+ *                                    (tests/test_pipeline.py, `normalise`):
+ *                                    one fixes it, the next must explain why it
+ *                                    failed.
+ *
+ * explainFailure USED TO RUN FIRST, ahead of the task that discovers the bug it
+ * asks about, so the graph had nothing to offer it and half the reuse evidence
+ * was structurally impossible to observe. Caught by inspecting the order before
+ * the first warm campaign rather than by a weak result afterwards.
+ */
 export const TASKS = [
-  explainFailure,
   floodedSymbol,
   debugPipeline,
+  // Placed after debugPipeline: it asks why a test failed that debugPipeline has
+  // just diagnosed.
+  explainFailure,
   singleShotExtract,
   pureGeneration,
   repeatComprehension,
+  // Placed after floodedSymbol: same defect, different haystack.
   needleInRepo,
   // The large-context battery. Added because measurement showed 74.7% of spend
   // is on the input side -- cache_read alone is 58.2% -- which no rules file
@@ -895,7 +1044,8 @@ export const TASKS = [
   // could never exercise the mechanism that does reach it.
   largeFileDefect,
   noisyCommand,
-  wholeFileTransform,
+  // Replaces whole-file-transform, which was adversarial but never converged.
+  wholeFileRetitle,
   // The bias control for the large-context set. Added last, after the aggregate
   // was found to rest on three tasks our mechanism is built to win.
   generationAmidBulk,

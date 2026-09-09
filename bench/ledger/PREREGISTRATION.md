@@ -277,3 +277,262 @@ the build key, and this ledger refuses to average across builds. Folding it into
 the headline requires re-running every task and arm together; until that happens
 it is reported as a standalone bias control and the aggregate keeps its warning.
 
+
+---
+
+# Addendum 3: a third attempt at a converging adversarial task
+
+Written before the confirmatory run, after a pilot and because of it. This is the
+third attempt; the first two are recorded below so the record cannot be read as
+if this design were arrived at cleanly.
+
+## What failed twice
+
+- **`whole-file-transform`** had the right DIRECTION -- interception measured
+  1.149 [0.962, 1.395] against `ours-rules` -- and unusable precision. Excluded
+  from every headline as UNRESOLVED across three campaigns.
+- **`generation-amid-bulk`** had the right PRECISION and the wrong direction. It
+  was designed as a bias control and turned out to be a fourth task we win
+  (0.892 [0.821, 0.969] at n=60). See RESULTS-ADVERSARIAL.md.
+
+## The change, and why it should fix precision
+
+`whole-file-retitle` requires each message to carry its own function's name, so
+no single find/replace expresses the answer and the dominant cost -- emitting 120
+unique strings -- is the same on every route. The strategy choice that produced
+the spread is gone.
+
+Measured in a 12-rep pilot (`retitle-pilot.jsonl`, image `sha256:abfce039`):
+cost CV 20.4% (`ours-rules`), 24.3% (`assist`), 26.7% (control), against the old
+task's projected +/-21% at n=30. Projected here: **+/-12.0% at n=30, +/-8.4% at
+n=60**. Every one of the 36 pilot runs scored 1.000, so closing the cheap route
+did not make the task unsolvable.
+
+## The pre-registered n is 60, and the design is fixed here
+
+**n = 60 per arm, fixed, no early stopping**, on `control`, `ours-rules` and
+`assist`. 60 buys roughly **+/-8.4%** on the pilot's variance. That is slightly
+WIDER than the +/-7% at which `large-file-defect` resolves, and far narrower than
+the +/-21% at which `whole-file-transform` never did.
+
+An earlier draft of this line said +/-8.4% was "inside the band where
+`large-file-defect` resolves (+/-7%)", which is arithmetically false -- review
+caught it. The threshold that matters is not a fixed number anyway: the harness
+resolves a task when the interval is tight enough to separate the arms, and
++/-7% is a figure one task happened to achieve rather than a bar this one must
+clear. What n=60 is bought for is stated in the falsifier below -- an interval
+that can distinguish "spans parity" from "excludes parity" -- and +/-8.4% is
+sufficient for that.
+
+*Recorded after the fact, and it does not change the design:* the confirmatory
+run came in at **+/-6.8%**, narrower than the pilot projected and inside +/-7%
+after all. The pre-registration stands as written, correction included, because
+a projection that turned out conservative is not a licence to rewrite what was
+committed to beforehand.
+
+The pilot rows do NOT enter the result; they exist to choose this number.
+
+## What would falsify it, stated before the data
+
+The pilot's point estimate is **0.977 [0.816, 1.170]**, which is BELOW parity --
+the opposite side from the old task's 1.149. So the honest possibilities are:
+
+- **Interval spans parity** -- the intended outcome. Interception is measured and
+  shown not to help where it cannot help. This is a valid bias control and clears
+  the harness's `NO ADVERSARIAL TASKS RESOLVED` warning.
+- **Interval excludes parity ABOVE 1** -- interception costs. Also acceptable,
+  and a stronger control.
+- **Interval excludes parity BELOW 1** -- `assist` WINS this task. Then it is not
+  a bias control at all, it is a third task we win, and this attempt has failed
+  exactly as `generation-amid-bulk` did. That outcome gets published as a third
+  failure rather than reframed as a win, and the battery still has no converging
+  adversarial task.
+- **Interval still wider than +/-12%** -- the spread was never strategy choice,
+  and the diagnosis in the commit message is wrong.
+
+The pilot cannot distinguish the first three: its interval [0.816, 1.170]
+contains all of them. That is the question n=60 is being bought to answer.
+
+
+---
+
+# Addendum 4 -- does the graph pay off, now that it can actually speak?
+
+Registered **before** the campaign completes. Build `de05b1ca @ 5048f812`,
+warm track, control vs assist, 11 tasks, fixed n=10.
+
+## What the first warm campaign found
+
+The warm track ran for the first time at 217 runs and produced a NULL result --
+but the shape of the null is what matters, because it is the inverse of what a
+working graph predicts:
+
+| group | median assist/control | can these tasks reuse anything? |
+| --- | --- | --- |
+| adversarial (4 tasks) | **0.681** | no, by construction |
+| beneficiary (2 tasks) | **0.890** | yes, written to demonstrate it |
+| other (5 tasks) | 0.839 | incidentally |
+
+Tasks that CANNOT benefit from accumulated knowledge benefited most. Tasks
+written expressly to show reuse benefited least. That is not a weak positive, it
+is a signature: a retrieval path that never fires, with the whole ~16% assist
+margin coming from within-session output discipline.
+
+Two faults were then found and fixed, both proven against the real router:
+
+1. Under `assist` the advisory was computed and DISCARDED -- it rides on
+   `reason`, and `enforce()` allows silently under assist, exiting first. The
+   warm campaign ran assist for all 107 of its runs, so the advisory reached no
+   model at any point.
+2. The gate named `Grep` and `Glob` only, while the observed agents searched
+   entirely through the shell (`grep -rn "compute_settlement_fee" /work ...`).
+
+## The prediction
+
+If those two faults were the cause, the inversion should close: the BENEFICIARY
+ratio should fall relative to the ADVERSARIAL ratio. The adversarial set is the
+control here -- its tasks cannot reuse anything, so Fix A should not move them,
+and any change in them is telling us about the build rather than the graph.
+
+The registered statistic is the **gap**, `beneficiary_mean - adversarial_mean`,
+which was **+0.209** (0.890 - 0.681). It is a within-campaign comparison, so it
+is not confounded by the build change that the new image forces.
+
+## What would falsify it, stated before the data
+
+- **Gap narrows toward zero or goes negative** -- the fixes worked and the graph
+  pays where it was designed to. The claim survives.
+- **Gap is unchanged (within noise of +0.209)** -- delivery was NOT the binding
+  constraint. Something else stops the graph paying, and the two fixes, though
+  independently correct, bought nothing measurable. This must be reported as the
+  fixes failing to move the number, not as "directionally encouraging".
+- **Gap WIDENS** -- the advisory is actively costing the tasks it targets, most
+  plausibly by spending context on an answer the model then re-verifies anyway.
+  That would argue for reverting delivery on the beneficiary path.
+- **The adversarial set moves substantially** -- the comparison is contaminated
+  by the build, and the gap cannot be read at all. Then n=10 on two arms was the
+  wrong instrument and the honest answer is that this campaign settles nothing.
+
+## The limitation, stated in advance
+
+n=10 across 11 tasks resolves a per-task ratio to roughly +/-10% at best, and the
+gap is a difference of two means over 4 and 2 tasks. A change smaller than about
+0.05 in the gap is not distinguishable from noise at this n, so only a clear
+narrowing counts as support. A null here does NOT prove the graph worthless; it
+proves that these two fixes did not move this battery, which is a narrower and
+more honest claim.
+
+---
+
+# Correction 4a -- what Addendum 4 got wrong, before its campaign is read
+
+Review raised two problems with Addendum 4 above. Both are real. This is
+appended rather than edited into it, because silently rewriting a
+pre-registration destroys the only property that makes it worth writing.
+
+## 1. The provenance of "217 runs", and where n is not 10
+
+Addendum 4 says "fixed n=10" and "217 runs" without reconciling the two. The
+store is `bench/ledger/warm-baseline.jsonl`. It holds **220 rows: 110 control
+and 110 assist**, reps 1 through 10, across 11 tasks.
+
+Three assist rows failed and cost nothing:
+
+| task | arm | rep | status | usd | error |
+| --- | --- | --- | --- | --- | --- |
+| noisy-command | assist | 10 | failed | 0 | OAuth session expired and could not be refreshed |
+| whole-file-retitle | assist | 10 | failed | 0 | OAuth session expired and could not be refreshed |
+| generation-amid-bulk | assist | 10 | failed | 0 | OAuth session expired and could not be refreshed |
+
+`isHarnessFailure` (`bench/ledger/store.mjs:165`) treats a zero-cost `failed`
+row as a harness failure, so all three are excluded from analysis. 220 - 3 =
+**217**, which is where that number comes from.
+
+**So "fixed n=10" describes the design, not three of the cells.** On the assist
+side `noisy-command`, `whole-file-retitle` and `generation-amid-bulk` each have
+**n=9**. Two of those three are adversarial tasks, which is the group the
+registered statistic leans on hardest.
+
+Recomputed from the ledger both ways, per-task ratio = median(assist unit cost)
+/ median(control unit cost), unit cost = `usd / score`:
+
+| group | harness rule (217 rows) | failures retained at usd 0 (220 rows) |
+| --- | --- | --- |
+| adversarial (4 tasks) | mean **0.681**, median 0.689 | mean 0.672, median 0.672 |
+| beneficiary (2 tasks) | mean **0.890**, median 0.890 | mean 0.890, median 0.890 |
+| other (5 tasks) | mean 0.839, median 0.864 | mean 0.839, median 0.864 |
+| **gap** (beneficiary_mean - adversarial_mean) | **+0.209** | **+0.218** |
+
+The 217-row column reproduces Addendum 4's table exactly, so the numbers
+published there were computed under the harness rule as intended. Retaining the
+three failures at `usd 0` moves the gap by 0.009 -- far below the ~0.05 the
+addendum itself calls the noise floor -- so the choice of rule does not change
+the registered comparison. That is a reconciliation, not a defence: it had to be
+checked before it could be said.
+
+The reproduction is `median(usd/score)` per arm per task over
+`warm-baseline.jsonl`, grouped as adversarial = {single-shot-extract,
+pure-generation, whole-file-retitle, generation-amid-bulk}, beneficiary =
+{needle-in-repo, explain-failure} (the second half of each reuse pair defined in
+`bench/ledger/tasks/index.mjs`), other = the remaining five.
+
+## 2. `control` is not a graph-only counterfactual, and the adversarial set is not inert
+
+Addendum 4 claims "the adversarial set is the control here -- its tasks cannot
+reuse anything, so Fix A should not move them, and any change in them is telling
+us about the build rather than the graph."
+
+That does not follow, and `bench/ledger/arms.mjs` is why:
+
+- `control` (line 18) installs **no hooks at all** and sets
+  `TOKEN_OPTIMIZER_MODE=off`.
+- `assist` (line 80) installs `optimizerHooks`: a `SessionStart` hook and a
+  `PreToolUse` matcher over `Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell`.
+
+Every assist/control ratio in the table therefore prices the **whole bundle** --
+session seeding, output discipline, outline substitution, the search advisory --
+and not graph retrieval. Worse for the specific argument made: the `PreToolUse`
+matcher includes `Bash`, and Fix A is exactly the advisory that now fires on
+shell searches. It applies to adversarial tasks like every other. So the
+adversarial set cannot serve as a within-campaign control for Fix A: the
+intervention reaches it directly.
+
+**What this costs the registered claim.** The gap can still be read as a
+description -- did the beneficiary group move relative to the adversarial group
+-- but not as attribution. A narrowing gap is consistent with the graph starting
+to pay AND with the advisory simply costing adversarial tasks more than
+beneficiary ones. Addendum 4's falsifier "the adversarial set moves
+substantially -> contaminated by the build" is incomplete for the same reason:
+that movement is at least as likely to be Fix A acting on the adversarial set as
+it is to be the build.
+
+**The instrument that would attribute it already exists in this repo.**
+`arms.mjs` defines matched single-variable partners built for precisely this:
+
+- `assist-noseed` (line 97) -- `assist` with `TOKEN_OPTIMIZER_SEED=0`, "identical
+  in every other respect, so the difference between them is the seed and nothing
+  else".
+- `assist-norules` (line 113) -- `assist` with the output-discipline block
+  removed, described in its own docblock as "THE ONLY ARM THAT CAN ATTRIBUTE THE
+  RESULT", written because "everything measured in this project until now has
+  been an arm-versus-control test of a bundle".
+
+That docblock is a verdict on Addendum 4 written before Addendum 4 existed.
+A graph-only counterfactual needs the same treatment: `assist` against an arm
+identical but for retrieval, with the same hooks, the same `Bash` matcher and
+the same advisory envelope on both sides.
+
+## What changes, concretely
+
+1. The Addendum 4 campaign is still worth reading, and its result is reported as
+   what it measures: **hooks-bundle vs no-hooks**, described per group. It is not
+   reported as evidence about the graph specifically.
+2. The registered gap keeps its falsifiers, with one added: a change in the
+   adversarial set is no longer attributable to the build alone, so a
+   substantially moving adversarial set means the gap is uninterpretable rather
+   than merely contaminated.
+3. The graph claim is denominated on a matched pair -- `assist` against a
+   retrieval-disabled arm sharing its hooks and advisory envelope -- registered
+   before it runs, in the style `assist-norules` established.
+4. Every warm result cites `warm-baseline.jsonl` and states its usable n per
+   cell, not just the design n.

@@ -61,6 +61,28 @@ export function rowProblem(row) {
     if (row[field] === undefined || row[field] === null) return `missing ${field}`;
   }
   if (!TRACKS.includes(row.track)) return `unknown track ${row.track}`;
+  // PROVENANCE MUST BE SHAPED LIKE PROVENANCE, not merely present.
+  //
+  // Review found this on a row I created myself. Pinning a top-up with
+  // `--commit-sha`, I typed a remembered 8-character prefix and invented the
+  // rest; the ledger's build-scoping caught it -- the run reported "0 rows
+  // already recorded" where it should have said 600 -- but only because the key
+  // failed to MATCH. The row itself was accepted: status ok, a real cost, and a
+  // commit_sha resolving to nothing. Quarantining the file was not a fix,
+  // because `--store` points wherever it is told and any future typo produces
+  // the same thing under a name nobody flags.
+  //
+  // Checked as a shape rather than against `git cat-file`: a row must be
+  // readable years later, on a machine that does not have this repository, from
+  // a JSONL file alone. A 40-character hex sha cannot prove the commit exists,
+  // but it does reject the whole class of hand-typed values -- short prefixes,
+  // truncations, invented tails -- which is what actually happened here.
+  if (!/^[0-9a-f]{40}$/.test(String(row.commit_sha))) {
+    return `commit_sha must be a full 40-character hex sha, got "${row.commit_sha}"`;
+  }
+  if (!/^sha256:[0-9a-f]{64}$/.test(String(row.image_digest))) {
+    return `image_digest must be sha256:<64 hex>, got "${row.image_digest}"`;
+  }
   if (typeof row.usd !== 'number' || !Number.isFinite(row.usd) || row.usd < 0) {
     return 'usd must be a finite non-negative number';
   }
@@ -135,4 +157,38 @@ export function newestBuildOnly(rows) {
   }
   const kept = rows.filter((r) => buildKey(r) === build);
   return { kept, dropped: rows.filter((r) => buildKey(r) !== build), build };
+}
+
+/**
+ * Which commits in a set of rows do not exist in this repository.
+ *
+ * SEPARATE FROM `rowProblem`, AND DELIBERATELY OPT-IN. That function is pure: it
+ * judges a row from the row alone, so a JSONL file stays readable years later on
+ * a machine that never had this repository. Resolving a sha needs a git object
+ * database, which is exactly the dependency the raw rows are meant not to have.
+ *
+ * IT EXISTS BECAUSE A SHAPE CHECK CANNOT CATCH THIS. Pinning a top-up with
+ * `--commit-sha`, I typed a remembered 8-character prefix and invented the tail.
+ * The result was a well-formed 40-character hex sha that resolves to nothing --
+ * so `/^[0-9a-f]{40}$/` accepts it, and the only way to tell is to ask git. The
+ * ledger caught the mistake by a different route (the build key failed to match,
+ * and the run reported "0 rows already recorded" where it should have said 600),
+ * but that is luck about which half of the key was wrong, not a check.
+ *
+ * `run` is injected so this is testable without a repository.
+ */
+export function unresolvableCommits(rows, { run = null, cwd = process.cwd() } = {}) {
+  const shas = [...new Set(rows.map((r) => String(r.commit_sha)).filter(Boolean))];
+  if (!shas.length || !run) return [];
+  const missing = [];
+  for (const sha of shas) {
+    try {
+      // `commit^{commit}` fails for a tree, a blob or a non-existent object, so
+      // it answers "is this a commit here" rather than "does some object exist".
+      run('git', ['-C', cwd, 'rev-parse', '--quiet', '--verify', `${sha}^{commit}`]);
+    } catch {
+      missing.push(sha);
+    }
+  }
+  return missing;
 }

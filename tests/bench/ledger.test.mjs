@@ -27,6 +27,32 @@ import {
 } from '../../bench/ledger/provenance.mjs';
 import { taskResult, compareArm, report } from '../../bench/ledger/rank.mjs';
 import { renderReport } from '../../bench/ledger/render.mjs';
+import { TASKS } from '../../bench/ledger/tasks/index.mjs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+/**
+ * WELL-FORMED PLACEHOLDER PROVENANCE, named rather than inlined.
+ *
+ * `rowProblem` requires a 40-hex commit and a sha256:<64 hex> digest, because a
+ * short or truncated value is the shape a hand-typed sha takes and a row that
+ * cannot identify its build cannot be checked by anyone. The fixtures used
+ * 'abc1234' and 'sha256:aaa', which are neither.
+ *
+ * Padded rather than randomised so the original placeholder is still legible --
+ * DIGEST_OLD reads `sha256:d000...` and DIGEST_NEW `sha256:e000...` -- and a
+ * failing assertion still says which build it meant. That distinction is
+ * load-bearing: several tests exist precisely to prove two builds are never
+ * averaged together.
+ */
+const pad = (label, len) => (label + '0'.repeat(len)).slice(0, len);
+const COMMIT = pad('abc1234', 40);
+const COMMIT_OTHER = pad('c1', 40);
+const DIGEST = pad('sha256:aaa'.slice(7), 64);
+const DIGEST_B = pad('bbb', 64);
+const DIGEST_OLD = pad('d', 64);
+const DIGEST_NEW = pad('e', 64);
 
 /** A row with everything the ledger requires, so tests vary one thing at a time. */
 const row = (over = {}) => ({
@@ -38,8 +64,8 @@ const row = (over = {}) => ({
   usd: 0.1,
   turns: 6,
   score: 1,
-  image_digest: 'sha256:aaa',
-  commit_sha: 'abc1234',
+  image_digest: `sha256:${DIGEST}`,
+  commit_sha: COMMIT,
   started_at: '2026-08-31T22:05:00Z',
   ...over,
 });
@@ -410,9 +436,9 @@ describe('provenance cannot be skipped', () => {
     // The exact shape of the real incident: same arm, same task, two builds,
     // nothing in the rows to tell them apart except when they ran.
     const mixed = [
-      row({ image_digest: 'sha256:old', started_at: '2026-08-31T17:42:05Z' }),
-      row({ image_digest: 'sha256:old', started_at: '2026-08-31T17:43:34Z' }),
-      row({ image_digest: 'sha256:new', started_at: '2026-08-31T22:08:54Z' }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, started_at: '2026-08-31T17:42:05Z' }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, started_at: '2026-08-31T17:43:34Z' }),
+      row({ image_digest: `sha256:${DIGEST_NEW}`, started_at: '2026-08-31T22:08:54Z' }),
     ];
     expect(() => assertSingleBuild(mixed, 'cold/candidate')).toThrow(/spans 2 builds/);
   });
@@ -423,20 +449,20 @@ describe('provenance cannot be skipped', () => {
 
   test('recovery keeps the newest build and hands back the discards', () => {
     const mixed = [
-      row({ image_digest: 'sha256:old', started_at: '2026-08-31T17:42:05Z' }),
-      row({ image_digest: 'sha256:new', started_at: '2026-08-31T22:08:54Z' }),
+      row({ image_digest: `sha256:${DIGEST_OLD}`, started_at: '2026-08-31T17:42:05Z' }),
+      row({ image_digest: `sha256:${DIGEST_NEW}`, started_at: '2026-08-31T22:08:54Z' }),
     ];
     const { kept, dropped, build } = newestBuildOnly(mixed);
     expect(kept).toHaveLength(1);
     expect(dropped).toHaveLength(1);
-    expect(build).toContain('sha256:new');
+    expect(build).toContain(DIGEST_NEW);
     // Nothing is deleted -- the caller decides.
     expect(mixed).toHaveLength(2);
   });
 });
 
 describe('the report', () => {
-  const rows = (arm, track, usds, scores, digest = 'sha256:aaa') =>
+  const rows = (arm, track, usds, scores, digest = `sha256:${DIGEST}`) =>
     usds.map((usd, i) =>
       row({
         arm,
@@ -464,8 +490,8 @@ describe('the report', () => {
     expect(() =>
       report([
         ...rows('control', 'cold', [0.1, 0.1, 0.1], [1, 1, 1]),
-        ...rows('candidate', 'cold', [0.1, 0.1], [1, 1], 'sha256:old'),
-        ...rows('candidate', 'cold', [0.1], [1], 'sha256:new'),
+        ...rows('candidate', 'cold', [0.1, 0.1], [1, 1], `sha256:${DIGEST_OLD}`),
+        ...rows('candidate', 'cold', [0.1], [1], `sha256:${DIGEST_NEW}`),
       ])
     ).toThrow(/spans 2 builds/);
   });
@@ -737,5 +763,120 @@ describe('the report', () => {
     const out = report([row(), { task: 'x' }]);
     expect(out.rejected).toHaveLength(1);
     expect(out.rejected[0].problem).toMatch(/missing/);
+  });
+});
+
+/**
+ * A verifier must not accept work that was commented out.
+ *
+ * The `raise` matcher for whole-file-retitle was not anchored to the start of a
+ * code line, so `# raise ValueError("rule_0001: ...")` satisfied it. An agent
+ * could comment out all 120 raises, rename the text inside the comments, and
+ * pass every check on this task -- while the generated rules stopped rejecting
+ * negative amounts entirely. A benchmark that scores that as success is
+ * measuring the wrong thing and reporting it confidently.
+ */
+describe('whole-file-retitle rejects commented-out work', () => {
+  const task = () => TASKS.find((t) => t.id === 'whole-file-retitle');
+
+  /**
+   * Rewrites every raise line in the fixture.
+   *
+   * `mode` selects what is written in its place:
+   *   clean       the honest solution -- same line, new message
+   *   commented   `# raise ...`, which is not code
+   *   unreachable `pass` in the guard, and a matching raise under `if False:`
+   *   nested      the guard kept, but the raise buried under `if False:`
+   */
+  const solve = ({ mode = 'clean' } = {}) => {
+    const dir = mkdtempSync(join(tmpdir(), 'retitle-verify-'));
+    task().setup(dir);
+    const path = join(dir, 'pkg', 'rules.py');
+    let fn = null;
+    const src = readFileSync(path, 'utf8')
+      .split('\n')
+      .map((line) => {
+        const def = line.match(/^def\s+(rule_\d{4})\s*\(/);
+        if (def) {
+          fn = def[1];
+          return line;
+        }
+        if (!fn || !/^\s*raise\s+ValueError\(/.test(line)) return line;
+        const renamed = line.replace(
+          /ValueError\((['"]).*?\1\)/,
+          `ValueError("${fn}: amount must be zero or greater")`
+        );
+        const indent = (line.match(/^\s*/) || [''])[0];
+        const outer = indent.slice(0, Math.max(0, indent.length - 4));
+        if (mode === 'commented') return renamed.replace(/^(\s*)raise/, '$1# raise');
+        if (mode === 'unreachable') {
+          // The guard still exists and still does nothing; the message that
+          // satisfies the checker lives somewhere that never executes.
+          return [`${indent}pass`, `${outer}if False:`, renamed].join('\n');
+        }
+        if (mode === 'nested') {
+          return [`${indent}if False:`, `    ${renamed}`].join('\n');
+        }
+        return renamed;
+      })
+      .join('\n');
+    writeFileSync(path, src);
+    return dir;
+  };
+
+  const results = (dir) =>
+    Object.fromEntries(task().checks.map((c) => [c.name, !!c.run(dir)]));
+
+  test('the real solution passes every check', () => {
+    // The positive half matters as much as the negative one: a matcher tightened
+    // until nothing passes would also reject the commented cheat, and would be
+    // useless.
+    const dir = solve({ mode: 'clean' });
+    try {
+      expect(Object.values(results(dir)).every(Boolean)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('commenting the raises out fails the message check', () => {
+    const dir = solve({ mode: 'commented' });
+    try {
+      const scored = results(dir);
+      expect(scored['every message carries its own function name']).toBe(false);
+      // The other two still pass, which is exactly why this was dangerous: two
+      // of three checks green and the task scored as done.
+      expect(scored['the functions themselves survived']).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a matching raise under `if False:` fails the message check', () => {
+    // Review found this one. The raise is real code, sits inside its own
+    // function, carries the exact required message, and appears exactly once --
+    // so every constraint the checker had was satisfied while `if amount < 0:`
+    // was left doing nothing at all. Only its POSITION gives it away.
+    const dir = solve({ mode: 'unreachable' });
+    try {
+      const scored = results(dir);
+      expect(scored['every message carries its own function name']).toBe(false);
+      // Same danger as the commented cheat: the other two checks stay green.
+      expect(scored['none of the old messages remain']).toBe(true);
+      expect(scored['the functions themselves survived']).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('burying the raise deeper inside the guard fails too', () => {
+    // The variant the first fix would have missed: the guard is kept and the
+    // raise is still inside it, just one level further down and unreachable.
+    const dir = solve({ mode: 'nested' });
+    try {
+      expect(results(dir)['every message carries its own function name']).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

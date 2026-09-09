@@ -20,7 +20,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { runColdTask, runWarmSequence, campaignProvenance } from './run.mjs';
-import { appendRows, loadRows, completedReps, nextRep } from './store.mjs';
+import {
+  appendRows,
+  loadRows,
+  completedReps,
+  nextRep,
+  isHarnessFailure,
+} from './store.mjs';
 import { report } from './rank.mjs';
 import { forTrack } from './tasks/index.mjs';
 import { discardWorkspace } from './executor.mjs';
@@ -153,23 +159,58 @@ export async function warmArm(arm, { tasks, execute, provenance, storePath, prec
   // rep counts as done only when every task in it has a row for this build --
   // a sequence interrupted halfway is redone, because its later tasks never saw
   // the state the earlier ones would have left.
+  //
+  // A RUN THE HARNESS NEVER STARTED DOES NOT SATISFY THE REP COUNT, which is the
+  // rule `completedReps` already states for the cold track and this function did
+  // not apply. Observed: Docker died 26 runs into a 220-run campaign, and the
+  // runner wrote 194 rows at `status: error` and `usd: 0` -- one for every task
+  // of every remaining rep. Those rows name every task, so `complete` counted
+  // all ten reps of both arms as done, and a resume would have skipped the whole
+  // campaign and reported it finished on 26 real runs. The failures are excluded
+  // from `priorRows` for the same reason: a zero-cost row is not evidence, and
+  // feeding it to `samplingVerdict` would converge an interval on nothing.
   const build = buildKey(provenance);
   const mine = loadRows(storePath).filter(
-    (r) => r.arm === arm && r.track === 'warm' && buildKey(r) === build
+    (r) =>
+      r.arm === arm &&
+      r.track === 'warm' &&
+      buildKey(r) === build &&
+      !isHarnessFailure(r)
   );
   const complete = new Set();
   for (const rep of new Set(mine.map((r) => r.rep))) {
     const inRep = new Set(mine.filter((r) => r.rep === rep).map((r) => r.task));
     if (tasks.every((t) => inRep.has(t.id))) complete.add(rep);
   }
+  // A LABEL ABOVE EVERY COMPLETE REP, AND A BUDGET COUNTED IN COMPLETE REPS.
+  //
+  // Those are two different questions and this conflated them. Reps 1 and 3
+  // banked with rep 2 a full sequence of harness failures gives a next label
+  // of 4 -- correct -- but the sequence then measured that against fixedReps
+  // and ran NOTHING, finishing on two usable reps and settling an interval
+  // below the registered sample size. `completedReps` is what the budget is
+  // actually owed against, so the gap at rep 2 is made up at rep 4 rather
+  // than left unfilled.
+  //
+  // The gap is not backfilled AT label 2 deliberately: rows already carry it,
+  // and the reader keeps the newest row per (arm, task, build, rep). Reusing
+  // a label is only safe where the rows under it are worthless -- a torn rep
+  // or a zero-cost harness failure, which is exactly the case
+  // `Math.max(...complete) + 1` still allows.
   const startRep = complete.size ? Math.max(...complete) + 1 : 1;
   const priorRows = mine.filter((r) => complete.has(r.rep));
-  if (startRep > 1) log?.(`  warm/${arm}: resuming at rep ${startRep} (${priorRows.length} row(s) banked)`);
+  if (startRep > 1) {
+    log?.(
+      `  warm/${arm}: resuming at rep ${startRep} ` +
+        `(${complete.size} complete rep(s), ${priorRows.length} row(s) banked)`
+    );
+  }
 
   const { rows, unresolved } = await runWarmSequence(tasks, {
     arm,
     startRep,
     priorRows,
+    completedReps: complete.size,
     execute,
     freshStateDir: async () => mkdtempSync(join(tmpdir(), `ledger-warm-${arm}-`)),
     provenance,

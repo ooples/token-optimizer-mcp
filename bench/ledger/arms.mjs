@@ -116,6 +116,132 @@ export const assistNoRules = {
   env: { ...assist.env, TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: '0' },
 };
 
+/**
+ * THE SHIPPED DEFAULT, and the posture the goal in #357 is denominated on.
+ *
+ * WHY THIS ARM DID NOT EXIST UNTIL NOW, WHICH IS THE AWKWARD PART. Every arm in
+ * this file was `off` or `assist`, so the enforcing posture -- the one a user
+ * gets out of the box, since `mode()` returns MODE_ENFORCE for anything
+ * unrecognised -- had never been measurable here at all. #357 sets its target
+ * explicitly "measured with enforcement on", on the grounds that winning without
+ * it would mean winning without the differentiator, and the harness could not
+ * express that configuration.
+ *
+ * IDENTICAL TO `assist` EXCEPT THE MODE. Same hooks, same runtime pin, same
+ * capabilities. That single-variable difference is the whole value: `enforce`
+ * against `assist` is the price of refusals plus the routing advisory, and
+ * nothing else moves.
+ *
+ * WHAT IT IS EXPECTED TO COST. A refusal spends a whole turn redirecting a call
+ * that would otherwise have completed, which on a cost endpoint is the most
+ * expensive thing an optimizer can do -- the same reasoning that predicted the
+ * competitor's blocking read guard would net to nothing, and did. The last
+ * measurement of this posture, on THOL's battery, was 1.687x vanilla Claude Code
+ * against `off` at 0.904. If it is still above parity here, that is the finding,
+ * and #357's commitment says it gets published rather than re-run until it
+ * agrees.
+ */
+/**
+ * The MCP server, registered exactly as the shipped plugin registers it.
+ *
+ * WITHOUT THIS AN ENFORCING ARM IS INERT, and the discovery cost a probe rather
+ * than a campaign. A refusal only fires when the replacement tool has positive
+ * registration evidence -- `refusalsEnabled()` is necessary but not sufficient --
+ * so an `enforce` arm inheriting `TOKEN_OPTIMIZER_MCP_CAPABILITIES: ''` from
+ * `assist` never refuses anything. Measured directly: the same 200 KB Read
+ * payload through pretooluse-router.mjs produces NO output under
+ * mode=enforce with empty capabilities, and a smart_read redirect under
+ * mode=enforce with them declared.
+ *
+ * Declaring the capability string alone would be worse than useless. It makes
+ * the hook refuse a Read and point the model at `smart_read`, a tool that would
+ * not exist in the container -- so the arm would measure an agent chasing a
+ * missing tool, which no real user experiences. Registering the server makes the
+ * redirect land somewhere, which is the only faithful way to price enforcement.
+ *
+ * Paths are absolute because the arm is a settings file handed to `claude
+ * --settings`, with no plugin root to expand. The image pre-seeds
+ * TOKEN_OPTIMIZER_RUNTIME at 6.0.2 precisely so launch.mjs serves the pinned
+ * build warm instead of npx-installing @latest mid-campaign.
+ */
+const POSTURE_SCAFFOLD = join(
+  dirname(fileURLToPath(import.meta.url)),
+  'postures',
+  'mcp-installed'
+);
+
+/**
+ * Hooks only. The MCP server arrives through the SCAFFOLD, not through here.
+ *
+ * `settings.mcpServers` DOES NOT WORK and failed silently, which is why this is
+ * a comment rather than a config line. The executor invokes
+ * `claude -p ... --settings /arm/settings.json`, and --settings carries hooks but
+ * not MCP servers -- there is no --mcp-config in the invocation. Measured: an
+ * arm declaring settings.mcpServers produced a transcript with ZERO mcp__ tools
+ * while its refusals still fired, so the agent was told to call smart_read,
+ * found no such tool, and fell back to Bash five times. The same probe with a
+ * project-level .mcp.json in the workspace registered the server.
+ */
+const installedSettings = { hooks: optimizerHooks };
+
+/**
+ * Base environment for the posture arms. Capabilities are NOT blanked here, so
+ * the host's real inventory is what decides whether a replacement exists.
+ */
+const postureEnv = {
+  TOKEN_OPTIMIZER_RUNTIME: '/opt/token-optimizer-runtime',
+  TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS: '999999999999',
+};
+
+/**
+ * THE SHIPPED DEFAULT, and the posture #357's target is denominated on.
+ *
+ * WHY THIS ARM DID NOT EXIST UNTIL NOW. Every arm in this file was `off` or
+ * `assist`, so the enforcing posture -- what a user gets out of the box, since
+ * `mode()` returns MODE_ENFORCE for anything unrecognised -- had never been
+ * measurable here. #357 sets its target explicitly "measured with enforcement
+ * on", because winning without it means winning without the differentiator.
+ *
+ * WHAT IT IS EXPECTED TO COST. A refusal spends a whole turn redirecting a call
+ * that would otherwise have completed, which on a cost endpoint is the most
+ * expensive thing an optimizer can do -- the reasoning that predicted the
+ * competitor's blocking read guard would net to nothing, and did. The last
+ * measurement of this posture, on THOL's battery, was 1.687x vanilla against
+ * `off` at 0.904. If it is still above parity, that is the finding, and #357's
+ * own commitment says it gets published rather than re-run until it agrees.
+ */
+export const enforce = {
+  name: 'enforce',
+  settings: installedSettings,
+  env: { ...postureEnv, TOKEN_OPTIMIZER_MODE: 'enforce' },
+  scaffold: POSTURE_SCAFFOLD,
+};
+
+/** Refusals off, routing advisory on. The middle rung. */
+export const adviseOnly = {
+  name: 'advise',
+  settings: installedSettings,
+  env: { ...postureEnv, TOKEN_OPTIMIZER_MODE: 'advise' },
+  scaffold: POSTURE_SCAFFOLD,
+};
+
+/**
+ * Refusals off, advisory off, server still installed.
+ *
+ * THE COMPARATOR THAT MAKES THE OTHER TWO READABLE. `enforce` against the
+ * existing `assist` arm would differ in two ways at once -- the mode AND the
+ * presence of the MCP server -- so it could not price refusals. These three
+ * arms carry identical settings and differ only in TOKEN_OPTIMIZER_MODE, which
+ * makes each pair a single-variable comparison: enforce vs advise is the price
+ * of refusals alone, advise vs assist-mcp the price of the advisory alone.
+ */
+export const assistMcp = {
+  name: 'assist-mcp',
+  settings: installedSettings,
+  env: { ...postureEnv, TOKEN_OPTIMIZER_MODE: 'assist' },
+  scaffold: POSTURE_SCAFFOLD,
+};
+
 
 /**
  * The leader, represented by the thing that actually moves their numbers.
@@ -246,6 +372,10 @@ export const tokenjuice = {
 export const ARMS = {
   control,
   assist,
+  // The shipped default, and the posture #357's target is denominated on.
+  enforce,
+  advise: adviseOnly,
+  'assist-mcp': assistMcp,
   'assist-noseed': assistNoSeed,
   'assist-norules': assistNoRules,
   'tokenade-rules': tokenadeRules,

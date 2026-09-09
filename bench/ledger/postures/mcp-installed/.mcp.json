@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "token-optimizer": {
+      "command": "node",
+      "args": ["/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/launch.mjs"],
+      "env": {}
+    }
+  }
+}

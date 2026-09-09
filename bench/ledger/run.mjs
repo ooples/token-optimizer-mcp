@@ -168,7 +168,17 @@ export async function runColdTask(
  */
 export async function runWarmSequence(
   tasks,
-  { arm, execute, freshStateDir, provenance, precision, onRow, startRep = 1, priorRows = [] } = {}
+  {
+    arm,
+    execute,
+    freshStateDir,
+    provenance,
+    precision,
+    onRow,
+    startRep = 1,
+    priorRows = [],
+    completedReps = 0,
+  } = {}
 ) {
   const limit = { ...DEFAULT_PRECISION, ...precision };
   // RESUMES FROM ROWS ALREADY BANKED. Without this a warm campaign that was
@@ -178,7 +188,22 @@ export async function runWarmSequence(
   // from a fraction of the evidence and keep sampling forever.
   const rows = [...priorRows];
 
-  for (let rep = startRep; rep <= (limit.fixedReps || limit.maxReps); rep++) {
+  // THE BUDGET IS REPS STILL OWED, NOT THE HIGHEST LABEL.
+  //
+  // This read `rep <= fixedReps`, which silently turns a resume into a no-op:
+  // reps 1 and 3 banked with rep 2 a harness failure gives startRep 4, and at
+  // fixedReps 3 the loop never runs. The campaign then reports finished on two
+  // usable reps and `samplingVerdict` settles below the registered sample
+  // size. `runColdTask` already extends its ceiling the same way; the warm
+  // path did not.
+  //
+  // Labels are never reused, only extended -- filling the gap at rep 2 would
+  // collide with the harness-failure row already carrying that label, and the
+  // reader keeps the newest row per key, so the real measurement would be the
+  // one that disappeared. That is the failure the cold track already learned.
+  const owed = Math.max(0, (limit.fixedReps || limit.maxReps) - completedReps);
+  const repCeiling = startRep - 1 + owed;
+  for (let rep = startRep; rep <= repCeiling; rep++) {
     // Fresh for the SEQUENCE, shared within it. That single distinction is what
     // separates warm from cold.
     const stateDir = freshStateDir ? await freshStateDir({ arm, rep }) : null;
