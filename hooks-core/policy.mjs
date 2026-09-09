@@ -14,8 +14,9 @@
  *
  * REFUSALS ARE NOW OPT-IN, because measurement did not support them. Two
  * independent harnesses agree that enforcing is the worst posture we ship --
- * THOL: enforce $23.33/score 0.935 against assist $20.48/0.971 and control
- * $21.13/0.969, losing 12 of 17 tasks; ledger cold: enforce/advise 1.147
+ * THOL: enforce costs 1.471x control per task (median) at score 0.960 and
+ * 20.3 turns, against assist's 0.971 and 14.4 and control's 0.969 and 16.2;
+ * ledger cold: enforce/advise 1.147
  * [1.065, 1.235] while advise/assist-mcp is 1.028 [0.951, 1.114]. So the cost is
  * the refusals themselves, not the routing advisory or retrieval, and the
  * machinery below is retained and exercised rather than deleted: `enforce`
@@ -107,20 +108,35 @@ export function refusalsEnabled() {
  * enforcement was the assumed way there rather than a measured one. Two
  * independent harnesses now say it is the worst posture we ship:
  *
- *   THOL 2.1.251, 17 tasks x 3 reps x 3 arms, 153 runs, zero errors
- *     control  $21.13  score 0.969  turns 16.2
- *     assist   $20.48  score 0.971  turns 14.4   <- better on all three
- *     enforce  $23.33  score 0.935  turns 17.6   <- worse on all three,
- *                                                   losing 12 of 17 tasks
+ *   THOL 2.1.251, 17 tasks x 3 reps x 3 arms
+ *     control  score 0.969  turns 16.2
+ *     assist   score 0.971  turns 14.4   <- better on both
+ *     enforce  score 0.960  turns 20.3   <- worse on both
+ *
+ *     per-task median cost, enforce/control: 1.471 (mean 1.656)
+ *     enforce is cheaper on 2 of 17 tasks
+ *
+ *   READ THE PER-TASK RATIO, NOT THE RUN TOTALS. Summed over the campaign
+ *   enforce spent $18.96 against control's $21.13, which inverts the
+ *   conclusion -- and it is an artefact: `web-research-oss-inventory` costs
+ *   $3.46 a run and kept only 1 of 3 enforce reps, so the arm with fewer
+ *   runs of the most expensive task looks cheaper in a sum. The paired
+ *   per-task comparison is the one that answers the question.
+ *
+ *   These figures replace an earlier set ($23.33/0.935, "losing 12 of 17")
+ *   measured on a manifest that did not apply the enforce configuration.
+ *   The direction was right and the magnitude was not: the cost penalty is
+ *   larger than published, not smaller.
  *   Ledger cold track
  *     enforce/advise    1.147 [1.065, 1.235]  refusals cost 14.7%
  *     advise/assist-mcp 1.028 [0.951, 1.114]  the advisory itself is free
  *
  * So the refusals are the whole cost: not the routing advisory, not retrieval.
  * Enforce's worst tasks are the small cheap ones, where one refused turn is a
- * large fraction of the total (code-bugfix-py 1.599, log-needle-zh 1.589).
- * Shipping assist is worth ~12% cost and 3.6 score points against what users
- * receive today.
+ * large fraction of the total (code-bugfix-py 2.196, code-comprehension-django
+ * 2.316, code-settings-inventory-django 3.274). The mechanism is visible in
+ * the turn count: 20.3 against control's 16.2, because a refusal spends a turn
+ * before the work resumes.
  *
  * THE TYPO PROPERTY IS PRESERVED, which is what the old comment was really
  * protecting. An unrecognised value still falls back to a posture with routing,
