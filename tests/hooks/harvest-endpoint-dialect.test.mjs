@@ -16,14 +16,26 @@
  */
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import { createServer } from 'node:http';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
   extract,
   harvestFailure,
   endpointDialect,
   credentialFor,
+  validate,
   FINDINGS_SCHEMA,
 } from '../../hooks-core/harvest.mjs';
+
+const HARVEST_MODULE = new URL('../../hooks-core/harvest.mjs', import.meta.url).href;
+
+// The recorded failure now outlives the process that recorded it, so a test
+// run must not write into the developer's own ~/.token-optimizer.
+const stateDir = mkdtempSync(join(tmpdir(), 'harvest-state-'));
+const stateFile = join(stateDir, 'last-harvest.json');
 
 const FINDING = [
   {
@@ -87,6 +99,10 @@ const start = ({ status = 200, shape = 'auto', rejectSchema = false } = {}) =>
 beforeEach(() => {
   seen = null;
   attempts = [];
+  // The recorded failure is now written to disk so it can cross a process
+  // boundary; point it at a temp file so a test run never touches the
+  // developer's own ~/.token-optimizer.
+  process.env.TOKEN_OPTIMIZER_HARVEST_STATE = stateFile;
   saved = {
     endpoint: process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT,
     key: process.env.TOKEN_OPTIMIZER_API_KEY,
@@ -247,6 +263,133 @@ describe('the harvester speaks the dialect its endpoint speaks', () => {
  * path is that a modest model can run it for free, the schema is sent rather
  * than hoped for.
  */
+/**
+ * The schema is a CLOSED object, so a field the prompt asks for and the
+ * schema does not declare cannot be returned at all.
+ */
+describe('the schema declares every field the prompt asks for', () => {
+  const item = () => FINDINGS_SCHEMA.properties.findings.items;
+
+  test('scope and invalidators are declared and required', () => {
+    // additionalProperties is false, so omitting them from `properties` did
+    // not merely leave them optional -- it FORBADE them. An enforcing server
+    // could not return either one, `validate` substituted `project` and `[]`
+    // for every finding, and the substitution is silent: no finding from the
+    // schema path could ever be promoted beyond its own project or carry an
+    // invalidator.
+    expect(item().additionalProperties).toBe(false);
+    expect(Object.keys(item().properties)).toEqual(expect.arrayContaining(['scope', 'invalidators']));
+    expect(item().required).toEqual(expect.arrayContaining(['scope', 'invalidators']));
+  });
+
+  test('the declared scopes are the ones validate() accepts', () => {
+    // A schema offering a scope the gate rejects would send the model to a
+    // value that is silently rewritten, which is the same bug one level down.
+    const declared = item().properties.scope.enum;
+    for (const scope of declared) {
+      const [kept] = validate(
+        [
+          {
+            type: 'finding',
+            claim: 'a claim long enough to pass the gate',
+            evidence: 'the evidence that proved it',
+            applicability: 'when testing',
+            confidenceLabel: 'verified',
+            scope,
+            invalidators: ['the schema changes'],
+            anchors: ['hooks-core/harvest.mjs'],
+          },
+        ],
+        { knownFiles: new Set(['hooks-core/harvest.mjs']) }
+      );
+      expect(kept.scope).toBe(scope);
+      expect(kept.invalidators).toEqual(['the schema changes']);
+    }
+  });
+});
+
+/**
+ * The reason a harvest produced nothing has to reach the process that reports it.
+ */
+describe('the recorded failure outlives the process that recorded it', () => {
+  const run = (script) =>
+    spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TOKEN_OPTIMIZER_HARVEST_STATE: stateFile,
+        TOKEN_OPTIMIZER_HARVEST_ENDPOINT: '',
+        TOKEN_OPTIMIZER_API_KEY: '',
+        ANTHROPIC_API_KEY: '',
+      },
+    });
+
+  beforeEach(() => {
+    if (existsSync(stateFile)) rmSync(stateFile);
+  });
+
+  test('a failure in one process is readable in the next', () => {
+    // THE BUG THIS EXISTS FOR. The harvest runs in a DETACHED worker spawned
+    // at Stop; `doctor` is a separate node invocation importing a fresh copy
+    // of the module. A module-local variable cannot cross that boundary, so
+    // probeHarvest read null no matter what the harvest had done and the
+    // failure branch built to surface the reason was unreachable from the
+    // diagnostic that exists to surface it.
+    const recorded = run(
+      `import { extract, harvestFailure } from ${JSON.stringify(HARVEST_MODULE)};` +
+        `await extract('');` +
+        `process.stdout.write(String(harvestFailure()));`
+    );
+    expect(recorded.status).toBe(0);
+    expect(recorded.stdout).toContain('no digest');
+
+    const read = run(
+      `import { harvestFailure } from ${JSON.stringify(HARVEST_MODULE)};` +
+        `process.stdout.write(String(harvestFailure()));`
+    );
+    expect(read.status).toBe(0);
+    expect(read.stdout).toContain('no digest');
+  });
+
+  test('a record older than the TTL is not reported as current', () => {
+    // A harvest runs at the end of every session, so a week-old record means
+    // the harvest has not run since -- calling that the current state is a
+    // guess, and a guess that keeps a fixed configuration looking broken.
+    const old = Date.now() - 8 * 24 * 60 * 60 * 1000;
+    const write = run(
+      `import { writeFileSync } from 'node:fs';` +
+        `writeFileSync(process.env.TOKEN_OPTIMIZER_HARVEST_STATE, JSON.stringify({ reason: 'ancient', at: ${old} }));`
+    );
+    expect(write.status).toBe(0);
+
+    const read = run(
+      `import { harvestFailure } from ${JSON.stringify(HARVEST_MODULE)};` +
+        `process.stdout.write(String(harvestFailure()));`
+    );
+    expect(read.stdout.trim()).toBe('null');
+  });
+
+  test('a harvest that works clears the record', () => {
+    // Otherwise the file is a one-way latch: the user fixes their endpoint and
+    // doctor keeps reporting last week's failure. The TTL expires a stale
+    // record, not a wrong one.
+    run(
+      `import { extract } from ${JSON.stringify(HARVEST_MODULE)};` + `await extract('');`
+    );
+    const cleared = run(
+      `import { writeFileSync } from 'node:fs';` +
+        `writeFileSync(process.env.TOKEN_OPTIMIZER_HARVEST_STATE, JSON.stringify({ reason: null, at: Date.now() }));`
+    );
+    expect(cleared.status).toBe(0);
+
+    const read = run(
+      `import { harvestFailure } from ${JSON.stringify(HARVEST_MODULE)};` +
+        `process.stdout.write(String(harvestFailure()));`
+    );
+    expect(read.stdout.trim()).toBe('null');
+  });
+});
+
 describe('the reply shape is enforced where the server can enforce it', () => {
   test('the OpenAI request carries the findings schema', async () => {
     await start();

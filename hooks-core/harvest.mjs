@@ -18,7 +18,9 @@
  * must be defensible without anyone reading the docs.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 
 const MODEL = () => process.env.TOKEN_OPTIMIZER_HARVEST_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -54,6 +56,17 @@ export const FINDING_TYPES = ['finding', 'decision', 'failure', 'command', 'map'
  * the OpenAI structured-output contract takes an object at the root; `extract`
  * already locates the array inside whatever it is handed, so nothing
  * downstream needs to know.
+ *
+ * EVERY FIELD THE PROMPT ASKS FOR HAS TO BE DECLARED HERE, because the
+ * object is closed. `PROMPT` asks for `scope` and `invalidators`; the schema
+ * did not declare them and `additionalProperties: false` therefore FORBADE
+ * them, so an enforcing server could not return either one. `validate` then
+ * substituted `project` and `[]` for every finding, and the substitution is
+ * silent: on the schema path, organization- and global-scope findings could
+ * not be promoted and no finding could ever carry an invalidator. Both are
+ * required, matching the prompt -- a finding with nothing that would
+ * invalidate it is declared as an empty array rather than omitted, which is a
+ * claim the model has to make on purpose.
  */
 export const FINDINGS_SCHEMA = Object.freeze({
   type: 'object',
@@ -65,13 +78,24 @@ export const FINDINGS_SCHEMA = Object.freeze({
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['type', 'claim', 'evidence', 'applicability', 'confidenceLabel', 'anchors'],
+        required: [
+          'type',
+          'claim',
+          'evidence',
+          'applicability',
+          'confidenceLabel',
+          'scope',
+          'invalidators',
+          'anchors',
+        ],
         properties: {
           type: { type: 'string', enum: FINDING_TYPES },
           claim: { type: 'string' },
           evidence: { type: 'string' },
           applicability: { type: 'string' },
           confidenceLabel: { type: 'string', enum: ['verified', 'probable', 'speculative'] },
+          scope: { type: 'string', enum: ['project', 'organization', 'global'] },
+          invalidators: { type: 'array', items: { type: 'string' } },
           anchors: { type: 'array', items: { type: 'string' } },
           trigger: { type: 'string' },
         },
@@ -377,11 +401,72 @@ export function endpointDialect(endpoint = ENDPOINT()) {
  * on the hook path must not care; the reason is recorded beside it so
  * `doctor` and a human can tell the two apart.
  */
+// A MODULE VARIABLE CANNOT CROSS A PROCESS, and every reader of this is in a
+// different one. The harvest runs in a DETACHED worker spawned at Stop
+// (stop-harvest.mjs), while `doctor` is a separate `node` invocation that
+// imports a fresh copy of this module. So `probeHarvest` read `null` no matter
+// what the harvest had done, and the failure branch it was given -- the whole
+// point of recording a reason -- could never be reached from the diagnostic
+// that exists to surface it. The reason is written where the next process can
+// find it.
+//
+// Per user, not per project: the worker resolves a project root and `doctor`
+// often cannot, and the failures recorded here (a wrong dialect, a missing
+// model name, an unreachable endpoint, a CLI that is not on PATH) are
+// properties of the machine's configuration rather than of a repository.
+const FAILURE_FILE = () =>
+  process.env.TOKEN_OPTIMIZER_HARVEST_STATE ||
+  join(homedir(), '.token-optimizer', 'last-harvest.json');
+
+// Old enough to be about a configuration that no longer exists. A harvest runs
+// at the end of every session, so a record older than this means the harvest
+// has not run since -- reporting it as the current state would be a guess.
+const FAILURE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 let lastHarvestFailure = null;
-export const harvestFailure = () => lastHarvestFailure;
-const failed = (reason) => {
+/** True once this process has recorded an outcome, so the file is not consulted. */
+let outcomeThisProcess = false;
+
+function recordOutcome(reason) {
   lastHarvestFailure = reason;
+  outcomeThisProcess = true;
+  try {
+    const file = FAILURE_FILE();
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ reason, at: Date.now() }), 'utf8');
+  } catch {
+    // Best effort. A harvest must never fail because it could not write a
+    // diagnostic about itself.
+  }
+}
+
+export function harvestFailure() {
+  if (outcomeThisProcess) return lastHarvestFailure;
+  try {
+    const { reason, at } = JSON.parse(readFileSync(FAILURE_FILE(), 'utf8'));
+    if (!reason || typeof at !== 'number') return null;
+    return Date.now() - at > FAILURE_TTL_MS ? null : reason;
+  } catch {
+    return null;
+  }
+}
+
+const failed = (reason) => {
+  recordOutcome(reason);
   return [];
+};
+
+/**
+ * Clears the recorded failure, because the harvest just worked.
+ *
+ * Without this the file is a one-way latch: a user fixes their endpoint, the
+ * harvest starts working, and `doctor` keeps reporting the failure that was
+ * true a week ago. The TTL alone would not do it -- it expires a stale record,
+ * not a wrong one.
+ */
+const succeeded = (findings) => {
+  recordOutcome(null);
+  return findings;
 };
 
 /**
@@ -394,6 +479,7 @@ export async function extract(
   { timeoutMs = 30_000, prompt = null, knownFiles = null } = {}
 ) {
   lastHarvestFailure = null;
+  outcomeThisProcess = false;
   if (!digest) return failed('no digest');
   if (!harvestEnabled()) return failed(`harvest is ${harvestMode()}`);
 
@@ -581,7 +667,7 @@ export async function extract(
     if (start === -1 || end <= start) return failed('no JSON array in the reply');
 
     try {
-      return JSON.parse(text.slice(start, end + 1));
+      return succeeded(JSON.parse(text.slice(start, end + 1)));
     } catch {
       return failed('the JSON array in the reply did not parse');
     }
