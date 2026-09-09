@@ -246,6 +246,23 @@ export function probeHarvest() {
       'local model found -- semantic harvest is on, free and private: no credential, no billing, ' +
       'and nothing leaves this machine. Active-model wiki_write remains the primary path')];
   }
+  // The host client's own CLI, opted into with TOKEN_OPTIMIZER_HARVEST_CLI.
+  // Reported with the same failure-reason read as `local`, because the two
+  // share the property that made a broken configuration invisible: they
+  // return [] on failure and look exactly like a session with nothing to
+  // learn.
+  if (mode === 'host-cli') {
+    const reason = harvestFailure();
+    if (reason) {
+      return [bad('finding extraction is configured but returned nothing',
+        `the last harvest attempt ended: ${reason}`,
+        'check that this client\'s CLI is on PATH and signed in, or unset ' +
+        'TOKEN_OPTIMIZER_HARVEST_CLI to fall back to a configured endpoint')];
+    }
+    return [ok('finding extraction is available',
+      "this client's own CLI runs the semantic harvest -- no separate credential and no " +
+      'second vendor. Active-model wiki_write remains the primary path')];
+  }
   if (mode === 'remote') {
     return [ok('finding extraction is available',
       'active-model wiki_write is primary; a credential also enables fallback extraction from ' +

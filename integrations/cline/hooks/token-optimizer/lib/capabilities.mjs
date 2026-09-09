@@ -194,6 +194,181 @@ const native = (profile) => ({
   ...profile,
 });
 
+/**
+ * How each client's own CLI can be driven headlessly, when it has one.
+ *
+ * THE HARVEST MODEL IS THE HOST ITSELF. Semantic extraction has always
+ * needed an API key or a local endpoint, and on a machine with neither it
+ * simply does not run -- measured on this one, 3 harvested findings against
+ * 237 written by the agent. But the client that just ran the session is
+ * installed BY DEFINITION and every one of these ships a headless mode, so
+ * the model was already on the machine. Nothing needed configuring; it only
+ * needed asking.
+ *
+ * ONE ROW PER CLIENT, not a hardcoded backend list. The nearest competitor
+ * picks from three (claude, gemini, codex), so its Cursor, Zed, Amp, Crush
+ * or Droid users get no semantic harvest at all. Every client this package
+ * supports gets a row here or an explicit null, and `npm run sync:hooks`
+ * copies the same table into all 16 integrations so the design cannot drift
+ * per client.
+ *
+ * NEVER ANOTHER VENDOR'S CLI. Reaching for whatever happens to be on PATH
+ * would send this session's digest to a model the user never chose, which is
+ * a disclosure they did not agree to. The host is the only defensible
+ * default, and TOKEN_OPTIMIZER_HARVEST_CLI_COMMAND is the only way to pick a
+ * different one.
+ *
+ * DELIVERY IS PART OF THE ROW because the CLIs genuinely differ, and getting
+ * it wrong is silent:
+ *   - 'stdin'       the whole payload goes to the child's stdin.
+ *   - 'arg-stdin'   a short instruction is the final argument and the digest
+ *                   goes to stdin, for CLIs whose prompt flag needs a value
+ *                   but which still read stdin.
+ *   - 'prompt-file' the payload is written to a temp file and the final
+ *                   argument tells the agent to read it, for CLIs that do
+ *                   not read stdin at all.
+ *
+ * WHY A FILE AND NOT JUST A LONG ARGUMENT. Passing the payload itself as an
+ * argument was tried and abandoned on evidence. On POSIX it is fine; on
+ * Windows every one of these installs as a .cmd shim, which Node will not
+ * spawn without a shell, and cmd.exe cannot carry a newline inside an
+ * argument at all. Routing through PowerShell with the payload base64-encoded
+ * got past cmd.exe and then hit PowerShell 5.1's native-argument binder,
+ * which does not escape embedded double quotes: the prompt is JSON, so the
+ * first `\"type\":` ended the quoting and the child received 32 arguments
+ * instead of 1. A path has no spaces we did not choose, no quotes and no
+ * newlines, and it also lifts the ARG_MAX ceiling entirely -- these are
+ * agentic CLIs whose whole purpose is reading files, and the route is
+ * verified: copilot asked to read a payload file returned the exact array.
+ *
+ * VERIFIED means a probe was executed against the installed CLI in this
+ * repository and its reply parsed. DOCUMENTED means the shape comes from the
+ * vendor's own `--help` or published headless docs and has not been executed
+ * here, because the CLI is not installed on this machine. Both ship; the
+ * distinction is recorded so nobody mistakes the second for the first, and a
+ * wrong DOCUMENTED row fails loudly through `harvestFailure()` and doctor
+ * rather than silently producing nothing.
+ */
+const harvestCli = (command, args, { delivery = 'stdin', verified = false } = {}) =>
+  Object.freeze({ command, args: Object.freeze([...args]), delivery, verified });
+
+export const CLIENT_HARVEST_CLI = Object.freeze({
+  // VERIFIED: `claude -p` with the payload on stdin returned the exact array
+  // asked for. --output-format stream-json was tried first and rejected: its
+  // envelopes are themselves JSON containing brackets, which is a parsing
+  // hazard for no gain when plain text is already the model's reply.
+  'claude-code': harvestCli('claude', ['-p'], { verified: true }),
+  // VERIFIED: `codex exec -` reads instructions from stdin (its own --help
+  // says so, and a probe returned the array). It prints a banner containing
+  // `[workdir, /tmp, $TMPDIR]` before the reply, which is exactly why the
+  // reply parser has to try more than the first bracket it finds.
+  codex: harvestCli('codex', ['exec', '-'], { verified: true }),
+  // VERIFIED both ways. Asked to follow instructions on stdin the agent
+  // answered that it was unable to read stdin and exited 0 -- a silent
+  // no-findings result indistinguishable from a quiet session. Asked instead
+  // to read a payload file it returned the exact array requested, which is
+  // why this row is prompt-file. --allow-all-tools is required for
+  // non-interactive use by copilot's own help text, and -s drops the stats
+  // banner.
+  copilot: harvestCli('copilot', ['-s', '--allow-all-tools', '-p'], {
+    delivery: 'prompt-file',
+    verified: true,
+  }),
+  // DOCUMENTED: `gemini --help` states that -p runs headless and that the
+  // prompt is "Appended to input on stdin (if any)", so the digest rides
+  // stdin and the instruction is the flag value. Not executed here: this
+  // machine's gemini is unauthenticated and fails in refreshAuth before any
+  // prompt is read.
+  gemini: harvestCli('gemini', ['-p'], { delivery: 'arg-stdin' }),
+  // DOCUMENTED: qwen-code is a fork of gemini-cli and keeps its flag surface.
+  qwen: harvestCli('qwen', ['-p'], { delivery: 'arg-stdin' }),
+  // DOCUMENTED: `opencode run <message>` is its non-interactive entry point.
+  opencode: harvestCli('opencode', ['run'], { delivery: 'prompt-file' }),
+  // DOCUMENTED: `crush run <prompt>` runs a single non-interactive prompt.
+  crush: harvestCli('crush', ['run', '-q'], { delivery: 'prompt-file' }),
+  // DOCUMENTED: `droid exec <prompt>` is Factory's headless mode.
+  droid: harvestCli('droid', ['exec'], { delivery: 'prompt-file' }),
+  // DOCUMENTED: `amp -x <prompt>` executes a single prompt and exits.
+  amp: harvestCli('amp', ['-x'], { delivery: 'prompt-file' }),
+  // DOCUMENTED: the Continue CLI installs as `cn` and takes -p for headless.
+  continue: harvestCli('cn', ['-p'], { delivery: 'prompt-file' }),
+
+  // NO HEADLESS CLI OF THEIR OWN. These are editor- and extension-hosted:
+  // the assistant runs inside the IDE process and ships no command a hook
+  // could spawn. Declaring null keeps that a stated fact rather than an
+  // omission, and these clients fall back to a configured endpoint --
+  // borrowing a neighbouring vendor's CLI would send the digest to a model
+  // the user never chose.
+  cursor: null,
+  cline: null,
+  windsurf: null,
+  kilo: null,
+  roo: null,
+  zed: null,
+});
+
+/**
+ * Splits a configured command line into words, respecting quotes.
+ *
+ * SPLITTING ON WHITESPACE ALONE IS WRONG ON WINDOWS, and the first test
+ * written against this caught it: the natural thing to configure is the
+ * interpreter you already have, and on Windows that is
+ * `C:\\Program Files\\nodejs\\node.exe`. A bare split turned that into the
+ * command `C:\\Program` and reported `C:\\Program exited 1`, which is a
+ * diagnostic nobody can act on. Quoting a path with spaces is the ordinary
+ * way to write a command line, so it has to mean what it says.
+ */
+function commandWords(line) {
+  const words = [];
+  let current = '';
+  let quote = '';
+  let started = false;
+  for (const ch of String(line)) {
+    if (quote) {
+      if (ch === quote) quote = '';
+      else current += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      started = true;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      if (started) words.push(current);
+      current = '';
+      started = false;
+      continue;
+    }
+    current += ch;
+    started = true;
+  }
+  if (started) words.push(current);
+  return words;
+}
+
+/**
+ * The harvest CLI for a client, or null when it has none.
+ *
+ * TOKEN_OPTIMIZER_HARVEST_CLI_COMMAND overrides the table entirely, so a
+ * client with no row -- or one whose vendor changed its flags after this
+ * shipped -- is a configuration away from working rather than a release away.
+ * The value is a command and its arguments. The payload goes to stdin unless
+ * the string ends in `{}`, which is replaced by the path of a file holding
+ * the payload -- the delivery an agentic CLI that ignores stdin needs.
+ */
+export function harvestCliFor(client, env = process.env) {
+  const override = (env.TOKEN_OPTIMIZER_HARVEST_CLI_COMMAND || '').trim();
+  if (override) {
+    const parts = commandWords(override);
+    const arg = parts[parts.length - 1] === '{}';
+    if (arg) parts.pop();
+    const [command, ...args] = parts;
+    if (!command) return null;
+    return harvestCli(command, args, { delivery: arg ? 'prompt-file' : 'stdin' });
+  }
+  return CLIENT_HARVEST_CLI[client] || null;
+}
 export const CLIENT_CAPABILITIES = Object.freeze({
   'claude-code': native({
     name: 'Claude Code',
