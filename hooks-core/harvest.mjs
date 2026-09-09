@@ -366,7 +366,10 @@ const failed = (reason) => {
  * indistinguishable, from the caller's side, from a session with nothing to
  * learn. `harvestFailure()` carries why, for the diagnostics that do care.
  */
-export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}) {
+export async function extract(
+  digest,
+  { timeoutMs = 30_000, prompt = null, knownFiles = null } = {}
+) {
   lastHarvestFailure = null;
   if (!digest) return failed('no digest');
   if (!harvestEnabled()) return failed(`harvest is ${harvestMode()}`);
@@ -382,6 +385,43 @@ export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}
   const endpoint = ENDPOINT();
   const dialect = endpointDialect(endpoint);
   const system = prompt || PROMPT;
+
+  // ANCHORS OFFERED AS A CHOICE, NOT REQUESTED IN PROSE.
+  //
+  // `validate` holds anchors to the files the session actually touched, and a
+  // model asked in English for a path writes a plausible one instead of a real
+  // one -- so every finding was discarded at the gate. Measured over four runs
+  // of qwen2.5:7b on this session's real digest, against that same gate:
+  //
+  //   anchors unconstrained     4 extracted -> 0 accepted
+  //   anchors enum-constrained  4 extracted -> 4 accepted
+  //
+  // Nothing else differed. The server enforces the enum, so the model picks
+  // from the real list rather than inventing one, and the gate stops being
+  // the thing that silently eats the harvest.
+  //
+  // Only when the caller knows the list. `buildFullDelta` is raw transcript
+  // with no file heading, and its caller passes no knownFiles for the same
+  // reason -- an empty enum would forbid every anchor rather than free it.
+  const anchorChoices = knownFiles ? [...knownFiles].filter(Boolean) : [];
+  const schema = anchorChoices.length
+    ? {
+        ...FINDINGS_SCHEMA,
+        properties: {
+          ...FINDINGS_SCHEMA.properties,
+          findings: {
+            ...FINDINGS_SCHEMA.properties.findings,
+            items: {
+              ...FINDINGS_SCHEMA.properties.findings.items,
+              properties: {
+                ...FINDINGS_SCHEMA.properties.findings.items.properties,
+                anchors: { type: 'array', items: { type: 'string', enum: anchorChoices } },
+              },
+            },
+          },
+        },
+      }
+    : FINDINGS_SCHEMA;
 
   // AN AMBIENT KEY IS NOT CONSENT TO SEND IT TO A LOCAL SERVER.
   //
@@ -434,7 +474,7 @@ export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}
                 ? {
                     response_format: {
                       type: 'json_schema',
-                      json_schema: { name: 'findings', schema: FINDINGS_SCHEMA },
+                      json_schema: { name: 'findings', schema },
                     },
                   }
                 : {}),

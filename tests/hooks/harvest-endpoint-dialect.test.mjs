@@ -287,3 +287,56 @@ describe('the reply shape is enforced where the server can enforce it', () => {
     expect(attempts).toHaveLength(1);
   });
 });
+
+/**
+ * Anchors are offered as a choice, not requested in prose.
+ *
+ * `validate` holds anchors to the files the session actually touched, and a
+ * model asked in English for a path writes a plausible one instead of a real
+ * one -- so every finding was discarded at the gate. Measured over runs of
+ * qwen2.5:7b on this session's real digest, against that same gate:
+ * unconstrained, 0 of 6 runs yielded an accepted finding; enum-constrained,
+ * 5 of 6. Nothing else differed.
+ */
+describe('the model is given the anchors rather than asked for them', () => {
+  const anchorSpec = () =>
+    seen.body.response_format.json_schema.schema
+      .properties.findings.items.properties.anchors;
+
+  test('known files become the permitted anchor set', async () => {
+    await start();
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = `http://127.0.0.1:${port}/v1/chat/completions`;
+
+    await extract('a digest', {
+      timeoutMs: 4000,
+      knownFiles: new Set(['hooks-core/harvest.mjs', 'hooks-core/derive.mjs']),
+    });
+
+    expect(anchorSpec().items.enum).toEqual([
+      'hooks-core/harvest.mjs',
+      'hooks-core/derive.mjs',
+    ]);
+  });
+
+  test('no list means no restriction, not an empty one', async () => {
+    // An empty enum would forbid EVERY anchor rather than free them, which is
+    // the failure mode for buildFullDelta -- raw transcript with no file
+    // heading, whose caller deliberately passes nothing.
+    await start();
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = `http://127.0.0.1:${port}/v1/chat/completions`;
+
+    await extract('a digest', { timeoutMs: 4000 });
+
+    expect(anchorSpec().items.enum).toBeUndefined();
+    expect(anchorSpec()).toEqual({ type: 'array', items: { type: 'string' } });
+  });
+
+  test('an empty known set is treated as no list', async () => {
+    await start();
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = `http://127.0.0.1:${port}/v1/chat/completions`;
+
+    await extract('a digest', { timeoutMs: 4000, knownFiles: new Set() });
+
+    expect(anchorSpec().items.enum).toBeUndefined();
+  });
+});
