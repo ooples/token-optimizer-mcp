@@ -29,6 +29,18 @@ const rows = (n: number) =>
     }))
   );
 
+/**
+ * A sink for elided content.
+ *
+ * Every caller in production has one -- the proxy writes under the OS temp
+ * directory. An engine with nowhere to put what it removes keeps the content
+ * instead, which `proxy.test.ts` pins directly; here the point is what the
+ * strategies do when there IS somewhere.
+ */
+let spilled = 0;
+const spill = (_content: string, hint: string): string =>
+  `/spill/${(spilled += 1)}-${hint}`;
+
 /** A request whose first message is cached and whose last is fresh. */
 function request(cached: string, fresh: string): ProviderRequest {
   return {
@@ -95,7 +107,7 @@ describe('v1 frontier strategy', () => {
   it('rewrites the fresh block and leaves the cached prefix byte-identical', () => {
     const cached = rows(60);
     const req = request(cached, rows(60));
-    const out = v1Frontier(req, {});
+    const out = v1Frontier(req, { spill });
 
     const messages = out.request.messages ?? [];
     const prefix = Array.isArray(messages[0].content) ? messages[0].content[0].text : '';
@@ -140,14 +152,14 @@ describe('ccr control arm', () => {
   it('charges itself for the preamble it injects', () => {
     // Their published reduction figures appear not to include this, and the
     // user is billed for it.
-    const out = ccrStyle(request(rows(60), rows(60)), {});
+    const out = ccrStyle(request(rows(60), rows(60)), { spill });
     expect(out.injectedChars).toBeGreaterThan(0);
     expect(JSON.stringify(out.request.tools)).toContain('headroom_retrieve');
     expect(String(out.request.system)).toContain('Compressed Context Available');
   });
 
   it('emits opaque markers, which is the design being compared against', () => {
-    const out = ccrStyle(request(rows(60), rows(60)), {});
+    const out = ccrStyle(request(rows(60), rows(60)), { spill });
     expect(textOf(out.request)).toContain('<<ccr:');
   });
 
@@ -219,7 +231,7 @@ describe('every strategy', () => {
   it('is registered and returns a well-formed request', () => {
     const req = request(rows(60), rows(60));
     for (const [name, run] of Object.entries(STRATEGIES)) {
-      const out = run(req, {});
+      const out = run(req, { spill });
       expect(Array.isArray(out.request.messages)).toBe(true);
       expect(out.request.messages).toHaveLength(2);
       expect(typeof out.injectedChars).toBe('number');
@@ -232,7 +244,7 @@ describe('every strategy', () => {
     // corrupt that.
     const req = request(rows(60), rows(60));
     const before = JSON.stringify(req);
-    for (const run of Object.values(STRATEGIES)) run(req, {});
+    for (const run of Object.values(STRATEGIES)) run(req, { spill });
     expect(JSON.stringify(req)).toBe(before);
   });
 });

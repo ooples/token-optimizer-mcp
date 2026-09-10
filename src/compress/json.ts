@@ -37,7 +37,7 @@
 
 import { count, inlineMarker } from './annotate.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
-import { unchanged } from './types.js';
+import { spillFor, unchanged } from './types.js';
 
 /** Rows kept at the head of a long array before the tail is elided. */
 const KEEP_ROWS = 3;
@@ -164,7 +164,13 @@ export function compressJson(
   const nulls = countNulls(parsed);
   const stripped = nulls ? dropNulls(parsed) : parsed;
   if (nulls) {
-    elisions.push({ removed: count(nulls, 'null field'), recoverAt: null });
+    // Lossless: absent and null read the same, and the surviving rows carry
+    // the key list.
+    elisions.push({
+      removed: count(nulls, 'null field'),
+      recoverAt: null,
+      lossless: true,
+    });
   }
 
   const minified = JSON.stringify(stripped);
@@ -173,6 +179,8 @@ export function compressJson(
     elisions.push({
       removed: count(text.length - minified.length, 'byte') + ' of whitespace',
       recoverAt: null,
+      // Re-serialising restores it exactly.
+      lossless: true,
     });
   }
 
@@ -191,9 +199,13 @@ export function compressJson(
       return { text: minified, elisions, lossless: true };
     }
 
-    const recoverAt = ctx.spill
-      ? ctx.spill(JSON.stringify(stripped), 'rows.json')
-      : null;
+    // NO HOME MEANS NO ELISION. Without a spill the rows would be gone with
+    // nowhere to look -- the marker would name a count and a shape and offer
+    // no way back, which is the dangling-reference failure this design exists
+    // to avoid. The minified document is still a real saving, so keep it and
+    // keep the rows.
+    const recoverAt = spillFor(ctx, JSON.stringify(stripped), 'rows.json');
+    if (!recoverAt) return { text: minified, elisions, lossless: true };
     const kept = [...keep].sort((a, b) => a - b).map((i) => stripped[i]);
     const sample = stripped.find((_row, i) => !keep.has(i));
     const keptText = JSON.stringify(kept);
@@ -212,7 +224,11 @@ export function compressJson(
       text: body,
       elisions: [
         ...elisions,
-        { removed: count(dropped, 'repeating row'), recoverAt },
+        {
+          removed: count(dropped, 'repeating row'),
+          recoverAt,
+          lossless: false,
+        },
       ],
       // The repeating tail is gone from the text; only a spill makes it
       // recoverable, and even then it is a lookup rather than a reconstruction.

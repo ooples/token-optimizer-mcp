@@ -22,12 +22,25 @@ const rows = (n: number) =>
   );
 
 const bodyOf = (messages: unknown) => Buffer.from(JSON.stringify({ messages }), 'utf8');
+/**
+ * A sink that works, and one that does not.
+ *
+ * The proxy's real sink returns an empty string when the write fails, and an
+ * empty string is not a path. Both cases are exercised: with a home for the
+ * content the engines elide, without one they must keep it.
+ */
+let spilled: string[] = [];
+const spill = (content: string, hint: string): string => {
+  spilled.push(content);
+  return `/spill/${spilled.length}-${hint}`;
+};
 const noSpill = () => '';
 
 let servers: Server[] = [];
 afterEach(async () => {
   await Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
   servers = [];
+  spilled = [];
 });
 
 /** A stand-in provider that records what it was sent. */
@@ -70,9 +83,21 @@ describe('proxyEnabled', () => {
 describe('compressBody', () => {
   it('compresses a large provider request', () => {
     const body = bodyOf([{ role: 'user', content: [{ type: 'text', text: rows(80) }] }]);
-    const out = compressBody(body, noSpill);
+    const out = compressBody(body, spill);
     expect(out.summary.compressed).toBe(true);
     expect(out.body.length).toBeLessThan(body.length);
+  });
+
+  it('keeps rows it has nowhere to spill, and still minifies', () => {
+    // A failed sink is reported as an empty string. Eliding against it would
+    // leave a marker naming a row count and offering no way back -- the
+    // dangling reference this whole design exists to avoid. The rows survive,
+    // and the lossless half of the work is still done.
+    const payload = rows(80);
+    const body = bodyOf([{ role: 'user', content: [{ type: 'text', text: payload }] }]);
+    const out = compressBody(body, noSpill);
+    const sent = JSON.parse(out.body.toString('utf8'));
+    expect(sent.messages[0].content[0].text).toBe(payload);
   });
 
   // FAIL OPEN, every branch.
@@ -108,7 +133,7 @@ describe('compressBody', () => {
       { role: 'user', content: [{ type: 'text', text: cached, cache_control: { type: 'ephemeral' } }] },
       { role: 'user', content: [{ type: 'text', text: rows(80) }] },
     ]);
-    const out = compressBody(body, noSpill);
+    const out = compressBody(body, spill);
     const sent = JSON.parse(out.body.toString('utf8'));
     expect(sent.messages[0].content[0].text).toBe(cached);
     expect(sent.messages[1].content[0].text.length).toBeLessThan(cached.length);

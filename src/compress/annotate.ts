@@ -31,7 +31,9 @@ import type { Elision } from './types.js';
  * deal of it. Deliberately NOT an angle-bracket sigil: those read as markup and
  * invite the model to treat them as a protocol it must satisfy.
  */
-export function marker(elision: Elision): string {
+export function marker(
+  elision: Pick<Elision, 'removed' | 'recoverAt'>
+): string {
   return elision.recoverAt
     ? `[... ${elision.removed} -> ${elision.recoverAt}]`
     : `[... ${elision.removed}]`;

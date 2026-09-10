@@ -304,6 +304,8 @@ export function compressCode(
     elisions.push({
       removed: `body, ${count(lineCount, 'line')}`,
       recoverAt: where,
+      // The body is gone from the text; `where` is the only way back.
+      lossless: false,
     });
   }
 

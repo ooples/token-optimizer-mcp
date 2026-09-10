@@ -105,6 +105,7 @@ export function compressLog(
       elisions.push({
         removed: count(dropped, 'duplicate line'),
         recoverAt: null,
+        lossless: true,
       });
       i += run;
     } else {
@@ -257,6 +258,7 @@ function templated(lines: string[], elisions: Elision[]): string[] {
     elisions.push({
       removed: `${count(members.length - 1, 'line')} folded into a template`,
       recoverAt: null,
+      lossless: true,
     });
   }
 
@@ -328,6 +330,7 @@ function foldScattered(lines: string[], elisions: Elision[]): string[] {
       elisions.push({
         removed: count(more, 'duplicate line'),
         recoverAt: null,
+        lossless: true,
       });
     }
   });

@@ -178,7 +178,9 @@ describe('the engines honour it', () => {
       'Please note that the defaults are usually fine for most users.',
     ].join(' ');
 
-    const out = compressProse(sentences, {});
+    // Prose has no lossless half, so with nowhere to spill it declines
+    // outright; the sink is what makes this a compression test at all.
+    const out = compressProse(sentences, { spill: () => '/spill/prose.txt' });
     expect(out.text).toContain(UUID);
     // It really did compress -- the sentence survived on merit, not because
     // nothing was dropped.

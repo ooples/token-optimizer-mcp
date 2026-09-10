@@ -179,7 +179,9 @@ export function compressSearchResults(
     text: body,
     // Nothing was removed that the output does not fully describe: the path is
     // stated once and every line number is recoverable from the header.
-    elisions: [{ removed: 'repeated path prefixes', recoverAt: null }],
+    elisions: [
+      { removed: 'repeated path prefixes', recoverAt: null, lossless: true },
+    ],
     lossless: true,
   };
 }

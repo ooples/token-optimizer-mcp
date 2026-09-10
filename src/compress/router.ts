@@ -13,10 +13,19 @@
  * (text, context). There is no object to hold state on, so the bug is not
  * something we avoid -- it is something that cannot be written.
  *
- * ORDER MATTERS IN CLASSIFICATION. Diff is checked before code because a diff
- * of a source file passes every code test while being the one thing that must
- * never have its bodies elided. JSON is checked before prose because a
- * pretty-printed payload of English strings reads as wordy lines.
+ * THE BUILT-INS REGISTER LIKE ANYBODY ELSE'S. They are ordinary registry
+ * entries, so there is one dispatch path to test and a custom engine can claim
+ * content ahead of them. What used to be the order of a `switch` is now
+ * priority, which makes the reasoning explicit:
+ *
+ *   diff        70   its hunks ARE the content; nothing may elide them
+ *   json        60   before prose, since a pretty-printed payload of English
+ *                    strings reads as wordy lines
+ *   search      50   grep output carries source lines AND timestamps, so both
+ *                    code and log would claim it and then find nothing
+ *   log         40
+ *   code        30
+ *   prose       10   the most permissive claim, so it goes last
  */
 
 import { compressCode, looksLikeCode, looksLikeDiff } from './code.js';
@@ -24,60 +33,106 @@ import { compressJson, looksLikeJson } from './json.js';
 import { compressLog, looksLikeLog } from './log.js';
 import { compressProse, looksLikeProse } from './prose.js';
 import { compressSearchResults, looksLikeSearchResults } from './search.js';
+import { engineFor, registerEngine, runEngine } from './registry.js';
 import type { CompressionResult, ContentKind, EngineContext } from './types.js';
 import { unchanged } from './types.js';
 
-/** What kind of content this is. Pure; depends only on its arguments. */
+/**
+ * A diff is claimed and then deliberately left alone.
+ *
+ * Claiming it is the point: if nothing claimed a diff, `code` would, and its
+ * hunks are the entire content of the change. Registering the refusal is how it
+ * survives somebody adding another engine later.
+ */
+registerEngine({
+  name: 'diff',
+  priority: 70,
+  claims: (text) => looksLikeDiff(text),
+  compress: (text) => unchanged(text),
+});
+
+registerEngine({
+  name: 'json',
+  priority: 60,
+  claims: (text) => looksLikeJson(text),
+  compress: compressJson,
+});
+
+registerEngine({
+  name: 'search',
+  priority: 50,
+  claims: (text) => looksLikeSearchResults(text),
+  compress: compressSearchResults,
+});
+
+registerEngine({
+  name: 'log',
+  priority: 40,
+  claims: (text) => looksLikeLog(text),
+  compress: compressLog,
+});
+
+registerEngine({
+  name: 'code',
+  priority: 30,
+  claims: (text, ctx) => looksLikeCode(text, ctx),
+  compress: compressCode,
+});
+
+registerEngine({
+  name: 'prose',
+  priority: 10,
+  claims: (text) => looksLikeProse(text),
+  compress: compressProse,
+});
+
+/** Built-in names, so a caller can tell ours from a third party's. */
+export const BUILT_IN_ENGINES = Object.freeze([
+  'diff',
+  'json',
+  'search',
+  'log',
+  'code',
+  'prose',
+]);
+
+/**
+ * What kind of content this is.
+ *
+ * Answers with the winning engine's name, so a custom engine appears in a
+ * report rather than being invisible.
+ */
 export function classify(text: string, ctx: EngineContext = {}): ContentKind {
-  if (looksLikeJson(text)) return 'json';
-  // BEFORE code and log. Grep output carries source lines, and can carry
-  // timestamped ones, so either engine would claim it and then find nothing
-  // it recognises -- what is really there is `path:line: content`. The
-  // benchmark found this the hard way: the code-search workload scored 0.0%
-  // for every arm, including the CCR control, until this type existed.
-  if (looksLikeSearchResults(text)) return 'search';
-  // Before `code`: a diff passes every code test and must not be elided.
-  if (looksLikeDiff(text)) return 'unknown';
-  if (looksLikeLog(text)) return 'log';
-  if (looksLikeCode(text, ctx)) return 'code';
-  if (looksLikeProse(text)) return 'prose';
-  return 'unknown';
+  const engine = engineFor(text, ctx);
+  if (!engine) return 'unknown';
+  // `diff` claims in order to refuse, and reports as unknown so nothing
+  // downstream treats it as a compressible kind.
+  if (engine.name === 'diff') return 'unknown';
+  return (
+    BUILT_IN_ENGINES.includes(engine.name) ? engine.name : 'custom'
+  ) as ContentKind;
+}
+
+/** The engine that would handle this block, built-in or not. */
+export function engineNameFor(
+  text: string,
+  ctx: EngineContext = {}
+): string | null {
+  return engineFor(text, ctx)?.name ?? null;
 }
 
 /**
  * Compresses one block.
  *
- * A result that grew is discarded. Compression that adds tokens is a defect
- * their own changelog records fixing in other systems ("compression increasing
- * prompt size"), and it is trivially preventable by measuring rather than
- * trusting.
+ * The boundary in `runEngine` applies to every engine equally: a result that
+ * grew is discarded, a throw passes the input through untouched, and a lossy
+ * elision with nowhere to recover from is refused.
  */
 export function compressBlock(
   text: string,
   ctx: EngineContext = {}
 ): CompressionResult {
-  const kind = classify(text, ctx);
-
-  let result: CompressionResult;
-  switch (kind) {
-    case 'json':
-      result = compressJson(text, ctx);
-      break;
-    case 'search':
-      result = compressSearchResults(text, ctx);
-      break;
-    case 'log':
-      result = compressLog(text, ctx);
-      break;
-    case 'code':
-      result = compressCode(text, ctx);
-      break;
-    case 'prose':
-      result = compressProse(text, ctx);
-      break;
-    default:
-      return unchanged(text);
-  }
-
-  return result.text.length < text.length ? result : unchanged(text);
+  const engine = engineFor(text, ctx);
+  if (!engine) return unchanged(text);
+  return runEngine(engine, text, ctx);
 }

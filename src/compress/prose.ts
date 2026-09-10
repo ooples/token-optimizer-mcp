@@ -25,7 +25,7 @@
 import { count, inlineMarker } from './annotate.js';
 import { containsStructural } from './structural.js';
 import type { CompressionResult, EngineContext } from './types.js';
-import { unchanged } from './types.js';
+import { spillFor, unchanged } from './types.js';
 
 /** Below this a document is left alone; scoring noise dominates. */
 const MIN_SENTENCES = 6;
@@ -134,7 +134,10 @@ export function compressProse(
   const dropped = parts.length - keep.size;
   if (dropped <= 0) return unchanged(text);
 
-  const recoverAt = ctx.spill ? ctx.spill(text, 'prose.txt') : null;
+  // Prose has no file of its own and no lossless half to fall back on, so
+  // without a spill there is nothing honest to do but leave it whole.
+  const recoverAt = spillFor(ctx, text, 'prose.txt');
+  if (!recoverAt) return unchanged(text);
   const kept = ranked.filter((r) => keep.has(r.index)).map((r) => r.sentence);
   const body = `${kept.join(' ')} ${inlineMarker(
     `${count(dropped, 'lower-signal sentence')} removed`,
@@ -143,7 +146,13 @@ export function compressProse(
 
   return {
     text: body,
-    elisions: [{ removed: count(dropped, 'lower-signal sentence'), recoverAt }],
+    elisions: [
+      {
+        removed: count(dropped, 'lower-signal sentence'),
+        recoverAt,
+        lossless: false,
+      },
+    ],
     lossless: false,
   };
 }
