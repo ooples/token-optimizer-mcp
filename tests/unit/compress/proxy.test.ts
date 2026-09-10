@@ -6,7 +6,9 @@ import {
   startProxy,
   upstreamIsSafe,
   requestPath,
+  knowledgeEnabled,
 } from '../../../src/proxy/server.js';
+import { anchorStore } from '../../../src/compress/anchor.js';
 
 /**
  * The proxy, against a real upstream rather than a mock.
@@ -463,5 +465,86 @@ describe('the destination is ours to choose', () => {
 
     expect(attacker.seen.headers).toBeUndefined();
     expect(attacker.seen.body).toBeUndefined();
+  });
+});
+
+describe('the cached-knowledge block', () => {
+  it('is off unless explicitly asked for, separately from the proxy', () => {
+    // Compression removes tokens; this ADDS them, justified by turns rather
+    // than size -- and turns are the one thing this repository has not yet
+    // measured here. An unproven addition folded into a proven reduction
+    // would make the reduction untrue, so it has its own switch.
+    expect(knowledgeEnabled({})).toBe(false);
+    expect(knowledgeEnabled({ TOKEN_OPTIMIZER_PROXY: '1' })).toBe(false);
+    expect(knowledgeEnabled({ TOKEN_OPTIMIZER_PROXY_KNOWLEDGE: '1' })).toBe(
+      true
+    );
+  });
+
+  it('yields to the kill switch', () => {
+    expect(
+      knowledgeEnabled({
+        TOKEN_OPTIMIZER_PROXY_KNOWLEDGE: '1',
+        TOKEN_OPTIMIZER_MODE: 'off',
+      })
+    ).toBe(false);
+  });
+
+  it('adds nothing to the wire when no findings are supplied', () => {
+    // The default path, and it has to stay byte-for-byte what it was before
+    // this feature existed.
+    const body = bodyOf([
+      { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+    ]);
+    const out = compressBody(body, spill);
+    const sent = JSON.parse(out.body.toString('utf8'));
+    expect(sent.system).toBeUndefined();
+    expect(out.summary.injectedChars).toBeUndefined();
+  });
+
+  it('declines to inject without an anchor store, which is what knows it is free', () => {
+    // The cache-stability argument rests entirely on the anchor decision:
+    // without a store there is no way to tell whether rewriting the prefix is
+    // already paid for, and no way to replay the same block next turn.
+    const body = Buffer.from(
+      JSON.stringify({
+        system: 'You are a coding agent.',
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+        ],
+      }),
+      'utf8'
+    );
+    const out = compressBody(body, spill, undefined, [
+      { key: 'k', claim: 'a finding nobody will see', confidence: 0.95 },
+    ]);
+    const sent = JSON.parse(out.body.toString('utf8'));
+    expect(sent.system).toBe('You are a coding agent.');
+  });
+
+  it('puts supplied findings in the system prompt and charges for them', () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        system: 'You are a coding agent.',
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+        ],
+      }),
+      'utf8'
+    );
+    const out = compressBody(body, spill, anchorStore(), [
+      {
+        key: 'k',
+        type: 'failure',
+        claim: 'npm install bumps zod and breaks tsc; use npm ci',
+        confidence: 0.95,
+      },
+    ]);
+    const sent = JSON.parse(out.body.toString('utf8'));
+
+    expect(String(sent.system)).toContain('npm ci');
+    // Charged, not hidden. A summary that reported only the byte reduction
+    // beside a deliberate addition would be a false report.
+    expect(out.summary.injectedChars).toBeGreaterThan(0);
   });
 });

@@ -19,6 +19,12 @@ import { compressBlock } from './router.js';
 import { dedupBlocks, type DedupBlock } from './dedup.js';
 import { queryFrom } from './relevance.js';
 import {
+  injectKnowledge,
+  knowledgeBlock,
+  stableContext,
+  type Finding,
+} from './knowledge.js';
+import {
   anchorDecision,
   type AnchorDecision,
   type AnchorStore,
@@ -57,6 +63,18 @@ export interface StrategyOptions {
    * as it always has and never touches the cached prefix.
    */
   readonly anchors?: AnchorStore;
+  /**
+   * What this project already established, for the cached prefix.
+   *
+   * Supplied by the caller rather than read here, because reaching for a
+   * graph on disk would make a pure function of (request, options) into
+   * something that depends on the filesystem. Absent means nothing is
+   * injected, which is the default: this is payload, and it has to be
+   * asked for.
+   */
+  readonly findings?: readonly Finding[];
+  /** Characters of findings allowed in the prefix. */
+  readonly knowledgeBudget?: number;
 }
 
 export interface StrategyResult {
@@ -280,8 +298,39 @@ export function v1Frontier(
   // went on the wire. The record travels back with the result and is committed
   // only once the body it describes is actually sent.
   const decision = anchorDecision(request, options.anchors);
+
+  // KNOWLEDGE RIDES ON THE ANCHOR DECISION, and that is the whole trick.
+  // Putting findings in the cached prefix is what makes them cost 0.1x a
+  // turn instead of 1.0x, and what puts them in front of the model BEFORE
+  // it decides rather than in an advisory after it already has. But the
+  // prefix has to arrive byte-identical or the cache misses and the
+  // injection costs more than everything it could ever save.
+  //
+  // So the block is recomputed only on a turn where rewriting the prefix is
+  // already free -- the first turn, or one the client invalidated itself --
+  // and replayed verbatim on every other. A conversation we declined to
+  // anchor gets nothing: starting to inject there would be the cache miss
+  // this is supposed to avoid.
+  const fresh =
+    decision.reason === 'first-turn' ||
+    decision.reason === 'client-invalidated';
+  const knowledge = fresh
+    ? knowledgeBlock(
+        options.findings ?? [],
+        stableContext(request),
+        options.knowledgeBudget
+      )
+    : (decision.record.knowledge ?? null);
+
   const out = pathAddressed(request, options, !decision.reanchor);
-  return { ...out, anchor: decision };
+  const withKnowledge = injectKnowledge(out.request, knowledge);
+
+  return {
+    ...out,
+    request: withKnowledge,
+    injectedChars: out.injectedChars + (knowledge?.length ?? 0),
+    anchor: { ...decision, record: { ...decision.record, knowledge } },
+  };
 }
 
 /**

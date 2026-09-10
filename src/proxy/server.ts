@@ -39,6 +39,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { v1Frontier, type StrategyResult } from '../compress/strategy.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
+import type { Finding } from '../compress/knowledge.js';
+import { loadFindings } from './findings.js';
 import type { ProviderRequest } from '../compress/frontier.js';
 
 /** Upstream, overridable for a gateway. */
@@ -56,6 +58,13 @@ export interface ProxyOptions {
   readonly upstream?: string;
   /** Called with a one-line summary per request. Never receives payloads. */
   readonly onSummary?: (summary: ProxySummary) => void;
+  /**
+   * Where to look for this project's knowledge graph.
+   *
+   * Defaults to the directory the proxy was started in, which is where the
+   * rest of this package resolves a project from.
+   */
+  readonly projectRoot?: string;
 }
 
 export interface ProxySummary {
@@ -64,6 +73,14 @@ export interface ProxySummary {
   readonly afterBytes: number;
   readonly compressed: boolean;
   readonly reason?: string;
+  /**
+   * Characters of knowledge deliberately ADDED to the request.
+   *
+   * Reported separately from the byte counts because it is the opposite of
+   * what the rest of this does, and a summary that hid it would make the
+   * compression figure beside it a lie.
+   */
+  readonly injectedChars?: number;
 }
 
 /** Enabled only on an explicit opt-in, and never when the kill switch is set. */
@@ -148,7 +165,8 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
 export function compressBody(
   body: Buffer,
   spill: (content: string, hint: string) => string,
-  anchors?: AnchorStore
+  anchors?: AnchorStore,
+  findings?: readonly Finding[]
 ): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
   const before = body.length;
   const unchanged = (reason: string) => ({
@@ -175,14 +193,19 @@ export function compressBody(
 
   let result: StrategyResult;
   try {
-    result = v1Frontier(parsed, { spill, anchors });
+    result = v1Frontier(parsed, { spill, anchors, findings });
   } catch {
     return unchanged('compression threw');
   }
 
   const next = Buffer.from(JSON.stringify(result.request), 'utf8');
-  // Never send more than we were given.
-  if (next.length >= before) return unchanged('compression did not pay');
+  // Never send more than we were given -- UNLESS a knowledge block was
+  // deliberately added, which is the one case where growing the request is
+  // the point. It is charged in the summary either way, and it only
+  // happens on a turn the prefix was being rewritten anyway.
+  const added = result.injectedChars > 0;
+  if (!added && next.length >= before)
+    return unchanged('compression did not pay');
 
   // COMMITTED ONLY NOW, because everything above can still decide not to send
   // this body. Remembering `anchored: true` for a rewrite that was then
@@ -194,7 +217,12 @@ export function compressBody(
 
   return {
     body: next,
-    summary: { beforeBytes: before, afterBytes: next.length, compressed: true },
+    summary: {
+      beforeBytes: before,
+      afterBytes: next.length,
+      compressed: true,
+      ...(added ? { injectedChars: result.injectedChars } : {}),
+    },
   };
 }
 
@@ -219,6 +247,20 @@ const HOP_BY_HOP = new Set([
   'transfer-encoding',
   'upgrade',
 ]);
+
+/**
+ * Is the cached-knowledge block switched on?
+ *
+ * SEPARATE FROM THE PROXY SWITCH, and off unless asked for. Compression
+ * removes tokens; this ADDS them, and it is justified by turns rather than
+ * by size -- a claim this repository cannot yet make, because only THOL
+ * measures turns and it has not been run against this. Folding an unproven
+ * addition into a proven reduction would make the reduction untrue.
+ */
+export function knowledgeEnabled(env: NodeJS.ProcessEnv): boolean {
+  if (env.TOKEN_OPTIMIZER_MODE === 'off') return false;
+  return /^(1|true|yes|on)$/i.test(env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE || '');
+}
 
 /**
  * Is it safe to send credentials to this upstream?
@@ -354,7 +396,7 @@ function forward(
 }
 
 /** Starts the proxy. Resolves once it is listening. */
-export function startProxy(
+export async function startProxy(
   options: ProxyOptions = {}
 ): Promise<{ server: Server; port: number }> {
   const upstream = options.upstream || UPSTREAM();
@@ -364,11 +406,9 @@ export function startProxy(
     // than one that saves nothing. This is the opposite case: carrying on
     // would put the user's provider key on the wire in cleartext, and doing
     // that quietly is not a degradation, it is the harm.
-    return Promise.reject(
-      new Error(
-        `token-optimizer proxy: refusing to forward credentials to ${upstream} -- ` +
-          'an upstream must be https, or http on loopback'
-      )
+    throw new Error(
+      `token-optimizer proxy: refusing to forward credentials to ${upstream} -- ` +
+        'an upstream must be https, or http on loopback'
     );
   }
   const spillRoot = join(tmpdir(), 'token-optimizer-spill');
@@ -379,6 +419,14 @@ export function startProxy(
   // state on itself, and two agents through one proxy is the exact shape
   // that turns into.
   const anchors = anchorStore();
+  // Read once at startup, not per request. The graph does change during a
+  // session, but a block that changes mid-session cannot live in a cached
+  // prefix anyway -- so re-reading would spend I/O to produce a value the
+  // cache rules immediately discard. New findings reach the next session,
+  // which is when they are free.
+  const findings = knowledgeEnabled(process.env)
+    ? await loadFindings(options.projectRoot || process.cwd())
+    : [];
 
   const server = createServer((req, res) => {
     void (async () => {
@@ -390,7 +438,12 @@ export function startProxy(
         return;
       }
 
-      const { body: next, summary } = compressBody(body, spill, anchors);
+      const { body: next, summary } = compressBody(
+        body,
+        spill,
+        anchors,
+        findings
+      );
       options.onSummary?.({ path: req.url || '/', ...summary });
       forward(upstream, req, res, next);
     })();

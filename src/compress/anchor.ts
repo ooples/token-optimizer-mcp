@@ -226,6 +226,17 @@ export interface AnchorRecord {
   readonly samples: readonly string[];
   /** Did we rewrite that prefix? */
   readonly anchored: boolean;
+  /**
+   * The knowledge block we last put in this prefix, if any.
+   *
+   * Kept here because it IS part of the prefix, and the prefix has to
+   * arrive byte-identical every turn. Re-selecting findings each turn
+   * would rewrite it each turn and convert a 0.1x read into a 1.25x write
+   * on everything -- so the block is chosen once and replayed verbatim
+   * until a turn on which rewriting is already free. Null means nothing
+   * was injected and nothing may start being injected without a rewrite.
+   */
+  readonly knowledge?: string | null;
 }
 
 export interface AnchorStore {
