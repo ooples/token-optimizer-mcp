@@ -64,16 +64,46 @@ REPS="$REPS" \
 SEG_1="$TASKS" SEGMENTS_MAX=1 \
   bash "$RIG_DIR/thol/run-campaign.sh" "$@"
 
-# PROVE THE WARM-UP ACTUALLY WROTE SOMETHING before paying for pass 2. An empty
-# graph here means pass 2 would measure the plain proxy arm twice under two
-# different names, which is the exact silent failure described above.
-nodes=$(find "$PROXY_GRAPH_DIR/.token-optimizer/wiki" -type f 2>/dev/null | wc -l | tr -d ' ')
-log "Graph after warm-up: $nodes file(s) under $PROXY_GRAPH_DIR/.token-optimizer/wiki"
-if [ "$nodes" = "0" ]; then
-  echo "!! The warm-up wrote no graph, so the measured pass would inject nothing" >&2
-  echo "   and report the plain proxy arm's numbers as the knowledge arm's." >&2
-  echo "   Check that the arm's TOKEN_OPTIMIZER_WIKI_DIR points inside" >&2
-  echo "   /results/proxy-graph and that the hooks ran." >&2
+# PROVE THE WARM-UP WROTE THE THING THAT GETS INJECTED, not merely that it wrote.
+#
+# COUNTING FILES WAS NOT ENOUGH, and this gate passed while measuring nothing. The
+# warm-up produced 9 files and 445KB across graph/evidence/metrics/snapshots -- and
+# zero nodes carrying a `claim`, which is the only field `loadFindings` keeps. The
+# knowledge arm therefore injected an empty block, was byte-for-byte the plain proxy
+# arm, and returned identical turn counts on all four tasks. A null result that was
+# really an unrun experiment.
+#
+# Structure is not findings. The graph captures files, symbols and edges from ordinary
+# tool use; a FINDING is written by the semantic harvest when a model concludes
+# something durable, and short benchmark tasks do not produce any.
+findings=$(node -e '
+  const fs = require("fs");
+  const dir = process.argv[1];
+  let active = 0;
+  try {
+    for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
+      for (const line of fs.readFileSync(dir + "/" + f, "utf8").split("\n")) {
+        if (!line.trim()) continue;
+        try {
+          const node = JSON.parse(line);
+          if (typeof node.claim === "string" && !node.retired) active += 1;
+        } catch {}
+      }
+    }
+  } catch {}
+  process.stdout.write(String(active));
+' "$PROXY_GRAPH_DIR/.token-optimizer/wiki" 2>/dev/null || echo 0)
+
+log "Graph after warm-up: $findings active finding(s) with a claim"
+if [ "${findings:-0}" = "0" ]; then
+  echo "!! The warm-up produced no FINDINGS, only graph structure, so the measured" >&2
+  echo "   pass would inject an empty block and report the plain proxy arm's numbers" >&2
+  echo "   as the knowledge arm's -- an unrun experiment that looks like a null." >&2
+  echo "" >&2
+  echo "   Findings come from the semantic harvest, not from tool use. Benchmark" >&2
+  echo "   tasks are short and produce none. Seed the graph from a project graph" >&2
+  echo "   that has them, and make sure they are ABOUT the repository the tasks" >&2
+  echo "   touch -- findings about another project are pure injected cost." >&2
   exit 1
 fi
 
