@@ -18,6 +18,7 @@
 import { compressBlock } from './router.js';
 import { dedupBlocks, type DedupBlock } from './dedup.js';
 import { queryFrom } from './relevance.js';
+import type { Tuning } from './options.js';
 import {
   injectKnowledge,
   knowledgeBlock,
@@ -75,6 +76,14 @@ export interface StrategyOptions {
   readonly findings?: readonly Finding[];
   /** Characters of findings allowed in the prefix. */
   readonly knowledgeBudget?: number;
+  /**
+   * The resolved dials.
+   *
+   * Resolved by the CALLER and held fixed for the life of a proxy, because
+   * changing a dial mid-session changes how the cached prefix compresses --
+   * and a prefix that changes is a cache miss on everything.
+   */
+  readonly tuning?: Tuning;
 }
 
 export interface StrategyResult {
@@ -255,6 +264,7 @@ function pathAddressed(
     const result = compressBlock(text, {
       spill: options.spill,
       query: cached || repeated ? undefined : query,
+      tuning: options.tuning,
     });
     elisions.push(...result.elisions);
     staged.push({ text: result.text, original: text, touchable: true });
@@ -318,7 +328,7 @@ export function v1Frontier(
     ? knowledgeBlock(
         options.findings ?? [],
         stableContext(request),
-        options.knowledgeBudget
+        options.knowledgeBudget ?? options.tuning?.knowledgeBudgetChars
       )
     : (decision.record.knowledge ?? null);
 
@@ -406,6 +416,7 @@ export function ccrStyle(
     const result = compressBlock(text, {
       spill: options.spill,
       query: cached ? undefined : query,
+      tuning: options.tuning,
     });
     if (result.text === text) return null;
     const marker = ccrMarker(text, index);

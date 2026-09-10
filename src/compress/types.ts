@@ -111,7 +111,17 @@ export interface EngineContext {
    * which is the behaviour that shipped before this existed.
    */
   readonly query?: string;
+  /**
+   * The resolved dials for this run.
+   *
+   * Always fully populated by the time an engine sees it -- `compressBlock`
+   * resolves it once so no engine has to carry its own fallback, and a
+   * missing dial cannot mean two different things in two engines.
+   */
+  readonly tuning?: Tuning;
 }
+
+import type { Tuning } from './options.js';
 
 /** Every engine has this shape. */
 export type Engine = (text: string, ctx: EngineContext) => CompressionResult;

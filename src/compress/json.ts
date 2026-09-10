@@ -37,14 +37,9 @@
 
 import { count, inlineMarker } from './annotate.js';
 import { ranker } from './relevance.js';
+import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
-
-/** Rows kept at the head of a long array before the tail is elided. */
-const KEEP_ROWS = 3;
-
-/** Below this an array is left whole: the marker would cost more than the rows. */
-const MIN_ROWS_TO_ELIDE = 6;
 
 /** Recognises JSON without paying to parse something that plainly is not. */
 export function looksLikeJson(text: string): boolean {
@@ -185,12 +180,20 @@ export function compressJson(
     });
   }
 
-  // A long top-level array is where the remaining bulk lives.
-  if (Array.isArray(stripped) && stripped.length >= MIN_ROWS_TO_ELIDE) {
+  const tuning = ctx.tuning ?? DEFAULT_TUNING;
+
+  // A long top-level array is where the remaining bulk lives. Eliding its
+  // tail is the one lossy thing this engine does, so a lossless posture
+  // stops here with the minified document -- which is still a real saving.
+  if (
+    tuning.allowLossy &&
+    Array.isArray(stripped) &&
+    stripped.length >= tuning.minRowsToElide
+  ) {
     const odd = anomalousRows(stripped);
     // Head rows for shape, plus every row that departs from it, in order.
     const keep = new Set<number>(odd);
-    for (let i = 0; i < Math.min(KEEP_ROWS, stripped.length); i += 1)
+    for (let i = 0; i < Math.min(tuning.keepRows, stripped.length); i += 1)
       keep.add(i);
 
     // RELEVANCE ON TOP OF SHAPE, and the extra allowance is bounded on
@@ -201,11 +204,11 @@ export function compressJson(
     const rank = ranker(ctx.query);
     if (rank.active) {
       const rows = stripped.map((row) => JSON.stringify(row) ?? '');
-      for (const i of rank.top(rows, KEEP_ROWS)) keep.add(i);
+      for (const i of rank.top(rows, tuning.keepRows)) keep.add(i);
     }
 
     const dropped = stripped.length - keep.size;
-    if (dropped < MIN_ROWS_TO_ELIDE - KEEP_ROWS) {
+    if (dropped < tuning.minRowsToElide - tuning.keepRows) {
       // Almost everything is exceptional, so there is no redundant tail to
       // remove and eliding a handful of rows would not pay for the marker.
       return { text: minified, elisions, lossless: true };

@@ -25,14 +25,12 @@
 import { count, inlineMarker } from './annotate.js';
 import { containsStructural } from './structural.js';
 import { ranker } from './relevance.js';
+import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
 
 /** Below this a document is left alone; scoring noise dominates. */
 const MIN_SENTENCES = 6;
-
-/** Fraction of sentences kept. Tuned against the fixtures, not guessed. */
-const KEEP_FRACTION = 0.5;
 
 /** Signals the sentence carries something a reader must act on. */
 const CRITICAL =
@@ -141,6 +139,11 @@ export function compressProse(
   text: string,
   ctx: EngineContext = {}
 ): CompressionResult {
+  const tuning = ctx.tuning ?? DEFAULT_TUNING;
+  // Prose elision is lossy by construction: a removed sentence cannot be
+  // reconstructed from the ones that stayed. A lossless posture declines.
+  if (!tuning.allowLossy) return unchanged(text);
+
   const parts = sentences(text);
   if (parts.length < MIN_SENTENCES) return unchanged(text);
 
@@ -153,7 +156,10 @@ export function compressProse(
   const bodies = parts.map((part) => part.text);
   const rank = ranker(ctx.query);
   const relevant = rank.active
-    ? rank.top(bodies, Math.max(1, Math.round(parts.length * KEEP_FRACTION)))
+    ? rank.top(
+        bodies,
+        Math.max(1, Math.round(parts.length * tuning.keepSentenceFraction))
+      )
     : new Set<number>();
 
   const ranked = parts.map((part, index) => ({
@@ -163,7 +169,10 @@ export function compressProse(
       score(part.text, index, parts.length) + (relevant.has(index) ? 6 : 0),
   }));
 
-  const keepCount = Math.max(1, Math.round(parts.length * KEEP_FRACTION));
+  const keepCount = Math.max(
+    1,
+    Math.round(parts.length * tuning.keepSentenceFraction)
+  );
   const keep = new Set(
     [...ranked]
       .sort((a, b) => b.value - a.value || a.index - b.index)

@@ -22,6 +22,7 @@
 import { parse } from '@babel/parser';
 import { count, inlineMarker, span } from './annotate.js';
 import { ranker } from './relevance.js';
+import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { unchanged } from './types.js';
 
@@ -270,7 +271,8 @@ const MAX_LIVE_SHARE = 0.5;
 function liveBodies(
   lines: readonly string[],
   spans: readonly (readonly [number, number])[],
-  query: string | undefined
+  query: string | undefined,
+  maxLiveShare: number = MAX_LIVE_SHARE
 ): Set<number> {
   const rank = ranker(query);
   if (!rank.active || !spans.length) return new Set<number>();
@@ -286,7 +288,7 @@ function liveBodies(
   // the bodies of a file the question did not discriminate between, which is
   // the failure it exists to prevent.
   const live = rank.top(declarations, declarations.length);
-  if (live.size > spans.length * MAX_LIVE_SHARE) return new Set<number>();
+  if (live.size > spans.length * maxLiveShare) return new Set<number>();
   return new Set([...live].map((i) => spans[i][0]));
 }
 
@@ -301,6 +303,10 @@ export function compressCode(
   ctx: EngineContext = {}
 ): CompressionResult {
   if (looksLikeDiff(text)) return unchanged(text);
+  const tuning = ctx.tuning ?? DEFAULT_TUNING;
+  // A replaced body is gone from the text; only its path brings it back.
+  // That is the trade a lossless posture declines to make.
+  if (!tuning.allowLossy) return unchanged(text);
 
   const ext = extensionOf(ctx.sourcePath);
   const language = ctx.language || EXT_LANGUAGE[ext] || '';
@@ -332,9 +338,9 @@ export function compressCode(
   // LIVENESS, DECIDED ONCE FOR THE WHOLE BLOCK. A body whose declaration is
   // what the agent is asking about survives; the rest are elided as before.
   const eligible = spans.filter(
-    ([from, to]) => to - from + 1 >= MIN_BODY_LINES
+    ([from, to]) => to - from + 1 >= tuning.minBodyLines
   );
-  const liveness = liveBodies(lines, eligible, ctx.query);
+  const liveness = liveBodies(lines, eligible, ctx.query, tuning.maxLiveShare);
 
   // ONE SPILL FOR THE WHOLE BLOCK, NOT ONE PER BODY.
   //
@@ -353,7 +359,7 @@ export function compressCode(
 
   for (const [from, to] of spans) {
     const lineCount = to - from + 1;
-    if (lineCount < MIN_BODY_LINES) continue;
+    if (lineCount < tuning.minBodyLines) continue;
     // The agent is looking at this one. Everything else still goes.
     if (liveness.has(from)) continue;
     // WHERE THE BODY CAN BE FOUND AGAIN, and it must be findable or it stays.

@@ -36,6 +36,7 @@ import { compressSearchResults, looksLikeSearchResults } from './search.js';
 import { engineFor, registerEngine, runEngine } from './registry.js';
 import type { CompressionResult, ContentKind, EngineContext } from './types.js';
 import { unchanged } from './types.js';
+import { DEFAULT_TUNING } from './options.js';
 
 /**
  * A diff is claimed and then deliberately left alone.
@@ -134,5 +135,14 @@ export function compressBlock(
 ): CompressionResult {
   const engine = engineFor(text, ctx);
   if (!engine) return unchanged(text);
-  return runEngine(engine, text, ctx);
+  // RESOLVED ONCE, HERE. An engine reading `ctx.tuning?.keepRows ?? 3`
+  // would put the default in two places, and the second copy is the one
+  // that drifts. Filling it in at the single dispatch point means every
+  // engine sees a complete object and the defaults live in exactly one
+  // file.
+  const tuned: EngineContext = {
+    ...ctx,
+    tuning: ctx.tuning ?? DEFAULT_TUNING,
+  };
+  return runEngine(engine, text, tuned);
 }

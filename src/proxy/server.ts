@@ -41,6 +41,13 @@ import { v1Frontier, type StrategyResult } from '../compress/strategy.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindings } from './findings.js';
+import {
+  presetFromEnv,
+  resolveTuning,
+  type CompressionOptions,
+  type PresetName,
+  type Tuning,
+} from '../compress/options.js';
 import type { ProviderRequest } from '../compress/frontier.js';
 
 /** Upstream, overridable for a gateway. */
@@ -65,6 +72,10 @@ export interface ProxyOptions {
    * rest of this package resolves a project from.
    */
   readonly projectRoot?: string;
+  /** Named starting point for the dials. Defaults to the environment's. */
+  readonly preset?: PresetName | string;
+  /** Expert overrides, layered over the preset. */
+  readonly compression?: CompressionOptions;
 }
 
 export interface ProxySummary {
@@ -166,7 +177,8 @@ export function compressBody(
   body: Buffer,
   spill: (content: string, hint: string) => string,
   anchors?: AnchorStore,
-  findings?: readonly Finding[]
+  findings?: readonly Finding[],
+  tuning?: Tuning
 ): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
   const before = body.length;
   const unchanged = (reason: string) => ({
@@ -193,7 +205,7 @@ export function compressBody(
 
   let result: StrategyResult;
   try {
-    result = v1Frontier(parsed, { spill, anchors, findings });
+    result = v1Frontier(parsed, { spill, anchors, findings, tuning });
   } catch {
     return unchanged('compression threw');
   }
@@ -419,6 +431,13 @@ export async function startProxy(
   // state on itself, and two agents through one proxy is the exact shape
   // that turns into.
   const anchors = anchorStore();
+  // One preset for the life of the proxy. Changing dials mid-session would
+  // change how the cached prefix compresses, which is the one thing that must
+  // not move -- see anchor.ts.
+  const tuning = resolveTuning(
+    options.compression ?? {},
+    options.preset ?? presetFromEnv(process.env)
+  );
   // Read once at startup, not per request. The graph does change during a
   // session, but a block that changes mid-session cannot live in a cached
   // prefix anyway -- so re-reading would spend I/O to produce a value the
@@ -442,7 +461,8 @@ export async function startProxy(
         body,
         spill,
         anchors,
-        findings
+        findings,
+        tuning
       );
       options.onSummary?.({ path: req.url || '/', ...summary });
       forward(upstream, req, res, next);
