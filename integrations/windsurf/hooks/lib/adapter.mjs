@@ -695,6 +695,15 @@ function extractionNotice() {
         '\n\nA credential is configured, so fallback extraction also runs after this session from ' +
         'a bounded digest: paths, commands, prompts and conclusions, never file contents.'
       );
+    case 'host-cli':
+      // The extractor is this client's own headless CLI, which the user opted
+      // into. Worth its own case rather than folding into `remote`: no
+      // credential is involved, and the digest goes to the same vendor that
+      // already ran the session, which is a materially different disclosure.
+      return (
+        '\n\nSemantic extraction also runs after this session through this client\'s own CLI, ' +
+        'from a bounded digest: paths, commands, prompts and conclusions, never file contents.'
+      );
     case 'off:mode':
       // The whole optimizer is off and this text is not emitted anyway. Saying
       // anything here would be noise stacked on an explicit choice.
