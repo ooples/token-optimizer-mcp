@@ -33,7 +33,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createHmac, randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -57,6 +57,38 @@ const UPSTREAM = (): string =>
 /** Loopback only. Not configurable, deliberately: see the header. */
 const HOST = '127.0.0.1';
 
+/**
+ * Paths the DEFAULT upstream is allowed to serve.
+ *
+ * THE DEFAULT IS A GUESS, AND A WRONG GUESS FORWARDS SOMEONE'S CREDENTIALS TO THE WRONG
+ * COMPANY. Sixteen clients can be redirected here through their own base-URL variable,
+ * and their requests carry their own provider's key. With no explicit upstream every one
+ * of them would be sent to api.anthropic.com -- a Copilot token, a Gemini key, delivered
+ * over TLS to a third party that never asked for it.
+ *
+ * So an unconfigured upstream serves only the routes Anthropic actually has. Anything
+ * else is refused with an error naming the variable to set. This can only reject traffic
+ * that was about to go somewhere it should not; correctly-configured proxies never see
+ * it.
+ */
+const ANTHROPIC_PATHS = ['/v1/messages', '/v1/complete', '/v1/models'];
+
+/**
+ * May the default upstream serve this path?
+ *
+ * Exported so the rule can be tested for what it ADMITS as well as what it refuses --
+ * the refusal is easy to exercise end to end, while proving `/v1/messages` still gets
+ * through would otherwise mean letting a test reach api.anthropic.com.
+ */
+export function defaultUpstreamServes(path: string): boolean {
+  return ANTHROPIC_PATHS.some((prefix) => path.startsWith(prefix));
+}
+
+/** True when the upstream was chosen for us rather than by the operator. */
+export function upstreamIsDefault(options: ProxyOptions): boolean {
+  return !options.upstream && !process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM;
+}
+
 /** Requests above this are worth compressing; below it the work is noise. */
 const MIN_BYTES = 4096;
 
@@ -76,6 +108,13 @@ export interface ProxyOptions {
   readonly preset?: PresetName | string;
   /** Expert overrides, layered over the preset. */
   readonly compression?: CompressionOptions;
+  /**
+   * Largest request body to buffer, in bytes.
+   *
+   * Only ever lowers the built-in ceiling; a larger value is ignored, because raising it
+   * would opt back into the unbounded buffering the ceiling exists to prevent.
+   */
+  readonly maxBodyBytes?: number;
 }
 
 export interface ProxySummary {
@@ -156,11 +195,49 @@ function spillTo(root: string) {
   };
 }
 
-/** Reads a whole request body. */
-function readBody(req: IncomingMessage): Promise<Buffer> {
+/**
+ * Largest body this will buffer.
+ *
+ * Generous on purpose: a provider request carrying several images is genuinely tens of
+ * megabytes, and a limit that refused real traffic would be worse than none. What it
+ * stops is the unbounded case -- any local process can stream at a loopback listener,
+ * and `Buffer.concat` over a stream nobody bounded is an out-of-memory kill with no
+ * error anyone can act on.
+ */
+const MAX_BODY_BYTES = 64 * 1024 * 1024;
+
+/** The limit in force, which a caller may lower but never raise past the default. */
+export function bodyLimitFor(options: ProxyOptions): number {
+  const asked = options.maxBodyBytes;
+  if (asked === undefined || !Number.isFinite(asked) || asked <= 0)
+    return MAX_BODY_BYTES;
+  // Lowering is a legitimate deployment choice and testing needs it; raising it past
+  // the default would let a caller opt back into the unbounded case this exists to
+  // close.
+  return Math.min(asked, MAX_BODY_BYTES);
+}
+
+/** Thrown when a body exceeds {@link MAX_BODY_BYTES}, so the handler can answer 413. */
+class BodyTooLarge extends Error {}
+
+/** Reads a whole request body, up to the limit. */
+function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
+    let received = 0;
+    req.on('data', (c: Buffer) => {
+      received += c.length;
+      if (received > limit) {
+        // PAUSED, NOT DESTROYED. Destroying here does stop the flood, and it also
+        // closes the socket before the 413 can be written -- so the caller sees
+        // "other side closed" and has no idea a limit exists. Pausing stops reading
+        // immediately; the handler answers and then destroys.
+        req.pause();
+        reject(new BodyTooLarge());
+        return;
+      }
+      chunks.push(c);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
@@ -423,7 +500,16 @@ export async function startProxy(
         'an upstream must be https, or http on loopback'
     );
   }
-  const spillRoot = join(tmpdir(), 'token-optimizer-spill');
+  // ONE DIRECTORY PER PROXY, because shutdown deletes it. A shared root would mean the
+  // first proxy to stop wiping the spills of every other one still running -- and a
+  // spill path is a live reference the agent may still follow with `Read`. The random
+  // segment is what keeps two proxies from sharing a fate; within a proxy the file
+  // names stay content-addressed, which is what dedup needs.
+  const spillRoot = join(
+    tmpdir(),
+    'token-optimizer-spill',
+    randomBytes(12).toString('hex')
+  );
   const spill = spillTo(spillRoot);
   // One store per proxy, holding a hash and a boolean per conversation.
   // Per-conversation, never per-request, and passed in explicitly rather
@@ -447,12 +533,55 @@ export async function startProxy(
     ? await loadFindings(options.projectRoot || process.cwd())
     : [];
 
+  const guessing = upstreamIsDefault(options);
+  const limit = bodyLimitFor(options);
+
   const server = createServer((req, res) => {
     void (async () => {
+      // VALIDATED BEFORE ANYTHING IS COMPRESSED, and the order is the fix. Compressing
+      // first meant `anchors.remember` recorded this conversation as anchored, and only
+      // then did `forward` reject the target with a 400 -- so the provider never saw the
+      // body, and the retry took the already-anchored branch against a prefix that was
+      // never established.
+      const path = requestPath(req.url);
+      if (path === null) {
+        res.writeHead(400, { 'content-type': 'text/plain' });
+        res.end(
+          'token-optimizer proxy: refusing a request target that names its own ' +
+            'destination; send a path, not an absolute URL'
+        );
+        return;
+      }
+
+      if (guessing && !defaultUpstreamServes(path)) {
+        res.writeHead(421, { 'content-type': 'text/plain' });
+        res.end(
+          `token-optimizer proxy: '${path}' is not a route of the default upstream ` +
+            `(${upstream}), and forwarding it there would send this client's ` +
+            'credentials to the wrong provider. Set TOKEN_OPTIMIZER_PROXY_UPSTREAM, or ' +
+            'pass --upstream, to name the provider this client actually uses.'
+        );
+        return;
+      }
+
       let body: Buffer;
       try {
-        body = await readBody(req);
-      } catch {
+        body = await readBody(req, limit);
+      } catch (error) {
+        if (error instanceof BodyTooLarge) {
+          // `connection: close` because the rest of that body is still coming and this
+          // connection cannot be reused; the socket is destroyed once the answer has
+          // actually been written.
+          res.writeHead(413, {
+            'content-type': 'text/plain',
+            connection: 'close',
+          });
+          res.end(
+            `token-optimizer proxy: request body exceeds ${limit} bytes`,
+            () => req.destroy()
+          );
+          return;
+        }
         res.writeHead(400).end();
         return;
       }
@@ -467,6 +596,20 @@ export async function startProxy(
       options.onSummary?.({ path: req.url || '/', ...summary });
       forward(upstream, req, res, next);
     })();
+  });
+
+  // SPILLED CONTENT IS A FRAGMENT OF THE USER'S SESSION, and mode 0600 bounds who can
+  // read it, not how long it lives. Left behind, every run adds to a pile under the
+  // temp directory that nothing ever removes. Cleared when the proxy stops, which is
+  // also when the last agent that could still `Read` one of those paths has gone.
+  server.on('close', () => {
+    try {
+      // eslint-disable-next-line n/no-sync
+      rmSync(spillRoot, { recursive: true, force: true });
+    } catch {
+      // A file already gone, or a directory we cannot remove. Neither is worth
+      // failing a shutdown over.
+    }
   });
 
   return new Promise((resolve, reject) => {

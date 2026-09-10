@@ -1,9 +1,12 @@
 import { describe, it, expect, afterEach } from '@jest/globals';
 import { createServer, request as httpRequest, type Server } from 'node:http';
 import {
+  bodyLimitFor,
   compressBody,
+  defaultUpstreamServes,
   proxyEnabled,
   startProxy,
+  upstreamIsDefault,
   upstreamIsSafe,
   requestPath,
   knowledgeEnabled,
@@ -546,5 +549,148 @@ describe('the cached-knowledge block', () => {
     // Charged, not hidden. A summary that reported only the byte reduction
     // beside a deliberate addition would be a false report.
     expect(out.summary.injectedChars).toBeGreaterThan(0);
+  });
+});
+
+describe('what the proxy refuses to buffer or forward', () => {
+  it('answers 413 rather than buffering an unbounded body', async () => {
+    // ANY LOCAL PROCESS CAN STREAM AT A LOOPBACK LISTENER, and `Buffer.concat` over a
+    // stream nobody bounded is an out-of-memory kill with no error to act on. The limit
+    // is lowered here rather than sending 64MB, which is the same code path.
+    const { url } = await upstream();
+    const { server, port } = await startProxy({
+      upstream: url,
+      maxBodyBytes: 4096,
+    });
+    servers.push(server);
+
+    const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'x'.repeat(20_000),
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.text()).toContain('exceeds 4096 bytes');
+  });
+
+  it('still forwards a body under the limit', async () => {
+    // The control: a limit that rejected everything would pass the test above.
+    const { url, seen } = await upstream();
+    const { server, port } = await startProxy({
+      upstream: url,
+      maxBodyBytes: 4096,
+    });
+    servers.push(server);
+
+    const body = JSON.stringify({
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    });
+
+    expect(response.status).toBe(200);
+    expect(seen.body).toBe(body);
+  });
+
+  it('will not raise the ceiling past the built-in one', () => {
+    // Lowering is a deployment choice; raising would opt back into the unbounded case.
+    expect(bodyLimitFor({ maxBodyBytes: Number.MAX_SAFE_INTEGER })).toBe(
+      bodyLimitFor({})
+    );
+    expect(bodyLimitFor({ maxBodyBytes: 4096 })).toBe(4096);
+    expect(bodyLimitFor({ maxBodyBytes: 0 })).toBe(bodyLimitFor({}));
+    expect(bodyLimitFor({ maxBodyBytes: -1 })).toBe(bodyLimitFor({}));
+  });
+});
+
+describe('the default upstream is a guess, and guesses are fenced', () => {
+  it('serves the routes Anthropic actually has', () => {
+    // Asserted as a predicate rather than end to end, because proving `/v1/messages`
+    // gets through under the DEFAULT upstream would mean letting a test reach
+    // api.anthropic.com.
+    expect(defaultUpstreamServes('/v1/messages')).toBe(true);
+    expect(defaultUpstreamServes('/v1/messages/batches')).toBe(true);
+    expect(defaultUpstreamServes('/v1/complete')).toBe(true);
+    expect(defaultUpstreamServes('/v1/models')).toBe(true);
+  });
+
+  it('does not serve another provider s routes', () => {
+    // A COPILOT TOKEN DELIVERED TO ANTHROPIC is what the default would otherwise do:
+    // sixteen clients can be pointed here through their own base-URL variable, and each
+    // request carries its own provider s key.
+    expect(defaultUpstreamServes('/chat/completions')).toBe(false);
+    expect(defaultUpstreamServes('/v1/chat/completions')).toBe(false);
+    expect(
+      defaultUpstreamServes('/v1beta/models/gemini-pro:generateContent')
+    ).toBe(false);
+    expect(defaultUpstreamServes('/')).toBe(false);
+  });
+
+  it('knows when it is guessing', () => {
+    const saved = process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM;
+    try {
+      delete process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM;
+      expect(upstreamIsDefault({})).toBe(true);
+      expect(upstreamIsDefault({ upstream: 'https://example.test' })).toBe(
+        false
+      );
+      process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM = 'https://example.test';
+      expect(upstreamIsDefault({})).toBe(false);
+    } finally {
+      if (saved === undefined)
+        delete process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM;
+      else process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM = saved;
+    }
+  });
+
+  it('refuses a foreign route when nobody named the provider', async () => {
+    const saved = process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM;
+    delete process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM;
+    try {
+      const { server, port } = await startProxy({});
+      servers.push(server);
+
+      const response = await fetch(
+        `http://127.0.0.1:${port}/chat/completions`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: 'Bearer gho_secret',
+          },
+          body: JSON.stringify({ messages: [] }),
+        }
+      );
+
+      expect(response.status).toBe(421);
+      const text = await response.text();
+      expect(text).toContain('TOKEN_OPTIMIZER_PROXY_UPSTREAM');
+      // The refusal must not echo the credential it just declined to forward.
+      expect(text).not.toContain('gho_secret');
+    } finally {
+      if (saved !== undefined)
+        process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM = saved;
+    }
+  });
+
+  it('leaves an explicitly configured upstream alone', async () => {
+    // The fence applies to a GUESS. An operator who named the provider has said which
+    // one it is, and every route is then theirs to serve.
+    const { url, seen } = await upstream();
+    const { server, port } = await startProxy({ upstream: url });
+    servers.push(server);
+
+    const response = await fetch(`http://127.0.0.1:${port}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(seen.url).toBe('/chat/completions');
   });
 });
