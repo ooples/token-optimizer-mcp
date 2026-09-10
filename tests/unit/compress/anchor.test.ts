@@ -46,25 +46,33 @@ function small(fresh = 'go on'): ProviderRequest {
 }
 
 /**
- * The same conversation, joined when its history is already large.
+ * A conversation joined when its history is already large.
  *
- * The OPENING block is held fixed across variants, because a conversation's
- * identity is derived from it. Editing that block would produce a different
- * conversation rather than an edited one, which is not what any of these tests
- * mean to exercise -- the invalidation case edits a later part of the prefix,
- * the way a compaction or a history edit actually does.
+ * TWO VARIATION POINTS, AND THEY MEAN DIFFERENT THINGS. `tail` changes the END
+ * of the prefix, which is what a history edit or a compaction does to a
+ * conversation that is still the same conversation. `opening` changes its
+ * START, which is what a DIFFERENT conversation looks like -- including one
+ * that hashes to the same key because its system prompt and first message
+ * happen to match.
+ *
+ * The distinction is the whole subject of the head digest, so the fixture has
+ * to be able to express both, and the tail variant must sit beyond the first
+ * few KB or it would move the head too and prove nothing.
  */
-function large(tail = 'earlier turns'): ProviderRequest {
+function large(
+  tail = 'earlier turns',
+  opening = 'start here'
+): ProviderRequest {
   return {
     system: 'You are a coding agent.',
     messages: [
-      { role: 'user', content: [{ type: 'text', text: 'start here' }] },
+      { role: 'user', content: [{ type: 'text', text: opening }] },
       {
         role: 'user',
         content: [
           {
             type: 'text',
-            text: `${tail}\n${payload('history', Math.ceil(COLD_PREFIX_LIMIT / 40))}`,
+            text: `${payload('history', Math.ceil(COLD_PREFIX_LIMIT / 40))}\n${tail}`,
             cache_control: { type: 'ephemeral' },
           },
         ],
@@ -147,16 +155,68 @@ describe('anchorDecision', () => {
     expect(second.reanchor).toBe(true);
     expect(second.reason).toBe('client-invalidated');
   });
+
+  it('does not treat a colliding conversation as an edited one', () => {
+    // Two sessions whose system prompt and opening message are identical share
+    // a key -- a user who starts two conversations with the same first message.
+    // Without the head digest the second looks like the first with its history
+    // rewritten, and the answer to that is "anchor, the miss already happened",
+    // which would spend a 1.25x write on a large prefix the provider holds in
+    // its original form.
+    const store = anchorStore();
+    const anchored = anchorDecision(large(), store);
+    store.remember(anchored.key, anchored.record);
+
+    // A store that hands back the OTHER conversation's record under this key,
+    // which is exactly what a hash collision produces. Stubbed rather than
+    // constructed, because `conversationKey` deliberately cannot see enough of
+    // the request to be forced into a collision from the outside.
+    const collided = anchorDecision(large('x', 'a different opening'), {
+      seen: () => anchored.record,
+      remember: () => {},
+    });
+
+    expect(collided.reason).toBe('joined-mid-conversation');
+    expect(collided.reanchor).toBe(false);
+  });
+
+  it('still calls a genuine edit an edit', () => {
+    // The other half: same opening, changed tail. Without this, the test above
+    // would pass just as well against a rule that never re-anchored anything.
+    const store = anchorStore();
+    const first = anchorDecision(large(), store);
+    store.remember(first.key, first.record);
+
+    const edited = anchorDecision(large('a compaction rewrote this'), store);
+    expect(edited.reason).toBe('client-invalidated');
+    expect(edited.reanchor).toBe(true);
+  });
 });
 
 describe('anchorStore', () => {
   it('evicts least recently used, not least recently created', () => {
     const store = anchorStore(2);
-    store.remember('a', { prefixDigest: '1', anchored: true });
-    store.remember('b', { prefixDigest: '2', anchored: true });
+    store.remember('a', {
+      prefixDigest: '1',
+      headChunks: ['h1'],
+      anchored: true,
+    });
+    store.remember('b', {
+      prefixDigest: '2',
+      headChunks: ['h2'],
+      anchored: true,
+    });
     // Touching 'a' must move it to the back of the eviction queue.
-    store.remember('a', { prefixDigest: '1', anchored: true });
-    store.remember('c', { prefixDigest: '3', anchored: true });
+    store.remember('a', {
+      prefixDigest: '1',
+      headChunks: ['h1'],
+      anchored: true,
+    });
+    store.remember('c', {
+      prefixDigest: '3',
+      headChunks: ['h3'],
+      anchored: true,
+    });
 
     expect(store.seen('a')).toBeDefined();
     expect(store.seen('c')).toBeDefined();
@@ -166,20 +226,33 @@ describe('anchorStore', () => {
   it('stays bounded', () => {
     const store = anchorStore(3);
     for (let i = 0; i < 50; i += 1)
-      store.remember(`k${i}`, { prefixDigest: `${i}`, anchored: false });
+      store.remember(`k${i}`, {
+        prefixDigest: `${i}`,
+        headChunks: [`h${i}`],
+        anchored: false,
+      });
     expect(store.seen('k0')).toBeUndefined();
     expect(store.seen('k49')).toBeDefined();
   });
 });
 
 describe('v1 with an anchor store', () => {
+  /**
+   * DISTINCT BODIES, so a test can tell WHICH one survived.
+   *
+   * With identical bodies the assertions below pass whenever any single body
+   * remains -- including the wrong one -- which proves that something was kept
+   * and nothing at all about relevance. Every signature survives compression
+   * too, so asserting on the NAME would be just as vacuous. The unique marker
+   * line inside each body is the only thing that discriminates.
+   */
   const file = Array.from(
     { length: 14 },
     (_, i) => `export function handler${i}(input: string): string {
   const trimmed = input.trim();
-  const upper = trimmed.toUpperCase();
-  const parts = upper.split(',');
-  return parts.join('|');
+  const marker = 'body-of-handler${i}';
+  const parts = trimmed.toUpperCase().split(',');
+  return marker + parts.join('|');
 }`
   ).join('\n\n');
 
@@ -201,6 +274,25 @@ describe('v1 with an anchor store', () => {
       },
     ],
   });
+
+  /**
+   * V1 plus the commit step the proxy performs.
+   *
+   * The strategy returns what to remember rather than writing it, because the
+   * proxy still discards a rewrite that did not come out smaller. A test that
+   * skipped this step would report `first-turn` on every call and prove
+   * nothing about the turn-to-turn behaviour it claims to test.
+   */
+  const anchored = (
+    request: ProviderRequest,
+    anchors: ReturnType<typeof anchorStore>,
+    options: { spill?: () => string } = {}
+  ) => {
+    const result = v1Frontier(request, { ...options, anchors });
+    if (result.anchor)
+      anchors.remember(result.anchor.key, result.anchor.record);
+    return result;
+  };
 
   const prefixOf = (r: ProviderRequest): string => {
     const content = r.messages?.[0].content;
@@ -232,8 +324,7 @@ describe('v1 with an anchor store', () => {
     // The two rules working together: stability behind the breakpoint, and
     // relevance in front of it.
     const anchors = anchorStore();
-    const out = v1Frontier(session('what does handler3 do'), {
-      anchors,
+    const out = anchored(session('what does handler3 do'), anchors, {
       // The code engine needs somewhere to put the bodies it removes, or it
       // declines outright -- the same contract every engine holds to.
       spill: () => '/spill/block.txt',
@@ -242,6 +333,8 @@ describe('v1 with an anchor store', () => {
     const fresh = Array.isArray(content) ? (content[0].text ?? '') : '';
 
     expect(fresh.length).toBeLessThan(file.length);
-    expect(fresh).toContain('handler3');
+    // The body the question named survives, and a neighbour's does not.
+    expect(fresh).toContain("body-of-handler3'");
+    expect(fresh).not.toContain("body-of-handler11'");
   });
 });

@@ -208,16 +208,32 @@ describe('liveness in the code engine', () => {
    * broad enough to name everything is ignored rather than silently switching
    * compression off.
    */
-  const source = Array.from(
-    { length: 10 },
-    (
-      _,
-      i
-    ) => `export function ${['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa'][i]}Handler(input: string): string {
+  /**
+   * DISTINCT BODIES, so an assertion can tell WHICH one survived.
+   *
+   * With identical bodies, matching on any body line passes whenever a single
+   * body remains -- including the wrong one. Every signature survives
+   * compression too, so matching on the NAME is no better. The unique marker
+   * inside each body is the only thing that discriminates.
+   */
+  const NAMES = [
+    'alpha',
+    'beta',
+    'gamma',
+    'delta',
+    'epsilon',
+    'zeta',
+    'eta',
+    'theta',
+    'iota',
+    'kappa',
+  ];
+  const source = NAMES.map(
+    (name) => `export function ${name}Handler(input: string): string {
   const trimmed = input.trim();
-  const upper = trimmed.toUpperCase();
-  const parts = upper.split(',');
-  return parts.join('|');
+  const marker = 'body-of-${name}';
+  const parts = trimmed.toUpperCase().split(',');
+  return marker + parts.join('|');
 }`
   ).join('\n\n');
 
@@ -226,7 +242,10 @@ describe('liveness in the code engine', () => {
 
   it('keeps the body of the function the agent just named', () => {
     const out = compress('why does gammaHandler drop the separator');
-    expect(out.text).toContain("const parts = upper.split(',');");
+    expect(out.text).toContain("body-of-gamma'");
+    // And it is the RIGHT body: with identical bodies this would have passed
+    // whichever one survived.
+    expect(out.text).not.toContain("body-of-alpha'");
   });
 
   it('still elides the bodies nobody asked about', () => {
@@ -239,6 +258,8 @@ describe('liveness in the code engine', () => {
   it('matches a name written with spaces against one written without', () => {
     const out = compress('what does the gamma handler do');
     expect(out.elisions.length).toBe(9);
+    // A count alone would pass if any nine had gone.
+    expect(out.text).toContain("body-of-gamma'");
   });
 
   it('elides every body when nothing was named', () => {

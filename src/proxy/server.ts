@@ -37,7 +37,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { createHmac, randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { v1Frontier } from '../compress/strategy.js';
+import { v1Frontier, type StrategyResult } from '../compress/strategy.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import type { ProviderRequest } from '../compress/frontier.js';
 
@@ -173,16 +173,24 @@ export function compressBody(
   }
   if (!Array.isArray(parsed.messages)) return unchanged('no messages array');
 
-  let rewritten: ProviderRequest;
+  let result: StrategyResult;
   try {
-    rewritten = v1Frontier(parsed, { spill, anchors }).request;
+    result = v1Frontier(parsed, { spill, anchors });
   } catch {
     return unchanged('compression threw');
   }
 
-  const next = Buffer.from(JSON.stringify(rewritten), 'utf8');
+  const next = Buffer.from(JSON.stringify(result.request), 'utf8');
   // Never send more than we were given.
   if (next.length >= before) return unchanged('compression did not pay');
+
+  // COMMITTED ONLY NOW, because everything above can still decide not to send
+  // this body. Remembering `anchored: true` for a rewrite that was then
+  // discarded would tell the next turn to rewrite a prefix the provider had
+  // cached in its original form -- a cache write bought with a lie about what
+  // we sent.
+  if (anchors && result.anchor)
+    anchors.remember(result.anchor.key, result.anchor.record);
 
   return {
     body: next,

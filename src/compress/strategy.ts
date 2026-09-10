@@ -18,7 +18,11 @@
 import { compressBlock } from './router.js';
 import { dedupBlocks, type DedupBlock } from './dedup.js';
 import { queryFrom } from './relevance.js';
-import { anchorDecision, type AnchorStore } from './anchor.js';
+import {
+  anchorDecision,
+  type AnchorDecision,
+  type AnchorStore,
+} from './anchor.js';
 import {
   isAfter,
   lastCacheBreakpoint,
@@ -60,6 +64,14 @@ export interface StrategyResult {
   readonly elisions: readonly Elision[];
   /** Tokens of preamble this strategy ADDED to the request. */
   readonly injectedChars: number;
+  /**
+   * What to remember about this conversation IF this request is the one sent.
+   *
+   * Uncommitted on purpose: a caller that decides not to use the rewritten body
+   * must not leave a record saying it did. Commit it with
+   * `anchors.remember(anchor.key, anchor.record)` once the body is accepted.
+   */
+  readonly anchor?: AnchorDecision;
 }
 
 /** The system message HeadRoom appends, reproduced from ccr/tool_injection.py:143. */
@@ -173,6 +185,25 @@ function pathAddressed(
   const elisions: Elision[] = [];
   const staged: DedupBlock[] = [];
 
+  // A SOURCE THAT APPEARS TWICE IS COMPRESSED THE SAME WAY BOTH TIMES.
+  //
+  // Relevance and liveness make the output depend on the question, and cached
+  // content must not (see below), so the two copies of one file would compress
+  // differently and cross-block dedup would collapse neither -- the fresh copy
+  // is then sent in full, which costs far more than relevance-tuning it saves.
+  // Matching them on SOURCE instead was the wrong repair: it replaces the fresh
+  // text with earlier, different text and cannot honestly be called lossless.
+  //
+  // Compressing every copy query-independently makes the outputs genuinely
+  // equal, so the reference is exact. What the agent gives up is relevance
+  // tuning on content that is repeated verbatim elsewhere in the same request,
+  // and every body that elision removes still names its path.
+  const sourceCounts = new Map<string, number>();
+  mapBlocks(request, (text) => {
+    sourceCounts.set(text, (sourceCounts.get(text) ?? 0) + 1);
+    return null;
+  });
+
   // Pass one: compress each block, and record whether it could be touched at
   // all. An untouchable block is still staged, because it is the strongest
   // referent a later repeat can point at -- it is guaranteed to arrive
@@ -202,9 +233,10 @@ function pathAddressed(
     // the cache hits. After the breakpoint nothing is cached yet, so the
     // question is free to steer retention.
     const cached = !isAfter(at, breakpoint);
+    const repeated = (sourceCounts.get(text) ?? 0) > 1;
     const result = compressBlock(text, {
       spill: options.spill,
-      query: cached ? undefined : query,
+      query: cached || repeated ? undefined : query,
     });
     elisions.push(...result.elisions);
     staged.push({ text: result.text, original: text, touchable: true });
@@ -240,9 +272,16 @@ export function v1Frontier(
 ): StrategyResult {
   if (!options.anchors) return pathAddressed(request, options, true);
 
+  // DECIDED HERE, COMMITTED BY THE CALLER, and the order matters. The proxy
+  // still discards a rewrite that did not come out smaller and forwards the
+  // original instead. Recording `anchored: true` before that verdict told the
+  // next turn to rewrite a prefix the provider had cached in its ORIGINAL form
+  // -- an avoidable cache write, caused by remembering something that never
+  // went on the wire. The record travels back with the result and is committed
+  // only once the body it describes is actually sent.
   const decision = anchorDecision(request, options.anchors);
-  options.anchors.remember(decision.key, decision.record);
-  return pathAddressed(request, options, !decision.reanchor);
+  const out = pathAddressed(request, options, !decision.reanchor);
+  return { ...out, anchor: decision };
 }
 
 /**

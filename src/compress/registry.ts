@@ -132,13 +132,30 @@ export function runEngine(
     return unchanged(text);
   }
 
+  // EVERY FIELD IS CHECKED BEFORE IT IS TOUCHED, and the elisions are checked
+  // one by one rather than only for arrayness. An engine returning
+  // `elisions: [null]` would otherwise be dereferenced BELOW, outside the try
+  // that caught its throw -- so a badly written engine would take the request
+  // down through the very boundary written to stop it doing that. Fail open
+  // means fail open on the shape of the answer too, not just on the answer.
   if (
     !result ||
     typeof result.text !== 'string' ||
+    typeof result.lossless !== 'boolean' ||
     !Array.isArray(result.elisions)
   ) {
     return unchanged(text);
   }
+
+  const wellFormed = result.elisions.every(
+    (elision) =>
+      elision !== null &&
+      typeof elision === 'object' &&
+      typeof elision.removed === 'string' &&
+      typeof elision.lossless === 'boolean' &&
+      (elision.recoverAt === null || typeof elision.recoverAt === 'string')
+  );
+  if (!wellFormed) return unchanged(text);
 
   // Compression that adds tokens is a defect other systems have shipped, and
   // measuring is cheaper than trusting.

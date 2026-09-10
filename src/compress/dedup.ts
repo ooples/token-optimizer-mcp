@@ -146,36 +146,54 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
   const texts: string[] = [];
   const elisions: Elision[] = [];
 
-  // By source bytes, holding whatever that block ended up sending -- the
-  // reference has to quote what a reader will actually see above.
-  const bySource = new Map<string, string>();
-  // And by compressed form, for two DIFFERENT sources that compressed to the
-  // same output. Rare, but it is free to catch.
+  // By source bytes, but ONLY for a block that was never rewritten -- an
+  // untouchable one, which still holds the original. Such a block is the
+  // strongest referent there is: a later copy of the same source is fully
+  // present above, byte for byte.
+  const verbatim = new Map<string, string>();
+  // And by emitted text, which is the general case: two blocks that SAY the
+  // same thing, whatever their sources were.
   const byOutput = new Map<string, string>();
 
   const remember = (block: DedupBlock): void => {
     if (
+      !block.touchable &&
       block.original.length >= MIN_DEDUP_BYTES &&
-      !bySource.has(block.original)
+      !verbatim.has(block.original)
     )
-      bySource.set(block.original, block.text);
+      verbatim.set(block.original, block.text);
     if (block.text.length >= MIN_DEDUP_BYTES && !byOutput.has(block.text))
       byOutput.set(block.text, block.text);
   };
 
   for (const block of blocks) {
     // An untouchable block -- signed, or behind the cache frontier -- is never
-    // rewritten, but it is the strongest referent there is: it arrives
-    // byte-identical no matter what.
+    // rewritten, so it arrives byte-identical no matter what.
     if (!block.touchable) {
       remember(block);
       texts.push(block.text);
       continue;
     }
 
+    // MATCHING ON SOURCE ALONE WAS A LIE, and it is the same lie this module
+    // helped catch elsewhere: correct about what was removed, wrong about
+    // what was claimed. Two blocks with the same SOURCE can emit different
+    // text -- cached content is compressed without the question and fresh
+    // content with it, so a fresh block may keep the very body the question
+    // made live while the earlier copy elided it. Replacing the fresh block
+    // with a pointer to the earlier one then removes something the output
+    // does not contain, and `lossless: true` was simply false.
+    //
+    // So a source match counts only when the earlier block was never
+    // rewritten. Everything else has to match on what was actually EMITTED,
+    // where the reference is exact by construction. The compression is not
+    // lost: `strategy.ts` compresses a repeated source query-independently
+    // at both positions, so the two texts come out equal and this second
+    // path catches them -- the difference is that now they really are equal
+    // rather than assumed to be close enough.
     const earlier =
       (block.original.length >= MIN_DEDUP_BYTES
-        ? bySource.get(block.original)
+        ? verbatim.get(block.original)
         : undefined) ??
       (block.text.length >= MIN_DEDUP_BYTES
         ? byOutput.get(block.text)

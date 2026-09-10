@@ -6,7 +6,12 @@ import {
   runEngine,
   unregisterEngine,
 } from '../../../src/compress/registry.js';
-import { BUILT_IN_ENGINES, classify, compressBlock, engineNameFor } from '../../../src/compress/router.js';
+import {
+  BUILT_IN_ENGINES,
+  classify,
+  compressBlock,
+  engineNameFor,
+} from '../../../src/compress/router.js';
 import type { EngineRegistration } from '../../../src/compress/registry.js';
 
 /**
@@ -63,9 +68,15 @@ describe('registration', () => {
   });
 
   it('refuses a registration that cannot work', () => {
-    expect(() => registerEngine({ name: '', claims: () => true, compress: lossless })).toThrow();
     expect(() =>
-      registerEngine({ name: CUSTOM, claims: undefined as never, compress: lossless })
+      registerEngine({ name: '', claims: () => true, compress: lossless })
+    ).toThrow();
+    expect(() =>
+      registerEngine({
+        name: CUSTOM,
+        claims: undefined as never,
+        compress: lossless,
+      })
     ).toThrow();
   });
 
@@ -93,7 +104,12 @@ describe('registration', () => {
 describe('the boundary', () => {
   const run = (engine: Partial<EngineRegistration>, text: string): string =>
     runEngine(
-      { name: CUSTOM, claims: () => true, compress: lossless, ...engine } as EngineRegistration,
+      {
+        name: CUSTOM,
+        claims: () => true,
+        compress: lossless,
+        ...engine,
+      } as EngineRegistration,
       text,
       {}
     ).text;
@@ -101,9 +117,12 @@ describe('the boundary', () => {
   const INPUT = 'x'.repeat(200);
 
   it('discards output larger than the input', () => {
-    expect(run({ compress: (t) => ({ text: t + t, elisions: [], lossless: true }) }, INPUT)).toBe(
-      INPUT
-    );
+    expect(
+      run(
+        { compress: (t) => ({ text: t + t, elisions: [], lossless: true }) },
+        INPUT
+      )
+    ).toBe(INPUT);
   });
 
   it('passes the input through when an engine throws', () => {
@@ -121,7 +140,49 @@ describe('the boundary', () => {
 
   it('passes the input through when an engine returns nonsense', () => {
     expect(run({ compress: () => undefined as never }, INPUT)).toBe(INPUT);
-    expect(run({ compress: () => ({ text: 'ok' }) as never }, INPUT)).toBe(INPUT);
+    expect(run({ compress: () => ({ text: 'ok' }) as never }, INPUT)).toBe(
+      INPUT
+    );
+  });
+
+  it('passes the input through when an elision is null or malformed', () => {
+    // The rule below reads every elision, and that read happens OUTSIDE the
+    // try that catches a throwing engine. An engine returning `[null]` would
+    // therefore take the request down through the boundary written to stop
+    // exactly that. Fail open applies to the shape of the answer too.
+    expect(
+      run(
+        {
+          compress: () => ({
+            text: 'tiny',
+            elisions: [null] as never,
+            lossless: false,
+          }),
+        },
+        INPUT
+      )
+    ).toBe(INPUT);
+
+    expect(
+      run(
+        {
+          compress: () => ({
+            text: 'tiny',
+            elisions: [
+              { removed: 12, recoverAt: null, lossless: true },
+            ] as never,
+            lossless: false,
+          }),
+        },
+        INPUT
+      )
+    ).toBe(INPUT);
+  });
+
+  it('passes the input through when the result omits lossless', () => {
+    expect(
+      run({ compress: () => ({ text: 'tiny', elisions: [] }) as never }, INPUT)
+    ).toBe(INPUT);
   });
 
   it('refuses a lossy elision with nowhere to recover from', () => {
@@ -130,7 +191,9 @@ describe('the boundary', () => {
       {
         compress: () => ({
           text: 'tiny',
-          elisions: [{ removed: 'everything', recoverAt: null, lossless: false }],
+          elisions: [
+            { removed: 'everything', recoverAt: null, lossless: false },
+          ],
           lossless: false,
         }),
       },
@@ -144,7 +207,9 @@ describe('the boundary', () => {
       {
         compress: () => ({
           text: 'tiny',
-          elisions: [{ removed: 'the rest', recoverAt: '/spill/1.txt', lossless: false }],
+          elisions: [
+            { removed: 'the rest', recoverAt: '/spill/1.txt', lossless: false },
+          ],
           lossless: false,
         }),
       },
@@ -162,9 +227,17 @@ describe('the boundary', () => {
         compress: () => ({
           text: 'tiny',
           elisions: [
-            { removed: '900 bytes of whitespace', recoverAt: null, lossless: true },
+            {
+              removed: '900 bytes of whitespace',
+              recoverAt: null,
+              lossless: true,
+            },
             { removed: '12 null fields', recoverAt: null, lossless: true },
-            { removed: '57 repeating rows', recoverAt: '/spill/1.json', lossless: false },
+            {
+              removed: '57 repeating rows',
+              recoverAt: '/spill/1.json',
+              lossless: false,
+            },
           ],
           lossless: false,
         }),

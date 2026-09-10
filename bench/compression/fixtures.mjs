@@ -224,7 +224,13 @@ function structuredLog(r, n) {
 
   const entries = [];
   for (let i = 0; i < n; i += 1) {
-    const critical = i < 1;
+    // DEEP IN THE PAYLOAD, NOT AT THE HEAD. The critical record used to be
+    // entry zero, which every engine keeps as a shape sample -- so a gate
+    // asserting it survived could not fail, which is worse than no gate. At
+    // 83% it survives only because it BREAKS THE SHAPE: it carries an
+    // `exception` key the INFO rows lack, which is exactly the anomaly
+    // preservation the gate is there to protect.
+    const critical = i === Math.floor(n * 0.83);
     const error = !critical && i < 6;
     const level = critical
       ? 'CRITICAL'
@@ -235,7 +241,14 @@ function structuredLog(r, n) {
           : r() < 0.1
             ? 'DEBUG'
             : 'INFO';
-    const message = fill(pick(r, error || critical ? errors : messages));
+    // A DETERMINISTIC MARKER ON THE CRITICAL ENTRY, so the gate has something
+    // to look for. This generator documents its CRITICAL and ERROR records as
+    // needles by construction, but nothing checked them: an arm could drop
+    // every exception in the log and still pass every gate. A random message
+    // cannot be asserted, so the first entry carries a fixed one.
+    const message = critical
+      ? NEEDLE_CRITICAL
+      : fill(pick(r, error ? errors : messages));
     const entry = {
       timestamp: `2026-01-06T00:${String(Math.floor(i / 120) % 60).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}Z`,
       level,
@@ -331,6 +344,18 @@ function searchJson(r, rows) {
 /** Values the gate looks for in the compressed output. */
 export const NEEDLE_UUID = '9f1c2b3a-7d4e-4a1b-9c6f-abcdefabcdef';
 export const NEEDLE_ERROR = 'Permission denied';
+
+/**
+ * The CRITICAL entry in a structured log, which no arm may drop.
+ *
+ * The log generator has always produced CRITICAL and ERROR records with
+ * stacktraces and documented them as needles, but no gate looked for them --
+ * `fixture.needles` was set on `code-search` alone. An arm could therefore
+ * discard every exception in a 900-line incident log and pass all four gates,
+ * on the workload where the exceptions ARE the content.
+ */
+export const NEEDLE_CRITICAL =
+  'FATAL: primary datastore unreachable, failing over';
 
 /**
  * The relevance needle, and why it is shaped differently from the two above.
@@ -471,6 +496,7 @@ export function fixtures() {
     {
       name: 'sre-debugging',
       theirs: { before: 65694, after: 5118 },
+      criticalNeedle: true,
       request: request(
         'You are an SRE agent.',
         [structuredLog(r, 120), 'Investigating the failed deploy.'],

@@ -31,6 +31,7 @@ import {
   NEEDLE_UUID,
   NEEDLE_ERROR,
   NEEDLE_RELEVANT,
+  NEEDLE_CRITICAL,
 } from './fixtures.mjs';
 import { STRATEGIES, v1Frontier } from '../../dist/compress/strategy.js';
 import { lastCacheBreakpoint, isAfter } from '../../dist/compress/frontier.js';
@@ -170,6 +171,23 @@ function prefixText(request, breakpoint) {
  *
  * Applied identically to every arm, including the control.
  */
+/**
+ * V1 with an anchor store, committing the record the way the proxy does.
+ *
+ * The strategy RETURNS what to remember rather than writing it, because the
+ * proxy still discards a rewrite that did not come out smaller -- recording a
+ * rewrite that never went on the wire would tell the next turn to rewrite a
+ * prefix the provider had cached in its original form. The benchmark always
+ * uses the rewritten request, so it always commits; the point is that it goes
+ * through the same two-step contract rather than a shortcut the product does
+ * not have.
+ */
+function runAnchored(request, options, anchors) {
+  const result = v1Frontier(request, { ...options, anchors });
+  if (result.anchor) anchors.remember(result.anchor.key, result.anchor.record);
+  return result;
+}
+
 function steadyTokens(request, run, spill) {
   // THE CONVERSATION IS REPLAYED FROM ITS START, and it has to be. A fixture
   // is a snapshot of a session already in progress: its very first block is
@@ -249,7 +267,7 @@ function main() {
       ...STRATEGIES,
       'v1-anchored': (() => {
         const anchors = anchorStore();
-        return (req, opts) => v1Frontier(req, { ...opts, anchors });
+        return (req, opts) => runAnchored(req, opts, anchors);
       })(),
     };
     for (const [name, run] of Object.entries(arms)) {
@@ -266,7 +284,7 @@ function main() {
       // the state the single-shot run above just wrote.
       const steadyRun =
         name === 'v1-anchored'
-          ? (req, opts) => v1Frontier(req, { ...opts, anchors: steadyAnchors })
+          ? (req, opts) => runAnchored(req, opts, steadyAnchors)
           : run;
       steady[name] = steadyTokens(before, steadyRun, armSpill);
 
@@ -289,6 +307,16 @@ function main() {
       // shape-identical to its neighbours and sits deep in the tail, so
       // nothing structural can rescue it: if the question is not being read
       // off the request and used, it is gone.
+      // The CRITICAL record in an incident log, with its stacktrace. On the
+      // sre-debugging workload the exceptions ARE the content, and every arm
+      // scores 97%+ there -- a number that would look just as good with them
+      // all thrown away.
+      if (fixture.criticalNeedle) {
+        const body = JSON.stringify(result.request);
+        if (!body.includes(NEEDLE_CRITICAL))
+          needleFailures.push(`${fixture.name}/${name}: lost the CRITICAL record`);
+      }
+
       if (fixture.relevanceNeedle) {
         const body = JSON.stringify(result.request);
         if (!body.includes(NEEDLE_RELEVANT))

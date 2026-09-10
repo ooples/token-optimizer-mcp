@@ -123,13 +123,88 @@ export function conversationKey(request: ProviderRequest): string {
     .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
     .map((raw) => (raw as Block)?.text)
     .find((text): text is string => typeof text === 'string');
-  return digest(`${system} ${first ?? ''}`);
+  // `metadata.user_id` when the client sends one (Anthropic documents the
+  // field and Claude Code populates it). It does not separate two
+  // conversations from the same person, but it costs nothing and removes
+  // every collision between different people -- which is the larger set.
+  const metadata = request.metadata as { user_id?: unknown } | undefined;
+  const user = typeof metadata?.user_id === 'string' ? metadata.user_id : '';
+  return digest(`${user} ${system} ${first ?? ''}`);
+}
+
+/**
+ * The prefix, digested in fixed-size chunks.
+ *
+ * WHY CHUNKS AND NOT ONE DIGEST OF THE OPENING. A conversation grows by
+ * APPENDING, so what identifies it is that the earlier bytes are still there
+ * -- but the cached prefix does not merely gain a tail, it gains whole
+ * messages as the breakpoint advances. Turn one might cache nothing but the
+ * system prompt; turn two caches the system prompt and two messages. A
+ * single digest of "the first few KB" therefore changes between two turns of
+ * the SAME conversation, which is precisely the case that must be
+ * recognised: measured, it stopped anchoring engaging at all and took the
+ * sre-debugging arm from 844 steady tokens back to 1,740.
+ *
+ * Chunks are aligned to fixed offsets, so growth leaves the earlier ones
+ * untouched and "is this the conversation we were serving?" becomes "are the
+ * chunks we recorded still the chunks at the front?". Digests rather than
+ * the text itself, because this is retained across requests and there is no
+ * reason for a proxy to hold onto a kilobyte of anybody's conversation.
+ */
+const CHUNK_BYTES = 512;
+
+/** At most this many chunks are compared: enough to identify, not to store. */
+const MAX_CHUNKS = 8;
+
+function headChunks(prefix: string): string[] {
+  const chunks: string[] = [];
+  for (
+    let at = 0;
+    at + CHUNK_BYTES <= prefix.length && chunks.length < MAX_CHUNKS;
+    at += CHUNK_BYTES
+  ) {
+    chunks.push(digest(prefix.slice(at, at + CHUNK_BYTES)));
+  }
+  return chunks;
+}
+
+/**
+ * Is `now` the same conversation as the one `before` was recorded for?
+ *
+ * True when every complete chunk they have in common matches. An empty
+ * overlap -- the recorded prefix was shorter than one chunk -- answers TRUE,
+ * and deliberately: a prefix that small means we joined at the very start of
+ * the conversation, so we served its earlier turns and nothing of the
+ * client's original is in the provider's cache to be protected.
+ */
+function isContinuation(
+  before: readonly string[],
+  now: readonly string[]
+): boolean {
+  const shared = Math.min(before.length, now.length);
+  for (let i = 0; i < shared; i += 1) {
+    if (before[i] !== now[i]) return false;
+  }
+  return true;
 }
 
 /** What we last did for one conversation. */
 export interface AnchorRecord {
   /** Digest of the CLIENT's prefix as it arrived, so a change is detectable. */
   readonly prefixDigest: string;
+  /**
+   * Chunk digests of the opening of that prefix.
+   *
+   * THIS IS WHAT SEPARATES AN EDIT FROM A COLLISION. Two different sessions
+   * whose system prompt and opening message are identical -- a user who
+   * starts two conversations with "fix the tests" -- share a key. Without
+   * this, the second one looks like the first with its history rewritten,
+   * and the answer to that is "anchor, the miss already happened", which
+   * would spend a 1.25x write on a large prefix the provider is holding in
+   * its original form. With it, an unrelated conversation is recognised as
+   * unrelated and falls back to the size rule for a first sighting.
+   */
+  readonly headChunks: readonly string[];
   /** Did we rewrite that prefix? */
   readonly anchored: boolean;
 }
@@ -189,9 +264,13 @@ export function anchorDecision(
   const key = conversationKey(request);
   const prefix = prefixOf(request);
   const prefixDigest = digest(prefix);
+  const chunks = headChunks(prefix);
   const previous = store.seen(key);
+  const sameConversation = previous
+    ? isContinuation(previous.headChunks, chunks)
+    : false;
 
-  if (previous && previous.prefixDigest === prefixDigest) {
+  if (previous && sameConversation && previous.prefixDigest === prefixDigest) {
     // Unchanged prefix: do exactly what we did last time, whatever that was.
     // Consistency IS the cache hit here -- switching either way is the miss.
     return {
@@ -202,17 +281,21 @@ export function anchorDecision(
     };
   }
 
-  if (previous) {
-    // The client changed history under us: an edit, a new system prompt, a
-    // compaction. That miss has already happened, so what replaces it may as
-    // well be smaller.
+  if (previous && sameConversation) {
+    // Same opening, different prefix: the client changed history under us --
+    // an edit, a new system prompt, a compaction. That miss has already
+    // happened, so what replaces it may as well be smaller.
     return {
       reanchor: true,
       reason: 'client-invalidated',
       key,
-      record: { prefixDigest, anchored: true },
+      record: { prefixDigest, headChunks: chunks, anchored: true },
     };
   }
+
+  // Either nothing is known, or the key belongs to a DIFFERENT conversation
+  // that opened the same way. Both are first sightings, and both answer the
+  // same question: is this prefix small enough that being wrong is cheap?
 
   if (prefix.length <= COLD_PREFIX_LIMIT) {
     // A conversation at its start. The prefix is written either way.
@@ -220,7 +303,7 @@ export function anchorDecision(
       reanchor: true,
       reason: 'first-turn',
       key,
-      record: { prefixDigest, anchored: true },
+      record: { prefixDigest, headChunks: chunks, anchored: true },
     };
   }
 
@@ -228,6 +311,6 @@ export function anchorDecision(
     reanchor: false,
     reason: 'joined-mid-conversation',
     key,
-    record: { prefixDigest, anchored: false },
+    record: { prefixDigest, headChunks: chunks, anchored: false },
   };
 }
