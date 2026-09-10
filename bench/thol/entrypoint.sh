@@ -13,6 +13,10 @@ set -euo pipefail
 MODE="${1:-selftest}"
 shift || true
 
+# The installed package under test. Top-level rather than set inside prepare(),
+# so a function that runs after it cannot depend on that ordering.
+PKG=/usr/local/lib/node_modules/@ooples/token-optimizer-mcp
+
 log() { printf '\n\033[1;36m>> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 
@@ -41,7 +45,6 @@ prepare() {
   #
   # Cheap to check, and the failure it prevents is otherwise invisible.
   log "Provenance of the build under test"
-  PKG=/usr/local/lib/node_modules/@ooples/token-optimizer-mcp
   if [ -f /opt/optimizer-provenance.json ]; then
     node -e "
       const p = require('/opt/optimizer-provenance.json');
@@ -96,6 +99,58 @@ prepare() {
       " 2>/dev/null || echo "error")"
       [ "$wrote" = "0" ] || die "arm $arm declares TOKEN_OPTIMIZER_WIKI_DISABLED=$nograph but the packaged build still wrote $wrote graph file(s). That arm would measure a graph that is running. Build from a tree that supports it."
       echo "   $arm: graph gate is inert"
+    fi
+
+    # THE PROXY IS THE WORST OF THESE TO GET WRONG, because its failure is
+    # total and silent from the rig's side. An arm points ANTHROPIC_BASE_URL at
+    # a local port; if the packaged build has no proxy to put there, every
+    # request in that arm hits a closed port, every task fails, and the result
+    # reads as "the compressor destroys task outcome" rather than "there was no
+    # compressor". So this starts the packaged CLI against a loopback stand-in
+    # and asserts a request body actually arrived.
+    wantproxy="$(node -e "const m=require('$manifest');process.stdout.write(m.settings?.env?.TOKEN_OPTIMIZER_PROXY||'')")"
+    if [ -n "$wantproxy" ]; then
+      [ -f "$PKG/dist/proxy/cli.js" ] || die "arm $arm declares TOKEN_OPTIMIZER_PROXY=$wantproxy but the packaged build has no dist/proxy/cli.js. Every request in that arm would hit a closed port. Build from a tree that ships the proxy command."
+      node --input-type=module -e "
+        import { createServer } from 'node:http';
+        import { spawn } from 'node:child_process';
+        import { once } from 'node:events';
+
+        let seen = 0;
+        const upstream = createServer((req, res) => {
+          req.resume();
+          req.on('end', () => { seen += 1; res.writeHead(200).end('{}'); });
+        });
+        await new Promise((r) => upstream.listen(0, '127.0.0.1', r));
+        const to = 'http://127.0.0.1:' + upstream.address().port;
+
+        const child = spawn(process.execPath, ['$PKG/dist/proxy/cli.js', '--upstream', to, '--quiet']);
+        let out = '';
+        child.stdout.setEncoding('utf8');
+        const url = await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('the proxy printed no URL within 15s')), 15000);
+          child.stdout.on('data', (c) => {
+            out += c;
+            if (out.includes('
+')) { clearTimeout(timer); resolve(out.split('
+')[0].trim()); }
+          });
+          child.on('exit', (code) => { clearTimeout(timer); reject(new Error('the proxy exited with ' + code)); });
+        });
+
+        const response = await fetch(url + '/v1/messages', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ model: 'probe', messages: [{ role: 'user', content: 'probe' }] }),
+        });
+        if (!response.ok) throw new Error('the proxy answered ' + response.status);
+        if (seen !== 1) throw new Error('the request never reached the upstream');
+
+        child.kill('SIGTERM');
+        await once(child, 'exit');
+        upstream.close();
+      " || die "arm $arm declares TOKEN_OPTIMIZER_PROXY=$wantproxy but the packaged build could not start a proxy and forward one request through it. That arm would send every request to a closed port."
+      echo "   $arm: the packaged proxy starts and forwards"
     fi
   done
 
@@ -212,6 +267,119 @@ PY
   python3 runner.py selftest || die "selftest failed -- do not spend money on a harness whose verifiers are broken"
 }
 
+# ONE PROXY PER DISTINCT PORT found across the registered manifests.
+#
+# Not one shared proxy: knowledge injection is read from the PROXY's own
+# environment when it starts, because a block that changes mid-session cannot
+# live in a cached prefix. So an arm with injection on and an arm with it off
+# are two processes by construction, and collapsing them would silently make
+# the two arms identical -- the same class of failure the capability
+# assertions above exist to prevent.
+#
+# Started here rather than in the image so a campaign that uses no proxy arm
+# pays nothing, and so the port comes from the manifests rather than being
+# repeated in two places that can drift.
+PROXY_PIDS=""
+
+stop_proxies() {
+  [ -n "$PROXY_PIDS" ] || return 0
+  for pid in $PROXY_PIDS; do kill "$pid" 2>/dev/null || true; done
+  PROXY_PIDS=""
+}
+trap stop_proxies EXIT
+
+start_proxies() {
+  local spec started=0 logdir pid started_spec=""
+  # name|port|knowledge|project-root, one line per arm, deduped by port.
+  if ! spec="$(node -e "
+    const fs = require('fs');
+    const dir = '/home/bench/manifests';
+    const byPort = new Map();
+    for (const name of fs.readdirSync(dir)) {
+      let m;
+      try { m = require(dir + '/' + name + '/manifest.json'); } catch { continue; }
+      const env = (m.settings && m.settings.env) || {};
+      if (!env.TOKEN_OPTIMIZER_PROXY) continue;
+      const base = env.ANTHROPIC_BASE_URL || '';
+      const port = base && new URL(base).port;
+      if (!port) continue;
+      // loadFindings reads <root>/.token-optimizer/wiki, so the root is the
+      // wiki dir with that suffix removed. An arm that points its wiki dir
+      // somewhere else gets no findings rather than a wrong root.
+      const wiki = env.TOKEN_OPTIMIZER_WIKI_DIR || '';
+      const suffix = '/.token-optimizer/wiki';
+      const root = wiki.endsWith(suffix) ? wiki.slice(0, -suffix.length) : '';
+      const knowledge = env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE ? '1' : '';
+      // '|' as the separator, not a tab: this snippet is inside a
+      // double-quoted shell string, and an escaped tab or newline here has
+      // to survive both the shell and the file it was written into. One of
+      // them already arrived as a real newline and made this a syntax
+      // error. A character that needs no escape cannot.
+      if (!byPort.has(port)) byPort.set(port, [name, port, knowledge, root].join('|'));
+    }
+    for (const row of byPort.values()) console.log(row);
+  ")"; then
+    die "could not read the manifests to find which arms declare a proxy. An empty answer here is indistinguishable from 'no arm wants one', which would start nothing and leave every proxy arm pointing at a dead port."
+  fi
+  # Genuinely no proxy arm in this campaign, which costs nothing.
+  [ -n "$spec" ] || return 0
+
+  log "Starting the compression proxy for the arms that declare one"
+  while IFS='|' read -r name port knowledge root; do
+    [ -n "$port" ] || continue
+    # A knowledge arm whose graph directory cannot be created would inject
+    # nothing and measure exactly the plain proxy arm, so this is fatal
+    # rather than best-effort.
+    if [ -n "$root" ]; then
+      mkdir -p "$root/.token-optimizer/wiki" \
+        || die "arm $name needs a graph directory at $root/.token-optimizer/wiki and it could not be created. That arm would inject nothing and silently measure the plain proxy arm."
+    fi
+    # /results is a mount and may be absent or read-only; a redirect that fails
+    # would leave the proxy unstarted with no log saying why.
+    logdir=/results
+    [ -d /results ] && [ -w /results ] || logdir=/tmp
+    TOKEN_OPTIMIZER_PROXY=1     TOKEN_OPTIMIZER_PROXY_KNOWLEDGE="$knowledge"       node "$PKG/dist/proxy/cli.js" --port "$port"         ${root:+--project-root "$root"}         >>"$logdir/proxy-$port.log" 2>&1 &
+    pid=$!
+    PROXY_PIDS="$PROXY_PIDS $pid"
+    # Remembered per port, because "something answers on this port" is NOT the
+    # same claim as "our proxy is up" -- see the liveness check below.
+    started_spec="$started_spec$name|$port|$pid
+"
+    started=$((started + 1))
+    echo "   $name on 127.0.0.1:$port${knowledge:+ (knowledge on, root $root)}"
+  done <<EOF
+$spec
+EOF
+
+  # PROVE IT IS OURS AND LISTENING before spending money. A proxy that failed
+  # to bind leaves every request in its arm hitting a closed port, and the
+  # campaign then reads as "compression destroys task outcome" rather than
+  # "there was no proxy".
+  #
+  # BOTH HALVES ARE NEEDED. A connect test alone passes against ANY process
+  # holding the port -- a squatter, or a stale proxy left over from an earlier
+  # run with different settings, which is the "two arms are silently identical"
+  # failure the capability assertions above exist to prevent. Verified by
+  # squatting on 8787 and watching the connect-only check pass. So the process
+  # we started must also still be alive: a bind failure kills it, and that is
+  # what tells the two cases apart.
+  sleep 2
+  while IFS='|' read -r name port pid; do
+    [ -n "$pid" ] || continue
+    kill -0 "$pid" 2>/dev/null \
+      || die "the proxy for arm $name exited instead of listening on 127.0.0.1:$port. Most likely the port was already taken. See proxy-$port.log under /results, or under /tmp when /results is not writable."
+    node -e "
+      const net = require('net');
+      const s = net.connect($port, '127.0.0.1');
+      s.on('connect', () => { s.end(); process.exit(0); });
+      s.on('error', () => process.exit(1));
+    " || die "the proxy for arm $name is running but nothing accepts on 127.0.0.1:$port -- see proxy-$port.log"
+  done <<EOF
+$started_spec
+EOF
+  echo "   $started proxy process(es) listening"
+}
+
 case "$MODE" in
   selftest)
     prepare
@@ -258,6 +426,7 @@ case "$MODE" in
         console.log('   provenance -> ' + out);
       "
     fi
+    start_proxies
     log "Campaign: $THOL_CAMPAIGN"
     python3 runner.py run "$@"
     log "Building leaderboard"

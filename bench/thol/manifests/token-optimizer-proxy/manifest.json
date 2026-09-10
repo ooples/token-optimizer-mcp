@@ -1,0 +1,80 @@
+{
+  "name": "token-optimizer-proxy",
+  "display_name": "Token Optimizer (proxy: compression on the wire)",
+  "verified": false,
+  "version_pin": "6.0.2",
+  "version_checked": "2026-09-10",
+  "upstream": "https://github.com/ooples/token-optimizer-mcp",
+  "install_doc": "COMPRESSION ON THE WIRE, WHICH NO ARM HAS MEASURED. Everything the assist arm does, plus the client's requests routed through the local compression proxy: ANTHROPIC_BASE_URL points at 127.0.0.1:8787, which entrypoint.sh starts before the campaign and forwards to the real API.\n\nWHY THIS ARM EXISTS. The compression work is measured today only on recorded payloads -- gross, net and effective token counts on fixtures. Those say the request got smaller. They cannot say whether the agent still solves the task, and the enforce arm is the standing proof that the two come apart: it won on tokens and lost 1.471x on cost, because it spent TURNS. A compressor that elides the one line the agent needed fails the same way, and only THOL can see it.\n\nKNOWLEDGE INJECTION IS OFF HERE, deliberately. Compression removes tokens; the knowledge block adds them. Folding an unproven addition into a measured reduction would make the reduction untrue, so it gets its own arm.\n\nThis arm's env is checked against the packaged build by prepare(), which starts the proxy against a loopback stand-in and asserts a body actually reached it. An arm declaring a proxy the build cannot start would otherwise run with every request going nowhere, which is a failed campaign that looks like a slow one.",
+  "requires": [
+    "node"
+  ],
+  "settings": {
+    "env": {
+      "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
+      "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
+      "TOKEN_OPTIMIZER_MODE": "assist",
+      "TOKEN_OPTIMIZER_MCP_CAPABILITIES": "",
+      "TOKEN_OPTIMIZER_PROXY": "1",
+      "TOKEN_OPTIMIZER_PROXY_KNOWLEDGE": "",
+      "ANTHROPIC_BASE_URL": "http://127.0.0.1:8787"
+    },
+    "hooks": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/session-start.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreToolUse": [
+        {
+          "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/pretooluse-router.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/precompact-optimize.mjs\""
+            }
+          ]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "matcher": "Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/post-tool.mjs\""
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/stop.mjs\""
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "tool_prefixes": [
+    "mcp__token-optimizer__"
+  ]
+}
