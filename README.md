@@ -407,6 +407,74 @@ live in a temp directory, so your OS reclaims them on its own schedule; delete
 any outstanding marker in a live session no longer resolving. Running with the
 proxy off writes no spills at all.
 
+### Three switches, and what each one trades
+
+| variable | default | what it does |
+| --- | --- | --- |
+| `TOKEN_OPTIMIZER_PROXY` | off | the compression proxy itself |
+| `TOKEN_OPTIMIZER_COMPRESSION` | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless` |
+| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | off | put what this project already learned in the cached prefix |
+
+`lossless` is worth knowing about: it forbids every transform that removes
+something the output cannot reconstruct -- function bodies, array tails,
+lower-signal prose -- and keeps the ones that can, which is whitespace, null
+keys, folded duplicate lines with their timestamps listed, repeated path
+prefixes, and back-references to content still in the request. Measured on the
+codebase-exploration workload it still removes 12.2%, with **zero** lossy
+elisions. For review or audit work where "the model can read the path" is not
+an acceptable answer, that is the setting.
+
+Presets are a starting point, not a ceiling: the library takes a
+`CompressionOptions` object layered over the preset, so "aggressive, but keep
+six head rows" is expressible.
+
+### The graph, in the cached prefix
+
+**The expensive failure here is turns, not tokens.** This project measured a
+posture that cut nothing and cost 1.471x through extra turns alone. So a
+finding that prevents one wasted turn pays for a great deal of context.
+
+The knowledge graph knows things that would prevent them, but until now it
+reached the model two ways and both arrive too late or too dear: a SessionStart
+index chosen once from the opening task text, and a `PreToolUse` advisory that
+fires *after* the model already decided to make the call it is advising about --
+so acting on it costs the very turn it was meant to save.
+
+With `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE=1` the findings go in the **cached
+prefix** instead: in front of the model before every decision, billed at 0.1x
+rather than 1.0x. On this repository 286 active findings select down to about
+489 tokens -- written once, then read at roughly 49 tokens a turn.
+
+It is off by default and reported separately (`injectedChars` in the proxy
+summary) because it is the one thing here that ADDS tokens. Its justification
+is turns, and turns are measured by THOL, which has not been run against it.
+Folding an unproven addition into a proven reduction would make the reduction
+untrue.
+
+### Images
+
+An image block was invisible to all of this until recently -- every walker keyed
+on `block.text`. That matters because an image costs about `width * height /
+750` tokens, so one 1456x816 screenshot is roughly 1,585, re-sent as history on
+every later turn. A browser-driving agent sends the same frame repeatedly, and
+those repeats now collapse to a reference to the copy already in the request.
+Dimensions come from the file header, so there is no codec dependency; resizing
+is deliberately not done for the same reason.
+
+### Bringing your own relevance model
+
+Retention is ranked by BM25, which is why this needs no Python, no model
+weights and no RAM floor, and why it is deterministic enough to keep a cached
+prefix byte-stable. Lexical has a ceiling, though -- "the database ran out of
+handles" shares no token with "connection pool exhausted" -- so `registerRanker`
+takes a replacement and everything falls back to BM25 when none is given.
+
+One constraint to know before reaching for `onnxruntime-node`: **ranking is
+synchronous**, because the engines are pure synchronous functions and
+`session.run()` is not. A model has to sit behind a synchronous facade, such as
+an embedding cache warmed out of band. No model is bundled and none has been
+benchmarked here.
+
 ### Compaction is consolidation, not loss
 
 Everyone else checkpoints and restores what you _had_ — which spends the
