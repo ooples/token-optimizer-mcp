@@ -24,6 +24,7 @@
 
 import { count, inlineMarker } from './annotate.js';
 import { containsStructural } from './structural.js';
+import { ranker } from './relevance.js';
 import type { CompressionResult, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
 
@@ -117,10 +118,21 @@ export function compressProse(
   const parts = sentences(text);
   if (parts.length < MIN_SENTENCES) return unchanged(text);
 
+  // RELEVANCE REORDERS, IT DOES NOT ENLARGE. The kept fraction is unchanged,
+  // so this cannot flatter the reduction number: it decides WHICH half of a
+  // passage survives when the agent has told us what it is looking for. The
+  // weight is set below the CRITICAL term (10) and the identifier term (14)
+  // deliberately -- a sentence naming an error or carrying a correlation id
+  // outranks one that merely shares vocabulary with the question.
+  const rank = ranker(ctx.query);
+  const relevant = rank.active
+    ? rank.top(parts, Math.max(1, Math.round(parts.length * KEEP_FRACTION)))
+    : new Set<number>();
+
   const ranked = parts.map((sentence, index) => ({
     sentence,
     index,
-    value: score(sentence, index, parts.length),
+    value: score(sentence, index, parts.length) + (relevant.has(index) ? 6 : 0),
   }));
 
   const keepCount = Math.max(1, Math.round(parts.length * KEEP_FRACTION));

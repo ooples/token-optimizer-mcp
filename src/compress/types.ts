@@ -101,6 +101,16 @@ export interface EngineContext {
    * the content alone.
    */
   readonly spill?: (content: string, hint: string) => string;
+  /**
+   * What the agent is asking about, so retention can be ranked against it
+   * rather than decided from the shape of the content alone.
+   *
+   * A 900-line log compressed identically whether the question is "why did
+   * the deploy fail" or "which worker handled request 4471" keeps the answer
+   * by luck. Absent means every engine falls back to its structural rules,
+   * which is the behaviour that shipped before this existed.
+   */
+  readonly query?: string;
 }
 
 /** Every engine has this shape. */

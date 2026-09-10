@@ -332,6 +332,47 @@ function searchJson(r, rows) {
 export const NEEDLE_UUID = '9f1c2b3a-7d4e-4a1b-9c6f-abcdefabcdef';
 export const NEEDLE_ERROR = 'Permission denied';
 
+/**
+ * The relevance needle, and why it is shaped differently from the two above.
+ *
+ * The UUID and error needles are STRUCTURAL: they add a key the other rows
+ * lack, so anomaly preservation rescues them and the gate proves the engine
+ * is not truncating. This one adds no key at all -- it is byte-for-byte the
+ * same shape as its neighbours and sits deep in the tail. Nothing in the
+ * content can save it. It survives only if the question is read off the
+ * request and used to rank retention, which makes it the only end-to-end
+ * check that relevance is wired up at all: a size benchmark cannot see it,
+ * because relevance reorders a fixed budget rather than enlarging one.
+ */
+export const NEEDLE_RELEVANT = 'connection pool exhausted after the deploy';
+export const RELEVANCE_QUESTION =
+  'Why is the connection pool exhausted since the deploy?';
+
+/**
+ * A payload whose only distinguishing row is distinguished by CONTENT.
+ *
+ * `plant` is not decoration. The needle goes ONLY in the fresh turn: planted in
+ * the cached prefix as well, v1 would pass the gate for free, because v1 never
+ * rewrites the prefix and the string would still be in the request no matter
+ * what the engines did. That is exactly the vacuous gate this file warns about
+ * elsewhere -- caught by disabling relevance and watching v1 pass anyway.
+ */
+function relevanceJson(r, rows, plant) {
+  const items = [];
+  for (let i = 0; i < rows; i += 1) {
+    items.push({
+      id: `evt_${i}`,
+      level: "info",
+      message:
+        plant && i === Math.floor(rows * 0.83)
+          ? NEEDLE_RELEVANT
+          : `${pick(r, VERBS)} the ${pick(r, NOUNS).toLowerCase()} for tenant ${i % 7}`,
+      elapsed_ms: Math.floor(r() * 400),
+    });
+  }
+  return JSON.stringify(items, null, 2);
+}
+
 /** An issue-triage payload: a JSON array of realistic issue objects. */
 function issueJson(r, rows) {
   const items = [];
@@ -466,6 +507,18 @@ export function fixtures() {
           'You are a coding agent.',
         [searchResults(join(REPO, 'hooks-core'), /function |=> \{/, 12_000), 'Reading hits.'],
         [searchResults(join(REPO, 'src', 'tools'), /function |=> \{/, 60_000)]
+      ),
+    },
+    {
+      // OURS. The question is a real question, and the row that answers it
+      // is shape-identical to 300 others -- so only relevance can keep it.
+      name: 'relevance-probe',
+      theirs: null,
+      relevanceNeedle: true,
+      request: request(
+        'You are debugging a production incident.',
+        [relevanceJson(r, 40, false), RELEVANCE_QUESTION],
+        [relevanceJson(r, 300, true), RELEVANCE_QUESTION]
       ),
     },
     {

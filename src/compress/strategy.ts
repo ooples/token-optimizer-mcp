@@ -17,6 +17,7 @@
 
 import { compressBlock } from './router.js';
 import { dedupBlocks, type DedupBlock } from './dedup.js';
+import { queryFrom } from './relevance.js';
 import {
   isAfter,
   lastCacheBreakpoint,
@@ -94,6 +95,29 @@ function ccrMarker(content: string, index: number): string {
   return `<<ccr:${hash},blob,${content.length}>>`;
 }
 
+/**
+ * What the agent is asking, read off the request itself.
+ *
+ * Only SHORT blocks count. The last message in an agentic conversation is
+ * usually a tool result -- tens of kilobytes of the very content being
+ * compressed -- and tokenising that as the question would make every block
+ * maximally relevant to itself. That failure would look like it was working,
+ * which is the worst kind.
+ */
+function questionIn(request: ProviderRequest): string {
+  const blocks: { text: string }[] = [];
+  for (const message of request.messages ?? []) {
+    const content = message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const raw of content) {
+      const block = raw as Block;
+      if (typeof block?.text === 'string') blocks.push({ text: block.text });
+    }
+  }
+  const system = typeof request.system === 'string' ? request.system : '';
+  return `${system}\n${queryFrom(blocks)}`.trim();
+}
+
 /** Walks every text-bearing block, letting the visitor replace its text. */
 function mapBlocks(
   request: ProviderRequest,
@@ -131,6 +155,7 @@ function pathAddressed(
   respectFrontier: boolean
 ): StrategyResult {
   const frontier = respectFrontier ? lastCacheBreakpoint(request) : null;
+  const query = questionIn(request);
   const elisions: Elision[] = [];
   const staged: DedupBlock[] = [];
 
@@ -147,7 +172,7 @@ function pathAddressed(
       staged.push({ text, original: text, touchable: false });
       return null;
     }
-    const result = compressBlock(text, { spill: options.spill });
+    const result = compressBlock(text, { spill: options.spill, query });
     elisions.push(...result.elisions);
     staged.push({ text: result.text, original: text, touchable: true });
     return null;
@@ -231,12 +256,13 @@ export function ccrStyle(
   // payload at an entry that can be missing -- their #2509 -- where a
   // back-reference points at bytes in the request being sent.
   const byContent = new Map<string, string>();
+  const query = questionIn(request);
 
   const out = mapBlocks(request, (text, _at, message) => {
     if (messageIsSigned(message)) return null;
     const already = byContent.get(text);
     if (already !== undefined) return already;
-    const result = compressBlock(text, { spill: options.spill });
+    const result = compressBlock(text, { spill: options.spill, query });
     if (result.text === text) return null;
     const marker = ccrMarker(text, index);
     index += 1;

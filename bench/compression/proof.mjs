@@ -26,7 +26,12 @@
  * Run: node bench/compression/proof.mjs
  */
 
-import { fixtures, NEEDLE_UUID, NEEDLE_ERROR } from './fixtures.mjs';
+import {
+  fixtures,
+  NEEDLE_UUID,
+  NEEDLE_ERROR,
+  NEEDLE_RELEVANT,
+} from './fixtures.mjs';
 import { STRATEGIES } from '../../dist/compress/strategy.js';
 import { lastCacheBreakpoint, isAfter } from '../../dist/compress/frontier.js';
 
@@ -119,6 +124,7 @@ function main() {
 
   const failures = [];
   const needleFailures = [];
+  const relevanceFailures = [];
 
   for (const fixture of fixtures()) {
     const before = fixture.request;
@@ -159,6 +165,17 @@ function main() {
         ].filter(Boolean);
         if (lost.length) needleFailures.push(`${fixture.name}/${name}: lost ${lost.join(" and ")}`);
       }
+
+      // RELEVANCE IS INVISIBLE TO EVERY COLUMN ABOVE, because it reorders a
+      // fixed budget rather than enlarging one. The planted row is
+      // shape-identical to its neighbours and sits deep in the tail, so
+      // nothing structural can rescue it: if the question is not being read
+      // off the request and used, it is gone.
+      if (fixture.relevanceNeedle) {
+        const body = JSON.stringify(result.request);
+        if (!body.includes(NEEDLE_RELEVANT))
+          relevanceFailures.push(`${fixture.name}/${name}: lost the row the question asked about`);
+      }
       console.log(
         `    ${name.padEnd(16)}   gross ${String(g).padStart(6)} (${pct(g0, g).padStart(6)})` +
           `  net ${String(n).padStart(6)} (${pct(n0, n).padStart(6)})` +
@@ -182,6 +199,15 @@ function main() {
     process.exitCode = 1;
   } else {
     console.log('NEEDLE GATE PASSED.');
+  }
+
+  console.log('--- gate 3: the row the question asks about must survive ---');
+  if (relevanceFailures.length) {
+    console.log('RELEVANCE GATE FAILED:');
+    for (const f of relevanceFailures) console.log(`  ${f}`);
+    process.exitCode = 1;
+  } else {
+    console.log('RELEVANCE GATE PASSED.');
   }
 
   console.log('--- gate: v1-frontier must beat ccr on effective tokens, every workload ---');

@@ -36,6 +36,7 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
+import { ranker } from './relevance.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
 
@@ -191,6 +192,17 @@ export function compressJson(
     const keep = new Set<number>(odd);
     for (let i = 0; i < Math.min(KEEP_ROWS, stripped.length); i += 1)
       keep.add(i);
+
+    // RELEVANCE ON TOP OF SHAPE, and the extra allowance is bounded on
+    // purpose. A row that answers the question is worth more than a row
+    // that merely sits at the head, but letting relevance keep whatever it
+    // likes would buy task outcomes with a reduction number -- the trade
+    // every competitor makes quietly. At most KEEP_ROWS rows are added.
+    const rank = ranker(ctx.query);
+    if (rank.active) {
+      const rows = stripped.map((row) => JSON.stringify(row) ?? '');
+      for (const i of rank.top(rows, KEEP_ROWS)) keep.add(i);
+    }
 
     const dropped = stripped.length - keep.size;
     if (dropped < MIN_ROWS_TO_ELIDE - KEEP_ROWS) {
