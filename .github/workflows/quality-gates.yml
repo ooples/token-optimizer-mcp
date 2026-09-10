@@ -58,6 +58,13 @@ jobs:
       - name: Certify all client capability tiers
         run: npm run verify:certification
 
+      # BUILT HERE, because this job otherwise never compiles. verify:onnx loads the
+      # adapter from dist/, and it was added to a job whose every other check reads
+      # source -- so it failed with ERR_MODULE_NOT_FOUND on a dist/ that no step had
+      # produced, which reads like a missing file rather than a missing build.
+      - name: Build
+        run: npm run build
+
       # ONNX IS AN OPTIONAL DEPENDENCY, installed here and nowhere else.
       # Semantic ranking is opt-in and `onnxruntime-node` is ~100 MB of native
       # binaries, so making it a dependency would charge every consumer for a
