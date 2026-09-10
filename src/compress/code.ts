@@ -21,6 +21,7 @@
 
 import { parse } from '@babel/parser';
 import { count, inlineMarker, span } from './annotate.js';
+import { ranker } from './relevance.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { unchanged } from './types.js';
 
@@ -225,6 +226,69 @@ function heuristicBodies(
 }
 
 /**
+ * Words that name a language construct rather than a thing in this codebase.
+ *
+ * A query mentioning "the function that exports the class" must not mark
+ * every body in the file live. These carry no identity, so they are never
+ * evidence that a particular body is the one being discussed.
+ */
+/**
+ * If more than this share of bodies looks live, the question was too broad
+ * to be evidence about any one of them.
+ *
+ * WITHOUT THIS GUARD LIVENESS IS A COMPRESSION SWITCH. A question that
+ * happens to share vocabulary with every signature in a file would keep
+ * every body and report a reduction near zero, for a reason no reader could
+ * see. A signal that fires everywhere is not a signal.
+ */
+const MAX_LIVE_SHARE = 0.5;
+
+/**
+ * Which bodies the agent is currently working with.
+ *
+ * LIVENESS IS THE CODE-SHAPED FORM OF RELEVANCE, and it is the one that
+ * matters most for a coding agent. If the last turn said "let me look at
+ * compressBlock", the body of `compressBlock` is the single thing in the file
+ * that must not be elided -- and eliding it is exactly what a
+ * signature-preserving compressor does by default, because a signature is all
+ * it keeps.
+ *
+ * RANKED, NOT MATCHED, and the difference is the whole reason this works. The
+ * first version tested each declaration for a shared token with the question,
+ * which reads as obviously correct and is useless: in a file of `alphaHandler`
+ * / `betaHandler` / `gammaHandler`, a question about `gammaHandler` shares the
+ * token `handler` with every declaration, so all of them looked live, the
+ * breadth guard fired, and NOTHING was kept -- the exact opposite of the
+ * intent, and it passed a hand-check of the logic. BM25's document frequency
+ * discounts a term the declarations all share and keeps the one that
+ * distinguishes them, which is what the ranker was built to do. Language
+ * keywords need no special-casing for the same reason: `export` and `function`
+ * appear in every declaration, so they carry no signal about any of them.
+ */
+function liveBodies(
+  lines: readonly string[],
+  spans: readonly (readonly [number, number])[],
+  query: string | undefined
+): Set<number> {
+  const rank = ranker(query);
+  if (!rank.active || !spans.length) return new Set<number>();
+
+  // The declaration is the line above the body; the line above that catches
+  // a decorator or a signature wrapped across two lines.
+  const declarations = spans.map(
+    ([from]) => `${lines[from - 3] ?? ''} ${lines[from - 2] ?? ''}`
+  );
+  // EVERY declaration that scores at all, not the top few, because the guard
+  // below is a question about BREADTH. Asking for the top N would truncate the
+  // answer to N and the guard could never fire -- it would silently keep half
+  // the bodies of a file the question did not discriminate between, which is
+  // the failure it exists to prevent.
+  const live = rank.top(declarations, declarations.length);
+  if (live.size > spans.length * MAX_LIVE_SHARE) return new Set<number>();
+  return new Set([...live].map((i) => spans[i][0]));
+}
+
+/**
  * Replaces function bodies with a marker naming where they live.
  *
  * Signatures, imports, class and type declarations and decorators all survive,
@@ -263,6 +327,13 @@ export function compressCode(
   const elisions: Elision[] = [];
   const markerAt = new Map<number, string>();
 
+  // LIVENESS, DECIDED ONCE FOR THE WHOLE BLOCK. A body whose declaration is
+  // what the agent is asking about survives; the rest are elided as before.
+  const eligible = spans.filter(
+    ([from, to]) => to - from + 1 >= MIN_BODY_LINES
+  );
+  const liveness = liveBodies(lines, eligible, ctx.query);
+
   // ONE SPILL FOR THE WHOLE BLOCK, NOT ONE PER BODY.
   //
   // Spilling each body separately made every marker carry its own path, and
@@ -281,6 +352,8 @@ export function compressCode(
   for (const [from, to] of spans) {
     const lineCount = to - from + 1;
     if (lineCount < MIN_BODY_LINES) continue;
+    // The agent is looking at this one. Everything else still goes.
+    if (liveness.has(from)) continue;
     // WHERE THE BODY CAN BE FOUND AGAIN, and it must be findable or it stays.
     //
     // A file on disk is the best answer: `src/x.ts:14-37` costs nothing to

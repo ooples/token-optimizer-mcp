@@ -6,6 +6,7 @@ import {
 } from '../../../src/compress/relevance.js';
 import { compressJson } from '../../../src/compress/json.js';
 import { compressProse } from '../../../src/compress/prose.js';
+import { compressCode } from '../../../src/compress/code.js';
 
 /**
  * Relevance-ranked retention.
@@ -69,7 +70,12 @@ describe('ranker', () => {
   it('ignores a term that appears in almost every unit', () => {
     // "handled" is in half of these and "returned" carries no signal about
     // WHICH row; a term present nearly everywhere cannot discriminate.
-    const everywhere = ['x handled a', 'x handled b', 'x handled c', 'x handled d'];
+    const everywhere = [
+      'x handled a',
+      'x handled b',
+      'x handled c',
+      'x handled d',
+    ];
     expect([...ranker('handled').top(everywhere, 2)]).toEqual([]);
   });
 
@@ -92,7 +98,10 @@ describe('queryFrom', () => {
     // as the question would make every block maximally relevant to itself,
     // which would look like it was working.
     const payload = 'row '.repeat(3000);
-    const query = queryFrom([{ text: payload }, { text: 'find the retry helper' }]);
+    const query = queryFrom([
+      { text: payload },
+      { text: 'find the retry helper' },
+    ]);
 
     expect(query).toContain('find the retry helper');
     expect(query).not.toContain(payload);
@@ -186,5 +195,68 @@ describe('relevance through the engines', () => {
     const without = compressProse(passage, { spill: () => '/spill/prose.txt' });
     const sentences = (t: string) => t.split(/(?<=[.!?])\s+/).length;
     expect(sentences(withQuery.text)).toBe(sentences(without.text));
+  });
+});
+
+describe('liveness in the code engine', () => {
+  /**
+   * Liveness is relevance in the shape a coding agent actually needs.
+   *
+   * A signature-preserving compressor elides the body of the ONE function the
+   * agent just named, because a signature is all it keeps. These pin that the
+   * named body survives, that its neighbours still do not, and that a question
+   * broad enough to name everything is ignored rather than silently switching
+   * compression off.
+   */
+  const source = Array.from(
+    { length: 10 },
+    (
+      _,
+      i
+    ) => `export function ${['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa'][i]}Handler(input: string): string {
+  const trimmed = input.trim();
+  const upper = trimmed.toUpperCase();
+  const parts = upper.split(',');
+  return parts.join('|');
+}`
+  ).join('\n\n');
+
+  const compress = (query?: string) =>
+    compressCode(source, { sourcePath: 'src/handlers.ts', query });
+
+  it('keeps the body of the function the agent just named', () => {
+    const out = compress('why does gammaHandler drop the separator');
+    expect(out.text).toContain("const parts = upper.split(',');");
+  });
+
+  it('still elides the bodies nobody asked about', () => {
+    const out = compress('why does gammaHandler drop the separator');
+    // Nine of ten bodies are gone, so this is compression with an exception,
+    // not compression switched off.
+    expect(out.elisions.length).toBe(9);
+  });
+
+  it('matches a name written with spaces against one written without', () => {
+    const out = compress('what does the gamma handler do');
+    expect(out.elisions.length).toBe(9);
+  });
+
+  it('elides every body when nothing was named', () => {
+    expect(compress().elisions.length).toBe(10);
+  });
+
+  it('ignores a question broad enough to name every body', () => {
+    // A signal that fires everywhere is not a signal. Without this guard a
+    // broad question is a compression switch, and no reader could see why.
+    const out = compress(
+      'alphaHandler betaHandler gammaHandler deltaHandler epsilonHandler zetaHandler etaHandler thetaHandler iotaHandler kappaHandler'
+    );
+    expect(out.elisions.length).toBe(10);
+  });
+
+  it('is not fooled by language keywords', () => {
+    // "function", "export", "return" name a construct, not a thing here.
+    const out = compress('which exported function should return early');
+    expect(out.elisions.length).toBe(10);
   });
 });
