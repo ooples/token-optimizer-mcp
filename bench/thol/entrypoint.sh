@@ -129,11 +129,17 @@ prepare() {
         child.stdout.setEncoding('utf8');
         const url = await new Promise((resolve, reject) => {
           const timer = setTimeout(() => reject(new Error('the proxy printed no URL within 15s')), 15000);
+          // NEWLINE BY CODE POINT, not as an escape. This snippet sits inside a
+          // double-quoted shell string in a file that was itself written by a
+          // script: a `\n` here has to survive two layers, and it did not --
+          // it arrived as a real line break, leaving an unterminated string
+          // literal that node rejected. The assertion around it then reported
+          // that the packaged build could not start a proxy, which was true of
+          // the probe rather than of the build.
+          const EOL = String.fromCharCode(10);
           child.stdout.on('data', (c) => {
             out += c;
-            if (out.includes('
-')) { clearTimeout(timer); resolve(out.split('
-')[0].trim()); }
+            if (out.includes(EOL)) { clearTimeout(timer); resolve(out.split(EOL)[0].trim()); }
           });
           child.on('exit', (code) => { clearTimeout(timer); reject(new Error('the proxy exited with ' + code)); });
         });
