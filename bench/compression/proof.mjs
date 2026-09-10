@@ -36,6 +36,7 @@ import {
 import { STRATEGIES, v1Frontier } from '../../dist/compress/strategy.js';
 import { lastCacheBreakpoint, isAfter } from '../../dist/compress/frontier.js';
 import { anchorStore } from '../../dist/compress/anchor.js';
+import { describeImage, isImageBlock } from '../../dist/compress/images.js';
 
 const CACHE_READ = 0.1;
 
@@ -63,28 +64,74 @@ function tokens(text) {
 }
 
 /** Every text block in a request, with its position. */
+/**
+ * AN IMAGE IS NOT COSTED BY ITS BASE64 LENGTH, and getting that wrong would
+ * have manufactured a spectacular fake saving. A 1456x816 screenshot is
+ * about 200 KB of base64 -- some 50,000 "tokens" at chars/4 -- and roughly
+ * 1,585 real ones at the documented width * height / 750. Collapsing a
+ * repeated screenshot would have scored thirty times what it is worth.
+ *
+ * So an image block reports its PIXEL cost, and a block whose header is
+ * unreadable reports zero rather than a guess: an unknown image counted as
+ * its base64 length is the same error in a quieter voice.
+ */
+function imageTokens(block) {
+  const described = describeImage(block);
+  return described?.tokens ?? 0;
+}
+
 function blocks(request) {
   const out = [];
   (request.messages ?? []).forEach((message, mi) => {
     const content = message?.content;
     if (!Array.isArray(content)) return;
     content.forEach((block, bi) => {
-      if (typeof block?.text === 'string') out.push({ text: block.text, at: { message: mi, block: bi } });
+      const at = { message: mi, block: bi };
+      if (typeof block?.text === 'string') out.push({ text: block.text, at });
+      else if (isImageBlock(block))
+        out.push({ text: '', at, tokens: imageTokens(block) });
     });
   });
   return out;
 }
 
-const grossTokens = (request) => blocks(request).reduce((n, b) => n + tokens(b.text), 0);
+/** A block costs its pixels when it is an image, and its length otherwise. */
+const blockTokens = (block) =>
+  typeof block.tokens === 'number' ? block.tokens : tokens(block.text);
+
+const grossTokens = (request) =>
+  blocks(request).reduce((n, b) => n + blockTokens(b), 0);
 
 /** Tokens in the blocks a frontier-respecting strategy is permitted to rewrite. */
 function touchableTokens(request) {
   const frontier = lastCacheBreakpoint(request);
   return blocks(request)
     .filter((b) => isAfter(b.at, frontier))
-    .reduce((n, b) => n + tokens(b.text), 0);
+    .reduce((n, b) => n + blockTokens(b), 0);
 }
-const netTokens = (request) => tokens(JSON.stringify(request));
+/**
+ * The whole serialised request, with images costed as pixels rather than
+ * as the length of their base64.
+ *
+ * WITHOUT THIS THE IMAGE SAVING IS INFLATED ABOUT THIRTYFOLD. A 1456x816
+ * screenshot is roughly 160 KB of base64 -- some 40,000 'tokens' at chars/4
+ * -- and about 1,585 real ones. Reported raw, collapsing one repeated
+ * screenshot looked like a 45.6% net reduction on the browser workload when
+ * the honest figure is a fraction of that. The base64 is replaced by a
+ * placeholder before counting and the pixel cost is added back.
+ */
+function netTokens(request) {
+  let pixels = 0;
+  const replaced = JSON.stringify(request, (key, value) => {
+    if (key === 'data' && typeof value === 'string' && value.length > 256) {
+      return '<image>';
+    }
+    return value;
+  });
+  for (const block of blocks(request))
+    if (typeof block.tokens === 'number') pixels += block.tokens;
+  return tokens(replaced) + pixels;
+}
 
 /**
  * Cache-weighted tokens.
@@ -108,15 +155,17 @@ function effectiveTokens(before, after) {
     const cached = !isAfter(original.at, frontier);
     if (cached) {
       if (text !== original.text) prefixIntact = false;
-      prefix += tokens(text);
+      prefix += now ? blockTokens(now) : blockTokens(original);
     } else {
-      suffix += tokens(text);
+      suffix += now ? blockTokens(now) : blockTokens(original);
     }
   }
 
   // Injected preamble is never cached on the turn it appears.
-  const injected = netTokens(after) - compressed.reduce((n, b) => n + tokens(b.text), 0);
-  const baseline = netTokens(before) - originals.reduce((n, b) => n + tokens(b.text), 0);
+  const injected =
+    netTokens(after) - compressed.reduce((n, b) => n + blockTokens(b), 0);
+  const baseline =
+    netTokens(before) - originals.reduce((n, b) => n + blockTokens(b), 0);
 
   return prefix * (prefixIntact ? CACHE_READ : CACHE_WRITE) + suffix + Math.max(0, injected - baseline);
 }
@@ -214,11 +263,11 @@ function steadyTokens(request, run, spill) {
   const prefix = tokens(sentSecond);
   const suffix = blocks(second)
     .filter((b) => isAfter(b.at, breakpoint))
-    .reduce((n, b) => n + tokens(b.text), 0);
+    .reduce((n, b) => n + blockTokens(b), 0);
   const injected =
-    netTokens(second) - blocks(second).reduce((n, b) => n + tokens(b.text), 0);
+    netTokens(second) - blocks(second).reduce((n, b) => n + blockTokens(b), 0);
   const baseline =
-    netTokens(request) - blocks(request).reduce((n, b) => n + tokens(b.text), 0);
+    netTokens(request) - blocks(request).reduce((n, b) => n + blockTokens(b), 0);
 
   return prefix * (hit ? CACHE_READ : CACHE_WRITE) + suffix + Math.max(0, injected - baseline);
 }

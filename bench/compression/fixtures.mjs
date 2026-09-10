@@ -455,6 +455,93 @@ function repeatedReads(root, budget) {
   return { file, tests };
 }
 
+/**
+ * A screenshot, as a real PNG header plus filler.
+ *
+ * The header is constructed rather than pasted so the size the benchmark
+ * costs it at is the size the parser actually reads. Filler stands in for the
+ * compressed pixel data: it makes the block the right ORDER of magnitude on
+ * the wire without carrying a real image into the repository.
+ */
+function screenshot(width, height, bytes) {
+  const header = Buffer.alloc(24);
+  header.writeUInt32BE(0x89504e47, 0);
+  header.writeUInt32BE(0x0d0a1a0a, 4);
+  header.writeUInt32BE(13, 8);
+  header.write('IHDR', 12, 'ascii');
+  header.writeUInt32BE(width, 16);
+  header.writeUInt32BE(height, 20);
+  // Deterministic filler: a fixed byte pattern, so two calls with the same
+  // arguments produce identical base64 and the dedup being measured is real.
+  const filler = Buffer.alloc(bytes);
+  for (let i = 0; i < bytes; i += 1) filler[i] = (i * 31) % 251;
+  return Buffer.concat([header, filler]).toString('base64');
+}
+
+const imageBlock = (data) => ({
+  type: 'image',
+  source: { type: 'base64', media_type: 'image/png', data },
+});
+
+/**
+ * A browser-driving session, which no text workload can represent.
+ *
+ * Take a screenshot, act, screenshot again, navigate back, screenshot the
+ * same page again. The repeated frames are identical bytes and every one of
+ * them is re-sent as history for the rest of the session. No published
+ * comparator: HeadRoom's four workloads are all text.
+ */
+function browserSession() {
+  const home = screenshot(1456, 816, 120_000);
+  const detail = screenshot(1456, 816, 140_000);
+  // A REAL BROWSER SESSION IS NOT IMAGE-ONLY, and the first version of this
+  // fixture was -- which made every arm identical, because the only thing to
+  // compress was the images and every arm handles those the same way. The
+  // accessibility tree and console output are what a browser tool actually
+  // returns alongside a screenshot, and they are where the arms differ: v1
+  // leaves the cached prefix alone while the control rewrites history and
+  // pays for its injected preamble.
+  const r = rng(20260911);
+  const tree = (n) =>
+    Array.from(
+      { length: n },
+      (_, i) =>
+        `  node ${i}: role=${pick(r, ['button', 'link', 'heading', 'text', 'listitem'])} ` +
+        `name="${pick(r, VERBS)} ${pick(r, NOUNS).toLowerCase()}" ` +
+        `focusable=${r() < 0.4} bounds=(${Math.floor(r() * 1400)},${Math.floor(r() * 800)})`
+    ).join('\n');
+  return {
+    system: 'You are a browser agent.',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Check the pricing page renders correctly.' },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          imageBlock(home),
+          { type: 'text', text: `Home page loaded. Accessibility tree:\n${tree(120)}`, cache_control: { type: 'ephemeral' } },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          imageBlock(detail),
+          { type: 'text', text: `Opened pricing. Accessibility tree:\n${tree(700)}` },
+          imageBlock(home),
+          { type: 'text', text: 'Navigated back; same home page as before.' },
+          imageBlock(detail),
+          { type: 'text', text: `And forward again to pricing. Console:\n${buildLog(r, 250)}` },
+        ],
+      },
+    ],
+    tools: [],
+  };
+}
+
 /** Wraps content as an Anthropic-shaped request with a cache breakpoint. */
 function request(system, cachedTurns, freshBlocks) {
   const messages = [];
@@ -534,6 +621,13 @@ export function fixtures() {
         [searchResults(join(REPO, 'hooks-core'), /function |=> \{/, 12_000), 'Reading hits.'],
         [searchResults(join(REPO, 'src', 'tools'), /function |=> \{/, 60_000)]
       ),
+    },
+    {
+      // OURS, AND UNREPRESENTABLE IN TEXT. Repeated screenshots, which every
+      // walker in this package used to step straight over.
+      name: 'browser-session',
+      theirs: null,
+      request: browserSession(),
     },
     {
       // OURS. The question is a real question, and the row that answers it

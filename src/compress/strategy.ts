@@ -19,6 +19,7 @@ import { compressBlock } from './router.js';
 import { dedupBlocks, type DedupBlock } from './dedup.js';
 import { queryFrom } from './relevance.js';
 import type { Tuning } from './options.js';
+import { dedupImages, isImageBlock } from './images.js';
 import {
   injectKnowledge,
   knowledgeBlock,
@@ -189,6 +190,86 @@ function mapBlocks(
   return { ...request, messages };
 }
 
+/** Walks every image block, in the same order `replaceImages` will. */
+function visitImages(
+  request: ProviderRequest,
+  visit: (block: unknown, at: Position, message: Message) => null
+): void {
+  (request.messages ?? []).forEach((message, mi) => {
+    const content = message?.content;
+    if (!Array.isArray(content)) return;
+    content.forEach((raw, bi) => {
+      if (!isImageBlock(raw)) return;
+      visit(raw, { message: mi, block: bi }, message);
+    });
+  });
+}
+
+/**
+ * Collapses repeated images, and records what that removed.
+ *
+ * SHARED WITH THE CONTROL ARM, deliberately. HeadRoom's published engines are
+ * text engines and all four of their published workloads are text, but their
+ * marker layer is content-hash addressed and hash dedup of an identical image
+ * block is its natural extension -- so assuming they cannot do this would be
+ * inventing an advantage rather than measuring one. The control gets it too,
+ * and on the browser workload the arms tie. What the workload is really for is
+ * a regression guard on a hole that was OURS: every walker here keyed on
+ * `block.text`, so an image was invisible to all of it.
+ */
+function imagePass(
+  request: ProviderRequest,
+  frontier: Position | null,
+  elisions: Elision[]
+): ReturnType<typeof dedupImages> {
+  const found: { block: unknown; touchable: boolean }[] = [];
+  visitImages(request, (block, at, message) => {
+    found.push({
+      block,
+      touchable: !messageIsSigned(message) && isAfter(at, frontier),
+    });
+    return null;
+  });
+
+  const images = dedupImages(found);
+  if (images.collapsed) {
+    elisions.push({
+      removed: `${images.collapsed} repeated image${images.collapsed === 1 ? '' : 's'}, about ${images.tokensSaved.toLocaleString('en-US')} tokens`,
+      // The image is still above, and the reference names which one.
+      recoverAt: null,
+      lossless: true,
+    });
+  }
+  return images;
+}
+
+/**
+ * Swaps an image block for a text block naming the copy above.
+ *
+ * A content array is heterogeneous, so replacing an `image` with a `text`
+ * is well-formed -- and it is the only replacement that removes the whole
+ * cost. Shrinking the image would need a codec; saying "this one again"
+ * needs nothing.
+ */
+function replaceImages(
+  request: ProviderRequest,
+  next: () => string | null
+): ProviderRequest {
+  const messages = (request.messages ?? []).map((message) => {
+    const content = message?.content;
+    if (!Array.isArray(content)) return message;
+    const mapped = content.map((raw) => {
+      if (!isImageBlock(raw)) return raw;
+      const replacement = next();
+      return replacement === null
+        ? raw
+        : ({ type: 'text', text: replacement } as Block);
+    });
+    return { ...message, content: mapped };
+  });
+  return { ...request, messages };
+}
+
 /**
  * Shared body for V1 and V3; they differ only in where they are allowed to act.
  *
@@ -274,10 +355,28 @@ function pathAddressed(
   const deduped = dedupBlocks(staged);
   elisions.push(...deduped.elisions);
 
+  // IMAGES, WHICH NOTHING ABOVE CAN SEE. Every walker here keys on
+  // `block.text`, so an image block was never classified, compressed,
+  // deduplicated or counted -- and one screenshot is roughly
+  // `width * height / 750` tokens, re-sent as history on every later turn.
+  // A browser-driving agent sends the same screenshot repeatedly, which is
+  // the case worth catching, and the argument is the one text dedup already
+  // makes: the referent is in this request, so the reference cannot miss.
+  const images = imagePass(
+    request,
+    respectFrontier ? frontier : null,
+    elisions
+  );
+
   // Pass two writes the answers back. `mapBlocks` walks in the same order it
   // walked before, so the index lines up with what was staged.
   let at = 0;
-  const out = mapBlocks(request, () => deduped.texts[at++] ?? null);
+  const withText = mapBlocks(request, () => deduped.texts[at++] ?? null);
+  let imageAt = 0;
+  const out = replaceImages(
+    withText,
+    () => images.replacements[imageAt++] ?? null
+  );
 
   // Nothing is added to the request: no system message, no tool, no hash.
   return { request: out, elisions, injectedChars: 0 };
@@ -429,14 +528,22 @@ export function ccrStyle(
     return `${result.text}\n${marker}`;
   });
 
-  if (!index) return { request: out, elisions, injectedChars: 0 };
+  // The control gets the image pass too; see `imagePass`.
+  const ccrImages = imagePass(out, null, elisions);
+  let ccrImageAt = 0;
+  const withImages = replaceImages(
+    out,
+    () => ccrImages.replacements[ccrImageAt++] ?? null
+  );
+
+  if (!index) return { request: withImages, elisions, injectedChars: 0 };
 
   const systemText = CCR_SYSTEM.replace(
     '{HASHES}',
     hashes.slice(0, 5).join(', ')
   );
   const withInjection: ProviderRequest = {
-    ...out,
+    ...withImages,
     system: Array.isArray(out.system)
       ? [...out.system, { type: 'text', text: systemText }]
       : `${out.system ?? ''}${systemText}`,
