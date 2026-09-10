@@ -15,3 +15,6 @@ results/runs/
 
 # Row stores are published deliberately, not committed incidentally.
 ledger/results*.jsonl
+
+# The proxy knowledge graph built by a screen run. Session data, not evidence.
+thol/proxy-graph/

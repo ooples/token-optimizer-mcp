@@ -116,7 +116,8 @@
     "bench:field": "node bench/field/report.mjs",
     "bench:pack": "node scripts/bench-pack.mjs",
     "verify:onnx": "node scripts/verify-onnx-adapter.mjs",
-    "proxy": "node dist/proxy/cli.js"
+    "proxy": "node dist/proxy/cli.js",
+    "bench:screen:knowledge": "bash bench/thol/screen-knowledge.sh"
   },
   "repository": {
     "type": "git",

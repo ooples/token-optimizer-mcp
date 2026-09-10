@@ -35,6 +35,25 @@ REPS="${REPS:-3}"
 ARMS="${ARMS:-control,token-optimizer-mcp,token-optimizer-mcp-off}"
 HOST_CREDS="${HOST_CREDS:-$HOME/.claude/.credentials.json}"
 
+# THE RESULTS VOLUME IS A KNOB because the knowledge arm needs two passes and
+# only ONE of them is evidence.
+#
+# The proxy loads the graph once, at startup, since a block that changes
+# mid-session cannot live in a cached prefix. So a first pass against an empty
+# graph injects nothing and measures exactly the plain proxy arm. It exists to
+# WRITE the graph, and its run rows are not results -- they are the warm-up.
+#
+# Keeping them out of the real database is not tidiness: runner.py resumes by
+# skipping runs already recorded for a campaign label, so warm-up rows in the
+# real volume would make the measured pass a no-op that reports the cold
+# numbers as if they were warm.
+RESULTS_VOLUME="${RESULTS_VOLUME:-thol-results}"
+
+# ...and the graph itself is a HOST directory, mounted into whichever results
+# volume is in play, so it is the one thing that survives from the warm-up pass
+# into the measured one.
+PROXY_GRAPH_DIR="${PROXY_GRAPH_DIR:-$RIG_DIR/thol/proxy-graph}"
+
 # Cheapest first. The last group is the $5/run outlier, isolated so it can be
 # dropped with SEGMENTS_MAX=4 without touching the rest.
 SEG_1="${SEG_1:-code-bugfix-py,code-refactor-split-py,log-needle-zh,code-iterate-tests}"
@@ -86,6 +105,11 @@ cleanup_credentials() {
 }
 trap cleanup_credentials EXIT INT TERM
 
+mkdir -p "$PROXY_GRAPH_DIR/.token-optimizer/wiki"
+
+log "Results volume: $RESULTS_VOLUME"
+log "Proxy graph:    $PROXY_GRAPH_DIR"
+
 for i in "${!SEGMENTS[@]}"; do
   n=$((i+1))
   [ "$n" -le "$SEGMENTS_MAX" ] || { log "Stopping before segment $n (SEGMENTS_MAX=$SEGMENTS_MAX)"; break; }
@@ -97,7 +121,8 @@ for i in "${!SEGMENTS[@]}"; do
   log "Segment $n/$SEGMENTS_MAX -- tasks: $tasks"
   MSYS_NO_PATHCONV=1 docker run --rm \
     -v "$RIG_DIR/auth:/auth:ro" \
-    -v thol-results:/results \
+    -v "$RESULTS_VOLUME:/results" \
+    -v "$PROXY_GRAPH_DIR:/results/proxy-graph" \
     -e THOL_CAMPAIGN="$CAMPAIGN" \
     --name thol-campaign "$IMAGE" campaign \
       -c "$ARMS" \
@@ -109,6 +134,7 @@ done
 log "Campaign complete -- building final leaderboard"
 MSYS_NO_PATHCONV=1 docker run --rm \
   -v "$RIG_DIR/auth:/auth:ro" \
-  -v thol-results:/results \
+  -v "$RESULTS_VOLUME:/results" \
+  -v "$PROXY_GRAPH_DIR:/results/proxy-graph" \
   -e THOL_CAMPAIGN="$CAMPAIGN" \
   "$IMAGE" report
