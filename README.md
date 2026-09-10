@@ -461,20 +461,33 @@ those repeats now collapse to a reference to the copy already in the request.
 Dimensions come from the file header, so there is no codec dependency; resizing
 is deliberately not done for the same reason.
 
-### Bringing your own relevance model
+### Relevance: BM25 by default, a model if you want one
 
 Retention is ranked by BM25, which is why this needs no Python, no model
 weights and no RAM floor, and why it is deterministic enough to keep a cached
-prefix byte-stable. Lexical has a ceiling, though -- "the database ran out of
-handles" shares no token with "connection pool exhausted" -- so `registerRanker`
-takes a replacement and everything falls back to BM25 when none is given.
+prefix byte-stable. Lexical has a ceiling, though: "the database ran out of
+handles" shares no token with "connection pool exhausted", and worse, BM25
+does not go quiet on that question -- it confidently picks the wrong line.
 
-One constraint to know before reaching for `onnxruntime-node`: **ranking is
-synchronous**, because the engines are pure synchronous functions and
-`session.run()` is not. A model has to sit behind a synchronous facade, such as
-an embedding cache warmed out of band. No model is bundled and none has been
-benchmarked here.
+So there are two ways to do better. `registerRanker` installs any synchronous
+ranker. Or supply a `SemanticEncoder` and let the proxy warm an embedding
+cache: a request-level async pre-pass embeds the candidate units in one batch,
+and the engines then read vectors synchronously, exactly as before. An
+`onnxruntime-node` adapter is included, loaded dynamically so the runtime is
+never a dependency of this package.
 
+Anything the pre-pass did not see falls back to BM25 rather than scoring zero
+-- a missing vector is our omission, not evidence about the line.
+
+The adapter is verified against **real inference**, not mocked:
+`npm run verify:onnx` runs nine checks against a 2.3 KB ONNX graph with real
+weights, committed alongside the generator that builds it. It is a script
+rather than a jest test because onnxruntime checks `instanceof Float32Array`
+in native code and jest's per-suite VM realm has its own typed arrays; CI
+installs the optional runtime and runs it.
+
+**Not claimed:** that an embedding model actually beats BM25 on these
+workloads. The mechanism is proved and the measurement is not done.
 ### Compaction is consolidation, not loss
 
 Everyone else checkpoints and restores what you _had_ — which spends the
