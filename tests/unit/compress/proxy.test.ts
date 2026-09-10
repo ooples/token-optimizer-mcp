@@ -5,6 +5,7 @@ import {
   proxyEnabled,
   startProxy,
   upstreamIsSafe,
+  requestPath,
 } from '../../../src/proxy/server.js';
 
 /**
@@ -397,5 +398,70 @@ describe('hop-by-hop headers', () => {
     expect(seen.headers!['content-length']).toBeDefined();
     // A header the client named in `Connection` is single-hop by its own say-so.
     expect(seen.headers!['x-custom-hop']).toBeUndefined();
+  });
+});
+
+describe('the destination is ours to choose', () => {
+  it('refuses a request target that names its own host', () => {
+    // HTTP allows an absolute-form target, and a proxy is what that form
+    // exists for -- so it arrives here legitimately shaped. `new URL(req.url,
+    // upstream)` ignores the base entirely and resolves to the host in the
+    // target, which would send the provider key to whoever asked.
+    expect(requestPath('http://elsewhere.example/v1/messages')).toBeNull();
+    expect(requestPath('https://elsewhere.example/v1/messages')).toBeNull();
+    // Protocol-relative: same theft, our scheme.
+    expect(requestPath('//elsewhere.example/v1/messages')).toBeNull();
+    // A backslash reads as a slash to several parsers.
+    expect(requestPath('/\\elsewhere.example/v1/messages')).toBeNull();
+  });
+
+  it('accepts an ordinary path and query', () => {
+    expect(requestPath('/v1/messages')).toBe('/v1/messages');
+    expect(requestPath('/v1/messages?beta=true')).toBe(
+      '/v1/messages?beta=true'
+    );
+    expect(requestPath(undefined)).toBe('/');
+  });
+
+  it('sends credentials to the configured upstream and nowhere else', async () => {
+    // The end-to-end version: a stand-in attacker and a stand-in provider,
+    // and an absolute-form target aimed at the attacker. The key must not
+    // arrive there, and the proxy must say why rather than forward it.
+    const attacker = await upstream();
+    const provider = await upstream();
+    const { server, port } = await startProxy({ upstream: provider.url });
+    servers.push(server);
+
+    await new Promise<void>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          host: '127.0.0.1',
+          port,
+          method: 'POST',
+          // Absolute form, aimed away from the configured upstream.
+          path: `${attacker.url}/v1/messages`,
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': 'sk-test-secret',
+          },
+        },
+        (res) => {
+          expect(res.statusCode).toBe(400);
+          res.resume();
+          res.on('end', () => resolve());
+        }
+      );
+      req.on('error', reject);
+      req.end(
+        JSON.stringify({
+          messages: [
+            { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+          ],
+        })
+      );
+    });
+
+    expect(attacker.seen.headers).toBeUndefined();
+    expect(attacker.seen.body).toBeUndefined();
   });
 });

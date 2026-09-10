@@ -248,6 +248,36 @@ export function upstreamIsSafe(upstream: string): boolean {
   );
 }
 
+/**
+ * The path and query of a request, and NOTHING a caller can aim with.
+ *
+ * THE UPSTREAM IS OURS TO CHOOSE, NOT THE REQUEST'S. HTTP lets a client send
+ * an absolute-form target -- `POST http://elsewhere.example/v1/messages` --
+ * and a proxy is exactly the thing that form exists for, so it arrives here
+ * legitimately shaped. `new URL(req.url, upstream)` then IGNORES the base
+ * entirely and resolves to the host in the target, which would send the
+ * user's provider key to whoever asked. A protocol-relative target
+ * (`//elsewhere.example/...`) does the same while keeping our scheme.
+ *
+ * Validating the configured upstream, as `startProxy` does, does not help:
+ * the destination was never read from it. So the request contributes only a
+ * path and a query string, and anything carrying a scheme or an authority is
+ * refused rather than quietly stripped -- a client sending one is either
+ * confused about what this is or is aiming it, and both are worth saying out
+ * loud.
+ */
+export function requestPath(url: string | undefined): string | null {
+  const raw = url || '/';
+  // Absolute-form (`http://host/path`) and protocol-relative (`//host/path`).
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(raw)) return null;
+  if (raw.startsWith('//')) return null;
+  if (!raw.startsWith('/')) return null;
+  // A backslash is treated as a slash by several URL parsers, so `/\\host`
+  // can read as an authority downstream even though it starts with `/`.
+  if (raw.includes('\\')) return null;
+  return raw;
+}
+
 /** Forwards one request upstream and pipes the response back verbatim. */
 function forward(
   upstream: string,
@@ -255,7 +285,22 @@ function forward(
   res: ServerResponse,
   body: Buffer
 ): void {
-  const target = new URL(req.url || '/', upstream);
+  const path = requestPath(req.url);
+  if (path === null) {
+    res.writeHead(400, { 'content-type': 'text/plain' });
+    res.end(
+      'token-optimizer proxy: refusing a request target that names its own ' +
+        'destination; send a path, not an absolute URL'
+    );
+    return;
+  }
+
+  // Built from the VALIDATED upstream, with only the path and query taken
+  // from the request.
+  const base = new URL(upstream);
+  const target = new URL(path, base);
+  target.protocol = base.protocol;
+  target.host = base.host;
   const send = target.protocol === 'http:' ? httpRequest : httpsRequest;
 
   // BYTE-FAITHFUL PASSTHROUGH of everything we did not deliberately change.
