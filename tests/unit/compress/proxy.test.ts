@@ -47,7 +47,7 @@ const spill = (content: string, hint: string): string => {
   spilled.push(content);
   return `/spill/${spilled.length}-${hint}`;
 };
-const noSpill = () => '';
+const noSpill = (_content: string, _hint: string): string => '';
 
 let servers: Server[] = [];
 afterEach(async () => {
@@ -129,8 +129,22 @@ describe('compressBody', () => {
     const body = bodyOf([
       { role: 'user', content: [{ type: 'text', text: payload }] },
     ]);
-    const out = compressBody(body, noSpill);
+
+    // THE ATTEMPT IS THE POINT, and asserting only "the rows survive" did not check
+    // for it. `rows(80)` is already compact, so the content comes back unchanged
+    // whether the spill failed and the engine declined -- the behaviour under test --
+    // or the engine never reached an elision at all. The second case would pass while
+    // the spill-failure path went entirely unexercised, so the call is counted.
+    let asked = 0;
+    const failingSpill = (content: string, hint: string) => {
+      asked += 1;
+      return noSpill(content, hint);
+    };
+
+    const out = compressBody(body, failingSpill);
     const sent = JSON.parse(out.body.toString('utf8'));
+
+    expect(asked).toBeGreaterThan(0);
     expect(sent.messages[0].content[0].text).toBe(payload);
   });
 

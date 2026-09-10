@@ -167,10 +167,15 @@ function effectiveTokens(before, after) {
   const baseline =
     netTokens(before) - originals.reduce((n, b) => n + blockTokens(b), 0);
 
-  return prefix * (prefixIntact ? CACHE_READ : CACHE_WRITE) + suffix + Math.max(0, injected - baseline);
+  return (
+    prefix * (prefixIntact ? CACHE_READ : CACHE_WRITE) +
+    suffix +
+    Math.max(0, injected - baseline)
+  );
 }
 
-const pct = (before, after) => `${(((before - after) / before) * 100).toFixed(1)}%`;
+const pct = (before, after) =>
+  `${(((before - after) / before) * 100).toFixed(1)}%`;
 
 /**
  * The turn AFTER this one, as a client would send it.
@@ -185,10 +190,32 @@ function nextTurn(request) {
     ...request,
     messages: [
       ...(request.messages ?? []),
-      { role: 'assistant', content: [{ type: 'text', text: 'Looking at that now.' }] },
-      { role: 'user', content: [{ type: 'text', text: 'Now check the retry path.' }] },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Looking at that now.' }],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'Now check the retry path.' }],
+      },
     ],
   };
+}
+
+/** Everything the compressor was free to touch, as one string. */
+function freshText(request, breakpoint) {
+  return blocks(request)
+    .filter((b) => isAfter(b.at, breakpoint))
+    .map((b) => b.text)
+    .join('\u0000');
+}
+
+/** Which planted needles are absent from a piece of text. */
+function needlesMissing(text) {
+  return [
+    text.includes(NEEDLE_UUID) ? null : 'uuid',
+    text.includes(NEEDLE_ERROR) ? null : 'error',
+  ].filter(Boolean);
 }
 
 /** The cached prefix of a request, as a single string, for comparison. */
@@ -260,16 +287,31 @@ function steadyTokens(request, run, spill) {
   const sentSecond = prefixText(second, breakpoint);
   const hit = sentFirst === sentSecond;
 
-  const prefix = tokens(sentSecond);
+  // PRICED WITH blockTokens, NOT FROM THE TEXT. `prefixText` exists to COMPARE two
+  // prefixes, and it joins `b.text` -- which is empty for an image block, because an
+  // image's cost lives in `b.tokens` and is measured in pixels. Charging the prefix by
+  // its text therefore made every cached image free, and not neutrally: an arm that
+  // leaves an image in place paid nothing for it, while an arm that replaced the same
+  // image with a text back-reference paid for the replacement. Gate 4 compares
+  // v1-anchored against ccr on exactly this number, on a workload whose cached prefix
+  // contains images.
+  const prefix = blocks(second)
+    .filter((b) => !isAfter(b.at, breakpoint))
+    .reduce((n, b) => n + blockTokens(b), 0);
   const suffix = blocks(second)
     .filter((b) => isAfter(b.at, breakpoint))
     .reduce((n, b) => n + blockTokens(b), 0);
   const injected =
     netTokens(second) - blocks(second).reduce((n, b) => n + blockTokens(b), 0);
   const baseline =
-    netTokens(request) - blocks(request).reduce((n, b) => n + blockTokens(b), 0);
+    netTokens(request) -
+    blocks(request).reduce((n, b) => n + blockTokens(b), 0);
 
-  return prefix * (hit ? CACHE_READ : CACHE_WRITE) + suffix + Math.max(0, injected - baseline);
+  return (
+    prefix * (hit ? CACHE_READ : CACHE_WRITE) +
+    suffix +
+    Math.max(0, injected - baseline)
+  );
 }
 
 function main() {
@@ -284,8 +326,12 @@ function main() {
     return spilled.get(key);
   };
 
-  console.log('\nCompression proof -- synthetic fixtures at the scale of HeadRoom\'s published workloads.');
-  console.log('gross = payload only (their methodology) | net = whole request | effective = cache-weighted\n');
+  console.log(
+    "\nCompression proof -- synthetic fixtures at the scale of HeadRoom's published workloads."
+  );
+  console.log(
+    'gross = payload only (their methodology) | net = whole request | effective = cache-weighted\n'
+  );
 
   const failures = [];
   const steadyFailures = [];
@@ -343,12 +389,27 @@ function main() {
       // generator plants needles for exactly this reason, so the benchmark
       // has to check for them.
       if (fixture.needles) {
-        const body = JSON.stringify(result.request);
-        const lost = [
-          body.includes(NEEDLE_UUID) ? null : 'uuid',
-          body.includes(NEEDLE_ERROR) ? null : 'error',
-        ].filter(Boolean);
-        if (lost.length) needleFailures.push(`${fixture.name}/${name}: lost ${lost.join(" and ")}`);
+        // A VACUOUS GATE IS WORSE THAN NO GATE. If the fixture never planted a needle
+        // in the fresh region, "it survived there" is a claim about nothing -- so the
+        // baseline is checked first and a fixture that fails this is a fixture bug.
+        const armBreakpoint = lastCacheBreakpoint(before);
+        const planted = needlesMissing(freshText(before, armBreakpoint));
+        if (planted.length) {
+          needleFailures.push(
+            `${fixture.name}: the fixture plants no fresh ${planted.join(' or ')}, so the gate would pass vacuously`
+          );
+        }
+
+        // SEARCHED IN THE FRESH BLOCKS, NOT THE WHOLE REQUEST. Each needle also appears
+        // in cached content, so an arm could delete the fresh copy and still pass a gate
+        // that stringified the entire request -- the cached copy would answer for it.
+        // The production proxy forwards this output; what has to survive is the copy the
+        // arm was free to remove.
+        const lost = needlesMissing(freshText(result.request, armBreakpoint));
+        if (lost.length)
+          needleFailures.push(
+            `${fixture.name}/${name}: lost ${lost.join(' and ')}`
+          );
       }
 
       // RELEVANCE IS INVISIBLE TO EVERY COLUMN ABOVE, because it reorders a
@@ -363,13 +424,17 @@ function main() {
       if (fixture.criticalNeedle) {
         const body = JSON.stringify(result.request);
         if (!body.includes(NEEDLE_CRITICAL))
-          needleFailures.push(`${fixture.name}/${name}: lost the CRITICAL record`);
+          needleFailures.push(
+            `${fixture.name}/${name}: lost the CRITICAL record`
+          );
       }
 
       if (fixture.relevanceNeedle) {
         const body = JSON.stringify(result.request);
         if (!body.includes(NEEDLE_RELEVANT))
-          relevanceFailures.push(`${fixture.name}/${name}: lost the row the question asked about`);
+          relevanceFailures.push(
+            `${fixture.name}/${name}: lost the row the question asked about`
+          );
       }
       console.log(
         `    ${name.padEnd(16)}   gross ${String(g).padStart(6)} (${pct(g0, g).padStart(6)})` +
@@ -425,7 +490,9 @@ function main() {
     console.log('RELEVANCE GATE PASSED.');
   }
 
-  console.log('--- gate 4: re-anchoring must never cost, and must stay within the premium ---');
+  console.log(
+    '--- gate 4: re-anchoring must never cost, and must stay within the premium ---'
+  );
   if (steadyFailures.length) {
     console.log('STEADY GATE FAILED:');
     for (const f of steadyFailures) console.log(`  ${f}`);
@@ -434,7 +501,9 @@ function main() {
     console.log('STEADY GATE PASSED.');
   }
 
-  console.log('--- gate: v1-frontier must beat ccr on effective tokens, every workload ---');
+  console.log(
+    '--- gate: v1-frontier must beat ccr on effective tokens, every workload ---'
+  );
   if (failures.length) {
     console.log('GATE FAILED:');
     for (const f of failures) console.log(`  ${f}`);

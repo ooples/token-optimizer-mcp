@@ -75,8 +75,12 @@ jobs:
       # onnxruntime checks `data instanceof Float32Array` in native code and
       # jest's per-suite VM realm has its own typed arrays, so the check fails
       # on a realm the native module never saw. See the script's header.
+      # PINNED, because --no-save keeps it out of the lockfile. On `latest` a
+      # release published between two runs changes what this gate tested without
+      # anything in the diff moving -- and the gate's whole claim is that a
+      # specific adapter works against a specific runtime.
       - name: Install the optional ONNX runtime
-        run: npm install --no-save --no-audit --no-fund onnxruntime-node
+        run: npm install --no-save --no-audit --no-fund onnxruntime-node@1.29.0
 
       - name: Verify the ONNX encoder against real inference
         run: npm run verify:onnx

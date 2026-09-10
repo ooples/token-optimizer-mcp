@@ -22,12 +22,24 @@
 
 import { execFile, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
+import {
+  existsSync,
+  statSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  mkdirSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { harvestMode, harvestFailure } from './harvest.mjs';
 import { proxyEnvFor } from './capabilities.mjs';
-import { readManifest, verifyManifest, residue, manifestSize } from './manifest.mjs';
+import {
+  readManifest,
+  verifyManifest,
+  residue,
+  manifestSize,
+} from './manifest.mjs';
 import { mcpClientsSeen } from './metrics.mjs';
 
 /**
@@ -82,7 +94,10 @@ function readJson(path) {
 
 /** Numeric semver compare; unparseable versions sort as equal to avoid crying wolf. */
 function compareVersions(a, b) {
-  const parse = (v) => String(v || '').split('.').map((n) => Number.parseInt(n, 10));
+  const parse = (v) =>
+    String(v || '')
+      .split('.')
+      .map((n) => Number.parseInt(n, 10));
   const left = parse(a);
   const right = parse(b);
   if (left.some(Number.isNaN) || right.some(Number.isNaN)) return 0;
@@ -117,14 +132,25 @@ export function detectInstall({ pluginsDir, root } = {}) {
   const dir = pluginsDir || join(homedir(), '.claude', 'plugins');
   const packageHooks = join(root || '.', 'plugin', 'hooks');
 
-  const record = readJson(join(dir, 'installed_plugins.json'))?.plugins?.[PLUGIN_ID]?.[0];
+  const record = readJson(join(dir, 'installed_plugins.json'))?.plugins?.[
+    PLUGIN_ID
+  ]?.[0];
   const marketplace = readJson(
-    join(dir, 'marketplaces', 'token-optimizer', 'plugin', '.claude-plugin', 'plugin.json')
+    join(
+      dir,
+      'marketplaces',
+      'token-optimizer',
+      'plugin',
+      '.claude-plugin',
+      'plugin.json'
+    )
   );
 
   const installedVersion = record?.version ?? null;
   const availableVersion = marketplace?.version ?? null;
-  const pluginHooks = record?.installPath ? join(record.installPath, 'hooks') : null;
+  const pluginHooks = record?.installPath
+    ? join(record.installPath, 'hooks')
+    : null;
 
   // WHICH BUILD IS ACTUALLY BEING DIAGNOSED?
   //
@@ -135,13 +161,15 @@ export function detectInstall({ pluginsDir, root } = {}) {
   // and "plugin is up to date", because the only version this function looked at
   // was a stale Claude Code record on the same machine. Read the package's own
   // version so every report can name the build it examined.
-  const packageVersion = readJson(join(root || '.', 'package.json'))?.version ?? null;
+  const packageVersion =
+    readJson(join(root || '.', 'package.json'))?.version ?? null;
 
   // Is the plugin record describing THIS tree, or another client's copy? Path
   // comparison, because a plugin install and an npm install can hold the same
   // version number and still be two different directories.
-  const sameTree = Boolean(record?.installPath && root &&
-    resolve(record.installPath) === resolve(root));
+  const sameTree = Boolean(
+    record?.installPath && root && resolve(record.installPath) === resolve(root)
+  );
 
   // A record whose installPath has gone missing is a broken plugin install, not
   // a script install -- saying "script" there would send the user to the wrong
@@ -238,14 +266,22 @@ export function probeHarvest() {
     // this is the reader it was added for.
     const reason = harvestFailure();
     if (reason) {
-      return [bad('finding extraction is configured but returned nothing',
-        `the last harvest attempt ended: ${reason}`,
-        'check the endpoint URL and, for an OpenAI-compatible server, that ' +
-        'TOKEN_OPTIMIZER_HARVEST_MODEL names a model it actually serves')];
+      return [
+        bad(
+          'finding extraction is configured but returned nothing',
+          `the last harvest attempt ended: ${reason}`,
+          'check the endpoint URL and, for an OpenAI-compatible server, that ' +
+            'TOKEN_OPTIMIZER_HARVEST_MODEL names a model it actually serves'
+        ),
+      ];
     }
-    return [ok('finding extraction is available',
-      'local model found -- semantic harvest is on, free and private: no credential, no billing, ' +
-      'and nothing leaves this machine. Active-model wiki_write remains the primary path')];
+    return [
+      ok(
+        'finding extraction is available',
+        'local model found -- semantic harvest is on, free and private: no credential, no billing, ' +
+          'and nothing leaves this machine. Active-model wiki_write remains the primary path'
+      ),
+    ];
   }
   // The host client's own CLI, opted into with TOKEN_OPTIMIZER_HARVEST_CLI.
   // Reported with the same failure-reason read as `local`, because the two
@@ -255,19 +291,31 @@ export function probeHarvest() {
   if (mode === 'host-cli') {
     const reason = harvestFailure();
     if (reason) {
-      return [bad('finding extraction is configured but returned nothing',
-        `the last harvest attempt ended: ${reason}`,
-        'check that this client\'s CLI is on PATH and signed in, or unset ' +
-        'TOKEN_OPTIMIZER_HARVEST_CLI to fall back to a configured endpoint')];
+      return [
+        bad(
+          'finding extraction is configured but returned nothing',
+          `the last harvest attempt ended: ${reason}`,
+          "check that this client's CLI is on PATH and signed in, or unset " +
+            'TOKEN_OPTIMIZER_HARVEST_CLI to fall back to a configured endpoint'
+        ),
+      ];
     }
-    return [ok('finding extraction is available',
-      "this client's own CLI runs the semantic harvest -- no separate credential and no " +
-      'second vendor. Active-model wiki_write remains the primary path')];
+    return [
+      ok(
+        'finding extraction is available',
+        "this client's own CLI runs the semantic harvest -- no separate credential and no " +
+          'second vendor. Active-model wiki_write remains the primary path'
+      ),
+    ];
   }
   if (mode === 'remote') {
-    return [ok('finding extraction is available',
-      'active-model wiki_write is primary; a credential also enables fallback extraction from ' +
-      'the bounded digest. TOKEN_OPTIMIZER_HARVEST=0 turns only that fallback off')];
+    return [
+      ok(
+        'finding extraction is available',
+        'active-model wiki_write is primary; a credential also enables fallback extraction from ' +
+          'the bounded digest. TOKEN_OPTIMIZER_HARVEST=0 turns only that fallback off'
+      ),
+    ];
   }
 
   // No second-model credential is required for the primary path. The Codex/agent session that
@@ -279,19 +327,27 @@ export function probeHarvest() {
   // exit codes, red-to-green transitions, corrections and churn out of evidence
   // already on disk and sends nothing anywhere.
   if (mode === 'off:no-key') {
-    return [ok('finding extraction is available',
-      'active model records durable conclusions through local wiki_write, and derive runs at ' +
-      'session end with no credential. No separate-model credential is configured, so fallback ' +
-      'transcript extraction is unavailable: point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local ' +
-      'model to run it free and private, or set TOKEN_OPTIMIZER_API_KEY to run it from a bounded ' +
-      'digest of paths, commands, prompts and conclusions -- never file contents')];
+    return [
+      ok(
+        'finding extraction is available',
+        'active model records durable conclusions through local wiki_write, and derive runs at ' +
+          'session end with no credential. No separate-model credential is configured, so fallback ' +
+          'transcript extraction is unavailable: point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local ' +
+          'model to run it free and private, or set TOKEN_OPTIMIZER_API_KEY to run it from a bounded ' +
+          'digest of paths, commands, prompts and conclusions -- never file contents'
+      ),
+    ];
   }
 
   // off:opted-out -- a deliberate choice, reported as one. Nagging about a setting somebody chose
   // is how a diagnostic gets ignored, and the point of this check is that it is worth reading.
-  return [ok('finding extraction is available',
-    'active-model wiki_write remains available; separate-model fallback extraction is off by ' +
-    'your choice (TOKEN_OPTIMIZER_HARVEST is set to a false value)')];
+  return [
+    ok(
+      'finding extraction is available',
+      'active-model wiki_write remains available; separate-model fallback extraction is off by ' +
+        'your choice (TOKEN_OPTIMIZER_HARVEST is set to a false value)'
+    ),
+  ];
 }
 
 /**
@@ -340,25 +396,37 @@ export function pointsAtLoopback(value) {
 }
 
 export function probeProxy(env = process.env) {
-  if (env.TOKEN_OPTIMIZER_MODE === 'off') return [];
+  // NORMALISED THE WAY THE RUNTIME NORMALISES IT. `policy.mode()` trims and
+  // lowercases, so `OFF` and ` off ` genuinely turn the product off -- while a raw
+  // comparison here read them as "on" and reported proxy failures against a
+  // product that was not running. A diagnostic that disagrees with the runtime
+  // about whether the runtime is enabled is worse than no diagnostic.
+  const mode = String(env.TOKEN_OPTIMIZER_MODE || '')
+    .trim()
+    .toLowerCase();
+  if (mode === 'off') return [];
 
   const on = /^(1|true|yes|on)$/i.test(env.TOKEN_OPTIMIZER_PROXY || '');
   if (!on) {
     return [
-      ok('request compression is available',
+      ok(
+        'request compression is available',
         'the compression proxy is off. It compresses tool results and history on the ' +
-        'way to the model, which a hook cannot do -- PostToolUse can add context but ' +
-        'not replace a result. Set TOKEN_OPTIMIZER_PROXY=1 to turn it on'),
+          'way to the model, which a hook cannot do -- PostToolUse can add context but ' +
+          'not replace a result. Set TOKEN_OPTIMIZER_PROXY=1 to turn it on'
+      ),
     ];
   }
 
   const variable = proxyEnvFor(env.TOKEN_OPTIMIZER_CLIENT);
   if (!variable) {
     return [
-      bad('the compression proxy cannot serve this client',
+      bad(
+        'the compression proxy cannot serve this client',
         (env.TOKEN_OPTIMIZER_CLIENT || 'this client') +
           ' exposes no supported way to redirect its model traffic',
-        'unset TOKEN_OPTIMIZER_PROXY, or run a client that reads a base-URL variable'),
+        'unset TOKEN_OPTIMIZER_PROXY, or run a client that reads a base-URL variable'
+      ),
     ];
   }
 
@@ -366,24 +434,40 @@ export function probeProxy(env = process.env) {
   const loopback = pointsAtLoopback(pointed);
   if (!loopback) {
     return [
-      bad('the compression proxy is on but nothing is routed through it',
-        variable + ' is ' + (pointed ? 'set to ' + pointed : 'not set') +
+      bad(
+        'the compression proxy is on but nothing is routed through it',
+        variable +
+          ' is ' +
+          (pointed ? 'set to ' + pointed : 'not set') +
           ', so this client talks straight to the provider',
-        'set ' + variable + ' to the address the proxy is listening on; until then ' +
-          'nothing is compressed'),
+        'set ' +
+          variable +
+          ' to the address the proxy is listening on; until then ' +
+          'nothing is compressed'
+      ),
     ];
   }
 
   return [
-    ok('request compression is available',
-      'the compression proxy is on and ' + variable + ' points at it. Tool results ' +
-      'and history are compressed on the way to the model, and the cached prefix is ' +
-      'never rewritten'),
+    ok(
+      'request compression is available',
+      'the compression proxy is on and ' +
+        variable +
+        ' points at it. Tool results ' +
+        'and history are compressed on the way to the model, and the cached prefix is ' +
+        'never rewritten'
+    ),
   ];
 }
 
 export function probeVersion({ install }) {
-  const { method, installedVersion, availableVersion, packageVersion, sameTree } = install || {};
+  const {
+    method,
+    installedVersion,
+    availableVersion,
+    packageVersion,
+    sameTree,
+  } = install || {};
 
   const checks = [];
 
@@ -396,7 +480,12 @@ export function probeVersion({ install }) {
   // numbers are both true and they are about different installs, so both are
   // printed and each says whose it is.
   if (packageVersion) {
-    checks.push(ok('package under examination', `@ooples/token-optimizer-mcp ${packageVersion}`));
+    checks.push(
+      ok(
+        'package under examination',
+        `@ooples/token-optimizer-mcp ${packageVersion}`
+      )
+    );
   }
 
   if (method !== 'plugin' || !installedVersion) {
@@ -410,12 +499,23 @@ export function probeVersion({ install }) {
   // was looking at.
   if (!sameTree && packageVersion) {
     const label = 'other clients agree with this package';
-    return checks.concat(compareVersions(installedVersion, packageVersion) < 0
-      ? [bad(label,
-        `the Claude Code plugin cache holds ${installedVersion}, but this package is ${packageVersion}`,
-        'this run diagnosed the package, not the plugin. Run /plugin in Claude Code and ' +
-        'update token-optimizer so both clients run the same build')]
-      : [ok(label, `Claude Code plugin ${installedVersion}; this package ${packageVersion}`)]);
+    return checks.concat(
+      compareVersions(installedVersion, packageVersion) < 0
+        ? [
+            bad(
+              label,
+              `the Claude Code plugin cache holds ${installedVersion}, but this package is ${packageVersion}`,
+              'this run diagnosed the package, not the plugin. Run /plugin in Claude Code and ' +
+                'update token-optimizer so both clients run the same build'
+            ),
+          ]
+        : [
+            ok(
+              label,
+              `Claude Code plugin ${installedVersion}; this package ${packageVersion}`
+            ),
+          ]
+    );
   }
 
   if (!availableVersion) {
@@ -423,13 +523,19 @@ export function probeVersion({ install }) {
   }
 
   if (compareVersions(installedVersion, availableVersion) < 0) {
-    return checks.concat([bad('plugin is up to date',
-      `installed ${installedVersion}, but ${availableVersion} is available`,
-      'run /plugin and update token-optimizer -- updating the marketplace alone ' +
-      'does not move the installed version, and older builds shipped far weaker hooks')]);
+    return checks.concat([
+      bad(
+        'plugin is up to date',
+        `installed ${installedVersion}, but ${availableVersion} is available`,
+        'run /plugin and update token-optimizer -- updating the marketplace alone ' +
+          'does not move the installed version, and older builds shipped far weaker hooks'
+      ),
+    ]);
   }
 
-  return checks.concat([ok('plugin is up to date', `installed ${installedVersion}`)]);
+  return checks.concat([
+    ok('plugin is up to date', `installed ${installedVersion}`),
+  ]);
 }
 
 /**
@@ -457,21 +563,21 @@ function probe(binary, payload, { timeoutMs = 8000, cwd, env } = {}) {
         timeout: timeoutMs,
         cwd,
         env: {
-        ...process.env,
-        // THE PROBE MUST SUPPLY ITS OWN EVIDENCE. The bundled tool inventory is
-        // now asserted only for an actual plugin install, which the runtime
-        // marks with CLAUDE_PLUGIN_ROOT -- and the doctor is a CLI, run outside
-        // that runtime, so it never has it. Without this the enforcement probe
-        // would report "not refused" for a correctly installed plugin: a false
-        // negative in the one tool whose job is to tell the user the truth.
-        //
-        // The question the probe asks is "would enforcement fire if the tools
-        // were there", so it states that they are rather than inferring it.
-        TOKEN_OPTIMIZER_MCP_CAPABILITIES:
-          process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??
-          'smart_read,smart_write,smart_edit,smart_glob,smart_grep',
-        ...(env || {}),
-      },
+          ...process.env,
+          // THE PROBE MUST SUPPLY ITS OWN EVIDENCE. The bundled tool inventory is
+          // now asserted only for an actual plugin install, which the runtime
+          // marks with CLAUDE_PLUGIN_ROOT -- and the doctor is a CLI, run outside
+          // that runtime, so it never has it. Without this the enforcement probe
+          // would report "not refused" for a correctly installed plugin: a false
+          // negative in the one tool whose job is to tell the user the truth.
+          //
+          // The question the probe asks is "would enforcement fire if the tools
+          // were there", so it states that they are rather than inferring it.
+          TOKEN_OPTIMIZER_MCP_CAPABILITIES:
+            process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??
+            'smart_read,smart_write,smart_edit,smart_glob,smart_grep',
+          ...(env || {}),
+        },
         windowsHide: true,
       },
       (error, stdout) => {
@@ -519,23 +625,38 @@ export function checklist({ root, settingsPath, install }) {
   // holding; "Claude Code plugin 5.5.0, hooks from <cache>" reads as what it is
   // -- another client's install, on the same machine (#307).
   const pluginLabel = resolved.sameTree ? 'plugin' : 'Claude Code plugin';
-  checks.push(ok('install method', resolved.method === 'plugin'
-    ? `${pluginLabel}${resolved.installedVersion ? ` ${resolved.installedVersion}` : ''}` +
-      ` -- hooks from ${hooksDir}`
-    : `${resolved.method} -- hooks from ${hooksDir}`));
+  checks.push(
+    ok(
+      'install method',
+      resolved.method === 'plugin'
+        ? `${pluginLabel}${resolved.installedVersion ? ` ${resolved.installedVersion}` : ''}` +
+            ` -- hooks from ${hooksDir}`
+        : `${resolved.method} -- hooks from ${hooksDir}`
+    )
+  );
 
   const router = join(hooksDir, 'pretooluse-router.mjs');
   const sessionStart = join(hooksDir, 'session-start.mjs');
 
-  checks.push(existsSync(router)
-    ? ok('hook binary present', router)
-    : bad('hook binary present', `not found at ${router}`,
-      'reinstall the package, or run install-hooks.sh (install-hooks.ps1 on Windows)'));
+  checks.push(
+    existsSync(router)
+      ? ok('hook binary present', router)
+      : bad(
+          'hook binary present',
+          `not found at ${router}`,
+          'reinstall the package, or run install-hooks.sh (install-hooks.ps1 on Windows)'
+        )
+  );
 
-  checks.push(existsSync(sessionStart)
-    ? ok('session-start binary present', sessionStart)
-    : bad('session-start binary present', `not found at ${sessionStart}`,
-      'reinstall the package to restore the session-start hook'));
+  checks.push(
+    existsSync(sessionStart)
+      ? ok('session-start binary present', sessionStart)
+      : bad(
+          'session-start binary present',
+          `not found at ${sessionStart}`,
+          'reinstall the package to restore the session-start hook'
+        )
+  );
 
   // SETTINGS AND MANIFEST ARE SCRIPT-INSTALL CONCERNS ONLY.
   //
@@ -549,18 +670,35 @@ export function checklist({ root, settingsPath, install }) {
     if (settingsPath && existsSync(settingsPath)) {
       try {
         const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
-        const wired = JSON.stringify(settings?.hooks || {}).includes('token-optimizer');
-        checks.push(wired
-          ? ok('hooks wired into settings', settingsPath)
-          : bad('hooks wired into settings', 'no token-optimizer entries found',
-            'run install-hooks.sh to add the PreToolUse and SessionStart entries'));
+        const wired = JSON.stringify(settings?.hooks || {}).includes(
+          'token-optimizer'
+        );
+        checks.push(
+          wired
+            ? ok('hooks wired into settings', settingsPath)
+            : bad(
+                'hooks wired into settings',
+                'no token-optimizer entries found',
+                'run install-hooks.sh to add the PreToolUse and SessionStart entries'
+              )
+        );
       } catch {
-        checks.push(bad('settings file parses', `${settingsPath} is not valid JSON`,
-          'fix the JSON by hand -- we will not rewrite a file we cannot parse'));
+        checks.push(
+          bad(
+            'settings file parses',
+            `${settingsPath} is not valid JSON`,
+            'fix the JSON by hand -- we will not rewrite a file we cannot parse'
+          )
+        );
       }
     } else {
-      checks.push(bad('settings file present', `${settingsPath || 'settings path unknown'} not found`,
-        'run install-hooks.sh, or point TOKEN_OPTIMIZER_SETTINGS at your settings file'));
+      checks.push(
+        bad(
+          'settings file present',
+          `${settingsPath || 'settings path unknown'} not found`,
+          'run install-hooks.sh, or point TOKEN_OPTIMIZER_SETTINGS at your settings file'
+        )
+      );
     }
 
     // What we recorded putting on the machine, and whether it is still that.
@@ -580,19 +718,38 @@ export function checklist({ root, settingsPath, install }) {
       // makes it visible -- a missing file contributes zero bytes -- but a
       // visible detail beside a PASS is still a PASS.
       if (verified.missing > 0) {
-        checks.push(bad('installed files intact',
-          `${verified.missing} of ${verified.files.length} recorded file(s) are gone (${footprint} still on disk)`,
-          'reinstall the package to restore them, or run the uninstaller to clear the manifest'));
+        checks.push(
+          bad(
+            'installed files intact',
+            `${verified.missing} of ${verified.files.length} recorded file(s) are gone (${footprint} still on disk)`,
+            'reinstall the package to restore them, or run the uninstaller to clear the manifest'
+          )
+        );
       } else if (verified.modified === 0) {
-        checks.push(ok('installed files intact', `${verified.intact} file(s), ${footprint}, match the install manifest`));
+        checks.push(
+          ok(
+            'installed files intact',
+            `${verified.intact} file(s), ${footprint}, match the install manifest`
+          )
+        );
       } else {
-        checks.push(ok('installed files intact', `${verified.modified} of ${verified.intact + verified.modified} file(s) ` +
-          `(${footprint} recorded) edited since install -- ` +
-          'uninstall will leave those alone rather than destroy your changes'));
+        checks.push(
+          ok(
+            'installed files intact',
+            `${verified.modified} of ${verified.intact + verified.modified} file(s) ` +
+              `(${footprint} recorded) edited since install -- ` +
+              'uninstall will leave those alone rather than destroy your changes'
+          )
+        );
       }
     } else {
-      checks.push(bad('install manifest present', 'no record of what was installed',
-        'harmless if you installed manually; reinstall to get a removable, verifiable record'));
+      checks.push(
+        bad(
+          'install manifest present',
+          'no record of what was installed',
+          'harmless if you installed manually; reinstall to get a removable, verifiable record'
+        )
+      );
     }
   }
 
@@ -613,9 +770,18 @@ export async function probeEnforcement({ root, workspace, hooksDir, install }) {
   // Probe the build that RUNS, not the one bundled beside this module. On a real
   // machine those were 5.3.5 and 5.3.6 with all 37 hook files differing, and
   // this probe passed for the copy nobody was executing.
-  const binary = join(hooksDirFor({ hooksDir, install, root }), 'pretooluse-router.mjs');
+  const binary = join(
+    hooksDirFor({ hooksDir, install, root }),
+    'pretooluse-router.mjs'
+  );
   if (!existsSync(binary)) {
-    return [bad('enforcement refuses a large read', 'hook binary missing', 'reinstall the package')];
+    return [
+      bad(
+        'enforcement refuses a large read',
+        'hook binary missing',
+        'reinstall the package'
+      ),
+    ];
   }
 
   mkdirSync(workspace, { recursive: true });
@@ -667,10 +833,18 @@ export async function probeEnforcement({ root, workspace, hooksDir, install }) {
       enforcing
     );
     const deniedOk = typeof denied === 'string' && denied.includes('deny');
-    checks.push(deniedOk
-      ? ok('enforcement refuses a large read', 'the refusal came back from the real hook')
-      : bad('enforcement refuses a large read', `hook returned: ${String(denied).slice(0, 200) || '(nothing)'}`,
-        'the probe asks for enforce explicitly, so a failure is the hook itself rather than your mode -- reinstall the hooks'));
+    checks.push(
+      deniedOk
+        ? ok(
+            'enforcement refuses a large read',
+            'the refusal came back from the real hook'
+          )
+        : bad(
+            'enforcement refuses a large read',
+            `hook returned: ${String(denied).slice(0, 200) || '(nothing)'}`,
+            'the probe asks for enforce explicitly, so a failure is the hook itself rather than your mode -- reinstall the hooks'
+          )
+    );
 
     const allowed = await probe(
       binary,
@@ -688,16 +862,24 @@ export async function probeEnforcement({ root, workspace, hooksDir, install }) {
     // green tick produced by an absent measurement. A hook that hangs on every
     // small read is a catastrophic install, and this check used to call it fine.
     const allowedOk = allowed !== null && !allowed.includes('deny');
-    checks.push(allowedOk
-      ? ok('small reads are left alone', 'no refusal, as intended')
-      : bad('small reads are left alone',
-        allowed === null
-          ? 'the hook produced no result at all -- it crashed, hung past the timeout, or could not be spawned'
-          : 'the hook refused a tiny file',
-        'a hook that refuses everything, or answers nothing, is as broken as one that refuses nothing -- report this'));
+    checks.push(
+      allowedOk
+        ? ok('small reads are left alone', 'no refusal, as intended')
+        : bad(
+            'small reads are left alone',
+            allowed === null
+              ? 'the hook produced no result at all -- it crashed, hung past the timeout, or could not be spawned'
+              : 'the hook refused a tiny file',
+            'a hook that refuses everything, or answers nothing, is as broken as one that refuses nothing -- report this'
+          )
+    );
   } finally {
     for (const path of [big, small]) {
-      try { unlinkSync(path); } catch { /* best effort */ }
+      try {
+        unlinkSync(path);
+      } catch {
+        /* best effort */
+      }
     }
   }
 
@@ -705,10 +887,24 @@ export async function probeEnforcement({ root, workspace, hooksDir, install }) {
 }
 
 /** The session-start notice has to actually come out. */
-export async function probeSessionStart({ root, workspace, hooksDir, install }) {
-  const binary = join(hooksDirFor({ hooksDir, install, root }), 'session-start.mjs');
+export async function probeSessionStart({
+  root,
+  workspace,
+  hooksDir,
+  install,
+}) {
+  const binary = join(
+    hooksDirFor({ hooksDir, install, root }),
+    'session-start.mjs'
+  );
   if (!existsSync(binary)) {
-    return [bad('session-start emits the policy', 'binary missing', 'reinstall the package')];
+    return [
+      bad(
+        'session-start emits the policy',
+        'binary missing',
+        'reinstall the package'
+      ),
+    ];
   }
 
   // probeEnforcement normally creates this, but it returns early when the router
@@ -722,20 +918,37 @@ export async function probeSessionStart({ root, workspace, hooksDir, install }) 
   // it and reported 'ran, but produced no policy text' -- sending the user after
   // TOKEN_OPTIMIZER_MODE for what is a spawn failure.
   if (out === null) {
-    return [bad('session-start emits the policy',
-      'the hook produced no output at all -- it did not run',
-      'reinstall the package; the binary is present but could not be executed')];
+    return [
+      bad(
+        'session-start emits the policy',
+        'the hook produced no output at all -- it did not run',
+        'reinstall the package; the binary is present but could not be executed'
+      ),
+    ];
   }
   try {
     const parsed = JSON.parse(out);
     const context = parsed?.hookSpecificOutput?.additionalContext || '';
-    return [context.includes('Token optimization is active')
-      ? ok('session-start emits the policy', `${Math.ceil(context.length / 4)} tokens of standing context`)
-      : bad('session-start emits the policy', 'ran, but produced no policy text',
-        'check TOKEN_OPTIMIZER_MODE is not "off"')];
+    return [
+      context.includes('Token optimization is active')
+        ? ok(
+            'session-start emits the policy',
+            `${Math.ceil(context.length / 4)} tokens of standing context`
+          )
+        : bad(
+            'session-start emits the policy',
+            'ran, but produced no policy text',
+            'check TOKEN_OPTIMIZER_MODE is not "off"'
+          ),
+    ];
   } catch {
-    return [bad('session-start emits the policy', `unparseable output: ${String(out).slice(0, 120)}`,
-      'reinstall the package; the hook is present but not producing valid output')];
+    return [
+      bad(
+        'session-start emits the policy',
+        `unparseable output: ${String(out).slice(0, 120)}`,
+        'reinstall the package; the hook is present but not producing valid output'
+      ),
+    ];
   }
 }
 
@@ -749,8 +962,13 @@ export function probeGraph({ dir }) {
     unlinkSync(canary);
     checks.push(ok('graph directory writable', dir));
   } catch (error) {
-    checks.push(bad('graph directory writable', String(error?.message || error),
-      `check permissions on ${dir}, or set TOKEN_OPTIMIZER_WIKI_DIR to a writable path`));
+    checks.push(
+      bad(
+        'graph directory writable',
+        String(error?.message || error),
+        `check permissions on ${dir}, or set TOKEN_OPTIMIZER_WIKI_DIR to a writable path`
+      )
+    );
     return checks;
   }
 
@@ -766,20 +984,34 @@ export function probeGraph({ dir }) {
   const clients = probeClients({ dir });
 
   if (process.platform === 'win32') {
-    checks.push(ok('graph directory is private',
-      'POSIX modes are not enforced on Windows; the directory inherits its parent ACL'));
+    checks.push(
+      ok(
+        'graph directory is private',
+        'POSIX modes are not enforced on Windows; the directory inherits its parent ACL'
+      )
+    );
     checks.push(...clients);
     return checks;
   }
 
   try {
     const mode = statSync(dir).mode & 0o777;
-    checks.push((mode & 0o077) === 0
-      ? ok('graph directory is private', `mode ${mode.toString(8)}`)
-      : bad('graph directory is private', `mode ${mode.toString(8)} is group- or world-readable`,
-        `run: chmod 700 ${dir}`));
+    checks.push(
+      (mode & 0o077) === 0
+        ? ok('graph directory is private', `mode ${mode.toString(8)}`)
+        : bad(
+            'graph directory is private',
+            `mode ${mode.toString(8)} is group- or world-readable`,
+            `run: chmod 700 ${dir}`
+          )
+    );
   } catch {
-    checks.push(ok('graph directory is private', 'mode could not be read on this filesystem'));
+    checks.push(
+      ok(
+        'graph directory is private',
+        'mode could not be read on this filesystem'
+      )
+    );
   }
 
   checks.push(...clients);
@@ -807,14 +1039,24 @@ export function probeClients({ dir }) {
     return [ok('MCP clients seen', 'no evidence log yet')];
   }
   if (!clients.length) {
-    return [ok('MCP clients seen', 'none yet -- the server has had no MCP handshake in this project')];
+    return [
+      ok(
+        'MCP clients seen',
+        'none yet -- the server has had no MCP handshake in this project'
+      ),
+    ];
   }
   const described = clients
     .slice(0, 5)
     .map((c) => `${c.title || c.client}${c.version ? ` ${c.version}` : ''}`)
     .join(', ');
-  return [ok('MCP clients seen', `${clients.length}: ${described}` +
-    (clients.length > 5 ? `, and ${clients.length - 5} more` : ''))];
+  return [
+    ok(
+      'MCP clients seen',
+      `${clients.length}: ${described}` +
+        (clients.length > 5 ? `, and ${clients.length - 5} more` : '')
+    ),
+  ];
 }
 
 /**
@@ -826,8 +1068,10 @@ export function probeClients({ dir }) {
  * published package that cannot start needs reinstalling, not compiling.
  */
 function isSourceCheckout(root) {
-  return existsSync(join(root, 'src', 'server', 'index.ts')) &&
-    existsSync(join(root, 'tsconfig.json'));
+  return (
+    existsSync(join(root, 'src', 'server', 'index.ts')) &&
+    existsSync(join(root, 'tsconfig.json'))
+  );
 }
 
 /** The remedy for "the server did not work", phrased for the install we are in. */
@@ -862,8 +1106,13 @@ function speakMcp(entry, timeoutMs) {
         windowsHide: true,
       });
     } catch (error) {
-      resolve({ tools: null, code: null, signal: null, timedOut: false,
-        stderr: String(error?.message || error) });
+      resolve({
+        tools: null,
+        code: null,
+        signal: null,
+        timedOut: false,
+        stderr: String(error?.message || error),
+      });
       return;
     }
 
@@ -876,13 +1125,27 @@ function speakMcp(entry, timeoutMs) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      try { child.kill(); } catch { /* already gone */ }
-      resolve({ tools: readTools(stdout), stderr: stderr.trim(), timedOut,
-        elapsedMs: Date.now() - started, code: null, signal: null, ...extra });
+      try {
+        child.kill();
+      } catch {
+        /* already gone */
+      }
+      resolve({
+        tools: readTools(stdout),
+        stderr: stderr.trim(),
+        timedOut,
+        elapsedMs: Date.now() - started,
+        code: null,
+        signal: null,
+        ...extra,
+      });
     };
 
     const started = Date.now();
-    const timer = setTimeout(() => { timedOut = true; finish(); }, timeoutMs);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      finish();
+    }, timeoutMs);
 
     child.on('error', (error) => {
       stderr += `\n${error?.message || error}`;
@@ -893,17 +1156,28 @@ function speakMcp(entry, timeoutMs) {
       // Answer in hand: stop early rather than burn the whole timeout.
       if (readTools(stdout)) finish();
     });
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
     child.on('exit', (code, signal) => finish({ code, signal }));
 
     const send = (message) => {
-      try { child.stdin.write(`${JSON.stringify(message)}\n`); } catch { /* exited */ }
+      try {
+        child.stdin.write(`${JSON.stringify(message)}\n`);
+      } catch {
+        /* exited */
+      }
     };
-    send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {
-      protocolVersion: '2024-11-05',
-      capabilities: {},
-      clientInfo: { name: 'token-optimizer-doctor', version: '1' },
-    } });
+    send({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'token-optimizer-doctor', version: '1' },
+      },
+    });
     send({ jsonrpc: '2.0', method: 'notifications/initialized' });
     send({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
     // stdin stays open until finish() kills the child.
@@ -941,37 +1215,70 @@ function readTools(stdout) {
 export async function probeServer({ root, timeoutMs = 20_000 }) {
   const entry = join(root, 'dist', 'server', 'index.js');
   if (!existsSync(entry)) {
-    return [bad('MCP server responds', `${entry} not found`,
-      serverRemedy(root, 'the build output is missing entirely'))];
+    return [
+      bad(
+        'MCP server responds',
+        `${entry} not found`,
+        serverRemedy(root, 'the build output is missing entirely')
+      ),
+    ];
   }
 
   const result = await speakMcp(entry, timeoutMs);
   const detail = (summary) => {
     const parts = [summary];
-    if (result.code !== null && result.code !== undefined) parts.push(`exit code ${result.code}`);
+    if (result.code !== null && result.code !== undefined)
+      parts.push(`exit code ${result.code}`);
     if (result.signal) parts.push(`killed by ${result.signal}`);
-    if (result.stderr) parts.push(`stderr: ${stderrHighlights(result.stderr, 6)}`);
+    if (result.stderr)
+      parts.push(`stderr: ${stderrHighlights(result.stderr, 6)}`);
     return parts.join('\n          ');
   };
 
   if (result.timedOut && !result.tools) {
-    return [bad('MCP server responds', detail(`no tools/list reply within ${timeoutMs}ms`),
-      serverRemedy(root, 'raise the client\'s startup timeout if the machine is slow'))];
+    return [
+      bad(
+        'MCP server responds',
+        detail(`no tools/list reply within ${timeoutMs}ms`),
+        serverRemedy(
+          root,
+          "raise the client's startup timeout if the machine is slow"
+        )
+      ),
+    ];
   }
 
   if (!result.tools) {
-    return [bad('MCP server responds', detail('the server exited without answering tools/list'),
-      serverRemedy(root))];
+    return [
+      bad(
+        'MCP server responds',
+        detail('the server exited without answering tools/list'),
+        serverRemedy(root)
+      ),
+    ];
   }
 
   if (!result.tools.length) {
-    return [bad('MCP server responds', detail('started, but listed no tools'),
-      serverRemedy(root, 'check TOKEN_OPTIMIZER_TOOL_PROFILE -- an empty profile registers nothing'))];
+    return [
+      bad(
+        'MCP server responds',
+        detail('started, but listed no tools'),
+        serverRemedy(
+          root,
+          'check TOKEN_OPTIMIZER_TOOL_PROFILE -- an empty profile registers nothing'
+        )
+      ),
+    ];
   }
 
   if (!result.tools.some((tool) => tool?.name === 'wiki_write')) {
-    return [bad('MCP server responds', `${result.tools.length} tools listed, but wiki_write is missing`,
-      'use the core or full tool profile; semantic harvesting requires wiki_write')];
+    return [
+      bad(
+        'MCP server responds',
+        `${result.tools.length} tools listed, but wiki_write is missing`,
+        'use the core or full tool profile; semantic harvesting requires wiki_write'
+      ),
+    ];
   }
 
   const seconds = (result.elapsedMs / 1000).toFixed(1);
@@ -989,15 +1296,23 @@ export async function probeServer({ root, timeoutMs = 20_000 }) {
   // Measured on Windows, cold 12.1s against warm 1.4s -- healthy both times, and
   // over the default budget exactly once.
   if (result.elapsedMs > CLIENT_STARTUP_BUDGET_MS) {
-    return [bad('MCP server responds',
-      `${result.tools.length} tools listed, but startup took ${seconds}s`,
-      `that is past the ${CLIENT_STARTUP_BUDGET_MS / 1000}s Codex allows by default, which ` +
-      'shows up as a server that registers no tools rather than as a timeout. Raise it -- ' +
-      '`startup_timeout_sec = 30` under [mcp_servers.token-optimizer] in ~/.codex/config.toml')];
+    return [
+      bad(
+        'MCP server responds',
+        `${result.tools.length} tools listed, but startup took ${seconds}s`,
+        `that is past the ${CLIENT_STARTUP_BUDGET_MS / 1000}s Codex allows by default, which ` +
+          'shows up as a server that registers no tools rather than as a timeout. Raise it -- ' +
+          '`startup_timeout_sec = 30` under [mcp_servers.token-optimizer] in ~/.codex/config.toml'
+      ),
+    ];
   }
 
-  return [ok('MCP server responds',
-    `${result.tools.length} tools listed in ${seconds}s; wiki_write available`)];
+  return [
+    ok(
+      'MCP server responds',
+      `${result.tools.length} tools listed in ${seconds}s; wiki_write available`
+    ),
+  ];
 }
 
 /**
@@ -1051,13 +1366,18 @@ function tomlTables(text) {
     if (current) current.body.push(line);
   }
 
-  return tables.map((table) => ({ key: table.key, body: table.body.join('\n') }));
+  return tables.map((table) => ({
+    key: table.key,
+    body: table.body.join('\n'),
+  }));
 }
 
 /** The body of the one table with this exact dotted key, or null. */
 function tomlTable(text, name) {
   const wanted = splitTomlKey(name);
-  const found = tomlTables(text).find((table) => sameTomlKey(table.key, wanted));
+  const found = tomlTables(text).find((table) =>
+    sameTomlKey(table.key, wanted)
+  );
   return found ? found.body : null;
 }
 
@@ -1093,8 +1413,13 @@ export function probeCodex({ codexHome } = {}) {
   try {
     config = readFileSync(configPath, 'utf8');
   } catch {
-    return [bad('codex config readable', `${configPath} could not be read`,
-      'check the file permissions, or remove it to let Codex recreate it')];
+    return [
+      bad(
+        'codex config readable',
+        `${configPath} could not be read`,
+        'check the file permissions, or remove it to let Codex recreate it'
+      ),
+    ];
   }
 
   const server = tomlTable(config, 'mcp_servers.token-optimizer');
@@ -1104,18 +1429,25 @@ export function probeCodex({ codexHome } = {}) {
   // it from. The reporter's config said `token-optimizer@token-optimizer`; the
   // machine this was written on says `token-optimizer@personal`. Pinning the
   // whole id would have made this check silently blind on both of them one day.
-  const pluginTable = tomlTables(config).find((table) =>
-    table.key.length === 2 &&
-    table.key[0] === 'plugins' &&
-    table.key[1].split('@')[0] === PLUGIN_NAME);
+  const pluginTable = tomlTables(config).find(
+    (table) =>
+      table.key.length === 2 &&
+      table.key[0] === 'plugins' &&
+      table.key[1].split('@')[0] === PLUGIN_NAME
+  );
   const pluginEnabled = Boolean(
-    pluginTable && /^\s*enabled\s*=\s*true\s*$/m.test(pluginTable.body));
+    pluginTable && /^\s*enabled\s*=\s*true\s*$/m.test(pluginTable.body)
+  );
   const pluginId = pluginTable?.key[1];
 
   if (!server && !pluginEnabled) {
-    return [ok('codex knows about this server',
-      'no token-optimizer entry in ~/.codex/config.toml -- not installed for Codex, which is ' +
-      'fine if you do not use it')];
+    return [
+      ok(
+        'codex knows about this server',
+        'no token-optimizer entry in ~/.codex/config.toml -- not installed for Codex, which is ' +
+          'fine if you do not use it'
+      ),
+    ];
   }
 
   const checks = [];
@@ -1124,31 +1456,46 @@ export function probeCodex({ codexHome } = {}) {
   // the config.toml block declares it again under the same name. Which set of
   // settings wins is then a question about Codex's merge order rather than about
   // anything we shipped, and the answer is not written down.
-  checks.push(server && pluginEnabled
-    ? bad('codex declares this server once',
-      `declared twice: the enabled plugin ${pluginId} provides it, and ` +
-      '[mcp_servers.token-optimizer] declares it again',
-      'keep one. The plugin is self-contained and carries its own timeouts, so the usual fix ' +
-      'is `codex mcp remove token-optimizer`; keep the config.toml block instead if you are ' +
-      'not using the plugin')
-    : ok('codex declares this server once',
-      pluginEnabled
-        ? `via the enabled plugin ${pluginId}`
-        : 'via [mcp_servers.token-optimizer]'));
+  checks.push(
+    server && pluginEnabled
+      ? bad(
+          'codex declares this server once',
+          `declared twice: the enabled plugin ${pluginId} provides it, and ` +
+            '[mcp_servers.token-optimizer] declares it again',
+          'keep one. The plugin is self-contained and carries its own timeouts, so the usual fix ' +
+            'is `codex mcp remove token-optimizer`; keep the config.toml block instead if you are ' +
+            'not using the plugin'
+        )
+      : ok(
+          'codex declares this server once',
+          pluginEnabled
+            ? `via the enabled plugin ${pluginId}`
+            : 'via [mcp_servers.token-optimizer]'
+        )
+  );
 
   // A config.toml block with no budget on it inherits Codex's default of 10
   // seconds, which a cold `npx -y ...@latest` start does not fit inside. The
   // plugin's own .mcp.json has always carried 30; a hand-merged block did not.
   if (server && !/^\s*startup_timeout_sec\s*=/m.test(server)) {
-    checks.push(bad('codex allows enough time to start',
-      'no startup_timeout_sec on [mcp_servers.token-optimizer], so Codex uses its default of ' +
-      `${CLIENT_STARTUP_BUDGET_MS / 1000}s`,
-      'add `startup_timeout_sec = 30` to that block. A cold start pays for an npx registry ' +
-      'lookup before node even runs, and gets killed mid-handshake -- which looks exactly ' +
-      'like a server that registered no tools'));
+    checks.push(
+      bad(
+        'codex allows enough time to start',
+        'no startup_timeout_sec on [mcp_servers.token-optimizer], so Codex uses its default of ' +
+          `${CLIENT_STARTUP_BUDGET_MS / 1000}s`,
+        'add `startup_timeout_sec = 30` to that block. A cold start pays for an npx registry ' +
+          'lookup before node even runs, and gets killed mid-handshake -- which looks exactly ' +
+          'like a server that registered no tools'
+      )
+    );
   } else if (server) {
     const budget = /^\s*startup_timeout_sec\s*=\s*(\d+)/m.exec(server);
-    checks.push(ok('codex allows enough time to start', `startup_timeout_sec = ${budget?.[1]}`));
+    checks.push(
+      ok(
+        'codex allows enough time to start',
+        `startup_timeout_sec = ${budget?.[1]}`
+      )
+    );
   }
 
   return checks;
@@ -1172,9 +1519,14 @@ export function probeCodex({ codexHome } = {}) {
  */
 export function probeCache({ degradedReason }) {
   if (!degradedReason) return [];
-  return [bad('cache is persisting', `running in memory only -- ${degradedReason}`,
-    'fix the path above, then restart the MCP server. Tools work meanwhile, but ' +
-    'nothing is cached across runs, so every read is paid for again')];
+  return [
+    bad(
+      'cache is persisting',
+      `running in memory only -- ${degradedReason}`,
+      'fix the path above, then restart the MCP server. Tools work meanwhile, but ' +
+        'nothing is cached across runs, so every read is paid for again'
+    ),
+  ];
 }
 
 /* --------------------------------------------------------------- ASSEMBLY */
@@ -1186,8 +1538,14 @@ export function probeCache({ degradedReason }) {
  * probes after, because they are what actually prove it works.
  */
 export async function diagnose({
-  root, workspace, graphDir, settingsPath, pluginsDir, skipServer = false,
-  cacheDegradedReason = null, codexHome,
+  root,
+  workspace,
+  graphDir,
+  settingsPath,
+  pluginsDir,
+  skipServer = false,
+  cacheDegradedReason = null,
+  codexHome,
 } = {}) {
   // Resolved ONCE and threaded through, so every check reasons about the same
   // install. Detecting per-probe is how the checklist and the enforcement probe
@@ -1234,9 +1592,12 @@ export async function diagnose({
 
 /** The report, with a remedy on every failure. */
 export function renderDiagnosis(result) {
-  const lines = result.checks.map((check) => `  ${check.pass ? 'PASS' : 'FAIL'}  ${check.name}` +
-    (check.detail ? `\n          ${check.detail}` : '') +
-    (check.pass || !check.remedy ? '' : `\n          fix: ${check.remedy}`));
+  const lines = result.checks.map(
+    (check) =>
+      `  ${check.pass ? 'PASS' : 'FAIL'}  ${check.name}` +
+      (check.detail ? `\n          ${check.detail}` : '') +
+      (check.pass || !check.remedy ? '' : `\n          fix: ${check.remedy}`)
+  );
 
   const residueNote = [];
   // The path diagnose ACTUALLY EXAMINED. Reading the env override here meant the
@@ -1247,9 +1608,12 @@ export function renderDiagnosis(result) {
   const settings = result.settingsPath || process.env.TOKEN_OPTIMIZER_SETTINGS;
   if (settings) {
     const found = residue(settings);
-    residueNote.push('', found.clean
-      ? 'No token-optimizer entries in the settings file.'
-      : `${found.entries.length} token-optimizer entry/entries present in the settings file.`);
+    residueNote.push(
+      '',
+      found.clean
+        ? 'No token-optimizer entries in the settings file.'
+        : `${found.entries.length} token-optimizer entry/entries present in the settings file.`
+    );
   }
 
   return [

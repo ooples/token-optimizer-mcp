@@ -147,7 +147,7 @@ records durable conclusions itself through `wiki_write`.
 
 The **model-based semantic harvest** is the third path, and the only one that
 needs something you do not already have. It is **not opt-in** —
-`TOKEN_OPTIMIZER_HARVEST=0` turns it *off* — but its real gate is a credential:
+`TOKEN_OPTIMIZER_HARVEST=0` turns it _off_ — but its real gate is a credential:
 with none it reports `off:no-key`, which is the state on CI, corporate machines,
 and subscription-only logins. Point `TOKEN_OPTIMIZER_HARVEST_ENDPOINT` at a
 local model and it runs **free and private, with nothing leaving the machine**.
@@ -363,12 +363,12 @@ Reduction over the content each strategy is permitted to rewrite, on fixtures
 matching the four workloads HeadRoom publishes (their figures from their
 README; ours from `bench/compression`, which anyone can run):
 
-| workload | ours | theirs |
-| --- | --- | --- |
-| issue triage | 98.9% | 72.8% |
-| code search | 98.2% | 92.1% |
-| SRE debugging | 92.8% | 92.2% |
-| codebase exploration | 61.3% | 47.4% |
+| workload             | ours  | theirs |
+| -------------------- | ----- | ------ |
+| issue triage         | 98.9% | 72.8%  |
+| code search          | 98.2% | 92.1%  |
+| SRE debugging        | 92.8% | 92.2%  |
+| codebase exploration | 61.3% | 47.4%  |
 
 These are not their corpora, which are unpublished; the code workloads read real
 files out of this repository and the rest are generated to the shape and scale
@@ -380,14 +380,27 @@ nothing and cost 1.471x through extra turns alone. Until the proxy has run
 through THOL, treat the figures above as compression numbers and nothing more.
 
 Off by default. `TOKEN_OPTIMIZER_PROXY=1` turns it on, it binds loopback only,
-credentials are forwarded and never stored, nothing is logged, and `doctor`
-reports whether your client is actually routed through it -- the silent failure
-being a proxy that is running while the agent talks past it.
+nothing is logged, and `doctor` reports whether your client is actually routed
+through it -- the silent failure being a proxy that is running while the agent
+talks past it.
+
+Your provider key is forwarded in the request headers and is never read, stored
+or written by the proxy. That is a narrower claim than "nothing sensitive is
+written", and the difference matters: the proxy does write _message content_ to
+disk, described next, and it does not inspect that content for secrets. If a
+secret is in your conversation, it can reach a spill file the same way any other
+text does.
+
+It will not reach an unencrypted network, though: an upstream that is neither
+`https` nor loopback is refused rather than forwarded to, and with no upstream
+configured the proxy serves only Anthropic's own routes -- so a client for a
+different provider is told to name its provider rather than having its key sent
+to the wrong company.
 
 **It does write some payload to disk, and you should know exactly when.** An
 elision has to name a way back to what it removed, and content that arrived in a
-tool result has no file of its own -- so that content is written to a *spill
-file* and the marker names its path. This happens only when an engine actually
+tool result has no file of its own -- so that content is written to a _spill
+file_ and the marker names its path. This happens only when an engine actually
 elides something recoverable-by-path: a JSON array tail, a set of function
 bodies, a passage of prose. Requests below the size floor, requests nothing
 claims, and every elision that is lossless are all written nowhere.
@@ -399,21 +412,28 @@ discloses nothing and two runs do not collide. They are never read back by us;
 the agent reads them with the `Read` tool it already has, which is the whole
 point of a path instead of a hash.
 
-They are **not** deleted automatically, and that is deliberate: a marker whose
-spill has been swept is exactly the dangling reference this design exists to
-avoid, and the agent may follow a path many turns after it was written. They
-live in a temp directory, so your OS reclaims them on its own schedule; delete
-`token-optimizer-spill/` yourself whenever you want them gone, at the cost of
-any outstanding marker in a live session no longer resolving. Running with the
-proxy off writes no spills at all.
+They are **not** deleted while the proxy is running, and that is deliberate: a
+marker whose spill has been swept is exactly the dangling reference this design
+exists to avoid, and the agent may follow a path many turns after it was
+written. So retention within one run is bounded only by the distinct content you
+elide -- there is no quota, and a very long session that elides constantly can
+accumulate.
+
+When the proxy stops, its spill directory is removed. Each proxy process gets
+its own directory under `token-optimizer-spill/`, so stopping one never sweeps
+another's live paths, and the moment it stops is also the moment no agent can
+still be following one of them. If a run ends without that cleanup -- a kill
+signal, a power cut -- the directory is left behind in your OS temp directory
+and is safe to delete by hand. Running with the proxy off writes no spills at
+all.
 
 ### Three switches, and what each one trades
 
-| variable | default | what it does |
-| --- | --- | --- |
-| `TOKEN_OPTIMIZER_PROXY` | off | the compression proxy itself |
-| `TOKEN_OPTIMIZER_COMPRESSION` | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless` |
-| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | off | put what this project already learned in the cached prefix |
+| variable                          | default    | what it does                                               |
+| --------------------------------- | ---------- | ---------------------------------------------------------- |
+| `TOKEN_OPTIMIZER_PROXY`           | off        | the compression proxy itself                               |
+| `TOKEN_OPTIMIZER_COMPRESSION`     | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`       |
+| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | off        | put what this project already learned in the cached prefix |
 
 `lossless` is worth knowing about: it forbids every transform that removes
 something the output cannot reconstruct -- function bodies, array tails,
@@ -437,7 +457,7 @@ finding that prevents one wasted turn pays for a great deal of context.
 The knowledge graph knows things that would prevent them, but until now it
 reached the model two ways and both arrive too late or too dear: a SessionStart
 index chosen once from the opening task text, and a `PreToolUse` advisory that
-fires *after* the model already decided to make the call it is advising about --
+fires _after_ the model already decided to make the call it is advising about --
 so acting on it costs the very turn it was meant to save.
 
 With `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE=1` the findings go in the **cached
@@ -488,6 +508,7 @@ installs the optional runtime and runs it.
 
 **Not claimed:** that an embedding model actually beats BM25 on these
 workloads. The mechanism is proved and the measurement is not done.
+
 ### Compaction is consolidation, not loss
 
 Everyone else checkpoints and restores what you _had_ — which spends the
