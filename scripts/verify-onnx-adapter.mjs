@@ -42,20 +42,37 @@ function check(name, condition, detail = '') {
 async function main() {
   console.log('\nONNX adapter, against real onnxruntime inference\n');
 
+  // A MISSING PREREQUISITE FAILS, IT DOES NOT SKIP. CI installs the runtime and the
+  // fixture is committed, so neither can be absent there by accident -- and a skip that
+  // exits 0 turns this gate into one that passes precisely when it did not run, which
+  // is the failure mode the workflow's own comments call out for every other gate here.
+  // Someone running it by hand gets the same message and a non-zero status, which is
+  // what tells them the verification did not happen.
   if (!existsSync(MODEL)) {
-    console.log(`  SKIP  no fixture at ${MODEL}`);
-    console.log('        regenerate with: python tests/fixtures/make-tiny-encoder.py');
+    console.error(`  FAIL  no fixture at ${MODEL}`);
+    console.error(
+      '        regenerate with: python tests/fixtures/make-tiny-encoder.py'
+    );
+    process.exitCode = 1;
     return;
   }
   try {
     await import('onnxruntime-node');
-  } catch {
-    console.log('  SKIP  onnxruntime-node is not installed (it is an optional dependency)');
-    console.log('        install with: npm install --no-save onnxruntime-node');
+  } catch (error) {
+    console.error(
+      '  FAIL  onnxruntime-node is not installed (it is an optional dependency)'
+    );
+    console.error(
+      '        install with: npm install --no-save onnxruntime-node'
+    );
+    console.error(`        import failed with: ${error?.message ?? error}`);
+    process.exitCode = 1;
     return;
   }
 
-  const { onnxEncoder, hashingTokenizer } = await import('../dist/compress/onnx.js');
+  const { onnxEncoder, hashingTokenizer } = await import(
+    '../dist/compress/onnx.js'
+  );
   const { embeddingCache, warmEmbeddings, semanticRanker } = await import(
     '../dist/compress/embedding.js'
   );
@@ -71,8 +88,15 @@ async function main() {
     'connection pool exhausted',
     'the build finished cleanly',
   ]);
-  check('returns one vector per input', vectors.length === 2, `got ${vectors.length}`);
-  check('vectors are Float32Array', vectors.every((v) => v instanceof Float32Array));
+  check(
+    'returns one vector per input',
+    vectors.length === 2,
+    `got ${vectors.length}`
+  );
+  check(
+    'vectors are Float32Array',
+    vectors.every((v) => v instanceof Float32Array)
+  );
   check(
     'vectors have the declared width',
     vectors.every((v) => v.length === DIMENSIONS),
@@ -86,7 +110,10 @@ async function main() {
   // ---- determinism, which the whole cache-stability argument rests on
   const [a] = await encoder.encode(['connection pool exhausted']);
   const [b] = await encoder.encode(['connection pool exhausted']);
-  check('same text gives the same vector', JSON.stringify([...a]) === JSON.stringify([...b]));
+  check(
+    'same text gives the same vector',
+    JSON.stringify([...a]) === JSON.stringify([...b])
+  );
 
   // ---- the buffer-reuse hazard
   //
@@ -95,14 +122,25 @@ async function main() {
   // which is why the adapter copies.
   const [held] = await encoder.encode(['connection pool exhausted']);
   const before = JSON.stringify([...held]);
-  await encoder.encode(['something entirely different, to reuse the output buffer']);
-  check('an earlier vector survives a later run', JSON.stringify([...held]) === before);
+  await encoder.encode([
+    'something entirely different, to reuse the output buffer',
+  ]);
+  check(
+    'an earlier vector survives a later run',
+    JSON.stringify([...held]) === before
+  );
 
   // ---- batching across the configured batch size
-  const many = Array.from({ length: 70 }, (_, i) => `log line number ${i} about the pool`);
+  const many = Array.from(
+    { length: 70 },
+    (_, i) => `log line number ${i} about the pool`
+  );
   const batched = await encoder.encode(many);
-  check('batches larger than batchSize round-trip', batched.length === many.length,
-    `got ${batched.length}`);
+  check(
+    'batches larger than batchSize round-trip',
+    batched.length === many.length,
+    `got ${batched.length}`
+  );
 
   // ---- the two-phase path end to end
   const cache = embeddingCache();

@@ -3,6 +3,7 @@ import { compressLog } from '../../../src/compress/log.js';
 import { compressProse } from '../../../src/compress/prose.js';
 import { compressSearchResults } from '../../../src/compress/search.js';
 import { compressCode } from '../../../src/compress/code.js';
+import { parse } from '@babel/parser';
 
 /**
  * Defects found in review of the compression PR, each pinned by the case that
@@ -171,5 +172,63 @@ describe('code spans stop at the last real line', () => {
     const range = out.elisions[0]?.recoverAt ?? '';
     // The body is lines 2-5; the blanks at 6 and 7 are not part of it.
     expect(range).toBe('src/h.py:2-5');
+  });
+});
+
+describe('a concise arrow body is not a brace-delimited body', () => {
+  // The same parser the engine uses, so "valid" here means what the engine means.
+  const parses = (source: string): boolean => {
+    try {
+      parse(source, { sourceType: 'module', plugins: ['typescript'] });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it('leaves a multiline concise arrow as valid source', () => {
+    // BABEL STORES A CONCISE BODY AS AN EXPRESSION, not a BlockStatement -- there are
+    // no braces around it. Eliding "the lines between the first and the last" then cuts
+    // the middle out of an expression and splices a marker into it, and what reaches
+    // the model is not compressed source but broken source.
+    const source = [
+      'export const pick = (rows: Row[]) =>',
+      '  rows',
+      '    .filter((row) => row.enabled)',
+      '    .filter((row) => row.score > 0)',
+      '    .filter((row) => row.owner !== null)',
+      '    .filter((row) => row.kind === "leaf")',
+      '    .filter((row) => row.parent !== undefined)',
+      '    .map((row) => row.id)',
+      '    .sort((a, b) => a - b);',
+      '',
+    ].join('\n');
+
+    expect(parses(source)).toBe(true);
+
+    const out = compressCode(source, { sourcePath: 'src/pick.ts' });
+
+    expect(parses(out.text)).toBe(true);
+  });
+
+  it('still elides an ordinary block body', () => {
+    // The control. A fix that simply stopped eliding functions would pass the test
+    // above and destroy the engine.
+    const body = Array.from(
+      { length: 40 },
+      (_, i) => `  const value${i} = compute(${i}) * factor + offset;`
+    );
+    const source = [
+      'export function work(): number {',
+      ...body,
+      '  return 0;',
+      '}',
+      '',
+    ].join('\n');
+
+    const out = compressCode(source, { sourcePath: 'src/work.ts' });
+
+    expect(out.elisions.length).toBeGreaterThan(0);
+    expect(out.text.length).toBeLessThan(source.length);
   });
 });

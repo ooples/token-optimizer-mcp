@@ -161,6 +161,26 @@ async function runBatch(
     throw new Error(`the model produced no output named '${outputName}'`);
   }
 
+  // THE MODEL'S WIDTH, CHECKED AGAINST THE DECLARED ONE. Slicing on a `dimensions` the
+  // model does not share misaligns every row after the first -- and row 0 is still
+  // exactly `dimensions` long, so the length check downstream passes and the ranking
+  // becomes confidently wrong. That is the worst failure available here: a wrong answer
+  // that looks like a right one, which is precisely what this file's header says must
+  // never happen quietly.
+  const vectorWidth = embedding.dims[embedding.dims.length - 1];
+  if (vectorWidth !== dimensions) {
+    throw new Error(
+      `the model produced ${vectorWidth}-wide vectors but 'dimensions' declares ${dimensions}; ` +
+        'every row after the first would be read from the wrong offset'
+    );
+  }
+  const produced = embedding.data.length / dimensions;
+  if (produced < rows.length) {
+    throw new Error(
+      `the model produced ${produced} vectors for ${rows.length} inputs`
+    );
+  }
+
   const data = embedding.data as Float32Array;
   const out: Float32Array[] = [];
   for (let r = 0; r < rows.length; r += 1) {

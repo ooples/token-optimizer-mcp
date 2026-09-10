@@ -177,6 +177,17 @@ function questionIn(request: ProviderRequest): string {
 }
 
 /** Walks every text-bearing block, letting the visitor replace its text. */
+/** The elision marker `pathAddressed` leaves behind. */
+const ELIDED = /\[\.\.\. body, [^\]]+\]/;
+
+/** The untouched text at a position in the request the strategy was given. */
+function blockTextAt(request: ProviderRequest, at: Position): string | null {
+  const content = request.messages?.[at.message]?.content;
+  if (!Array.isArray(content)) return null;
+  const block = content[at.block] as Block | undefined;
+  return typeof block?.text === 'string' ? block.text : null;
+}
+
 function mapBlocks(
   request: ProviderRequest,
   visit: (text: string, at: Position, message: Message) => string | null
@@ -415,7 +426,11 @@ export function v1Frontier(
   // -- an avoidable cache write, caused by remembering something that never
   // went on the wire. The record travels back with the result and is committed
   // only once the body it describes is actually sent.
-  const decision = anchorDecision(request, options.anchors);
+  const decision = anchorDecision(
+    request,
+    options.anchors,
+    options.tuning?.coldPrefixLimit
+  );
 
   // KNOWLEDGE RIDES ON THE ANCHOR DECISION, and that is the whole trick.
   // Putting findings in the cached prefix is what makes them cost 0.1x a
@@ -467,14 +482,23 @@ export function v2Speculative(
   const base = pathAddressed(request, options, true);
   if (!wanted.length) return base;
 
-  // A span the model is reaching for is left whole this turn, on a request
-  // that was already being sent -- so recovery costs no round trip at all,
-  // where CCR's retrieve tool always costs one.
-  const out = mapBlocks(base.request, (text) => {
-    const hit = wanted.some((want) => text.includes(want));
-    if (!hit) return null;
-    const original = wanted.find((want) => text.includes(want));
-    return original ? text.replace(/\[\.\.\. body, [^\]]+\]/g, '') : null;
+  // A span the model is reaching for is left whole this turn, on a request that was
+  // already being sent -- so recovery costs no round trip at all, where CCR's retrieve
+  // tool always costs one.
+  //
+  // MATCHED AGAINST THE ORIGINAL, AND RESTORED FROM IT. Matching the COMPRESSED text
+  // was wrong twice over: the wanted symbol usually lives in the body that was just
+  // elided, so the test rarely fired -- and when it did, stripping the
+  // `[... body, N lines -> path]` marker removed the only route back to the content
+  // without putting the content back. The request then looked complete while having
+  // quietly lost its recovery path, which is the one failure this whole design exists
+  // to avoid.
+  const out = mapBlocks(base.request, (text, at) => {
+    if (!ELIDED.test(text)) return null;
+    const original = blockTextAt(request, at);
+    if (original === null) return null;
+    if (!wanted.some((want) => original.includes(want))) return null;
+    return original;
   });
 
   return { ...base, request: out };

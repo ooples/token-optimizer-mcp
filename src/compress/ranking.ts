@@ -86,10 +86,18 @@ export function activeRanker(
   embeddings?: EmbeddingCache
 ): Ranker {
   // A warmed cache outranks the registered factory, because it is the more
-  // specific answer: the caller went to the trouble of embedding THIS
-  // request. With no cache, or a query nobody embedded, this falls straight
-  // through to whatever is registered, and that to BM25.
-  if (embeddings && embeddings.size > 0) {
+  // specific answer: the caller went to the trouble of embedding THIS request. With no
+  // cache, or a query nobody embedded, this falls straight through to whatever is
+  // registered, and that to BM25.
+  //
+  // THE QUERY VECTOR IS CHECKED HERE, not left to semanticRanker. It answers a missing
+  // query vector by returning the LEXICAL ranker, which this branch then handed back as
+  // though it were the semantic one -- so a warm cache and an unembedded query silently
+  // discarded the caller's registered ranker for BM25, the opposite of what the comment
+  // above promises. The gap is reachable: warmEmbeddings skips text under twelve
+  // characters and caps the batch, so a short query leaves the cache warm and itself
+  // unembedded.
+  if (embeddings && embeddings.size > 0 && query && embeddings.get(query)) {
     try {
       return guarded(semanticRanker(query, embeddings), query);
     } catch {

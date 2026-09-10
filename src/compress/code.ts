@@ -146,8 +146,17 @@ function babelBodies(text: string): Array<[number, number]> | null {
       typeof n.type === 'string' &&
       /^(ObjectExpression|ArrayExpression)$/.test(n.type);
 
-    if (isFunction || isLiteral) {
-      const target = isFunction
+    // A BLOCK BODY, OR NOTHING. `n.body` on an arrow function with a CONCISE body is
+    // the expression itself, not a BlockStatement -- there are no braces around it. The
+    // elision below keeps the first and last lines and replaces what is between them,
+    // which on a multiline concise arrow cuts the middle out of an expression and
+    // splices a marker into it. The result is not compressed source, it is invalid
+    // source, and the model is asked to read it.
+    const body = n.body as { type?: string } | undefined;
+    const hasBlockBody = isFunction && body?.type === 'BlockStatement';
+
+    if (hasBlockBody || isLiteral) {
+      const target = hasBlockBody
         ? (n.body as
             | { loc?: { start: { line: number }; end: { line: number } } }
             | undefined)
@@ -160,7 +169,7 @@ function babelBodies(text: string): Array<[number, number]> | null {
         const from = target.loc.start.line + 1;
         const to = target.loc.end.line - 1;
         const key = `${from}:${to}`;
-        const floor = isFunction ? MIN_BODY_LINES : MIN_LITERAL_LINES;
+        const floor = hasBlockBody ? MIN_BODY_LINES : MIN_LITERAL_LINES;
         if (to - from + 1 >= floor && !seen.has(key)) {
           seen.add(key);
           spans.push([from, to]);
@@ -325,10 +334,16 @@ export function compressCode(
     BABEL.has(ext) || (!language && !ext)
       ? babelBodies(text)
       : heuristicBodies(text, language);
+  // NULL AND EMPTY MEAN DIFFERENT THINGS, and conflating them is how a construct the
+  // AST deliberately declines to touch gets mangled by the heuristic instead. `null` is
+  // "could not parse", which is what the fallback exists for. `[]` is "parsed, and
+  // there is nothing here worth eliding" -- an answer, and one the line-based
+  // heuristic is not entitled to overrule. It was overruling it: a multiline concise
+  // arrow, which the AST branch now correctly skips because its body has no braces,
+  // came straight back through the fallback and had the middle cut out of its
+  // expression.
   const spans =
-    parsed && parsed.length
-      ? parsed
-      : heuristicBodies(text, language || 'generic');
+    parsed !== null ? parsed : heuristicBodies(text, language || 'generic');
 
   if (!spans.length) return unchanged(text);
 

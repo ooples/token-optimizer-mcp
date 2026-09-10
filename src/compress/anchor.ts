@@ -289,7 +289,8 @@ export interface AnchorDecision {
  */
 export function anchorDecision(
   request: ProviderRequest,
-  store: AnchorStore
+  store: AnchorStore,
+  coldPrefixLimit: number = COLD_PREFIX_LIMIT
 ): AnchorDecision {
   const key = conversationKey(request);
   const prefix = prefixOf(request);
@@ -327,7 +328,10 @@ export function anchorDecision(
   // that opened the same way. Both are first sightings, and both answer the
   // same question: is this prefix small enough that being wrong is cheap?
 
-  if (prefix.length <= COLD_PREFIX_LIMIT) {
+  // THE DIAL, NOT THE CONSTANT. `coldPrefixLimit` was declared in options.ts with this
+  // exact meaning and a matching default, while this line read the module constant --
+  // so setting it changed nothing, on the most expensive decision in this file.
+  if (prefix.length <= coldPrefixLimit) {
     // A conversation at its start. The prefix is written either way.
     return {
       reanchor: true,
