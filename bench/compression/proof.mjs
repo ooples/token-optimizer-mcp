@@ -103,10 +103,15 @@ function effectiveTokens(before, after) {
 const pct = (before, after) => `${(((before - after) / before) * 100).toFixed(1)}%`;
 
 function main() {
-  const spilled = [];
+  // Content-addressed, exactly as the proxy sink is: the same bytes must
+  // spill to the same path, or two identical blocks compress to two
+  // different texts and cross-block dedup collapses neither of them.
+  const spilled = new Map();
   const spill = (content, hint) => {
-    spilled.push(content);
-    return `.token-optimizer/spill/${spilled.length}-${hint}`;
+    const key = `${hint}:${content.length}:${content}`;
+    if (!spilled.has(key))
+      spilled.set(key, `.token-optimizer/spill/${spilled.size + 1}-${hint}`);
+    return spilled.get(key);
   };
 
   console.log('\nCompression proof -- synthetic fixtures at the scale of HeadRoom\'s published workloads.');

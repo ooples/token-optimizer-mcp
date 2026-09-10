@@ -368,6 +368,27 @@ function designProse(r, paragraphs) {
   return out.join('\n\n');
 }
 
+/**
+ * A session that reads the same things more than once.
+ *
+ * NOT A CONTRIVANCE, and worth defending because it is the one workload here
+ * with no counterpart in HeadRoom's published set. An agentic coding session
+ * repeats itself constantly and for good reasons: read a file, edit it, read
+ * it back to check the edit; run the tests, fix, run them again; grep, follow
+ * a hit, grep the same pattern again from somewhere else. Their four
+ * workloads are all single-shot payloads, so none of them can show what a
+ * forty-turn session actually spends its tokens on.
+ *
+ * The repeats here are EXACT, because that is the only case either design
+ * dedups. A file re-read after a real edit is different content and must stay
+ * whole -- the edit is the thing the agent is looking at.
+ */
+function repeatedReads(root, budget) {
+  const file = realSources(root, budget);
+  const tests = buildLog(rng(20260910), 300);
+  return { file, tests };
+}
+
 /** Wraps content as an Anthropic-shaped request with a cache breakpoint. */
 function request(system, cachedTurns, freshBlocks) {
   const messages = [];
@@ -446,6 +467,21 @@ export function fixtures() {
         [searchResults(join(REPO, 'hooks-core'), /function |=> \{/, 12_000), 'Reading hits.'],
         [searchResults(join(REPO, 'src', 'tools'), /function |=> \{/, 60_000)]
       ),
+    },
+    {
+      // OURS, AND THE ONE THEIR WORKLOADS CANNOT SHOW. A session that reads
+      // the same file three times and the same test output twice, which is
+      // what a long coding session actually does. No published comparator.
+      name: 'repeated-reads',
+      theirs: null,
+      request: (() => {
+          const { file, tests } = repeatedReads(join(REPO, 'src', 'core'), 20_000);
+          return request(
+            'You are a coding agent.',
+            [file, 'Reading the cache engine.'],
+            [tests, file, 'Fixing the failing case.', tests, file]
+          );
+        })(),
     },
     {
       name: 'codebase-exploration',

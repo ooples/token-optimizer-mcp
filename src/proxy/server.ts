@@ -34,7 +34,7 @@ import {
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { v1Frontier } from '../compress/strategy.js';
@@ -78,10 +78,27 @@ export function proxyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
  * same reason the host-CLI harvest does it: this is a fragment of the user's
  * session sitting in a shared directory. Written, never read back by us -- the
  * agent reads it with the tool it already has.
+ *
+ * CONTENT-ADDRESSED, AND THAT IS LOAD-BEARING, not tidiness. A random name
+ * per call means the same bytes spilled twice get two paths, so the two
+ * compressed blocks differ by that path alone -- and cross-block dedup, which
+ * matches on exact equality, sees two different blocks and collapses neither.
+ * Measured on the repeated-reads workload: with random names the v3 arm lost
+ * to the CCR control on gross reduction purely because of it. Keying on
+ * content also means identical bytes are written once rather than N times.
+ *
+ * The key is an HMAC under a per-process random salt rather than a bare
+ * digest, so the name stays stable within a run -- which is all dedup needs
+ * -- without being predictable from the content by anyone else.
  */
 function spillTo(root: string) {
+  const salt = randomBytes(32);
   return (content: string, hint: string): string => {
-    const file = join(root, `${randomUUID()}-${hint}`);
+    const name = createHmac('sha256', salt)
+      .update(content)
+      .digest('hex')
+      .slice(0, 32);
+    const file = join(root, `${name}-${hint}`);
     try {
       // SYNC ON PURPOSE, against `n/no-sync`, and the rule is right in general.
       //

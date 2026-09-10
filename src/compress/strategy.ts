@@ -16,6 +16,7 @@
  */
 
 import { compressBlock } from './router.js';
+import { dedupBlocks, type DedupBlock } from './dedup.js';
 import {
   isAfter,
   lastCacheBreakpoint,
@@ -115,7 +116,15 @@ function mapBlocks(
   return { ...request, messages };
 }
 
-/** Shared body for V1 and V3; they differ only in where they are allowed to act. */
+/**
+ * Shared body for V1 and V3; they differ only in where they are allowed to act.
+ *
+ * TWO PASSES, because the second one sees what the first cannot. Every engine
+ * is a pure function of one block, so no engine can notice that the file it is
+ * compressing is the same file the agent read nine turns ago. The blocks are
+ * staged first, then `dedupBlocks` reads the whole sequence and replaces a
+ * repeat with a reference to the copy already in the request.
+ */
 function pathAddressed(
   request: ProviderRequest,
   options: StrategyOptions,
@@ -123,18 +132,34 @@ function pathAddressed(
 ): StrategyResult {
   const frontier = respectFrontier ? lastCacheBreakpoint(request) : null;
   const elisions: Elision[] = [];
+  const staged: DedupBlock[] = [];
 
-  const out = mapBlocks(request, (text, at, message) => {
+  // Pass one: compress each block, and record whether it could be touched at
+  // all. An untouchable block is still staged, because it is the strongest
+  // referent a later repeat can point at -- it is guaranteed to arrive
+  // byte-identical.
+  mapBlocks(request, (text, at, message) => {
     // #3456: a signed message is untouchable. Rewriting it poisons the
     // conversation permanently, not just this turn.
-    if (messageIsSigned(message)) return null;
-    if (respectFrontier && !isAfter(at, frontier)) return null;
-
+    const touchable =
+      !messageIsSigned(message) && (!respectFrontier || isAfter(at, frontier));
+    if (!touchable) {
+      staged.push({ text, original: text, touchable: false });
+      return null;
+    }
     const result = compressBlock(text, { spill: options.spill });
-    if (result.text === text) return null;
     elisions.push(...result.elisions);
-    return result.text;
+    staged.push({ text: result.text, original: text, touchable: true });
+    return null;
   });
+
+  const deduped = dedupBlocks(staged);
+  elisions.push(...deduped.elisions);
+
+  // Pass two writes the answers back. `mapBlocks` walks in the same order it
+  // walked before, so the index lines up with what was staged.
+  let at = 0;
+  const out = mapBlocks(request, () => deduped.texts[at++] ?? null);
 
   // Nothing is added to the request: no system message, no tool, no hash.
   return { request: out, elisions, injectedChars: 0 };
@@ -198,15 +223,26 @@ export function ccrStyle(
   const elisions: Elision[] = [];
   const hashes: string[] = [];
   let index = 0;
+  // THE CONTROL GETS DEDUP TOO, and it must. A content-addressed cache
+  // collapses repeats for free: the second copy of the same bytes hashes to
+  // the entry already stored, so their design would send the marker alone.
+  // Handicapping the control to flatter ours would make the comparison
+  // worthless. What remains ours is that their marker points OUT of the
+  // payload at an entry that can be missing -- their #2509 -- where a
+  // back-reference points at bytes in the request being sent.
+  const byContent = new Map<string, string>();
 
   const out = mapBlocks(request, (text, _at, message) => {
     if (messageIsSigned(message)) return null;
+    const already = byContent.get(text);
+    if (already !== undefined) return already;
     const result = compressBlock(text, { spill: options.spill });
     if (result.text === text) return null;
     const marker = ccrMarker(text, index);
     index += 1;
     hashes.push(marker.slice(7, 19));
     elisions.push(...result.elisions);
+    byContent.set(text, marker);
     // Their form: the compressed body with an opaque marker standing in for
     // everything removed.
     return `${result.text}\n${marker}`;

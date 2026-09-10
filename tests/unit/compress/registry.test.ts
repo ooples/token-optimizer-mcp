@@ -177,7 +177,9 @@ describe('the boundary', () => {
 
 describe('dispatch', () => {
   it('leaves content nothing claims untouched', () => {
-    const odd = '';
+    // Control bytes: not JSON, not code, not prose. Written as escapes because
+    // a literal control character in source is a defect this repo gates on.
+    const odd = '\x01\x02\x03';
     expect(compressBlock(odd).text).toBe(odd);
     expect(engineFor(odd, {})).toBeNull();
   });
