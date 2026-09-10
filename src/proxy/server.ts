@@ -190,6 +190,56 @@ export function compressBody(
   };
 }
 
+/**
+ * Headers that belong to ONE HOP and must not be forwarded.
+ *
+ * Per RFC 9110. `transfer-encoding` is the one that bites: a chunked client
+ * request carries `transfer-encoding: chunked`, and copying it while also
+ * setting `content-length` -- which this must do, since the body was
+ * rewritten and is now a known length -- sends two conflicting framing
+ * headers. A strict upstream rejects that outright, and a lenient one is
+ * guessing. The rest are here because forwarding another hop's connection
+ * management is wrong for the same structural reason, just less loudly.
+ */
+const HOP_BY_HOP = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+]);
+
+/**
+ * Is it safe to send credentials to this upstream?
+ *
+ * CREDENTIALS DO NOT GO OVER CLEARTEXT. Every request through here carries
+ * the user's provider key in a header, forwarded verbatim -- so an upstream
+ * of `http://api.example.com` would put that key on the wire in the clear,
+ * and the override that sets it is a single environment variable.
+ *
+ * Loopback is the exception, and it has to be: the tests in this repository
+ * run a stand-in provider on 127.0.0.1, and so does anyone debugging with a
+ * local recorder. Traffic that never leaves the machine cannot be
+ * intercepted on the way to somewhere else.
+ */
+export function upstreamIsSafe(upstream: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(upstream);
+  } catch {
+    return false;
+  }
+  if (url.protocol === 'https:') return true;
+  if (url.protocol !== 'http:') return false;
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  return (
+    host === 'localhost' || host === '::1' || /^127\.\d+\.\d+\.\d+$/.test(host)
+  );
+}
+
 /** Forwards one request upstream and pipes the response back verbatim. */
 function forward(
   upstream: string,
@@ -203,12 +253,26 @@ function forward(
   // BYTE-FAITHFUL PASSTHROUGH of everything we did not deliberately change.
   // HeadRoom's #3463 is a proxy losing `Location` on the way back; the fix is
   // to copy headers rather than reconstruct them.
+  // Anything named by the request's own `Connection` header is hop-by-hop
+  // too, by definition -- the sender is telling us which headers it considers
+  // single-hop, and forwarding those is the same mistake as forwarding
+  // `Connection` itself.
+  const declaredHopByHop = new Set(
+    String(req.headers.connection ?? '')
+      .split(',')
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
   const headers: Record<string, string | string[]> = {};
   for (const [key, value] of Object.entries(req.headers)) {
     if (value === undefined) continue;
     if (key === 'host' || key === 'content-length') continue;
+    if (HOP_BY_HOP.has(key) || declaredHopByHop.has(key)) continue;
     headers[key] = value;
   }
+  // Set last and unconditionally: the body was rewritten, so its length is
+  // ours to state and no longer the client's.
   headers['content-length'] = String(body.length);
 
   const upstreamReq = send(
@@ -241,6 +305,19 @@ export function startProxy(
   options: ProxyOptions = {}
 ): Promise<{ server: Server; port: number }> {
   const upstream = options.upstream || UPSTREAM();
+  if (!upstreamIsSafe(upstream)) {
+    // FAIL LOUDLY HERE, uniquely in this file. Everything else in the proxy
+    // fails open, because a token optimizer that wedges the agent is worse
+    // than one that saves nothing. This is the opposite case: carrying on
+    // would put the user's provider key on the wire in cleartext, and doing
+    // that quietly is not a degradation, it is the harm.
+    return Promise.reject(
+      new Error(
+        `token-optimizer proxy: refusing to forward credentials to ${upstream} -- ` +
+          'an upstream must be https, or http on loopback'
+      )
+    );
+  }
   const spillRoot = join(tmpdir(), 'token-optimizer-spill');
   const spill = spillTo(spillRoot);
   // One store per proxy, holding a hash and a boolean per conversation.

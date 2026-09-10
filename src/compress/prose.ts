@@ -46,12 +46,38 @@ const FILLER =
 const HEDGE =
   /\b(might|maybe|perhaps|possibly|arguably|somewhat|fairly|quite|rather|often|usually|typically|tends? to)\b/gi;
 
-/** Splits on sentence boundaries without mangling code spans or version numbers. */
-function sentences(text: string): string[] {
-  return text
-    .split(/(?<=[.!?])\s+(?=[A-Z(`"'\[])/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+/** One sentence, and the whitespace that followed it in the original. */
+interface Sentence {
+  readonly text: string;
+  /** What separated it from the next sentence: a space, or a paragraph break. */
+  readonly after: string;
+}
+
+/**
+ * Splits on sentence boundaries without mangling code spans or version numbers.
+ *
+ * THE SEPARATOR IS KEPT, because throwing it away flattened the document.
+ * Joining the survivors with a single space turned a design note's paragraphs
+ * into one wall of text -- a structural change nobody asked for, on top of the
+ * sentence elision that was the actual job. Paragraph breaks carry meaning a
+ * reader uses to navigate, and losing them is not compression.
+ */
+function sentences(text: string): Sentence[] {
+  const parts = text.split(/(?<=[.!?])(\s+)(?=[A-Z(`"'\[])/);
+  const out: Sentence[] = [];
+  // The split keeps the separator, so the array alternates sentence, gap,
+  // sentence, gap -- and the final sentence has no gap after it.
+  for (let i = 0; i < parts.length; i += 2) {
+    const body = (parts[i] ?? '').trim();
+    if (!body) continue;
+    out.push({ text: body, after: parts[i + 1] ?? '' });
+  }
+  return out;
+}
+
+/** A gap that crosses a blank line is a paragraph break; anything else is a space. */
+function separator(gap: string): string {
+  return /\n\s*\n/.test(gap) ? '\n\n' : ' ';
 }
 
 /**
@@ -124,15 +150,17 @@ export function compressProse(
   // weight is set below the CRITICAL term (10) and the identifier term (14)
   // deliberately -- a sentence naming an error or carrying a correlation id
   // outranks one that merely shares vocabulary with the question.
+  const bodies = parts.map((part) => part.text);
   const rank = ranker(ctx.query);
   const relevant = rank.active
-    ? rank.top(parts, Math.max(1, Math.round(parts.length * KEEP_FRACTION)))
+    ? rank.top(bodies, Math.max(1, Math.round(parts.length * KEEP_FRACTION)))
     : new Set<number>();
 
-  const ranked = parts.map((sentence, index) => ({
-    sentence,
+  const ranked = parts.map((part, index) => ({
+    sentence: part.text,
     index,
-    value: score(sentence, index, parts.length) + (relevant.has(index) ? 6 : 0),
+    value:
+      score(part.text, index, parts.length) + (relevant.has(index) ? 6 : 0),
   }));
 
   const keepCount = Math.max(1, Math.round(parts.length * KEEP_FRACTION));
@@ -150,8 +178,24 @@ export function compressProse(
   // without a spill there is nothing honest to do but leave it whole.
   const recoverAt = spillFor(ctx, text, 'prose.txt');
   if (!recoverAt) return unchanged(text);
-  const kept = ranked.filter((r) => keep.has(r.index)).map((r) => r.sentence);
-  const body = `${kept.join(' ')} ${inlineMarker(
+  // REJOINED WITH THE ORIGINAL SEPARATORS. When a run of sentences is
+  // dropped between two survivors, the widest gap in that run is the one
+  // that stands: a paragraph break that had sentences either side of it is
+  // still a paragraph break once they are gone. Flattening everything to a
+  // single space turned a design note into one wall of text -- a structural
+  // change nobody asked for, on top of the elision that was the actual job.
+  const keptIndices = [...keep].sort((a, b) => a - b);
+  let body = '';
+  keptIndices.forEach((index, position) => {
+    body += parts[index].text;
+    if (position === keptIndices.length - 1) return;
+    const next = keptIndices[position + 1];
+    // Every gap between this survivor and the next, including the gaps
+    // around the sentences being removed.
+    const gaps = parts.slice(index, next).map((part) => separator(part.after));
+    body += gaps.includes('\n\n') ? '\n\n' : ' ';
+  });
+  body += ` ${inlineMarker(
     `${count(dropped, 'lower-signal sentence')} removed`,
     recoverAt
   )}`;

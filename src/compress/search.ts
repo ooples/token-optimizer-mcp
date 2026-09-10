@@ -61,6 +61,13 @@ interface Hit {
   readonly path: string;
   readonly line: number;
   readonly matched: boolean;
+  /**
+   * The separator exactly as ripgrep wrote it: `:` for a match, `-` for a
+   * context line. Kept alongside `matched` rather than derived from it, because
+   * restoring a short hunk has to reproduce the byte, not a re-derivation of
+   * what the byte meant.
+   */
+  readonly sep: string;
   readonly text: string;
 }
 
@@ -68,7 +75,7 @@ function parseHit(line: string): Hit | null {
   const m = HIT.exec(line);
   if (!m) return null;
   const [, path, num, sep, text] = m;
-  return { path, line: Number(num), matched: sep === ':', text };
+  return { path, line: Number(num), matched: sep === ':', sep, text };
 }
 
 /**
@@ -132,21 +139,33 @@ export function compressSearchResults(
   let path: string | null = null;
   let start = 0;
   let previous = 0;
-  let buffer: string[] = [];
+  // THE SEPARATOR IS CONTENT, so the buffer keeps it rather than the text
+  // alone. A hunk too short to earn a header is restored line by line, and
+  // rebuilding those lines with a hardcoded `:` turned every ripgrep CONTEXT
+  // line into a claimed match -- `src/a.ts:11-  return 1;` came back as
+  // `src/a.ts:11:  return 1;`. That is the exact distinction this file's
+  // header says must survive, quietly inverted on the most common shape in
+  // grep output: the single-line hunk.
+  let buffer: { sep: string; text: string }[] = [];
   let matchedOffsets: number[] = [];
 
   const flush = (): void => {
     if (!path || !buffer.length) return;
     if (buffer.length < MIN_HUNK_LINES) {
-      // Too short to earn a header: restore the original prefixes.
-      buffer.forEach((line, i) => out.push(`${path}:${start + i}: ${line}`));
+      // Too short to earn a header: restore the original prefixes exactly.
+      // No space is added -- group 4 of HIT begins immediately after the
+      // separator, so the line's own leading whitespace is already in `text`,
+      // and inserting another doubled it on every restored line.
+      buffer.forEach((line, i) =>
+        out.push(`${path}:${start + i}${line.sep}${line.text}`)
+      );
     } else {
       const range = start === previous ? `${start}` : `${start}-${previous}`;
       // Which lines actually matched, so `-` context is still distinguishable
       // from a `:` hit without a prefix on every line.
       const marks = matchNote(matchedOffsets, start, previous);
       out.push(`${path}:${range}${marks}`);
-      out.push(...buffer);
+      out.push(...buffer.map((line) => line.text));
     }
     path = null;
     buffer = [];
@@ -168,7 +187,7 @@ export function compressSearchResults(
     }
     previous = hit.line;
     if (hit.matched) matchedOffsets.push(hit.line);
-    buffer.push(hit.text);
+    buffer.push({ sep: hit.sep, text: hit.text });
   }
   flush();
 

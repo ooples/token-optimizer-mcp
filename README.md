@@ -380,9 +380,32 @@ nothing and cost 1.471x through extra turns alone. Until the proxy has run
 through THOL, treat the figures above as compression numbers and nothing more.
 
 Off by default. `TOKEN_OPTIMIZER_PROXY=1` turns it on, it binds loopback only,
-credentials are forwarded and never stored, no payload is written anywhere, and
-`doctor` reports whether your client is actually routed through it -- the silent
-failure being a proxy that is running while the agent talks past it.
+credentials are forwarded and never stored, nothing is logged, and `doctor`
+reports whether your client is actually routed through it -- the silent failure
+being a proxy that is running while the agent talks past it.
+
+**It does write some payload to disk, and you should know exactly when.** An
+elision has to name a way back to what it removed, and content that arrived in a
+tool result has no file of its own -- so that content is written to a *spill
+file* and the marker names its path. This happens only when an engine actually
+elides something recoverable-by-path: a JSON array tail, a set of function
+bodies, a passage of prose. Requests below the size floor, requests nothing
+claims, and every elision that is lossless are all written nowhere.
+
+Spills go under your OS temp directory in `token-optimizer-spill/`, one file per
+distinct content, created `0600` (owner read/write only) and named by an HMAC of
+the content under a salt generated fresh in each proxy process -- so the name
+discloses nothing and two runs do not collide. They are never read back by us;
+the agent reads them with the `Read` tool it already has, which is the whole
+point of a path instead of a hash.
+
+They are **not** deleted automatically, and that is deliberate: a marker whose
+spill has been swept is exactly the dangling reference this design exists to
+avoid, and the agent may follow a path many turns after it was written. They
+live in a temp directory, so your OS reclaims them on its own schedule; delete
+`token-optimizer-spill/` yourself whenever you want them gone, at the cost of
+any outstanding marker in a live session no longer resolving. Running with the
+proxy off writes no spills at all.
 
 ### Compaction is consolidation, not loss
 

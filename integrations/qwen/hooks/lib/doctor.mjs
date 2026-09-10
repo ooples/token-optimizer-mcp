@@ -286,6 +286,42 @@ export function probeHarvest() {
  * sees no savings and no error. Naming both halves -- enabled, and actually
  * routed -- is the whole point of the check.
  */
+/**
+ * Does this base URL actually point at this machine?
+ *
+ * PARSED, NOT PREFIX-MATCHED, and the difference is a real hole rather than a
+ * style preference. The prefix test this replaces accepted
+ * `http://localhost.attacker.example` -- a registrable domain that merely
+ * STARTS with `localhost` -- and `http://localhost@attacker.example`, where
+ * everything before the `@` is userinfo and the host is the attacker. In both
+ * cases the diagnostic reported that traffic was safely routed through a local
+ * proxy while it was in fact being sent to someone else, with the user's
+ * provider credentials attached.
+ *
+ * `new URL()` resolves userinfo, ports, IPv6 brackets and case for us, so the
+ * check becomes what it always meant: an exact hostname, on a scheme we
+ * understand.
+ */
+export function pointsAtLoopback(value) {
+  if (!value) return false;
+  let url;
+  try {
+    url = new URL(String(value));
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  // A URL with userinfo is never a plain loopback address, and accepting one is
+  // precisely how the old check was fooled.
+  if (url.username || url.password) return false;
+  const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  return (
+    host === 'localhost' ||
+    host === '::1' ||
+    /^127[.]\d{1,3}[.]\d{1,3}[.]\d{1,3}$/.test(host)
+  );
+}
+
 export function probeProxy(env = process.env) {
   if (env.TOKEN_OPTIMIZER_MODE === 'off') return [];
 
@@ -310,7 +346,7 @@ export function probeProxy(env = process.env) {
   }
 
   const pointed = env[variable];
-  const loopback = /^https?:[/][/](127[.]0[.]0[.]1|localhost|\[::1\])/.test(pointed || '');
+  const loopback = pointsAtLoopback(pointed);
   if (!loopback) {
     return [
       bad('the compression proxy is on but nothing is routed through it',

@@ -57,6 +57,42 @@ describe('probeProxy', () => {
     expect(detailOf(checks)).toContain('cached prefix is never rewritten');
   });
 
+  it('rejects a host that merely STARTS with localhost', () => {
+    // `localhost.attacker.example` is a registrable domain someone else owns.
+    // The prefix test this replaces accepted it, so the diagnostic reported
+    // traffic safely routed through a local proxy while it was being sent
+    // elsewhere with the user's provider credentials attached.
+    const checks = probeProxy({
+      TOKEN_OPTIMIZER_PROXY: '1',
+      TOKEN_OPTIMIZER_CLIENT: 'claude-code',
+      ANTHROPIC_BASE_URL: 'http://localhost.attacker.example',
+    });
+    expect(checks[0].pass).toBe(false);
+  });
+
+  it('rejects a host smuggled behind userinfo', () => {
+    // Everything before the `@` is userinfo: the host here is the attacker.
+    const checks = probeProxy({
+      TOKEN_OPTIMIZER_PROXY: '1',
+      TOKEN_OPTIMIZER_CLIENT: 'claude-code',
+      ANTHROPIC_BASE_URL: 'http://localhost@attacker.example',
+    });
+    expect(checks[0].pass).toBe(false);
+  });
+
+  it('accepts the other genuine loopback spellings', () => {
+    // The rejection tests above would pass just as well against a check that
+    // rejected everything, so the real forms have to be pinned too.
+    for (const url of ['http://localhost:8123', 'http://[::1]:8123', 'http://127.9.9.9:8123']) {
+      const checks = probeProxy({
+        TOKEN_OPTIMIZER_PROXY: '1',
+        TOKEN_OPTIMIZER_CLIENT: 'claude-code',
+        ANTHROPIC_BASE_URL: url,
+      });
+      expect(checks[0].pass).toBe(true);
+    }
+  });
+
   it('FAILS honestly for a client that cannot be redirected at all', () => {
     const checks = probeProxy({ TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_CLIENT: 'zed' });
     expect(checks[0].pass).toBe(false);

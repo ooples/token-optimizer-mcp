@@ -218,7 +218,21 @@ export const CLIENT_PROXY_ENV = Object.freeze({
   // DOCUMENTED: OpenAI-compatible clients read OPENAI_BASE_URL; codex also
   // accepts a model_provider base_url in its config file.
   codex: 'OPENAI_BASE_URL',
-  copilot: 'OPENAI_BASE_URL',
+  // VERIFIED AGAINST THE INSTALLED CLI, and it was wrong before. Copilot was
+  // mapped to OPENAI_BASE_URL because it speaks an OpenAI-shaped API, which
+  // is the kind of inference that produces a doctor reporting success while
+  // the client talks straight past the proxy -- the exact silent failure this
+  // whole diagnostic exists to catch.
+  //
+  // In @github/copilot's bundle, COPILOT_API_URL is what reaches
+  // `setCopilotUrl(...)` and is read again in the auth path as the host an
+  // env-provided token belongs to: it is the provider endpoint.
+  // OPENAI_BASE_URL reaches `setOpenAiBaseUrl(...)`, which is the
+  // Azure/OpenAI-direct configuration, and is otherwise only the bundled
+  // OpenAI SDK constructor default. Redirecting it does not move Copilot
+  // traffic. (A review asked for COPILOT_PROVIDER_BASE_URL; that name does
+  // not occur anywhere in the shipped bundle.)
+  copilot: 'COPILOT_API_URL',
   gemini: 'GOOGLE_GEMINI_BASE_URL',
   qwen: 'OPENAI_BASE_URL',
   opencode: 'OPENAI_BASE_URL',

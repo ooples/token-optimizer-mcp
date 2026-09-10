@@ -1,6 +1,11 @@
 import { describe, it, expect, afterEach } from '@jest/globals';
-import { createServer, type Server } from 'node:http';
-import { compressBody, proxyEnabled, startProxy } from '../../../src/proxy/server.js';
+import { createServer, request as httpRequest, type Server } from 'node:http';
+import {
+  compressBody,
+  proxyEnabled,
+  startProxy,
+  upstreamIsSafe,
+} from '../../../src/proxy/server.js';
 
 /**
  * The proxy, against a real upstream rather than a mock.
@@ -16,12 +21,14 @@ const rows = (n: number) =>
     Array.from({ length: n }, (_, i) => ({
       id: `doc_${i}`,
       score: 0.5,
-      title: 'A reasonably long result title so the payload has some bulk to it',
+      title:
+        'A reasonably long result title so the payload has some bulk to it',
       metadata: { author: 'Someone', category: 'technical' },
     }))
   );
 
-const bodyOf = (messages: unknown) => Buffer.from(JSON.stringify({ messages }), 'utf8');
+const bodyOf = (messages: unknown) =>
+  Buffer.from(JSON.stringify({ messages }), 'utf8');
 /**
  * A sink that works, and one that does not.
  *
@@ -38,14 +45,26 @@ const noSpill = () => '';
 
 let servers: Server[] = [];
 afterEach(async () => {
-  await Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
+  await Promise.all(
+    servers.map((s) => new Promise<void>((r) => s.close(() => r())))
+  );
   servers = [];
   spilled = [];
 });
 
 /** A stand-in provider that records what it was sent. */
-function upstream(handler?: (body: string) => { status?: number; headers?: Record<string, string>; body?: string }) {
-  const seen: { body?: string; headers?: Record<string, unknown>; url?: string } = {};
+function upstream(
+  handler?: (body: string) => {
+    status?: number;
+    headers?: Record<string, string>;
+    body?: string;
+  }
+) {
+  const seen: {
+    body?: string;
+    headers?: Record<string, unknown>;
+    url?: string;
+  } = {};
   const server = createServer((req, res) => {
     let raw = '';
     req.on('data', (c) => (raw += c));
@@ -54,7 +73,10 @@ function upstream(handler?: (body: string) => { status?: number; headers?: Recor
       seen.headers = req.headers;
       seen.url = req.url;
       const reply = handler?.(raw) ?? {};
-      res.writeHead(reply.status ?? 200, { 'content-type': 'application/json', ...(reply.headers ?? {}) });
+      res.writeHead(reply.status ?? 200, {
+        'content-type': 'application/json',
+        ...(reply.headers ?? {}),
+      });
       res.end(reply.body ?? '{"ok":true}');
     });
   });
@@ -76,13 +98,17 @@ describe('proxyEnabled', () => {
   });
 
   it('yields to the kill switch even when asked for', () => {
-    expect(proxyEnabled({ TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_MODE: 'off' })).toBe(false);
+    expect(
+      proxyEnabled({ TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_MODE: 'off' })
+    ).toBe(false);
   });
 });
 
 describe('compressBody', () => {
   it('compresses a large provider request', () => {
-    const body = bodyOf([{ role: 'user', content: [{ type: 'text', text: rows(80) }] }]);
+    const body = bodyOf([
+      { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+    ]);
     const out = compressBody(body, spill);
     expect(out.summary.compressed).toBe(true);
     expect(out.body.length).toBeLessThan(body.length);
@@ -94,7 +120,9 @@ describe('compressBody', () => {
     // dangling reference this whole design exists to avoid. The rows survive,
     // and the lossless half of the work is still done.
     const payload = rows(80);
-    const body = bodyOf([{ role: 'user', content: [{ type: 'text', text: payload }] }]);
+    const body = bodyOf([
+      { role: 'user', content: [{ type: 'text', text: payload }] },
+    ]);
     const out = compressBody(body, noSpill);
     const sent = JSON.parse(out.body.toString('utf8'));
     expect(sent.messages[0].content[0].text).toBe(payload);
@@ -109,20 +137,33 @@ describe('compressBody', () => {
   });
 
   it('forwards JSON with no messages array untouched', () => {
-    const body = Buffer.from(JSON.stringify({ prompt: 'x'.repeat(9000) }), 'utf8');
-    expect(compressBody(body, noSpill).summary.reason).toBe('no messages array');
+    const body = Buffer.from(
+      JSON.stringify({ prompt: 'x'.repeat(9000) }),
+      'utf8'
+    );
+    expect(compressBody(body, noSpill).summary.reason).toBe(
+      'no messages array'
+    );
   });
 
   it('leaves a small body alone', () => {
-    const body = bodyOf([{ role: 'user', content: [{ type: 'text', text: 'hi' }] }]);
-    expect(compressBody(body, noSpill).summary.reason).toBe('below the size floor');
+    const body = bodyOf([
+      { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+    ]);
+    expect(compressBody(body, noSpill).summary.reason).toBe(
+      'below the size floor'
+    );
   });
 
   it('never sends more than it was given', () => {
     // Incompressible bulk: the result must be the original, not a larger
     // rewrite. "Compression increasing prompt size" is a real defect class.
-    const noise = Array.from({ length: 9000 }, (_, i) => String.fromCharCode(33 + (i % 90))).join('');
-    const body = bodyOf([{ role: 'user', content: [{ type: 'text', text: noise }] }]);
+    const noise = Array.from({ length: 9000 }, (_, i) =>
+      String.fromCharCode(33 + (i % 90))
+    ).join('');
+    const body = bodyOf([
+      { role: 'user', content: [{ type: 'text', text: noise }] },
+    ]);
     const out = compressBody(body, noSpill);
     expect(out.body.length).toBeLessThanOrEqual(body.length);
   });
@@ -130,7 +171,12 @@ describe('compressBody', () => {
   it('does not touch content at or before the cache breakpoint', () => {
     const cached = rows(80);
     const body = bodyOf([
-      { role: 'user', content: [{ type: 'text', text: cached, cache_control: { type: 'ephemeral' } }] },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: cached, cache_control: { type: 'ephemeral' } },
+        ],
+      },
       { role: 'user', content: [{ type: 'text', text: rows(80) }] },
     ]);
     const out = compressBody(body, spill);
@@ -151,7 +197,10 @@ describe('the proxy on the wire', () => {
     });
     const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': 'sk-test-secret' },
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': 'sk-test-secret',
+      },
       body: payload,
     });
 
@@ -168,8 +217,15 @@ describe('the proxy on the wire', () => {
 
     await fetch(`http://127.0.0.1:${port}/v1/messages`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': 'sk-test-secret' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: [{ type: 'text', text: rows(80) }] }] }),
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': 'sk-test-secret',
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+        ],
+      }),
     });
 
     expect(seen.headers!['x-api-key']).toBe('sk-test-secret');
@@ -189,7 +245,9 @@ describe('the proxy on the wire', () => {
     const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }] }),
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+      }),
       redirect: 'manual',
     });
 
@@ -199,7 +257,9 @@ describe('the proxy on the wire', () => {
   });
 
   it('reports an upstream failure instead of hanging', async () => {
-    const { server, port } = await startProxy({ upstream: 'http://127.0.0.1:1' });
+    const { server, port } = await startProxy({
+      upstream: 'http://127.0.0.1:1',
+    });
     servers.push(server);
 
     const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
@@ -214,19 +274,28 @@ describe('the proxy on the wire', () => {
   it('summarises sizes without ever seeing a payload', async () => {
     const { url } = await upstream();
     const summaries: unknown[] = [];
-    const { server, port } = await startProxy({ upstream: url, onSummary: (s) => summaries.push(s) });
+    const { server, port } = await startProxy({
+      upstream: url,
+      onSummary: (s) => summaries.push(s),
+    });
     servers.push(server);
 
     await fetch(`http://127.0.0.1:${port}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: [{ type: 'text', text: rows(80) }] }] }),
+      body: JSON.stringify({
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+        ],
+      }),
     });
 
     expect(summaries).toHaveLength(1);
     const summary = summaries[0] as Record<string, unknown>;
     expect(summary.compressed).toBe(true);
-    expect(Number(summary.beforeBytes)).toBeGreaterThan(Number(summary.afterBytes));
+    expect(Number(summary.beforeBytes)).toBeGreaterThan(
+      Number(summary.afterBytes)
+    );
     // The summary carries sizes and a path, never content.
     expect(JSON.stringify(summary)).not.toContain('doc_0');
   });
@@ -235,6 +304,98 @@ describe('the proxy on the wire', () => {
     const { server } = await startProxy({ upstream: 'http://127.0.0.1:1' });
     servers.push(server);
     const address = server.address();
-    expect(typeof address === 'object' && address ? address.address : '').toBe('127.0.0.1');
+    expect(typeof address === 'object' && address ? address.address : '').toBe(
+      '127.0.0.1'
+    );
+  });
+});
+
+describe('the upstream a proxy will talk to', () => {
+  it('refuses cleartext to anywhere but this machine', () => {
+    // Every request through here carries the user's provider key in a header,
+    // forwarded verbatim. An http upstream puts that key on the wire in the
+    // clear, and the override that sets it is one environment variable.
+    expect(upstreamIsSafe('http://api.example.com')).toBe(false);
+    expect(upstreamIsSafe('http://10.0.0.5:8080')).toBe(false);
+    expect(upstreamIsSafe('ftp://example.com')).toBe(false);
+    expect(upstreamIsSafe('not a url')).toBe(false);
+  });
+
+  it('allows https anywhere, and http on loopback', () => {
+    // Loopback has to stay allowed: the stand-in provider in this very file
+    // runs on 127.0.0.1, and so does anyone debugging with a local recorder.
+    expect(upstreamIsSafe('https://api.anthropic.com')).toBe(true);
+    expect(upstreamIsSafe('http://127.0.0.1:8123')).toBe(true);
+    expect(upstreamIsSafe('http://localhost:8123')).toBe(true);
+    expect(upstreamIsSafe('http://[::1]:8123')).toBe(true);
+  });
+
+  it('refuses to start against an unsafe upstream instead of leaking quietly', async () => {
+    // The one place in this file that does NOT fail open. Carrying on would
+    // send credentials in cleartext, and doing that quietly is the harm.
+    await expect(
+      startProxy({ upstream: 'http://api.example.com' })
+    ).rejects.toThrow(/refusing to forward credentials/);
+  });
+});
+
+describe('hop-by-hop headers', () => {
+  /**
+   * Sent with `node:http`, not `fetch`.
+   *
+   * undici treats `Connection` and `Transfer-Encoding` as forbidden header
+   * names and drops them, so a fetch-based test cannot construct the request
+   * that exposes the bug -- it would pass against the broken code too. The
+   * whole point here is a client that really does send chunked framing.
+   */
+  const sendChunked = (
+    port: number,
+    body: string,
+    headers: Record<string, string>
+  ) =>
+    new Promise<void>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          host: '127.0.0.1',
+          port,
+          method: 'POST',
+          path: '/v1/messages',
+          headers: { 'content-type': 'application/json', ...headers },
+        },
+        (res) => {
+          res.resume();
+          res.on('end', () => resolve());
+        }
+      );
+      req.on('error', reject);
+      req.end(body);
+    });
+
+  it('does not forward transfer-encoding alongside its own content-length', async () => {
+    // A chunked client request carries `transfer-encoding: chunked`. The body
+    // is rewritten here, so content-length must be set -- and sending both is
+    // two conflicting framing headers, which a strict upstream rejects.
+    const { url, seen } = await upstream();
+    const { server, port } = await startProxy({ upstream: url });
+    servers.push(server);
+
+    await sendChunked(
+      port,
+      JSON.stringify({
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+        ],
+      }),
+      {
+        'transfer-encoding': 'chunked',
+        connection: 'keep-alive, x-custom-hop',
+        'x-custom-hop': 'should not survive',
+      }
+    );
+
+    expect(seen.headers!['transfer-encoding']).toBeUndefined();
+    expect(seen.headers!['content-length']).toBeDefined();
+    // A header the client named in `Connection` is single-hop by its own say-so.
+    expect(seen.headers!['x-custom-hop']).toBeUndefined();
   });
 });

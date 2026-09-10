@@ -208,30 +208,32 @@ function heuristicBodies(
   for (let i = 0; i < lines.length; i += 1) {
     if (!declare.test(lines[i])) continue;
     const indent = lines[i].match(/^\s*/)?.[0].length ?? 0;
-    let end = i;
+    // TWO ENDS, BECAUSE A BLANK LINE IS NOT PART OF THE BODY. `scan` is how far
+    // the walk got; `body` is the last line that actually belongs. A blank line
+    // must not close a block -- a function with a blank line in the middle is
+    // ordinary -- but letting it EXTEND the block put the trailing blanks after
+    // a function inside the span, so they were elided along with the body and
+    // named in the recovery range. The range then pointed at lines that were
+    // never part of what the marker said it removed.
+    let scan = i;
+    let body = i;
     for (let j = i + 1; j < lines.length; j += 1) {
       if (!lines[j].trim()) {
-        end = j;
+        scan = j;
         continue;
       }
       const deeper = (lines[j].match(/^\s*/)?.[0].length ?? 0) > indent;
       if (!deeper) break;
-      end = j;
+      scan = j;
+      body = j;
     }
     // 1-based, and the declaration line itself is kept.
-    if (end - i >= MIN_BODY_LINES) spans.push([i + 2, end + 1]);
-    i = end;
+    if (body - i >= MIN_BODY_LINES) spans.push([i + 2, body + 1]);
+    i = scan;
   }
   return spans;
 }
 
-/**
- * Words that name a language construct rather than a thing in this codebase.
- *
- * A query mentioning "the function that exports the class" must not mark
- * every body in the file live. These carry no identity, so they are never
- * evidence that a particular body is the one being discussed.
- */
 /**
  * If more than this share of bodies looks live, the question was too broad
  * to be evidence about any one of them.
