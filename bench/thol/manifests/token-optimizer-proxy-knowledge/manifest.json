@@ -5,7 +5,7 @@
   "version_pin": "6.0.2",
   "version_checked": "2026-09-10",
   "upstream": "https://github.com/ooples/token-optimizer-mcp",
-  "install_doc": "THE COMPRESSION PROXY PLUS KNOWLEDGE INJECTION: what this project already worked out, placed in the cached prefix so the model does not re-derive it. The hypothesis is about TURNS, not size -- a finding recalled is a mistake not repeated -- and turns are the one thing only THOL measures.\n\nREAD THIS BEFORE RUNNING IT. The proxy loads the graph ONCE at startup, because a block that changes mid-session cannot live in a cached prefix. A campaign run against an empty graph therefore injects nothing and measures exactly the plain proxy arm, while looking like a real comparison. The graph must be WARM: run a campaign that populates TOKEN_OPTIMIZER_WIKI_DIR first, then restart the proxy, then run this arm. Its wiki dir is laid out as <root>/.token-optimizer/wiki because that is where loadFindings looks, given --project-root <root>.\n\nCompare against token-optimizer-proxy, never against control: the difference between them is the injection, and the difference from control is the injection plus the compression plus the hooks.\n\nITS OWN PORT, 8788, and not for tidiness: knowledge injection is read from the PROXY's environment at startup, so one process cannot serve both this arm and the plain one. entrypoint.sh starts a proxy per distinct port it finds across the manifests, which is what keeps the two arms genuinely different.",
+  "install_doc": "THE COMPRESSION PROXY PLUS KNOWLEDGE INJECTION: what this project already worked out, placed in the cached prefix so the model does not re-derive it. The hypothesis is about TURNS, not size -- a finding recalled is a mistake not repeated -- and turns are the one thing only THOL measures.\n\nREAD THIS BEFORE RUNNING IT. The proxy loads the graph ONCE at startup, because a block that changes mid-session cannot live in a cached prefix. A campaign run against an empty graph therefore injects nothing and measures exactly the plain proxy arm, while looking like a real comparison. The graph must be WARM: run a campaign that populates TOKEN_OPTIMIZER_WIKI_DIR first, then restart the proxy, then run this arm. Its wiki dir is laid out as <root>/.token-optimizer/wiki because that is where loadFindings looks, given --project-root <root>. The root is /proxy-graph rather than a path under /results: nesting a bind mount inside a fresh named volume makes Docker create the volume root as root:root, the container runs as bench, and the entrypoint then silently skips persisting results.sqlite.\n\nCompare against token-optimizer-proxy, never against control: the difference between them is the injection, and the difference from control is the injection plus the compression plus the hooks.\n\nITS OWN PORT, 8788, and not for tidiness: knowledge injection is read from the PROXY's environment at startup, so one process cannot serve both this arm and the plain one. entrypoint.sh starts a proxy per distinct port it finds across the manifests, which is what keeps the two arms genuinely different.",
   "requires": [
     "node"
   ],
@@ -18,7 +18,7 @@
       "TOKEN_OPTIMIZER_PROXY": "1",
       "TOKEN_OPTIMIZER_PROXY_KNOWLEDGE": "1",
       "ANTHROPIC_BASE_URL": "http://127.0.0.1:8788",
-      "TOKEN_OPTIMIZER_WIKI_DIR": "/results/proxy-graph/.token-optimizer/wiki"
+      "TOKEN_OPTIMIZER_WIKI_DIR": "/proxy-graph/.token-optimizer/wiki"
     },
     "hooks": {
       "SessionStart": [

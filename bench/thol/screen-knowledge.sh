@@ -41,11 +41,18 @@ PROXY_GRAPH_DIR="${PROXY_GRAPH_DIR:-$RIG_DIR/thol/proxy-graph}"
 log() { printf '\n\033[1;36m>> %s\033[0m\n' "$*"; }
 
 if [ "${FRESH_GRAPH:-1}" = "1" ]; then
-  # A graph left over from an earlier screen would make pass 1 pointless and
-  # pass 2 unattributable -- the injected findings would come from a run
-  # nobody recorded.
-  log "Clearing the proxy graph so the warm-up is the only thing that fills it"
+  # A graph left over from an earlier screen would make pass 1 pointless and pass 2
+  # unattributable -- the injected findings would come from a run nobody recorded.
+  #
+  # THE WARM-UP VOLUME GOES WITH IT, and that pairing is load-bearing. runner.py
+  # resumes by skipping runs already recorded for a campaign label, so clearing the
+  # graph while keeping the volume gives a pass 1 with nothing to run and a graph
+  # nothing refills -- pass 2 would then start cold under a name that says warm. The
+  # gate below catches it, but only after the operator has waited for a pass that did
+  # nothing.
+  log "Clearing the proxy graph and the warm-up volume so pass 1 genuinely refills it"
   rm -rf "$PROXY_GRAPH_DIR"
+  docker volume rm "$WARMUP_VOLUME" >/dev/null 2>&1 || true
 fi
 mkdir -p "$PROXY_GRAPH_DIR/.token-optimizer/wiki"
 

@@ -198,8 +198,15 @@ PY
     rm -rf "$THOL_HOME/.cache"
     ln -sfn /results/.cache "$THOL_HOME/.cache"
     echo "   .cache -> /results/.cache (repo + npm caches persist across segments)"
+  elif [ "$MODE" = "campaign" ]; then
+    # FATAL FOR A CAMPAIGN, because the alternative is paying for runs and throwing
+    # them away. This was a warning, and a mount that existed but was not writable
+    # by `bench` took the same branch: four runs completed, nothing was recorded,
+    # the leaderboard reported "no OK runs" and the next attempt re-ran them. A
+    # campaign with nowhere to write its results has no reason to start.
+    die "/results is not writable by $(whoami) (it is $(stat -c '%U:%G %a' /results 2>/dev/null || echo missing)). Every run would be paid for and discarded. Mount a volume the container can write, and do not nest another mount inside it."
   else
-    echo "   WARNING: /results not mounted -- run data will be lost when the container exits"
+    echo "   WARNING: /results not writable -- run data will be lost when the container exits"
   fi
 
   # runner.py selftest builds scratch workspaces at runs_root/selftest/<task>

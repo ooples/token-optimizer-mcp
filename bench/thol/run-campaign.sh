@@ -49,9 +49,17 @@ HOST_CREDS="${HOST_CREDS:-$HOME/.claude/.credentials.json}"
 # numbers as if they were warm.
 RESULTS_VOLUME="${RESULTS_VOLUME:-thol-results}"
 
-# ...and the graph itself is a HOST directory, mounted into whichever results
-# volume is in play, so it is the one thing that survives from the warm-up pass
-# into the measured one.
+# ...and the graph itself is a HOST directory, so it is the one thing that survives
+# from the warm-up pass into the measured one.
+#
+# MOUNTED AT ITS OWN PATH, NOT INSIDE /results, and that is not cosmetic. Nesting a
+# bind mount inside a FRESH named volume makes Docker create the volume root as
+# root:root instead of inheriting the image's bench:bench, and the container runs as
+# bench. The entrypoint guards its persistence on `[ -w /results ]`, so it silently
+# skipped it: no results.sqlite, the leaderboard reported "no OK runs", resume found
+# nothing to skip, and a campaign that had already been paid for was re-run from
+# scratch. Verified: `thol-results` is bench-owned and writable, a volume first used
+# with the nested mount is root-owned and is not.
 PROXY_GRAPH_DIR="${PROXY_GRAPH_DIR:-$RIG_DIR/thol/proxy-graph}"
 
 # Cheapest first. The last group is the $5/run outlier, isolated so it can be
@@ -122,7 +130,7 @@ for i in "${!SEGMENTS[@]}"; do
   MSYS_NO_PATHCONV=1 docker run --rm \
     -v "$RIG_DIR/auth:/auth:ro" \
     -v "$RESULTS_VOLUME:/results" \
-    -v "$PROXY_GRAPH_DIR:/results/proxy-graph" \
+    -v "$PROXY_GRAPH_DIR:/proxy-graph" \
     -e THOL_CAMPAIGN="$CAMPAIGN" \
     --name thol-campaign "$IMAGE" campaign \
       -c "$ARMS" \
@@ -131,10 +139,19 @@ for i in "${!SEGMENTS[@]}"; do
       "$@"
 done
 
+# THE RUNS ARE THE ARTIFACT; THE LEADERBOARD IS A CONVENIENCE. It needs a control
+# arm to compare against, so a deliberately single-arm campaign -- a warm-up pass, a
+# one-arm screen -- makes it exit non-zero for an entirely correct reason. Under
+# `set -e` that aborted the caller AFTER the runs had been paid for and recorded,
+# which is the worst possible moment to stop.
+#
+# So its failure is reported and not propagated. The runs are already in the results
+# volume either way, and `report` can be re-run against them at any time.
 log "Campaign complete -- building final leaderboard"
 MSYS_NO_PATHCONV=1 docker run --rm \
   -v "$RIG_DIR/auth:/auth:ro" \
   -v "$RESULTS_VOLUME:/results" \
-  -v "$PROXY_GRAPH_DIR:/results/proxy-graph" \
+  -v "$PROXY_GRAPH_DIR:/proxy-graph" \
   -e THOL_CAMPAIGN="$CAMPAIGN" \
-  "$IMAGE" report
+  "$IMAGE" report \
+  || log "leaderboard not built (it needs a control arm); the runs are recorded regardless"
