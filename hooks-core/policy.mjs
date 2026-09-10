@@ -108,7 +108,10 @@ export function refusalsEnabled() {
  * enforcement was the assumed way there rather than a measured one. Two
  * independent harnesses now say it is the worst posture we ship:
  *
- *   THOL 2.1.251, 17 tasks x 3 reps x 3 arms
+ *   THOL 2.1.251, 17 tasks x 3 reps x 3 arms as designed -- 51 runs per arm,
+ *   but 49 for enforce: `web-research-oss-inventory` retained 1 of its 3
+ *   enforce repetitions. That shortfall is not incidental, and the paragraph
+ *   below is about what it does to a summed total.
  *     control  score 0.969  turns 16.2
  *     assist   score 0.971  turns 14.4   <- better on both
  *     enforce  score 0.960  turns 20.3   <- worse on both
