@@ -180,6 +180,45 @@ describe('anchorDecision', () => {
     expect(collided.reanchor).toBe(false);
   });
 
+  it('sees a divergence past the first four kilobytes', () => {
+    // The reason samples are taken at DOUBLING offsets rather than
+    // consecutively. Eight consecutive 512-byte chunks cover four kilobytes
+    // and nothing after, so two conversations sharing an opening that long
+    // looked identical however far they diverged later -- and 'same
+    // conversation, different prefix' answers 'anchor, the miss already
+    // happened', spending a write on a prefix we may not own.
+    const shared = payload('shared opening', 200);
+    expect(shared.length).toBeGreaterThan(4096);
+
+    const withTail = (tail: string): ProviderRequest => ({
+      system: 'You are a coding agent.',
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'start here' }] },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `${shared}
+${payload(tail, 400)}`,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+        },
+        { role: 'user', content: [{ type: 'text', text: 'go on' }] },
+      ],
+    });
+
+    const store = anchorStore();
+    const one = anchorDecision(withTail('session one'), store);
+    store.remember(one.key, one.record);
+
+    // Same key, same first four kilobytes, different history after that.
+    const two = anchorDecision(withTail('session two'), store);
+    expect(two.reason).toBe('joined-mid-conversation');
+    expect(two.reanchor).toBe(false);
+  });
+
   it('still calls a genuine edit an edit', () => {
     // The other half: same opening, changed tail. Without this, the test above
     // would pass just as well against a rule that never re-anchored anything.
@@ -198,23 +237,23 @@ describe('anchorStore', () => {
     const store = anchorStore(2);
     store.remember('a', {
       prefixDigest: '1',
-      headChunks: ['h1'],
+      samples: ['h1'],
       anchored: true,
     });
     store.remember('b', {
       prefixDigest: '2',
-      headChunks: ['h2'],
+      samples: ['h2'],
       anchored: true,
     });
     // Touching 'a' must move it to the back of the eviction queue.
     store.remember('a', {
       prefixDigest: '1',
-      headChunks: ['h1'],
+      samples: ['h1'],
       anchored: true,
     });
     store.remember('c', {
       prefixDigest: '3',
-      headChunks: ['h3'],
+      samples: ['h3'],
       anchored: true,
     });
 
@@ -228,7 +267,7 @@ describe('anchorStore', () => {
     for (let i = 0; i < 50; i += 1)
       store.remember(`k${i}`, {
         prefixDigest: `${i}`,
-        headChunks: [`h${i}`],
+        samples: [`h${i}`],
         anchored: false,
       });
     expect(store.seen('k0')).toBeUndefined();

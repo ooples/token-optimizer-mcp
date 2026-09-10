@@ -153,19 +153,38 @@ export function conversationKey(request: ProviderRequest): string {
  */
 const CHUNK_BYTES = 512;
 
-/** At most this many chunks are compared: enough to identify, not to store. */
-const MAX_CHUNKS = 8;
+/**
+ * Samples are taken at DOUBLING offsets, not consecutively.
+ *
+ * Eight consecutive chunks cover the first four kilobytes and nothing after,
+ * so two conversations that share an opening of that length look identical
+ * however far they diverge later -- and the answer to "same conversation,
+ * different prefix" is "anchor, the miss already happened", which spends a
+ * 1.25x write on a prefix we may not own. Doubling offsets keep the sample
+ * count logarithmic in the prefix size while covering all of it: a 32 KB
+ * prefix takes seven samples, a megabyte twelve.
+ *
+ * Offsets are absolute, so growth leaves every earlier sample exactly where
+ * it was -- which is what makes comparing the overlap meaningful.
+ *
+ * WHAT THIS DOES NOT PROMISE. Sampling is sampling: two prefixes that agree
+ * at every sampled window and differ only between them read as the same
+ * conversation. That is a bounded residual, it grows less likely as the
+ * prefix does, and its worst outcome is one avoidable cache write -- not
+ * wrong content. It is recorded rather than dressed up as a proof.
+ */
+const MAX_SAMPLES = 12;
 
-function headChunks(prefix: string): string[] {
-  const chunks: string[] = [];
+function prefixSamples(prefix: string): string[] {
+  const samples: string[] = [];
   for (
     let at = 0;
-    at + CHUNK_BYTES <= prefix.length && chunks.length < MAX_CHUNKS;
-    at += CHUNK_BYTES
+    at + CHUNK_BYTES <= prefix.length && samples.length < MAX_SAMPLES;
+    at = at === 0 ? CHUNK_BYTES : at * 2
   ) {
-    chunks.push(digest(prefix.slice(at, at + CHUNK_BYTES)));
+    samples.push(digest(prefix.slice(at, at + CHUNK_BYTES)));
   }
-  return chunks;
+  return samples;
 }
 
 /**
@@ -193,7 +212,7 @@ export interface AnchorRecord {
   /** Digest of the CLIENT's prefix as it arrived, so a change is detectable. */
   readonly prefixDigest: string;
   /**
-   * Chunk digests of the opening of that prefix.
+   * Digests sampled across that prefix, at doubling offsets.
    *
    * THIS IS WHAT SEPARATES AN EDIT FROM A COLLISION. Two different sessions
    * whose system prompt and opening message are identical -- a user who
@@ -204,7 +223,7 @@ export interface AnchorRecord {
    * its original form. With it, an unrelated conversation is recognised as
    * unrelated and falls back to the size rule for a first sighting.
    */
-  readonly headChunks: readonly string[];
+  readonly samples: readonly string[];
   /** Did we rewrite that prefix? */
   readonly anchored: boolean;
 }
@@ -264,10 +283,10 @@ export function anchorDecision(
   const key = conversationKey(request);
   const prefix = prefixOf(request);
   const prefixDigest = digest(prefix);
-  const chunks = headChunks(prefix);
+  const samples = prefixSamples(prefix);
   const previous = store.seen(key);
   const sameConversation = previous
-    ? isContinuation(previous.headChunks, chunks)
+    ? isContinuation(previous.samples, samples)
     : false;
 
   if (previous && sameConversation && previous.prefixDigest === prefixDigest) {
@@ -289,7 +308,7 @@ export function anchorDecision(
       reanchor: true,
       reason: 'client-invalidated',
       key,
-      record: { prefixDigest, headChunks: chunks, anchored: true },
+      record: { prefixDigest, samples, anchored: true },
     };
   }
 
@@ -303,7 +322,7 @@ export function anchorDecision(
       reanchor: true,
       reason: 'first-turn',
       key,
-      record: { prefixDigest, headChunks: chunks, anchored: true },
+      record: { prefixDigest, samples, anchored: true },
     };
   }
 
@@ -311,6 +330,6 @@ export function anchorDecision(
     reanchor: false,
     reason: 'joined-mid-conversation',
     key,
-    record: { prefixDigest, headChunks: chunks, anchored: false },
+    record: { prefixDigest, samples, anchored: false },
   };
 }
