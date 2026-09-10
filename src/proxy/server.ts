@@ -38,6 +38,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { v1Frontier } from '../compress/strategy.js';
+import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import type { ProviderRequest } from '../compress/frontier.js';
 
 /** Upstream, overridable for a gateway. */
@@ -146,7 +147,8 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
  */
 export function compressBody(
   body: Buffer,
-  spill: (content: string, hint: string) => string
+  spill: (content: string, hint: string) => string,
+  anchors?: AnchorStore
 ): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
   const before = body.length;
   const unchanged = (reason: string) => ({
@@ -173,7 +175,7 @@ export function compressBody(
 
   let rewritten: ProviderRequest;
   try {
-    rewritten = v1Frontier(parsed, { spill }).request;
+    rewritten = v1Frontier(parsed, { spill, anchors }).request;
   } catch {
     return unchanged('compression threw');
   }
@@ -241,6 +243,12 @@ export function startProxy(
   const upstream = options.upstream || UPSTREAM();
   const spillRoot = join(tmpdir(), 'token-optimizer-spill');
   const spill = spillTo(spillRoot);
+  // One store per proxy, holding a hash and a boolean per conversation.
+  // Per-conversation, never per-request, and passed in explicitly rather
+  // than reached for -- HeadRoom's #3486 is a shared router keeping request
+  // state on itself, and two agents through one proxy is the exact shape
+  // that turns into.
+  const anchors = anchorStore();
 
   const server = createServer((req, res) => {
     void (async () => {
@@ -252,7 +260,7 @@ export function startProxy(
         return;
       }
 
-      const { body: next, summary } = compressBody(body, spill);
+      const { body: next, summary } = compressBody(body, spill, anchors);
       options.onSummary?.({ path: req.url || '/', ...summary });
       forward(upstream, req, res, next);
     })();

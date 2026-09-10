@@ -18,6 +18,7 @@
 import { compressBlock } from './router.js';
 import { dedupBlocks, type DedupBlock } from './dedup.js';
 import { queryFrom } from './relevance.js';
+import { anchorDecision, type AnchorStore } from './anchor.js';
 import {
   isAfter,
   lastCacheBreakpoint,
@@ -43,6 +44,15 @@ export interface StrategyOptions {
    * Supplied by the caller so this stays a pure function of its inputs.
    */
   readonly wanted?: readonly string[];
+  /**
+   * Memory of which conversations we have already re-anchored.
+   *
+   * Supplied by the caller rather than held here, so this module keeps no
+   * state of its own and two concurrent requests cannot observe each
+   * other's -- HeadRoom's #3486 is exactly that bug. Absent means V1 behaves
+   * as it always has and never touches the cached prefix.
+   */
+  readonly anchors?: AnchorStore;
 }
 
 export interface StrategyResult {
@@ -154,7 +164,11 @@ function pathAddressed(
   options: StrategyOptions,
   respectFrontier: boolean
 ): StrategyResult {
-  const frontier = respectFrontier ? lastCacheBreakpoint(request) : null;
+  // Located whether or not it is respected: even an arm that rewrites
+  // history needs to know which side of the breakpoint a block is on,
+  // because that decides whether the block has to be BYTE-STABLE.
+  const breakpoint = lastCacheBreakpoint(request);
+  const frontier = respectFrontier ? breakpoint : null;
   const query = questionIn(request);
   const elisions: Elision[] = [];
   const staged: DedupBlock[] = [];
@@ -172,7 +186,26 @@ function pathAddressed(
       staged.push({ text, original: text, touchable: false });
       return null;
     }
-    const result = compressBlock(text, { spill: options.spill, query });
+    // CACHED CONTENT IS COMPRESSED WITHOUT THE QUESTION, and this is not a
+    // detail -- it is what makes rewriting history viable at all.
+    //
+    // Relevance and liveness make the output a function of what the agent
+    // asked, and the question changes every turn. Applied to the cached
+    // prefix that is fatal: turn N compresses the prefix one way, turn N+1
+    // asks a different question and compresses the same bytes differently,
+    // so the prefix we send differs every turn and the provider cache misses
+    // every turn. Compression that busts the cache costs more than it saves
+    // -- a read bills at 0.1x and a write at 1.25x.
+    //
+    // Behind the breakpoint the transform is therefore a pure function of
+    // the CONTENT, so re-deriving it next turn reproduces the same bytes and
+    // the cache hits. After the breakpoint nothing is cached yet, so the
+    // question is free to steer retention.
+    const cached = !isAfter(at, breakpoint);
+    const result = compressBlock(text, {
+      spill: options.spill,
+      query: cached ? undefined : query,
+    });
     elisions.push(...result.elisions);
     staged.push({ text: result.text, original: text, touchable: true });
     return null;
@@ -190,12 +223,26 @@ function pathAddressed(
   return { request: out, elisions, injectedChars: 0 };
 }
 
-/** V1: the recommended design. */
+/**
+ * V1: the recommended design.
+ *
+ * WITH AN ANCHOR STORE IT ALSO RE-ANCHORS, which is the one case where
+ * touching the cached prefix is not a mistake. `anchorDecision` answers yes
+ * only when the write is already happening -- a first turn, a prefix the
+ * client itself invalidated -- or when the prefix in the cache is ALREADY
+ * ours, in which case reproducing it is the hit and stopping would be the
+ * miss. See `anchor.ts` for the economics; without a store this is exactly
+ * the frontier-only behaviour it has always had.
+ */
 export function v1Frontier(
   request: ProviderRequest,
   options: StrategyOptions = {}
 ): StrategyResult {
-  return pathAddressed(request, options, true);
+  if (!options.anchors) return pathAddressed(request, options, true);
+
+  const decision = anchorDecision(request, options.anchors);
+  options.anchors.remember(decision.key, decision.record);
+  return pathAddressed(request, options, !decision.reanchor);
 }
 
 /**
@@ -262,7 +309,16 @@ export function ccrStyle(
     if (messageIsSigned(message)) return null;
     const already = byContent.get(text);
     if (already !== undefined) return already;
-    const result = compressBlock(text, { spill: options.spill, query });
+    // The control gets the same query-independence rule behind the breakpoint
+    // that we hold ourselves to. It is the harder choice -- their real design
+    // is cache-unaware, so this makes the control MORE cache-stable than it
+    // would be in the wild -- but it isolates what is actually being compared:
+    // opaque markers and injected retrieval versus paths and nothing injected.
+    const cached = !isAfter(_at, lastCacheBreakpoint(request));
+    const result = compressBlock(text, {
+      spill: options.spill,
+      query: cached ? undefined : query,
+    });
     if (result.text === text) return null;
     const marker = ccrMarker(text, index);
     index += 1;

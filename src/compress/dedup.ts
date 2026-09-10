@@ -110,84 +110,90 @@ function opening(text: string): string {
  * These hundred characters mean something to the reader on their own, and the
  * content they point at is in the same request.
  */
-function backReference(
-  bytes: number,
-  referent: string,
-  exact: boolean
-): string {
-  const what = exact ? 'identical to' : 'the same as';
-  return `[... ${bytes.toLocaleString('en-US')} bytes ${what} the earlier output starting "${opening(referent)}"]`;
+function backReference(bytes: number, referent: string): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, already shown above starting "${opening(referent)}"]`;
 }
 
 /**
  * Replaces repeated blocks with a reference to the copy already in the request.
  *
- * Order matters and is preserved: the FIRST occurrence is always kept whole,
- * because it is what every later reference points at. A block that may not be
- * rewritten is still recorded as a referent -- an untouchable block is the best
- * referent there is, since it is guaranteed to arrive byte-identical.
+ * KEYED ON THE SOURCE, NOT ON THE COMPRESSED FORM, and this took a measurement
+ * to get right. The first version matched a repeat only when the two blocks
+ * had compressed to identical text. That held until cached content started
+ * being compressed WITHOUT the question (see `strategy.ts`: the question
+ * changes every turn, so a query-dependent prefix can never be cache-stable).
+ * From then on the cached copy and the fresh copy of the same file compressed
+ * differently, matched nothing, and were both sent in full -- which cost more
+ * than re-anchoring saved. On the repeated-reads workload the anchored arm
+ * scored 5,646 steady-state tokens against the frontier-only 2,901: the
+ * feature was a regression until this changed.
+ *
+ * So two blocks are the same repeat when their SOURCE bytes are the same,
+ * whatever each compressed to. The later one is replaced by a reference to the
+ * earlier one.
+ *
+ * WHAT THAT COSTS, since it is a real trade and not a free win. The earlier
+ * copy may have elided something the later copy would have kept -- a function
+ * body the question made live, say. The reader is not stuck: every elision in
+ * the earlier copy names a path or a line range, so the body is one `Read`
+ * away. That is the same guarantee the rest of this design rests on, and it is
+ * why the trade is acceptable here where it would not be for a hash.
+ *
+ * Order matters and is preserved: the FIRST occurrence is always kept, because
+ * it is what every later reference points at.
  */
 export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
   const texts: string[] = [];
   const elisions: Elision[] = [];
 
-  // Two tables, because the two kinds of repeat are recoverable for different
-  // reasons: a verbatim referent still holds the ORIGINAL bytes, so a later
-  // copy can skip compression entirely; a compressed referent only proves the
-  // later copy would have said the same thing.
-  const verbatim = new Map<string, string>();
-  const compressed = new Map<string, string>();
+  // By source bytes, holding whatever that block ended up sending -- the
+  // reference has to quote what a reader will actually see above.
+  const bySource = new Map<string, string>();
+  // And by compressed form, for two DIFFERENT sources that compressed to the
+  // same output. Rare, but it is free to catch.
+  const byOutput = new Map<string, string>();
+
+  const remember = (block: DedupBlock): void => {
+    if (
+      block.original.length >= MIN_DEDUP_BYTES &&
+      !bySource.has(block.original)
+    )
+      bySource.set(block.original, block.text);
+    if (block.text.length >= MIN_DEDUP_BYTES && !byOutput.has(block.text))
+      byOutput.set(block.text, block.text);
+  };
 
   for (const block of blocks) {
-    const untouched = block.text === block.original;
-
+    // An untouchable block -- signed, or behind the cache frontier -- is never
+    // rewritten, but it is the strongest referent there is: it arrives
+    // byte-identical no matter what.
     if (!block.touchable) {
-      // Never rewritten, so it arrives exactly as recorded and is the strongest
-      // possible referent.
-      if (block.original.length >= MIN_DEDUP_BYTES) {
-        if (!verbatim.has(block.original))
-          verbatim.set(block.original, block.original);
-        if (!compressed.has(block.text)) compressed.set(block.text, block.text);
-      }
+      remember(block);
       texts.push(block.text);
       continue;
     }
 
-    if (block.original.length >= MIN_DEDUP_BYTES) {
-      const earlier = verbatim.get(block.original);
-      if (earlier !== undefined) {
-        texts.push(backReference(block.original.length, earlier, true));
-        elisions.push({
-          removed: `${block.original.length.toLocaleString('en-US')} bytes repeated verbatim from earlier in this conversation`,
-          // The referent is in the same request. There is nothing to look up.
-          recoverAt: null,
-          lossless: true,
-        });
-        continue;
-      }
+    const earlier =
+      (block.original.length >= MIN_DEDUP_BYTES
+        ? bySource.get(block.original)
+        : undefined) ??
+      (block.text.length >= MIN_DEDUP_BYTES
+        ? byOutput.get(block.text)
+        : undefined);
+
+    if (earlier !== undefined) {
+      texts.push(backReference(block.original.length, earlier));
+      elisions.push({
+        removed: `${block.original.length.toLocaleString('en-US')} bytes already shown earlier in this conversation`,
+        // The referent is in the same request. There is nothing to look up,
+        // and nothing to miss.
+        recoverAt: null,
+        lossless: true,
+      });
+      continue;
     }
 
-    if (block.text.length >= MIN_DEDUP_BYTES) {
-      const earlier = compressed.get(block.text);
-      if (earlier !== undefined) {
-        texts.push(backReference(block.text.length, earlier, false));
-        elisions.push({
-          removed: `${block.text.length.toLocaleString('en-US')} bytes that compress to output already above`,
-          recoverAt: null,
-          lossless: true,
-        });
-        continue;
-      }
-    }
-
-    // Not a repeat: it stands, and becomes a referent for whatever follows.
-    if (untouched && block.original.length >= MIN_DEDUP_BYTES) {
-      if (!verbatim.has(block.original))
-        verbatim.set(block.original, block.original);
-    }
-    if (block.text.length >= MIN_DEDUP_BYTES && !compressed.has(block.text)) {
-      compressed.set(block.text, block.text);
-    }
+    remember(block);
     texts.push(block.text);
   }
 

@@ -53,7 +53,7 @@ describe('dedupBlocks', () => {
 
     expect(out.elisions[0].lossless).toBe(true);
     expect(out.elisions[0].recoverAt).toBeNull();
-    expect(out.elisions[0].removed).toContain('repeated verbatim');
+    expect(out.elisions[0].removed).toContain('already shown earlier');
   });
 
   it('references an untouchable block, because it is the strongest referent', () => {
@@ -84,7 +84,7 @@ describe('dedupBlocks', () => {
     ]);
 
     expect(out.texts[1].length).toBeLessThan(200);
-    expect(out.elisions[0].removed).toContain('compress to output already above');
+    expect(out.elisions[0].removed).toContain('already shown earlier');
   });
 
   it('leaves near-duplicates alone, because the difference is the point', () => {
