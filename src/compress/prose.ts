@@ -24,7 +24,7 @@
 
 import { count, inlineMarker } from './annotate.js';
 import { containsStructural } from './structural.js';
-import { ranker } from './relevance.js';
+import { activeRanker } from './ranking.js';
 import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
@@ -154,7 +154,7 @@ export function compressProse(
   // deliberately -- a sentence naming an error or carrying a correlation id
   // outranks one that merely shares vocabulary with the question.
   const bodies = parts.map((part) => part.text);
-  const rank = ranker(ctx.query);
+  const rank = activeRanker(ctx.query);
   const relevant = rank.active
     ? rank.top(
         bodies,

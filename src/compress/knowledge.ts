@@ -40,7 +40,7 @@
  * compression figure it would flatter nobody by joining.
  */
 
-import { ranker } from './relevance.js';
+import { activeRanker } from './ranking.js';
 import {
   isAfter,
   lastCacheBreakpoint,
@@ -138,7 +138,7 @@ export function knowledgeBlock(
   // Relevance decides ORDER among findings, never whether the block exists. A
   // pinned rule or a person's correction is delivered whether or not it shares
   // vocabulary with what the session happens to be doing.
-  const rank = ranker(context);
+  const rank = activeRanker(context);
   const claims = usable.map((f) => f.claim);
   const relevant = rank.active
     ? rank.top(claims, usable.length)

@@ -21,7 +21,7 @@
 
 import { parse } from '@babel/parser';
 import { count, inlineMarker, span } from './annotate.js';
-import { ranker } from './relevance.js';
+import { activeRanker } from './ranking.js';
 import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { unchanged } from './types.js';
@@ -274,7 +274,7 @@ function liveBodies(
   query: string | undefined,
   maxLiveShare: number = MAX_LIVE_SHARE
 ): Set<number> {
-  const rank = ranker(query);
+  const rank = activeRanker(query);
   if (!rank.active || !spans.length) return new Set<number>();
 
   // The declaration is the line above the body; the line above that catches
