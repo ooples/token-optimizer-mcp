@@ -20,9 +20,12 @@
  * must be defensible without anyone reading the docs.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { harvestCliFor } from './capabilities.mjs';
 
 const MODEL = () => process.env.TOKEN_OPTIMIZER_HARVEST_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -178,13 +181,25 @@ export function harvestMode() {
   // Free and private, so nothing further to weigh: no credential, no billing, no digest leaving
   // the machine.
   if (localEndpoint()) return 'local';
+  // THE HOST CLI IS A BACKEND, so the enablement check has to know about it.
+  // Without this the gate answers off:no-key and `extract` never reaches the
+  // CLI path -- which defeats the whole point of a backend that needs no key.
+  // Caught end to end rather than reasoned about: with no endpoint and no key,
+  // the first run of the opted-in host-CLI harvest returned
+  // `harvest is off:no-key` in 0s, having never spawned anything.
+  if (hostCliHarvest()) return 'host-cli';
+
 
   return apiKey() ? 'remote' : 'off:no-key';
 }
 
 export function harvestEnabled() {
   const mode = harvestMode();
-  return mode === 'local' || mode === 'remote';
+  // host-cli belongs here for the same reason local and remote do: it is a
+  // backend that can actually answer. Leaving it out would let the mode say
+  // `host-cli` while every caller that asks `harvestEnabled()` -- the Stop
+  // hook, the worker, extract's own first line -- skipped the harvest.
+  return mode === 'local' || mode === 'remote' || mode === 'host-cli';
 }
 
 /**
@@ -476,6 +491,334 @@ const succeeded = (findings) => {
  * indistinguishable, from the caller's side, from a session with nothing to
  * learn. `harvestFailure()` carries why, for the diagnostics that do care.
  */
+/**
+ * The findings array inside a reply, or null.
+ *
+ * Models wrap JSON in prose or fences often enough that locating the array is
+ * more reliable than insisting the whole response parses -- and a CLI adds its
+ * own banner lines and stream-json envelopes on top, so both callers need the
+ * same tolerance. Shared so the two cannot drift.
+ */
+function findingsIn(text) {
+  const raw = String(text || '');
+
+  // FIRST BRACKET TO LAST IS NOT ENOUGH, and a CLI is where that breaks.
+  // `codex exec` prints a banner line reading `sandbox: workspace-write
+  // [workdir, /tmp, $TMPDIR]` before the model says anything, so the first
+  // `[` in the stream belongs to the banner and the naive slice parses to
+  // nothing -- an empty harvest that looks exactly like a session with
+  // nothing to learn. Closing brackets are walked from the end and opening
+  // brackets from the start, so the widest array that actually parses wins,
+  // and prose on either side is tolerated the way it already was for HTTP.
+  const closes = [];
+  for (let i = raw.length - 1; i >= 0 && closes.length < CLOSE_TRIES; i -= 1) {
+    if (raw[i] === ']') closes.push(i);
+  }
+  for (const end of closes) {
+    let tries = 0;
+    for (let start = raw.indexOf('['); start !== -1 && start < end; start = raw.indexOf('[', start + 1)) {
+      if ((tries += 1) > OPEN_TRIES) break;
+      try {
+        const parsed = JSON.parse(raw.slice(start, end + 1));
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        /* not this pair */
+      }
+    }
+  }
+  return null;
+}
+
+// Bounded so a pathological reply cannot turn parsing into an O(n^2) walk of
+// a megabyte. A real findings array is at the end of the reply and preceded
+// by a banner or a sentence, not by hundreds of brackets.
+const CLOSE_TRIES = 8;
+const OPEN_TRIES = 40;
+
+/**
+ * Launches a Windows command through cmd.exe WITHOUT letting Node build the
+ * command line.
+ *
+ * These CLIs all install as .cmd shims, and Node has refused to spawn .cmd
+ * or .bat without a shell since the 2024 command-injection fix -- so a shell
+ * is not optional. But Node's own `shell: true` builds the cmd.exe line by
+ * joining argv with single spaces and no quoting at all, which breaks the
+ * moment any part contains one. Caught by the first test written against
+ * this: pointing the override at `C:\\Program Files\\nodejs\\node.exe`
+ * produced `C:\\Program Files\\nodejs\\node.exe exited 1`, because cmd.exe
+ * had been handed `C:\\Program` as the command. Quoting each part and passing
+ * the line verbatim is the fix.
+ */
+function windowsShellCommand(file, args) {
+  const quote = (part) => {
+    const value = String(part);
+    // Doubling is cmd.exe's own escape for a quote inside a quoted token.
+    return /[\s"]/.test(value)
+      ? `"${value.replace(/"/g, '""')}"`
+      : value;
+  };
+  const line = [file, ...args].map(quote).join(' ');
+  return [process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${line}"`]];
+}
+
+/**
+ * States the anchor list in the prompt, for a backend that cannot be handed
+ * a schema.
+ *
+ * THE ANCHOR GATE IS WHAT SILENTLY EATS A HARVEST. `validate` keeps only
+ * anchors naming a file the session actually touched, and a model asked in
+ * English for a path writes a plausible one rather than a real one. Measured
+ * over four runs of qwen2.5:7b on a real digest against that gate:
+ * unconstrained, 4 extracted and 0 accepted; constrained to the list, 4 of 4.
+ *
+ * The HTTP path gets that constraint from a server-enforced enum. A CLI has
+ * no server to enforce it, so the same constraint is stated as strongly as a
+ * prompt can state it -- the exact strings, and an instruction to copy rather
+ * than compose. Not as good as an enum, and much better than nothing: the
+ * first end-to-end run without this extracted 10 findings and kept none.
+ */
+function withAnchorChoices(system, choices) {
+  if (!choices.length) return system;
+  const list = choices.map((file) => `- ${file}`).join('\n');
+  return (
+    `${system}\n\n` +
+    'Every entry in "anchors" MUST be copied verbatim from this list -- pick the ' +
+    'entries that best match the finding, and never write a path that is not ' +
+    'listed. Choosing the nearest match is right; dropping the finding is not:\n' +
+    list
+  );
+}
+
+/**
+ * The `-p` value for a CLI whose prompt flag needs one but which still reads
+ * stdin. One line, no quotes, no newlines: everything a Windows command line
+ * cannot carry.
+ */
+export const ARG_STDIN_INSTRUCTION =
+  'Follow the instructions in the input above and reply with only the JSON array they ask for.';
+
+/** Restated at the end of a prompt file, where an agent skimming will see it. */
+const TRAILER =
+  'END OF SESSION DIGEST. Now follow the instructions at the top of this file: ' +
+  'reply with the JSON array of findings and nothing else. If nothing in the ' +
+  'session is worth recording, reply with an empty array.';
+
+/**
+ * Runs the host client's own CLI as the harvest model.
+ *
+ * THE CHILD MUST NOT HARVEST. The harvest runs from the Stop hook, and a
+ * child session fires its own Stop hook -- verified, not assumed: a bare
+ * `claude -p` with our plugin installed wrote mcp-client, episode-outcome and
+ * derive events to the graph. Left unguarded that is unbounded recursion,
+ * each level spending real quota.
+ *
+ * TOKEN_OPTIMIZER_MODE=off IS THE GUARD, and it is the one that works.
+ * Measured on the same probe: TOKEN_OPTIMIZER_HARVEST=0 still ran the child's
+ * Stop hook and still wrote derive events -- it disables the harvest but not
+ * the hooks around it -- while MODE=off suppressed everything but a single
+ * mcp-client row. The kill switch is the only setting that makes the child
+ * inert, so the child is spawned with it and nothing else is relied upon.
+ *
+ * DELIVERY COMES FROM THE ROW, not from an assumption that every CLI reads
+ * stdin. Copilot does not: asked to follow instructions on stdin it replies
+ * that it cannot read stdin, exits 0, and yields no findings -- which looks
+ * exactly like a session with nothing to learn. Guessing here fails silently,
+ * so it is not guessed.
+ */
+/**
+ * How long to let the host CLI run.
+ *
+ * THE 30s HTTP DEFAULT KILLS EVERY CLI HARVEST, so it cannot be shared. That
+ * budget is sized for one completion against an endpoint that is already
+ * listening. A host CLI is an agent: it starts a process, loads its plugin
+ * and hook tree, opens a session, then thinks. Measured here on a 23 KB
+ * digest with no key and no local model, `claude -p` returned 10 findings in
+ * 104 SECONDS -- correct, and more than three times over the HTTP budget.
+ * `codex exec` on the same machine defaults to xhigh reasoning effort and
+ * had not finished at 300s, which is why this is configurable rather than
+ * merely larger.
+ *
+ * A caller that asks for MORE keeps it; the floor only lifts a default that
+ * was never chosen with this backend in mind.
+ */
+function hostCliTimeoutMs(requested) {
+  const configured = Number(process.env.TOKEN_OPTIMIZER_HARVEST_CLI_TIMEOUT_MS);
+  const floor = Number.isFinite(configured) && configured > 0 ? configured : 180_000;
+  return Math.max(floor, Number(requested) || 0);
+}
+
+async function runHostCli(cli, system, digest, timeoutMs) {
+  const payload = `${system}\n\n${digest}`;
+  const fileMode = cli.delivery === 'prompt-file';
+  let file = cli.command;
+  let args = [...cli.args];
+  let verbatim = false;
+  let promptFile = null;
+
+  if (fileMode) {
+    // A PATH, NOT THE PAYLOAD. See CLIENT_HARVEST_CLI for why the payload
+    // itself cannot travel as an argument on Windows. The file is written
+    // under the OS temp directory, which every one of these CLIs can read by
+    // default, and removed in `finish` whatever the outcome.
+    try {
+      // UNGUESSABLE, NOT MERELY UNIQUE. pid and clock are both predictable
+      // enough for another local user to pre-create the path in a shared temp
+      // directory; randomUUID removes the guess, and `flag: 'wx'` below
+      // removes the race that remains.
+      promptFile = join(tmpdir(), `token-optimizer-harvest-${randomUUID()}.txt`);
+      // 0600. This is a digest of the user's session -- paths, commands and
+      // prompts -- sitting in a shared temp directory for as long as the child
+      // takes to read it. It is removed in `finish`, but a kill between the two
+      // would leave it behind, so it is unreadable to other users meanwhile.
+      // (Windows ignores the mode; NTFS inheritance already keeps the per-user
+      // temp directory private.)
+      // THE CONTRACT IS REPEATED AT THE END. The instructions lead the file and
+      // the digest follows, which is the natural order and the one that failed:
+      // handed 23 KB this way, copilot reported the file as "a scratchpad
+      // /summary document" with no instruction in it and asked what JSON array
+      // was wanted. An agent skimming a long file sees its tail; restating the
+      // ask there costs one line and removes the dependence on how the file is
+      // read.
+      writeFileSync(promptFile, `${payload}\n\n${TRAILER}`, {
+        encoding: 'utf8',
+        mode: 0o600,
+        // EXCLUSIVE CREATE. `mode` governs a file this call makes; it does
+        // nothing about one that already exists, and the default flag 'w'
+        // happily follows a symlink someone else placed at the path -- which
+        // would redirect a digest of the user's session wherever they chose.
+        // 'wx' fails instead of following.
+        flag: 'wx',
+      });
+    } catch (error) {
+      return { ok: false, reason: `could not write the harvest prompt file: ${error?.message || error}` };
+    }
+    args.push(
+      `Read the whole file at ${promptFile}. It opens with instructions, then a ` +
+        'digest of a coding session, then repeats what to reply. Follow those ' +
+        'instructions and output the JSON array they ask for, and nothing else.'
+    );
+  } else if (cli.delivery === 'arg-stdin') {
+    // A SHORT SINGLE LINE, NEVER THE PROMPT. The flag needs a value, and the
+    // obvious value -- `system` -- is the multi-line PROMPT, which
+    // withAnchorChoices extends with a newline-separated file list and which
+    // is full of the JSON prompt's double quotes. That is the exact payload
+    // the prompt-file route exists to keep off a Windows command line:
+    // cmd.exe cannot carry a newline inside an argument, and the quoting
+    // doubles every `"`. These CLIs document the flag value as being
+    // APPENDED to stdin, so the whole payload rides stdin and the argument
+    // is one line of ASCII that any shell survives.
+    args.push(ARG_STDIN_INSTRUCTION);
+  }
+
+  if (process.platform === 'win32' && file === cli.command) {
+    [file, args] = windowsShellCommand(file, args);
+    verbatim = true;
+  }
+
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(file, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        // The command line was built above where it needed cmd.exe, so Node
+        // must not rebuild it: `shell: true` would join argv unquoted.
+        windowsVerbatimArguments: verbatim,
+        env: {
+          ...process.env,
+          TOKEN_OPTIMIZER_MODE: 'off',
+        },
+      });
+    } catch (error) {
+      resolve({ ok: false, reason: `${cli.command} could not start: ${error?.message || error}` });
+      return;
+    }
+
+    let out = '';
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try {
+        child.kill();
+      } catch {
+        /* already gone */
+      }
+      if (promptFile) {
+        try {
+          rmSync(promptFile, { force: true });
+        } catch {
+          /* a leftover in the temp directory is not worth failing a harvest */
+        }
+      }
+      resolve(value);
+    };
+    const timer = setTimeout(
+      () => finish({ ok: false, reason: `${cli.command} timed out after ${timeoutMs}ms` }),
+      timeoutMs
+    );
+
+    child.stdout.on('data', (c) => {
+      out += c;
+    });
+    // stderr is drained so a chatty CLI cannot fill the pipe and deadlock.
+    child.stderr.on('data', () => {});
+    child.on('error', (error) =>
+      finish({ ok: false, reason: `${cli.command} failed: ${error?.message || error}` })
+    );
+    // NON-ZERO IS NOT ALWAYS EMPTY. Some of these print the reply and then
+    // exit non-zero over an unrelated cleanup complaint, so a parseable array
+    // already in hand beats the exit code; the code decides only when there is
+    // nothing to parse.
+    child.on('close', (code) =>
+      code === 0 || findingsIn(out)
+        ? finish({ ok: true, text: out })
+        : finish({ ok: false, reason: `${cli.command} exited ${code}` })
+    );
+
+    // EPIPE ARRIVES AS AN EVENT, NOT AS A THROW. The try/catch below sees
+    // only a synchronous failure; a child that exits without reading stdin
+    // fails the write asynchronously, and Node delivers that on the stream.
+    // With no listener it is an uncaught exception that takes down the hook
+    // process instead of resolving this promise -- and the path is not
+    // hypothetical: copilot, asked to read a prompt on stdin, answers that it
+    // cannot and exits 0, which is why its row is prompt-file at all.
+    child.stdin.on('error', (error) =>
+      finish({
+        ok: false,
+        reason: `could not write the digest to ${cli.command}: ${error?.message || error}`,
+      })
+    );
+
+    try {
+      // Closed either way: a child left waiting on a pipe that will never
+      // carry anything hangs until the timeout, which is the slowest possible
+      // way to produce nothing.
+      if (fileMode) child.stdin.end();
+      else child.stdin.end(payload);
+    } catch {
+      finish({ ok: false, reason: `could not write the digest to ${cli.command}` });
+    }
+  });
+}
+
+/**
+ * Is the host CLI available as a harvest backend for this client?
+ *
+ * OPT-IN, deliberately, and this is the one default in this file that is not
+ * on. Every other path either reads local files or spends a key the user
+ * already configured for this purpose; this one spends the subscription that
+ * runs their editor, automatically, at the end of every session. HeadRoom
+ * makes the equivalent call user-invoked (`headroom learn`, cli/learn.py) and
+ * its own design note says to log events and analyse offline. Charging someone
+ * quota they did not ask to spend is not a default worth taking.
+ */
+export function hostCliHarvest(client = undefined, env = process.env) {
+  const enabled = /^(1|true|yes|on)$/i.test(env.TOKEN_OPTIMIZER_HARVEST_CLI || '');
+  if (!enabled) return null;
+  return harvestCliFor(client === undefined ? env.TOKEN_OPTIMIZER_CLIENT : client, env);
+}
+
 export async function extract(
   digest,
   { timeoutMs = 30_000, prompt = null, knownFiles = null } = {}
@@ -491,11 +834,40 @@ export async function extract(
   // exists and that the user opted in.
   const key = apiKey();
   const local = Boolean(localEndpoint());
-  if (!local && !key) return failed('no api key for a remote endpoint');
+  // The host CLI carries its own auth -- the user is already signed into the
+  // client that is running this -- so the key requirement is about the HTTP
+  // backends only.
+  if (!local && !key && !hostCliHarvest()) {
+    return failed('no api key for a remote endpoint');
+  }
 
   const endpoint = ENDPOINT();
   const dialect = endpointDialect(endpoint);
   const system = prompt || PROMPT;
+
+  // Computed before the CLI branch because BOTH backends need it. It used to
+  // sit below, so the host CLI was the one path that never learned which
+  // files it was allowed to anchor to -- and the anchor gate is what silently
+  // eats a harvest. Caught end to end on a real session: 10 findings
+  // extracted through `claude -p`, 0 surviving `validate`.
+  const anchorChoices = knownFiles ? [...knownFiles].filter(Boolean) : [];
+
+  // The host client's own CLI, when the user has opted in. Tried first
+  // because it needs no key and no local model -- the two things whose
+  // absence has kept this path at 3 harvested findings on this machine.
+  const hostCli = hostCliHarvest();
+  if (hostCli) {
+    const result = await runHostCli(
+      hostCli,
+      withAnchorChoices(system, anchorChoices),
+      digest,
+      hostCliTimeoutMs(timeoutMs)
+    );
+    if (!result.ok) return failed(result.reason);
+    const parsed = findingsIn(result.text);
+    if (!parsed) return failed(`no JSON array in the ${hostCli.command} reply`);
+    return succeeded(parsed);
+  }
 
   // ANCHORS OFFERED AS A CHOICE, NOT REQUESTED IN PROSE.
   //
@@ -514,7 +886,6 @@ export async function extract(
   // Only when the caller knows the list. `buildFullDelta` is raw transcript
   // with no file heading, and its caller passes no knownFiles for the same
   // reason -- an empty enum would forbid every anchor rather than free it.
-  const anchorChoices = knownFiles ? [...knownFiles].filter(Boolean) : [];
   const schema = anchorChoices.length
     ? {
         ...FINDINGS_SCHEMA,
@@ -662,17 +1033,8 @@ export async function extract(
       '';
     if (!text) return failed('endpoint answered in an unrecognised shape');
 
-    // Models wrap JSON in prose or fences often enough that finding the array
-    // is more reliable than insisting the whole response parse.
-    const start = text.indexOf('[');
-    const end = text.lastIndexOf(']');
-    if (start === -1 || end <= start) return failed('no JSON array in the reply');
-
-    try {
-      return succeeded(JSON.parse(text.slice(start, end + 1)));
-    } catch {
-      return failed('the JSON array in the reply did not parse');
-    }
+    const parsed = findingsIn(text);
+    return parsed ? succeeded(parsed) : failed('no usable JSON array in the reply');
   } catch (error) {
     return failed(error?.name === 'AbortError' ? `timed out after ${timeoutMs}ms` : `${error?.message || error}`);
   } finally {
