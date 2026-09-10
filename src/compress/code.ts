@@ -22,6 +22,7 @@
 import { parse } from '@babel/parser';
 import { count, inlineMarker, span } from './annotate.js';
 import { activeRanker } from './ranking.js';
+import type { EmbeddingCache } from './embedding.js';
 import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { unchanged } from './types.js';
@@ -272,9 +273,10 @@ function liveBodies(
   lines: readonly string[],
   spans: readonly (readonly [number, number])[],
   query: string | undefined,
-  maxLiveShare: number = MAX_LIVE_SHARE
+  maxLiveShare: number = MAX_LIVE_SHARE,
+  embeddings?: EmbeddingCache
 ): Set<number> {
-  const rank = activeRanker(query);
+  const rank = activeRanker(query, embeddings);
   if (!rank.active || !spans.length) return new Set<number>();
 
   // The declaration is the line above the body; the line above that catches
@@ -340,7 +342,13 @@ export function compressCode(
   const eligible = spans.filter(
     ([from, to]) => to - from + 1 >= tuning.minBodyLines
   );
-  const liveness = liveBodies(lines, eligible, ctx.query, tuning.maxLiveShare);
+  const liveness = liveBodies(
+    lines,
+    eligible,
+    ctx.query,
+    tuning.maxLiveShare,
+    ctx.embeddings
+  );
 
   // ONE SPILL FOR THE WHOLE BLOCK, NOT ONE PER BODY.
   //

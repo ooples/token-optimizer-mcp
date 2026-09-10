@@ -19,6 +19,7 @@ import { compressBlock } from './router.js';
 import { dedupBlocks, type DedupBlock } from './dedup.js';
 import { queryFrom } from './relevance.js';
 import type { Tuning } from './options.js';
+import type { EmbeddingCache } from './embedding.js';
 import { dedupImages, isImageBlock } from './images.js';
 import {
   injectKnowledge,
@@ -77,6 +78,13 @@ export interface StrategyOptions {
   readonly findings?: readonly Finding[];
   /** Characters of findings allowed in the prefix. */
   readonly knowledgeBudget?: number;
+  /**
+   * Vectors a request-level pre-pass already computed.
+   *
+   * Supplied by the caller, never built here: embedding is async and these
+   * strategies are synchronous all the way down. See `embedding.ts`.
+   */
+  readonly embeddings?: EmbeddingCache;
   /**
    * The resolved dials.
    *
@@ -346,6 +354,7 @@ function pathAddressed(
       spill: options.spill,
       query: cached || repeated ? undefined : query,
       tuning: options.tuning,
+      embeddings: options.embeddings,
     });
     elisions.push(...result.elisions);
     staged.push({ text: result.text, original: text, touchable: true });
@@ -427,7 +436,8 @@ export function v1Frontier(
     ? knowledgeBlock(
         options.findings ?? [],
         stableContext(request),
-        options.knowledgeBudget ?? options.tuning?.knowledgeBudgetChars
+        options.knowledgeBudget ?? options.tuning?.knowledgeBudgetChars,
+        options.embeddings
       )
     : (decision.record.knowledge ?? null);
 
@@ -516,6 +526,7 @@ export function ccrStyle(
       spill: options.spill,
       query: cached ? undefined : query,
       tuning: options.tuning,
+      embeddings: options.embeddings,
     });
     if (result.text === text) return null;
     const marker = ccrMarker(text, index);

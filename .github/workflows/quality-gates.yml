@@ -58,6 +58,22 @@ jobs:
       - name: Certify all client capability tiers
         run: npm run verify:certification
 
+      # ONNX IS AN OPTIONAL DEPENDENCY, installed here and nowhere else.
+      # Semantic ranking is opt-in and `onnxruntime-node` is ~100 MB of native
+      # binaries, so making it a dependency would charge every consumer for a
+      # feature almost none of them enable. Installing it in CI with --no-save
+      # keeps the adapter genuinely covered without that.
+      #
+      # The verification is a script rather than a jest test because
+      # onnxruntime checks `data instanceof Float32Array` in native code and
+      # jest's per-suite VM realm has its own typed arrays, so the check fails
+      # on a realm the native module never saw. See the script's header.
+      - name: Install the optional ONNX runtime
+        run: npm install --no-save --no-audit --no-fund onnxruntime-node
+
+      - name: Verify the ONNX encoder against real inference
+        run: npm run verify:onnx
+
       - name: Verify the harvest API contract
         run: npm run verify:harvest
 

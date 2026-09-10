@@ -154,7 +154,7 @@ export function compressProse(
   // deliberately -- a sentence naming an error or carrying a correlation id
   // outranks one that merely shares vocabulary with the question.
   const bodies = parts.map((part) => part.text);
-  const rank = activeRanker(ctx.query);
+  const rank = activeRanker(ctx.query, ctx.embeddings);
   const relevant = rank.active
     ? rank.top(
         bodies,

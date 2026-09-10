@@ -41,6 +41,7 @@
  */
 
 import { activeRanker } from './ranking.js';
+import type { EmbeddingCache } from './embedding.js';
 import {
   isAfter,
   lastCacheBreakpoint,
@@ -123,7 +124,8 @@ function render(finding: Finding): string {
 export function knowledgeBlock(
   findings: readonly Finding[],
   context: string,
-  budgetChars: number = DEFAULT_BUDGET_CHARS
+  budgetChars: number = DEFAULT_BUDGET_CHARS,
+  embeddings?: EmbeddingCache
 ): string | null {
   const usable = findings.filter(
     (f) =>
@@ -138,7 +140,7 @@ export function knowledgeBlock(
   // Relevance decides ORDER among findings, never whether the block exists. A
   // pinned rule or a person's correction is delivered whether or not it shares
   // vocabulary with what the session happens to be doing.
-  const rank = activeRanker(context);
+  const rank = activeRanker(context, embeddings);
   const claims = usable.map((f) => f.claim);
   const relevant = rank.active
     ? rank.top(claims, usable.length)

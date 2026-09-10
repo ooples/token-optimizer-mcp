@@ -113,7 +113,8 @@
     "bench:confirm": "REPS=3 bash bench/thol/run-campaign.sh",
     "bench:debug-loop": "node bench/debug-loop/run.mjs",
     "bench:field": "node bench/field/report.mjs",
-    "bench:pack": "node scripts/bench-pack.mjs"
+    "bench:pack": "node scripts/bench-pack.mjs",
+    "verify:onnx": "node scripts/verify-onnx-adapter.mjs"
   },
   "repository": {
     "type": "git",

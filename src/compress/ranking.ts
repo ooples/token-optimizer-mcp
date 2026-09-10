@@ -15,27 +15,28 @@
  * the engine registry already uses -- register an implementation, get the
  * default when you do not.
  *
- * THE CONSTRAINT ANYONE PLUGGING IN A MODEL MUST KNOW, and it is the reason
- * this is an interface rather than a bundled integration: RANKING IS
- * SYNCHRONOUS. The engines are pure synchronous functions of (text, context) --
- * that is what makes them free of per-request state, which is the defect
- * HeadRoom's #3486 is about -- and `onnxruntime-node`'s `session.run()` is
- * async. There is no `await` available at the point a ranker is called.
+ * RANKING IS SYNCHRONOUS, AND THAT IS NOT THE BARRIER IT LOOKED LIKE. The
+ * engines are pure synchronous functions of (text, context) -- what keeps them
+ * free of the per-request state HeadRoom's #3486 is about -- and
+ * `onnxruntime-node`'s `session.run()` is async, so there is no `await` at the
+ * point a ranker is called.
  *
- * A model therefore has to be driven from behind a synchronous facade: warm a
- * cache of embeddings out of band and look them up here, or run the session on
- * a worker and block on a shared buffer. Neither is exotic, but neither is
- * free, and discovering it after installing 100 MB of native binaries would be
- * an unpleasant surprise. It is written here instead.
+ * An earlier version of this comment concluded from that that a model could not
+ * be bundled, on the reasoning that the units to embed only exist after an
+ * engine has parsed a block. THAT WAS WRONG, and the correction is worth
+ * keeping visible: parsing is cheap and pure, so a request-level pre-pass can
+ * collect candidate units, embed them all in one batch, and hand the sync
+ * engines a cache to read. See `embedding.ts`, which does exactly that, and
+ * `onnx.ts`, which is the forty lines of glue the barrier was hiding.
  *
- * NOT VERIFIED AGAINST A REAL MODEL. `onnxruntime-node` is not installed in
- * this repository and no weights are shipped. What is proved below is that the
- * seam works and that the default is unchanged when nothing is registered; that
- * a particular embedding model improves retention is an untested claim and is
- * not made anywhere.
+ * So there are two ways in. `registerRanker` installs any synchronous Ranker,
+ * and a warmed `EmbeddingCache` on the context takes precedence over it --
+ * the cache is the more specific answer, because someone embedded THIS
+ * request. With neither, everything is BM25.
  */
 
 import { ranker as lexicalRanker, type Ranker } from './relevance.js';
+import { semanticRanker, type EmbeddingCache } from './embedding.js';
 
 /**
  * Builds a ranker for one question.
@@ -80,7 +81,22 @@ export function rankerIsCustom(): boolean {
  * expect -- and the whole design fails open. Losing semantic ranking costs
  * some retention quality; losing the request costs the turn.
  */
-export function activeRanker(query: string | undefined): Ranker {
+export function activeRanker(
+  query: string | undefined,
+  embeddings?: EmbeddingCache
+): Ranker {
+  // A warmed cache outranks the registered factory, because it is the more
+  // specific answer: the caller went to the trouble of embedding THIS
+  // request. With no cache, or a query nobody embedded, this falls straight
+  // through to whatever is registered, and that to BM25.
+  if (embeddings && embeddings.size > 0) {
+    try {
+      return guarded(semanticRanker(query, embeddings), query);
+    } catch {
+      // Fall through to the registered ranker.
+    }
+  }
+
   let candidate: Ranker;
   try {
     candidate = factory(query);

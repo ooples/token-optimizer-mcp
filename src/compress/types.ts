@@ -119,9 +119,18 @@ export interface EngineContext {
    * missing dial cannot mean two different things in two engines.
    */
   readonly tuning?: Tuning;
+  /**
+   * Vectors a request-level pre-pass already computed, keyed by exact text.
+   *
+   * Present only when a semantic encoder is configured. Its absence is the
+   * normal case and means BM25, which is also the fallback for any unit the
+   * pre-pass did not happen to see.
+   */
+  readonly embeddings?: EmbeddingCache;
 }
 
 import type { Tuning } from './options.js';
+import type { EmbeddingCache } from './embedding.js';
 
 /** Every engine has this shape. */
 export type Engine = (text: string, ctx: EngineContext) => CompressionResult;

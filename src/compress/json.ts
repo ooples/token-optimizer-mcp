@@ -201,7 +201,7 @@ export function compressJson(
     // that merely sits at the head, but letting relevance keep whatever it
     // likes would buy task outcomes with a reduction number -- the trade
     // every competitor makes quietly. At most KEEP_ROWS rows are added.
-    const rank = activeRanker(ctx.query);
+    const rank = activeRanker(ctx.query, ctx.embeddings);
     if (rank.active) {
       const rows = stripped.map((row) => JSON.stringify(row) ?? '');
       for (const i of rank.top(rows, tuning.keepRows)) keep.add(i);
