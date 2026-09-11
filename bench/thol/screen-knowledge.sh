@@ -24,6 +24,10 @@
 # Usage:
 #   bash bench/thol/screen-knowledge.sh
 #   TASKS=code-bugfix-py bash bench/thol/screen-knowledge.sh   # cheaper still
+#
+#   FRESH_GRAPH=0      keep the existing graph (pass 1 then adds to it)
+#   FRESH_GRAPH=force  required to clear a PROXY_GRAPH_DIR you have overridden,
+#                      since only the default one is known to belong to the rig
 
 set -euo pipefail
 
