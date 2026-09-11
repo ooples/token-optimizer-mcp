@@ -348,3 +348,86 @@ describe('the ONNX adapter rejects an output shape it cannot slice', () => {
     expect(Array.from(vectors[0])).toEqual([1, 2, 3, 4]);
   });
 });
+
+describe('a class body keeps the signatures inside it', () => {
+  // THE ASYMMETRY THIS CLOSES. The indentation walk treated every declaration
+  // alike: find the block, elide it, skip past it. For a function that is right,
+  // and it matches what the Babel path does. For a CLASS it elided the entire
+  // body as one span, so every method signature and every decorator inside went
+  // with it -- while the identical shape in TypeScript kept all three signatures
+  // and elided each method body separately.
+  //
+  // Signatures are the part an agent reads to decide whether it needs the file
+  // at all, so losing them is the expensive direction of a size win.
+  const NEWLINE = String.fromCharCode(10);
+  const PY = [
+    'class RealClass:',
+    '    @property',
+    '    def decorated(self):',
+    '        first = 1',
+    '        second = 2',
+    '        return first + second',
+    '',
+    '    def other_method(self, count):',
+    '        total = 0',
+    '        for i in range(count):',
+    '            total += i',
+    '        return total',
+    '',
+    'LAST_MARKER = "sentinel"',
+  ].join(NEWLINE);
+
+  it('keeps the decorator and every method signature', () => {
+    const out = compressCode(PY, { sourcePath: 'shape.py' });
+
+    expect(out).not.toBeNull();
+    const text = out?.text ?? '';
+    expect(text).toContain('class RealClass:');
+    expect(text).toContain('@property');
+    expect(text).toContain('def decorated(self):');
+    expect(text).toContain('def other_method(self, count):');
+    // Module-level code after the class must survive the walk too.
+    expect(text).toContain('LAST_MARKER');
+  });
+
+  it('elides the method bodies rather than the class', () => {
+    const out = compressCode(PY, { sourcePath: 'shape.py' });
+    const text = out?.text ?? '';
+
+    // The bodies are gone...
+    expect(text).not.toContain('total += i');
+    // ...and each was removed as its own elision, which is what a span per
+    // method means. A single elision here is the old behaviour: the whole class
+    // collapsed into one span.
+    expect((out?.elisions ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('does not treat declarations inside a string literal as real ones', () => {
+    // A regex over line starts cannot see quoting, so this is the case an AST
+    // would be bought for. It passes because the walk only elides BELOW a
+    // declaration it matched, and these sit at module level inside a literal.
+    const QUOTES = String.fromCharCode(34, 34, 34);
+    const withString = [
+      `SQL = ${QUOTES}`,
+      'def not_a_function():',
+      '    this is prose inside a triple quoted string',
+      'class NotAClass:',
+      '    also inside',
+      QUOTES,
+      '',
+      'def real_one(value):',
+      '    a = 1',
+      '    b = 2',
+      '    return value + a + b',
+    ].join(NEWLINE);
+
+    const out = compressCode(withString, { sourcePath: 'strings.py' });
+    const text = out?.text ?? '';
+
+    expect(text).toContain('def real_one(value):');
+    // The literal's contents survive: nothing treated `not_a_function` as a
+    // declaration whose body could be elided.
+    expect(text).toContain('not_a_function');
+    expect(text).toContain('NotAClass');
+  });
+});
