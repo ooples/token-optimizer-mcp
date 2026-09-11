@@ -478,6 +478,37 @@ function pathAddressed(
  * miss. See `anchor.ts` for the economics; without a store this is exactly
  * the frontier-only behaviour it has always had.
  */
+/**
+ * How much of the cached prefix a rewrite must remove before it pays for itself.
+ *
+ * THE ARITHMETIC THAT DECIDES THIS, because it is not a matter of taste. A
+ * cached token is read at 0.1x every turn. Rewriting the prefix means the
+ * provider caches OUR version instead, which costs 1.25x once on the whole
+ * prefix and then reads a smaller one at 0.1x thereafter. Removing a fraction f
+ * therefore breaks even after
+ *
+ *     1.25 * P  ==  0.1 * f * P * N        =>        N = 12.5 / f
+ *
+ * turns. At the reduction actually achieved on real Claude Code traffic --
+ * 2.47%, measured over 22 requests -- that is 507 turns. THOL tasks run 6 to 12
+ * and a long human session is around 100, so at that rate the rewrite cannot
+ * pay under any realistic session, and the measured result agreed: the proxy
+ * cost about 24% more than control with identical turn counts, and the cache
+ * writes it caused were 42% of weighted input cost while being 5.5% of tokens.
+ *
+ * 12.5% is break-even at 100 turns, which is a generous estimate of a long
+ * session. Below it we leave the prefix alone and compress only what the
+ * provider has not cached; above it the rewrite genuinely wins and is sent.
+ *
+ * This is not a guess that can quietly go stale: it is `CACHE_WRITE / CACHE_READ`
+ * divided by the session length we are willing to bet on, and both are named.
+ */
+const CACHE_WRITE_MULTIPLIER = 1.25;
+const CACHE_READ_MULTIPLIER = 0.1;
+const ASSUMED_SESSION_TURNS = 100;
+const MIN_PREFIX_REWRITE_SHARE =
+  CACHE_WRITE_MULTIPLIER / CACHE_READ_MULTIPLIER / ASSUMED_SESSION_TURNS;
+
 export function v1Frontier(
   request: ProviderRequest,
   options: StrategyOptions = {}
@@ -521,14 +552,41 @@ export function v1Frontier(
       )
     : (decision.record.knowledge ?? null);
 
-  const out = pathAddressed(request, options, !decision.reanchor);
+  let out = pathAddressed(request, options, !decision.reanchor);
+  let reanchored = decision.reanchor;
+
+  // A REWRITE OF THE CACHED PREFIX HAS TO CLEAR ITS OWN COST. See
+  // MIN_PREFIX_REWRITE_SHARE: below that share the 1.25x write we are about to
+  // cause outweighs every 0.1x read it will ever save, so the honest move is to
+  // leave the prefix exactly as the provider already has it and compress only
+  // what is not cached yet.
+  //
+  // Measured before this existed: 2.47% removed, and the resulting cache writes
+  // were 42% of weighted input cost.
+  if (decision.reanchor) {
+    const before = JSON.stringify(request).length;
+    const removed = before - JSON.stringify(out.request).length;
+    if (removed < before * MIN_PREFIX_REWRITE_SHARE) {
+      out = pathAddressed(request, options, true);
+      reanchored = false;
+    }
+  }
+
   const withKnowledge = injectKnowledge(out.request, knowledge);
 
   return {
     ...out,
     request: withKnowledge,
     injectedChars: out.injectedChars + (knowledge?.length ?? 0),
-    anchor: { ...decision, record: { ...decision.record, knowledge } },
+    // RECORDED AS WHAT WE ACTUALLY DID. Remembering `anchored: true` for a
+    // rewrite we declined would tell the next turn the provider holds our
+    // version when it holds the client's -- the exact cache write this check
+    // exists to avoid, bought with a lie about what went on the wire.
+    anchor: {
+      ...decision,
+      reanchor: reanchored,
+      record: { ...decision.record, anchored: reanchored, knowledge },
+    },
   };
 }
 
