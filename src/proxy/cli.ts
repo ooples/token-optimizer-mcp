@@ -189,6 +189,23 @@ export async function run(argv: readonly string[]): Promise<number> {
     return 1;
   }
 
+  // ARMED BEFORE THE URL IS ANNOUNCED, because the URL is what tells a launcher the
+  // proxy is ready -- and a launcher that reads it and immediately signals would
+  // otherwise land in the window before these handlers exist and be killed by the
+  // default disposition rather than shutting down. Caught by CI on Linux, where the
+  // child exited with a null code and a SIGTERM signal; Windows hid it, because a
+  // signal there is a forced termination either way.
+  const stopped = new Promise<void>((resolve) => {
+    const stop = (): void => {
+      started.server.close(() => resolve());
+      // Accepted sockets keep the server alive, and a streaming response can hold
+      // one open for minutes. A proxy asked to stop should stop.
+      started.server.closeAllConnections?.();
+    };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+  });
+
   const url = `http://127.0.0.1:${started.port}`;
   process.stdout.write(`${url}\n`);
   process.stderr.write(
@@ -196,16 +213,7 @@ export async function run(argv: readonly string[]): Promise<number> {
       `${args.upstream || process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM || DEFAULT_UPSTREAM}\n`
   );
 
-  await new Promise<void>((resolve) => {
-    const stop = (): void => {
-      started.server.close(() => resolve());
-      // Accepted sockets keep the server alive, and a streaming response can
-      // hold one open for minutes. A proxy asked to stop should stop.
-      started.server.closeAllConnections?.();
-    };
-    process.once('SIGINT', stop);
-    process.once('SIGTERM', stop);
-  });
+  await stopped;
 
   return 0;
 }
