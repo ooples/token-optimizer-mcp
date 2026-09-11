@@ -474,8 +474,10 @@ describe('a declined rewrite is reconsidered as the conversation grows', () => {
     const early = removedFrom(conversation(1), anchors);
     expect(early).toBe(0);
 
-    // The same conversation once it has accumulated enough to be worth it.
-    const later = removedFrom(conversation(8), anchors);
+    // The same conversation once it has accumulated enough to be worth it --
+    // both in saving AND in length, since the write only repays out of the
+    // turns that follow it, and a session that ends first has just paid it.
+    const later = removedFrom(conversation(24), anchors);
     expect(later).toBeGreaterThan(0);
   });
 

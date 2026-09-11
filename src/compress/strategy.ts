@@ -506,6 +506,21 @@ function pathAddressed(
 const CACHE_WRITE_MULTIPLIER = 1.25;
 const CACHE_READ_MULTIPLIER = 0.1;
 const ASSUMED_SESSION_TURNS = 100;
+/**
+ * How long a conversation must already be before we bet on it continuing.
+ *
+ * A rewrite needs 12.5/f turns of cheap reads after it to repay its write, so
+ * the bet is on turns REMAINING -- which nothing here can know. Turns so far is
+ * the only available estimate, and a session that has already run this long is
+ * the kind that plausibly runs long enough again.
+ *
+ * Each turn contributes two messages, so this is roughly twenty turns: past the
+ * length of every task in the benchmark, which is deliberate. Those tasks end
+ * at 6 to 12 turns and measurably cannot amortise a write, so the honest
+ * behaviour there is not to make one.
+ */
+const MIN_MESSAGES_TO_AMORTISE = 40;
+
 const MIN_PREFIX_REWRITE_SHARE =
   CACHE_WRITE_MULTIPLIER / CACHE_READ_MULTIPLIER / ASSUMED_SESSION_TURNS;
 
@@ -564,7 +579,21 @@ export function v1Frontier(
   // provider still holds the client's prefix, which is what it held when we
   // declined, so adopting the rewrite later costs the same write it would
   // have cost then.
-  const attempt = decision.reanchor || decision.reason === 'left-alone';
+  // AND ONLY IN A SESSION LONG ENOUGH TO AMORTISE THE WRITE. Reconsidering is
+  // the right behaviour, but it is not free: it lets a rewrite happen the moment
+  // the saving clears the floor, and the 1.25x write that buys still needs
+  // 12.5/f turns of 0.1x reads AFTER it to repay. A session that ends before
+  // then has simply paid the write.
+  //
+  // Measured: on 6-to-12 turn tasks, reconsidering cost $0.81 against $0.76 for
+  // the same build that never rewrote -- worse, and by about what the arithmetic
+  // predicts. Turns so far is the only estimate of turns remaining available
+  // here, so a conversation has to have shown it is long before we bet on it
+  // continuing.
+  const longEnough =
+    (request.messages ?? []).length >= MIN_MESSAGES_TO_AMORTISE;
+  const attempt =
+    decision.reanchor || (decision.reason === 'left-alone' && longEnough);
   let out = pathAddressed(request, options, !attempt);
   let reanchored = attempt;
 
