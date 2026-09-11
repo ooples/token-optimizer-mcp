@@ -4,6 +4,7 @@ import {
   anchorStore,
   conversationKey,
   COLD_MESSAGE_LIMIT,
+  type AnchorStore,
 } from '../../../src/compress/anchor.js';
 import { v1Frontier } from '../../../src/compress/strategy.js';
 import type { ProviderRequest } from '../../../src/compress/frontier.js';
@@ -389,5 +390,100 @@ describe('v1 with an anchor store', () => {
     // The body the question named survives, and a neighbour's does not.
     expect(fresh).toContain("body-of-handler3'");
     expect(fresh).not.toContain("body-of-handler11'");
+  });
+});
+
+describe('a declined rewrite is reconsidered as the conversation grows', () => {
+  // WHY THE FIRST REFUSAL MUST NOT BE FINAL. Rewriting the cached prefix has to
+  // repay its own 1.25x cache write out of 0.1x reads, so it is refused while
+  // the saving is too small. Early in a session there is barely any history to
+  // remove, so the saving is ALWAYS small then -- and treating that refusal as
+  // permanent left the rest of the session uncompressed.
+  //
+  // Measured in a six-turn simulation: declined at 10.3% on turn two, worth
+  // 22.7% by turn six. Before this, turns two through six all removed nothing.
+  const NEWLINE = String.fromCharCode(10);
+  const body = (n: number): string =>
+    Array.from(
+      { length: n },
+      (_, i) =>
+        `export function helper${i}(input: number): number {` +
+        NEWLINE +
+        `  const doubled = input * 2;` +
+        NEWLINE +
+        `  const shifted = doubled + ${i};` +
+        NEWLINE +
+        `  return shifted;` +
+        NEWLINE +
+        `}`
+    ).join(NEWLINE);
+
+  const conversation = (turns: number): ProviderRequest => {
+    const messages: unknown[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'fix the failing test' }],
+      },
+    ];
+    for (let i = 0; i < turns; i += 1) {
+      messages.push({
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: `t${i}`,
+            name: 'Read',
+            input: { file_path: `f${i}.ts` },
+          },
+        ],
+      });
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: `t${i}`,
+            content: [{ type: 'text', text: body(60) }],
+            ...(i === turns - 1
+              ? { cache_control: { type: 'ephemeral' } }
+              : {}),
+          },
+        ],
+      });
+    }
+    return {
+      system: 'You are a coding agent. '.repeat(400),
+      messages,
+    } as unknown as ProviderRequest;
+  };
+
+  const removedFrom = (
+    request: ProviderRequest,
+    anchors: AnchorStore
+  ): number => {
+    const before = JSON.stringify(request).length;
+    const out = v1Frontier(request, { spill: () => '/spill/x.txt', anchors });
+    if (out.anchor) anchors.remember(out.anchor.key, out.anchor.record);
+    return before - JSON.stringify(out.request).length;
+  };
+
+  it('adopts the rewrite on a later turn after refusing an early one', () => {
+    const anchors = anchorStore();
+
+    // A first turn with almost no history: the rewrite cannot repay its write.
+    const early = removedFrom(conversation(1), anchors);
+    expect(early).toBe(0);
+
+    // The same conversation once it has accumulated enough to be worth it.
+    const later = removedFrom(conversation(8), anchors);
+    expect(later).toBeGreaterThan(0);
+  });
+
+  it('keeps refusing while the saving stays below the floor', () => {
+    // The other half, without which the test above would pass against a rule
+    // that simply always rewrote.
+    const anchors = anchorStore();
+    expect(removedFrom(conversation(1), anchors)).toBe(0);
+    expect(removedFrom(conversation(1), anchors)).toBe(0);
   });
 });

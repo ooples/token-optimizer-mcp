@@ -552,8 +552,21 @@ export function v1Frontier(
       )
     : (decision.record.knowledge ?? null);
 
-  let out = pathAddressed(request, options, !decision.reanchor);
-  let reanchored = decision.reanchor;
+  // RECONSIDERED EVERY TURN, because the answer changes as the conversation
+  // grows. The break-even test below compares what a rewrite would remove
+  // against what it costs, and early in a session there is little history to
+  // remove -- so a conversation can be declined at 10% on turn two and be
+  // worth 23% by turn six. Treating the first refusal as final left that on
+  // the table for the rest of the session.
+  //
+  // `left-alone` is exactly the state of having declined before, so it is
+  // retried rather than honoured. Nothing is lost by asking again: the
+  // provider still holds the client's prefix, which is what it held when we
+  // declined, so adopting the rewrite later costs the same write it would
+  // have cost then.
+  const attempt = decision.reanchor || decision.reason === 'left-alone';
+  let out = pathAddressed(request, options, !attempt);
+  let reanchored = attempt;
 
   // A REWRITE OF THE CACHED PREFIX HAS TO CLEAR ITS OWN COST. See
   // MIN_PREFIX_REWRITE_SHARE: below that share the 1.25x write we are about to
@@ -563,7 +576,7 @@ export function v1Frontier(
   //
   // Measured before this existed: 2.47% removed, and the resulting cache writes
   // were 42% of weighted input cost.
-  if (decision.reanchor) {
+  if (attempt) {
     const before = JSON.stringify(request).length;
     const removed = before - JSON.stringify(out.request).length;
     if (removed < before * MIN_PREFIX_REWRITE_SHARE) {
