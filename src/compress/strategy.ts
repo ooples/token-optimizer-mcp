@@ -188,6 +188,27 @@ function blockTextAt(request: ProviderRequest, at: Position): string | null {
   return typeof block?.text === 'string' ? block.text : null;
 }
 
+/** A tool result, whose payload is nested rather than on `text`. */
+interface ToolResultBlock {
+  readonly type: string;
+  readonly content?: unknown;
+}
+
+/**
+ * Whether a block is a tool result.
+ *
+ * Checked by `type` rather than by the presence of `content`, because a
+ * `tool_use` block also has structured fields and must NOT be rewritten -- its
+ * input is an argument the model chose, not output to be summarised.
+ */
+function isToolResult(block: unknown): boolean {
+  return (
+    typeof block === 'object' &&
+    block !== null &&
+    (block as ToolResultBlock).type === 'tool_result'
+  );
+}
+
 function mapBlocks(
   request: ProviderRequest,
   visit: (text: string, at: Position, message: Message) => string | null
@@ -198,9 +219,53 @@ function mapBlocks(
 
     const mapped = content.map((raw, bi) => {
       const block = raw as Block;
-      if (typeof block?.text !== 'string') return block;
-      const replaced = visit(block.text, { message: mi, block: bi }, message);
-      return replaced === null ? block : { ...block, text: replaced };
+      const at = { message: mi, block: bi };
+
+      if (typeof block?.text === 'string') {
+        const replaced = visit(block.text, at, message);
+        return replaced === null ? block : { ...block, text: replaced };
+      }
+
+      // A TOOL RESULT CARRIES ITS PAYLOAD ONE LEVEL DOWN, and skipping it made
+      // this compressor blind to almost everything a coding agent sends.
+      //
+      // This walker keyed on `block.text`. A tool_result has no `text`: the
+      // file that was read, the command output, the search hits all live under
+      // `content`, either as a plain string or as nested text blocks. So every
+      // one of them was returned untouched -- the same defect already recorded
+      // here for images, in the engine that exists to compress exactly this.
+      //
+      // MEASURED, on 23 real requests through the rig: 2.79 MB of traffic,
+      // largest request 128 KB, and 23 of 23 reported "compression did not
+      // pay" having removed 0 bytes. The identical file content compresses
+      // 36.4% as a text block and 0.0% as a tool_result.
+      //
+      // The nested text inherits its CONTAINER's position, which is what the
+      // frontier comparison needs: a tool_result sits on one side of the cache
+      // breakpoint as a unit, and its parts cannot straddle it.
+      if (isToolResult(block)) {
+        const inner = (block as ToolResultBlock).content;
+
+        if (typeof inner === 'string') {
+          const replaced = visit(inner, at, message);
+          return replaced === null ? block : { ...block, content: replaced };
+        }
+
+        if (Array.isArray(inner)) {
+          let touched = false;
+          const mappedInner = inner.map((rawInner) => {
+            const innerBlock = rawInner as Block;
+            if (typeof innerBlock?.text !== 'string') return innerBlock;
+            const replaced = visit(innerBlock.text, at, message);
+            if (replaced === null) return innerBlock;
+            touched = true;
+            return { ...innerBlock, text: replaced };
+          });
+          return touched ? { ...block, content: mappedInner } : block;
+        }
+      }
+
+      return block;
     });
 
     return { ...message, content: mapped };
