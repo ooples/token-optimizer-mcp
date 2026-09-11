@@ -511,15 +511,24 @@ function forward(
       // a listener attached after delivery has already begun.
       const ledger = facts ? accountingPath() : null;
       if (ledger && facts) {
-        tapUsage(upstreamRes, (usage) => {
-          appendRecord(ledger, {
-            ts: new Date().toISOString(),
-            path: requestPath(req.url) ?? '/',
-            status: upstreamRes.statusCode || 0,
-            ...facts,
-            usage,
-          });
-        });
+        // THE ENCODING HAS TO BE HANDED OVER, and forgetting to was why the
+        // ledger still recorded no usage after the decoder was written: the
+        // parameter existed, the call site never passed it, and every test fed
+        // the tap plaintext so nothing caught it.
+        const encoding = upstreamRes.headers['content-encoding'];
+        tapUsage(
+          upstreamRes,
+          (usage) => {
+            appendRecord(ledger, {
+              ts: new Date().toISOString(),
+              path: requestPath(req.url) ?? '/',
+              status: upstreamRes.statusCode || 0,
+              ...facts,
+              usage,
+            });
+          },
+          typeof encoding === 'string' ? encoding : undefined
+        );
       }
       // Piped, not buffered: an SSE stream must arrive as it is produced, or
       // the agent sits waiting for a response that has already started.
