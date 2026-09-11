@@ -3,9 +3,17 @@
  *
  * WHY THIS EXISTS. The router was a `switch` over five engines, so a user with
  * a proprietary log format, a domain payload or simply a better compressor than
- * ours had nowhere to put it. HeadRoom ships six fixed engines and the same
+ * ours had nowhere to put it. HeadRoom's engine set is fixed too -- the same
  * closed door; an extension point is the cheapest way to be beaten less often,
  * because the next content type is always one nobody anticipated.
+ *
+ * NO COUNT IS CLAIMED HERE, deliberately. This comment said "six fixed engines"
+ * and that number could not be supported: their README names three
+ * (SmartCrusher for JSON, CodeCompressor for code, Kompress-v2-base for prose)
+ * and `compression/handlers/` holds `base.py`, `code_handler.py` and
+ * `json_handler.py`. The argument was never about how many they have; it is
+ * about whether a user can add one. Counting a competitor's internals in a
+ * source comment invites being wrong about them in public, and we were.
  *
  * NO PRIVILEGED TIER. The built-ins register through this exactly as a third
  * party does, so there is one code path to test and no "works for us, breaks
