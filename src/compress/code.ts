@@ -69,6 +69,38 @@ const DECLARES: Record<string, RegExp> = {
     /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(?:async\s+)?(?:function\s|class\s|interface\s|enum\s|(?:public|private|protected|static|readonly)\s|const\s+[\w$]+\s*=|[\w$]+\s*\([^)]*\)\s*[:{])/,
 };
 
+/**
+ * Declarations that CONTAIN other declarations, per language.
+ *
+ * WHY THIS IS SEPARATE FROM `DECLARES`. The walk below used to treat every
+ * declaration the same: find its block, elide the block, skip past it. For a
+ * function that is right -- the body is one unit and nested helpers belong to
+ * it, which is also what the Babel path does. For a CLASS it threw away the
+ * thing worth keeping: the whole class body became one span, so every method
+ * signature and every decorator inside it was elided along with the code.
+ *
+ * Measured on a Python fixture: `class RealClass` collapsed to a single
+ * nine-line span, taking `@property` and two method signatures with it, while
+ * the same shape in TypeScript kept all three signatures and elided each method
+ * body separately. That asymmetry was the real gap against a competitor's
+ * AST-per-language claim -- not reduction, which the indentation walk already
+ * wins on Python, and not language coverage.
+ *
+ * So a container is recursed into rather than elided, and only leaf
+ * declarations produce spans. No parser is needed for that: the indentation
+ * that makes a block findable at all makes the nested ones findable too.
+ */
+const CONTAINERS: Record<string, RegExp> = {
+  python: /^\s*class\s/,
+  go: /^\s*type\s+\w+\s+(?:struct|interface)\b/,
+  rust: /^\s*(?:pub\s+)?(?:impl|trait|mod)\s/,
+  java: /^\s*(?:(?:public|private|protected|abstract|final|static)\s+)*(?:class|interface|enum)\s/,
+  ruby: /^\s*(?:class|module)\s/,
+  c: /^\s*(?:typedef\s+)?(?:struct|union|enum)\s/,
+  generic:
+    /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(?:class|interface|namespace)\s/,
+};
+
 const EXT_LANGUAGE: Record<string, string> = {
   py: 'python',
   go: 'go',
@@ -213,6 +245,7 @@ function heuristicBodies(
 ): Array<[number, number]> {
   const declare = DECLARES[language];
   if (!declare) return [];
+  const container = CONTAINERS[language];
   const lines = text.split('\n');
   const spans: Array<[number, number]> = [];
 
@@ -238,6 +271,12 @@ function heuristicBodies(
       scan = j;
       body = j;
     }
+    // A CONTAINER IS WALKED INTO, NOT ELIDED. Eliding it would take every
+    // nested signature and decorator with it; leaving `i` where it is lets the
+    // same loop find those nested declarations and give each its own span,
+    // which is what the Babel path does for a class in JS/TS.
+    if (container?.test(lines[i])) continue;
+
     // 1-based, and the declaration line itself is kept.
     if (body - i >= MIN_BODY_LINES) spans.push([i + 2, body + 1]);
     i = scan;

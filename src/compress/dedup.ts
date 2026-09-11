@@ -110,8 +110,44 @@ function opening(text: string): string {
  * These hundred characters mean something to the reader on their own, and the
  * content they point at is in the same request.
  */
+/**
+ * The same reference, plus a label, for a referent that will be pointed at more
+ * than once.
+ *
+ * The label costs about five characters here and saves about seventy on every
+ * later repeat, so it is only ever attached when a second reference exists to
+ * use it -- see `dedupBlocks`. Attaching it unconditionally made the common
+ * case (a block repeated exactly once) slightly worse.
+ */
+function labelledReference(
+  bytes: number,
+  referent: string,
+  label: number
+): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${opening(referent)}" (#${label})]`;
+}
+
+/**
+ * A repeat of something already labelled: the cheap form.
+ *
+ * STILL NOT A HASH. `#2` is an ordinal into this request, and the thing it
+ * names is a reference that spelled itself out in full further up the same
+ * payload -- so a reader who scrolls finds a quoted opening line, not a table
+ * lookup that can miss. That is the property their `<<ccr:a1b2c3>>` gives up,
+ * and the one that degrades to `[unresolved: entry not found]` (#2509).
+ *
+ * WHAT IT BUYS. The legible form runs about 100 characters against their 24,
+ * and on the repeat-heavy workloads that difference was the entire margin by
+ * which their arm led. Paying it once per distinct referent instead of once
+ * per repeat keeps the legibility where a reader needs it -- the first time --
+ * and charges roughly their price for every repeat after.
+ */
+function repeatReference(bytes: number, label: number): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, as #${label} above]`;
+}
+
 function backReference(bytes: number, referent: string): string {
-  return `[... ${bytes.toLocaleString('en-US')} bytes, already shown above starting "${opening(referent)}"]`;
+  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${opening(referent)}"]`;
 }
 
 /**
@@ -142,8 +178,17 @@ function backReference(bytes: number, referent: string): string {
  * Order matters and is preserved: the FIRST occurrence is always kept, because
  * it is what every later reference points at.
  */
+/** A position in the output: either literal text, or a reference to be worded. */
+type Slot =
+  | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'ref'; readonly bytes: number; readonly referent: string };
+
 export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
-  const texts: string[] = [];
+  // COLLECTED BEFORE THEY ARE WORDED. How a reference should be phrased depends
+  // on how many OTHER references share its referent, which is not known until
+  // every block has been matched. Collecting slots first keeps that decision in
+  // one place rather than duplicating the matching rules in a counting pass.
+  const slots: Slot[] = [];
   const elisions: Elision[] = [];
 
   // By source bytes, but ONLY for a block that was never rewritten -- an
@@ -171,7 +216,7 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     // rewritten, so it arrives byte-identical no matter what.
     if (!block.touchable) {
       remember(block);
-      texts.push(block.text);
+      slots.push({ kind: 'text', text: block.text });
       continue;
     }
 
@@ -200,7 +245,11 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
         : undefined);
 
     if (earlier !== undefined) {
-      texts.push(backReference(block.original.length, earlier));
+      slots.push({
+        kind: 'ref',
+        bytes: block.original.length,
+        referent: earlier,
+      });
       elisions.push({
         removed: `${block.original.length.toLocaleString('en-US')} bytes already shown earlier in this conversation`,
         // The referent is in the same request. There is nothing to look up,
@@ -212,8 +261,39 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     }
 
     remember(block);
-    texts.push(block.text);
+    slots.push({ kind: 'text', text: block.text });
   }
+
+  // A LABEL ONLY WHERE IT PAYS. One reference to a referent is the common case
+  // and a label would make it five characters worse for no later saving; from
+  // two references on, the label is spelled out once and every repeat after it
+  // costs roughly what a hash would.
+  const referenceCounts = new Map<string, number>();
+  for (const slot of slots) {
+    if (slot.kind === 'ref')
+      referenceCounts.set(
+        slot.referent,
+        (referenceCounts.get(slot.referent) ?? 0) + 1
+      );
+  }
+
+  const labels = new Map<string, number>();
+  for (const slot of slots) {
+    if (slot.kind !== 'ref') continue;
+    if ((referenceCounts.get(slot.referent) ?? 0) < 2) continue;
+    if (!labels.has(slot.referent)) labels.set(slot.referent, labels.size + 1);
+  }
+
+  const spelledOut = new Set<string>();
+  const texts = slots.map((slot) => {
+    if (slot.kind === 'text') return slot.text;
+    const label = labels.get(slot.referent);
+    if (label === undefined) return backReference(slot.bytes, slot.referent);
+    if (spelledOut.has(slot.referent))
+      return repeatReference(slot.bytes, label);
+    spelledOut.add(slot.referent);
+    return labelledReference(slot.bytes, slot.referent, label);
+  });
 
   return { texts, elisions };
 }
