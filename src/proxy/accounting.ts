@@ -79,6 +79,17 @@ export interface CompressionFacts {
   readonly elisions?: number;
   readonly deferredTools?: number;
   readonly deferredToolChars?: number;
+  /**
+   * Characters of cached knowledge added to the request.
+   *
+   * RECORDED BECAUSE IT IS THE ONE THING HERE THAT MAKES A REQUEST BIGGER,
+   * and it was the one fact the ledger did not carry. The proxy printed
+   * `+1927 injected` to its log while the ledger line beside it said nothing,
+   * so an A/B of the knowledge block read its own effect as zero and would
+   * have reported the feature inert. A cost that only appears in a log a
+   * measurement does not parse is a cost nobody attributes.
+   */
+  readonly injectedChars?: number;
   readonly systemChars?: number;
   readonly toolsChars?: number;
   readonly toolCount?: number;

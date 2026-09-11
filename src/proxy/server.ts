@@ -881,24 +881,14 @@ export async function startProxy(
         tuning
       );
       options.onSummary?.({ path: req.url || '/', ...summary });
-      forward(upstream, req, res, next, {
-        compressed: summary.compressed,
-        reason: summary.reason,
-        beforeBytes: summary.beforeBytes,
-        afterBytes: summary.afterBytes,
-        anchorReason: summary.anchorReason,
-        elisions: summary.elisions,
-        deferredTools: summary.deferredTools,
-        deferredToolChars: summary.deferredToolChars,
-        systemChars: summary.systemChars,
-        toolsChars: summary.toolsChars,
-        toolCount: summary.toolCount,
-        coreToolChars: summary.coreToolChars,
-        mcpToolChars: summary.mcpToolChars,
-        topTools: summary.topTools,
-        messagesChars: summary.messagesChars,
-        messageCount: summary.messageCount,
-      });
+      // SPREAD, NOT RE-LISTED. This was seventeen fields copied across by hand,
+      // and the ledger is only as good as that list is complete: injectedChars
+      // was missing from it, so the proxy printed `+1927 injected` to its log
+      // while the ledger line beside it said nothing, and an A/B of the
+      // knowledge block read its own effect as zero. The summary IS the
+      // compression facts -- every field of it belongs in the ledger, and a
+      // field added to one should never need remembering in the other.
+      forward(upstream, req, res, next, summary);
     })();
   });
 
