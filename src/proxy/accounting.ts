@@ -77,6 +77,11 @@ export interface CompressionFacts {
   readonly reason?: string;
   readonly anchorReason?: string;
   readonly elisions?: number;
+  readonly systemChars?: number;
+  readonly toolsChars?: number;
+  readonly toolCount?: number;
+  readonly messagesChars?: number;
+  readonly messageCount?: number;
   readonly beforeBytes: number;
   readonly afterBytes: number;
 }
@@ -214,8 +219,17 @@ export function tapUsage(
       finish();
     }
   };
+  // EVERY WAY A RESPONSE CAN FINISH, not just the tidy ones. The ledger
+  // recorded 31 requests for a run with about 50 tool calls, because only
+  // 'end' and 'error' were wired: a stream that is destroyed, aborted by the
+  // client, or closed after the last chunk without emitting 'end' left no
+  // record at all. An instrument that silently drops half its observations is
+  // worse than none, because the half it keeps still looks like a complete
+  // picture. `settle` is idempotent, so listening to all of them is safe.
   stream.on('end', settle);
   stream.on('error', settle);
+  stream.on('close', settle);
+  stream.on('aborted', settle);
 }
 
 /**

@@ -217,6 +217,21 @@ data["runs_root"] = "/results/runs"
 cfg.write_text(json.dumps(data, indent=1) + "\n")
 print("   runs_root -> /results/runs")
 PY
+    # ARTIFACTS ARE A SEPARATE PATH FROM runs_root, and setting only the latter
+    # persisted nothing. runner.py writes workspaces under CFG["runs_root"] but
+    # per-run artifacts -- transcript.jsonl, run.json, stderr.log, verify.txt --
+    # under ARTIFACTS = ROOT/"runs", hardcoded to the THOL home. So /results/runs
+    # stayed empty while every transcript died with the container, and the one
+    # question the numbers could not answer -- what the extra turn through the
+    # proxy actually IS -- needed exactly those transcripts.
+    #
+    # Symlinked rather than copied afterwards, so an interrupted campaign still
+    # leaves behind everything it paid for.
+    mkdir -p /results/artifacts
+    rm -rf "$THOL_HOME/runs"
+    ln -sfn /results/artifacts "$THOL_HOME/runs"
+    echo "   per-run artifacts -> /results/artifacts"
+
     [ -e /results/results.sqlite ] || : > /results/results.sqlite
     ln -sf /results/results.sqlite "$THOL_HOME/results.sqlite"
     echo "   results.sqlite -> /results/results.sqlite"

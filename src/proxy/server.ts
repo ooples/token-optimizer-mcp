@@ -185,6 +185,12 @@ export interface ProxySummary {
    */
   readonly anchorReason?: string;
   readonly elisions?: number;
+  /** Section sizes, for locating where a request's bytes live. No content. */
+  readonly systemChars?: number;
+  readonly toolsChars?: number;
+  readonly toolCount?: number;
+  readonly messagesChars?: number;
+  readonly messageCount?: number;
 }
 
 /** Enabled only on an explicit opt-in, and never when the kill switch is set. */
@@ -327,8 +333,39 @@ export function compressBody(
   // -- same tool calls, same turns -- which cannot come from compression. This
   // switch forwards bytes and does nothing else, so a run with it on says
   // whether that overhead belongs to our rewriting or to being proxied at all.
-  if (/^(1|true|yes|on)$/i.test(process.env.TOKEN_OPTIMIZER_PROXY_NULL || ''))
-    return unchanged('null proxy');
+  if (/^(1|true|yes|on)$/i.test(process.env.TOKEN_OPTIMIZER_PROXY_NULL || '')) {
+    // WHERE THE BYTES ACTUALLY ARE, measured but never recorded. A matched pair
+    // showed the proxied run carrying ~9,400 more tokens per request than the
+    // same run without a proxy, while the CONVERSATION was the same size (9,035
+    // against 9,488 characters). So the difference lives in the static part --
+    // system prompt and tool schema, which are ~98% of a 120 KB request -- and
+    // nothing was reporting their sizes. Sizes only; no content is recorded.
+    let shape: Record<string, number> | undefined;
+    try {
+      const seen = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
+      const sizeOf = (v: unknown): number =>
+        v === undefined ? 0 : JSON.stringify(v).length;
+      shape = {
+        systemChars: sizeOf(seen.system),
+        toolsChars: sizeOf(seen.tools),
+        toolCount: Array.isArray(seen.tools) ? seen.tools.length : 0,
+        messagesChars: sizeOf(seen.messages),
+        messageCount: Array.isArray(seen.messages) ? seen.messages.length : 0,
+      };
+    } catch {
+      // Not JSON; the null path forwards it regardless.
+    }
+    return {
+      body,
+      summary: {
+        beforeBytes: before,
+        afterBytes: before,
+        compressed: false,
+        reason: 'null proxy',
+        ...(shape ?? {}),
+      },
+    };
+  }
 
   if (before < MIN_BYTES) return unchanged('below the size floor');
 
@@ -745,6 +782,11 @@ export async function startProxy(
         afterBytes: summary.afterBytes,
         anchorReason: summary.anchorReason,
         elisions: summary.elisions,
+        systemChars: summary.systemChars,
+        toolsChars: summary.toolsChars,
+        toolCount: summary.toolCount,
+        messagesChars: summary.messagesChars,
+        messageCount: summary.messageCount,
       });
     })();
   });
