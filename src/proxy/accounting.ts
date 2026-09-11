@@ -77,6 +77,8 @@ export interface CompressionFacts {
   readonly reason?: string;
   readonly anchorReason?: string;
   readonly elisions?: number;
+  readonly deferredTools?: number;
+  readonly deferredToolChars?: number;
   readonly systemChars?: number;
   readonly toolsChars?: number;
   readonly toolCount?: number;

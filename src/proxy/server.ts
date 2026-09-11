@@ -38,6 +38,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { v1Frontier, type StrategyResult } from '../compress/strategy.js';
+import { deferTools, withAdvancedToolUse } from '../compress/tools.js';
 import {
   accountingPath,
   appendRecord,
@@ -186,6 +187,8 @@ export interface ProxySummary {
   readonly anchorReason?: string;
   readonly elisions?: number;
   /** Section sizes, for locating where a request's bytes live. No content. */
+  readonly deferredTools?: number;
+  readonly deferredToolChars?: number;
   readonly systemChars?: number;
   readonly toolsChars?: number;
   readonly toolCount?: number;
@@ -379,6 +382,29 @@ export function compressBody(
   }
   if (!Array.isArray(parsed.messages)) return unchanged('no messages array');
 
+  // TOOL DEFERRAL IS ITS OWN CAPABILITY, and deliberately not folded into the
+  // compression path. They address different halves of the request -- measured
+  // live, tool definitions were 47.6% of a 179,564 byte request and the
+  // conversation about 2% -- and keeping them separate is what lets either be
+  // measured without the other's effect being attributed to it.
+  let deferred = 0;
+  let deferredChars = 0;
+  if (
+    /^(1|true|yes|on)$/i.test(
+      process.env.TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS || ''
+    )
+  ) {
+    try {
+      const out = deferTools(parsed);
+      parsed = out.request;
+      deferred = out.deferredCount;
+      deferredChars = out.deferredChars;
+    } catch {
+      // Fails open like everything else here: a tools array we cannot rewrite
+      // is forwarded as it arrived.
+    }
+  }
+
   let result: StrategyResult;
   try {
     result = v1Frontier(parsed, { spill, anchors, findings, tuning });
@@ -391,7 +417,7 @@ export function compressBody(
   // deliberately added, which is the one case where growing the request is
   // the point. It is charged in the summary either way, and it only
   // happens on a turn the prefix was being rewritten anyway.
-  const added = result.injectedChars > 0;
+  const added = result.injectedChars > 0 || deferred > 0;
   // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
   // shaves a couple of percent still plants elisions the agent may read back,
   // and one such turn costs more than the whole saving.
@@ -428,6 +454,8 @@ export function compressBody(
       beforeBytes: before,
       afterBytes: next.length,
       compressed: true,
+      deferredTools: deferred,
+      deferredToolChars: deferredChars,
       anchorReason: result.anchor?.reason,
       elisions: result.elisions.length,
       ...(added ? { injectedChars: result.injectedChars } : {}),
@@ -579,6 +607,13 @@ function forward(
   // Set last and unconditionally: the body was rewritten, so its length is
   // ours to state and no longer the client's.
   headers['content-length'] = String(body.length);
+  // THE BETA THAT MAKES defer_loading MEAN ANYTHING. Appended to whatever the
+  // client already asked for, never replacing it -- overwriting would switch
+  // off betas it needs and the failure would surface far from here.
+  if (facts?.deferredTools)
+    headers['anthropic-beta'] = withAdvancedToolUse(
+      req.headers['anthropic-beta']
+    );
 
   const upstreamReq = send(
     {
@@ -782,6 +817,8 @@ export async function startProxy(
         afterBytes: summary.afterBytes,
         anchorReason: summary.anchorReason,
         elisions: summary.elisions,
+        deferredTools: summary.deferredTools,
+        deferredToolChars: summary.deferredToolChars,
         systemChars: summary.systemChars,
         toolsChars: summary.toolsChars,
         toolCount: summary.toolCount,
