@@ -73,6 +73,18 @@ if [ "$FRESH_GRAPH" != "0" ]; then
   # gate below catches it, but only after the operator has waited for a pass that did
   # nothing.
   log "Clearing the proxy graph and the warm-up volume so pass 1 genuinely refills it"
+  # A SYMLINK IN THE PATH DEFEATS THE CHECK ABOVE, which compares text. If
+  # PROXY_GRAPH_DIR -- or the .token-optimizer inside it -- is a link, the string
+  # can equal the default while rm -rf resolves the intermediate component and
+  # deletes a wiki somewhere else entirely. The trailing component needs no test:
+  # rm does not follow a symlink it is asked to remove, so a linked `wiki` loses
+  # the link and not the target.
+  if [ -L "$PROXY_GRAPH_DIR" ] || [ -L "$PROXY_GRAPH_DIR/.token-optimizer" ]; then
+    printf 'refusing to clear a graph reached through a symbolic link\n' >&2
+    printf '  PROXY_GRAPH_DIR=%s\n' "$PROXY_GRAPH_DIR" >&2
+    printf '  resolve it to a real directory, or re-run with FRESH_GRAPH=0\n' >&2
+    exit 2
+  fi
   rm -rf -- "$PROXY_GRAPH_DIR/.token-optimizer/wiki"
   docker volume rm "$WARMUP_VOLUME" >/dev/null 2>&1 || true
 fi
