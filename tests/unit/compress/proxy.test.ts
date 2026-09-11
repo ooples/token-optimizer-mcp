@@ -10,8 +10,10 @@ import {
   upstreamIsSafe,
   requestPath,
   knowledgeEnabled,
+  keepToolsFromEnv,
 } from '../../../src/proxy/server.js';
 import { anchorStore } from '../../../src/compress/anchor.js';
+import { DEFAULT_KEEP_RELEVANT } from '../../../src/compress/tools.js';
 
 /**
  * The proxy, against a real upstream rather than a mock.
@@ -482,6 +484,37 @@ describe('the destination is ours to choose', () => {
 
     expect(attacker.seen.headers).toBeUndefined();
     expect(attacker.seen.body).toBeUndefined();
+  });
+});
+
+describe('how many tool definitions stay loaded', () => {
+  it('keeps the measured default when the variable is absent or blank', () => {
+    // A campaign deferred 14 of 26 definitions at this setting and never
+    // triggered a single tool search, so the default is the value evidence
+    // supports rather than an arbitrary one.
+    expect(keepToolsFromEnv({})).toBe(DEFAULT_KEEP_RELEVANT);
+    expect(keepToolsFromEnv({ TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS: '   ' })).toBe(
+      DEFAULT_KEEP_RELEVANT
+    );
+  });
+
+  it('takes the value asked for, including nothing kept at all', () => {
+    expect(keepToolsFromEnv({ TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS: '12' })).toBe(
+      12
+    );
+    // Zero is a real setting -- defer every large definition -- and must not
+    // be confused with unset, which is what a falsy check would do.
+    expect(keepToolsFromEnv({ TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS: '0' })).toBe(0);
+  });
+
+  it('falls back rather than throwing on a value that makes no sense', () => {
+    // A typo in an environment variable must not take a session down, and a
+    // NaN reaching the ranker would defer an arbitrary set of tools.
+    for (const bad of ['five', '-1', '2.5', 'Infinity']) {
+      expect(keepToolsFromEnv({ TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS: bad })).toBe(
+        DEFAULT_KEEP_RELEVANT
+      );
+    }
   });
 });
 

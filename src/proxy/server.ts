@@ -42,7 +42,11 @@ import {
   questionIn,
   type StrategyResult,
 } from '../compress/strategy.js';
-import { deferTools, withAdvancedToolUse } from '../compress/tools.js';
+import {
+  deferTools,
+  withAdvancedToolUse,
+  DEFAULT_KEEP_RELEVANT,
+} from '../compress/tools.js';
 import {
   accountingPath,
   appendRecord,
@@ -437,7 +441,10 @@ export function compressBody(
       // The task text steers which non-core tools stay loaded, so the model
       // never has to search for one -- and a search costs a round trip plus a
       // second cold prefix write.
-      const out = deferTools(parsed, { query: questionIn(parsed) });
+      const out = deferTools(parsed, {
+        query: questionIn(parsed),
+        keepRelevant: keepToolsFromEnv(),
+      });
       parsed = out.request;
       deferred = out.deferredCount;
       deferredChars = out.deferredChars;
@@ -539,6 +546,28 @@ const HOP_BY_HOP = new Set([
 export function knowledgeEnabled(env: NodeJS.ProcessEnv): boolean {
   if (env.TOKEN_OPTIMIZER_MODE === 'off') return false;
   return /^(1|true|yes|on)$/i.test(env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE || '');
+}
+
+/**
+ * How many large tool definitions stay loaded when deferral is on.
+ *
+ * A KNOB BECAUSE THE RIGHT VALUE IS MEASURED, NOT REASONED. The default of
+ * five was a guess; the first campaign to run deferral end to end deferred 14
+ * of 26 definitions, cut the model's context from 29,824 prefix tokens to
+ * 19,138 -- below the 20,431 of an arm with no proxy at all -- and the
+ * transcripts show the tool search tool was never once invoked. Nothing was
+ * searched for, so the guess was too cautious, and finding out how much too
+ * cautious costs a campaign rather than an argument.
+ *
+ * Out-of-range and unparseable values fall back to the default rather than
+ * throwing: a typo in an environment variable must not take a session down.
+ */
+export function keepToolsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS;
+  if (raw === undefined || raw.trim() === '') return DEFAULT_KEEP_RELEVANT;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return DEFAULT_KEEP_RELEVANT;
+  return n;
 }
 
 /**
