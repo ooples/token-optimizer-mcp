@@ -98,6 +98,40 @@ export function upstreamIsDefault(options: ProxyOptions): boolean {
 /** Requests above this are worth compressing; below it the work is noise. */
 const MIN_BYTES = 4096;
 
+/**
+ * The share of a request compression must remove before it is worth sending.
+ *
+ * AN ELISION IS NOT FREE, and the byte count alone never said so. Every elision
+ * replaces content with a path the agent can read back, and reading it back
+ * costs a TURN -- which on these workloads costs far more than the tokens the
+ * elision saved. Measured on four THOL tasks: the proxy removed 2.47% of bytes
+ * and spent three extra turns against control, 37 to 34, for a net cost of
+ * $0.53 against $0.42.
+ *
+ * So a rewrite now has to clear a floor that is proportional to the request,
+ * not merely be smaller than it. Below the floor the original is forwarded
+ * untouched: no elision to read back, no rewritten prefix, and nothing for the
+ * provider to re-cache.
+ *
+ * WHY 0.5%, AND WHY NOT 5%. I set this to 5% first, reasoning that a 2.5%
+ * rewrite could not justify the turn an elision might cost. The measurement
+ * said otherwise and the floor had to come back down. With the floor at 5% the
+ * proxy passed 22 of 22 requests through untouched and the screen came out at
+ * 37 turns and $0.58; with compression actually applied it was 37 turns and
+ * $0.53. Identical turns, LOWER cost -- so the elisions were never buying those
+ * extra turns, and suppressing them only removed the saving.
+ *
+ * What the floor is still for is the case it was always for: a rewrite that
+ * shaves a handful of bytes is not worth an elision the agent might read back.
+ * 0.5% keeps that guard while leaving the achievable 2.5% intact.
+ *
+ * It is NOT a cache-economics guard. The ledger settled that separately: cache
+ * writes were 5.5% of cached tokens against 94.5% reads, with per-request writes
+ * falling to 150 tokens as reads climbed past 30,000, so re-anchoring reproduces
+ * a byte-stable prefix and the cache is hitting. The cost is turns, not writes.
+ */
+const MIN_SAVING_SHARE = 0.005;
+
 export interface ProxyOptions {
   readonly port?: number;
   readonly upstream?: string;
@@ -313,7 +347,11 @@ export function compressBody(
   // the point. It is charged in the summary either way, and it only
   // happens on a turn the prefix was being rewritten anyway.
   const added = result.injectedChars > 0;
-  if (!added && next.length >= before)
+  // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
+  // shaves a couple of percent still plants elisions the agent may read back,
+  // and one such turn costs more than the whole saving.
+  const saved = before - next.length;
+  if (!added && saved < before * MIN_SAVING_SHARE)
     // Reported with its diagnostics, because this is the branch that fired on
     // every request of two campaigns and the byte counts alone could not say why.
     return {
@@ -322,7 +360,10 @@ export function compressBody(
         beforeBytes: before,
         afterBytes: before,
         compressed: false,
-        reason: 'compression did not pay',
+        reason:
+          saved > 0
+            ? `saving ${((saved / before) * 100).toFixed(2)}% is below the ${(MIN_SAVING_SHARE * 100).toFixed(0)}% floor`
+            : 'compression did not pay',
         anchorReason: result.anchor?.reason,
         elisions: result.elisions.length,
       },
