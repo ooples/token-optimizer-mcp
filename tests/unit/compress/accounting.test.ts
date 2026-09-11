@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from '@jest/globals';
 import { Readable } from 'node:stream';
+import { gzipSync } from 'node:zlib';
 import { readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -200,5 +201,87 @@ describe('the ledger itself', () => {
         usage: {},
       })
     ).not.toThrow();
+  });
+});
+
+describe('a compressed response body is decoded before it is scanned', () => {
+  // WHY THIS WAS NOT CAUGHT BY THE TESTS ABOVE. They feed the tap plaintext
+  // SSE, which is what a stand-in upstream sends. The real provider answers
+  // gzipped, because this proxy forwards the client's `accept-encoding`
+  // untouched -- byte-faithful passthrough is the point. So the first live run
+  // recorded 23 requests with correct byte counts and `usage: {}` on every one:
+  // the scanner was reading compressed bytes as UTF-8 and matching nothing.
+  const sse =
+    'event: message_start\ndata: {"usage":{"input_tokens":31,' +
+    '"cache_creation_input_tokens":120,"cache_read_input_tokens":9000}}\n\n' +
+    'event: message_delta\ndata: {"usage":{"output_tokens":44}}\n\n';
+
+  const through = (
+    body: Buffer,
+    encoding?: string
+  ): Promise<{ usage: RequestUsage; delivered: number }> =>
+    new Promise((resolve) => {
+      // Chunked, as a socket delivers it, so the decoder has to span chunks.
+      const chunks: Buffer[] = [];
+      for (let i = 0; i < body.length; i += 97)
+        chunks.push(body.subarray(i, i + 97));
+      const stream = Readable.from(chunks);
+      let delivered = 0;
+      stream.on('data', (c: Buffer) => (delivered += c.length));
+      tapUsage(stream, (usage) => resolve({ usage, delivered }), encoding);
+    });
+
+  it('reads usage out of a gzipped body', async () => {
+    const { usage } = await through(gzipSync(Buffer.from(sse, 'utf8')), 'gzip');
+
+    expect(usage.input_tokens).toBe(31);
+    expect(usage.cache_creation_input_tokens).toBe(120);
+    expect(usage.cache_read_input_tokens).toBe(9000);
+    expect(usage.output_tokens).toBe(44);
+  });
+
+  it('still delivers every byte of a gzipped body', async () => {
+    // The decoder sits BESIDE the response, never in it. If it consumed the
+    // stream the client would get a truncated reply -- a measurement that
+    // breaks the thing it measures.
+    const body = gzipSync(Buffer.from(sse, 'utf8'));
+    const { delivered } = await through(body, 'gzip');
+
+    expect(delivered).toBe(body.length);
+  });
+
+  it('matches the encoding case-insensitively', async () => {
+    const { usage } = await through(gzipSync(Buffer.from(sse, 'utf8')), 'GZIP');
+    expect(usage.input_tokens).toBe(31);
+  });
+
+  it('reads a plain body when no encoding is declared', async () => {
+    const { usage } = await through(Buffer.from(sse, 'utf8'));
+    expect(usage.input_tokens).toBe(31);
+  });
+
+  it('reports nothing rather than guessing at an unknown encoding', async () => {
+    // A wrong decoder yields garbage, and garbage that happens to parse as a
+    // number is worse than no number -- it would be a confident, wrong cost
+    // attribution, which is the failure this ledger exists to prevent. So an
+    // unrecognised encoding falls back to scanning the bytes as they arrive,
+    // and on a body that really is encoded that finds nothing.
+    const body = gzipSync(Buffer.from(sse, 'utf8'));
+    const { usage, delivered } = await through(body, 'some-future-encoding');
+
+    expect(usage).toEqual({});
+    // And the response is untouched regardless.
+    expect(delivered).toBe(body.length);
+  });
+
+  it('does not lose the record when the body will not decode', async () => {
+    // A truncated or mislabelled body must still settle: the response has
+    // already reached the client by then, and a tap that never calls back
+    // would drop the ledger line for that request entirely.
+    const { delivered } = await through(
+      Buffer.from('not gzip at all', 'utf8'),
+      'gzip'
+    );
+    expect(delivered).toBe('not gzip at all'.length);
   });
 });

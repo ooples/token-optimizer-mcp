@@ -25,7 +25,8 @@
  */
 
 import { appendFileSync } from 'node:fs';
-import type { Readable } from 'node:stream';
+import type { Readable, Writable } from 'node:stream';
+import { createGunzip, createInflate, createBrotliDecompress } from 'node:zlib';
 
 /** The token classes a provider bills separately. */
 export interface RequestUsage {
@@ -133,11 +134,23 @@ export function appendRecord(path: string, record: AccountingRecord): void {
  */
 export function tapUsage(
   stream: Readable,
-  done: (usage: RequestUsage) => void
+  done: (usage: RequestUsage) => void,
+  contentEncoding?: string
 ): void {
   const usage: RequestUsage = {};
   let carry = '';
   let settled = false;
+
+  // DECODED BEFORE IT IS SCANNED, or the scan reads compressed bytes as text
+  // and finds nothing. The first live run recorded 23 requests with correct
+  // byte counts and `usage: {}` on every one, because this proxy forwards the
+  // client's `accept-encoding` untouched -- byte-faithful passthrough is the
+  // point -- so the provider answers gzipped.
+  //
+  // The decoder sits BESIDE the response, never in it. Chunks are copied into
+  // it; the original stream still pipes to the client unchanged, which is the
+  // property the whole tap exists to preserve.
+  const decoder = decoderFor(contentEncoding);
 
   const finish = (): void => {
     if (settled) return;
@@ -149,12 +162,32 @@ export function tapUsage(
     }
   };
 
+  const absorb = (text: string): void => {
+    const combined = carry + text;
+    scanUsage(combined, usage);
+    carry = combined.slice(Math.max(0, combined.length - CARRY_CHARS));
+  };
+
+  if (decoder) {
+    decoder.on('data', (chunk: Buffer) => {
+      try {
+        absorb(chunk.toString('utf8'));
+      } catch {
+        // Instrumentation only.
+      }
+    });
+    // A truncated or mislabelled body must cost nothing: the response has
+    // already been delivered by the time this fails.
+    decoder.on('error', () => undefined);
+  }
+
   stream.on('data', (chunk: Buffer | string) => {
     try {
-      const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-      scanUsage(carry + text, usage);
-      const combined = carry + text;
-      carry = combined.slice(Math.max(0, combined.length - CARRY_CHARS));
+      if (decoder) {
+        decoder.write(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+        return;
+      }
+      absorb(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
     } catch {
       // A chunk that will not decode tells us nothing; the response is
       // unaffected either way.
@@ -162,6 +195,38 @@ export function tapUsage(
   });
   // Both, because a stream that errors mid-flight still billed for what it
   // sent, and 'end' does not fire after 'error'.
-  stream.on('end', finish);
-  stream.on('error', finish);
+  //
+  // With a decoder in play the trailing bytes only emerge once it is ended, so
+  // the ledger waits for the decoder to flush rather than for the socket.
+  const settle = (): void => {
+    if (!decoder) {
+      finish();
+      return;
+    }
+    decoder.on('end', finish);
+    // Belt and braces: a decoder that never ends must not swallow the record.
+    decoder.on('error', finish);
+    try {
+      decoder.end();
+    } catch {
+      finish();
+    }
+  };
+  stream.on('end', settle);
+  stream.on('error', settle);
+}
+
+/**
+ * A decompressor for the encoding the provider actually used, or null when the
+ * body is already text.
+ *
+ * Unknown encodings return null rather than guessing: a wrong decoder yields
+ * garbage, and garbage that parses as a number is worse than no number.
+ */
+function decoderFor(contentEncoding?: string): (Writable & Readable) | null {
+  const encoding = (contentEncoding ?? '').trim().toLowerCase();
+  if (encoding === 'gzip' || encoding === 'x-gzip') return createGunzip();
+  if (encoding === 'deflate') return createInflate();
+  if (encoding === 'br') return createBrotliDecompress();
+  return null;
 }
