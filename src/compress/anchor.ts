@@ -79,7 +79,26 @@ export const MAX_TRACKED = 1000;
  * that ends next turn is the single most expensive mistake available here, and
  * it is worse than compressing nothing. Roughly five thousand tokens.
  */
-export const COLD_PREFIX_LIMIT = 20_000;
+/**
+ * How many messages a conversation may already have and still count as one we
+ * are seeing from its start.
+ *
+ * THIS REPLACED A PREFIX-SIZE TEST, and the replacement is the whole point.
+ * The old rule anchored only when the cached prefix was under 20,000
+ * characters, as a stand-in for "did we see this conversation from the
+ * beginning". Against Claude Code that stand-in is always false: its system
+ * prompt and tool schema alone exceed 20,000 characters on the very first
+ * request, so every conversation was classified as joined-mid-conversation,
+ * the proxy never anchored, v1 kept respecting a frontier that sits at the
+ * newest turn, and NOTHING was ever compressed -- measured at 0 bytes removed
+ * across 44 real requests in two campaigns.
+ *
+ * Message count asks the question directly. A proxy running before its client
+ * sees the conversation at one or two messages however heavy they are; a proxy
+ * attached to a session already in flight sees many, and still declines --
+ * which is the protection the old limit was there to provide.
+ */
+export const COLD_MESSAGE_LIMIT = 4;
 
 /** Everything at or before the breakpoint, which is what the provider caches. */
 function prefixOf(request: ProviderRequest): string {
@@ -290,7 +309,7 @@ export interface AnchorDecision {
 export function anchorDecision(
   request: ProviderRequest,
   store: AnchorStore,
-  coldPrefixLimit: number = COLD_PREFIX_LIMIT
+  coldMessageLimit: number = COLD_MESSAGE_LIMIT
 ): AnchorDecision {
   const key = conversationKey(request);
   const prefix = prefixOf(request);
@@ -331,8 +350,11 @@ export function anchorDecision(
   // THE DIAL, NOT THE CONSTANT. `coldPrefixLimit` was declared in options.ts with this
   // exact meaning and a matching default, while this line read the module constant --
   // so setting it changed nothing, on the most expensive decision in this file.
-  if (prefix.length <= coldPrefixLimit) {
-    // A conversation at its start. The prefix is written either way.
+  // EARLY IN ITS LIFE, NOT SMALL. A first request can be enormous -- a large
+  // system prompt and a full tool schema arrive before the user has said
+  // anything -- and it is still a conversation we are seeing from the start,
+  // where the prefix is written either way and anchoring is free.
+  if ((request.messages ?? []).length <= coldMessageLimit) {
     return {
       reanchor: true,
       reason: 'first-turn',

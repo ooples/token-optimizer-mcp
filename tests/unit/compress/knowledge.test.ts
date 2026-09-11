@@ -297,6 +297,12 @@ describe('through v1, where the cache economics live', () => {
     // Joining mid-conversation, the provider probably holds the client's
     // original prefix. Adding a block there is precisely the cache miss this
     // design exists to avoid.
+    //
+    // WHAT MAKES IT 'JOINED' IS THE NUMBER OF TURNS, not the weight of the
+    // prefix. The gate used to compare prefix size, which against a real
+    // client was true on the very first request -- its system prompt and tool
+    // schema alone exceed any such limit -- so every conversation looked
+    // joined and nothing was ever anchored or compressed.
     const big = 'history '.repeat(6000);
     const joined: ProviderRequest = {
       system: 'You are a coding agent.',
@@ -308,7 +314,10 @@ describe('through v1, where the cache economics live', () => {
             { type: 'text', text: big, cache_control: { type: 'ephemeral' } },
           ],
         },
-        { role: 'user', content: [{ type: 'text', text: 'go on' }] },
+        ...Array.from({ length: 6 }, (_, i) => ({
+          role: 'user' as const,
+          content: [{ type: 'text', text: `go on ${i}` }],
+        })),
       ],
     };
     const out = run(joined, anchorStore());

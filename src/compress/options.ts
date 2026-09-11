@@ -51,7 +51,7 @@ export interface CompressionOptions {
    * Above this many characters of cached prefix, a conversation we have never
    * seen is left alone rather than re-anchored. Default 20000.
    */
-  readonly coldPrefixLimit?: number;
+  readonly coldMessageLimit?: number;
   /** Characters of graph findings allowed in the cached prefix. Default 2000. */
   readonly knowledgeBudgetChars?: number;
   /**
@@ -85,7 +85,7 @@ export const DEFAULT_TUNING: Tuning = Object.freeze({
   maxLiveShare: 0.5,
   minRun: 3,
   minDedupBytes: 600,
-  coldPrefixLimit: 20_000,
+  coldMessageLimit: 4,
   knowledgeBudgetChars: 2000,
   allowLossy: true,
 });
@@ -175,7 +175,7 @@ export function resolveTuning(
     maxLiveShare: pick('maxLiveShare'),
     minRun: pick('minRun'),
     minDedupBytes: pick('minDedupBytes'),
-    coldPrefixLimit: pick('coldPrefixLimit'),
+    coldMessageLimit: pick('coldMessageLimit'),
     knowledgeBudgetChars: pick('knowledgeBudgetChars'),
     allowLossy: pick('allowLossy'),
   };

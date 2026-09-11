@@ -494,7 +494,7 @@ export function v1Frontier(
   const decision = anchorDecision(
     request,
     options.anchors,
-    options.tuning?.coldPrefixLimit
+    options.tuning?.coldMessageLimit
   );
 
   // KNOWLEDGE RIDES ON THE ANCHOR DECISION, and that is the whole trick.

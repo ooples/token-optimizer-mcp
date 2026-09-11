@@ -75,6 +75,8 @@ export function scanUsage(text: string, into: RequestUsage): void {
 export interface CompressionFacts {
   readonly compressed: boolean;
   readonly reason?: string;
+  readonly anchorReason?: string;
+  readonly elisions?: number;
   readonly beforeBytes: number;
   readonly afterBytes: number;
 }

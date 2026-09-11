@@ -3,7 +3,7 @@ import {
   anchorDecision,
   anchorStore,
   conversationKey,
-  COLD_PREFIX_LIMIT,
+  COLD_MESSAGE_LIMIT,
 } from '../../../src/compress/anchor.js';
 import { v1Frontier } from '../../../src/compress/strategy.js';
 import type { ProviderRequest } from '../../../src/compress/frontier.js';
@@ -72,12 +72,20 @@ function large(
         content: [
           {
             type: 'text',
-            text: `${payload('history', Math.ceil(COLD_PREFIX_LIMIT / 40))}\n${tail}`,
+            text: `${payload('history', 500)}\n${tail}`,
             cache_control: { type: 'ephemeral' },
           },
         ],
       },
-      { role: 'user', content: [{ type: 'text', text: 'go on' }] },
+      // ENOUGH TURNS TO BE A CONVERSATION ALREADY IN FLIGHT, which is what this
+      // fixture means and what the gate now actually tests. It used to mean
+      // 'big prefix', because the gate compared prefix SIZE -- a stand-in that
+      // was always false against a real client, whose system prompt and tool
+      // schema exceed any such limit on the very first request.
+      ...Array.from({ length: COLD_MESSAGE_LIMIT + 1 }, (_, i) => ({
+        role: 'user' as const,
+        content: [{ type: 'text', text: `go on ${i}` }],
+      })),
     ],
   };
 }
@@ -205,7 +213,13 @@ ${payload(tail, 400)}`,
             },
           ],
         },
-        { role: 'user', content: [{ type: 'text', text: 'go on' }] },
+        // Long enough to be a conversation already in flight, which is what
+        // 'joined-mid-conversation' now means: the gate asks how far along the
+        // conversation is, not how many bytes its prefix weighs.
+        ...Array.from({ length: COLD_MESSAGE_LIMIT + 1 }, (_, i) => ({
+          role: 'user' as const,
+          content: [{ type: 'text', text: `go on ${i}` }],
+        })),
       ],
     });
 

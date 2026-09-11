@@ -137,6 +137,20 @@ export interface ProxySummary {
    * compression figure beside it a lie.
    */
   readonly injectedChars?: number;
+  /**
+   * Which branch the anchor decision took, and how many elisions the
+   * strategy produced.
+   *
+   * DIAGNOSTIC, AND IT EXISTS BECAUSE INFERENCE FAILED TWICE. Two campaigns
+   * reported 'compression did not pay' on every request, and reading the code
+   * produced two confident explanations that a local reproduction then
+   * disproved. These two fields separate the remaining possibilities without
+   * guessing: no elisions means nothing was touchable or no engine claimed the
+   * content, while elisions with no saving means the rewrite grew the payload.
+   * Neither records any payload.
+   */
+  readonly anchorReason?: string;
+  readonly elisions?: number;
 }
 
 /** Enabled only on an explicit opt-in, and never when the kill switch is set. */
@@ -300,7 +314,19 @@ export function compressBody(
   // happens on a turn the prefix was being rewritten anyway.
   const added = result.injectedChars > 0;
   if (!added && next.length >= before)
-    return unchanged('compression did not pay');
+    // Reported with its diagnostics, because this is the branch that fired on
+    // every request of two campaigns and the byte counts alone could not say why.
+    return {
+      body,
+      summary: {
+        beforeBytes: before,
+        afterBytes: before,
+        compressed: false,
+        reason: 'compression did not pay',
+        anchorReason: result.anchor?.reason,
+        elisions: result.elisions.length,
+      },
+    };
 
   // COMMITTED ONLY NOW, because everything above can still decide not to send
   // this body. Remembering `anchored: true` for a rewrite that was then
@@ -316,6 +342,8 @@ export function compressBody(
       beforeBytes: before,
       afterBytes: next.length,
       compressed: true,
+      anchorReason: result.anchor?.reason,
+      elisions: result.elisions.length,
       ...(added ? { injectedChars: result.injectedChars } : {}),
     },
   };
@@ -622,6 +650,8 @@ export async function startProxy(
         reason: summary.reason,
         beforeBytes: summary.beforeBytes,
         afterBytes: summary.afterBytes,
+        anchorReason: summary.anchorReason,
+        elisions: summary.elisions,
       });
     })();
   });
