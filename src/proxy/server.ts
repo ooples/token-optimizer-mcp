@@ -37,7 +37,11 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createHmac, randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { v1Frontier, type StrategyResult } from '../compress/strategy.js';
+import {
+  v1Frontier,
+  questionIn,
+  type StrategyResult,
+} from '../compress/strategy.js';
 import { deferTools, withAdvancedToolUse } from '../compress/tools.js';
 import {
   accountingPath,
@@ -192,6 +196,9 @@ export interface ProxySummary {
   readonly systemChars?: number;
   readonly toolsChars?: number;
   readonly toolCount?: number;
+  readonly mcpToolChars?: number;
+  readonly topTools?: string;
+  readonly coreToolChars?: number;
   readonly messagesChars?: number;
   readonly messageCount?: number;
 }
@@ -343,7 +350,7 @@ export function compressBody(
     // against 9,488 characters). So the difference lives in the static part --
     // system prompt and tool schema, which are ~98% of a 120 KB request -- and
     // nothing was reporting their sizes. Sizes only; no content is recorded.
-    let shape: Record<string, number> | undefined;
+    let shape: Record<string, number | string> | undefined;
     try {
       const seen = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
       const sizeOf = (v: unknown): number =>
@@ -352,6 +359,38 @@ export function compressBody(
         systemChars: sizeOf(seen.system),
         toolsChars: sizeOf(seen.tools),
         toolCount: Array.isArray(seen.tools) ? seen.tools.length : 0,
+        // Split by origin, because which half is actually big decides what is
+        // worth deferring -- a client's built-in descriptions can dwarf an MCP
+        // server's terse schemas, or the reverse, and guessing gets it wrong.
+        coreToolChars: Array.isArray(seen.tools)
+          ? seen.tools
+              .filter(
+                (t) =>
+                  typeof (t as { name?: string })?.name === 'string' &&
+                  !(t as { name: string }).name.startsWith('mcp__')
+              )
+              .reduce((a, t) => a + JSON.stringify(t).length, 0)
+          : 0,
+        // The biggest definitions by name, because an average hides which ones
+        // are worth attacking.
+        topTools: Array.isArray(seen.tools)
+          ? seen.tools
+              .map((t) => ({
+                n: String((t as { name?: string })?.name ?? '?'),
+                c: JSON.stringify(t).length,
+              }))
+              .sort((a, b) => b.c - a.c)
+              .slice(0, 10)
+              .map((t) => `${t.n}:${t.c}`)
+              .join(' ')
+          : '',
+        mcpToolChars: Array.isArray(seen.tools)
+          ? seen.tools
+              .filter((t) =>
+                (t as { name?: string })?.name?.startsWith('mcp__')
+              )
+              .reduce((a, t) => a + JSON.stringify(t).length, 0)
+          : 0,
         messagesChars: sizeOf(seen.messages),
         messageCount: Array.isArray(seen.messages) ? seen.messages.length : 0,
       };
@@ -395,7 +434,10 @@ export function compressBody(
     )
   ) {
     try {
-      const out = deferTools(parsed);
+      // The task text steers which non-core tools stay loaded, so the model
+      // never has to search for one -- and a search costs a round trip plus a
+      // second cold prefix write.
+      const out = deferTools(parsed, { query: questionIn(parsed) });
       parsed = out.request;
       deferred = out.deferredCount;
       deferredChars = out.deferredChars;
@@ -822,6 +864,9 @@ export async function startProxy(
         systemChars: summary.systemChars,
         toolsChars: summary.toolsChars,
         toolCount: summary.toolCount,
+        coreToolChars: summary.coreToolChars,
+        mcpToolChars: summary.mcpToolChars,
+        topTools: summary.topTools,
         messagesChars: summary.messagesChars,
         messageCount: summary.messageCount,
       });

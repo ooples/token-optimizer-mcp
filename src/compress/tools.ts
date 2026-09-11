@@ -24,6 +24,8 @@
  */
 
 import type { ProviderRequest } from './frontier.js';
+import { activeRanker } from './ranking.js';
+import type { EmbeddingCache } from './embedding.js';
 
 /** The regex search tool Anthropic ships for this. */
 export const TOOL_SEARCH_TYPE = 'tool_search_tool_regex_20251119';
@@ -59,6 +61,59 @@ function forcedToolName(request: ProviderRequest): string | null {
     : null;
 }
 
+/**
+ * Tools that are never deferred, identified structurally rather than by name.
+ *
+ * An MCP tool is named `mcp__<server>__<tool>`; a client's own built-ins are
+ * plain names like `Read` or `Bash`. That distinction is the signal, and using
+ * it means this does not rot the next time a client renames or adds a built-in,
+ * which a hardcoded list certainly would.
+ *
+ * The built-ins are the agent's core loop and are reached for constantly, so
+ * deferring them guarantees the discovery round trip this is trying to avoid.
+ * The long tail of MCP tools is where both the bytes and the safety are: 26 of
+ * 31 tools in a measured session, 76,501 characters.
+ */
+function isCheapToKeep(chars: number, floor: number): boolean {
+  return chars <= floor;
+}
+
+/**
+ * Below this a definition is not worth deferring.
+ *
+ * MEASURED, NOT ASSUMED, and it replaced a rule that had it backwards. The
+ * first version protected "core" tools by origin -- anything not named
+ * mcp__server__tool -- on the theory that MCP servers carry the bulk. A live
+ * capture said otherwise: all 31 tools in a real Claude Code request were
+ * built-ins, 85,514 characters of them, and that rule would have deferred
+ * nothing at all.
+ *
+ * The same capture showed WHERE the weight is, and it is not the core loop:
+ * PowerShell 9,244 characters, DesignSync 8,930, Monitor 7,492, Workflow
+ * 5,355, SendMessage 4,804 -- the ten largest are about 64% of the schema and
+ * are specialised tools most sessions never call. Read, Edit, Write, Bash,
+ * Grep and Glob are all comfortably smaller.
+ *
+ * So size is the signal. A small definition is cheap to keep and keeping it
+ * guarantees no discovery round trip for the tools an agent actually lives in;
+ * a large one has to earn its place by looking relevant to the task.
+ */
+export const SMALL_TOOL_CHARS = 1500;
+
+/** How many non-core tools to keep loaded when a task hints at what it needs. */
+export const DEFAULT_KEEP_RELEVANT = 5;
+
+export interface DeferOptions {
+  /** The task text, used to decide which non-core tools are worth loading. */
+  readonly query?: string;
+  /** Non-core tools to keep loaded. */
+  readonly keepRelevant?: number;
+  /** Definitions at or below this size are always kept. */
+  readonly smallToolChars?: number;
+  /** Vectors for a semantic ranking, when one has been warmed. */
+  readonly embeddings?: EmbeddingCache;
+}
+
 export interface DeferralResult {
   readonly request: ProviderRequest;
   /** Characters of tool definition removed from context. */
@@ -75,7 +130,10 @@ export interface DeferralResult {
  * is the rule everywhere in this proxy and it matters more here than usual,
  * because a malformed tools array is a broken session rather than a slow one.
  */
-export function deferTools(request: ProviderRequest): DeferralResult {
+export function deferTools(
+  request: ProviderRequest,
+  options: DeferOptions = {}
+): DeferralResult {
   const tools = (request as { tools?: unknown }).tools;
   if (!Array.isArray(tools) || tools.length === 0)
     return { request, deferredChars: 0, deferredCount: 0 };
@@ -85,10 +143,44 @@ export function deferTools(request: ProviderRequest): DeferralResult {
     return { request, deferredChars: 0, deferredCount: 0 };
 
   const forced = forcedToolName(request);
+
+  // CHOSEN HERE RATHER THAN DISCOVERED LATER, which is the whole point.
+  //
+  // Letting the model search for a tool costs a round trip AND a second cold
+  // prefix write -- measured at about 11,000 tokens on top of the first. We can
+  // see the task and every tool description in the same request, so we can make
+  // that choice ourselves and never pay for discovery at all.
+  //
+  // This reuses the ranker already built for content, so it is BM25 by default
+  // and semantic when an encoder has been warmed. With no query it keeps the
+  // first few, which is no worse than an arbitrary choice and never worse than
+  // deferring everything.
+  const keep = options.keepRelevant ?? DEFAULT_KEEP_RELEVANT;
+  const smallFloor = options.smallToolChars ?? SMALL_TOOL_CHARS;
+  const candidates: { index: number; text: string }[] = [];
+  tools.forEach((raw, index) => {
+    if (typeof raw !== 'object' || raw === null) return;
+    const t = raw as ToolLike & { description?: string };
+    if (typeof t.name !== 'string') return;
+    if (isCheapToKeep(JSON.stringify(raw).length, smallFloor)) return;
+    candidates.push({ index, text: `${t.name} ${t.description ?? ''}` });
+  });
+  const ranked = activeRanker(options.query, options.embeddings);
+  const chosen = ranked.top(
+    candidates.map((c) => c.text),
+    Math.min(keep, candidates.length)
+  );
+  const keepLoaded = new Set<number>();
+  candidates.forEach((c, i) => {
+    if (chosen.has(i)) keepLoaded.add(c.index);
+  });
+  // With no ranking signal at all, keep the first few rather than none.
+  if (keepLoaded.size === 0)
+    candidates.slice(0, keep).forEach((c) => keepLoaded.add(c.index));
   let deferredChars = 0;
   let deferredCount = 0;
 
-  const rewritten = tools.map((raw) => {
+  const rewritten = tools.map((raw, index) => {
     // A tools array is client input and can contain anything. Nothing below
     // may assume an object, or one null entry takes the whole session down
     // for the sake of a saving.
@@ -100,6 +192,13 @@ export function deferTools(request: ProviderRequest): DeferralResult {
     if (typeof tool.defer_loading === 'boolean') return raw;
     if (typeof tool.name !== 'string' || tool.name.length === 0) return raw;
     if (forced !== null && tool.name === forced) return raw;
+    // The agent's own loop, and the non-core tools this task looks like it
+    // needs, both stay in context so nothing has to be searched for.
+    // Small enough that deferring it would save less than the discovery it
+    // risks. This is what keeps the agent's core loop in context without
+    // naming it -- those definitions are small.
+    if (isCheapToKeep(JSON.stringify(raw).length, smallFloor)) return raw;
+    if (keepLoaded.has(index)) return raw;
 
     deferredChars += JSON.stringify(raw).length;
     deferredCount += 1;

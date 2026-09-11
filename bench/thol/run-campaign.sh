@@ -132,6 +132,8 @@ for i in "${!SEGMENTS[@]}"; do
     -v "$RESULTS_VOLUME:/results" \
     -v "$PROXY_GRAPH_DIR:/proxy-graph" \
     -e THOL_CAMPAIGN="$CAMPAIGN" \
+    -e TOKEN_OPTIMIZER_PROXY_NULL="${TOKEN_OPTIMIZER_PROXY_NULL:-}" \
+    -e TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS="${TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS:-}" \
     --name thol-campaign "$IMAGE" campaign \
       -c "$ARMS" \
       -t "$tasks" \

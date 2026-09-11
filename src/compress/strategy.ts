@@ -162,7 +162,7 @@ function ccrMarker(content: string, index: number): string {
  * maximally relevant to itself. That failure would look like it was working,
  * which is the worst kind.
  */
-function questionIn(request: ProviderRequest): string {
+export function questionIn(request: ProviderRequest): string {
   const blocks: { text: string }[] = [];
   for (const message of request.messages ?? []) {
     const content = message?.content;

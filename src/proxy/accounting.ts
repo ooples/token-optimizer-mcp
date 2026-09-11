@@ -82,6 +82,9 @@ export interface CompressionFacts {
   readonly systemChars?: number;
   readonly toolsChars?: number;
   readonly toolCount?: number;
+  readonly coreToolChars?: number;
+  readonly mcpToolChars?: number;
+  readonly topTools?: string;
   readonly messagesChars?: number;
   readonly messageCount?: number;
   readonly beforeBytes: number;

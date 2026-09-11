@@ -405,7 +405,7 @@ start_proxies() {
     # at 1.25x. This writes the usage the provider reports beside what compression
     # did to the same request. It lands in $logdir, which is the results volume
     # when one is mounted, so it survives a --rm container.
-    TOKEN_OPTIMIZER_PROXY=1     TOKEN_OPTIMIZER_PROXY_KNOWLEDGE="$knowledge"       TOKEN_OPTIMIZER_PROXY_ACCOUNTING="$logdir/ledger-$port.jsonl"       TOKEN_OPTIMIZER_PROXY_NULL="${TOKEN_OPTIMIZER_PROXY_NULL:-}"       node "$PKG/dist/proxy/cli.js" --port "$port"         ${root:+--project-root "$root"}         >>"$logdir/proxy-$port.log" 2>&1 &
+    TOKEN_OPTIMIZER_PROXY=1     TOKEN_OPTIMIZER_PROXY_KNOWLEDGE="$knowledge"       TOKEN_OPTIMIZER_PROXY_ACCOUNTING="$logdir/ledger-$port.jsonl"       TOKEN_OPTIMIZER_PROXY_NULL="${TOKEN_OPTIMIZER_PROXY_NULL:-}"       TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS="${TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS:-}"       node "$PKG/dist/proxy/cli.js" --port "$port"         ${root:+--project-root "$root"}         >>"$logdir/proxy-$port.log" 2>&1 &
     pid=$!
     PROXY_PIDS="$PROXY_PIDS $pid"
     # Remembered per port, because "something answers on this port" is NOT the
