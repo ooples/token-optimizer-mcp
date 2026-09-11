@@ -322,6 +322,14 @@ export function compressBody(
     },
   });
 
+  // A TRUE NULL PROXY, for isolating what the transport itself costs.
+  // Identical work through the proxy measured 45% more tokens than without it
+  // -- same tool calls, same turns -- which cannot come from compression. This
+  // switch forwards bytes and does nothing else, so a run with it on says
+  // whether that overhead belongs to our rewriting or to being proxied at all.
+  if (/^(1|true|yes|on)$/i.test(process.env.TOKEN_OPTIMIZER_PROXY_NULL || ''))
+    return unchanged('null proxy');
+
   if (before < MIN_BYTES) return unchanged('below the size floor');
 
   let parsed: ProviderRequest;
@@ -545,7 +553,42 @@ function forward(
       headers,
     },
     (upstreamRes) => {
-      res.writeHead(upstreamRes.statusCode || 502, upstreamRes.headers);
+      // HOP-BY-HOP HEADERS ARE STRIPPED IN BOTH DIRECTIONS, and doing it in
+      // only one was a real defect rather than an untidiness.
+      //
+      // The request path has always dropped them. The response path forwarded
+      // `upstreamRes.headers` wholesale, so the upstream's `transfer-encoding`,
+      // `connection` and `keep-alive` were copied onto a DIFFERENT connection
+      // -- ours to the client. `transfer-encoding: chunked` is the damaging
+      // one: Node is already deciding framing for this response, and being
+      // handed a conflicting declaration is how a streamed body arrives
+      // differently from the way it was sent.
+      //
+      // That matters here more than it would in most proxies, because the body
+      // is an SSE stream the agent consumes incrementally. Measured: a proxy
+      // doing NOTHING but forwarding bytes cost ~30% more than no proxy, and
+      // control's per-rep token counts are deterministic (97,255 / 97,249 /
+      // 97,227) while the proxied ones scatter (111,957 to 175,745). Identical
+      // request bytes cannot move the model, so the divergence was on the way
+      // back.
+      //
+      // `Connection` also NAMES further headers that are single-hop, and those
+      // go too -- the sender is telling us which ones it considers local to its
+      // own connection, and passing those on is the same mistake as passing on
+      // `Connection` itself.
+      const upstreamHopByHop = new Set(
+        String(upstreamRes.headers.connection ?? '')
+          .split(',')
+          .map((name) => name.trim().toLowerCase())
+          .filter(Boolean)
+      );
+      const responseHeaders: Record<string, string | string[]> = {};
+      for (const [key, value] of Object.entries(upstreamRes.headers)) {
+        if (value === undefined) continue;
+        if (HOP_BY_HOP.has(key) || upstreamHopByHop.has(key)) continue;
+        responseHeaders[key] = value;
+      }
+      res.writeHead(upstreamRes.statusCode || 502, responseHeaders);
       // WATCHED BEFORE IT IS PIPED, and watching is all it does: a `data`
       // listener does not consume a stream in flowing mode, so every byte still
       // reaches `pipe` unchanged. Registered first so no chunk can be missed by

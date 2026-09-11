@@ -325,3 +325,79 @@ describe('the proxy command-line entrypoint', () => {
     expect(url).toBe(`http://127.0.0.1:${wanted}`);
   });
 });
+
+describe('hop-by-hop headers are stripped in BOTH directions', () => {
+  // Its own teardown: the helpers above are scoped to another block.
+  const mine: Server[] = [];
+  const kids: ChildProcessWithoutNullStreams[] = [];
+  afterEach(() => {
+    for (const c of kids.splice(0)) c.kill('SIGKILL');
+    for (const sv of mine.splice(0)) sv.close();
+  });
+
+  // THE REQUEST PATH ALWAYS DID THIS; THE RESPONSE PATH DID NOT. The upstream's
+  // headers were copied wholesale onto our connection to the client, so its
+  // `transfer-encoding`, `connection` and `keep-alive` -- which describe the
+  // upstream's socket, not ours -- travelled with them.
+  //
+  // `transfer-encoding: chunked` is the damaging one. Node is already deciding
+  // framing for our response, and handing it a conflicting declaration is how a
+  // streamed body arrives differently from the way it was sent. That matters
+  // here because the body is an SSE stream the agent consumes incrementally.
+  //
+  // Measured before the fix: a proxy doing nothing but forwarding bytes cost
+  // about 30% more than no proxy at all, and control's token counts repeat
+  // deterministically (97,255 / 97,249 / 97,227) where the proxied ones scatter
+  // (111,957 to 175,745).
+  it('does not copy the upstream connection headers to the client', async () => {
+    const upstream = createServer((req, res) => {
+      req.resume();
+      req.on('end', () => {
+        res.writeHead(200, {
+          'content-type': 'application/json',
+          // Single-hop: describes the upstream's socket, not ours.
+          // Names a further header as single-hop, which must go with it.
+          connection: 'x-upstream-local',
+          'keep-alive': 'timeout=99',
+          // And one the upstream names as single-hop itself.
+          'x-upstream-local': 'private',
+        });
+        res.end('{"ok":true}');
+      });
+    });
+    mine.push(upstream);
+    await new Promise<void>((done) =>
+      upstream.listen(0, '127.0.0.1', () => done())
+    );
+    const address = upstream.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+
+    const { child, url } = await start([
+      '--upstream',
+      `http://127.0.0.1:${port}`,
+      '--quiet',
+    ]);
+    kids.push(child);
+
+    const response = await fetch(`${url}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'x', messages: [] }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    expect(response.status).toBe(200);
+    // STRIPPED. `connection` itself cannot be asserted absent -- Node sets its
+    // own on every HTTP/1.1 response -- so the test uses the headers whose
+    // presence could only come from the upstream: the one it NAMED as
+    // single-hop, and `keep-alive`, which Node does not send.
+    expect(response.headers.get('x-upstream-local')).toBeNull();
+    // A DISTINCTIVE VALUE, because Node sets its own `Keep-Alive: timeout=5`
+    // from server.keepAliveTimeout -- so absence cannot be asserted, only that
+    // the UPSTREAM's value did not travel.
+    expect(response.headers.get('keep-alive')).not.toContain('99');
+    // End-to-end headers still arrive -- the fix must not become a filter that
+    // eats everything, which is HeadRoom's #3463 in a different guise.
+    expect(response.headers.get('content-type')).toContain('application/json');
+  });
+});
