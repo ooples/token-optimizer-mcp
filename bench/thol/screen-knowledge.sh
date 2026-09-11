@@ -36,11 +36,29 @@ TASKS="${TASKS:-code-bugfix-py,code-refactor-split-py,log-needle-zh,code-iterate
 REPS="${REPS:-1}"
 WARMUP_VOLUME="${WARMUP_VOLUME:-thol-knowledge-warmup}"
 MEASURED_VOLUME="${MEASURED_VOLUME:-thol-knowledge-screen}"
-PROXY_GRAPH_DIR="${PROXY_GRAPH_DIR:-$RIG_DIR/thol/proxy-graph}"
+DEFAULT_GRAPH_DIR="$RIG_DIR/thol/proxy-graph"
+PROXY_GRAPH_DIR="${PROXY_GRAPH_DIR:-$DEFAULT_GRAPH_DIR}"
+FRESH_GRAPH="${FRESH_GRAPH:-1}"
 
 log() { printf '\n\033[1;36m>> %s\033[0m\n' "$*"; }
 
-if [ "${FRESH_GRAPH:-1}" = "1" ]; then
+if [ "$FRESH_GRAPH" != "0" ]; then
+  # DELETE ONLY WHAT THIS SCRIPT CREATED, and only inside the default directory
+  # unless the operator says otherwise. PROXY_GRAPH_DIR is an arbitrary host path
+  # and a fresh graph is the DEFAULT, so the unguarded form here was one typo away
+  # from recursively deleting live host data: `PROXY_GRAPH_DIR=$HOME` would have
+  # taken the developer's own wiki graph with it, which is the same layout this
+  # benchmark uses and therefore exactly the thing it looks like.
+  #
+  # The bounded path is not a weaker clean. Everything the rig writes lands under
+  # .token-optimizer/wiki -- graph, evidence, metrics, snapshots and transcripts --
+  # so on the default directory this removes precisely what the old line removed.
+  if [ "$PROXY_GRAPH_DIR" != "$DEFAULT_GRAPH_DIR" ] && [ "$FRESH_GRAPH" != "force" ]; then
+    printf 'refusing to clear a graph outside %s\n' "$DEFAULT_GRAPH_DIR" >&2
+    printf '  PROXY_GRAPH_DIR=%s\n' "$PROXY_GRAPH_DIR" >&2
+    printf '  re-run with FRESH_GRAPH=force to clear it, or FRESH_GRAPH=0 to keep it\n' >&2
+    exit 2
+  fi
   # A graph left over from an earlier screen would make pass 1 pointless and pass 2
   # unattributable -- the injected findings would come from a run nobody recorded.
   #
@@ -51,7 +69,7 @@ if [ "${FRESH_GRAPH:-1}" = "1" ]; then
   # gate below catches it, but only after the operator has waited for a pass that did
   # nothing.
   log "Clearing the proxy graph and the warm-up volume so pass 1 genuinely refills it"
-  rm -rf "$PROXY_GRAPH_DIR"
+  rm -rf -- "$PROXY_GRAPH_DIR/.token-optimizer/wiki"
   docker volume rm "$WARMUP_VOLUME" >/dev/null 2>&1 || true
 fi
 mkdir -p "$PROXY_GRAPH_DIR/.token-optimizer/wiki"

@@ -4,6 +4,12 @@ import { compressProse } from '../../../src/compress/prose.js';
 import { compressSearchResults } from '../../../src/compress/search.js';
 import { compressCode } from '../../../src/compress/code.js';
 import { parse } from '@babel/parser';
+import { runBatch } from '../../../src/compress/onnx.js';
+import type {
+  OnnxRuntime,
+  OnnxSession,
+  OnnxTensorLike,
+} from '../../../src/compress/onnx.js';
 
 /**
  * Defects found in review of the compression PR, each pinned by the case that
@@ -230,5 +236,115 @@ describe('a concise arrow body is not a brace-delimited body', () => {
 
     expect(out.elisions.length).toBeGreaterThan(0);
     expect(out.text.length).toBeLessThan(source.length);
+  });
+});
+
+
+describe('the ONNX adapter rejects an output shape it cannot slice', () => {
+  // A stand-in runtime. `runBatch` only ever constructs a tensor and reads the
+  // session's output, so nothing here needs onnxruntime -- which is the point:
+  // this guard protects against a model that misbehaves, and a correctly
+  // behaving real model can never exercise it.
+  const runtimeReturning = (
+    output: OnnxTensorLike
+  ): { ort: OnnxRuntime; session: OnnxSession } => ({
+    ort: {
+      InferenceSession: {
+        create: (): Promise<OnnxSession> => {
+          throw new Error('not used by runBatch');
+        },
+      },
+      Tensor: class {
+        constructor(
+          readonly type: string,
+          readonly data: BigInt64Array,
+          readonly dims: readonly number[]
+        ) {}
+      },
+    },
+    session: {
+      inputNames: ['ids'],
+      outputNames: ['embedding'],
+      run: async (): Promise<Record<string, OnnxTensorLike>> => ({
+        embedding: output,
+      }),
+    },
+  });
+
+  const tokenize = (text: string): number[] => [text.length, 1];
+
+  it('refuses an unpooled [batch, tokens, dimensions] output', async () => {
+    // THE SHAPE THAT SLIPPED THROUGH. Last dimension is 4, so the width check
+    // is satisfied; the model emitted 2 x 3 x 4, so it produced six vectors for
+    // two inputs. The old `produced < rows.length` test passed, and the slice
+    // loop then gave input 1 the SECOND TOKEN of input 0.
+    const { ort, session } = runtimeReturning({
+      data: new Float32Array(2 * 3 * 4).fill(1),
+      dims: [2, 3, 4],
+    });
+
+    await expect(
+      runBatch(ort, session, 'ids', 'embedding', ['a', 'bb'], tokenize, 8, 4)
+    ).rejects.toThrow(/produced 6 vectors of width 4 for 2 inputs/);
+  });
+
+  it('refuses an output that is not a whole number of vectors', async () => {
+    // THE LAST DIMENSION IS DELIBERATELY 4, so the width check above cannot be
+    // the one that fires -- a fixture rejected by an earlier guard proves
+    // nothing about this one. The tensor is internally inconsistent instead:
+    // it claims 2 x 4 and carries 10 values, which is 2.5 vectors.
+    const { ort, session } = runtimeReturning({
+      data: new Float32Array(10).fill(1),
+      dims: [2, 4],
+    });
+
+    await expect(
+      runBatch(ort, session, 'ids', 'embedding', ['a', 'bb'], tokenize, 8, 4)
+    ).rejects.toThrow(/must produce exactly one pooled vector per input/);
+  });
+
+  it('accepts one pooled vector per input, and slices them apart', async () => {
+    // The positive case, and the one that proves the guard is not simply
+    // rejecting everything: two inputs, two 4-wide vectors, each recovered
+    // whole and in order.
+    const data = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
+    const { ort, session } = runtimeReturning({ data, dims: [2, 4] });
+
+    const vectors = await runBatch(
+      ort,
+      session,
+      'ids',
+      'embedding',
+      ['a', 'bb'],
+      tokenize,
+      8,
+      4
+    );
+
+    expect(vectors).toHaveLength(2);
+    expect(Array.from(vectors[0])).toEqual([1, 2, 3, 4]);
+    expect(Array.from(vectors[1])).toEqual([5, 6, 7, 8]);
+  });
+
+  it('copies each vector out of the runtime-owned buffer', async () => {
+    // The adapter copies because onnxruntime may reuse the output buffer on the
+    // next run. Overwriting the source afterwards must not disturb what was
+    // already handed back.
+    const data = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
+    const { ort, session } = runtimeReturning({ data, dims: [2, 4] });
+
+    const vectors = await runBatch(
+      ort,
+      session,
+      'ids',
+      'embedding',
+      ['a', 'bb'],
+      tokenize,
+      8,
+      4
+    );
+    data.fill(99);
+
+    expect(Array.from(vectors[0])).toEqual([1, 2, 3, 4]);
   });
 });

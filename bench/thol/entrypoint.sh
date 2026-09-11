@@ -125,36 +125,68 @@ prepare() {
         const to = 'http://127.0.0.1:' + upstream.address().port;
 
         const child = spawn(process.execPath, ['$PKG/dist/proxy/cli.js', '--upstream', to, '--quiet']);
-        let out = '';
-        child.stdout.setEncoding('utf8');
-        const url = await new Promise((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error('the proxy printed no URL within 15s')), 15000);
-          // NEWLINE BY CODE POINT, not as an escape. This snippet sits inside a
-          // double-quoted shell string in a file that was itself written by a
-          // script: a `\n` here has to survive two layers, and it did not --
-          // it arrived as a real line break, leaving an unterminated string
-          // literal that node rejected. The assertion around it then reported
-          // that the packaged build could not start a proxy, which was true of
-          // the probe rather than of the build.
-          const EOL = String.fromCharCode(10);
-          child.stdout.on('data', (c) => {
-            out += c;
-            if (out.includes(EOL)) { clearTimeout(timer); resolve(out.split(EOL)[0].trim()); }
+        // EVERY EXIT PATH TEARS DOWN. This probe runs BEFORE the first task, and a
+        // leaked child or a still-listening upstream keeps node's event loop alive:
+        // the probe would then hang forever rather than fail, taking the whole
+        // campaign with it and printing nothing that says why. The previous form
+        // only tore down on the success path, which is the one path that did not
+        // need it.
+        try {
+          let out = '';
+          child.stdout.setEncoding('utf8');
+          const url = await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('the proxy printed no URL within 15s')), 15000);
+            // NEWLINE BY CODE POINT, not as an escape. This snippet sits inside a
+            // double-quoted shell string in a file that was itself written by a
+            // script: a two-character escape here had to survive two layers, and it
+            // did not -- it arrived as a real line break, leaving an unterminated
+            // string literal that node rejected. The assertion around it then reported
+            // that the packaged build could not start a proxy, which was true of
+            // the probe rather than of the build.
+            const EOL = String.fromCharCode(10);
+            child.stdout.on('data', (c) => {
+              out += c;
+              if (out.includes(EOL)) { clearTimeout(timer); resolve(out.split(EOL)[0].trim()); }
+            });
+            child.on('exit', (code) => { clearTimeout(timer); reject(new Error('the proxy exited with ' + code)); });
           });
-          child.on('exit', (code) => { clearTimeout(timer); reject(new Error('the proxy exited with ' + code)); });
-        });
 
-        const response = await fetch(url + '/v1/messages', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ model: 'probe', messages: [{ role: 'user', content: 'probe' }] }),
-        });
-        if (!response.ok) throw new Error('the proxy answered ' + response.status);
-        if (seen !== 1) throw new Error('the request never reached the upstream');
+          const response = await fetch(url + '/v1/messages', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ model: 'probe', messages: [{ role: 'user', content: 'probe' }] }),
+            // A proxy that accepts the connection and then stalls is a real
+            // failure mode, and fetch has no deadline of its own.
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!response.ok) throw new Error('the proxy answered ' + response.status);
+          if (seen !== 1) throw new Error('the request never reached the upstream');
 
-        child.kill('SIGTERM');
-        await once(child, 'exit');
-        upstream.close();
+        } finally {
+          // ONLY WAIT ON A CHILD THAT IS STILL RUNNING. The commonest failure here
+          // is a proxy that dies at startup, and 'exit' has then already fired --
+          // awaiting it again waits for an event that will never come, so the whole
+          // teardown sat on the 5s fallback before reporting a failure it knew
+          // about immediately. Measured: 5.2s before this check, 0.35s after.
+          if (child.exitCode === null && child.signalCode === null) {
+            // SIGTERM first, because the proxy installs a handler that closes its
+            // sockets; SIGKILL only if it does not take it, so a wedged child
+            // cannot hold the probe open either.
+            child.kill('SIGTERM');
+            // The loser of this race is CLEARED, not abandoned: a pending 5s timer
+            // is itself something that holds the event loop open, which is the very
+            // thing this block exists to prevent.
+            let nudge;
+            await Promise.race([
+              once(child, 'exit'),
+              new Promise((r) => { nudge = setTimeout(r, 5000); }),
+            ]);
+            clearTimeout(nudge);
+            if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+          }
+          upstream.close();
+          upstream.closeAllConnections?.();
+        }
       " || die "arm $arm declares TOKEN_OPTIMIZER_PROXY=$wantproxy but the packaged build could not start a proxy and forward one request through it. That arm would send every request to a closed port."
       echo "   $arm: the packaged proxy starts and forwards"
     fi

@@ -61,6 +61,7 @@ async function start(
   child: ChildProcessWithoutNullStreams;
   url: string;
   stderr: () => string;
+  stdout: () => string;
 }> {
   const child = spawn(process.execPath, [CLI, ...args], {
     env: {
@@ -75,18 +76,23 @@ async function start(
   child.stderr.on('data', (chunk: string) => (stderr += chunk));
   child.stdout.setEncoding('utf8');
 
+  // EVERY BYTE OF STDOUT IS KEPT, not just the bytes after the URL arrives.
+  // The URL and a stray second line can land in ONE chunk, and this listener
+  // consumes that chunk before any test can attach its own -- so a test that
+  // watched for "extra output" afterwards saw nothing and passed over exactly
+  // the violation it existed to catch. Parsing reads this buffer rather than a
+  // private one, which makes the single-line contract assertable in full.
+  let stdout = '';
   const url = await new Promise<string>((resolve, reject) => {
-    let buffered = '';
     const timer = setTimeout(
       () => reject(new Error(`no URL within 15s; stderr was:\n${stderr}`)),
       15_000
     );
     child.stdout.on('data', (chunk: string) => {
-      buffered += chunk;
-      const line = buffered.split('\n')[0];
-      if (buffered.includes('\n')) {
+      stdout += chunk;
+      if (stdout.includes('\n')) {
         clearTimeout(timer);
-        resolve(line.trim());
+        resolve(stdout.split('\n')[0].trim());
       }
     });
     child.on('exit', (code) => {
@@ -99,7 +105,7 @@ async function start(
     });
   });
 
-  return { child, url, stderr: () => stderr };
+  return { child, url, stderr: () => stderr, stdout: () => stdout };
 }
 
 const post = (
@@ -180,17 +186,24 @@ describe('the proxy command-line entrypoint', () => {
 
   it('prints exactly one line on stdout, and it is the URL', async () => {
     const target = await upstream();
-    const { child, url } = await start(['--upstream', target.url, '--quiet']);
+    const { child, url, stdout } = await start([
+      '--upstream',
+      target.url,
+      '--quiet',
+    ]);
     running.push(child);
 
     expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
 
     // The contract a launcher depends on: nothing else ever reaches stdout, so
     // `BASE_URL=$(token-optimizer-proxy ...)` cannot capture a summary line.
-    let extra = '';
-    child.stdout.on('data', (chunk: string) => (extra += chunk));
+    // Asserted over the WHOLE stream, including whatever arrived in the same
+    // chunk as the URL, and serving a request first because that is when a
+    // stray log line would be written.
     await post(url, JSON.stringify({ model: 'x', messages: [] }));
-    expect(extra).toBe('');
+    await new Promise((settle) => setTimeout(settle, 50));
+
+    expect(stdout()).toBe(`${url}\n`);
   });
 
   it('forwards a request to the upstream it was given', async () => {

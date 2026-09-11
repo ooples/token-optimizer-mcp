@@ -145,13 +145,23 @@ done
 # `set -e` that aborted the caller AFTER the runs had been paid for and recorded,
 # which is the worst possible moment to stop.
 #
-# So its failure is reported and not propagated. The runs are already in the results
-# volume either way, and `report` can be re-run against them at any time.
+# TESTED FOR, NOT SUPPRESSED. The earlier `|| log` swallowed that failure, but it
+# swallowed every other one with it -- a corrupt results.sqlite, an unreadable
+# volume, a defect in `report` itself -- and the campaign then exited 0 having
+# printed a cyan note where the leaderboard should have been. The condition is
+# knowable up front, so it is decided up front: no control arm, no report; a
+# control arm and a failing report is a real failure and propagates.
 log "Campaign complete -- building final leaderboard"
-MSYS_NO_PATHCONV=1 docker run --rm \
-  -v "$RIG_DIR/auth:/auth:ro" \
-  -v "$RESULTS_VOLUME:/results" \
-  -v "$PROXY_GRAPH_DIR:/proxy-graph" \
-  -e THOL_CAMPAIGN="$CAMPAIGN" \
-  "$IMAGE" report \
-  || log "leaderboard not built (it needs a control arm); the runs are recorded regardless"
+case ",$ARMS," in
+  *,control,*)
+    MSYS_NO_PATHCONV=1 docker run --rm \
+      -v "$RIG_DIR/auth:/auth:ro" \
+      -v "$RESULTS_VOLUME:/results" \
+      -v "$PROXY_GRAPH_DIR:/proxy-graph" \
+      -e THOL_CAMPAIGN="$CAMPAIGN" \
+      "$IMAGE" report
+    ;;
+  *)
+    log "no leaderboard: ARMS=$ARMS has no control arm to compare against. The runs are recorded; re-run \`$IMAGE report\` once a control arm exists."
+    ;;
+esac

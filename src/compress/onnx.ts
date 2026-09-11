@@ -128,7 +128,17 @@ export async function onnxEncoder(
   };
 }
 
-async function runBatch(
+/**
+ * One `session.run` over a batch of texts, returning one vector per text.
+ *
+ * EXPORTED FOR THE GUARDS BELOW, which are the part of this file most worth
+ * testing and the part hardest to reach through {@link onnxEncoder}: that path
+ * needs `onnxruntime-node` present and a real model that misbehaves in a
+ * specific way. Every argument here is structural, so a test can hand it a
+ * runtime and a session that return a deliberately wrong shape and assert that
+ * the shape is rejected rather than silently mis-sliced.
+ */
+export async function runBatch(
   ort: OnnxRuntime,
   session: OnnxSession,
   inputName: string,
@@ -174,10 +184,19 @@ async function runBatch(
         'every row after the first would be read from the wrong offset'
     );
   }
+  // EXACTLY ONE VECTOR PER INPUT, not "at least one". An unpooled model emits
+  // [batch, tokens, dimensions]: its last dimension still equals `dimensions`, so the
+  // width check above is satisfied, and it produces batch x tokens vectors -- more
+  // than there are inputs, which a `<` comparison waves through. The slice loop below
+  // then hands row 1 the SECOND TOKEN OF ROW 0 and every ranking built on it is
+  // wrong while looking entirely well-formed. A non-integer count means the output is
+  // not a whole number of vectors at all, which is the same class of defect.
   const produced = embedding.data.length / dimensions;
-  if (produced < rows.length) {
+  if (!Number.isInteger(produced) || produced !== rows.length) {
     throw new Error(
-      `the model produced ${produced} vectors for ${rows.length} inputs`
+      `the model produced ${produced} vectors of width ${dimensions} for ${rows.length} ` +
+        `inputs (output dims [${embedding.dims.join(', ')}]); it must produce exactly one ` +
+        'pooled vector per input'
     );
   }
 
@@ -196,18 +215,20 @@ async function runBatch(
 
 // Minimal structural types for the optional dependency, so this file compiles
 // with or without `onnxruntime-node` present.
-interface OnnxTensorLike {
+// Exported alongside runBatch so a test can supply them; `declaration: true` would
+// otherwise refuse to emit a signature naming types it cannot reference.
+export interface OnnxTensorLike {
   readonly data: ArrayLike<number>;
   readonly dims: readonly number[];
 }
 
-interface OnnxSession {
+export interface OnnxSession {
   readonly inputNames: readonly string[];
   readonly outputNames: readonly string[];
   run(feeds: Record<string, unknown>): Promise<Record<string, OnnxTensorLike>>;
 }
 
-interface OnnxRuntime {
+export interface OnnxRuntime {
   readonly InferenceSession: { create(path: string): Promise<OnnxSession> };
   readonly Tensor: new (
     type: string,
