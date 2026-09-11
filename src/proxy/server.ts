@@ -38,6 +38,12 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { v1Frontier, type StrategyResult } from '../compress/strategy.js';
+import {
+  accountingPath,
+  appendRecord,
+  tapUsage,
+  type CompressionFacts,
+} from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindings } from './findings.js';
@@ -414,7 +420,8 @@ function forward(
   upstream: string,
   req: IncomingMessage,
   res: ServerResponse,
-  body: Buffer
+  body: Buffer,
+  facts?: CompressionFacts
 ): void {
   const path = requestPath(req.url);
   if (path === null) {
@@ -470,6 +477,22 @@ function forward(
     },
     (upstreamRes) => {
       res.writeHead(upstreamRes.statusCode || 502, upstreamRes.headers);
+      // WATCHED BEFORE IT IS PIPED, and watching is all it does: a `data`
+      // listener does not consume a stream in flowing mode, so every byte still
+      // reaches `pipe` unchanged. Registered first so no chunk can be missed by
+      // a listener attached after delivery has already begun.
+      const ledger = facts ? accountingPath() : null;
+      if (ledger && facts) {
+        tapUsage(upstreamRes, (usage) => {
+          appendRecord(ledger, {
+            ts: new Date().toISOString(),
+            path: requestPath(req.url) ?? '/',
+            status: upstreamRes.statusCode || 0,
+            ...facts,
+            usage,
+          });
+        });
+      }
       // Piped, not buffered: an SSE stream must arrive as it is produced, or
       // the agent sits waiting for a response that has already started.
       upstreamRes.pipe(res);
@@ -594,7 +617,12 @@ export async function startProxy(
         tuning
       );
       options.onSummary?.({ path: req.url || '/', ...summary });
-      forward(upstream, req, res, next);
+      forward(upstream, req, res, next, {
+        compressed: summary.compressed,
+        reason: summary.reason,
+        beforeBytes: summary.beforeBytes,
+        afterBytes: summary.afterBytes,
+      });
     })();
   });
 
