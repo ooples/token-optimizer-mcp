@@ -73,6 +73,17 @@ export async function loadFindings(root: string): Promise<Finding[]> {
         origin: typeof node.origin === 'string' ? node.origin : undefined,
         pinned: node.pinned === true,
         retired: node.retired === true,
+        // CARRIED THROUGH, because these two decide whether a finding is safe
+        // to put in a cached prefix and both were being dropped here. Measured
+        // on this repository: of 319 claim-bearing nodes, 66 are stale and 25
+        // are not verified. A stale finding is one whose anchored code has
+        // since changed, so it is advice derived from a tree that no longer
+        // exists -- and in the prefix it is re-read on every turn.
+        confidenceLabel:
+          typeof node.confidenceLabel === 'string'
+            ? node.confidenceLabel
+            : undefined,
+        stale: node.stale === true,
       }));
   } catch {
     // A pruned runtime, an unreadable directory, a corrupt line. None of them

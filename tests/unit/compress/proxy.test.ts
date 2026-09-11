@@ -555,6 +555,9 @@ describe('the cached-knowledge block', () => {
         type: 'failure',
         claim: 'npm install bumps zod and breaks tsc; use npm ci',
         confidence: 0.95,
+        // The cached prefix takes verified findings only -- a claim there is
+        // re-read every turn, so the bar is higher than for the wiki itself.
+        confidenceLabel: 'verified',
       },
     ]);
     const sent = JSON.parse(out.body.toString('utf8'));

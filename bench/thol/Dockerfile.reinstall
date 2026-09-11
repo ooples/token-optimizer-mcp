@@ -1,0 +1,55 @@
+# Re-applies the PRODUCT plus the rig files onto an already-built image.
+#
+# WHY THIS SITS BESIDE Dockerfile.rigfiles. That one re-applies only the rig files
+# and says, correctly, to rebuild from thol/Dockerfile whenever anything under src/
+# changes -- because it never touches the packaged tarball. This one is for exactly
+# that case: src/ changed, so the product has to be reinstalled, but nothing about
+# the toolchain has.
+#
+# The step that makes a full rebuild unaffordable is neither the tarball nor the
+# install. It is `chmod -R a+rX /usr/local/cargo /usr/local/rustup /usr/local/uv-tools`
+# at the end of the real Dockerfile, which on overlayfs copies the entire Rust
+# toolchain into a new layer; once Docker garbage-collects the build cache it runs
+# again, and on this machine it was killed for low memory eight times running at
+# every headroom from 0.8GB to 8.5GB. Nothing here touches those paths, so that layer
+# is inherited untouched.
+#
+# The product is installed in BOTH places the real Dockerfile puts it: globally, and
+# into the versioned runtime that TOKEN_OPTIMIZER_RUNTIME points at. Updating only
+# the global copy would leave the arms running the old build through the launch path
+# they actually use -- a stale measurement that looks like a fresh one, which is the
+# failure this rig's provenance checks exist to prevent.
+FROM thol-rig:local
+
+ARG OPTIMIZER_VERSION=6.0.2
+
+USER root
+
+COPY thol/pkg/optimizer.tgz /tmp/optimizer.tgz
+
+RUN npm install -g /tmp/optimizer.tgz
+
+# REPLACED, NOT LAYERED OVER. `npm install --prefix .` into a directory that already
+# holds an older copy can leave files from the previous version behind, and a stale
+# file in the runtime is indistinguishable from a fresh one at the point it is read.
+RUN rm -rf ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
+    && mkdir -p ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
+    && cd ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
+    && npm install --prefix . --no-audit --no-fund /tmp/optimizer.tgz \
+    && printf '%s' "${OPTIMIZER_VERSION}" > ${TOKEN_OPTIMIZER_RUNTIME}/current \
+    && node -e "require('fs').writeFileSync(process.env.TOKEN_OPTIMIZER_RUNTIME + '/.last-refresh', String(Date.now()))" \
+    && chown -R bench:bench ${TOKEN_OPTIMIZER_RUNTIME}
+
+# The mountpoint, owned by the runtime user. A fresh named volume is seeded from the
+# image path it is mounted at -- content AND ownership -- so without this the volume
+# root arrives root:root, the container runs as bench, and the entrypoint's
+# `[ -w /results ]` guard silently skips persistence: runs complete, nothing is
+# recorded, and the next attempt re-pays for them.
+RUN mkdir -p /results && chown bench:bench /results
+
+USER bench
+
+# Provenance travels with the product, or the image cannot be attributed to a tree.
+COPY thol/pkg/provenance.json /opt/optimizer-provenance.json
+COPY --chown=bench:bench thol/entrypoint.sh /home/bench/scripts/entrypoint.sh
+COPY --chown=bench:bench thol/manifests/ /home/bench/manifests/

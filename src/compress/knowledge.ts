@@ -65,6 +65,10 @@ export interface Finding {
   readonly pinned?: boolean;
   /** Withdrawn. Never rendered. */
   readonly retired?: boolean;
+  /** `verified` | `probable` | `speculative`, as recorded when written. */
+  readonly confidenceLabel?: string;
+  /** The anchored code changed after this was written. */
+  readonly stale?: boolean;
 }
 
 /**
@@ -127,10 +131,31 @@ export function knowledgeBlock(
   budgetChars: number = DEFAULT_BUDGET_CHARS,
   embeddings?: EmbeddingCache
 ): string | null {
+  // VERIFIED AND FRESH ONLY, and this is the strictest filter in the file on
+  // purpose. A finding in the cached prefix is not read once -- it is re-read
+  // on every turn of the session, so a wrong one is wrong repeatedly and at
+  // the one position the model attends to most. That asymmetry does not apply
+  // to a finding surfaced on demand, which is why this bar is higher than the
+  // one the wiki itself uses.
+  //
+  // `stale` means the anchored code changed after the claim was written, so it
+  // describes a tree that no longer exists. Measured on this repository: 319
+  // claim-bearing nodes, of which 66 are stale and 25 are not verified, leaving
+  // 237. Dropping a quarter of the graph is the point rather than a cost -- the
+  // budget only fits a few dozen lines anyway, so the filter changes WHICH
+  // findings compete for the space, not how many arrive.
+  //
+  // A MISSING LABEL IS NOT TREATED AS VERIFIED. That is deliberate and it has a
+  // cost: a graph written before labels existed injects nothing at all. The
+  // alternative -- defaulting absent to verified -- puts unlabelled claims of
+  // unknown provenance into the prefix, which is the exact risk this filter is
+  // here to remove. Silence is the safe failure; confident wrong advice is not.
   const usable = findings.filter(
     (f) =>
       f &&
       !f.retired &&
+      !f.stale &&
+      f.confidenceLabel === 'verified' &&
       typeof f.claim === 'string' &&
       f.claim.trim().length > 0 &&
       (f.confidence ?? 0.5) >= MIN_CONFIDENCE

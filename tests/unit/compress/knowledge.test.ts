@@ -21,6 +21,10 @@ import type { ProviderRequest } from '../../../src/compress/frontier.js';
  * matter: get them wrong and this costs 1.25x on everything instead.
  */
 
+// LABELLED VERIFIED, because that is now the bar for the cached prefix.
+// These fixtures exist to be injected, so they have to satisfy the contract
+// injection actually applies; the filter itself is exercised separately
+// below, with findings that are deliberately stale or unlabelled.
 const findings: Finding[] = [
   {
     key: 'a',
@@ -28,6 +32,7 @@ const findings: Finding[] = [
     claim: 'npm install bumps zod 3 to 4 and breaks tsc; use npm ci',
     confidence: 0.95,
     origin: 'agent',
+    confidenceLabel: 'verified',
   },
   {
     key: 'b',
@@ -35,6 +40,7 @@ const findings: Finding[] = [
     claim: 'Never weaken a test to make it pass',
     confidence: 0.99,
     origin: 'human',
+    confidenceLabel: 'verified',
   },
   {
     key: 'c',
@@ -42,6 +48,7 @@ const findings: Finding[] = [
     claim: 'The wiki search route is exercised by verify-wiki-interactions.mjs',
     confidence: 0.8,
     origin: 'agent',
+    confidenceLabel: 'verified',
   },
   {
     key: 'd',
@@ -49,6 +56,7 @@ const findings: Finding[] = [
     claim: 'The dashboard renders charts from a vendored chart.umd.min.js',
     confidence: 0.7,
     origin: 'agent',
+    confidenceLabel: 'verified',
   },
 ];
 
@@ -105,6 +113,7 @@ describe('knowledgeBlock', () => {
     const many: Finding[] = Array.from({ length: 200 }, (_, i) => ({
       key: `k${i}`,
       claim: `finding number ${i} about ${'padding '.repeat(10)}`,
+      confidenceLabel: 'verified',
       confidence: 0.9,
     }));
     const block = knowledgeBlock(many, 'finding padding') ?? '';
@@ -246,6 +255,7 @@ describe('through v1, where the cache economics live', () => {
         key: 'z',
         type: 'failure',
         claim: 'A brand new conclusion written during this very session',
+        confidenceLabel: 'verified',
         confidence: 0.99,
         origin: 'human',
       },
@@ -270,6 +280,7 @@ describe('through v1, where the cache economics live', () => {
         key: 'z',
         type: 'failure',
         claim: 'A brand new conclusion written during this very session',
+        confidenceLabel: 'verified',
         confidence: 0.99,
         origin: 'human',
       },
@@ -314,5 +325,98 @@ describe('through v1, where the cache economics live', () => {
       ''
     );
     expect(out.injectedChars).toBe(block.length);
+  });
+});
+
+describe('only verified, non-stale findings reach the cached prefix', () => {
+  // A FINDING IN THE PREFIX IS RE-READ EVERY TURN, which is what makes this the
+  // strictest filter in the module. A wrong claim surfaced on demand is read
+  // once and can be argued with; the same claim in the cached prefix is in front
+  // of the model for the whole session, at the position it attends to most.
+  //
+  // Measured on this repository's own graph: 319 claim-bearing nodes, of which
+  // 66 are stale and 25 are not verified, leaving 237. `stale` means the code a
+  // claim was anchored to has since changed, so the claim describes a tree that
+  // no longer exists.
+  const finding = (
+    claim: string,
+    confidenceLabel?: string,
+    stale = false
+  ): Finding => ({
+    claim,
+    confidenceLabel,
+    stale,
+    confidence: 0.9,
+    key: claim,
+  });
+
+  const block = (findings: Finding[]): string | null =>
+    knowledgeBlock(findings, 'a stable context string', 2000);
+
+  it('keeps a verified finding whose anchors still hold', () => {
+    const out = block([
+      finding('the engine absorbs recoverable errors', 'verified'),
+    ]);
+    expect(out).not.toBeNull();
+    expect(out).toContain('the engine absorbs recoverable errors');
+  });
+
+  it('drops a stale finding even when it is verified', () => {
+    // Verified says the claim WAS proved; stale says it was proved against code
+    // that has since moved. Both have to hold.
+    const out = block([
+      finding('derived from code that has since changed', 'verified', true),
+    ]);
+    expect(out).toBeNull();
+  });
+
+  it('drops probable and speculative findings', () => {
+    const out = block([
+      finding('a strong but incomplete conclusion', 'probable'),
+      finding('a hypothesis worth rechecking', 'speculative'),
+    ]);
+    expect(out).toBeNull();
+  });
+
+  it('does not treat a missing label as verified', () => {
+    // The safe failure is silence. Defaulting absent to verified would put
+    // claims of unknown provenance into the prefix, which is the risk the
+    // filter exists to remove.
+    const out = block([
+      finding('no label was ever recorded for this', undefined),
+    ]);
+    expect(out).toBeNull();
+  });
+
+  it('selects the verified ones out of a mixed graph', () => {
+    // The discriminating case: the block is produced, and contains exactly the
+    // findings that passed. A test that only asserted "not null" would pass
+    // even if every finding leaked through.
+    const out = block([
+      finding('keep me, verified and fresh', 'verified'),
+      finding('drop me, stale', 'verified', true),
+      finding('drop me, probable', 'probable'),
+      finding('keep me too', 'verified'),
+    ]);
+
+    expect(out).toContain('keep me, verified and fresh');
+    expect(out).toContain('keep me too');
+    expect(out).not.toContain('drop me, stale');
+    expect(out).not.toContain('drop me, probable');
+  });
+
+  it('still honours retirement, which is how a correction withdraws its target', () => {
+    // The graph has no structural "supersedes" relation, so a corrected claim
+    // is withdrawn by being retired. Nothing in this repository's 319 findings
+    // is retired yet, which means the mechanism exists and is unused -- worth
+    // knowing, because it is the only way a correction can silence the claim it
+    // corrects.
+    const retired: Finding = {
+      claim: 'a conclusion later found to be wrong',
+      confidenceLabel: 'verified',
+      confidence: 0.9,
+      retired: true,
+    };
+    expect(block([retired])).toBeNull();
   });
 });

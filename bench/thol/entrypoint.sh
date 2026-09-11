@@ -383,7 +383,14 @@ start_proxies() {
     # would leave the proxy unstarted with no log saying why.
     logdir=/results
     [ -d /results ] && [ -w /results ] || logdir=/tmp
-    TOKEN_OPTIMIZER_PROXY=1     TOKEN_OPTIMIZER_PROXY_KNOWLEDGE="$knowledge"       node "$PKG/dist/proxy/cli.js" --port "$port"         ${root:+--project-root "$root"}         >>"$logdir/proxy-$port.log" 2>&1 &
+    # THE LEDGER, so a cost difference can be attributed instead of argued about.
+    # The screen measured 36 turns against 35 and $0.58 against $0.43: turns barely
+    # moved and money did, so the difference is per-turn token spend -- but nothing
+    # recorded WHICH KIND of token, and a cache read bills at 0.1x against a write
+    # at 1.25x. This writes the usage the provider reports beside what compression
+    # did to the same request. It lands in $logdir, which is the results volume
+    # when one is mounted, so it survives a --rm container.
+    TOKEN_OPTIMIZER_PROXY=1     TOKEN_OPTIMIZER_PROXY_KNOWLEDGE="$knowledge"       TOKEN_OPTIMIZER_PROXY_ACCOUNTING="$logdir/ledger-$port.jsonl"       node "$PKG/dist/proxy/cli.js" --port "$port"         ${root:+--project-root "$root"}         >>"$logdir/proxy-$port.log" 2>&1 &
     pid=$!
     PROXY_PIDS="$PROXY_PIDS $pid"
     # Remembered per port, because "something answers on this port" is NOT the
