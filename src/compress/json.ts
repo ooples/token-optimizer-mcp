@@ -93,7 +93,6 @@ function shapeOf(row: unknown): string {
   return `${typeof row}s`;
 }
 
-/** Keys present in at least this fraction of rows define the common shape. */
 /**
  * Above this share of anomalous rows, the anomaly rule is not discriminating.
  *
@@ -104,7 +103,34 @@ function shapeOf(row: unknown): string {
  */
 const MAX_ANOMALOUS_SHARE = 0.5;
 
+/** Keys present in at least this fraction of rows define the common shape. */
 const COMMON_KEY_SHARE = 0.8;
+
+/**
+ * How many rows sharing one deviation still count as exceptional.
+ *
+ * MEASURED, on their api-responses fixture. 60 of 200 rows carry an optional
+ * `relationships` key, so every one of them "departs from the shape the rest
+ * share" and the anomaly rule kept all 60 -- 31% of the array retained whole,
+ * 75.8% reduction against their 91.4%. But sixty rows deviating IDENTICALLY
+ * are not sixty anomalies, they are a subpopulation, and rule 2 already keeps
+ * a representative of it. The global share cap could not see this: 60 is well
+ * under half the array, so the backstop never fired.
+ *
+ * A deviation nobody else shares is still kept in full -- that is the error
+ * row, the record with the unexpected field, the thing this rule exists for.
+ */
+const MAX_PER_DEVIATION = 3;
+
+/** The way a row departs from the common shape, as a comparable key. */
+function deviationOf(
+  keys: readonly string[],
+  common: ReadonlySet<string>
+): string {
+  const extra = keys.filter((key) => !common.has(key)).sort();
+  const missing = [...common].filter((key) => !keys.includes(key)).sort();
+  return `+${extra.join(',')}|-${missing.join(',')}`;
+}
 
 /**
  * Which rows depart from the shape the rest of the array shares.
@@ -113,6 +139,10 @@ const COMMON_KEY_SHARE = 0.8;
  * `is_needle`, `error`, `status` -- or lacks one most rows carry. Both
  * directions matter: an extra field marks a special record, and a missing
  * field marks an incomplete one, and a reader wants each.
+ *
+ * Rows are then grouped by HOW they deviate and each group is capped, so a
+ * shared optional field reads as one subpopulation rather than as sixty
+ * separate anomalies. See MAX_PER_DEVIATION.
  */
 function anomalousRows(rows: readonly unknown[]): Set<number> {
   const frequency = new Map<string, number>();
@@ -133,14 +163,28 @@ function anomalousRows(rows: readonly unknown[]): Set<number> {
       .map(([key]) => key)
   );
 
-  const odd = new Set<number>();
+  // GROUPED BY HOW THEY DEVIATE, not just counted. A deviation shared by many
+  // rows is a shape; a deviation shared by none is an anomaly. Only the second
+  // kind earns the whole row.
+  const byDeviation = new Map<string, number[]>();
   rows.forEach((row, index) => {
     if (!row || typeof row !== 'object' || Array.isArray(row)) return;
     const keys = Object.keys(row as Record<string, unknown>);
     const extra = keys.some((key) => !common.has(key));
     const missing = [...common].some((key) => !keys.includes(key));
-    if (extra || missing) odd.add(index);
+    if (!extra && !missing) return;
+    const deviation = deviationOf(keys, common);
+    const bucket = byDeviation.get(deviation);
+    if (bucket) bucket.push(index);
+    else byDeviation.set(deviation, [index]);
   });
+
+  const odd = new Set<number>();
+  for (const indices of byDeviation.values()) {
+    // Ordered by position, so the rows kept are the first occurrences rather
+    // than an arbitrary slice -- the same bias the head-of-array rule uses.
+    for (const index of indices.slice(0, MAX_PER_DEVIATION)) odd.add(index);
+  }
   return odd;
 }
 
