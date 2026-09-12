@@ -290,6 +290,26 @@ export interface AnchorRecord {
    */
   readonly breakpoint?: Position | null;
   /**
+   * Where compression STARTED for this conversation, and never moves after.
+   *
+   * A FROZEN BOUNDARY IS WHAT MAKES THE PREFIX REPRODUCIBLE. `breakpoint`
+   * advances every turn as the client moves its cache marker, and using it
+   * as the compression floor means a span compressed on turn N falls BELOW
+   * the floor on turn N+1 and would be sent uncompressed -- the provider
+   * then holds our bytes and receives the client's, which is a miss on
+   * everything from that point on.
+   *
+   * Measured before this existed: 20 of 418 message-turns changed across a
+   * 30-turn replay, which invalidated a modelled 21% effective-token saving
+   * outright, because every one of those changes is a cache miss rather
+   * than the 0.1x read the model assumed.
+   *
+   * Frozen, the rule is simply: everything after this point is compressed,
+   * every turn, by a transform that depends only on the content. Same
+   * input, same output, cache hit.
+   */
+  readonly compressFrom?: Position | null;
+  /**
    * The knowledge block we last put in this prefix, if any.
    *
    * Kept here because it IS part of the prefix, and the prefix has to

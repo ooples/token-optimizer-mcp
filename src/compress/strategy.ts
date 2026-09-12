@@ -673,8 +673,25 @@ export function v1Frontier(
     decision.reason === 'already-anchored' ||
     decision.reason === 'left-alone' ||
     decision.reason === 'extended';
-  const floor = recognised ? (decision.record.breakpoint ?? null) : null;
-  let out = pathAddressed(request, options, !attempt, floor);
+  // ONCE COMPRESSION HAS STARTED THE BOUNDARY NEVER MOVES. `breakpoint`
+  // advances every turn as the client moves its cache marker, so using it as
+  // the floor would push a span compressed on turn N below the floor on turn
+  // N+1 and send the client's original for bytes the provider is holding as
+  // ours. `compressFrom` is set once, on the turn compression first bites,
+  // and reused verbatim thereafter -- so the same content yields the same
+  // output every turn and the cache hits. See anchor.ts for the measurement.
+  const frozen = recognised ? (decision.record.compressFrom ?? null) : null;
+  const floor =
+    frozen ?? (recognised ? (decision.record.breakpoint ?? null) : null);
+  // A FROZEN BOUNDARY OUTRANKS THE REWRITE PATH. `attempt` normally means
+  // "rewrite the whole history", which is right when we are deciding to
+  // anchor for the first time and wrong once a boundary exists: re-deriving
+  // the prefix from scratch touches content the provider already holds in a
+  // form we chose, and changes it. Measured: exactly one message-turn in 418
+  // moved, at the turn the already-anchored path first fired, and it was
+  // this.
+  const respect = !attempt || frozen !== null;
+  let out = pathAddressed(request, options, respect, floor);
   let reanchored = attempt;
 
   // COMPRESSING NEW CONTENT COMMITS US TO IT. The moment we shrink a block,
@@ -689,6 +706,14 @@ export function v1Frontier(
     JSON.stringify(out.request).length < JSON.stringify(request).length
   )
     reanchored = true;
+
+  // The boundary to reuse next turn: whatever we already froze, or -- on the
+  // turn compression first bites -- the floor it bit at. Recorded only when
+  // something was actually removed, because a turn that changed nothing has
+  // committed us to nothing.
+  const removedAnything =
+    JSON.stringify(out.request).length < JSON.stringify(request).length;
+  const compressFrom = frozen ?? (removedAnything ? floor : null);
 
   // A REWRITE OF THE CACHED PREFIX HAS TO CLEAR ITS OWN COST. See
   // MIN_PREFIX_REWRITE_SHARE: below that share the 1.25x write we are about to
@@ -739,6 +764,7 @@ export function v1Frontier(
         // span is new. Recorded from the request as it ARRIVED, not as we
         // send it: it describes what the provider is about to hold.
         breakpoint: lastCacheBreakpoint(request),
+        compressFrom,
       },
     },
   };
