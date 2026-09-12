@@ -117,6 +117,96 @@ describe('the fixture still looks like the wire', () => {
   });
 });
 
+/** The payload text of a message, ignoring markers the client moves itself. */
+const payloadOf = (message: unknown): string => {
+  const content = (message as { content?: unknown }).content;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return (
+    content
+      .map((raw) => {
+        const block = raw as {
+          type?: string;
+          text?: string;
+          content?: unknown;
+        };
+        if (typeof block.text === 'string') return block.text;
+        if (block.type === 'tool_result') {
+          if (typeof block.content === 'string') return block.content;
+          if (Array.isArray(block.content))
+            return block.content
+              .map((x) => (x as { text?: string })?.text ?? '')
+              .join('');
+        }
+        return JSON.stringify(block);
+      })
+      // Built rather than written as an escape. A literal control character in
+      // source is exactly what `no-stray-control-characters` exists to catch,
+      // and a heredoc collapsing the escape into one real byte is how one got
+      // here.
+      .join(String.fromCharCode(0))
+  );
+};
+
+describe('the compressed prefix is reproducible turn over turn', () => {
+  it('sends every earlier message byte-identically as the session grows', () => {
+    // THE PROPERTY THE WHOLE CACHE ARGUMENT RESTS ON. Compression is only worth
+    // anything because the provider re-reads the prefix at 0.1x; if our output
+    // for a message changes between turns the provider misses instead, and the
+    // saving inverts into a 1.25x rewrite of everything from that point on.
+    //
+    // It has been broken twice. The floor used to be the client's cache marker,
+    // which advances every turn, so a span compressed on turn N fell below the
+    // floor on turn N+1 and was sent uncompressed; and the already-anchored path
+    // re-derived the whole history, touching content the provider held in a form
+    // we had chosen. Both are silent -- the compressor reports a healthy saving
+    // either way, and only the next turn's bill knows.
+    //
+    // COMPARED ON PAYLOAD TEXT, NOT WHOLE MESSAGES, and that distinction cost a
+    // wrongly-retracted finding: the client relocates its own cache_control
+    // marker every turn, so nineteen of twenty apparent instabilities in one
+    // measurement were the client's doing and not ours.
+    const anchors = anchorStore();
+    const files = [
+      'src/compress/log.ts',
+      'src/compress/json.ts',
+      'src/compress/prose.ts',
+      'src/compress/dedup.ts',
+      'src/compress/code.ts',
+    ];
+    let previousOurs: string[] | null = null;
+    let previousTheirs: string[] | null = null;
+    let ourChanges = 0;
+    let compared = 0;
+
+    for (let i = 1; i <= files.length; i += 1) {
+      const request = wireShapeRequest({
+        root: ROOT,
+        readFiles: files.slice(0, i),
+      }) as ProviderRequest;
+      const out = v1Frontier(request, { anchors });
+      if (out.anchor) anchors.remember(out.anchor.key, out.anchor.record);
+
+      const ours = (out.request.messages ?? []).map(payloadOf);
+      const theirs = (request.messages ?? []).map(payloadOf);
+      if (previousOurs && previousTheirs) {
+        for (let k = 0; k < previousOurs.length; k += 1) {
+          compared += 1;
+          // Only our own changes count; a message the CLIENT rewrote would have
+          // missed the cache whatever we did.
+          if (theirs[k] === previousTheirs[k] && ours[k] !== previousOurs[k])
+            ourChanges += 1;
+        }
+      }
+      previousOurs = ours;
+      previousTheirs = theirs;
+    }
+
+    expect(compared).toBeGreaterThan(0);
+    expect(ourChanges).toBe(0);
+  });
+});
+
 describe('compression is not inert on a wire-shaped request', () => {
   it('removes bytes on a continuing conversation', () => {
     // THE RATCHET. Every defect this suite exists for produced exactly one

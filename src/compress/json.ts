@@ -37,6 +37,7 @@
 
 import { count, inlineMarker } from './annotate.js';
 import { needleRows, shapeRepresentatives } from './needles.js';
+import { compressNestedStrings } from './nested.js';
 import { activeRanker } from './ranking.js';
 import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
@@ -158,6 +159,7 @@ export function compressJson(
   if (!looksLikeJson(text)) return unchanged(text);
 
   let parsed: unknown;
+  let nestedElisions: readonly Elision[] = [];
   try {
     parsed = JSON.parse(text);
   } catch {
@@ -166,7 +168,26 @@ export function compressJson(
     return unchanged(text);
   }
 
-  const elisions: Elision[] = [];
+  // CONTENT THAT ARRIVED AS A STRING. A tool result serialised into a
+  // `content` field is invisible to everything below, which stops at the
+  // container -- and on HeadRoom's own conversation fixtures that is where
+  // almost all of the bulk lives. Descending first means the structural work
+  // below operates on already-compressed values, and the caller's `nested`
+  // handler decides which engine each string deserves.
+  if (ctx.compressNested) {
+    const inner = compressNestedStrings(
+      parsed,
+      ctx.compressNested,
+      ctx,
+      ctx.stringDepth ?? 0
+    );
+    if (inner.removed > 0) {
+      parsed = inner.value;
+      nestedElisions = inner.elisions;
+    }
+  }
+
+  const elisions: Elision[] = [...nestedElisions];
 
   const nulls = countNulls(parsed);
   const stripped = nulls ? dropNulls(parsed) : parsed;

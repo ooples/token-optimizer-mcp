@@ -35,6 +35,7 @@ import { compressProse, looksLikeProse } from './prose.js';
 import { compressSearchResults, looksLikeSearchResults } from './search.js';
 import { engineFor, registerEngine, runEngine } from './registry.js';
 import { readNumbering } from './numbering.js';
+import { foldRepeatedSegments, looksRepetitive } from './segments.js';
 import type { CompressionResult, ContentKind, EngineContext } from './types.js';
 import { unchanged } from './types.js';
 import { DEFAULT_TUNING } from './options.js';
@@ -51,6 +52,22 @@ registerEngine({
   priority: 70,
   claims: (text) => looksLikeDiff(text),
   compress: (text) => unchanged(text),
+});
+
+/**
+ * Repeated sections inside one document, folded losslessly.
+ *
+ * PRIORITY ABOVE json BUT BELOW diff, because it must see a document before
+ * an engine that would treat it as prose or code, and must never see a diff.
+ * It claims only text that is genuinely repetitive -- a real majority of its
+ * segments byte-identical -- so ordinary documents fall straight through to
+ * the engines that already handle them.
+ */
+registerEngine({
+  name: 'segments',
+  priority: 65,
+  claims: (text) => looksRepetitive(text),
+  compress: foldRepeatedSegments,
 });
 
 registerEngine({
@@ -91,6 +108,7 @@ registerEngine({
 /** Built-in names, so a caller can tell ours from a third party's. */
 export const BUILT_IN_ENGINES = Object.freeze([
   'diff',
+  'segments',
   'json',
   'search',
   'log',
@@ -153,6 +171,10 @@ export function compressBlock(
   const tuned: EngineContext = {
     ...ctx,
     tuning: ctx.tuning ?? DEFAULT_TUNING,
+    // The router hands ITSELF to the engines, so a string found inside a
+    // document is routed by exactly the same rules as one found at the top.
+    // Supplied here rather than imported by the engine, which would cycle.
+    compressNested: ctx.compressNested ?? compressBlock,
   };
   return runEngine(engine, text, tuned);
 }

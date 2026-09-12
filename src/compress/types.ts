@@ -93,6 +93,20 @@ export interface EngineContext {
    * produce `src/x.ts:14-37` rather than a spill path.
    */
   readonly sourcePath?: string;
+  /**
+   * Compresses content found INSIDE a string value, when the caller has a
+   * router to route it with.
+   *
+   * Supplied rather than imported so an engine never depends on the router
+   * that dispatches to it, which would be a cycle. Absent means no descent:
+   * every engine stays exactly as it was.
+   */
+  /** How many strings deep this content already is. Guards re-entry. */
+  readonly stringDepth?: number;
+  readonly compressNested?: (
+    text: string,
+    ctx: EngineContext
+  ) => CompressionResult;
   /** Language hint for `code`; inferred from `sourcePath` when absent. */
   readonly language?: string;
   /**
