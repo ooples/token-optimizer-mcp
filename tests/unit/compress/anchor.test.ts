@@ -452,7 +452,16 @@ describe('a declined rewrite is reconsidered as the conversation grows', () => {
       });
     }
     return {
-      system: 'You are a coding agent. '.repeat(400),
+      // SIZED SO THE EARLY REFUSAL IS GENUINE. At repeat(400) this fixture
+      // removed 14.12% on its very first turn and the rewrite was adopted --
+      // so `early` came out non-zero and the test below stopped testing what
+      // it claims. That was not a policy change: the code engine had started
+      // firing on the tool_result once a sourcePath could be recovered from
+      // the matching tool_use, and the same fixture suddenly cleared the
+      // floor. At repeat(1200) the saving is 6.8% against a 12.5% floor, so
+      // the refusal is real, while turn 24 still clears it at 26.3% and the
+      // rewrite is still adopted. Both halves now discriminate.
+      system: 'You are a coding agent. '.repeat(1200),
       messages,
     } as unknown as ProviderRequest;
   };

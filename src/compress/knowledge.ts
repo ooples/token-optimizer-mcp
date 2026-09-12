@@ -85,6 +85,29 @@ export const DEFAULT_BUDGET_CHARS = 2000;
 /** Below this a finding is not worth the line it occupies. */
 const MIN_CONFIDENCE = 0.5;
 
+/**
+ * The largest share of the block any ONE kind of finding may occupy.
+ *
+ * WITHOUT THIS THE BLOCK IS ONE KIND, and measurably so. `weight` multiplies a
+ * failure by 1.4 and a decision or plain finding by 1, while confidence in a
+ * real graph clusters near 0.95 -- so the type multiplier does not tilt the
+ * ordering, it partitions it. Measured on this repository: 268 findings survive
+ * the filter, of which only half are failures, yet every block rendered was
+ * 100% failures, the top twenty by weight were all failures, and the first
+ * non-failure sat at rank 47 against a budget that fits six to eight lines. 62
+ * decisions and 29 commands were eligible and unreachable.
+ *
+ * That is the wrong thing to exclude by kind. A command that finally worked and
+ * a decision with its rejected alternative are the two shapes most likely to
+ * save a turn, which is the only currency this block trades in.
+ *
+ * A cap rather than a quota: it never promotes a weak finding over a strong
+ * one, it only stops one kind taking the whole block. Deterministic, so the
+ * block stays identical across turns and remains cacheable -- the property the
+ * whole design rests on.
+ */
+const MAX_TYPE_SHARE = 0.5;
+
 /** The heading, which is also the instruction. Counted against the budget. */
 const HEADING =
   '## Already established in this project\n\nConclusions from earlier sessions, with the work behind them already done.\nThey are evidence, not orders: prefer them to re-deriving, and say so if you\nfind one is wrong.\n\n';
@@ -186,17 +209,61 @@ export function knowledgeBlock(
         a.index - b.index
     );
 
-  const lines: string[] = [];
-  let spent = HEADING.length;
-  for (const { finding } of ordered) {
-    const line = render(finding);
-    if (spent + line.length + 1 > budgetChars) continue;
-    lines.push(line);
-    spent += line.length + 1;
-  }
+  // TWO GREEDY PASSES, because the cap is a share of the block and the block's
+  // size is not known until the budget has been spent. The first pass only
+  // counts; the second applies the cap it establishes.
+  const capacity = fill(ordered, budgetChars, null).lines.length;
+  const cap = Math.max(1, Math.ceil(capacity * MAX_TYPE_SHARE));
+  const breadth = fill(ordered, budgetChars, cap);
+  // The cap protects other kinds from being crowded out; it is not a reason
+  // to leave budget unspent when no other kind is waiting. Whatever the
+  // capped pass skipped competes again for what is left, best first.
+  const lines = fill(
+    ordered,
+    budgetChars,
+    null,
+    breadth.lines,
+    breadth.spent
+  ).lines;
   if (!lines.length) return null;
 
   return HEADING + lines.join('\n');
+}
+
+/**
+ * Greedily takes findings in order until the budget runs out.
+ *
+ * `cap` limits how many lines any ONE kind may occupy; null counts without
+ * limiting, which is how the capacity that cap is a share of gets established.
+ */
+function fill(
+  ordered: readonly { finding: Finding }[],
+  budgetChars: number,
+  cap: number | null,
+  already: readonly string[] = [],
+  alreadySpent = HEADING.length
+): { lines: string[]; spent: number } {
+  const lines = [...already];
+  const seen = new Set(already);
+  // Counts only what THIS pass places. Lines carried in from a previous pass
+  // are not re-counted, and do not need to be: a pass that continues one is
+  // the uncapped pass, which never consults this.
+  const taken = new Map<string, number>();
+  let spent = alreadySpent;
+  for (const { finding } of ordered) {
+    const kind = finding.type ?? 'finding';
+    if (cap !== null && (taken.get(kind) ?? 0) >= cap) continue;
+    const line = render(finding);
+    if (seen.has(line)) continue;
+    // `continue` rather than `break`: a long line that does not fit must not
+    // end the block, because a shorter one further down still can.
+    if (spent + line.length + 1 > budgetChars) continue;
+    lines.push(line);
+    seen.add(line);
+    taken.set(kind, (taken.get(kind) ?? 0) + 1);
+    spent += line.length + 1;
+  }
+  return { lines, spent };
 }
 
 /**

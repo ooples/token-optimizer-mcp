@@ -549,6 +549,31 @@ export function knowledgeEnabled(env: NodeJS.ProcessEnv): boolean {
 }
 
 /**
+ * How many characters of established knowledge go into the cached prefix.
+ *
+ * A KNOB FOR THE SAME REASON THE TOOL APERTURE IS ONE. The default of 2,000
+ * fits six to eight lines out of 72,736 characters of eligible claim text --
+ * 2.7% of what this project has worked out -- and that number was never chosen
+ * against a measurement, only against a worry that a longer block would bury
+ * the relevant lines. The block is charged once as a cache write and then read
+ * at 0.1x, so widening it is cheap per turn and expensive only once; whether it
+ * buys turns is a question for the rig, not for an argument.
+ *
+ * Returns undefined when unset so the preset's own value survives; falling
+ * back to the constant here would silently override a preset that chose a
+ * different budget on purpose.
+ */
+export function knowledgeCharsFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): number | undefined {
+  const raw = env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE_CHARS;
+  if (raw === undefined || raw.trim() === '') return undefined;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) return undefined;
+  return n;
+}
+
+/**
  * How many large tool definitions stay loaded when deferral is on.
  *
  * A KNOB BECAUSE THE RIGHT VALUE IS MEASURED, NOT REASONED. The default of
@@ -807,8 +832,17 @@ export async function startProxy(
   // One preset for the life of the proxy. Changing dials mid-session would
   // change how the cached prefix compresses, which is the one thing that must
   // not move -- see anchor.ts.
+  // The knowledge budget is the one dial with its own variable, because it is
+  // the one being swept: an explicit `compression` option still wins over it,
+  // so this layers in rather than overriding the caller.
+  const knowledgeChars = knowledgeCharsFromEnv(process.env);
   const tuning = resolveTuning(
-    options.compression ?? {},
+    {
+      ...(knowledgeChars === undefined
+        ? {}
+        : { knowledgeBudgetChars: knowledgeChars }),
+      ...(options.compression ?? {}),
+    },
     options.preset ?? presetFromEnv(process.env)
   );
   // Read once at startup, not per request. The graph does change during a

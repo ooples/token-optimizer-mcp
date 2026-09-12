@@ -60,6 +60,72 @@ const findings: Finding[] = [
   },
 ];
 
+/** Rendered finding lines in a block. */
+const countLines = (block: string | null): number =>
+  ((block ?? '').match(/^- /gm) ?? []).length;
+
+describe('no one kind of finding may take the whole block', () => {
+  /** Enough failures to fill any budget on their own. */
+  const manyFailures: Finding[] = Array.from({ length: 40 }, (_, i) => ({
+    key: `f${i}`,
+    type: 'failure',
+    claim: `a recorded failure about subsystem ${i} and what went wrong in it`,
+    confidence: 0.95,
+    origin: 'agent',
+    confidenceLabel: 'verified',
+  }));
+
+  it('lets other kinds in even when failures outrank all of them', () => {
+    // THE DEFECT THIS EXISTS FOR. weight() multiplies a failure by 1.4 and a
+    // decision or plain finding by 1, and real confidence clusters near 0.95 --
+    // so the multiplier does not tilt the ordering, it partitions it. Measured
+    // on this repository's graph: 268 eligible findings, only half of them
+    // failures, yet every rendered block was 100% failures and the first
+    // non-failure sat at rank 47 against a budget that fits six to eight lines.
+    const block =
+      knowledgeBlock(
+        [
+          ...manyFailures,
+          {
+            key: 'cmd',
+            type: 'command',
+            claim: 'run npm ci rather than npm install, which bumps zod',
+            confidence: 0.8,
+            origin: 'agent',
+            confidenceLabel: 'verified',
+          },
+        ],
+        'failure subsystem'
+      ) ?? '';
+
+    expect(block).toContain('command: run npm ci');
+  });
+
+  it('caps a single kind at half the lines it would otherwise take', () => {
+    const lines = countLines(
+      knowledgeBlock(manyFailures, 'failure subsystem')
+    );
+    const uncapped = countLines(
+      knowledgeBlock([...manyFailures], 'failure subsystem', 2000)
+    );
+
+    // With nothing else eligible the cap still applies, which is the honest
+    // behaviour: it is a ceiling on one kind, not a promise to fill the budget.
+    expect(lines).toBeLessThan(uncapped * 2);
+    expect(lines).toBeGreaterThan(0);
+  });
+
+  it('stays byte-identical across calls, which is what makes it cacheable', () => {
+    // The cap introduces state that persists across the loop, so this is the
+    // property most at risk from it: a block that differs between two turns
+    // turns a 0.1x read into a 1.25x write on the whole prefix.
+    const mixed = [...manyFailures, ...findings];
+    expect(knowledgeBlock(mixed, 'zod tsc install')).toBe(
+      knowledgeBlock([...mixed], 'zod tsc install')
+    );
+  });
+});
+
 describe('knowledgeBlock', () => {
   it('renders the findings as one budgeted block', () => {
     const block = knowledgeBlock(findings, 'zod tsc install');

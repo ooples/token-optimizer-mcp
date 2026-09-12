@@ -59,6 +59,7 @@ import {
   lastCacheBreakpoint,
   type Block,
   type ProviderRequest,
+  type Position,
 } from './frontier.js';
 
 /**
@@ -110,6 +111,20 @@ function prefixOf(request: ProviderRequest): string {
   ];
   (request.messages ?? []).forEach((message, mi) => {
     const content = message?.content;
+    // A STRING AND A ONE-TEXT-BLOCK ARRAY ARE THE SAME MESSAGE, and this
+    // used to skip the string form entirely -- so the text vanished from the
+    // digest and the prefix read as changed.
+    //
+    // That is not hypothetical. Claude Code sends the SessionStart block as
+    // an array of text blocks on one turn and as a plain string on the next:
+    // captured back to back, message 0 was byte-identical while message 1
+    // carried the same 22,755 characters in a different container. Every
+    // turn therefore reported client-invalidated, the conversation was never
+    // recognised, and anything keyed on recognising it never ran.
+    if (typeof content === 'string') {
+      if (!isAfter({ message: mi, block: 0 }, breakpoint)) parts.push(content);
+      return;
+    }
     if (!Array.isArray(content)) return;
     content.forEach((raw, bi) => {
       const block = raw as Block;
@@ -231,6 +246,18 @@ export interface AnchorRecord {
   /** Digest of the CLIENT's prefix as it arrived, so a change is detectable. */
   readonly prefixDigest: string;
   /**
+   * Length of the prefix that digest covers.
+   *
+   * WITH IT, EXTENSION IS PROVABLE. Re-digesting exactly this many
+   * characters of the new prefix and comparing answers "is what I saw last
+   * time still an exact prefix of what I see now" -- which separates a
+   * conversation that grew from one whose history was edited. A sample
+   * comparison cannot: samples are spot checks at doubling offsets, so an
+   * edit that lands between two of them passes, and a test pinning that
+   * exact case is what caught the guess.
+   */
+  readonly prefixLength?: number;
+  /**
    * Digests sampled across that prefix, at doubling offsets.
    *
    * THIS IS WHAT SEPARATES AN EDIT FROM A COLLISION. Two different sessions
@@ -245,6 +272,23 @@ export interface AnchorRecord {
   readonly samples: readonly string[];
   /** Did we rewrite that prefix? */
   readonly anchored: boolean;
+  /**
+   * Where this conversation's cache breakpoint sat when we last saw it.
+   *
+   * THE ONE FACT THAT SAYS WHAT IS NOT YET CACHED. A client puts its
+   * cache_control marker on the LAST message of every request -- verified
+   * across three consecutive captured turns, which reported breakpoints at
+   * message 1 of 2, 3 of 4 and 5 of 6 -- so "after the breakpoint in THIS
+   * request" is always empty and a frontier policy reading it compresses
+   * nothing at all.
+   *
+   * Between the breakpoint we saw last turn and the one in this request
+   * lies everything the conversation has grown since, which the provider
+   * has not cached yet and is about to cache now. Rewriting THAT costs no
+   * invalidation, shrinks the 1.25x write happening this turn, and shrinks
+   * every 0.1x read after it.
+   */
+  readonly breakpoint?: Position | null;
   /**
    * The knowledge block we last put in this prefix, if any.
    *
@@ -287,6 +331,8 @@ export type AnchorReason =
   | 'first-turn'
   | 'client-invalidated'
   | 'joined-mid-conversation'
+  /** The same conversation, one or more turns longer. The common case. */
+  | 'extended'
   | 'left-alone';
 
 export interface AnchorDecision {
@@ -332,14 +378,54 @@ export function anchorDecision(
   }
 
   if (previous && sameConversation) {
-    // Same opening, different prefix: the client changed history under us --
-    // an edit, a new system prompt, a compaction. That miss has already
-    // happened, so what replaces it may as well be smaller.
+    // GROWTH IS NOT AN EDIT, and conflating them cost this design its whole
+    // purpose. isContinuation has already established that every sample the
+    // two prefixes share is identical, so a differing digest with no fewer
+    // samples than before means the conversation got LONGER, not that
+    // anything cached was rewritten -- which is what happens on every single
+    // turn, because the client moves its cache_control marker forward and the
+    // prefix legitimately extends.
+    //
+    // Captured back to back: between two turns message 3 differed only by the
+    // removal of its cache_control marker, its 20,026 characters of text
+    // byte-identical, and the prefix simply reached further. Calling that
+    // 'client-invalidated' forced a rewrite every turn and meant the
+    // conversation was never once recognised as continuing.
+    //
+    // Safe by construction: this keeps whatever posture we already had
+    // (`previous.anchored`) rather than switching, and carries the stored
+    // breakpoint forward, so nothing before it is touched either way.
+    const grew =
+      previous.prefixLength !== undefined &&
+      prefix.length >= previous.prefixLength &&
+      digest(prefix.slice(0, previous.prefixLength)) === previous.prefixDigest;
+    if (grew) {
+      return {
+        reanchor: previous.anchored,
+        reason: 'extended',
+        key,
+        record: {
+          ...previous,
+          prefixDigest,
+          prefixLength: prefix.length,
+          samples,
+        },
+      };
+    }
+
+    // Genuinely shorter: history was compacted or edited away under us.
+    // That miss has already happened, so what replaces it may as well be
+    // smaller.
     return {
       reanchor: true,
       reason: 'client-invalidated',
       key,
-      record: { prefixDigest, samples, anchored: true },
+      record: {
+        prefixDigest,
+        prefixLength: prefix.length,
+        samples,
+        anchored: true,
+      },
     };
   }
 
@@ -359,7 +445,12 @@ export function anchorDecision(
       reanchor: true,
       reason: 'first-turn',
       key,
-      record: { prefixDigest, samples, anchored: true },
+      record: {
+        prefixDigest,
+        prefixLength: prefix.length,
+        samples,
+        anchored: true,
+      },
     };
   }
 
@@ -367,6 +458,11 @@ export function anchorDecision(
     reanchor: false,
     reason: 'joined-mid-conversation',
     key,
-    record: { prefixDigest, samples, anchored: false },
+    record: {
+      prefixDigest,
+      prefixLength: prefix.length,
+      samples,
+      anchored: false,
+    },
   };
 }

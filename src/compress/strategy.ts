@@ -192,6 +192,56 @@ function blockTextAt(request: ProviderRequest, at: Position): string | null {
 interface ToolResultBlock {
   readonly type: string;
   readonly content?: unknown;
+  /** Links this result back to the call that produced it. */
+  readonly tool_use_id?: string;
+}
+
+/** An assistant's call, which is where a tool result's provenance lives. */
+interface ToolUseBlock {
+  readonly type: string;
+  readonly id?: string;
+  readonly name?: string;
+  readonly input?: Record<string, unknown>;
+}
+
+/**
+ * Which file each tool result came from, keyed by the call that produced it.
+ *
+ * WITHOUT THIS THE CODE ENGINE IS INERT, and measurably so. compressCode
+ * resolves a language from `ctx.sourcePath`; a tool result arrives with no
+ * path attached, so the language came out empty, the Babel fallback returned
+ * nothing, and the engine reported 0.0% on content it compresses 55.6% when
+ * told the path -- 17,130 characters to 7,604 with seven elisions, measured on
+ * a captured request reading src/compress/log.ts.
+ *
+ * The path was never missing, only unlinked: the result carries a
+ * `tool_use_id` and the matching `tool_use` block sits in the SAME request,
+ * carrying `{ file_path }`. This walks the assistant turns once and builds
+ * the index the walker then reads.
+ *
+ * Names are not assumed. Any input key that looks like a path is accepted, so
+ * a client calling its reader something other than `Read` still benefits and
+ * this does not rot the next time a tool is renamed.
+ */
+function toolResultPaths(request: ProviderRequest): Map<string, string> {
+  const paths = new Map<string, string>();
+  for (const message of request.messages ?? []) {
+    const content = message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const raw of content) {
+      const block = raw as ToolUseBlock;
+      if (block?.type !== 'tool_use') continue;
+      if (typeof block.id !== 'string' || !block.input) continue;
+      for (const key of ['file_path', 'path', 'filePath', 'notebook_path']) {
+        const value = block.input[key];
+        if (typeof value === 'string' && value.length > 0) {
+          paths.set(block.id, value);
+          break;
+        }
+      }
+    }
+  }
+  return paths;
 }
 
 /**
@@ -211,7 +261,12 @@ function isToolResult(block: unknown): boolean {
 
 function mapBlocks(
   request: ProviderRequest,
-  visit: (text: string, at: Position, message: Message) => string | null
+  visit: (
+    text: string,
+    at: Position,
+    message: Message,
+    toolUseId?: string
+  ) => string | null
 ): ProviderRequest {
   const messages = (request.messages ?? []).map((message, mi) => {
     const content = message?.content;
@@ -246,8 +301,10 @@ function mapBlocks(
       if (isToolResult(block)) {
         const inner = (block as ToolResultBlock).content;
 
+        const producedBy = (block as ToolResultBlock).tool_use_id;
+
         if (typeof inner === 'string') {
-          const replaced = visit(inner, at, message);
+          const replaced = visit(inner, at, message, producedBy);
           return replaced === null ? block : { ...block, content: replaced };
         }
 
@@ -256,7 +313,7 @@ function mapBlocks(
           const mappedInner = inner.map((rawInner) => {
             const innerBlock = rawInner as Block;
             if (typeof innerBlock?.text !== 'string') return innerBlock;
-            const replaced = visit(innerBlock.text, at, message);
+            const replaced = visit(innerBlock.text, at, message, producedBy);
             if (replaced === null) return innerBlock;
             touched = true;
             return { ...innerBlock, text: replaced };
@@ -366,13 +423,19 @@ function replaceImages(
 function pathAddressed(
   request: ProviderRequest,
   options: StrategyOptions,
-  respectFrontier: boolean
+  respectFrontier: boolean,
+  floor?: Position | null
 ): StrategyResult {
   // Located whether or not it is respected: even an arm that rewrites
   // history needs to know which side of the breakpoint a block is on,
   // because that decides whether the block has to be BYTE-STABLE.
   const breakpoint = lastCacheBreakpoint(request);
-  const frontier = respectFrontier ? breakpoint : null;
+  // THE FLOOR IS WHERE THE CACHE ACTUALLY ENDS, which is not where this
+  // request's marker sits. A client marks the LAST message every turn, so
+  // respecting THIS breakpoint leaves nothing compressible; respecting the
+  // one we saw LAST turn leaves exactly the span the conversation has grown
+  // since, which the provider is about to cache for the first time.
+  const frontier = respectFrontier ? (floor ?? breakpoint) : null;
   const query = questionIn(request);
   const elisions: Elision[] = [];
   const staged: DedupBlock[] = [];
@@ -400,7 +463,8 @@ function pathAddressed(
   // all. An untouchable block is still staged, because it is the strongest
   // referent a later repeat can point at -- it is guaranteed to arrive
   // byte-identical.
-  mapBlocks(request, (text, at, message) => {
+  const sourcePaths = toolResultPaths(request);
+  mapBlocks(request, (text, at, message, toolUseId) => {
     // #3456: a signed message is untouchable. Rewriting it poisons the
     // conversation permanently, not just this turn.
     const touchable =
@@ -431,6 +495,10 @@ function pathAddressed(
       query: cached || repeated ? undefined : query,
       tuning: options.tuning,
       embeddings: options.embeddings,
+      // The path the payload came from, recovered from the call that
+      // produced it. This is what lets the code engine pick a language;
+      // without it the same content compresses by exactly 0.0%.
+      sourcePath: toolUseId ? sourcePaths.get(toolUseId) : undefined,
     });
     elisions.push(...result.elisions);
     staged.push({ text: result.text, original: text, touchable: true });
@@ -594,8 +662,33 @@ export function v1Frontier(
     (request.messages ?? []).length >= MIN_MESSAGES_TO_AMORTISE;
   const attempt =
     decision.reanchor || (decision.reason === 'left-alone' && longEnough);
-  let out = pathAddressed(request, options, !attempt);
+  // ONLY WHEN WE RECOGNISE THE CONVERSATION AND ITS PREFIX IS UNCHANGED.
+  // 'already-anchored' and 'left-alone' are exactly the two states that say
+  // the client sent us the same prefix we saw last time, so the breakpoint we
+  // stored still points at the same message and everything past it is new.
+  // A first sighting, a joined conversation or a client-invalidated prefix
+  // all mean we cannot say what the provider holds, and the honest answer
+  // there is the conservative one: fall back to this request's own marker.
+  const recognised =
+    decision.reason === 'already-anchored' ||
+    decision.reason === 'left-alone' ||
+    decision.reason === 'extended';
+  const floor = recognised ? (decision.record.breakpoint ?? null) : null;
+  let out = pathAddressed(request, options, !attempt, floor);
   let reanchored = attempt;
+
+  // COMPRESSING NEW CONTENT COMMITS US TO IT. The moment we shrink a block,
+  // the provider caches OUR bytes for it -- so next turn, when the client
+  // sends the original again, passing it through unchanged is a guaranteed
+  // miss on everything from that point on. Recording the turn as anchored is
+  // what makes the next one reproduce the same transform over the whole
+  // history, which is a hit precisely because the transform is a pure
+  // function of the content behind the breakpoint.
+  if (
+    !attempt &&
+    JSON.stringify(out.request).length < JSON.stringify(request).length
+  )
+    reanchored = true;
 
   // A REWRITE OF THE CACHED PREFIX HAS TO CLEAR ITS OWN COST. See
   // MIN_PREFIX_REWRITE_SHARE: below that share the 1.25x write we are about to
@@ -605,11 +698,22 @@ export function v1Frontier(
   //
   // Measured before this existed: 2.47% removed, and the resulting cache writes
   // were 42% of weighted input cost.
-  if (attempt) {
+  // THE THRESHOLD IS FOR DECIDING TO START, NOT FOR CARRYING ON. When the
+  // provider already holds OUR version of this prefix, reproducing it is the
+  // cache hit and declining is the miss -- there is no 1.25x write to clear,
+  // because the write already happened on the turn we started. Applying the
+  // floor here anyway de-anchored an anchored conversation the moment its
+  // saving dipped under the share, flipping the prefix back to the client's
+  // bytes and guaranteeing the very miss the floor exists to prevent.
+  const alreadyOurs =
+    (decision.reason === 'already-anchored' ||
+      decision.reason === 'extended') &&
+    decision.record.anchored;
+  if (attempt && !alreadyOurs) {
     const before = JSON.stringify(request).length;
     const removed = before - JSON.stringify(out.request).length;
     if (removed < before * MIN_PREFIX_REWRITE_SHARE) {
-      out = pathAddressed(request, options, true);
+      out = pathAddressed(request, options, true, floor);
       reanchored = false;
     }
   }
@@ -627,7 +731,15 @@ export function v1Frontier(
     anchor: {
       ...decision,
       reanchor: reanchored,
-      record: { ...decision.record, anchored: reanchored, knowledge },
+      record: {
+        ...decision.record,
+        anchored: reanchored,
+        knowledge,
+        // Where the cache ends as of this turn, so the next one knows which
+        // span is new. Recorded from the request as it ARRIVED, not as we
+        // send it: it describes what the provider is about to hold.
+        breakpoint: lastCacheBreakpoint(request),
+      },
     },
   };
 }

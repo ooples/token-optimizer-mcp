@@ -34,6 +34,7 @@ import { compressLog, looksLikeLog } from './log.js';
 import { compressProse, looksLikeProse } from './prose.js';
 import { compressSearchResults, looksLikeSearchResults } from './search.js';
 import { engineFor, registerEngine, runEngine } from './registry.js';
+import { readNumbering } from './numbering.js';
 import type { CompressionResult, ContentKind, EngineContext } from './types.js';
 import { unchanged } from './types.js';
 import { DEFAULT_TUNING } from './options.js';
@@ -133,6 +134,15 @@ export function compressBlock(
   text: string,
   ctx: EngineContext = {}
 ): CompressionResult {
+  // A numbered read is detected on its BARE content and re-numbered
+  // afterwards. Detecting on the numbered form finds nothing at all --
+  // see readNumbering, where the measurement is recorded.
+  const numbering = readNumbering(text);
+  if (numbering) {
+    const inner = compressBlock(numbering.stripped, ctx);
+    if (inner.text === numbering.stripped) return unchanged(text);
+    return { ...inner, text: numbering.restore(inner.text) };
+  }
   const engine = engineFor(text, ctx);
   if (!engine) return unchanged(text);
   // RESOLVED ONCE, HERE. An engine reading `ctx.tuning?.keepRows ?? 3`
