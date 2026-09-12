@@ -35,6 +35,33 @@ REPS="${REPS:-3}"
 ARMS="${ARMS:-control,token-optimizer-mcp,token-optimizer-mcp-off}"
 HOST_CREDS="${HOST_CREDS:-$HOME/.claude/.credentials.json}"
 
+# THE RESULTS VOLUME IS A KNOB because the knowledge arm needs two passes and
+# only ONE of them is evidence.
+#
+# The proxy loads the graph once, at startup, since a block that changes
+# mid-session cannot live in a cached prefix. So a first pass against an empty
+# graph injects nothing and measures exactly the plain proxy arm. It exists to
+# WRITE the graph, and its run rows are not results -- they are the warm-up.
+#
+# Keeping them out of the real database is not tidiness: runner.py resumes by
+# skipping runs already recorded for a campaign label, so warm-up rows in the
+# real volume would make the measured pass a no-op that reports the cold
+# numbers as if they were warm.
+RESULTS_VOLUME="${RESULTS_VOLUME:-thol-results}"
+
+# ...and the graph itself is a HOST directory, so it is the one thing that survives
+# from the warm-up pass into the measured one.
+#
+# MOUNTED AT ITS OWN PATH, NOT INSIDE /results, and that is not cosmetic. Nesting a
+# bind mount inside a FRESH named volume makes Docker create the volume root as
+# root:root instead of inheriting the image's bench:bench, and the container runs as
+# bench. The entrypoint guards its persistence on `[ -w /results ]`, so it silently
+# skipped it: no results.sqlite, the leaderboard reported "no OK runs", resume found
+# nothing to skip, and a campaign that had already been paid for was re-run from
+# scratch. Verified: `thol-results` is bench-owned and writable, a volume first used
+# with the nested mount is root-owned and is not.
+PROXY_GRAPH_DIR="${PROXY_GRAPH_DIR:-$RIG_DIR/thol/proxy-graph}"
+
 # Cheapest first. The last group is the $5/run outlier, isolated so it can be
 # dropped with SEGMENTS_MAX=4 without touching the rest.
 SEG_1="${SEG_1:-code-bugfix-py,code-refactor-split-py,log-needle-zh,code-iterate-tests}"
@@ -86,6 +113,11 @@ cleanup_credentials() {
 }
 trap cleanup_credentials EXIT INT TERM
 
+mkdir -p "$PROXY_GRAPH_DIR/.token-optimizer/wiki"
+
+log "Results volume: $RESULTS_VOLUME"
+log "Proxy graph:    $PROXY_GRAPH_DIR"
+
 for i in "${!SEGMENTS[@]}"; do
   n=$((i+1))
   [ "$n" -le "$SEGMENTS_MAX" ] || { log "Stopping before segment $n (SEGMENTS_MAX=$SEGMENTS_MAX)"; break; }
@@ -97,7 +129,8 @@ for i in "${!SEGMENTS[@]}"; do
   log "Segment $n/$SEGMENTS_MAX -- tasks: $tasks"
   MSYS_NO_PATHCONV=1 docker run --rm \
     -v "$RIG_DIR/auth:/auth:ro" \
-    -v thol-results:/results \
+    -v "$RESULTS_VOLUME:/results" \
+    -v "$PROXY_GRAPH_DIR:/proxy-graph" \
     -e THOL_CAMPAIGN="$CAMPAIGN" \
     --name thol-campaign "$IMAGE" campaign \
       -c "$ARMS" \
@@ -106,9 +139,29 @@ for i in "${!SEGMENTS[@]}"; do
       "$@"
 done
 
+# THE RUNS ARE THE ARTIFACT; THE LEADERBOARD IS A CONVENIENCE. It needs a control
+# arm to compare against, so a deliberately single-arm campaign -- a warm-up pass, a
+# one-arm screen -- makes it exit non-zero for an entirely correct reason. Under
+# `set -e` that aborted the caller AFTER the runs had been paid for and recorded,
+# which is the worst possible moment to stop.
+#
+# TESTED FOR, NOT SUPPRESSED. The earlier `|| log` swallowed that failure, but it
+# swallowed every other one with it -- a corrupt results.sqlite, an unreadable
+# volume, a defect in `report` itself -- and the campaign then exited 0 having
+# printed a cyan note where the leaderboard should have been. The condition is
+# knowable up front, so it is decided up front: no control arm, no report; a
+# control arm and a failing report is a real failure and propagates.
 log "Campaign complete -- building final leaderboard"
-MSYS_NO_PATHCONV=1 docker run --rm \
-  -v "$RIG_DIR/auth:/auth:ro" \
-  -v thol-results:/results \
-  -e THOL_CAMPAIGN="$CAMPAIGN" \
-  "$IMAGE" report
+case ",$ARMS," in
+  *,control,*)
+    MSYS_NO_PATHCONV=1 docker run --rm \
+      -v "$RIG_DIR/auth:/auth:ro" \
+      -v "$RESULTS_VOLUME:/results" \
+      -v "$PROXY_GRAPH_DIR:/proxy-graph" \
+      -e THOL_CAMPAIGN="$CAMPAIGN" \
+      "$IMAGE" report
+    ;;
+  *)
+    log "no leaderboard: ARMS=$ARMS has no control arm to compare against. The runs are recorded; re-run \`$IMAGE report\` once a control arm exists."
+    ;;
+esac

@@ -58,6 +58,33 @@ jobs:
       - name: Certify all client capability tiers
         run: npm run verify:certification
 
+      # BUILT HERE, because this job otherwise never compiles. verify:onnx loads the
+      # adapter from dist/, and it was added to a job whose every other check reads
+      # source -- so it failed with ERR_MODULE_NOT_FOUND on a dist/ that no step had
+      # produced, which reads like a missing file rather than a missing build.
+      - name: Build
+        run: npm run build
+
+      # ONNX IS AN OPTIONAL DEPENDENCY, installed here and nowhere else.
+      # Semantic ranking is opt-in and `onnxruntime-node` is ~100 MB of native
+      # binaries, so making it a dependency would charge every consumer for a
+      # feature almost none of them enable. Installing it in CI with --no-save
+      # keeps the adapter genuinely covered without that.
+      #
+      # The verification is a script rather than a jest test because
+      # onnxruntime checks `data instanceof Float32Array` in native code and
+      # jest's per-suite VM realm has its own typed arrays, so the check fails
+      # on a realm the native module never saw. See the script's header.
+      # PINNED, because --no-save keeps it out of the lockfile. On `latest` a
+      # release published between two runs changes what this gate tested without
+      # anything in the diff moving -- and the gate's whole claim is that a
+      # specific adapter works against a specific runtime.
+      - name: Install the optional ONNX runtime
+        run: npm install --no-save --no-audit --no-fund onnxruntime-node@1.29.0
+
+      - name: Verify the ONNX encoder against real inference
+        run: npm run verify:onnx
+
       - name: Verify the harvest API contract
         run: npm run verify:harvest
 

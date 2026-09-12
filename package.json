@@ -10,7 +10,8 @@
     "token-optimizer-daemon": "./dist/server/daemon.js",
     "token-optimizer-install": "./scripts/install-cli.mjs",
     "token-optimizer-doctor": "./scripts/doctor.mjs",
-    "token-optimizer-diagnostics": "./scripts/export-diagnostics.mjs"
+    "token-optimizer-diagnostics": "./scripts/export-diagnostics.mjs",
+    "token-optimizer-proxy": "./dist/proxy/cli.js"
   },
   "files": [
     "dist/**/*",
@@ -113,7 +114,10 @@
     "bench:confirm": "REPS=3 bash bench/thol/run-campaign.sh",
     "bench:debug-loop": "node bench/debug-loop/run.mjs",
     "bench:field": "node bench/field/report.mjs",
-    "bench:pack": "node scripts/bench-pack.mjs"
+    "bench:pack": "node scripts/bench-pack.mjs",
+    "verify:onnx": "node scripts/verify-onnx-adapter.mjs",
+    "proxy": "node dist/proxy/cli.js",
+    "bench:screen:knowledge": "bash bench/thol/screen-knowledge.sh"
   },
   "repository": {
     "type": "git",

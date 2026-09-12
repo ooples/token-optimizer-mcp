@@ -1,0 +1,39 @@
+# Re-applies only the rig files onto an already-built image.
+#
+# WHY THIS EXISTS. A full rebuild re-runs `chmod -R a+rX` over the Rust toolchain and
+# cargo registry, which on overlayfs copies up the entire tree into a new layer. Once
+# Docker Desktop garbage-collects the build cache -- measured going from 15.53GB
+# reclaimable to 2.04GB between attempts -- that step has to run again, and on a 15.7GB
+# machine it was killed for low memory eight times running, at every headroom from
+# 0.8GB to 8.5GB free and with the WSL VM capped at both 6GB and 4GB. It is not a cost
+# that can be made room for.
+#
+# It is also unnecessary. The rig files below are the ONLY things that change between
+# most iterations, they are plain COPYs at the end of the real Dockerfile, and the
+# product tarball is verifiably untouched -- `COPY thol/pkg/optimizer.tgz` reports
+# CACHED. So the base image is reused and only these are re-applied.
+#
+# The provenance file comes along deliberately: an image whose entrypoint and manifests
+# are newer than its provenance record is exactly the unattributable build this rig
+# refuses to run. Rebuild from thol/Dockerfile whenever anything under src/ changes.
+FROM thol-rig:local
+
+# THE MOUNTPOINT HAS TO EXIST IN THE IMAGE, OWNED BY THE RUNTIME USER. Docker seeds a
+# fresh named volume from the image path it is mounted at -- content and ownership. The
+# image had no /results at all, so Docker created the mountpoint as root:root, the
+# container runs as bench, and the entrypoint's `[ -w /results ]` guard then skipped
+# persistence: four runs completed, nothing was recorded, and the next attempt re-paid
+# for them.
+#
+# `thol-results` escaped this only by accident of age -- it already existed, bench-owned,
+# from an earlier image. Any NEW volume reproduced the fault, which is what made it look
+# like the nested `-v graph:/results/proxy-graph` mount was to blame. It was not: an
+# unnested mount of a fresh volume fails identically. Verified both ways.
+# root only for this one step: the base image ends as `bench`, which cannot mkdir in /.
+USER root
+RUN mkdir -p /results && chown bench:bench /results
+USER bench
+
+COPY thol/pkg/provenance.json /opt/optimizer-provenance.json
+COPY --chown=bench:bench thol/entrypoint.sh /home/bench/scripts/entrypoint.sh
+COPY --chown=bench:bench thol/manifests/ /home/bench/manifests/

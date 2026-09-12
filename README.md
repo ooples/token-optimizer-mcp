@@ -147,7 +147,7 @@ records durable conclusions itself through `wiki_write`.
 
 The **model-based semantic harvest** is the third path, and the only one that
 needs something you do not already have. It is **not opt-in** —
-`TOKEN_OPTIMIZER_HARVEST=0` turns it *off* — but its real gate is a credential:
+`TOKEN_OPTIMIZER_HARVEST=0` turns it _off_ — but its real gate is a credential:
 with none it reports `off:no-key`, which is the state on CI, corporate machines,
 and subscription-only logins. Point `TOKEN_OPTIMIZER_HARVEST_ENDPOINT` at a
 local model and it runs **free and private, with nothing leaving the machine**.
@@ -332,6 +332,182 @@ days, and live under `.token-optimizer/logs` when a state directory is set (or
 ---
 
 ## What it does that other optimizers do not
+
+### Compression that does not break the cache, or lose the needle
+
+An optional local proxy compresses tool results, search output, logs and
+conversation history on the way to the model. A hook cannot do this: the
+`PostToolUse` output schema is `{hookEventName, additionalContext?,
+classifierContext?}` and `updatedOutput` occurs nowhere in the client, so a hook
+can add context but never replace a result. The proxy never tries to -- it
+rewrites the outbound request, where those results already sit as history.
+
+Two things make it different from simply compressing harder.
+
+**It never rewrites cached content.** A cached prefix bills at 0.1x and a cache
+write at 1.25x, so compressing history can cut tokens while multiplying the
+bill. Measured on our own benchmark: compressing behind the cache breakpoint
+removes more raw tokens on every workload and costs more money on every
+workload. Compression stops at the frontier, and cache-weighted tokens are
+reported beside raw ones so the trap is visible rather than inferred.
+
+**It keeps the rows that matter.** Eliding a long array after the first few rows
+scored 95.7% on a search payload here and destroyed both the UUID record and the
+error record planted in it -- the only two rows anyone would have searched for.
+The engine now keeps every row that departs from the shape, wherever it sits:
+92.4% with the needles intact. A gate in the benchmark fails the build if a
+planted needle disappears, because a size metric alone cannot tell compression
+from truncation.
+
+Reduction over the content each strategy is permitted to rewrite, on fixtures
+matching the four workloads HeadRoom publishes (their figures from their
+README; ours from `bench/compression`, which anyone can run):
+
+| workload             | ours  | theirs |
+| -------------------- | ----- | ------ |
+| issue triage         | 98.9% | 72.8%  |
+| code search          | 98.2% | 92.1%  |
+| SRE debugging        | 92.8% | 92.2%  |
+| codebase exploration | 61.3% | 47.4%  |
+
+These are not their corpora, which are unpublished; the code workloads read real
+files out of this repository and the rest are generated to the shape and scale
+of their published ones, from their own benchmark generator's definition.
+
+**What is not yet measured: end-to-end task outcome.** Reduction is not the same
+as a cheaper session -- this project has already measured a posture that cut
+nothing and cost 1.471x through extra turns alone. Until the proxy has run
+through THOL, treat the figures above as compression numbers and nothing more.
+
+Off by default. `TOKEN_OPTIMIZER_PROXY=1` turns it on, it binds loopback only,
+nothing is logged, and `doctor` reports whether your client is actually routed
+through it -- the silent failure being a proxy that is running while the agent
+talks past it.
+
+Your provider key is forwarded in the request headers and is never read, stored
+or written by the proxy. That is a narrower claim than "nothing sensitive is
+written", and the difference matters: the proxy does write _message content_ to
+disk, described next, and it does not inspect that content for secrets. If a
+secret is in your conversation, it can reach a spill file the same way any other
+text does.
+
+It will not reach an unencrypted network, though: an upstream that is neither
+`https` nor loopback is refused rather than forwarded to, and with no upstream
+configured the proxy serves only Anthropic's own routes -- so a client for a
+different provider is told to name its provider rather than having its key sent
+to the wrong company.
+
+**It does write some payload to disk, and you should know exactly when.** An
+elision has to name a way back to what it removed, and content that arrived in a
+tool result has no file of its own -- so that content is written to a _spill
+file_ and the marker names its path. This happens only when an engine actually
+elides something recoverable-by-path: a JSON array tail, a set of function
+bodies, a passage of prose. Requests below the size floor, requests nothing
+claims, and every elision that is lossless are all written nowhere.
+
+Spills go under your OS temp directory in `token-optimizer-spill/`, one file per
+distinct content, created `0600` (owner read/write only) and named by an HMAC of
+the content under a salt generated fresh in each proxy process -- so the name
+discloses nothing and two runs do not collide. They are never read back by us;
+the agent reads them with the `Read` tool it already has, which is the whole
+point of a path instead of a hash.
+
+They are **not** deleted while the proxy is running, and that is deliberate: a
+marker whose spill has been swept is exactly the dangling reference this design
+exists to avoid, and the agent may follow a path many turns after it was
+written. So retention within one run is bounded only by the distinct content you
+elide -- there is no quota, and a very long session that elides constantly can
+accumulate.
+
+When the proxy stops, its spill directory is removed. Each proxy process gets
+its own directory under `token-optimizer-spill/`, so stopping one never sweeps
+another's live paths, and the moment it stops is also the moment no agent can
+still be following one of them. If a run ends without that cleanup -- a kill
+signal, a power cut -- the directory is left behind in your OS temp directory
+and is safe to delete by hand. Running with the proxy off writes no spills at
+all.
+
+### Three switches, and what each one trades
+
+| variable                          | default    | what it does                                               |
+| --------------------------------- | ---------- | ---------------------------------------------------------- |
+| `TOKEN_OPTIMIZER_PROXY`           | off        | the compression proxy itself                               |
+| `TOKEN_OPTIMIZER_COMPRESSION`     | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`       |
+| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | off        | put what this project already learned in the cached prefix |
+
+`lossless` is worth knowing about: it forbids every transform that removes
+something the output cannot reconstruct -- function bodies, array tails,
+lower-signal prose -- and keeps the ones that can, which is whitespace, null
+keys, folded duplicate lines with their timestamps listed, repeated path
+prefixes, and back-references to content still in the request. Measured on the
+codebase-exploration workload it still removes 12.2%, with **zero** lossy
+elisions. For review or audit work where "the model can read the path" is not
+an acceptable answer, that is the setting.
+
+Presets are a starting point, not a ceiling: the library takes a
+`CompressionOptions` object layered over the preset, so "aggressive, but keep
+six head rows" is expressible.
+
+### The graph, in the cached prefix
+
+**The expensive failure here is turns, not tokens.** This project measured a
+posture that cut nothing and cost 1.471x through extra turns alone. So a
+finding that prevents one wasted turn pays for a great deal of context.
+
+The knowledge graph knows things that would prevent them, but until now it
+reached the model two ways and both arrive too late or too dear: a SessionStart
+index chosen once from the opening task text, and a `PreToolUse` advisory that
+fires _after_ the model already decided to make the call it is advising about --
+so acting on it costs the very turn it was meant to save.
+
+With `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE=1` the findings go in the **cached
+prefix** instead: in front of the model before every decision, billed at 0.1x
+rather than 1.0x. On this repository 286 active findings select down to about
+489 tokens -- written once, then read at roughly 49 tokens a turn.
+
+It is off by default and reported separately (`injectedChars` in the proxy
+summary) because it is the one thing here that ADDS tokens. Its justification
+is turns, and turns are measured by THOL, which has not been run against it.
+Folding an unproven addition into a proven reduction would make the reduction
+untrue.
+
+### Images
+
+An image block was invisible to all of this until recently -- every walker keyed
+on `block.text`. That matters because an image costs about `width * height /
+750` tokens, so one 1456x816 screenshot is roughly 1,585, re-sent as history on
+every later turn. A browser-driving agent sends the same frame repeatedly, and
+those repeats now collapse to a reference to the copy already in the request.
+Dimensions come from the file header, so there is no codec dependency; resizing
+is deliberately not done for the same reason.
+
+### Relevance: BM25 by default, a model if you want one
+
+Retention is ranked by BM25, which is why this needs no Python, no model
+weights and no RAM floor, and why it is deterministic enough to keep a cached
+prefix byte-stable. Lexical has a ceiling, though: "the database ran out of
+handles" shares no token with "connection pool exhausted", and worse, BM25
+does not go quiet on that question -- it confidently picks the wrong line.
+
+So there are two ways to do better. `registerRanker` installs any synchronous
+ranker. Or supply a `SemanticEncoder` and let the proxy warm an embedding
+cache: a request-level async pre-pass embeds the candidate units in one batch,
+and the engines then read vectors synchronously, exactly as before. An
+`onnxruntime-node` adapter is included, loaded dynamically so the runtime is
+never a dependency of this package.
+
+Anything the pre-pass did not see falls back to BM25 rather than scoring zero
+-- a missing vector is our omission, not evidence about the line.
+
+The adapter is verified against **real inference**, not mocked:
+`npm run verify:onnx` runs nine checks against a 2.3 KB ONNX graph with real
+weights, committed alongside the generator that builds it. It is a script
+rather than a jest test because onnxruntime checks `instanceof Float32Array`
+in native code and jest's per-suite VM realm has its own typed arrays; CI
+installs the optional runtime and runs it.
+
+**Not claimed:** that an embedding model actually beats BM25 on these
+workloads. The mechanism is proved and the measurement is not done.
 
 ### Compaction is consolidation, not loss
 
