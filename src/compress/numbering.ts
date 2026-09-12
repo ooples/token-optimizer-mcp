@@ -19,8 +19,23 @@
  * saving for a broken edit -- the kind of bargain this package exists to refuse.
  */
 
-/** `<indent><digits><TAB><content>` — the shape a numbered read arrives in. */
-const NUMBERED_LINE = /^(\s*)(\d+)\t(.*)$/;
+/**
+ * `<indent><digits><TAB><content>` — the shape a numbered read arrives in.
+ *
+ * `[\s\S]*` RATHER THAN `.*`, AND THAT IS NOT A STYLE CHOICE. Lines are split on
+ * a newline, so a CRLF file leaves a carriage return at the end of every one.
+ * `.` does not match a carriage return and `$` without the multiline flag will
+ * not skip one, so `(.*)$` failed on EVERY line of a CRLF file -- detection then
+ * fell below its threshold, returned null, and the content went through
+ * unclassified and uncompressed.
+ *
+ * Caught by a wire-shaped fixture reading this repository's own sources, which
+ * are CRLF: src/compress/log.ts compressed 56.3% when captured off the wire with
+ * LF endings and 0.0% when read from disk. Capturing the carriage return into
+ * the content group also keeps it, so restore is faithful and the file's line
+ * endings survive the round trip.
+ */
+const NUMBERED_LINE = /^(\s*)(\d+)\t([\s\S]*)$/;
 
 /**
  * The share of lines that must be numbered before we believe the shape.
