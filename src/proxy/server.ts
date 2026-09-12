@@ -471,7 +471,31 @@ export function compressBody(
   // shaves a couple of percent still plants elisions the agent may read back,
   // and one such turn costs more than the whole saving.
   const saved = before - next.length;
-  if (!added && saved < before * MIN_SAVING_SHARE)
+  if (!added && saved < before * MIN_SAVING_SHARE) {
+    // REMEMBERED EVEN THOUGH WE SENT THE CLIENT'S BYTES, and forgetting here was
+    // a deadlock rather than a missed optimisation.
+    //
+    // `remember` used to sit only past this return, so a turn that compressed
+    // nothing was never recorded -- and a FIRST turn legitimately compresses
+    // nothing, because the only content it could touch is already behind the
+    // client's cache marker. The store therefore stayed empty, turn two saw
+    // `first-turn` again and got no floor, compressed nothing, and was not
+    // recorded either. It could not compress because it never remembered, and
+    // never remembered because it had not compressed.
+    //
+    // Measured: six live proxy runs, every request reporting `first-turn` and
+    // 0 elisions, while the identical requests replayed through one store
+    // offline removed 4.3%. That gap was this line.
+    //
+    // `anchored: false` is the honest value and the load-bearing one: we sent
+    // the client's prefix, so the next turn must be told the provider holds
+    // THEIRS, not ours. What the record carries that matters is the breakpoint,
+    // which is what tells the next turn where the cache ends.
+    if (anchors && result.anchor)
+      anchors.remember(result.anchor.key, {
+        ...result.anchor.record,
+        anchored: false,
+      });
     // Reported with its diagnostics, because this is the branch that fired on
     // every request of two campaigns and the byte counts alone could not say why.
     return {
@@ -488,6 +512,7 @@ export function compressBody(
         elisions: result.elisions.length,
       },
     };
+  }
 
   // COMMITTED ONLY NOW, because everything above can still decide not to send
   // this body. Remembering `anchored: true` for a rewrite that was then
