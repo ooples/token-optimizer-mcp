@@ -42,7 +42,9 @@ import { compressBlock } from '../../dist/compress/router.js';
 
 const dir = process.argv[2];
 if (!dir) {
-  console.error('usage: node bench/compression/head-to-head.mjs <out-dir-from-run-theirs>');
+  console.error(
+    'usage: node bench/compression/head-to-head.mjs <out-dir-from-run-theirs>'
+  );
   process.exit(2);
 }
 
@@ -98,6 +100,16 @@ function collect(value, into) {
     for (const word of value.split(/[\s",]+/)) {
       if (DISTINCTIVE.test(word) && /\d/.test(word)) into.add(word);
     }
+    // PROSE NEEDS ITS OWN UNIT, or the check is vacuous on prose. The whole
+    // identifier rule keys on "contains a digit", and a documentation heading
+    // like `## API Reference: /users` contains none -- so the RAG workload
+    // reported ONE identifier in 172KB and "zero lost" was a statement about
+    // an almost empty set. A section heading is what a reader of a document
+    // comes back for, exactly as a trace id is in a log, so distinct headings
+    // are counted as retention units too.
+    for (const heading of value.match(/^#{1,6} .+$/gm) || []) {
+      into.add(heading.trim());
+    }
     return;
   }
   if (Array.isArray(value)) {
@@ -135,7 +147,11 @@ function queryOf(text) {
   if (!Array.isArray(parsed)) return undefined;
   for (let i = parsed.length - 1; i >= 0; i--) {
     const message = parsed[i];
-    if (message && message.role === 'user' && typeof message.content === 'string') {
+    if (
+      message &&
+      message.role === 'user' &&
+      typeof message.content === 'string'
+    ) {
       return message.content;
     }
   }
@@ -254,7 +270,9 @@ const beforeTokAll = sum((r) => r.oursTokBefore);
 const oursTokAll = sum((r) => r.oursTokAfter);
 // Their per-workload token ratio applied to the common denominator, so the
 // corpus total is not skewed by their envelope on three of six workloads.
-const theirsTokAll = sum((r) => Math.round(r.oursTokBefore * (1 - r.theirsTok)));
+const theirsTokAll = sum((r) =>
+  Math.round(r.oursTokBefore * (1 - r.theirsTok))
+);
 
 const oursChars = 1 - oursAll / beforeAll;
 const theirsChars = 1 - theirsAll / beforeAll;
@@ -262,8 +280,12 @@ const oursTokens = 1 - oursTokAll / beforeTokAll;
 const theirsTokens = 1 - theirsTokAll / beforeTokAll;
 
 console.log('');
-console.log(`chars   ours ${pct(oursChars)}   theirs ${pct(theirsChars)}   (denominator: the payload bytes both arms were given)`);
-console.log(`tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload, tokenised with cl100k_base, both arms' real output)`);
+console.log(
+  `chars   ours ${pct(oursChars)}   theirs ${pct(theirsChars)}   (denominator: the payload bytes both arms were given)`
+);
+console.log(
+  `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload, tokenised with cl100k_base, both arms' real output)`
+);
 console.log(`identifiers unrecoverably lost: ${lost}`);
 // SAID OUT LOUD. Most retained identifiers live in the spill, and the spill is
 // about the size of the input -- so the saving is a saving in CONTEXT, not on
@@ -276,10 +298,16 @@ console.log(
 );
 
 const lostWorkloads = rows.filter((r) => r.ours <= r.theirs).map((r) => r.name);
-if (lostWorkloads.length) console.log(`LOST OR TIED ON: ${lostWorkloads.join(', ')}`);
+if (lostWorkloads.length)
+  console.log(`LOST OR TIED ON: ${lostWorkloads.join(', ')}`);
 const unconserved = rows.filter((r) => !r.conserved).map((r) => r.name);
-if (unconserved.length) console.log(`CONSERVATION FAILED ON: ${unconserved.join(', ')}`);
+if (unconserved.length)
+  console.log(`CONSERVATION FAILED ON: ${unconserved.join(', ')}`);
 
 const failed =
-  lost > 0 || lostWorkloads.length > 0 || unconserved.length > 0 || oursChars <= theirsChars || oursTokens <= theirsTokens;
+  lost > 0 ||
+  lostWorkloads.length > 0 ||
+  unconserved.length > 0 ||
+  oursChars <= theirsChars ||
+  oursTokens <= theirsTokens;
 process.exit(failed ? 1 : 0);

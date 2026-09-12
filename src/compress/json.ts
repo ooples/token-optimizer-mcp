@@ -106,22 +106,6 @@ const MAX_ANOMALOUS_SHARE = 0.5;
 /** Keys present in at least this fraction of rows define the common shape. */
 const COMMON_KEY_SHARE = 0.8;
 
-/**
- * How many rows sharing one deviation still count as exceptional.
- *
- * MEASURED, on their api-responses fixture. 60 of 200 rows carry an optional
- * `relationships` key, so every one of them "departs from the shape the rest
- * share" and the anomaly rule kept all 60 -- 31% of the array retained whole,
- * 75.8% reduction against their 91.4%. But sixty rows deviating IDENTICALLY
- * are not sixty anomalies, they are a subpopulation, and rule 2 already keeps
- * a representative of it. The global share cap could not see this: 60 is well
- * under half the array, so the backstop never fired.
- *
- * A deviation nobody else shares is still kept in full -- that is the error
- * row, the record with the unexpected field, the thing this rule exists for.
- */
-const MAX_PER_DEVIATION = 3;
-
 /** The way a row departs from the common shape, as a comparable key. */
 function deviationOf(
   keys: readonly string[],
@@ -140,11 +124,27 @@ function deviationOf(
  * directions matter: an extra field marks a special record, and a missing
  * field marks an incomplete one, and a reader wants each.
  *
- * Rows are then grouped by HOW they deviate and each group is capped, so a
- * shared optional field reads as one subpopulation rather than as sixty
- * separate anomalies. See MAX_PER_DEVIATION.
+ * ROWS ARE GROUPED BY HOW THEY DEVIATE, and each group is capped at
+ * `maxPerDeviation`. Measured on their api-responses fixture: 60 of 200 rows
+ * carry an optional `relationships` key, so every one of them departed from
+ * the common shape and all 60 were kept whole -- 31% of the array retained,
+ * 75.8% reduction against their 91.4%. Sixty rows deviating IDENTICALLY are
+ * one subpopulation, not sixty anomalies, and the shape rule already keeps a
+ * representative of it. The global share cap could not catch this: 60 is well
+ * under half the array, so the backstop never fired.
+ *
+ * A deviation nobody else shares is still kept in full -- that is the error
+ * row, the record with the unexpected field, the thing this rule exists for.
+ *
+ * The cap is `tuning.keepRows` rather than a constant, because the profiles
+ * disagree about how much evidence is worth keeping (1 row on the aggressive
+ * profile, 8 on the conservative one) and a fixed number would have quietly
+ * overridden both.
  */
-function anomalousRows(rows: readonly unknown[]): Set<number> {
+function anomalousRows(
+  rows: readonly unknown[],
+  maxPerDeviation: number
+): Set<number> {
   const frequency = new Map<string, number>();
   let objects = 0;
 
@@ -183,7 +183,7 @@ function anomalousRows(rows: readonly unknown[]): Set<number> {
   for (const indices of byDeviation.values()) {
     // Ordered by position, so the rows kept are the first occurrences rather
     // than an arbitrary slice -- the same bias the head-of-array rule uses.
-    for (const index of indices.slice(0, MAX_PER_DEVIATION)) odd.add(index);
+    for (const index of indices.slice(0, maxPerDeviation)) odd.add(index);
   }
   return odd;
 }
@@ -273,7 +273,7 @@ export function compressJson(
     // elided, 25.7% against their 60.0%) and keeps nothing when every row is
     // shaped alike (their agentic-conversation, 0 flagged, 45 of 48 rows
     // elided, every needle destroyed at 99.6%).
-    const odd = anomalousRows(stripped);
+    const odd = anomalousRows(stripped, tuning.keepRows);
     const keep = new Set<number>();
     // 1. Content that a reader would come back for -- identifiers, failure
     //    vocabulary -- which structure cannot see. Bounded, so an array made
