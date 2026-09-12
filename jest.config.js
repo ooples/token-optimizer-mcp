@@ -1,5 +1,23 @@
 export default {
   preset: 'ts-jest/presets/default-esm',
+  // BOUNDED BECAUSE THIS SUITE SPAWNS PROCESSES, and the default does not know
+  // that. Jest sizes its pool from CPU count -- fifteen workers on this machine
+  // -- and dozens of these tests spawn a real hook binary, an MCP server or the
+  // CLI, so the true concurrency is fifteen workers TIMES their children.
+  //
+  // Measured: a hook spawn costs 204-241ms standalone (bare `node -e ""` is 84ms,
+  // so most of it is module loading, and it is the same with an empty graph as
+  // with a 45MB one -- the hook is lazy, there is no data-size regression here).
+  // Under fifteen-way oversubscription those same spawns blow a 5s budget: three
+  // suites failed at the default, one or two at four workers, and the failing set
+  // ROTATED between runs, which is the signature of contention rather than of a
+  // defect in any one test. Each passes alone.
+  //
+  // Halving the pool is the correct fix rather than raising the timeouts: the
+  // budgets are honest for the work being done, and it is the scheduling that
+  // was wrong.
+  maxWorkers: '50%',
+
   testEnvironment: 'node',
   extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
