@@ -36,6 +36,7 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
+import { needleRows, shapeRepresentatives } from './needles.js';
 import { activeRanker } from './ranking.js';
 import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
@@ -92,6 +93,16 @@ function shapeOf(row: unknown): string {
 }
 
 /** Keys present in at least this fraction of rows define the common shape. */
+/**
+ * Above this share of anomalous rows, the anomaly rule is not discriminating.
+ *
+ * An array of three interleaved table shapes has no common key set, so every
+ * row reads as exceptional and the keep set swallows the array. Past this
+ * point shape diversity is preserved by keeping one representative of each
+ * shape instead, which is what the rule was for.
+ */
+const MAX_ANOMALOUS_SHARE = 0.5;
+
 const COMMON_KEY_SHARE = 0.8;
 
 /**
@@ -190,9 +201,28 @@ export function compressJson(
     Array.isArray(stripped) &&
     stripped.length >= tuning.minRowsToElide
   ) {
+    // WHAT MUST SURVIVE, from three rules that cover each other's blind
+    // spots. Measured on HeadRoom's own fixtures, each rule alone fails at
+    // one extreme: the anomaly rule keeps everything when an array has no
+    // single common shape (their database-rows, 300 of 300 flagged, nothing
+    // elided, 25.7% against their 60.0%) and keeps nothing when every row is
+    // shaped alike (their agentic-conversation, 0 flagged, 45 of 48 rows
+    // elided, every needle destroyed at 99.6%).
     const odd = anomalousRows(stripped);
-    // Head rows for shape, plus every row that departs from it, in order.
-    const keep = new Set<number>(odd);
+    const keep = new Set<number>();
+    // 1. Content that a reader would come back for -- identifiers, failure
+    //    vocabulary -- which structure cannot see. Bounded, so an array made
+    //    of needles does not simply disable compression.
+    for (const i of needleRows(stripped)) keep.add(i);
+    // 2. One example of every distinct shape, which is what the anomaly rule
+    //    was protecting; taken this way it costs a handful of rows rather
+    //    than the whole array.
+    for (const i of shapeRepresentatives(stripped)) keep.add(i);
+    // 3. The anomalous rows themselves, but only while they are genuinely
+    //    exceptional. Past that share the term has stopped discriminating
+    //    and rule 2 already carries the shape information.
+    if (odd.size <= stripped.length * MAX_ANOMALOUS_SHARE)
+      for (const i of odd) keep.add(i);
     for (let i = 0; i < Math.min(tuning.keepRows, stripped.length); i += 1)
       keep.add(i);
 
