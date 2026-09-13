@@ -225,6 +225,23 @@ for (const [name, text] of Object.entries(payloads)) {
   // conversation, so the ratio is theirs and the envelope cancels.
   const theirBefore = tokens(t.bestBeforeText ?? text);
   const theirAfter = tokens(t.bestText ?? text);
+
+  // THEIR RETENTION, MEASURED THE SAME WAY -- the hole an adversarial review
+  // found in this harness. Their winning arm is chosen by SMALLEST OUTPUT, so
+  // the selection actively prefers their most aggressive mode; scoring our
+  // verified zero loss against their unmeasured loss compared a careful
+  // compressor to a possibly reckless one and called the size difference a win.
+  //
+  // Their elided rows go to a retrieval store this harness cannot read, so a
+  // needle absent from their output is "not in the text they send" -- the same
+  // thing our `gone` column would mean if we ignored the spill. It is therefore
+  // reported beside ours as a like-for-like in-context figure, NOT as proof
+  // they lost it: their CCR store may still hold it, exactly as our spill holds
+  // ours. What it can do is stop a silent asymmetry being quoted as a win.
+  const theirText = t.bestText ?? text;
+  let theirIn = 0;
+  for (const id of want) if (theirText.includes(id)) theirIn++;
+  const theirGone = want.size - theirIn;
   rows.push({
     name,
     before,
@@ -240,6 +257,8 @@ for (const [name, text] of Object.entries(payloads)) {
     inOut,
     inSpill,
     gone,
+    theirIn,
+    theirGone,
     missing,
     conserved,
     grew,
@@ -250,14 +269,14 @@ for (const [name, text] of Object.entries(payloads)) {
 
 const pct = (n) => `${(n * 100).toFixed(1)}%`;
 console.log(
-  'workload                  before     ours   theirs |   ours  theirs (tokens) | ids  out spill gone | spill/in | their arm'
+  'workload                  before     ours   theirs |   ours  theirs (tokens) | ids | ours: out spill gone | theirs: in gone | their arm'
 );
 for (const r of rows) {
   console.log(
     `${r.name.padEnd(22)} ${String(r.before).padStart(8)}  ${pct(r.ours).padStart(6)}  ` +
       `${pct(r.theirs).padStart(6)} | ${pct(r.oursTok).padStart(6)} ${pct(r.theirsTok).padStart(6)} | ` +
-      `${String(r.ids).padStart(4)} ${String(r.inOut).padStart(4)} ${String(r.inSpill).padStart(5)} ` +
-      `${String(r.gone).padStart(4)} | ${r.spillRatio.toFixed(2).padStart(8)} | ${r.arm}` +
+      `${String(r.ids).padStart(4)} | ${String(r.inOut).padStart(9)} ${String(r.inSpill).padStart(5)} ` +
+      `${String(r.gone).padStart(4)} | ${String(r.theirIn).padStart(10)} ${String(r.theirGone).padStart(4)} | ${r.arm}` +
       (r.conserved ? '' : '  !! CONSERVATION FAILED')
   );
 }
@@ -286,7 +305,30 @@ console.log(
 console.log(
   `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload, tokenised with cl100k_base, both arms' real output)`
 );
-console.log(`identifiers unrecoverably lost: ${lost}`);
+// STATED NEUTRALLY, because the first version of this summary was one-sided in
+// our favour. BOTH arms elide with a recovery path -- ours a readable spill,
+// theirs a retrieval store this harness cannot open -- so "absent from their
+// text" is NOT loss, and counting our spill as retained while counting their
+// store as nothing is the same asymmetry that made the original claim wrong,
+// merely reversed.
+//
+// The comparable figure is in-context presence, and on these fixtures it does
+// NOT favour us: the higher reduction is reached partly BY eliding more, so
+// fewer needles stay directly visible. Whether that is the better trade depends
+// on how often a needle is followed up, which this harness cannot see.
+const oursIn = sum((r) => r.inOut);
+const oursSpilled = sum((r) => r.inSpill);
+const theirsIn = sum((r) => r.theirIn);
+const allIds = sum((r) => r.ids);
+console.log(`retention units           ${allIds}`);
+console.log(
+  `  in context     ours ${oursIn}   theirs ${theirsIn}` +
+    (theirsIn > oursIn ? '   <-- THEY keep more directly visible' : '')
+);
+console.log(
+  `  recoverable    ours ${oursSpilled} in a named spill   theirs ${allIds - theirsIn} in a store this harness cannot read`
+);
+console.log(`  unrecoverable by us      ${lost}`);
 // SAID OUT LOUD. Most retained identifiers live in the spill, and the spill is
 // about the size of the input -- so the saving is a saving in CONTEXT, not on
 // disk. That is the design (context tokens are the billed resource and a spill
