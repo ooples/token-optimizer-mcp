@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0](https://github.com/ooples/token-optimizer-mcp/compare/v6.0.2...v7.0.0) (2026-09-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* TOKEN_OPTIMIZER_MODE now defaults to `assist` rather than `enforce`. Expensive built-in calls are no longer refused unless you set TOKEN_OPTIMIZER_MODE=enforce. Routing, retrieval, capture and harvest are unaffected and remain on by default.
+
+### Features
+
+* **compress:** compression on the wire, with a cache-aware benchmark ([#382](https://github.com/ooples/token-optimizer-mcp/issues/382)) ([3d00ff2](https://github.com/ooples/token-optimizer-mcp/commit/3d00ff2dc16137f49559bb9ef6a2b240d6c58bb9))
+* default to assist, and make the graph actually deliver under it ([#375](https://github.com/ooples/token-optimizer-mcp/issues/375)) ([ee91e8b](https://github.com/ooples/token-optimizer-mcp/commit/ee91e8bfbd9a05e6c88e30605cf244c6dc1bafc8))
+* **graph:** answer a search from the index before it runs ([#369](https://github.com/ooples/token-optimizer-mcp/issues/369)) ([9a725f9](https://github.com/ooples/token-optimizer-mcp/commit/9a725f908b1d812b98164f4dc309c78f19344919))
+* **harvest:** use the client's own CLI as the extraction model ([#380](https://github.com/ooples/token-optimizer-mcp/issues/380)) ([1fca4e1](https://github.com/ooples/token-optimizer-mcp/commit/1fca4e1bfd3471bf230c7558993938f7f72b0e93))
+* **policy:** add assist, the posture that runs the graph without refusals ([#352](https://github.com/ooples/token-optimizer-mcp/issues/352)) ([9b48a47](https://github.com/ooples/token-optimizer-mcp/commit/9b48a47996c62d19d1ae3e768c7aac4034844185))
+* **policy:** bound a command's output instead of refusing the command ([#365](https://github.com/ooples/token-optimizer-mcp/issues/365)) ([aba7e0c](https://github.com/ooples/token-optimizer-mcp/commit/aba7e0c4872d540995777092f1aed4417366396a))
+* **wiki:** add a switch that makes the graph inert for measurement ([#355](https://github.com/ooples/token-optimizer-mcp/issues/355)) ([32c2619](https://github.com/ooples/token-optimizer-mcp/commit/32c26197781d870056cd334480022fabe5211867))
+
+
+### Bug Fixes
+
+* **bench:** the warm track, and the harness defects that hid its result ([#374](https://github.com/ooples/token-optimizer-mcp/issues/374)) ([646762b](https://github.com/ooples/token-optimizer-mcp/commit/646762bc1dda660ce214cb7011c8e63caaff0976))
+* bound test and build output, which the bound never reached ([#368](https://github.com/ooples/token-optimizer-mcp/issues/368)) ([e384eb6](https://github.com/ooples/token-optimizer-mcp/commit/e384eb6793655911122ac9813f7556c2a52696d0))
+* **cache:** let a read diff against what a write just stored ([#351](https://github.com/ooples/token-optimizer-mcp/issues/351)) ([190471a](https://github.com/ooples/token-optimizer-mcp/commit/190471a2d0adf16c3f7f9b0d0f4431cbb04e3d00))
+* **enforce:** stop refusing built-in writes, which cost a second copy ([#348](https://github.com/ooples/token-optimizer-mcp/issues/348)) ([4dae335](https://github.com/ooples/token-optimizer-mcp/commit/4dae335b05d944927b90bcc683745c904e7cd732))
+* **harvest:** speak the dialect the local model actually serves ([#379](https://github.com/ooples/token-optimizer-mcp/issues/379)) ([0df8180](https://github.com/ooples/token-optimizer-mcp/commit/0df8180c7131984bc4471ea6b37e6ea6547dd67c))
+* **hooks:** we were blind to web calls, and half the product never installed ([#367](https://github.com/ooples/token-optimizer-mcp/issues/367)) ([21cc8e5](https://github.com/ooples/token-optimizer-mcp/commit/21cc8e558286f45bb8722f3ad092f57f7fe5536e))
+* **install:** run the hook installer in argv mode instead of a shell string ([#344](https://github.com/ooples/token-optimizer-mcp/issues/344)) ([506236e](https://github.com/ooples/token-optimizer-mcp/commit/506236ecdb6789804dda73345dc97203bc62d91a))
+* **launch:** let the served version be pinned, instead of the npx cache deciding ([#349](https://github.com/ooples/token-optimizer-mcp/issues/349)) ([1b261cd](https://github.com/ooples/token-optimizer-mcp/commit/1b261cd07b4655444562fda448c9f2d1279f8976))
+* **router:** answer a refused read instead of spending a turn on it ([#378](https://github.com/ooples/token-optimizer-mcp/issues/378)) ([7072f0c](https://github.com/ooples/token-optimizer-mcp/commit/7072f0c1fab99711e89b48b73e761036d45af9db))
+
+
+### Performance
+
+* cache token counts, parallelise the doctor, read the metrics tail once ([#363](https://github.com/ooples/token-optimizer-mcp/issues/363)) ([5d5a7d7](https://github.com/ooples/token-optimizer-mcp/commit/5d5a7d7fdf66660e381105faae6f1e18a67b815d))
+* **registry:** stop rescanning the project registry on every call ([#359](https://github.com/ooples/token-optimizer-mcp/issues/359)) ([90bfa65](https://github.com/ooples/token-optimizer-mcp/commit/90bfa6502fc5c27f7ae5740ec54854e3da310134))
+
+
+### Documentation
+
+* benchmark harness and competitive program, spec and plan ([#353](https://github.com/ooples/token-optimizer-mcp/issues/353)) ([fba00bf](https://github.com/ooples/token-optimizer-mcp/commit/fba00bf6acd9636ed152d39a9de027f79782fb4a))
+* **policy:** correct the enforce measurement to the re-run ([#381](https://github.com/ooples/token-optimizer-mcp/issues/381)) ([1d0abf1](https://github.com/ooples/token-optimizer-mcp/commit/1d0abf17f6b9e4a0408f227a21a3d2a94261f0fd))
+* **security:** state the trust boundary smart_process actually grants ([#346](https://github.com/ooples/token-optimizer-mcp/issues/346)) ([b58f294](https://github.com/ooples/token-optimizer-mcp/commit/b58f29483e8ab866f0249081287b0021a3f806b7))
+* **spike:** whether a hook can rewrite a tool result ([#364](https://github.com/ooples/token-optimizer-mcp/issues/364)) ([e3fd3eb](https://github.com/ooples/token-optimizer-mcp/commit/e3fd3eb0060d8a2426fcc5d7619b273f5687bb86))
+
 ## [6.0.2](https://github.com/ooples/token-optimizer-mcp/compare/v6.0.1...v6.0.2) (2026-08-28)
 
 
