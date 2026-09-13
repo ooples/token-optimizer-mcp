@@ -10,6 +10,8 @@ import {
   STRATEGIES,
   v1Frontier,
   ccrStyle,
+  taskIn,
+  questionIn,
 } from '../../../src/compress/strategy.js';
 import { classify, compressBlock } from '../../../src/compress/router.js';
 
@@ -411,5 +413,62 @@ describe('a tool result is compressed like any other content', () => {
     // The argument survives intact, character for character.
     expect(sent).toContain('helper119');
     expect(sent).toContain('helper0');
+  });
+});
+
+describe('taskIn steers tool deferral without moving the cached prefix', () => {
+  // Content as BLOCKS, which is the wire shape -- questionIn walks text blocks
+  // and ignores a plain string, so a string fixture would make both helpers
+  // return the system prompt and the comparison below would pass vacuously.
+  const turn = (role: string, text: string) => ({
+    role,
+    content: [{ type: 'text', text }],
+  });
+  const session = (latest: string) => ({
+    system: 'You are a coding agent.',
+    messages: [
+      turn('user', 'Build a sales report as a PDF from sales.csv.'),
+      turn('assistant', 'Reading the file.'),
+      turn('user', latest),
+    ],
+  });
+
+  it('returns the same steering text as the conversation grows', () => {
+    // THE REGRESSION THIS PINS. Steering deferral on the live question kept a
+    // stable COUNT of 14 deferred tools while choosing a different SET each
+    // turn: 11 distinct deferredToolChars values over 41 requests. Each change
+    // rewrites the tools array at the front of the prefix, so cache creation
+    // rose 2,188 -> 7,048 tokens while reads fell 30,307 -> 14,181 -- weighted
+    // at 1.25x and 0.1x that is 5,766 -> 10,228, a feature making the bill
+    // 1.77x worse while removing 38,322 characters per request.
+    const early = taskIn(session('What are the rate limits?'));
+    const later = taskIn(session('Now format the totals as currency.'));
+
+    expect(early).toBe(later);
+    expect(early).toContain('Build a sales report as a PDF');
+  });
+
+  it('differs from questionIn, which is allowed to follow the live turn', () => {
+    // Asserted positively on both sides: content compression works after the
+    // cache frontier and SHOULD track the current question, so the two helpers
+    // are meant to disagree. A test that only checked taskIn's stability would
+    // still pass if questionIn were quietly frozen too.
+    const a = questionIn(session('What are the rate limits?'));
+    const b = questionIn(session('Now format the totals as currency.'));
+
+    expect(a).not.toBe(b);
+    expect(b).toContain('currency');
+  });
+
+  it('falls back past a first turn that carries no text', () => {
+    const imageOnly = {
+      system: 'You are a coding agent.',
+      messages: [
+        { role: 'user', content: [{ type: 'image', source: {} }] },
+        turn('user', 'Describe the screenshot.'),
+      ],
+    };
+
+    expect(taskIn(imageOnly)).toContain('Describe the screenshot');
   });
 });

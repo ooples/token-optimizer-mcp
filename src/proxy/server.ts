@@ -39,7 +39,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
   v1Frontier,
-  questionIn,
+  taskIn,
   type StrategyResult,
 } from '../compress/strategy.js';
 import {
@@ -442,7 +442,10 @@ export function compressBody(
       // never has to search for one -- and a search costs a round trip plus a
       // second cold prefix write.
       const out = deferTools(parsed, {
-        query: questionIn(parsed),
+        // taskIn, NOT questionIn: the tools array is part of the cached
+        // prefix, so steering it with text that changes every turn changes
+        // the prefix every turn. See taskIn for the measurement.
+        query: taskIn(parsed),
         keepRelevant: keepToolsFromEnv(),
       });
       parsed = out.request;

@@ -176,6 +176,49 @@ export function questionIn(request: ProviderRequest): string {
   return `${system}\n${queryFrom(blocks)}`.trim();
 }
 
+/**
+ * The steering text for TOOL deferral, which must not move during a session.
+ *
+ * WHY THIS IS NOT `questionIn`. Both pick what is relevant, but they rewrite
+ * different halves of the request and only one of them is cached. Content
+ * compression works AFTER the cache frontier, so it may follow the live
+ * question and change every turn at no cost. Tool deferral rewrites the tools
+ * array, which sits at the FRONT of the prefix -- so if its steering text
+ * changes, the chosen tools change, the prefix changes, and every cached token
+ * behind it is invalidated.
+ *
+ * MEASURED, and it is not a small effect. Steering deferral with `questionIn`
+ * kept a stable COUNT of 14 deferred tools while producing 11 distinct
+ * `deferredToolChars` values across 41 requests -- the same number of tools,
+ * but a different set each turn. Cache creation went from 2,188 tokens per
+ * request to 7,048 while cache reads fell from 30,307 to 14,181: weighting
+ * writes at 1.25x and reads at 0.1x, that is 5,766 -> 10,228, so the feature
+ * that removes 38,322 characters per request made the bill 1.77x WORSE.
+ *
+ * The first user turn is the task, and the task does not change while it is
+ * being worked on. Relevance to it is what tool selection actually wants.
+ */
+export function taskIn(request: ProviderRequest): string {
+  const system = typeof request.system === 'string' ? request.system : '';
+  for (const message of request.messages ?? []) {
+    if (message?.role !== 'user') continue;
+    const content = message.content;
+    if (typeof content === 'string') {
+      if (content.trim()) return `${system}\n${content}`.trim();
+      continue;
+    }
+    if (!Array.isArray(content)) continue;
+    const text = content
+      .map((raw) => (raw as Block)?.text)
+      .filter((t): t is string => typeof t === 'string')
+      .join('\n');
+    // A first turn carrying only an image or a tool result has no task text to
+    // steer with; keep looking rather than steering on nothing.
+    if (text.trim()) return `${system}\n${text}`.trim();
+  }
+  return system.trim();
+}
+
 /** Walks every text-bearing block, letting the visitor replace its text. */
 /** The elision marker `pathAddressed` leaves behind. */
 const ELIDED = /\[\.\.\. body, [^\]]+\]/;

@@ -163,5 +163,23 @@ export function semanticHarvestPrompt({
     + 'confidenceLabel (verified/probable/speculative), its project/organization/global scope, '
     + 'and anything that would invalidate it. If there is no such conclusion, do not invent one; '
     + 'finish normally.'
+    // THE ANSWER MUST SURVIVE THE HARVEST, and without this line it does not.
+    //
+    // MEASURED. This prompt continues the turn, so whatever the model says in
+    // reply to it becomes the LAST message of the session -- and a verifier, a
+    // reviewer and the person who asked all read the last message. On THOL's
+    // report-pdf the agent built the PDF correctly and then answered this
+    // prompt with "Recorded. The finding: pip3 install requires
+    // --break-system-packages", which scored 0.30 against control's 0.90 on
+    // 5 of 5 runs across two campaigns. The findings themselves were fine; the
+    // answer was gone.
+    //
+    // Fixing the SessionStart guidance instead did nothing, because that text
+    // is advice given before the work whereas this prompt arrives after it and
+    // is the thing actually being replied to. The instruction has to live here.
+    + ' Then finish by restating the answer to the original task in full. This'
+    + ' prompt continues your turn, so your reply to it is the last thing the'
+    + ' reader sees: a note about what you recorded is not an answer, and'
+    + ' replacing the answer with one loses the work you just did.'
   );
 }

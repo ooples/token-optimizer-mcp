@@ -131,4 +131,31 @@ describe('the active model performs the final semantic harvest', () => {
     expect(out).toMatch(/the active model that did the reasoning/i);
     expect(out).not.toMatch(/Work touched/);
   });
+
+  test('demands the answer back, because this prompt owns the last message', () => {
+    // REGRESSION PIN, with a measured failure behind it. This prompt CONTINUES
+    // the turn, so the model's reply to it is the final message of the session
+    // -- and on THOL's report-pdf the model replied "Recorded. The finding:
+    // pip3 install requires --break-system-packages", scoring 0.30 against
+    // control's 0.90 on 5 of 5 runs across two campaigns. The PDF was correct;
+    // only the answer was missing, because a harvest confirmation had replaced
+    // it.
+    //
+    // Asserted on the SHIPPED prompt rather than on a copy of the wording, and
+    // positively rather than as a `not.toContain`: a rule about what must be
+    // absent passes on an empty string, which is exactly the vacuous assertion
+    // this repo's lint rule rejects.
+    const out = semanticHarvestPrompt({
+      edits: 2,
+      files: ['C:/repo/src/report.ts'],
+    });
+
+    expect(out).toMatch(/restating the answer to the original task in full/i);
+    expect(out).toMatch(/last thing the reader sees/i);
+    // The instruction has to come AFTER the request to record, or it reads as
+    // advice about the recording rather than about what follows it.
+    expect(out.indexOf('wiki_write')).toBeLessThan(
+      out.indexOf('restating the answer')
+    );
+  });
 });
