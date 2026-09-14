@@ -258,15 +258,20 @@ const ARMS = {
       })
       .filter((m) => !Array.isArray(m.content) || m.content.length > 0),
 
-  'v4-substitute': (messages) => substituteHistory(messages).messages,
-
-  // The shipping arm with substitution on top, which is what would actually
-  // be deployed -- the two attack disjoint regions.
-  'v1+substitute': (messages) => {
-    const substituted = substituteHistory(messages).messages;
-    const out = STRATEGIES['v1-frontier']({ messages: substituted }, {});
-    return out.request.messages ?? substituted;
+  // THE REGISTERED STRATEGY, not a hand-rolled copy of it. This arm called
+  // `substituteHistory` directly at first, which meant it silently did not
+  // exercise the tool-result compression the strategy passes in -- so the
+  // measurement would have reported the feature as nearly worthless while
+  // never running half of it. A benchmark arm must call the shipped entry
+  // point, or it is measuring the benchmark.
+  'v4-substitute': (messages) => {
+    const out = STRATEGIES['v4-substitute']({ messages }, {});
+    return out.request.messages ?? messages;
   },
+
+  // Substitution WITHOUT the tool-result half, so the two regions it attacks
+  // -- reasoning and tool results -- can be told apart rather than bundled.
+  'v4-reasoning-only': (messages) => substituteHistory(messages).messages,
 };
 
 /**
@@ -300,8 +305,8 @@ function anchoredArm(pre) {
 
 const ANCHORED = {
   'v1-frontier +anchors': anchoredArm(null),
-  'v1+substitute +anchors': anchoredArm(
-    (messages) => substituteHistory(messages).messages
+  'v4-substitute +anchors': anchoredArm(
+    (messages) => STRATEGIES['v4-substitute']({ messages }, {}).request.messages
   ),
 };
 

@@ -62,6 +62,26 @@ const REASONING = new Set(['thinking', 'redacted_thinking']);
  */
 const HINT_CHARS = 60;
 
+export interface SubstitutionOptions {
+  /**
+   * Compresses one tool-result body. MUST be a pure function of its input.
+   *
+   * INJECTED RATHER THAN IMPORTED, for two reasons. It keeps this module free
+   * of the engine registry, so the substitution can be tested without one. And
+   * it makes the purity requirement a visible part of the contract instead of
+   * something a caller has to infer -- a compressor that consulted the current
+   * question, the conversation length or a spill sink would produce a different
+   * body for the same block on a later turn, break the prefix at that message
+   * and cost a full rewrite of everything after it, every turn.
+   *
+   * That is precisely why `v1Frontier` refuses to compress behind the cache
+   * frontier: its compression IS query-dependent on fresh content. Applied from
+   * first sight with the query omitted, the same engines become safe to use
+   * everywhere.
+   */
+  readonly compressToolResult?: (text: string) => string;
+}
+
 export interface SubstitutionResult {
   /** The rewritten messages. Always the same length as the input. */
   readonly messages: Message[];
@@ -71,6 +91,8 @@ export interface SubstitutionResult {
   readonly substituteChars: number;
   /** How many messages were substituted at all. */
   readonly substituted: number;
+  /** Characters removed from tool results, which are their own region. */
+  readonly toolResultChars: number;
 }
 
 /**
@@ -152,16 +174,48 @@ function reasoningChars(block: Block): number {
  * unattributable to either.
  */
 export function substituteHistory(
-  messages: readonly Message[] | undefined
+  messages: readonly Message[] | undefined,
+  options: SubstitutionOptions = {}
 ): SubstitutionResult {
   const out: Message[] = [];
   let removedChars = 0;
   let substituteChars = 0;
   let substituted = 0;
+  let toolResultChars = 0;
 
   for (const message of messages ?? []) {
     const content = message?.content;
     if (message?.role !== 'assistant' || !Array.isArray(content)) {
+      // TOOL RESULTS ARE THE OTHER 36% OF HISTORY, and the plan had written
+      // them off. Its arithmetic said compressing them alone repays a prefix
+      // rewrite only after ~36 turns against a 13-turn workload, so the whole
+      // feature "stands or falls entirely on removing thinking".
+      //
+      // That conclusion was downstream of assuming a REWRITE. Under the rule
+      // this module is built on -- transform every message the first time it is
+      // seen and never reconsider -- there is no rewrite to repay, so the
+      // break-even is not 36 turns, it is absent. The region becomes worth
+      // taking for the same reason the reasoning was.
+      //
+      // Only with a compressor the caller vouches is pure; otherwise untouched.
+      const compress = options.compressToolResult;
+      if (compress && message?.role === 'user' && Array.isArray(content)) {
+        let changed = false;
+        const next = content.map((block) => {
+          if (block?.type !== 'tool_result') return block;
+          const body = block.content;
+          if (typeof body !== 'string' || !body) return block;
+          const compressed = compress(body);
+          if (compressed === body) return block;
+          toolResultChars += body.length - compressed.length;
+          changed = true;
+          return { ...block, content: compressed };
+        });
+        if (changed) {
+          out.push({ ...message, content: next });
+          continue;
+        }
+      }
       out.push(message);
       continue;
     }
@@ -206,5 +260,11 @@ export function substituteHistory(
     substituted += 1;
   }
 
-  return { messages: out, removedChars, substituteChars, substituted };
+  return {
+    messages: out,
+    removedChars,
+    substituteChars,
+    substituted,
+    toolResultChars,
+  };
 }

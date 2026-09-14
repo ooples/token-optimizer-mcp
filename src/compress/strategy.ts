@@ -975,7 +975,14 @@ export function v4Substitute(
   request: ProviderRequest,
   options: StrategyOptions = {}
 ): StrategyResult {
-  const substitution = substituteHistory(request.messages);
+  const substitution = substituteHistory(request.messages, {
+    // NO QUERY, NO SPILL, NO EMBEDDINGS -- the three inputs that would make the
+    // same block compress differently on a later turn. `tuning` is fixed for
+    // the life of the proxy by design, so what remains is a pure function of
+    // the block's own text, which is what the append-only rule requires.
+    compressToolResult: (text) =>
+      compressBlock(text, { tuning: options.tuning }).text,
+  });
   // Nothing to substitute is not a reason to skip compression: the request
   // still has a fresh tail and tool definitions, and V1 is what handles those.
   const next: ProviderRequest =

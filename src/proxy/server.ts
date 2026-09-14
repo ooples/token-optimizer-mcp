@@ -39,6 +39,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
   v1Frontier,
+  v4Substitute,
   taskIn,
   type StrategyResult,
 } from '../compress/strategy.js';
@@ -559,9 +560,21 @@ export function compressBody(
     }
   }
 
+  // THE ONE PLACE A STRATEGY IS CHOSEN, and until now it was not a choice at
+  // all: `v1Frontier` was named directly, so `v4Substitute` could be registered,
+  // tested and benchmarked while remaining unreachable from the running proxy.
+  // That is the shape tool deferral shipped in for months -- present, correct,
+  // and never once executed on real traffic.
+  //
+  // Off unless asked. Substitution removes model reasoning from history, and
+  // whether that costs the model something it needed is the one question no
+  // offline instrument can answer.
+  const substitute = /^(1|true|yes|on)$/i.test(
+    (process.env.TOKEN_OPTIMIZER_PROXY_SUBSTITUTE || '').trim()
+  );
   let result: StrategyResult;
   try {
-    result = v1Frontier(parsed, {
+    result = (substitute ? v4Substitute : v1Frontier)(parsed, {
       spill,
       anchors,
       findings,

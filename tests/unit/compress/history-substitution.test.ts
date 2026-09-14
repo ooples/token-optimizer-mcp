@@ -266,3 +266,72 @@ describe('the strategy composes with v1 rather than replacing it', () => {
     expect(out.request.messages).toHaveLength(1);
   });
 });
+
+describe('tool results are the other region, and only with a pure compressor', () => {
+  const big = (n: number) => 'row data here\n'.repeat(n);
+
+  test('untouched when no compressor is supplied', () => {
+    // The default must stay conservative: this module cannot verify that a
+    // compressor is pure, so it does nothing unless the caller provides one.
+    const input: Message[] = [
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: big(50) }] },
+    ];
+    const result = substituteHistory(input);
+    expect(result.toolResultChars).toBe(0);
+    expect(JSON.stringify(result.messages)).toBe(JSON.stringify(input));
+  });
+
+  test('compressed in place when one is', () => {
+    const input: Message[] = [
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: big(50) }] },
+    ];
+    const result = substituteHistory(input, {
+      compressToolResult: (text) => text.slice(0, 20),
+    });
+    expect(result.toolResultChars).toBeGreaterThan(0);
+    expect((result.messages[0].content as { content?: string }[])[0].content).toHaveLength(20);
+  });
+
+  test('message count and role are preserved', () => {
+    const input: Message[] = [
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: big(50) }] },
+    ];
+    const out = substituteHistory(input, { compressToolResult: (t) => t.slice(0, 5) }).messages;
+    expect(out).toHaveLength(1);
+    expect(out[0].role).toBe('user');
+  });
+
+  test('a compressor that changes nothing leaves the message identical', () => {
+    // Not merely "equal": the same object, so an unchanged message keeps its
+    // identity for the replay's serialisation memo and for the cache.
+    const input: Message[] = [
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: 'short' }] },
+    ];
+    const out = substituteHistory(input, { compressToolResult: (t) => t }).messages;
+    expect(out[0]).toBe(input[0]);
+  });
+
+  test('non-string tool_result bodies are left alone', () => {
+    // A tool_result may carry an array of blocks. Compressing that shape is a
+    // different problem and guessing at it is how a 400 gets shipped.
+    const input: Message[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'a', content: [{ type: 'text', text: big(20) }] },
+        ],
+      },
+    ];
+    const result = substituteHistory(input, { compressToolResult: (t) => t.slice(0, 3) });
+    expect(result.toolResultChars).toBe(0);
+    expect(result.messages[0]).toBe(input[0]);
+  });
+
+  test('the compressor still runs on every turn identically', () => {
+    // The append-only property again, now for the tool-result half.
+    const opts = { compressToolResult: (t: string) => t.slice(0, 30) };
+    const short = substituteHistory(conversation(4), opts).messages;
+    const long = substituteHistory(conversation(9), opts).messages;
+    expect(JSON.stringify(long.slice(0, short.length))).toBe(JSON.stringify(short));
+  });
+});
