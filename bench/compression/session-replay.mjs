@@ -276,6 +276,20 @@ const ARMS = {
   // measurement would have reported the feature as nearly worthless while
   // never running half of it. A benchmark arm must call the shipped entry
   // point, or it is measuring the benchmark.
+  // THE COMPETITOR, ON THE SAME BYTES. `ccrStyle` is this repo's faithful
+  // reimplementation of HeadRoom's design -- opaque hash markers, history
+  // compressed, a retrieval tool and system message injected. Without it in
+  // this harness "we win" only ever meant "we beat doing nothing", which is a
+  // much weaker claim than the one the project is actually trying to make.
+  //
+  // Its injected tool and system text are NOT counted here: this instrument
+  // prices `messages` only, so the competitor is measured without the overhead
+  // its own design adds elsewhere. That is deliberate and it flatters them.
+  ccr: (messages) => {
+    const out = STRATEGIES.ccr({ messages }, {});
+    return out.request.messages ?? messages;
+  },
+
   'v4-substitute': (messages) => {
     const out = STRATEGIES['v4-substitute']({ messages }, {});
     return out.request.messages ?? messages;
