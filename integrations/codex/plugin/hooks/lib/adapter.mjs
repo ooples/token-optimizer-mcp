@@ -1380,6 +1380,10 @@ async function runHook(clientName, event, invocation) {
         session_id: sessionId,
         cwd,
         transcript_path: raw.transcript_path ?? raw.transcriptPath ?? null,
+        // So the harvest is not spent on a turn with nothing in it. The
+        // debounce marks the session as soon as a harvest starts, and on a
+        // session shorter than the interval that first mark is also the last.
+        edits: Number(state.edits || 0),
       });
     } catch {
       // The harvest is a side effect of ending a session. It must never stop

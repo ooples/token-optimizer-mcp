@@ -332,6 +332,17 @@ export async function runStopHarvest(payload = {}) {
   // transcript and re-extracting most of the same findings. The marker is
   // touched only when a harvest is actually started, so a skipped turn does not
   // push the next one further away.
+  // NOTHING TO HARVEST YET IS NOT A HARVEST. The debounce marks a session the
+  // moment a harvest starts, so a Stop on the very first assistant turn -- when
+  // no edit has happened -- used to consume the session's only slot and then
+  // block the next ten minutes. Measured on THOL: runs have a median wall time
+  // of 55s and a maximum of 418s, so not one of 240 reached a second harvest.
+  // The one that did fire captured the work done before the first turn, which
+  // is none.
+  //
+  // Checked BEFORE dueForHarvest so the marker is not written, leaving the slot
+  // for the first turn that actually did something.
+  if (Number(payload.edits ?? 0) < 1) return null;
   if (!dueForHarvest(payload.session_id)) return null;
 
   // Detached and fully released: the harvest must outlive this hook without

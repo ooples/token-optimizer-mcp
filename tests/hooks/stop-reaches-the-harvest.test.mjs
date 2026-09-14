@@ -265,3 +265,47 @@ describe('the harvest worker is reachable from every client, not one', () => {
     }
   });
 });
+
+describe('the harvest is not spent on a turn with no work in it', () => {
+  // THE DEFECT THIS PINS. dueForHarvest writes its marker the moment a harvest
+  // STARTS, so a Stop on the first assistant turn -- before any edit -- used to
+  // consume the session's only slot and then block the next ten minutes.
+  // Measured on THOL: 240 runs, median wall time 55s, maximum 418s, so not one
+  // reached a second harvest. The single harvest that did fire captured the
+  // work done before the first turn, which is none.
+  //
+  // Read from the shipped source rather than by invoking the hook, because the
+  // spawn path needs a worker, a transcript and a live credential; what must
+  // hold is that the edit check precedes the debounce, since a check placed
+  // after it would still write the marker and change nothing.
+  const source = readFileSync(
+    join(process.cwd(), 'hooks-core', 'stop-harvest.mjs'),
+    'utf8'
+  );
+
+  test('an edit gate exists and is evaluated before the debounce marks the session', () => {
+    const gate = source.indexOf('payload.edits');
+    const debounce = source.indexOf('dueForHarvest(payload.session_id)');
+
+    expect(gate).toBeGreaterThan(-1);
+    expect(debounce).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(debounce);
+  });
+
+  test('the gate returns without harvesting rather than falling through', () => {
+    // Positively asserted on the shipped text: the guard must return, because a
+    // guard that only logs would leave the marker written by the line below it.
+    expect(source).toMatch(/if \(Number\(payload\.edits \?\? 0\) < 1\) return null;/);
+  });
+
+  test('the same gate reached the packaged client copy', () => {
+    // sync:hooks fans hooks-core out to every client. A fix that lands in one
+    // copy and not the other ships as fixed and behaves as broken.
+    const packaged = readFileSync(
+      join(process.cwd(), 'plugin', 'hooks', 'lib', 'stop-harvest.mjs'),
+      'utf8'
+    );
+
+    expect(packaged).toContain('Number(payload.edits ?? 0) < 1');
+  });
+});
