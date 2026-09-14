@@ -620,6 +620,15 @@ function pathAddressed(
  */
 const CACHE_WRITE_MULTIPLIER = 1.25;
 const CACHE_READ_MULTIPLIER = 0.1;
+/**
+ * The DEFAULT prior on session length. Overridable via `assumedSessionTurns`.
+ *
+ * Kept as a named constant so the derivation below stays readable, but it is no
+ * longer the only value available: a workload that knows it runs short can say
+ * so, and one that runs for hundreds of turns can say that instead. See
+ * `options.ts#assumedSessionTurns` for why this is a fixed prior rather than
+ * something measured from the conversation as it goes.
+ */
 const ASSUMED_SESSION_TURNS = 100;
 /**
  * How long a conversation must already be before we bet on it continuing.
@@ -638,6 +647,22 @@ const MIN_MESSAGES_TO_AMORTISE = 40;
 
 const MIN_PREFIX_REWRITE_SHARE =
   CACHE_WRITE_MULTIPLIER / CACHE_READ_MULTIPLIER / ASSUMED_SESSION_TURNS;
+
+/**
+ * The share a rewrite must remove to repay itself, for this proxy's prior.
+ *
+ * FIXED FOR THE LIFE OF A PROXY, like every other dial, and that is the whole
+ * point: a threshold that moved with the conversation would decline a rewrite
+ * on one turn and accept it on the next, re-sending the entire prefix at 1.25x
+ * instead of re-reading it at 0.1x.
+ */
+export function minRewriteShare(tuning?: Tuning): number {
+  const turns = tuning?.assumedSessionTurns;
+  if (!turns || !Number.isFinite(turns) || turns <= 0) {
+    return MIN_PREFIX_REWRITE_SHARE;
+  }
+  return CACHE_WRITE_MULTIPLIER / CACHE_READ_MULTIPLIER / turns;
+}
 
 export function v1Frontier(
   request: ProviderRequest,
@@ -790,7 +815,7 @@ export function v1Frontier(
   if (attempt && !alreadyOurs) {
     const before = JSON.stringify(request).length;
     const removed = before - JSON.stringify(out.request).length;
-    if (removed < before * MIN_PREFIX_REWRITE_SHARE) {
+    if (removed < before * minRewriteShare(options.tuning)) {
       out = pathAddressed(request, options, true, floor);
       reanchored = false;
     }

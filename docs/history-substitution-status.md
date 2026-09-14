@@ -33,7 +33,7 @@ anything, and no offline instrument can answer that.
 | 1b | A removal primitive | **superseded** | substitution in place removes the need — `src/compress/history.ts` |
 | 1c | Drop thinking, keep the model's own text | **measured, negative, kept off** | `c7a5b7c0` |
 | 2 | Separate project knowledge from session state | **done** | the digest *is* the session distillation |
-| 2b | Make the amortisation gate proportional | **blocked** | contradicts the STEADY gate; see below |
+| 2b | Make the amortisation gate length-aware | **done, by a different route** | `assumedSessionTurns` dial; see below |
 | 3 | `v4-substitute`, behind a flag | **done and reachable** | `TOKEN_OPTIMIZER_PROXY_SUBSTITUTE` |
 | 4 | Campaign | **not run, deliberately** | see "Why no campaign" |
 
@@ -158,10 +158,8 @@ to control (mean per-task cost 0.94; it loses to *deferral*).
 1. **Quality.** Does the digest lose something the model needed? Nothing offline
    can answer this. It is the only thing between here and a decision.
 2. **A longer-session instrument**, since THOL cannot judge this feature.
-3. **Phase 2b** needs a decision, not code: the plan's proportional gate permits
-   an upfront cost that the STEADY gate forbids. Either the invariant stands and
-   2b is wrong, or the gate is the thing to change. Not resolvable by weakening
-   the gate.
+3. ~~**Phase 2b**~~ — **done**, see below. It needed neither a decision nor a
+   weakened gate; the plan had simply picked the wrong input.
 4. **The knowledge budget sweep** — instrument ready, needs a seeded graph and
    real spend.
 5. **The five losing tasks** — **answered offline**, see below.
@@ -236,3 +234,34 @@ exactly **one** `first-turn` each, followed only by `extended` and
 append-only across runs and carries no run identifier, so an adjacent pair is
 indistinguishable from the last request of one run followed by the first of the
 next, which is what it almost certainly was. Closed.
+
+---
+
+## Phase 2b — the gate is length-aware, and the plan's route was wrong
+
+The plan said to replace `MIN_PREFIX_REWRITE_SHARE`'s fixed 12.5% with the
+break-even relation compared against **turns already observed**. Implemented,
+that broke the STEADY gate on three of six workloads — re-anchoring COSTING
+tokens on code-search (1066 vs 871), sre-debugging (2139 vs 1795) and
+raw-build-log (17936 vs 15949).
+
+**The cause was not the arithmetic. It was the input.** `steadyTokens` prices
+turn two, and its cache hit requires turn two's prefix to be byte-identical to
+turn one's. A threshold computed from turns-so-far necessarily differs between
+two consecutive turns, so a conversation near the boundary declines the rewrite
+on one turn and accepts it on the next — and that flip re-sends the entire
+prefix at 1.25x instead of re-reading it at 0.1x. Any length-*derived* threshold
+does this. The gate was enforcing the same append-only discipline the
+substitution rests on, one level up.
+
+**So the length-awareness moved to where it is stable**: `assumedSessionTurns`,
+a tuning dial fixed for the life of a proxy like every other. The share is
+`1.25 / 0.1 / assumedSessionTurns` — 12.5% at the default 100, and **96% at 13**,
+which is the honest answer for a short workload: do not rewrite the prefix at
+all. That is exactly what the five-losing-tasks analysis independently
+concluded.
+
+All four proof gates pass. 8 tests pin the arithmetic, the monotonicity, the
+fallback for a nonsensical prior, and the safety property directly — that the
+threshold is a function of configuration alone, so nothing a growing
+conversation does can move it.
