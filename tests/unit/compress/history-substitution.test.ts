@@ -1,0 +1,268 @@
+/**
+ * Substituting history for a digest of what it did.
+ *
+ * THE PROPERTY THAT DECIDES WHETHER THIS PAYS is not the size of the saving.
+ * It is that the transform is a pure function of each message alone, so a
+ * message looks identical on the turn it arrives and on every later turn. A
+ * prefix that changes is a full 1.25x cache write on everything kept, against
+ * 0.1x to re-read it untouched -- and the probe this replaces broke exactly
+ * that rule. It exempted the newest assistant turn, so every message was sent
+ * whole once and rewritten once, which rewrote the prefix on EVERY request:
+ * code-debug-pipeline-py took 71% fewer turns and still cost 10% more.
+ *
+ * So the first describe below is the load-bearing one. The rest guard the
+ * shapes that turn a saving into a 400.
+ */
+
+import { substituteHistory } from '../../../src/compress/history.js';
+import { STRATEGIES, v4Substitute } from '../../../src/compress/strategy.js';
+import type { Message } from '../../../src/compress/frontier.js';
+
+const thinking = (text: string, signature = 'sig-abc') => ({
+  type: 'thinking',
+  thinking: text,
+  signature,
+});
+
+const toolUse = (name: string, input: Record<string, unknown>) => ({
+  type: 'tool_use',
+  id: `tu_${name}`,
+  name,
+  input,
+});
+
+/** One assistant turn that reasoned and then acted, as the wire carries it. */
+const assistantTurn = (n: number): Message => ({
+  role: 'assistant',
+  content: [
+    thinking(`Long private reasoning for turn ${n}. `.repeat(40)),
+    toolUse('Edit', { file_path: `src/module${n}.ts` }),
+  ],
+});
+
+const userTurn = (n: number): Message => ({
+  role: 'user',
+  content: [{ type: 'tool_result', tool_use_id: `tu_Edit`, content: `ok ${n}` }],
+});
+
+/** A conversation of `turns` assistant/user pairs. */
+const conversation = (turns: number): Message[] => {
+  const out: Message[] = [];
+  for (let n = 1; n <= turns; n += 1) {
+    out.push(assistantTurn(n), userTurn(n));
+  }
+  return out;
+};
+
+describe('the transform is a pure function of each message, so the prefix never moves', () => {
+  test('a message renders identically however long the conversation gets', () => {
+    // THE CACHE ARGUMENT, ASSERTED. Turn 3's copy of message 0 must be byte for
+    // byte turn 9's copy of message 0. If it is not, the provider's cached
+    // prefix stops matching and every later turn pays a full write for content
+    // it already had.
+    const short = substituteHistory(conversation(3)).messages;
+    const long = substituteHistory(conversation(9)).messages;
+
+    for (let i = 0; i < short.length; i += 1) {
+      expect(JSON.stringify(long[i])).toBe(JSON.stringify(short[i]));
+    }
+  });
+
+  test('the newest assistant turn is substituted like any other', () => {
+    // The specific defect being ruled out. Exempting the newest turn is what
+    // put a moving boundary in the prefix; an exemption would show up here as
+    // the last assistant message still carrying its thinking.
+    const out = substituteHistory(conversation(4)).messages;
+    const assistants = out.filter((m) => m.role === 'assistant');
+    const last = assistants[assistants.length - 1];
+
+    expect(Array.isArray(last.content)).toBe(true);
+    expect(
+      (last.content as { type?: string }[]).some((b) => b.type === 'thinking')
+    ).toBe(false);
+  });
+
+  test('a longer conversation extends the result, never rewrites it', () => {
+    // Stated as the growth property directly: the shorter result is a strict
+    // prefix of the longer one. This is what "append-only" means on the wire.
+    const short = substituteHistory(conversation(5)).messages;
+    const long = substituteHistory(conversation(8)).messages;
+
+    expect(long.length).toBeGreaterThan(short.length);
+    expect(JSON.stringify(long.slice(0, short.length))).toBe(
+      JSON.stringify(short)
+    );
+  });
+});
+
+describe('structure is preserved, which is what removal could not promise', () => {
+  test('message count is unchanged', () => {
+    const input = conversation(6);
+    expect(substituteHistory(input).messages).toHaveLength(input.length);
+  });
+
+  test('a message whose ONLY content was reasoning is kept, not emptied', () => {
+    // An empty content array is a 400. With no tool call there is no digest to
+    // write, so the safe answer is to leave the message exactly as it was --
+    // it costs what it always cost and cannot be wrong.
+    const input: Message[] = [
+      { role: 'assistant', content: [thinking('reasoned, did nothing')] },
+    ];
+    const out = substituteHistory(input).messages;
+
+    expect(out).toHaveLength(1);
+    expect(out[0].content).toHaveLength(1);
+    expect((out[0].content as { type?: string }[])[0].type).toBe('thinking');
+  });
+
+  test('user messages and their tool results are untouched', () => {
+    // Tool results are a separate concern with a separate risk profile. Mixing
+    // them in would make any regression unattributable to either.
+    const input = conversation(3);
+    const out = substituteHistory(input).messages;
+
+    for (let i = 0; i < input.length; i += 1) {
+      if (input[i].role !== 'user') continue;
+      expect(JSON.stringify(out[i])).toBe(JSON.stringify(input[i]));
+    }
+  });
+
+  test('the input messages are not mutated', () => {
+    const input = conversation(3);
+    const before = JSON.stringify(input);
+    substituteHistory(input);
+    expect(JSON.stringify(input)).toBe(before);
+  });
+});
+
+describe('the digest carries the state the reasoning was standing in for', () => {
+  test('it names the tool and its target, not merely that a turn happened', () => {
+    const out = substituteHistory([
+      {
+        role: 'assistant',
+        content: [
+          thinking('...'),
+          toolUse('Edit', { file_path: 'src/cache.ts' }),
+          toolUse('Bash', { command: 'npm test -- cache' }),
+        ],
+      },
+    ]).messages;
+
+    const text = (out[0].content as { text?: string }[])[0].text ?? '';
+    expect(text).toContain('Edit(src/cache.ts)');
+    expect(text).toContain('Bash(npm test -- cache)');
+  });
+
+  test('it is marked as elided rather than passed off as the model own words', () => {
+    // A digest presented as original text would be a false memory the model
+    // cannot distinguish from something it actually wrote.
+    const out = substituteHistory(conversation(1)).messages;
+    const text = (out[0].content as { text?: string }[])[0].text ?? '';
+    expect(text).toMatch(/elided/i);
+  });
+
+  test('two reasoning blocks in one message produce one digest, not two', () => {
+    const out = substituteHistory([
+      {
+        role: 'assistant',
+        content: [
+          thinking('first'),
+          thinking('second'),
+          toolUse('Read', { file_path: 'a.ts' }),
+        ],
+      },
+    ]).messages;
+
+    const blocks = out[0].content as { type?: string }[];
+    expect(blocks.filter((b) => b.type === 'text')).toHaveLength(1);
+    expect(blocks.filter((b) => b.type === 'thinking')).toHaveLength(0);
+  });
+
+  test('a long argument is truncated rather than reproduced', () => {
+    const out = substituteHistory([
+      {
+        role: 'assistant',
+        content: [
+          thinking('...'),
+          toolUse('Bash', { command: 'x'.repeat(500) }),
+        ],
+      },
+    ]).messages;
+
+    const text = (out[0].content as { text?: string }[])[0].text ?? '';
+    expect(text.length).toBeLessThan(120);
+    expect(text).toContain('...');
+  });
+});
+
+describe('the accounting says what it removed AND what it added', () => {
+  test('both sides are reported', () => {
+    const result = substituteHistory(conversation(4));
+    expect(result.removedChars).toBeGreaterThan(0);
+    expect(result.substituteChars).toBeGreaterThan(0);
+    expect(result.substituted).toBe(4);
+  });
+
+  test('the digest is far smaller than what it replaced', () => {
+    // Not an assertion about a target ratio -- an assertion that the transform
+    // is a reduction at all, which a digest naming many tools need not be.
+    const result = substituteHistory(conversation(4));
+    expect(result.substituteChars).toBeLessThan(result.removedChars / 10);
+  });
+
+  test('a conversation with no reasoning is left completely alone', () => {
+    const plain: Message[] = [
+      { role: 'assistant', content: [{ type: 'text', text: 'done' }] },
+    ];
+    const result = substituteHistory(plain);
+    expect(result.substituted).toBe(0);
+    expect(result.removedChars).toBe(0);
+    expect(JSON.stringify(result.messages)).toBe(JSON.stringify(plain));
+  });
+
+  test('undefined messages do not throw', () => {
+    expect(substituteHistory(undefined).messages).toEqual([]);
+  });
+});
+
+describe('the strategy composes with v1 rather than replacing it', () => {
+  test('it is registered', () => {
+    expect(STRATEGIES['v4-substitute']).toBe(v4Substitute);
+  });
+
+  test('it preserves message count on a request that actually has reasoning', () => {
+    // The shared "every strategy" test uses a fixture with no thinking blocks,
+    // so it passes vacuously for this arm. This is the same invariant asserted
+    // against input the arm actually transforms.
+    const req = { messages: conversation(5) };
+    const out = v4Substitute(req, {});
+    expect(out.request.messages).toHaveLength(10);
+  });
+
+  test('it leaves the caller original request untouched', () => {
+    const req = { messages: conversation(3) };
+    const before = JSON.stringify(req);
+    v4Substitute(req, {});
+    expect(JSON.stringify(req)).toBe(before);
+  });
+
+  test('the digest it added is counted in injectedChars', () => {
+    // A strategy that reports only what it removed can show a saving while
+    // having made the request larger.
+    const out = v4Substitute({ messages: conversation(4) }, {});
+    expect(out.injectedChars).toBeGreaterThan(0);
+  });
+
+  test('a request with no reasoning still gets v1 compression', () => {
+    // Substitution finding nothing must not short-circuit the arm into a no-op;
+    // the fresh tail and tool definitions are still V1's job.
+    const req = {
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+      ] as Message[],
+    };
+    const out = v4Substitute(req, {});
+    expect(Array.isArray(out.request.messages)).toBe(true);
+    expect(out.request.messages).toHaveLength(1);
+  });
+});

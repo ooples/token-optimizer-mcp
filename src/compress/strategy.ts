@@ -16,6 +16,7 @@
  */
 
 import { compressBlock } from './router.js';
+import { substituteHistory } from './history.js';
 import { dedupBlocks, type DedupBlock } from './dedup.js';
 import { queryFrom } from './relevance.js';
 import type { Tuning } from './options.js';
@@ -47,6 +48,7 @@ export type StrategyName =
   | 'v1-frontier'
   | 'v2-speculative'
   | 'v3-history'
+  | 'v4-substitute'
   | 'ccr';
 
 export interface StrategyOptions {
@@ -946,6 +948,51 @@ export function ccrStyle(
   };
 }
 
+/**
+ * V1, plus the history substitution -- the one region nothing else touches.
+ *
+ * COMPOSED RATHER THAN FORKED. V1 attacks the fresh tail and the tool
+ * definitions; this attacks the reasoning in history, which is 52% of it and
+ * which every other arm steps over because `messageIsSigned` forbids rewriting
+ * it. They are disjoint, so the substitution runs first and V1 then does
+ * exactly what it always did to what is left. Anything V1 learns about
+ * anchoring, knowledge injection and the saving floor is inherited rather than
+ * reimplemented, which is the difference between a fifth arm and a second
+ * codebase.
+ *
+ * ORDER IS NOT ARBITRARY. Substitution must happen BEFORE the anchor decision,
+ * because the anchor records what the cached prefix looks like and it has to
+ * record the prefix we actually send. Running it afterwards would anchor one
+ * body and transmit another -- the same class of defect as recording
+ * `anchored: true` for a rewrite the proxy then discarded.
+ *
+ * OFF BY DEFAULT AT THE CALLER. Registered here so it is measurable; the proxy
+ * gates it on `TOKEN_OPTIMIZER_PROXY_SUBSTITUTE`. Deferral shipped default-off
+ * and was therefore never measured for months, so the switch is deliberate and
+ * so is the instrumentation behind it.
+ */
+export function v4Substitute(
+  request: ProviderRequest,
+  options: StrategyOptions = {}
+): StrategyResult {
+  const substitution = substituteHistory(request.messages);
+  // Nothing to substitute is not a reason to skip compression: the request
+  // still has a fresh tail and tool definitions, and V1 is what handles those.
+  const next: ProviderRequest =
+    substitution.substituted > 0
+      ? { ...request, messages: substitution.messages }
+      : request;
+  const result = v1Frontier(next, options);
+  return {
+    ...result,
+    // The digest is content we ADDED, and it is counted as such. A strategy
+    // that reports only what it removed can show a saving while having made
+    // the request larger, which is the specific way a compression figure
+    // becomes a lie.
+    injectedChars: result.injectedChars + substitution.substituteChars,
+  };
+}
+
 /** Every arm, by name. */
 export const STRATEGIES: Record<
   StrategyName,
@@ -954,5 +1001,6 @@ export const STRATEGIES: Record<
   'v1-frontier': v1Frontier,
   'v2-speculative': v2Speculative,
   'v3-history': v3History,
+  'v4-substitute': v4Substitute,
   ccr: ccrStyle,
 };
