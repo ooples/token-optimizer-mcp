@@ -594,6 +594,17 @@ const HOP_BY_HOP = new Set([
  * measures turns and it has not been run against this. Folding an unproven
  * addition into a proven reduction would make the reduction untrue.
  */
+/**
+ * How stale the in-memory findings may get before a background re-read.
+ *
+ * The read is a full synchronous parse of the graph -- 40-58ms on a project
+ * graph, and it was measured at 1,118ms on a 75MB unrooted one -- so it is
+ * throttled rather than done per request. Sixty seconds is well inside the gap
+ * between sessions, which is when a fresher block can actually be used, and far
+ * longer than a burst of turns within one conversation, where it cannot.
+ */
+const FINDINGS_REFRESH_MS = 60_000;
+
 export function knowledgeEnabled(env: NodeJS.ProcessEnv): boolean {
   if (env.TOKEN_OPTIMIZER_MODE === 'off') return false;
   return /^(1|true|yes|on)$/i.test(env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE || '');
@@ -901,15 +912,53 @@ export async function startProxy(
   // prefix anyway -- so re-reading would spend I/O to produce a value the
   // cache rules immediately discard. New findings reach the next session,
   // which is when they are free.
-  const loaded = knowledgeEnabled(process.env)
-    ? await loadFindingsFrom(options.projectRoot || process.cwd())
+  const knowledgeOn = knowledgeEnabled(process.env);
+  const graphRoot = options.projectRoot || process.cwd();
+  const loaded = knowledgeOn
+    ? await loadFindingsFrom(graphRoot)
     : { findings: [], sharedGraph: false };
-  const findings = loaded.findings;
+  // MUTABLE, AND REFRESHED IN THE BACKGROUND. Read once per process was a real
+  // defect: a finding written today did not reach tomorrow's session until the
+  // proxy restarted, and this project writes findings continuously.
+  //
+  // NOT refreshed synchronously per request, for two separate reasons. The
+  // request path is synchronous and this read is not, and more importantly the
+  // block may only CHANGE on a turn where the cached prefix is already lost --
+  // `first-turn` and `client-invalidated`. On `already-anchored` the provider
+  // holds our prefix and reproducing it byte for byte is the cache hit, so a
+  // fresher block there would buy nothing and cost everything.
+  //
+  // So the refresh is decoupled: it runs after a response, throttled, and the
+  // newer findings are picked up by the next conversation that starts. Within
+  // one conversation the block still cannot change, which is not a limitation
+  // of this code but of what a cached prefix is.
+  let findings = loaded.findings;
+  let sharedGraphFlag = loaded.sharedGraph;
+  let lastFindingsRead = Date.now();
+  let refreshing = false;
+  const refreshFindings = (): void => {
+    if (!knowledgeOn || refreshing) return;
+    if (Date.now() - lastFindingsRead < FINDINGS_REFRESH_MS) return;
+    refreshing = true;
+    void loadFindingsFrom(graphRoot)
+      .then((next) => {
+        findings = next.findings;
+        sharedGraphFlag = next.sharedGraph;
+        lastFindingsRead = Date.now();
+      })
+      .catch(() => {
+        // A graph that cannot be re-read leaves the previous findings in place,
+        // which is strictly better than serving none.
+        lastFindingsRead = Date.now();
+      })
+      .finally(() => {
+        refreshing = false;
+      });
+  };
   // CARRIED WITH THE FINDINGS, not recomputed here. A shared graph -- the
   // unrooted fallback, or one mounted across several repositories -- holds
   // `project` claims about trees other than this one, and only the loader knows
   // which graph it opened.
-  const sharedGraph = loaded.sharedGraph;
 
   const guessing = upstreamIsDefault(options);
   const limit = bodyLimitFor(options);
@@ -970,8 +1019,9 @@ export async function startProxy(
         anchors,
         findings,
         tuning,
-        sharedGraph
+        sharedGraphFlag
       );
+      refreshFindings();
       options.onSummary?.({ path: req.url || '/', ...summary });
       // SPREAD, NOT RE-LISTED. This was seventeen fields copied across by hand,
       // and the ledger is only as good as that list is complete: injectedChars
