@@ -9,11 +9,25 @@
  * sitting in the provider's cache at 0.1x and removing it forces the rest to be
  * rewritten at 1.25x.
  *
- * That is exactly what happened. The thinking-drop probe cut turns hard -- 0.31,
- * 0.67, 0.75, 0.94 against control at score 1.0 -- and still lost on money on
- * three of four tasks. Per-request size said it was winning. Per-session cost
- * said it was not, and only the campaign could see the difference. This replays
- * the same arithmetic offline, for free.
+ * That is why the thinking-drop probe was hard to judge: it cut turns hard --
+ * 0.31, 0.67, 0.75, 0.94 against control at score 1.0 -- while per-request size
+ * said it was winning and the invoice was ambiguous. This replays the same
+ * arithmetic offline, for free.
+ *
+ * WHAT IT AGREED WITH, ONCE ASKED AT THE RIGHT LENGTH. The replay and the live
+ * campaign appeared to contradict each other -- 0.659 here against 0.885 there
+ * -- and the contradiction was an artefact of regime. Reasoning ACCUMULATES, so
+ * the share of history it occupies grows with conversation length, and the two
+ * instruments were being run at lengths two orders of magnitude apart. Capped at
+ * the benchmark's own 8-26 turns, this file reports 0.886 at ten turns against
+ * the campaign's measured 0.885 effective input. The curve is monotone: 0.886 at
+ * 10 turns, 0.810 at 20, 0.757 at 40, 0.731 at 100, 0.700 at 721.
+ *
+ * Read the agreement as direction and magnitude, not as three decimal places --
+ * the modelling gaps listed below are larger than that. The conclusion that
+ * survives is structural: THIS TRANSFORM'S VALUE IS A FUNCTION OF CONVERSATION
+ * LENGTH, and a benchmark whose tasks end at 26 turns measures it in the regime
+ * where it is worth least.
  *
  * HOW THE CACHE IS PRICED. Anthropic's cache key is the literal prefix: a
  * request hits the cache for exactly as long as its leading bytes match what was
@@ -35,10 +49,13 @@
  *      needed shows up here as a win and on a benchmark as a score regression.
  *      This answers "can it pay", not "does it still work".
  *   2. BEHAVIOUR. The replay holds the conversation FIXED and varies only how
- *      it is transmitted. Live, a different context produces different turns,
- *      different tool calls and a different session length. So a win here is a
- *      claim about transmission alone, and it does not predict a campaign --
- *      which is exactly where this disagrees with the one campaign we have.
+ *      it is transmitted. Live, a different context produces different turns and
+ *      a different session length -- the drop arm finished the same tasks in 8
+ *      turns where control took 26. So a win here is a claim about transmission
+ *      alone. What the run database settles is that this is not where the money
+ *      went: output tokens FELL (0.827) and tool calls per turn were unchanged
+ *      (0.88-0.96 against control's 0.93-0.96), so the arm was neither thinking
+ *      harder nor redoing work.
  *   3. CACHE BREAKPOINTS. A session log does not record `cache_control`, so the
  *      reconstructed requests carry none. Anything whose behaviour depends on
  *      where the client put its breakpoint -- the anchor machinery most of all
@@ -288,6 +305,17 @@ const ANCHORED = {
   ),
 };
 
+// TURNS=n caps each session at its first n turns.
+//
+// NOT A CONVENIENCE. The live benchmark's tasks run 8 to 26 turns while a real
+// development session runs hundreds, and reasoning ACCUMULATES: the share of
+// history it occupies grows with conversation length. A transform measured on a
+// 2,319-turn session is therefore being measured in a regime the benchmark
+// never enters, and comparing the two without saying so compares two different
+// questions. This makes the regime a dial so the comparison can be made at the
+// benchmark's own length.
+const TURN_CAP = Number(process.env.TURNS) > 0 ? Number(process.env.TURNS) : 0;
+
 const paths = process.argv.slice(2);
 if (!paths.length) {
   console.error('usage: node bench/compression/session-replay.mjs <transcript.jsonl> [...]');
@@ -298,7 +326,8 @@ const totals = new Map();
 
 for (const path of paths) {
   const messages = messagesFrom(path);
-  const cuts = turnBoundaries(messages);
+  const allCuts = turnBoundaries(messages);
+  const cuts = TURN_CAP ? allCuts.slice(0, TURN_CAP) : allCuts;
   if (cuts.length < 2) {
     console.log(`\n${path}\n  skipped: fewer than two turns to price`);
     continue;
