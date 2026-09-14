@@ -180,9 +180,21 @@ function priceSession(messages, cuts, transform) {
     return entry;
   };
 
+  // The fixed prefix is charged exactly as the provider charges it: written on
+  // the first turn, re-read on every turn after. It is identical in every arm,
+  // so it cancels in a difference and dilutes in a ratio -- which is precisely
+  // why it has to be present for the ratio to mean anything.
+  let firstTurn = true;
+
   for (const cut of cuts) {
     const sent = transform(messages.slice(0, cut), anchors);
     const described = sent.map(describe);
+
+    if (FIXED_PREFIX_TOKENS > 0) {
+      if (firstTurn) write += FIXED_PREFIX_TOKENS;
+      else read += FIXED_PREFIX_TOKENS;
+      firstTurn = false;
+    }
 
     // The longest leading run that is byte-identical to what the provider
     // already has. The first mismatch ends the cached prefix -- everything
@@ -320,6 +332,31 @@ const ANCHORED = {
 // questions. This makes the regime a dial so the comparison can be made at the
 // benchmark's own length.
 const TURN_CAP = Number(process.env.TURNS) > 0 ? Number(process.env.TURNS) : 0;
+
+/**
+ * The system prompt and tool definitions, which sit in front of every message.
+ *
+ * WITHOUT THIS THE DENOMINATOR IS WRONG AND FLATTERS US. A transcript records
+ * only `messages`, so a replay over one prices history against history -- while
+ * the real bill also carries a system prompt and a full tool schema that this
+ * transform never touches. Including an unchanged region can only move every
+ * ratio toward 1.0, so omitting it overstates the saving by however large that
+ * region is.
+ *
+ * MEASURED, NOT ASSUMED. On a first turn the conversation is a single short
+ * prompt, so a first-turn request is essentially system + tools. Across the 20
+ * first-turn requests in the deferral campaign's ledger the median was 115,476
+ * bytes -- about 28,869 tokens -- and that is the default here. It is a fixed
+ * cost: written once, re-read at 0.1x on every later turn, identical in every
+ * arm.
+ *
+ * FIXED_PREFIX_TOKENS=0 turns it off to recover the messages-only view, which
+ * is the right number when the question is about the history region alone.
+ */
+const FIXED_PREFIX_TOKENS =
+  process.env.FIXED_PREFIX_TOKENS !== undefined
+    ? Number(process.env.FIXED_PREFIX_TOKENS)
+    : 28869;
 
 const paths = process.argv.slice(2);
 if (!paths.length) {

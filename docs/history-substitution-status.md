@@ -9,11 +9,12 @@ history itself. History is ~65% of a live request and the only part that grows
 every turn.
 
 **Status in one line.** The transform is built, deployable behind a flag, and
-measured offline at **0.826 of control at 10 turns and 0.772 at 20, cheaper on
-4 of 4 independent sessions** — beating both the shipping compressor (0.997) and
-plain thinking removal (0.774), and these are lower bounds. The one thing still
-unmeasured is whether it costs the model anything, and no offline instrument can
-answer that.
+measured offline on the WHOLE request at **0.953 of control at 10 turns and
+0.915 at 20, cheaper on 4 of 4 independent sessions** — beating the shipping
+compressor (0.999) and plain thinking removal (0.916), conservative because
+deferral is not modelled, and a lower bound because transcripts store no
+reasoning text. The one thing still unmeasured is whether it costs the model
+anything, and no offline instrument can answer that.
 
 ---
 
@@ -78,12 +79,28 @@ model: per turn, the longest byte-identical leading run charged at 0.1x,
 everything after at 1.25x.
 
 **Four independent real sessions, at THOL's own conversation lengths.**
-Effective input vs control:
+Two denominators, because only one of them is the bill.
 
-| turns | df54309f | 93b51cc7 | 61c6baac | 3bf28153 | pooled | cheaper on |
-| --- | --- | --- | --- | --- | --- | --- |
-| 10 | — | — | — | — | **0.826** | **4 of 4** |
-| 20 | 0.631 | 0.891 | 0.849 | 0.802 | **0.772** | **4 of 4** |
+| turns | history region only | **whole request** | cheaper on |
+| --- | --- | --- | --- |
+| 10 | 0.826 | **0.953** | **4 of 4** |
+| 20 | 0.772 | **0.915** | **4 of 4** |
+
+The whole-request figure is the one to quote. A transcript records only
+`messages`, so a replay over one prices history against history — while the real
+bill also carries a system prompt and a full tool schema this transform never
+touches. That region is measured, not assumed: on a first turn the conversation
+is a single short prompt, so a first-turn request is essentially system + tools,
+and across the ledger's 20 first-turn requests the median was 115,476 bytes
+(~28,869 tokens). It is written once and re-read at 0.1x thereafter, identically
+in every arm.
+
+Per session at 20 turns, history region only: 0.631, 0.891, 0.849, 0.802.
+
+**The whole-request figure is conservative in a known direction.** It does not
+model deferral, which is on by default and shrinks the tool schema for our arm
+and not for control. The deployed number therefore sits somewhere between the
+two columns, nearer the right-hand one.
 
 Against the other arms at 20 turns: `drop-thinking-all` 0.774, `v1-frontier`
 0.997, and `drop-thinking-keep-newest` **1.141 — a loss**, which is the churn
@@ -210,8 +227,12 @@ first-turn requests (+369 bytes of flags) while deferral reported saving 36,753
 chars. `beforeBytes`/`afterBytes` therefore understates deferral to zero, and
 any figure derived from them is wrong about it.
 
-**Conversations may be re-classified as new.** 20 `first-turn` decisions across
-a 16-run campaign, including 4 consecutive `first-turn` pairs — a conversation
-counted as new on its second request, which forces a second full-prefix write at
-precisely the moment it is most expensive. Not yet diagnosed; the anchor key is
-the place to look.
+**Conversations re-classified as new — investigated, NOT a defect.** The ledger
+showed 20 `first-turn` decisions in a 16-run campaign with 4 consecutive pairs,
+which looked like a conversation being counted as new on its second request.
+Replaying two real conversations turn by turn through `anchorDecision` gives
+exactly **one** `first-turn` each, followed only by `extended` and
+`already-anchored` — continuation is recognised correctly. The ledger is
+append-only across runs and carries no run identifier, so an adjacent pair is
+indistinguishable from the last request of one run followed by the first of the
+next, which is what it almost certainly was. Closed.
