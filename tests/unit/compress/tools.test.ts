@@ -7,6 +7,7 @@ import {
   ADVANCED_TOOL_USE_BETA,
 } from '../../../src/compress/tools.js';
 import type { ProviderRequest } from '../../../src/compress/frontier.js';
+import { taskIn, questionIn } from '../../../src/compress/strategy.js';
 
 /**
  * Tool deferral, and the cases where it must decline.
@@ -260,5 +261,89 @@ describe('the beta header', () => {
   it('accepts the array form a header can arrive in', () => {
     const out = withAdvancedToolUse(['a-beta', 'b-beta']);
     expect(out).toBe(`a-beta,b-beta,${ADVANCED_TOOL_USE_BETA}`);
+  });
+});
+
+describe('the deferred tool set must not move between turns', () => {
+  // Tools have to clear SMALL_TOOL_CHARS (1500) or they are kept as cheap and
+  // nothing defers at all. The first version of this check used ~600-char tools
+  // and reported BOTH steerings stable, because deferred was 0 on every turn --
+  // a pass that measured nothing.
+  const tools = Array.from({ length: 24 }, (_, i) => ({
+    name: `tool_${i}`,
+    description:
+      `Performs operation ${i}. ` +
+      [
+        'search files',
+        'edit code',
+        'run tests',
+        'query database',
+        'render pdf',
+        'fetch url',
+        'analyse logs',
+        'format currency',
+      ][i % 8].repeat(200),
+    input_schema: { type: 'object', properties: { arg: { type: 'string' } } },
+  }));
+
+  const turn = (role: string, text: string) => ({
+    role,
+    content: [{ type: 'text', text }],
+  });
+  const session = (latest: string) =>
+    ({
+      system: 'You are a coding agent.',
+      tools,
+      messages: [
+        turn('user', 'Build a sales report as a PDF from sales.csv.'),
+        turn('assistant', 'Reading the file.'),
+        turn('user', latest),
+      ],
+    }) as unknown as ProviderRequest;
+
+  const LATEST = [
+    'What are the rate limits?',
+    'Now format the totals as currency.',
+    'Run the tests again.',
+    'Query the database for last month.',
+    'Fetch the spec from the url.',
+  ];
+
+  const setsFor = (steer: (r: ProviderRequest) => string) => {
+    const keys = new Set<string>();
+    let deferred = 0;
+    for (const latest of LATEST) {
+      const request = session(latest);
+      const out = deferTools(request, { query: steer(request) });
+      deferred = out.deferredCount;
+      const names = ((out.request as { tools?: unknown[] }).tools ?? [])
+        .filter(
+          (t) => (t as { defer_loading?: boolean })?.defer_loading === true
+        )
+        .map((t) => (t as { name: string }).name)
+        .sort();
+      keys.add(names.join(','));
+    }
+    return { distinct: keys.size, deferred };
+  };
+
+  it('keeps one set across turns when steered by the task', () => {
+    const fixed = setsFor(taskIn);
+
+    // Asserted so the vacuous case fails: a run that defers nothing would
+    // trivially report one set.
+    expect(fixed.deferred).toBeGreaterThan(10);
+    expect(fixed.distinct).toBe(1);
+  });
+
+  it('churns a new set every turn when steered by the live question', () => {
+    // The defect this pins, measured live before the fix: deferredTools held at
+    // 14 while deferredToolChars took 11 distinct values over 41 requests. The
+    // tools array is at the front of the prefix, so each new set invalidated
+    // every cached token behind it -- cache creation 2,188 -> 7,048 per request.
+    const old = setsFor(questionIn);
+
+    expect(old.deferred).toBeGreaterThan(10);
+    expect(old.distinct).toBe(LATEST.length);
   });
 });
