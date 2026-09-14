@@ -507,6 +507,22 @@ export function compressBody(
   // per-turn cost had roughly quadrupled. Dropping every block instead makes
   // the transform a pure function of the history, so the prefix one turn
   // produces is the prefix the next reproduces.
+  //
+  // THE VERDICT, AND IT IS NEGATIVE. Stabilising the transform worked -- against
+  // control on the four longest tasks, `all` beat `keep newest` on three of four
+  // (1.01 vs 1.48, 0.71 vs 1.10, 1.32 vs 1.34; cascade went the other way, 0.72
+  // vs 0.62). But DEFERRAL ALONE beats both on three of four (0.93, 0.93, 0.54,
+  // 0.98), so removing thinking costs more than it saves even once the prefix is
+  // stable. Turns fall hard and consistently -- 0.31, 0.67, 0.75, 0.94 against
+  // control, at score 1.0 everywhere -- and that does not convert into money.
+  //
+  // So this stays OFF and stays a probe. It is kept rather than deleted because
+  // it answered the question the plan was gated on (the API does accept the
+  // removal) and because the turn reduction is real and unexplained, which is
+  // worth understanding before anything else is built on top.
+  //
+  // n=1 per task on four tasks. Enough to stop, not enough to have proven a
+  // mechanism.
   const dropMode = (
     process.env.TOKEN_OPTIMIZER_PROXY_DROP_THINKING || ''
   ).toLowerCase();
