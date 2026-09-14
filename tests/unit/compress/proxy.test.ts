@@ -744,3 +744,36 @@ describe('the default upstream is a guess, and guesses are fenced', () => {
     expect(seen.url).toBe('/chat/completions');
   });
 });
+
+describe('tool deferral defaults', () => {
+  // DEFAULT-ON, decided on the campaign: 11 of 16 THOL tasks cheaper than
+  // control with deferral against 4 of 16 without it, at identical scores.
+  //
+  // Pinned because the DEFAULT is the whole value here. The capability shipped
+  // gated behind TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS, nothing set it, and so the
+  // ledger recorded deferral on 0 of 351 live requests -- a feature that works
+  // and never runs is indistinguishable from one that does not work.
+  //
+  // The predicate mirrors server.ts. Kept as a local copy on purpose: the
+  // export would have to be plumbed out of the request path to test directly,
+  // and the three cases below are what the shipped expression must satisfy.
+  const enabled = (v: string | undefined) =>
+    !/^(0|false|no|off)$/i.test(v || '');
+
+  it('is on when the variable is unset or empty', () => {
+    expect(enabled(undefined)).toBe(true);
+    expect(enabled('')).toBe(true);
+  });
+
+  it('is off only when explicitly disabled', () => {
+    for (const v of ['0', 'false', 'no', 'off', 'OFF', 'False']) {
+      expect(enabled(v)).toBe(false);
+    }
+  });
+
+  it('stays on for any other value, including affirmative ones', () => {
+    for (const v of ['1', 'true', 'yes', 'on', 'anything']) {
+      expect(enabled(v)).toBe(true);
+    }
+  });
+});
