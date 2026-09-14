@@ -147,8 +147,7 @@ to control (mean per-task cost 0.94; it loses to *deferral*).
    the gate.
 4. **The knowledge budget sweep** — instrument ready, needs a seeded graph and
    real spend.
-5. **The five losing tasks** — still unexplained, and out of scope for this
-   feature by its own arithmetic.
+5. **The five losing tasks** — **answered offline**, see below.
 
 ---
 
@@ -167,3 +166,52 @@ been tested, and it is recorded here so the next person to see a one-test
 discrepancy does not start from zero.
 
 Do not treat a green run as proof this is gone.
+
+---
+
+## The five losing tasks — answered
+
+Settled from the campaign's own database and ledger, with no new spend.
+
+**They are the short tasks.** Control turns for the five losers are
+[6, 8, 8, 10, 11], median 8; for the ten winners [10, 11, 13, 15, 17, 19, 19,
+19, 24, 27], median 18. Rank correlation with the cost ratio (n=15,
+`code-comprehension-django` excluded — its control ran only 2 turns, so every
+ratio against it is unstable):
+
+| predictor | Spearman |
+| --- | --- |
+| cache-write ratio | **+0.868** |
+| task length in turns | **−0.668** |
+| turn ratio | +0.546 |
+
+**The mechanism is a large upfront cache write that short tasks cannot
+amortise.** Excess cache writes against control, by task length:
+
+| control turns | ≤8 | 10–11 | ≥13 |
+| --- | --- | --- | --- |
+| excess writes | **+9,352 to +13,953** | +1,210 to +3,101 | −14,029 to +1,693 |
+
+The ledger locates it: `first-turn` requests carry a 45.3% write share against
+3.8% for `left-alone`, and account for roughly 65% of every cache write in the
+campaign. Over 13+ turns that is repaid by 0.1x reads. Over 6 it is not.
+
+**So this is the same fact as the substitution result.** The proxy's entire
+economics are length-dependent — it buys cheap reads later by paying an
+expensive write now. The plan's hypothesis F was right: on a short conversation
+the proxy should do LESS, not more.
+
+### Two leads this turned up
+
+**Byte accounting cannot see deferral.** `deferTools` adds `defer_loading: true`
+rather than removing definitions — correct for the Anthropic beta, where the
+server declines to place them in context — so the request GREW on 20 of 20
+first-turn requests (+369 bytes of flags) while deferral reported saving 36,753
+chars. `beforeBytes`/`afterBytes` therefore understates deferral to zero, and
+any figure derived from them is wrong about it.
+
+**Conversations may be re-classified as new.** 20 `first-turn` decisions across
+a 16-run campaign, including 4 consecutive `first-turn` pairs — a conversation
+counted as new on its second request, which forces a second full-prefix write at
+precisely the moment it is most expensive. Not yet diagnosed; the anchor key is
+the place to look.
