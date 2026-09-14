@@ -426,14 +426,29 @@ export function compressBody(
   if (!Array.isArray(parsed.messages)) return unchanged('no messages array');
 
   // TOOL DEFERRAL IS ITS OWN CAPABILITY, and deliberately not folded into the
-  // compression path. They address different halves of the request -- measured
-  // live, tool definitions were 47.6% of a 179,564 byte request and the
-  // conversation about 2% -- and keeping them separate is what lets either be
-  // measured without the other's effect being attributed to it.
+  // compression path. They address different halves of the request and keeping
+  // them separate is what lets either be measured without the other's effect
+  // being attributed to it.
+  //
+  // MEASURED ACROSS 116 LIVE REQUESTS, tool definitions are 28.7% of a request
+  // (p10 25.3%, median 29.2%, p90 31.6%). An earlier note here said 47.6%; that
+  // came from a single 179,564-byte request and was not representative.
+  //
+  // Compression reaches the other half and reaches it well -- it removes 91.7%
+  // of the FRESH region, which is the same figure it scores on fixtures. But
+  // the fresh region is only 3.7-8.0% of a live request, the rest being cached
+  // prefix billed at 0.1x, so 91.7% of it is 3.4% of the request. Deferral is
+  // what reaches the 28.7%, and it reaches it in the prefix, where every
+  // subsequent turn re-reads what was removed.
+  //
+  // ON BY DEFAULT, decided on the campaign: with deferral the proxy is cheaper
+  // than control on 11 of 16 THOL tasks against 4 of 16 without it, at
+  // identical scores (1.000 on every task) and a median 33% turn reduction.
+  // Set TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS=0 to turn it off.
   let deferred = 0;
   let deferredChars = 0;
   if (
-    /^(1|true|yes|on)$/i.test(
+    !/^(0|false|no|off)$/i.test(
       process.env.TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS || ''
     )
   ) {
