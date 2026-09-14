@@ -9,9 +9,11 @@ history itself. History is ~65% of a live request and the only part that grows
 every turn.
 
 **Status in one line.** The transform is built, deployable behind a flag, and
-measured offline at 0.90–0.73 of control depending on conversation length. The
-one thing still unmeasured is whether it costs the model anything — and no
-offline instrument can answer that.
+measured offline at **0.826 of control at 10 turns and 0.772 at 20, cheaper on
+4 of 4 independent sessions** — beating both the shipping compressor (0.997) and
+plain thinking removal (0.774), and these are lower bounds. The one thing still
+unmeasured is whether it costs the model anything, and no offline instrument can
+answer that.
 
 ---
 
@@ -26,7 +28,7 @@ offline instrument can answer that.
 | −1.5 | Stop the harvest firing on a session's emptiest turn | **done** | `6b035a7b` |
 | −1.6 | Stop staleness discarding transferable lessons | **done** | `4bac541f` |
 | 0 | Does the API accept removing signed thinking? | **answered: yes** | `d7288056` |
-| 1a | Tool results compressed in history | **done, marginal** | adds 0.6–0.8pp; see below |
+| 1a | Tool results compressed in history | **done, marginal** | adds 0.6–0.8pp at 40–200 turns |
 | 1b | A removal primitive | **superseded** | substitution in place removes the need — `src/compress/history.ts` |
 | 1c | Drop thinking, keep the model's own text | **measured, negative, kept off** | `c7a5b7c0` |
 | 2 | Separate project knowledge from session state | **done** | the digest *is* the session distillation |
@@ -40,9 +42,12 @@ offline instrument can answer that.
 
 `src/compress/history.ts`. Two regions, one rule.
 
-- **Reasoning** (52% of history) — each message's `thinking` blocks are replaced,
-  in place, by a digest built from that same message's own `tool_use` calls:
-  `[earlier reasoning elided; this turn called Edit(src/cache.ts)]`.
+- **Reasoning** (52% of history) — each message's `thinking` blocks are removed
+  in place. Nothing is written back where the message still shows what it did:
+  the `tool_use` blocks naming the tool and target are kept, and so is the
+  model's own `text`. A `[reasoning elided]` marker is written **only** when
+  removal would leave an empty message, which never occurred in 412 real
+  messages but is a 400 if it does.
 - **Tool results** (36% of history) — compressed in place by a compressor the
   caller vouches is pure.
 
@@ -69,26 +74,44 @@ just small.
 ## What it costs, measured
 
 `bench/compression/session-replay.mjs` — prices a whole session with the cache
-model: per turn, the longest byte-identical leading run charged at 0.1×,
-everything after at 1.25×.
+model: per turn, the longest byte-identical leading run charged at 0.1x,
+everything after at 1.25x.
 
-Effective input vs control, one real session capped at each length:
+**Four independent real sessions, at THOL's own conversation lengths.**
+Effective input vs control:
 
-| turns | 10 | 20 | 40 | 100 | 200 | 721 |
+| turns | df54309f | 93b51cc7 | 61c6baac | 3bf28153 | pooled | cheaper on |
 | --- | --- | --- | --- | --- | --- | --- |
-| reasoning only | 0.901 | — | 0.776 | — | 0.735 | 0.719 |
-| + tool results | 0.901 | 0.810* | 0.768 | 0.731* | 0.729 | 0.714* |
-| v1-frontier (today) | 1.000 | 0.992 | 0.992 | — | 0.994 | 0.996 |
+| 10 | — | — | — | — | **0.826** | **4 of 4** |
+| 20 | 0.631 | 0.891 | 0.849 | 0.802 | **0.772** | **4 of 4** |
 
-\* measured before the two halves were separable; the combined figure.
+Against the other arms at 20 turns: `drop-thinking-all` 0.774, `v1-frontier`
+0.997, and `drop-thinking-keep-newest` **1.141 — a loss**, which is the churn
+mechanism showing up at benchmark length too.
+
+Longer, on one session: 0.749 at 40 turns, 0.710 at 200, against
+`drop-thinking-all`'s 0.757 and 0.716. **Substitution beats plain removal while
+preserving the message structure removal destroys.**
 
 **The value scales with conversation length**, because reasoning accumulates.
 This is the single most important fact about the feature.
 
-Also visible: **v1-frontier is nearly inert on real sessions** (0.992–1.000).
+Also visible: **v1-frontier is nearly inert on real sessions** (0.997–1.000).
 The compression shipping today barely touches this traffic.
 
----
+### These are lower bounds
+
+Session transcripts store `thinking: ""` — Claude Code keeps only the ~480-byte
+signature and discards the reasoning text. So a replay over transcripts prices
+the removal of **signatures**, not of reasoning. Live requests carry the text as
+well, and the plan's own measurement put reasoning at 52% of history. Every
+figure above therefore understates production by an unknown but positive margin.
+
+### What these numbers still are not
+
+Transmission cost, on one axis, with behaviour held fixed. They price only
+`messages` — not tool definitions, not the system prompt — carry no
+`cache_control`, and say nothing about whether the model still does the job.
 
 ## Why no campaign
 

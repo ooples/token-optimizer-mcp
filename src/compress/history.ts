@@ -16,10 +16,11 @@
  *     only content, deletes the message. Message count moves, indices shift,
  *     and three existing tests that encode the 1:1 invariant have to be
  *     rewritten to allow it.
- *   - Substitution replaces the block IN PLACE with a compact digest of what
- *     that same message did. Message count is preserved, no index moves, and
- *     the 1:1 invariant is never broken -- so the constrained tests need no
- *     weakening, which is the outcome the plan wanted and could not get.
+ *   - Substitution edits the message IN PLACE, leaving whatever already showed
+ *     what the turn did and writing a marker only when nothing would remain.
+ *     Message count is preserved, no index moves, and the 1:1 invariant is
+ *     never broken -- so the constrained tests need no weakening, which is the
+ *     outcome the plan wanted and could not get.
  *
  * THE CACHE ARGUMENT, WHICH IS THE WHOLE DESIGN. A prefix rewrite costs a full
  * 1.25x write on everything kept, against 0.1x to re-read it untouched --
@@ -39,28 +40,30 @@
  * those would make the output of message `i` depend on something that changes,
  * and a prefix that changes is a cache miss on everything before it.
  *
- * WHAT GOES BACK IN, AND WHY IT IS FREE. A finding in the graph is PROJECT
- * knowledge -- durable, cross-session. History carries TASK STATE: which files
- * this session already edited, which command already failed. No finding records
- * that, so project findings cannot stand in for it. But the state is already in
- * the message: `tool_use` blocks name the tool and its target. Digesting those
- * costs no model call, is deterministic, and preserves the one thing the
- * removed reasoning was load-bearing for -- what this turn actually did.
+ * WHAT GOES BACK IN: ALMOST NOTHING, AND THAT IS THE POINT. A finding in the
+ * graph is PROJECT knowledge -- durable, cross-session. History carries TASK
+ * STATE: which files this session already edited, which command already failed.
+ * No finding records that, so project findings cannot stand in for it.
+ *
+ * But the state is ALREADY in the message and is already being kept. The
+ * `tool_use` blocks name the tool and its target; the `text` block is the
+ * model's own conclusion. An earlier version of this file synthesised a digest
+ * naming those same tool calls, which restated what the model could already
+ * see and cost real bytes to do it -- measured at 312 of 312 messages on one
+ * real session. So the substitute is written only where removal would leave an
+ * empty message, and everywhere else the answer is silence.
+ *
+ * A NOTE ON WHAT THE OFFLINE NUMBERS MEASURE. Session transcripts store
+ * `thinking: ""` and keep only the ~480-byte signature, so a replay over them
+ * prices the removal of SIGNATURES, not of reasoning text. Live requests carry
+ * the text as well. Every figure derived from a transcript replay is therefore
+ * a lower bound on what this saves in production.
  */
 
 import { type Block, type Message } from './frontier.js';
 
 /** Block types that carry model reasoning rather than content. */
 const REASONING = new Set(['thinking', 'redacted_thinking']);
-
-/**
- * How much of a tool's argument is worth keeping in the digest.
- *
- * Enough to identify WHICH file or command, not enough to reproduce it. A path
- * is the identifying part and paths are short; a Bash command's first clause
- * says what it was for. Past that the digest stops being a digest.
- */
-const HINT_CHARS = 60;
 
 export interface SubstitutionOptions {
   /**
@@ -96,67 +99,61 @@ export interface SubstitutionResult {
 }
 
 /**
- * The identifying part of a tool call, for the digest.
+ * The line that stands in for a message's removed reasoning -- when one is
+ * needed at all, which is rarer than it looks.
  *
- * Deliberately narrow and deliberately ordered: a file path answers "what did
- * this turn touch", which is the question the digest exists to answer, and the
- * common tools all spell it one of these three ways. Anything else falls back
- * to the first scalar argument, because a digest naming only the tool is a
- * digest that says a turn happened without saying what it did.
- */
-function hintFor(input: unknown): string {
-  if (!input || typeof input !== 'object') return '';
-  const record = input as Record<string, unknown>;
-  for (const key of ['file_path', 'path', 'command', 'pattern', 'query']) {
-    const value = record[key];
-    if (typeof value === 'string' && value.trim()) {
-      const flat = value.replace(/\s+/g, ' ').trim();
-      return flat.length > HINT_CHARS
-        ? `${flat.slice(0, HINT_CHARS)}...`
-        : flat;
-    }
-  }
-  return '';
-}
-
-/** One tool call, as the digest names it. */
-function describeCall(block: Block): string | null {
-  const name = typeof block.name === 'string' ? block.name : null;
-  if (!name) return null;
-  const hint = hintFor(block.input);
-  return hint ? `${name}(${hint})` : name;
-}
-
-/**
- * The line that stands in for a message's removed reasoning.
+ * THE FIRST VERSION OF THIS WAS EXACTLY BACKWARDS, and measurement said so. It
+ * built a digest naming the tools the message called, and wrote it whenever
+ * such calls existed -- but those `tool_use` blocks are KEPT, in the same
+ * message, already naming the same tool and the same target. The digest
+ * restated what the model could already see. Counted on two real sessions: 312
+ * of 312 and 99 of 100 messages carrying reasoning also carried `tool_use`, so
+ * the digest was pure added cost in essentially every case, while the branch
+ * that would have earned its bytes -- a reasoning-only message -- fired zero
+ * times in 412 messages.
  *
- * Returns null when there is nothing worth saying -- a message whose reasoning
- * led to no tool call and no text is a message whose reasoning left no trace,
- * and inventing a placeholder for it would spend bytes to say "something
- * happened here". The caller drops the blocks and writes nothing.
+ * That redundancy is why the substituting arm lost to plain removal at every
+ * length measured: 0.901 against 0.886 at ten turns, 0.768 against 0.757 at
+ * forty, 0.729 against 0.716 at two hundred. Made subtractive it wins instead,
+ * 0.749 and 0.710 at forty and two hundred, while keeping the message structure
+ * that removal destroys.
+ *
+ * So the rule is: say nothing when the message still shows what it did. A
+ * digest is written only when removing the reasoning would leave NOTHING
+ * behind, which is the one case where the turn would vanish from the record --
+ * and, being an empty content array, would also be a 400.
  *
  * Marked as elided rather than passed off as the model's own words. The model
  * reads its own history as a record of what it did; a digest presented as
- * original text would be a false memory, and one it cannot tell from the real
- * thing.
+ * original text would be a false memory it cannot tell from the real thing.
  */
 function digestFor(content: readonly Block[]): string | null {
-  const calls: string[] = [];
+  // Anything the model can still see makes a digest redundant. Both kinds are
+  // kept by the caller, so both are evidence already present in the message.
   for (const block of content) {
-    if (block?.type !== 'tool_use') continue;
-    const described = describeCall(block);
-    if (described) calls.push(described);
+    if (block?.type === 'tool_use' || block?.type === 'text') return null;
   }
-  if (!calls.length) return null;
-  return `[earlier reasoning elided; this turn called ${calls.join(', ')}]`;
+  return '[reasoning elided]';
 }
 
-/** Text length of a reasoning block, for the accounting. */
+/**
+ * What a reasoning block costs on the wire, for the accounting.
+ *
+ * THE WHOLE BLOCK, not its text. Counting `thinking` alone understated this
+ * badly and silently: a signed block carries a ~480-byte `signature` that is
+ * sent, billed, and removed along with everything else, and on a transcript
+ * where the text has been stripped to "" the signature IS the entire cost --
+ * so the old form reported exactly zero for blocks whose removal was the only
+ * thing producing a saving.
+ */
 function reasoningChars(block: Block): number {
-  const thinking = block.thinking;
-  if (typeof thinking === 'string') return thinking.length;
-  if (typeof block.data === 'string') return block.data.length;
-  return 0;
+  try {
+    return JSON.stringify(block).length;
+  } catch {
+    // A block that cannot be serialised cannot be costed; it also cannot have
+    // been sent, so zero is the honest answer rather than a guess.
+    return 0;
+  }
 }
 
 /**
