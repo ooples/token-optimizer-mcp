@@ -126,3 +126,21 @@ to control (mean per-task cost 0.94; it loses to *deferral*).
    real spend.
 5. **The five losing tasks** — still unexplained, and out of scope for this
    feature by its own arithmetic.
+
+---
+
+## Known flake, unidentified
+
+A single test in `tests/unit/compress` fails intermittently. Seen twice: the
+full suite reported 4,268 passed on one run and 4,269 on the next with the same
+total, and the compress subset reported 450 then 451. Nine isolated runs of that
+subset have all passed, so it is not reproducible on demand and the failing test
+has never been named in output.
+
+Both observed failures occurred immediately after `npm run build` or
+`prettier --write` had rewritten files, which suggests a test reading a
+partially-written `dist/`. That is a hypothesis and nothing more — it has not
+been tested, and it is recorded here so the next person to see a one-test
+discrepancy does not start from zero.
+
+Do not treat a green run as proof this is gone.
