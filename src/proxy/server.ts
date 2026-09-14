@@ -196,6 +196,8 @@ export interface ProxySummary {
   readonly elisions?: number;
   /** Section sizes, for locating where a request's bytes live. No content. */
   readonly deferredTools?: number;
+  /** Probe: thinking blocks removed from older assistant turns. */
+  readonly droppedThinking?: number;
   readonly deferredToolChars?: number;
   readonly systemChars?: number;
   readonly toolsChars?: number;
@@ -474,6 +476,60 @@ export function compressBody(
     }
   }
 
+  // A PROBE, NOT THE FEATURE. The substitution design in the plan turns on one
+  // untested question -- will the API accept history whose older assistant turns
+  // have had their `thinking` blocks removed? `frontier.ts` refuses to touch a
+  // signed block and cites HeadRoom's issue #3456, but that is their bug report,
+  // and removal is not rewriting: a signature covers block CONTENT, so deleting
+  // the block leaves nothing to mismatch.
+  //
+  // A direct probe against /v1/messages returned 429 on every variant including
+  // its control, so this asks the question down the path that demonstrably
+  // works instead: the real client, through this proxy, against the rig.
+  //
+  // Safe to do minimally because it was measured: across a 29-message
+  // conversation, `thinking` never shared a message with any other block type,
+  // so dropping those messages orphans no tool_use/tool_result pairing. The
+  // newest assistant turn keeps its thinking, since that is the one the
+  // provider may still require for continuity.
+  //
+  // Off unless asked for, and it stays a probe until the answer is in.
+  let droppedThinking = 0;
+  if (
+    /^(1|true|yes|on)$/i.test(
+      process.env.TOKEN_OPTIMIZER_PROXY_DROP_THINKING || ''
+    )
+  ) {
+    try {
+      const msgs = parsed.messages ?? [];
+      let lastAssistant = -1;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i]?.role === 'assistant') {
+          lastAssistant = i;
+          break;
+        }
+      }
+      const kept = msgs
+        .map((m, i) => {
+          if (m?.role !== 'assistant' || i === lastAssistant) return m;
+          const content = m.content;
+          if (!Array.isArray(content)) return m;
+          const next = content.filter((b) => {
+            const type = (b as { type?: string })?.type;
+            const drop = type === 'thinking' || type === 'redacted_thinking';
+            if (drop) droppedThinking += 1;
+            return !drop;
+          });
+          return next.length === content.length ? m : { ...m, content: next };
+        })
+        .filter((m) => !Array.isArray(m?.content) || m.content.length > 0);
+      parsed = { ...parsed, messages: kept };
+    } catch {
+      // Fails open, like every other rewrite here.
+      droppedThinking = 0;
+    }
+  }
+
   let result: StrategyResult;
   try {
     result = v1Frontier(parsed, {
@@ -555,6 +611,7 @@ export function compressBody(
       afterBytes: next.length,
       compressed: true,
       deferredTools: deferred,
+      droppedThinking,
       deferredToolChars: deferredChars,
       anchorReason: result.anchor?.reason,
       elisions: result.elisions.length,
