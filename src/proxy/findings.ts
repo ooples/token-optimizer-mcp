@@ -20,21 +20,13 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Finding } from '../compress/knowledge.js';
+import { sharedGraphFor } from './graph-scope.js';
 
 /** Where a project keeps its graph, matching `hooks-core/wiki.mjs#wikiDir`. */
 function graphDir(root: string): string {
   return join(root, '.token-optimizer', 'wiki');
 }
 
-/**
- * Loads active findings for one project.
- *
- * Read ONCE when the proxy starts rather than per request. The graph changes
- * during a session -- this session wrote five findings into it -- but a block
- * that changes mid-session cannot sit in a cached prefix anyway, so re-reading
- * per request would spend I/O to produce a value the cache rules then throw
- * away. New findings reach the next session, which is when they are free.
- */
 /**
  * Findings plus whether the graph they came from is shared across projects.
  *
@@ -52,6 +44,15 @@ export async function loadFindings(root: string): Promise<Finding[]> {
   return (await loadFindingsFrom(root)).findings;
 }
 
+/**
+ * Loads active findings for one project.
+ *
+ * Called at proxy startup and then again on a throttled background refresh --
+ * never on the request path, which is synchronous. A block that changes
+ * mid-conversation cannot sit in a cached prefix, so the refresh does not
+ * serve the conversation it runs during; it serves the next one, which is what
+ * makes a finding written today reach tomorrow without a restart.
+ */
 export async function loadFindingsFrom(root: string): Promise<LoadedFindings> {
   const dir = graphDir(root);
 
@@ -110,10 +111,7 @@ export async function loadFindingsFrom(root: string): Promise<LoadedFindings> {
 
     return {
       findings,
-      sharedGraph:
-        typeof wikiMod.isSharedDir === 'function'
-          ? wikiMod.isSharedDir(dir) === true
-          : false,
+      sharedGraph: sharedGraphFor(dir, wikiMod),
     };
   } catch {
     // A pruned runtime, an unreadable directory, a corrupt line. None of them

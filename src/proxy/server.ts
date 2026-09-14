@@ -993,11 +993,8 @@ export async function startProxy(
     },
     options.preset ?? presetFromEnv(process.env)
   );
-  // Read once at startup, not per request. The graph does change during a
-  // session, but a block that changes mid-session cannot live in a cached
-  // prefix anyway -- so re-reading would spend I/O to produce a value the
-  // cache rules immediately discard. New findings reach the next session,
-  // which is when they are free.
+  // Read at startup, then refreshed in the background -- see the block below,
+  // which owns the reasoning about why the refresh cannot be synchronous.
   const knowledgeOn = knowledgeEnabled(process.env);
   const graphRoot = options.projectRoot || process.cwd();
   const loaded = knowledgeOn

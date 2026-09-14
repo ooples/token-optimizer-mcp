@@ -350,7 +350,7 @@ trap stop_proxies EXIT
 
 start_proxies() {
   local spec started=0 logdir pid started_spec=""
-  # name|port|knowledge|project-root, one line per arm, deduped by port.
+  # name|port|knowledge|project-root|shared-graph, one line per arm, deduped by port.
   if ! spec="$(node -e "
     const fs = require('fs');
     const dir = '/home/bench/manifests';
@@ -370,12 +370,20 @@ start_proxies() {
       const suffix = '/.token-optimizer/wiki';
       const root = wiki.endsWith(suffix) ? wiki.slice(0, -suffix.length) : '';
       const knowledge = env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE ? '1' : '';
+      // CARRIED FROM THE MANIFEST BECAUSE THE PROXY IS NOT THE AGENT. An arm's
+      // settings.env configures the harness; this proxy is a separate process
+      // started here, so anything it needs has to be read out and passed on
+      // explicitly. Declaring the flag in the manifest and stopping there would
+      // have left it inert -- the arm would look configured and the scope
+      // filter would never fire, which is the exact silent-null shape this rig
+      // has produced before.
+      const shared = env.TOKEN_OPTIMIZER_GRAPH_SHARED ? '1' : '';
       // '|' as the separator, not a tab: this snippet is inside a
       // double-quoted shell string, and an escaped tab or newline here has
       // to survive both the shell and the file it was written into. One of
       // them already arrived as a real newline and made this a syntax
       // error. A character that needs no escape cannot.
-      if (!byPort.has(port)) byPort.set(port, [name, port, knowledge, root].join('|'));
+      if (!byPort.has(port)) byPort.set(port, [name, port, knowledge, root, shared].join('|'));
     }
     for (const row of byPort.values()) console.log(row);
   ")"; then
@@ -385,7 +393,7 @@ start_proxies() {
   [ -n "$spec" ] || return 0
 
   log "Starting the compression proxy for the arms that declare one"
-  while IFS='|' read -r name port knowledge root; do
+  while IFS='|' read -r name port knowledge root shared; do
     [ -n "$port" ] || continue
     # A knowledge arm whose graph directory cannot be created would inject
     # nothing and measure exactly the plain proxy arm, so this is fatal
@@ -405,7 +413,7 @@ start_proxies() {
     # at 1.25x. This writes the usage the provider reports beside what compression
     # did to the same request. It lands in $logdir, which is the results volume
     # when one is mounted, so it survives a --rm container.
-    TOKEN_OPTIMIZER_PROXY=1     TOKEN_OPTIMIZER_PROXY_KNOWLEDGE="$knowledge"       TOKEN_OPTIMIZER_PROXY_ACCOUNTING="$logdir/ledger-$port.jsonl"       TOKEN_OPTIMIZER_PROXY_NULL="${TOKEN_OPTIMIZER_PROXY_NULL:-}"       TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS="${TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS:-}"       TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS="${TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS:-}"       TOKEN_OPTIMIZER_PROXY_DROP_THINKING="${TOKEN_OPTIMIZER_PROXY_DROP_THINKING:-}"       node "$PKG/dist/proxy/cli.js" --port "$port"         ${root:+--project-root "$root"}         >>"$logdir/proxy-$port.log" 2>&1 &
+    TOKEN_OPTIMIZER_PROXY=1     TOKEN_OPTIMIZER_PROXY_KNOWLEDGE="$knowledge"       TOKEN_OPTIMIZER_PROXY_ACCOUNTING="$logdir/ledger-$port.jsonl"       TOKEN_OPTIMIZER_PROXY_NULL="${TOKEN_OPTIMIZER_PROXY_NULL:-}"       TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS="${TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS:-}"       TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS="${TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS:-}"       TOKEN_OPTIMIZER_PROXY_DROP_THINKING="${TOKEN_OPTIMIZER_PROXY_DROP_THINKING:-}"       TOKEN_OPTIMIZER_PROXY_KNOWLEDGE_CHARS="${TOKEN_OPTIMIZER_PROXY_KNOWLEDGE_CHARS:-}"       TOKEN_OPTIMIZER_GRAPH_SHARED="${shared:-${TOKEN_OPTIMIZER_GRAPH_SHARED:-}}"       node "$PKG/dist/proxy/cli.js" --port "$port"         ${root:+--project-root "$root"}         >>"$logdir/proxy-$port.log" 2>&1 &
     pid=$!
     PROXY_PIDS="$PROXY_PIDS $pid"
     # Remembered per port, because "something answers on this port" is NOT the
