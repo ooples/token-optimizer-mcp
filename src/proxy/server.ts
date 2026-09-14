@@ -494,16 +494,29 @@ export function compressBody(
   // provider may still require for continuity.
   //
   // Off unless asked for, and it stays a probe until the answer is in.
+  //
+  // TWO MODES, because exempting the newest turn cost more than it saved. `1`
+  // keeps that turn's thinking; `all` drops every one.
+  //
+  // MEASURED. With the newest turn exempt, the exemption BOUNDARY MOVES each
+  // turn -- the block kept at turn N is dropped at turn N+1 -- so the prefix
+  // changes at that point on every request and is re-written there. On the four
+  // longest THOL tasks turns fell hard (0.49, 0.67, 0.29, 0.82 against control)
+  // while cost rose on three of four (0.62, 1.48, 1.10, 1.34):
+  // code-debug-pipeline-py took 71% fewer turns and still cost 10% more, so
+  // per-turn cost had roughly quadrupled. Dropping every block instead makes
+  // the transform a pure function of the history, so the prefix one turn
+  // produces is the prefix the next reproduces.
+  const dropMode = (
+    process.env.TOKEN_OPTIMIZER_PROXY_DROP_THINKING || ''
+  ).toLowerCase();
+  const keepNewestThinking = dropMode !== 'all';
   let droppedThinking = 0;
-  if (
-    /^(1|true|yes|on)$/i.test(
-      process.env.TOKEN_OPTIMIZER_PROXY_DROP_THINKING || ''
-    )
-  ) {
+  if (/^(1|true|yes|on|all)$/.test(dropMode)) {
     try {
       const msgs = parsed.messages ?? [];
       let lastAssistant = -1;
-      for (let i = msgs.length - 1; i >= 0; i--) {
+      for (let i = msgs.length - 1; keepNewestThinking && i >= 0; i--) {
         if (msgs[i]?.role === 'assistant') {
           lastAssistant = i;
           break;

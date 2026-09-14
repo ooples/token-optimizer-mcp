@@ -224,7 +224,18 @@ export function knowledgeBlock(
     (f) =>
       f &&
       !f.retired &&
-      !f.stale &&
+      // STALENESS DISQUALIFIES A CLAIM ABOUT CODE, NOT A CLAIM THAT MERELY
+      // CITES IT. `stale` means the anchored file changed after the finding was
+      // written -- decisive for a project claim, which is ABOUT that tree, and
+      // weak evidence for a transferable one, where the anchor is an example.
+      //
+      // Measured on this repository: 98 of 419 findings are stale, and 8 of
+      // those are global -- "ANSI escape codes are ~22.5% of a coloured
+      // command's bytes but ~36% of its tokens" does not stop being true
+      // because the file it was measured in changed. Excluding them discarded
+      // 12% of the transferable knowledge for a signal that does not bear on
+      // whether they hold.
+      (!f.stale || TRANSFERABLE_SCOPES.has(f.scope ?? 'project')) &&
       f.confidenceLabel === 'verified' &&
       typeof f.claim === 'string' &&
       f.claim.trim().length > 0 &&

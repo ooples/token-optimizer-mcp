@@ -561,3 +561,55 @@ describe('scope decides what a shared graph may assert', () => {
     expect(block).toBeNull();
   });
 });
+
+describe('staleness disqualifies a claim about code, not one that cites it', () => {
+  // Measured on this repository: 98 of 419 findings are marked stale, 8 of them
+  // global. `stale` means an anchored file changed after the finding was
+  // written -- decisive for a claim ABOUT that tree, weak for a transferable
+  // one where the anchor is an example. Excluding the global ones discarded 12%
+  // of the transferable knowledge for a signal that does not bear on whether
+  // they still hold.
+  const stale = (claim: string, scope: string) => ({
+    claim,
+    confidenceLabel: 'verified',
+    confidence: 0.9,
+    scope,
+    stale: true,
+  });
+
+  it('still drops a stale project claim', () => {
+    const block = knowledgeBlock(
+      [stale('this repo compacts on a ratcheting baseline', 'project')],
+      'anything',
+      2000
+    );
+
+    expect(block).toBeNull();
+  });
+
+  it('keeps a stale global claim, whose truth does not depend on that file', () => {
+    const block = knowledgeBlock(
+      [stale('ANSI codes are ~22.5% of bytes but ~36% of tokens', 'global')],
+      'anything',
+      2000
+    );
+
+    expect(block).toContain('ANSI codes');
+  });
+
+  it('still drops a stale claim that is also retired or unverified', () => {
+    // Narrowing staleness must not become a bypass for the other gates, which
+    // is the obvious way this change could go wrong.
+    const retired = {
+      ...stale('retired global lesson', 'global'),
+      retired: true,
+    };
+    const unverified = {
+      ...stale('unverified global lesson', 'global'),
+      confidenceLabel: 'speculative',
+    };
+
+    expect(knowledgeBlock([retired], 'anything', 2000)).toBeNull();
+    expect(knowledgeBlock([unverified], 'anything', 2000)).toBeNull();
+  });
+});
