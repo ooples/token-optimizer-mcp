@@ -46,6 +46,14 @@
  *      anchored arms below are a smoke test that anchoring does not ADD churn,
  *      not evidence that it behaves identically in production.
  *
+ * COST OF RUNNING IT. Each turn re-transforms the whole conversation so far, so
+ * the work is quadratic in turns. Measured: a 2,319-turn session completes the
+ * pure arms in a few minutes, while the anchored arms -- which run the full V1
+ * compression per turn -- exceed ten. That is a property of the question, not a
+ * defect: pricing turn N genuinely requires knowing what turn N-1 sent. Give
+ * long sessions their own run, or compare the pure arms first and reach for the
+ * anchored ones only when something looks like churn.
+ *
  * Usage:
  *   node bench/compression/session-replay.mjs <transcript.jsonl> [more...]
  *
@@ -53,6 +61,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { STRATEGIES } from '../../dist/compress/strategy.js';
 import { anchorStore } from '../../dist/compress/anchor.js';
 import { substituteHistory } from '../../dist/compress/history.js';
@@ -129,29 +138,53 @@ function priceSession(messages, cuts, transform) {
   let write = 0;
   let sentChars = 0;
 
+  // MEASURED PER MESSAGE, KEPT AS A DIGEST. The naive form held every turn's
+  // full serialisation in order to compare it with the next turn's, which is
+  // O(turns x messages) live strings: on a 2,319-turn session of 4,639 messages
+  // that is ~10.7M multi-kilobyte strings and the run was killed by the host for
+  // memory before it finished. Only two facts about each message are ever
+  // needed -- its hash, to find where the prefix stops matching, and its token
+  // count -- so only those are carried forward.
+  //
+  // The WeakMap is the other half: a transform that returns the SAME object for
+  // an unchanged message (control does; a substituting arm does not) then
+  // serialises it once for the whole session instead of once per turn.
+  const memo = new WeakMap();
+  const describe = (message) => {
+    const hit = memo.get(message);
+    if (hit) return hit;
+    const json = JSON.stringify(message);
+    const entry = {
+      hash: createHash('sha1').update(json).digest('base64'),
+      tokens: tokens(json),
+      chars: json.length,
+    };
+    memo.set(message, entry);
+    return entry;
+  };
+
   for (const cut of cuts) {
     const sent = transform(messages.slice(0, cut), anchors);
-    const serial = sent.map((m) => JSON.stringify(m));
+    const described = sent.map(describe);
 
     // The longest leading run that is byte-identical to what the provider
     // already has. The first mismatch ends the cached prefix -- everything
     // after it is new content whether or not it was ever sent before.
     let shared = 0;
     while (
-      shared < serial.length &&
+      shared < described.length &&
       shared < previous.length &&
-      serial[shared] === previous[shared]
+      described[shared].hash === previous[shared]
     ) {
       shared += 1;
     }
 
-    for (let i = 0; i < serial.length; i += 1) {
-      const t = tokens(serial[i]);
-      if (i < shared) read += t;
-      else write += t;
-      sentChars += serial[i].length;
+    for (let i = 0; i < described.length; i += 1) {
+      if (i < shared) read += described[i].tokens;
+      else write += described[i].tokens;
+      sentChars += described[i].chars;
     }
-    previous = serial;
+    previous = described.map((d) => d.hash);
   }
 
   return {
