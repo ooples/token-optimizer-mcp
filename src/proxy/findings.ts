@@ -35,7 +35,24 @@ function graphDir(root: string): string {
  * per request would spend I/O to produce a value the cache rules then throw
  * away. New findings reach the next session, which is when they are free.
  */
+/**
+ * Findings plus whether the graph they came from is shared across projects.
+ *
+ * The flag travels WITH the findings because it qualifies them: on a shared
+ * graph a `project` claim is a fact about some tree, and nothing downstream can
+ * say which. Returning the two separately invites a caller to use one without
+ * the other, which is how `scope` came to be dropped here in the first place.
+ */
+export interface LoadedFindings {
+  readonly findings: Finding[];
+  readonly sharedGraph: boolean;
+}
+
 export async function loadFindings(root: string): Promise<Finding[]> {
+  return (await loadFindingsFrom(root)).findings;
+}
+
+export async function loadFindingsFrom(root: string): Promise<LoadedFindings> {
   const dir = graphDir(root);
 
   // NO EXISTENCE CHECKS, and not merely to satisfy `n/no-sync`. Every one of
@@ -62,7 +79,7 @@ export async function loadFindings(root: string): Promise<Finding[]> {
 
     const graph = wikiMod.load(dir);
     const active = curateMod.activeFindings(graph) as Record<string, unknown>[];
-    return active
+    const findings = active
       .filter((node) => typeof node.claim === 'string')
       .map((node) => ({
         claim: node.claim as string,
@@ -84,10 +101,23 @@ export async function loadFindings(root: string): Promise<Finding[]> {
             ? node.confidenceLabel
             : undefined,
         stale: node.stale === true,
+        // THE THIRD FIELD THAT DECIDES SAFETY IN A PREFIX, and it was missing.
+        // Without it `knowledgeBlock` cannot tell a claim that travels from one
+        // that is true only of the tree it came from, so a shared graph serves
+        // one project's specifics to another as if they were established fact.
+        scope: typeof node.scope === 'string' ? node.scope : undefined,
       }));
+
+    return {
+      findings,
+      sharedGraph:
+        typeof wikiMod.isSharedDir === 'function'
+          ? wikiMod.isSharedDir(dir) === true
+          : false,
+    };
   } catch {
     // A pruned runtime, an unreadable directory, a corrupt line. None of them
     // is a reason to stop compressing.
-    return [];
+    return { findings: [], sharedGraph: false };
   }
 }

@@ -55,7 +55,7 @@ import {
 } from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import type { Finding } from '../compress/knowledge.js';
-import { loadFindings } from './findings.js';
+import { loadFindingsFrom } from './findings.js';
 import {
   presetFromEnv,
   resolveTuning,
@@ -329,7 +329,9 @@ export function compressBody(
   spill: (content: string, hint: string) => string,
   anchors?: AnchorStore,
   findings?: readonly Finding[],
-  tuning?: Tuning
+  tuning?: Tuning,
+  /** True when `findings` came from a graph shared across projects. */
+  sharedGraph?: boolean
 ): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
   const before = body.length;
   const unchanged = (reason: string) => ({
@@ -474,7 +476,13 @@ export function compressBody(
 
   let result: StrategyResult;
   try {
-    result = v1Frontier(parsed, { spill, anchors, findings, tuning });
+    result = v1Frontier(parsed, {
+      spill,
+      anchors,
+      findings,
+      sharedGraph,
+      tuning,
+    });
   } catch {
     return unchanged('compression threw');
   }
@@ -893,9 +901,15 @@ export async function startProxy(
   // prefix anyway -- so re-reading would spend I/O to produce a value the
   // cache rules immediately discard. New findings reach the next session,
   // which is when they are free.
-  const findings = knowledgeEnabled(process.env)
-    ? await loadFindings(options.projectRoot || process.cwd())
-    : [];
+  const loaded = knowledgeEnabled(process.env)
+    ? await loadFindingsFrom(options.projectRoot || process.cwd())
+    : { findings: [], sharedGraph: false };
+  const findings = loaded.findings;
+  // CARRIED WITH THE FINDINGS, not recomputed here. A shared graph -- the
+  // unrooted fallback, or one mounted across several repositories -- holds
+  // `project` claims about trees other than this one, and only the loader knows
+  // which graph it opened.
+  const sharedGraph = loaded.sharedGraph;
 
   const guessing = upstreamIsDefault(options);
   const limit = bodyLimitFor(options);
@@ -955,7 +969,8 @@ export async function startProxy(
         spill,
         anchors,
         findings,
-        tuning
+        tuning,
+        sharedGraph
       );
       options.onSummary?.({ path: req.url || '/', ...summary });
       // SPREAD, NOT RE-LISTED. This was seventeen fields copied across by hand,

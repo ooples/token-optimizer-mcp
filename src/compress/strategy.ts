@@ -76,6 +76,8 @@ export interface StrategyOptions {
    * asked for.
    */
   readonly findings?: readonly Finding[];
+  /** True when `findings` came from a graph shared across projects. */
+  readonly sharedGraph?: boolean;
   /** Characters of findings allowed in the prefix. */
   readonly knowledgeBudget?: number;
   /**
@@ -674,7 +676,13 @@ export function v1Frontier(
         options.findings ?? [],
         stableContext(request),
         options.knowledgeBudget ?? options.tuning?.knowledgeBudgetChars,
-        options.embeddings
+        {
+          embeddings: options.embeddings,
+          // Passed through rather than defaulted here: only the loader knows
+          // which graph these findings came from, and a project claim served
+          // out of a shared graph is a fact about some other tree.
+          sharedGraph: options.sharedGraph === true,
+        }
       )
     : (decision.record.knowledge ?? null);
 

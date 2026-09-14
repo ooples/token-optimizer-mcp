@@ -102,9 +102,7 @@ describe('no one kind of finding may take the whole block', () => {
   });
 
   it('caps a single kind at half the lines it would otherwise take', () => {
-    const lines = countLines(
-      knowledgeBlock(manyFailures, 'failure subsystem')
-    );
+    const lines = countLines(knowledgeBlock(manyFailures, 'failure subsystem'));
     const uncapped = countLines(
       knowledgeBlock([...manyFailures], 'failure subsystem', 2000)
     );
@@ -493,5 +491,73 @@ describe('only verified, non-stale findings reach the cached prefix', () => {
       retired: true,
     };
     expect(block([retired])).toBeNull();
+  });
+});
+
+describe('scope decides what a shared graph may assert', () => {
+  // THE DEFECT THIS PINS. `loadFindings` mapped nine fields and `scope` was not
+  // among them, so `knowledgeBlock` could not tell a claim that travels from
+  // one true only of the tree it came from. On this repository's graph, 221 of
+  // 293 findings passing the quality filter are project-scoped, 57 global and
+  // 15 organization -- so a graph shared across repositories was serving one
+  // project's specifics to another as established fact, ranked by whether BM25
+  // happened to match a word.
+  const finding = (claim: string, scope?: string) => ({
+    claim,
+    confidenceLabel: 'verified',
+    confidence: 0.9,
+    scope,
+  });
+
+  const findings = [
+    finding('the compaction baseline in this repo ratchets upward', 'project'),
+    finding(
+      'gitignore is per-branch, so a secret ignored on one is staged on another',
+      'global'
+    ),
+    finding('this org pins rust toolchains in CI', 'organization'),
+    finding('an unlabelled claim of unknown reach'),
+  ];
+
+  it('keeps only transferable claims when the graph is shared', () => {
+    const block = knowledgeBlock(
+      findings,
+      'working on a django project',
+      2000,
+      {
+        sharedGraph: true,
+      }
+    );
+
+    expect(block).toContain('gitignore is per-branch');
+    expect(block).toContain('pins rust toolchains');
+    // Asserted positively as well: the block must still exist and carry the two
+    // transferable lines, so this cannot pass by returning null.
+    expect((block ?? '').match(/^- /gm)?.length).toBe(2);
+  });
+
+  it('keeps project claims on a normal per-project graph', () => {
+    // The other half of the rule, and the reason this is not simply a stricter
+    // filter: on its own graph a project finding is the most useful kind there
+    // is, and excluding it everywhere would throw away 75% of the asset.
+    const block = knowledgeBlock(findings, 'working in this repo', 2000);
+
+    expect(block).toContain('compaction baseline');
+    expect((block ?? '').match(/^- /gm)?.length).toBe(4);
+  });
+
+  it('treats a missing scope as project-scoped, not as transferable', () => {
+    const block = knowledgeBlock(
+      [finding('unlabelled reach')],
+      'anything',
+      2000,
+      {
+        sharedGraph: true,
+      }
+    );
+
+    // Silence is the safe failure. A claim written before scope existed says
+    // nothing about how far it travels, so a shared graph must not assert it.
+    expect(block).toBeNull();
   });
 });

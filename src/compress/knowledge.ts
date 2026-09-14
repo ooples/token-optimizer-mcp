@@ -69,6 +69,23 @@ export interface Finding {
   readonly confidenceLabel?: string;
   /** The anchored code changed after this was written. */
   readonly stale?: boolean;
+  /**
+   * `project` | `organization` | `global`, as recorded when written.
+   *
+   * CARRIED BECAUSE A CLAIM'S REACH IS PART OF THE CLAIM. It was dropped in
+   * `loadFindings`, so nothing downstream could tell a lesson that transfers
+   * from one that does not -- and the distinction cannot be recovered by
+   * relevance ranking, because lexical similarity is exactly what makes a
+   * project-specific claim look applicable somewhere it is false.
+   *
+   * Provenance is otherwise implicit: each project keeps its own graph, so a
+   * `project` finding is true of whichever graph holds it. That breaks down for
+   * a SHARED graph -- the unrooted fallback, or one deliberately mounted across
+   * several repositories -- where project claims from one tree are served to
+   * another. Measured on this repository's graph: of 293 findings passing the
+   * quality filter, 221 are `project`, 57 `global`, 15 `organization`.
+   */
+  readonly scope?: string;
 }
 
 /**
@@ -148,12 +165,42 @@ function render(finding: Finding): string {
  * Returns null when there is nothing worth saying, which is the common case in
  * a project with no graph yet and must stay cheap.
  */
+/** Scopes whose claims hold outside the tree they were written in. */
+const TRANSFERABLE_SCOPES = new Set(['global', 'organization']);
+
+export interface KnowledgeOptions {
+  readonly embeddings?: EmbeddingCache;
+  /**
+   * The graph is shared across projects, so `project` claims cannot be trusted.
+   *
+   * Set when the findings came from the unrooted fallback graph or from a graph
+   * deliberately mounted across several repositories. In that case a `project`
+   * finding is a fact about SOME tree, and nothing here can say which -- so it
+   * is excluded rather than ranked, because relevance ranking would actively
+   * promote it: lexical similarity is what makes a project-specific claim look
+   * applicable somewhere it is false.
+   *
+   * Left false for a normal per-project graph, where a `project` finding is
+   * true of exactly the tree being worked on and is the most useful kind there
+   * is.
+   */
+  readonly sharedGraph?: boolean;
+}
+
 export function knowledgeBlock(
   findings: readonly Finding[],
   context: string,
   budgetChars: number = DEFAULT_BUDGET_CHARS,
-  embeddings?: EmbeddingCache
+  options: EmbeddingCache | KnowledgeOptions | undefined = undefined
 ): string | null {
+  // The fourth argument was an EmbeddingCache before this gained a second
+  // option. Accepting either keeps every existing call site correct rather
+  // than forcing a mechanical edit that could not be verified at each site.
+  const opts: KnowledgeOptions =
+    options && typeof options === 'object' && 'sharedGraph' in options
+      ? (options as KnowledgeOptions)
+      : { embeddings: options as EmbeddingCache | undefined };
+  const embeddings = opts.embeddings;
   // VERIFIED AND FRESH ONLY, and this is the strictest filter in the file on
   // purpose. A finding in the cached prefix is not read once -- it is re-read
   // on every turn of the session, so a wrong one is wrong repeatedly and at
@@ -181,7 +228,11 @@ export function knowledgeBlock(
       f.confidenceLabel === 'verified' &&
       typeof f.claim === 'string' &&
       f.claim.trim().length > 0 &&
-      (f.confidence ?? 0.5) >= MIN_CONFIDENCE
+      (f.confidence ?? 0.5) >= MIN_CONFIDENCE &&
+      // A SHARED GRAPH CANNOT VOUCH FOR A PROJECT CLAIM. An absent scope is
+      // treated as project-scoped, which is the conservative reading: claims
+      // written before scope existed say nothing about how far they travel.
+      (!opts.sharedGraph || TRANSFERABLE_SCOPES.has(f.scope ?? 'project'))
   );
   if (!usable.length) return null;
 
