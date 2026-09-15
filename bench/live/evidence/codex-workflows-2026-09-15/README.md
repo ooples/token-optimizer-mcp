@@ -211,3 +211,11 @@ Mean agent time tied HeadRoom and input was 0.9% lower, but the cost scenario
 was 47.8% higher and requests increased. Replayed prior input items stayed
 stable across all append transitions; the provider cache-miss cause remains
 unproven. This loss remains part of the evidence.
+
+## Mixed shell output cost improvement
+
+[The mixed JSON screen](mixed-json/README.md) uses the same required first read
+in both arms. All four attempts passed, including the first-read exposure audit.
+The proxy's standard-rate cost scenario was 34.6% lower than HeadRoom, with
+43.4% less input and 38.9% fewer requests. This targeted workload result does
+not supersede the earlier natural-read cost loss.
