@@ -219,3 +219,10 @@ in both arms. All four attempts passed, including the first-read exposure audit.
 The proxy's standard-rate cost scenario was 34.6% lower than HeadRoom, with
 43.4% less input and 38.9% fewer requests. This targeted workload result does
 not supersede the earlier natural-read cost loss.
+
+[The unrestricted follow-up](mixed-json-natural/README.md) passed 4/4 and had
+36.3% lower observed estimated cost. Its first-request cache advantage explains
+most of the margin: a fixed-trace sensitivity charging both first requests
+fully uncached leaves a 4.7% mean advantage. Mean agent time lost by 5.7%.
+The new mixed-output path activated naturally in one proxy attempt; neither
+sample includes an old-build live arm, so causal cost attribution remains open.
