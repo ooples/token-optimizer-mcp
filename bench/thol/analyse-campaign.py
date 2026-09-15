@@ -36,6 +36,21 @@ arms = [r[0] for r in con.execute(
 tasks = [r[0] for r in con.execute(
     "SELECT DISTINCT task FROM runs WHERE status='ok' ORDER BY 1")]
 
+# REFUSE A BASELINE THAT RAN NOTHING, rather than reporting every arm as having
+# "no paired tasks" and exiting 0. A misspelled arm name, or one whose runs all
+# failed, produced a clean-looking report in which every comparison was empty --
+# indistinguishable at a glance from a campaign where nothing differed, and the
+# exit code agreed with that reading. The whole file is a comparison AGAINST
+# this arm, so its absence is not a degraded result, it is no result.
+if BASELINE not in arms:
+    print(f"baseline arm {BASELINE!r} has no successful runs in {DB}.",
+          file=sys.stderr)
+    print(f"  arms present: {', '.join(arms) if arms else '(none)'}",
+          file=sys.stderr)
+    print("  every comparison here is against the baseline, so there is "
+          "nothing to report.", file=sys.stderr)
+    sys.exit(2)
+
 # cell[(arm, task)] = {metric: mean, 'n': reps}
 cell = {}
 for arm in arms:

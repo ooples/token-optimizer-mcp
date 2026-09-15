@@ -204,6 +204,10 @@ export function compressJson(
 
   let parsed: unknown;
   let nestedElisions: readonly Elision[] = [];
+  // Set when a nested string was compressed lossily. Every `lossless: !nestedLossy`
+  // return below is conditioned on it, because a document is only lossless if
+  // its nested values were too.
+  let nestedLossy = false;
   try {
     parsed = JSON.parse(text);
   } catch {
@@ -228,6 +232,10 @@ export function compressJson(
     if (inner.removed > 0) {
       parsed = inner.value;
       nestedElisions = inner.elisions;
+      // A lossy nested string makes the whole document lossy. Without this the
+      // structural passes below decided `lossless` alone and could report true
+      // for a document whose inner content needs external recovery.
+      if (!inner.lossless) nestedLossy = true;
     }
   }
 
@@ -241,6 +249,9 @@ export function compressJson(
     elisions.push({
       removed: count(nulls, 'null field'),
       recoverAt: null,
+      // This ELISION is lossless on its own terms whatever happened elsewhere:
+      // an absent key and a null key read the same. Per-elision flags describe
+      // their own transform; the document-level claim is the engine's return.
       lossless: true,
     });
   }
@@ -251,7 +262,7 @@ export function compressJson(
     elisions.push({
       removed: count(text.length - minified.length, 'byte') + ' of whitespace',
       recoverAt: null,
-      // Re-serialising restores it exactly.
+      // Re-serialising restores it exactly, independently of nested content.
       lossless: true,
     });
   }
@@ -306,7 +317,7 @@ export function compressJson(
     if (dropped < tuning.minRowsToElide - tuning.keepRows) {
       // Almost everything is exceptional, so there is no redundant tail to
       // remove and eliding a handful of rows would not pay for the marker.
-      return { text: minified, elisions, lossless: true };
+      return { text: minified, elisions, lossless: !nestedLossy };
     }
 
     // NO HOME MEANS NO ELISION. Without a spill the rows would be gone with
@@ -315,7 +326,7 @@ export function compressJson(
     // to avoid. The minified document is still a real saving, so keep it and
     // keep the rows.
     const recoverAt = spillFor(ctx, JSON.stringify(stripped), 'rows.json');
-    if (!recoverAt) return { text: minified, elisions, lossless: true };
+    if (!recoverAt) return { text: minified, elisions, lossless: !nestedLossy };
     const kept = [...keep].sort((a, b) => a - b).map((i) => stripped[i]);
     const sample = stripped.find((_row, i) => !keep.has(i));
     const keptText = JSON.stringify(kept);
@@ -346,5 +357,5 @@ export function compressJson(
     };
   }
 
-  return { text: minified, elisions, lossless: true };
+  return { text: minified, elisions, lossless: !nestedLossy };
 }

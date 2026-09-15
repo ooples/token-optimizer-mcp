@@ -196,10 +196,24 @@ export function knowledgeBlock(
   // The fourth argument was an EmbeddingCache before this gained a second
   // option. Accepting either keeps every existing call site correct rather
   // than forcing a mechanical edit that could not be verified at each site.
-  const opts: KnowledgeOptions =
-    options && typeof options === 'object' && 'sharedGraph' in options
-      ? (options as KnowledgeOptions)
-      : { embeddings: options as EmbeddingCache | undefined };
+  // DISCRIMINATED ON THE CACHE'S OWN SHAPE, not on whether `sharedGraph` is
+  // present. Testing for `sharedGraph` mis-sorted the one case it most needed
+  // to get right: `{ embeddings }` with no scope flag is a perfectly ordinary
+  // KnowledgeOptions, and it was wrapped a second time as
+  // `{ embeddings: { embeddings } }`. `activeRanker` then found no numeric
+  // `size` on it, silently skipped semantic ranking, and fell back to lexical --
+  // a caller supplying vectors got none of the benefit and no error either.
+  //
+  // An EmbeddingCache is identified positively: it has `get`, `has` and a
+  // numeric `size`. Anything else that is an object is options.
+  const looksLikeCache =
+    !!options &&
+    typeof (options as EmbeddingCache).get === 'function' &&
+    typeof (options as EmbeddingCache).has === 'function' &&
+    typeof (options as EmbeddingCache).size === 'number';
+  const opts: KnowledgeOptions = looksLikeCache
+    ? { embeddings: options as EmbeddingCache }
+    : ((options ?? {}) as KnowledgeOptions);
   const embeddings = opts.embeddings;
   // VERIFIED AND FRESH ONLY, and this is the strictest filter in the file on
   // purpose. A finding in the cached prefix is not read once -- it is re-read

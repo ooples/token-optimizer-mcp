@@ -137,12 +137,16 @@ describe('deferring tool definitions', () => {
   it('does not defer server tools, which are not definitions', () => {
     // A code-execution or computer-use entry is a capability the server
     // provides, not a schema we can withhold.
-    const out = deferTools(
-      req({ tools: [{ type: 'code_execution_20250825', name: 'code' }] })
-    );
+    const input = req({
+      tools: [{ type: 'code_execution_20250825', name: 'code' }],
+    });
+    const out = deferTools(input);
 
     expect(out.deferredCount).toBe(0);
-    expect(out.request).toBe(out.request);
+    // AGAINST THE INPUT, not against itself. `toBe(out.request)` compared a
+    // value with itself and passed for any implementation whatsoever, so the
+    // identity claim it was named for went untested.
+    expect(out.request).toBe(input);
   });
 
   it('adds nothing when there is nothing to defer', () => {

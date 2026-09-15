@@ -114,13 +114,19 @@ function report(root, findings, sharedGraph, label) {
       '    NOTHING IS ELIGIBLE. Every budget delivers an empty block, so a\n' +
         '    sweep over this graph prices a feature that never fires.'
     );
-    return { cap, distinct: new Set() };
+    return { cap, unique: [] };
   }
 
   console.log(
     '    budget   delivered   findings   session cost   distinct from previous'
   );
-  const distinct = new Set();
+  // KEYED ON THE RENDERED BLOCK, and on the FIRST budget that produced it.
+  // Counting distinct sizes said "4 distinguishable arms" whenever any two
+  // budgets differed at all -- so a ceiling between two budgets left the larger
+  // ones rendering an identical block while the verdict still recommended
+  // paying for every one of them. The cheapest budget that yields a given block
+  // is the only one worth running.
+  const firstFor = new Map();
   let previous = null;
   for (const budget of BUDGETS) {
     const block =
@@ -134,7 +140,8 @@ function report(root, findings, sharedGraph, label) {
       ? block.split('\n').filter((l) => l.trim().startsWith('-')).length
       : 0;
     const same = block === previous;
-    distinct.add(chars);
+    const key = block ?? '';
+    if (!firstFor.has(key)) firstFor.set(key, budget);
     console.log(
       `    ${String(budget).padStart(6)}   ${String(chars).padStart(9)}   ` +
         `${String(lines).padStart(8)}   ${effective(tokens(chars ? block : '')).toFixed(0).padStart(12)}   ` +
@@ -142,7 +149,7 @@ function report(root, findings, sharedGraph, label) {
     );
     previous = block;
   }
-  return { cap, distinct };
+  return { cap, unique: [...firstFor.values()] };
 }
 
 /**
@@ -196,22 +203,26 @@ for (const root of roots) {
 
   // The verdict this script exists to deliver. A budget arm is only worth
   // running if it delivers something no cheaper arm already delivered.
-  const usable = BUDGETS.filter((b) => b === 0 || b <= shared.cap);
+  const usable = shared.unique;
   if (shared.cap === 0) {
     console.log(
       '\n    VERDICT: do not sweep on this graph. The shared regime is empty, so\n' +
         '    every arm is the plain proxy arm and the campaign cannot answer.'
     );
-  } else if (shared.distinct.size <= 2) {
+  } else if (usable.length < BUDGETS.length) {
     console.log(
-      `\n    VERDICT: the shared ceiling is ${shared.cap.toLocaleString()} chars, so the sweep collapses\n` +
-        `    to ${shared.distinct.size} distinguishable arm(s). Sweeping ${BUDGETS.join('/')} would pay for\n` +
-        `    duplicates. Sweep only ${usable.join('/')} -- or seed a larger transferable pool first.`
+      `\n    VERDICT: the shared ceiling is ${shared.cap.toLocaleString()} chars, so ${BUDGETS.length - usable.length} of the\n` +
+        `    ${BUDGETS.length} budgets render a block an earlier one already rendered. Sweeping\n` +
+        `    ${BUDGETS.join('/')} would pay for duplicates. Sweep only ${usable.join('/')} --\n` +
+        '    or seed a larger transferable pool first.'
     );
+    // Two or more genuinely different arms can still answer something, even
+    // though the full sweep as written would waste money on the rest.
+    if (usable.length > 2) anyDistinguishable = true;
   } else {
     anyDistinguishable = true;
     console.log(
-      `\n    VERDICT: ${shared.distinct.size} distinguishable arms. The sweep can answer; run it.`
+      `\n    VERDICT: ${usable.length} distinguishable arms. The sweep can answer; run it.`
     );
   }
   void perProject;

@@ -48,8 +48,15 @@ export interface CompressionOptions {
   /** Smallest repeated block worth a back-reference, in bytes. Default 600. */
   readonly minDedupBytes?: number;
   /**
-   * Above this many characters of cached prefix, a conversation we have never
-   * seen is left alone rather than re-anchored. Default 20000.
+   * Above this many MESSAGES, a conversation we have never seen is left alone
+   * rather than re-anchored.
+   *
+   * A message count, not a character count, and the distinction matters: a
+   * first request can be enormous -- a large system prompt and a full tool
+   * schema arrive before the user has said anything -- and it is still a
+   * conversation seen from the start, where the prefix is written either way
+   * and anchoring is free. Gating that on SIZE refused to anchor exactly the
+   * requests where anchoring costs nothing. Default 4.
    */
   readonly coldMessageLimit?: number;
   /** Characters of graph findings allowed in the cached prefix. Default 2000. */

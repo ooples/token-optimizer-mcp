@@ -126,9 +126,15 @@ figure above therefore understates production by an unknown but positive margin.
 
 ### What these numbers still are not
 
-Transmission cost, on one axis, with behaviour held fixed. They price only
-`messages` — not tool definitions, not the system prompt — carry no
-`cache_control`, and say nothing about whether the model still does the job.
+Transmission cost, on one axis, with behaviour held fixed, and saying nothing
+about whether the model still does the job.
+
+The two columns differ in what they price. The **history region only** replay
+prices `messages` alone — no tool definitions, no system prompt. The **whole
+request** figure adds those back as a fixed 28,869-token prefix measured from
+the ledger, written once and re-read thereafter. Neither carries
+`cache_control`, so both are blind to anything that depends on where the client
+puts its breakpoint.
 
 ## Why no campaign
 

@@ -109,22 +109,73 @@ function toolsFrom(messages) {
 }
 
 /**
- * The turns to sample, spread across the conversation's length.
+ * Length bands, and the share of the sample each one gets.
  *
- * SPREAD, NOT THE FIRST N. The amount of reasoning removed grows with
- * conversation length, so sampling only early turns would test the transform
- * where it does least. The spec fixes this in advance.
+ * Fixed in the pre-registration, not here, and copied across deliberately: the
+ * document and the instrument disagreeing about the sample is the same class of
+ * error as a benchmark arm calling a primitive instead of the shipped strategy.
+ */
+const BANDS = [
+  { label: '1-24', min: 1, max: 24 },
+  { label: '25-99', min: 25, max: 99 },
+  { label: '100-299', min: 100, max: 299 },
+  { label: '300+', min: 300, max: Infinity },
+];
+
+/**
+ * The turns to sample: an equal quota from each length band.
+ *
+ * EQUAL PER BAND, NOT PROPORTIONAL, and not simply spread evenly across the
+ * whole conversation. Divergence risk is stated to scale with length, so the
+ * mix of lengths determines the measured rate -- an even spread over a
+ * 400-turn session puts most samples in bands where the transform removes
+ * little, and the same probe over a 40-turn session would then be measuring
+ * something else entirely.
+ *
+ * Deterministic within a band (even intervals, no randomness), so a re-run
+ * samples the same turns and two runs are comparable.
+ *
+ * A short band is reported short rather than back-filled from its neighbours,
+ * because back-filling would silently re-weight the mix toward whichever band
+ * happened to be long.
  */
 function sampledCuts(messages, n) {
   const cuts = [];
   for (let i = 0; i < messages.length; i += 1) {
-    if (messages[i].role === 'user') cuts.push(i + 1);
+    // `turn` is the conversation turn this cut represents; `cut` is where to
+    // slice `messages`. Carried together because the bands are defined on the
+    // first and the slicing needs the second, and reporting one as the other
+    // misstates the length mix the whole quota exists to control.
+    if (messages[i].role === 'user') {
+      cuts.push({ cut: i + 1, turn: cuts.length + 1 });
+    }
   }
-  if (cuts.length <= n) return cuts;
-  const step = cuts.length / n;
+
+  const quota = Math.max(1, Math.floor(n / BANDS.length));
   const picked = [];
-  for (let i = 0; i < n; i += 1) picked.push(cuts[Math.floor(i * step)]);
-  return picked;
+  const shortfall = [];
+
+  BANDS.forEach((band, index) => {
+    // A cut's band is decided by which TURN it is, not by its message index.
+    const inBand = cuts.filter(
+      (c) => c.turn >= band.min && c.turn <= band.max
+    );
+    if (!inBand.length) {
+      shortfall.push(`${band.label}: none available`);
+      return;
+    }
+    const take = Math.min(quota, inBand.length);
+    if (take < quota) {
+      shortfall.push(`${band.label}: ${take} of ${quota}`);
+    }
+    const step = inBand.length / take;
+    for (let i = 0; i < take; i += 1) {
+      picked.push(inBand[Math.floor(i * step)]);
+    }
+    void index;
+  });
+
+  return { cuts: picked, shortfall };
 }
 
 /**
@@ -144,9 +195,12 @@ function actionOf(content) {
         ['file_path', 'path', 'command', 'pattern', 'query']
           .map((k) => input[k])
           .find((v) => typeof v === 'string' && v.trim()) ?? '';
-      calls.push(
-        `${b.name}(${target.replace(/\s+/g, ' ').trim().slice(0, 80)})`
-      );
+      // THE COMPLETE TARGET, never a prefix. Truncating here would make two
+      // different commands or paths that share their first 80 characters
+      // compare EQUAL, recording a real divergence as agreement -- an error in
+      // the one direction that matters, since it hides the effect being
+      // measured. Display is truncated separately at the print site.
+      calls.push(`${b.name}(${target.replace(/\s+/g, ' ').trim()})`);
     } else if (b?.type === 'text' && b.text?.trim()) {
       text = true;
     }
@@ -196,6 +250,18 @@ if (!AUTH && !DRY) {
 }
 
 /** Retry budget for a 429. Beyond this the run stops rather than grinding on. */
+/**
+ * Ceiling on a single request, so a stalled connection cannot hang the run.
+ *
+ * Generous, because a 180,000-token prefix legitimately takes a while to
+ * process; the point is to bound a socket that has stopped responding, not to
+ * hurry a slow request.
+ */
+const REQUEST_TIMEOUT_MS =
+  Number(process.env.REQUEST_TIMEOUT_MS) > 0
+    ? Number(process.env.REQUEST_TIMEOUT_MS)
+    : 180_000;
+
 const MAX_ATTEMPTS =
   Number(process.env.MAX_ATTEMPTS) > 0 ? Number(process.env.MAX_ATTEMPTS) : 5;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -264,16 +330,31 @@ async function ask(messages, tools) {
 
   let last = '';
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        ...AUTH.headers,
-      },
-      body: JSON.stringify(body),
-    });
-    const text = await res.text();
+    let res;
+    let text;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'anthropic-version': '2023-06-01',
+          ...AUTH.headers,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      text = await res.text();
+    } catch (err) {
+      // A DNS failure, a TLS error, a socket reset or the timeout above. These
+      // reject rather than returning a response, so without this they escape
+      // the sampling loop and kill the run -- losing every sample already paid
+      // for. Treated as a retryable failure like a 5xx, and on the last attempt
+      // returned as an error so the no-verdict path reports it.
+      last = `network: ${err?.name ?? 'Error'} ${err?.message ?? ''}`.trim();
+      if (attempt === MAX_ATTEMPTS) return { error: last };
+      await sleep(Math.min(60_000, 2 ** attempt * 1000) + Math.random() * 1000);
+      continue;
+    }
 
     if (res.ok) {
       const parsed = JSON.parse(text);
@@ -344,19 +425,28 @@ if (!paths.length) {
  * worth anything.
  */
 async function preflight() {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'anthropic-version': '2023-06-01',
-      ...AUTH.headers,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 16,
-      messages: [{ role: 'user', content: 'hi' }],
-    }),
-  });
+  let res;
+  try {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        ...AUTH.headers,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 16,
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (err) {
+    // An unreachable API is a reason to stop before the run, which is what
+    // this function is for. Reported like any other preflight failure rather
+    // than thrown out of a top-level await with a stack trace.
+    return `network: ${err?.name ?? 'Error'} ${err?.message ?? ''}`.trim();
+  }
   if (res.ok) return null;
   return describeFailure(res, await res.text());
 }
@@ -376,7 +466,8 @@ if (!DRY) {
         'amount of retrying or sampling smaller turns will help. Either the ' +
         'limit clears with time, or set ANTHROPIC_API_KEY, which is billed ' +
         'and limited separately from the subscription token.\n' +
-        '\nNothing was sent. No samples, no cost, no verdict.'
+        '\nNo samples were sent. Only the preflight request above was ' +
+        'made, and there is no cost and no verdict.'
     );
     process.exit(4);
   }
@@ -391,13 +482,18 @@ const failures = [];
 
 for (const path of paths) {
   const messages = messagesFrom(path);
-  const cuts = sampledCuts(messages, SAMPLES);
+  const { cuts, shortfall } = sampledCuts(messages, SAMPLES);
   const name = path.split(/[\\/]/).pop();
   console.log(
     `\n${name}  --  ${messages.length} messages, sampling ${cuts.length} turn(s)`
   );
+  // Reported, never silently absorbed: a band that could not be filled changes
+  // the length mix, and the length mix is what the divergence rate depends on.
+  if (shortfall.length) {
+    console.log(`  bands under quota: ${shortfall.join(', ')}`);
+  }
 
-  for (const cut of cuts) {
+  for (const { cut, turn } of cuts) {
     const control = messages.slice(0, cut);
     const substitution = substituteHistory(control);
     const tools = toolsFrom(control);
@@ -414,7 +510,7 @@ for (const path of paths) {
     if (DRY) {
       const chars = JSON.stringify(control).length;
       console.log(
-        `  turn ${String(cut).padStart(4)}  ~${Math.round(chars / 4)} prefix tokens  x3 calls`
+        `  turn ${String(turn).padStart(4)}  ~${Math.round(chars / 4)} prefix tokens  x3 calls`
       );
       continue;
     }
@@ -428,7 +524,7 @@ for (const path of paths) {
       ['control-B', b],
       ['substituted', s],
     ]) {
-      if (r.error) failures.push(`turn ${cut} ${label}: ${r.error}`);
+      if (r.error) failures.push(`turn ${turn} ${label}: ${r.error}`);
     }
     if (a.error || b.error || s.error) continue;
 
@@ -439,7 +535,7 @@ for (const path of paths) {
 
     const mark = a.action === s.action ? ' ' : 'X';
     console.log(
-      `  turn ${String(cut).padStart(4)} ${mark} floor=${a.action === b.action ? 'same' : 'DIFF'}  control="${a.action.slice(0, 44)}"  sub="${s.action.slice(0, 44)}"`
+      `  turn ${String(turn).padStart(4)} ${mark} floor=${a.action === b.action ? 'same' : 'DIFF'}  control="${a.action.slice(0, 44)}"  sub="${s.action.slice(0, 44)}"`
     );
   }
 }

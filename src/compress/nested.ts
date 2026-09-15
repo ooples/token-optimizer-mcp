@@ -59,6 +59,17 @@ export interface NestedResult {
   readonly elisions: readonly Elision[];
   /** Characters removed from nested strings, for the caller's accounting. */
   readonly removed: number;
+  /**
+   * True only if EVERY nested compression was itself lossless.
+   *
+   * CARRIED BECAUSE THE CALLER CANNOT INFER IT. `compressJson` copies the
+   * rewritten value and the elisions, then decides its own `lossless` from the
+   * structural transforms it applied -- so a nested string compressed by a
+   * lossy engine was reported inside a document claiming `lossless: true`,
+   * whose content could not be reconstructed from the output. One lossy nested
+   * value makes the whole document lossy, so this aggregates with AND.
+   */
+  readonly lossless: boolean;
 }
 
 /**
@@ -75,6 +86,7 @@ export function compressNestedStrings(
 ): NestedResult {
   const elisions: Elision[] = [];
   let removed = 0;
+  let lossless = true;
 
   const walk = (node: unknown): unknown => {
     if (typeof node === 'string') {
@@ -95,6 +107,9 @@ export function compressNestedStrings(
       if (result.text.length >= node.length) return node;
       elisions.push(...result.elisions);
       removed += node.length - result.text.length;
+      // A result that does not say makes no promise, so it is treated as lossy.
+      // Assuming otherwise would let an engine opt into a guarantee by omission.
+      if (result.lossless !== true) lossless = false;
       return result.text;
     }
 
@@ -114,6 +129,9 @@ export function compressNestedStrings(
   };
 
   // Past the re-entry budget nothing is descended into at all.
-  if (depth >= MAX_STRING_DEPTH) return { value, elisions: [], removed: 0 };
-  return { value: walk(value), elisions, removed };
+  if (depth >= MAX_STRING_DEPTH)
+    return { value, elisions: [], removed: 0, lossless: true };
+  // `walk` fills `removed` and `lossless`, so it must run before they are read.
+  const value2 = walk(value);
+  return { value: value2, elisions, removed, lossless };
 }

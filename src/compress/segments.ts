@@ -110,13 +110,20 @@ export function foldRepeatedSegments(
   // NEVER GROW. Folding a handful of short segments can cost more than the note
   // saves, and a compressor that returns something larger than it was given is
   // strictly worse than one that declines.
+  // Declining to compress IS lossless -- the original is returned untouched.
   if (out.length >= text.length) return { text, elisions: [], lossless: true };
 
   return {
     text: out,
-    // Lossless: the content is still present, so there is nothing to recover
-    // and nothing to record as removed.
     elisions: [],
-    lossless: true,
+    // NOT LOSSLESS, and claiming otherwise was wrong in a way that matters.
+    // The note records HOW MANY sections were folded, never WHICH one stood at
+    // each removed position -- so `A B A C A` and `A A B C A` produce an
+    // identical result, and neither can be reconstructed from it. `kept.join`
+    // also normalises the original separators. Under `allowLossy: false` this
+    // engine must therefore decline, which is exactly what this flag decides;
+    // reporting it as lossless put unreconstructable output into the one mode
+    // that exists to forbid it.
+    lossless: false,
   };
 }

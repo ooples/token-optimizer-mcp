@@ -66,7 +66,15 @@ registerEngine({
 registerEngine({
   name: 'segments',
   priority: 65,
-  claims: (text) => looksRepetitive(text),
+  // NEVER JSON, WHATEVER IT LOOKS LIKE. A large array of similar objects,
+  // pretty-printed with blank lines between them, satisfies `looksRepetitive`
+  // -- and this engine outranks `json` (65 against 60), so it won the claim,
+  // removed whole blocks and appended a plain-English note. The result is not
+  // parseable JSON, which is a different and worse failure than compressing it
+  // badly: a consumer that parses the value gets an exception rather than a
+  // smaller document. `json` handles this content correctly and is right
+  // behind it.
+  claims: (text) => !looksLikeJson(text) && looksRepetitive(text),
   compress: foldRepeatedSegments,
 });
 

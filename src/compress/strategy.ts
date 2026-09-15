@@ -1008,12 +1008,21 @@ export function v4Substitute(
     compressToolResult: (text) =>
       compressBlock(text, { tuning: options.tuning }).text,
   });
-  // Nothing to substitute is not a reason to skip compression: the request
-  // still has a fresh tail and tool definitions, and V1 is what handles those.
-  const next: ProviderRequest =
-    substitution.substituted > 0
-      ? { ...request, messages: substitution.messages }
-      : request;
+  // BOTH REGIONS COUNT, and gating on `substituted` alone silently threw one
+  // away. That counter tracks assistant REASONING substitutions only; tool
+  // results report through `toolResultChars`. So a conversation whose assistant
+  // turns carry no `thinking` -- an ordinary non-reasoning session -- had its
+  // compressed tool results computed and then discarded, because the reasoning
+  // count was zero.
+  //
+  // Nothing to substitute is still not a reason to skip compression: the
+  // request has a fresh tail and tool definitions either way, and V1 handles
+  // those.
+  const changed =
+    substitution.substituted > 0 || substitution.toolResultChars > 0;
+  const next: ProviderRequest = changed
+    ? { ...request, messages: substitution.messages }
+    : request;
   const result = v1Frontier(next, options);
   return {
     ...result,

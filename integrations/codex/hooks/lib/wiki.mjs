@@ -401,8 +401,18 @@ const compactFloorBytes = () =>
  * next time a file is touched, so evicting the oldest costs a re-scan and
  * nothing else.
  */
-const maxStructureNodes = () =>
-  Number(process.env.TOKEN_OPTIMIZER_GRAPH_MAX_NODES) || 20_000;
+const maxStructureNodes = () => {
+  // VALIDATED, NOT JUST DEFAULTED. `|| 20_000` already caught NaN and zero
+  // because both are falsy, which made it look complete -- and it let through
+  // the two values that are actively destructive. A NEGATIVE cap makes
+  // `keepStructure` zero, so compaction evicts every evictable node and the
+  // graph is emptied. `Infinity` makes `nodes.size > cap` permanently false, so
+  // eviction never runs and the cap silently does not exist. A fractional value
+  // slices at a non-integer index.
+  const raw = Number(process.env.TOKEN_OPTIMIZER_GRAPH_MAX_NODES);
+  if (!Number.isFinite(raw) || raw < 1) return 20_000;
+  return Math.floor(raw);
+};
 
 const markerPath = (dir) => join(dir, 'graph.compact.json');
 
@@ -613,8 +623,20 @@ function compactIfWasteful(dir) {
     for (const [id, meta] of nodeMeta) {
       if (meta.kind === "finding") anchored.add(id);
     }
-    for (const [, meta] of edgeMeta) {
-      if (anchored.has(meta.from)) anchored.add(meta.to);
+    // THE FULL CLOSURE, not one insertion-ordered pass. A single sweep makes
+    // retention depend on the order edges happen to sit in `edgeMeta`: if an
+    // edge A->B is visited before whatever made A anchored, B is never marked,
+    // and compaction then evicts a node that a finding transitively reaches --
+    // deleting its incident edge with it. Repeating until nothing new is
+    // marked makes the result independent of that order.
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const [, meta] of edgeMeta) {
+        if (anchored.has(meta.from) && !anchored.has(meta.to)) {
+          anchored.add(meta.to);
+          grew = true;
+        }
+      }
     }
     const cap = maxStructureNodes();
     if (nodes.size > cap) {

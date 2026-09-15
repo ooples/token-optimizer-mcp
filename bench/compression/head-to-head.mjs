@@ -220,6 +220,19 @@ for (const [name, text] of Object.entries(payloads)) {
   lost += gone;
 
   const t = theirs[name];
+  // REFUSE A MISSING ENTRY RATHER THAN SUBSTITUTE OUR OWN TEXT FOR IT. The
+  // fallbacks below read `t.bestBeforeText ?? text`, so an absent workload
+  // silently scored the competitor as having done nothing to OUR content --
+  // a fabricated comparison that reads as a win. Other sites guarded the same
+  // value and this one did not, which is how the inconsistency hid. A result
+  // that cannot be attributed to their actual output is not evidence.
+  if (!t) {
+    throw new Error(
+      `theirs.json has no entry for workload "${name}". Re-run ` +
+        'bench/compression/headroom/run-theirs.py so both arms cover the same ' +
+        'set, rather than scoring this workload against our own text.'
+    );
+  }
   // Their token reduction, measured on THEIR OWN before/after text with the
   // same tokeniser. For the pipeline arm those two texts are the wrapped
   // conversation, so the ratio is theirs and the envelope cancels.

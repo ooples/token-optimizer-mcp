@@ -377,7 +377,14 @@ start_proxies() {
       // have left it inert -- the arm would look configured and the scope
       // filter would never fire, which is the exact silent-null shape this rig
       // has produced before.
-      const shared = env.TOKEN_OPTIMIZER_GRAPH_SHARED ? '1' : '';
+      // PASSED THROUGH, NOT COERCED. `? '1' : ''` turned every non-empty value
+      // into '1', so a manifest declaring "0" or "false" -- the spellings an
+      // operator would reach for to say NOT shared -- arrived as an assertion
+      // that the graph IS shared. The proxy would then drop every
+      // project-scoped finding from a per-project graph, which is the exact
+      // failure this flag exists to prevent, inverted. The separator is '|', so
+      // only that character needs excluding.
+      const shared = String(env.TOKEN_OPTIMIZER_GRAPH_SHARED ?? '').replace(/\|/g, '');
       // '|' as the separator, not a tab: this snippet is inside a
       // double-quoted shell string, and an escaped tab or newline here has
       // to survive both the shell and the file it was written into. One of

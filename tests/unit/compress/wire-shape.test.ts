@@ -27,10 +27,13 @@ import type { ProviderRequest } from '../../../src/compress/frontier.js';
  * removes bytes from it.
  */
 
-const ROOT = new URL('../../../', import.meta.url).pathname.replace(
-  /^\/([A-Za-z]:)/,
-  '$1'
-);
+// `URL.pathname` keeps percent-encoding, so a checkout under a path with a
+// space or a non-ASCII character produced a root that `readFileSync` could not
+// open. `fileURLToPath` decodes it and handles the Windows drive letter, which
+// is what the hand-rolled regex was there for.
+import { fileURLToPath } from 'node:url';
+
+const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
 const fixture = (): ProviderRequest =>
   wireShapeRequest({

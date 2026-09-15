@@ -72,24 +72,57 @@ temperature 0 concealed.
 
 ### Decision rule, fixed now
 
-**Substitution fails if its divergence rate exceeds the control-vs-control floor
-by a statistically significant margin (two-proportion test, α = 0.05).**
+**Substitution fails if it diverges from control more often than control
+diverges from itself, by McNemar's exact test at α = 0.05, one-sided.**
+
+**McNemar, not a two-proportion test.** The two outcomes at each sampled turn
+are not independent groups: control-vs-control and control-vs-substituted share
+the same control-A reply, and both are drawn from the same conversation at the
+same turn. A two-proportion test assumes independent samples, so its p-value
+would be wrong here and the sample sizes derived from it were wrong too. The
+correct unit is the **discordant pair** — a turn where exactly one of the two
+comparisons diverged.
 
 No threshold negotiation after the fact. If it fails, `v4-substitute` does not
 ship and the digest design is reconsidered.
 
 ### Sample size
 
-Powered at 80% for a two-proportion difference:
+McNemar's power depends on the **discordance rate**, which cannot be known
+before the pilot. So the rule is stated in the unit the test actually consumes:
 
-| effect to detect | paired samples |
+| effect | discordant pairs needed |
 | --- | --- |
-| 10 percentage points | ~250 turns |
-| 5 percentage points | ~900 turns |
+| odds ratio 2.0 (substitution diverges twice as often) | **~35** |
+| odds ratio 1.5 | **~110** |
 
-Sampled turns are drawn across the conversation-length range **including 100+
-turns**, declared here rather than chosen later, because the amount of reasoning
-removed grows with length and so does any risk from removing it.
+Total turns follow from the discordance rate the pilot measures:
+`turns = discordant_pairs / discordance_rate`. At a 10% discordance rate, an
+odds ratio of 2.0 needs ~350 turns; at 25%, ~140.
+
+**The pilot's job is to measure that rate**, and the full sample size is
+computed from it and recorded before the main run. This replaces the earlier
+~250/~900 figures, which were derived from the wrong test.
+
+### Sampling rule, with quotas
+
+"Across the length range" does not define a sample, and because divergence risk
+is stated to scale with length, changing the length mix changes the result. So
+the quota is fixed here:
+
+| band (turns into the conversation) | share of sampled turns |
+| --- | --- |
+| 1–24 | 25% |
+| 25–99 | 25% |
+| 100–299 | 25% |
+| 300+ | 25% |
+
+Equal weighting across bands, not proportional to their natural frequency,
+because the question is whether divergence appears *anywhere* and the long bands
+are where the transform removes most. Turns within a band are taken at even
+intervals, deterministically, so a re-run samples the same turns. A band with
+too few available turns is reported as short rather than back-filled from
+another, since back-filling would silently re-weight the mix.
 
 ### Cost gate
 
@@ -101,7 +134,16 @@ again.
 
 Built now, held. Specified here so it cannot be designed around a result.
 
-- **Arms**: `control`, `token-optimizer-proxy`, `token-optimizer-proxy+substitute`.
+- **Arms**, by exact manifest directory name under `bench/thol/manifests/`,
+  because `entrypoint.sh` registers those names directly and a name that does
+  not resolve is an arm that silently does not exist:
+  `control` (THOL's own baseline, no manifest),
+  `token-optimizer-proxy` (exists),
+  and `token-optimizer-proxy-substitute` — **which must be created before the
+  run**, as a copy of `token-optimizer-proxy` with
+  `TOKEN_OPTIMIZER_PROXY_SUBSTITUTE=1` and its own port. `run-campaign.sh`
+  defaults to `control,token-optimizer-mcp,token-optimizer-mcp-off`, which are
+  different arms entirely; `ARMS` must be passed explicitly.
 - **Randomised arm order.** THOL runs control → mcp → proxy in fixed order,
   which is a systematic confound.
 - **Reps derived from measured variance**, not chosen. The last campaign's
@@ -110,7 +152,21 @@ Built now, held. Specified here so it cannot be designed around a result.
 - **Stratified by session length**, reported separately for short (<13 turns)
   and long (>=13) tasks. Pooling them averages a regime where the feature cannot
   work with one where it should.
-- **Score is the gate.** Any cost win with a score regression is a loss.
+- **Score is the gate, with the threshold bound here.** A score regression is a
+  drop in the per-task mean score whose bootstrap 95% CI (the seeded
+  percentile bootstrap `analyse-campaign.py` already computes, over task-level
+  paired ratios) excludes 1.0. Any cost win accompanied by such a regression is
+  a loss, whatever the cost number says.
+- **Strata are reported separately and never pooled into a single verdict.**
+  Short (<13 turns) and long (>=13) each get their own cost ratio, CI and score
+  check. A win in one and a regression in the other is reported as exactly that,
+  not averaged into a single number.
+- **Effect size and reps, bound before the run.** Target: a 10% cost
+  improvement. The variance estimate comes from the prior campaign's measured
+  per-task spread rather than a guess, and the rep count is computed from those
+  two and written into this file BEFORE the campaign starts. The last campaign
+  ran n=1 against cache_read ratios spanning 0.47-2.38, which is how it came to
+  be structurally unable to resolve the effect it was run to find.
 
 ## Guardrails, each tied to a failure above
 

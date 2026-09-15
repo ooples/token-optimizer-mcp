@@ -88,7 +88,9 @@ export function readNumbering(text: string): Numbering | null {
       // the cursor backwards and renumber the rest of the file.
       const out: string[] = [];
       let next = 0;
-      for (const line of compressed.split('\n')) {
+      let unmatched = 0;
+      const lines = compressed.split('\n');
+      for (const line of lines) {
         let found = -1;
         for (let i = next; i < bare.length; i += 1) {
           if (bare[i] === line) {
@@ -97,12 +99,33 @@ export function readNumbering(text: string): Numbering | null {
           }
         }
         if (found === -1) {
+          // A line the engine INVENTED rather than kept: a marker it added,
+          // or -- the case that breaks this -- a line it rewrote.
+          // `compressJson` minifies a numbered, pretty-printed document into
+          // one new line, which matches nothing here.
+          unmatched += 1;
           out.push(line);
           continue;
         }
         out.push(`${labels[found]}${line}`);
         next = found + 1;
       }
+
+      // FAIL CLOSED WHEN THE ASSUMPTION IS VIOLATED. This restores numbers by
+      // matching whole lines, which assumes engines only ever REMOVE lines. An
+      // engine that rewrites them leaves most output unmatched, and every
+      // unmatched line is emitted with no number -- silently breaking the line
+      // addressing the numbers exist to provide, in output that still looks
+      // numbered because the surviving lines kept theirs.
+      //
+      // Partial numbering is the worst of the three options: worse than
+      // numbering everything and worse than numbering nothing, because it
+      // reads as complete. So when most lines did not survive intact, the bare
+      // compressed text is returned and the caller sees output it can
+      // recognise as unnumbered.
+      const matched = lines.length - unmatched;
+      if (lines.length > 0 && matched < lines.length / 2) return compressed;
+
       return out.join('\n');
     },
   };
