@@ -374,10 +374,50 @@ These are not their corpora, which are unpublished; the code workloads read real
 files out of this repository and the rest are generated to the shape and scale
 of their published ones, from their own benchmark generator's definition.
 
-**What is not yet measured: end-to-end task outcome.** Reduction is not the same
-as a cheaper session -- this project has already measured a posture that cut
-nothing and cost 1.471x through extra turns alone. Until the proxy has run
-through THOL, treat the figures above as compression numbers and nothing more.
+**Reduction is not the bill, and the two disagree.** Cache changes the
+arithmetic: a cached prefix is re-read at 0.1x and a rewritten one is charged at
+1.25x, so an arm can remove more bytes and still cost more. Run
+`node bench/compression/proof.mjs` and that is exactly what happens -- the
+HeadRoom-style arm removes a larger share of every workload and loses on
+cache-weighted effective tokens on all of them:
+
+| workload         | raw reduction, ours / theirs | effective tokens, ours / theirs |
+| ---------------- | ---------------------------- | ------------------------------- |
+| code search      | 85.0% / **96.8%**            | **859** / 1,068                 |
+| SRE debugging    | 86.2% / **97.2%**            | **1,783** / 2,141               |
+| issue triage     | 90.7% / **98.0%**            | **439** / 557                   |
+| grep output      | 47.1% / **53.4%**            | **6,896** / 8,971               |
+| raw build log    | 50.1% / **55.0%**            | **15,937** / 17,943             |
+| browser session  | 20.3% / 20.3%                | **18,407** / 18,539             |
+
+The competitor arm is this repository's own reimplementation of their published
+design -- opaque hash markers, history compressed, a retrieval tool and system
+message injected -- not their binary. It is implemented to win where it can: the
+raw column is theirs on six of six.
+
+**On whole sessions.** `node bench/compression/session-replay.mjs` replays real
+recorded conversations turn by turn and prices each one the way a provider does,
+charging the longest byte-identical leading run at 0.1x and everything after at
+1.25x. Four independent sessions, whole request including system prompt and tool
+schema, against no proxy at all:
+
+| turns | HeadRoom's design | ours (v4-substitute) | cheaper on |
+| ----- | ----------------- | -------------------- | ---------- |
+| 10    | 1.000x            | **0.953x**           | 4 of 4     |
+| 20    | 0.999x            | **0.915x**           | 4 of 4     |
+
+Their design is inert on this traffic for a structural reason rather than an
+incidental one: it REWRITES blocks, and a message carrying signed thinking
+cannot be rewritten without a permanent 400. Every assistant turn that reasoned
+is such a message. Removing a signed block is a different operation, which the
+API accepts, and that is the region this project attacks.
+
+**What is still not measured: whether the model does the job as well.** Every
+figure above is transmission cost with behaviour held fixed. A transform that
+saves money by deleting something the model needed looks like a win here and
+fails a task benchmark. That measurement is pre-registered in
+`docs/superpowers/specs/2026-09-14-quality-preregistration.md` and has not been
+run, so nothing here should be read as an end-to-end result.
 
 Off by default. `TOKEN_OPTIMIZER_PROXY=1` turns it on, it binds loopback only,
 nothing is logged, and `doctor` reports whether your client is actually routed
