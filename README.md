@@ -3,8 +3,8 @@
 <h1 align="center">Token Optimizer MCP</h1>
 
 <p align="center">
-  <strong>Removes less. Costs less. Beats the leading compressor's design on
-  every workload we can measure &mdash; and you can run the proof yourself.</strong>
+  <strong>Compression that optimises your bill, not your byte count &mdash;
+  and ships the benchmark so you can check it.</strong>
 </p>
 
 <p align="center">
@@ -33,58 +33,64 @@
 
 ## Why it wins
 
-**Most compressors optimise the wrong number.** Providers cache your prompt
-prefix: cached tokens re-read at 0.1x, rewritten ones bill at 1.25x. So an
-engine that strips *more* bytes can cost you *more* money. That inversion is
-not theoretical &mdash; it is the result below.
+Providers cache the prompt prefix: cached tokens re-read at **0.1x**, rewritten
+ones bill at **1.25x**. Most compressors optimise bytes removed and ignore that
+multiplier. This one optimises the bill.
 
-Against a faithful reimplementation of the leading open compressor's design,
-run `node bench/compression/proof.mjs`:
+**It wins both columns.** Against a faithful reimplementation of the leading
+open compressor's published design, `node bench/compression/proof.mjs`:
 
-| workload        | bytes removed, theirs vs ours | **what you are billed**, ours vs theirs |
-| --------------- | ----------------------------- | --------------------------------------- |
-| code search     | 96.8% vs 85.0%                | **859** vs 1,068 &nbsp;(&minus;20%)     |
-| SRE debugging   | 97.2% vs 86.2%                | **1,783** vs 2,141 &nbsp;(&minus;17%)   |
-| issue triage    | 98.0% vs 90.7%                | **439** vs 557 &nbsp;(&minus;21%)       |
-| grep output     | 53.4% vs 47.1%                | **6,896** vs 8,971 &nbsp;(&minus;23%)   |
-| raw build log   | 55.0% vs 50.1%                | **15,937** vs 17,943 &nbsp;(&minus;11%) |
-| browser session | 20.3% vs 20.3%                | **18,407** vs 18,539                    |
+| workload        | bytes left, ours vs theirs | cache-weighted cost, ours vs theirs |
+| --------------- | -------------------------- | ----------------------------------- |
+| code search     | **936** vs 948             | **859** vs 1,068 (−20%)             |
+| SRE debugging   | **1,889** vs 1,901         | **1,783** vs 2,141 (−17%)           |
+| issue triage    | **482** vs 494             | **439** vs 557 (−21%)               |
+| grep output     | **8,478** vs 8,494         | **6,896** vs 8,971 (−23%)           |
+| raw build log   | **17,450** vs 17,467       | **15,937** vs 17,943 (−11%)         |
+| relevance probe | **253** vs 265             | **264** vs 295 (−11%)               |
+| browser session | **21,986** vs 21,994       | **18,407** vs 18,539                |
+| repeated reads  | 5,917 vs **5,866**         | **3,791** vs 6,590 (−42%)           |
 
-They win the vanity metric on six of six. **We win the invoice on six of six.**
+Raw removal: ours on 7 of 8. Cache-weighted cost: **ours on 8 of 8.**
 
-### On real sessions, their design does nothing at all
+The two columns come from different arms of the same engine, and that is the
+point. `v3-history` compresses history too and matches them byte for byte;
+`v1-frontier` leaves the cached prefix alone and wins the invoice by 11–42%.
+Maximising bytes removed is available and is not the default, because on a
+cached prefix it costs money.
 
-`node bench/compression/session-replay.mjs` replays recorded conversations turn
-by turn and prices each one the way a provider does. Four independent real
-sessions, whole request including system prompt and tool schema:
+The competitor arm is this repository's reimplementation of their published
+design — opaque hash markers, history compressed, a retrieval tool and system
+message injected — not their binary, and it is held to the same signed-content
+guard we hold ourselves to.
 
-| conversation length | their design | **ours** | cheaper on |
-| ------------------- | ------------ | -------- | ---------- |
-| 10 turns            | 1.000x       | **0.953x** | **4 of 4** |
-| 20 turns            | 0.999x       | **0.915x** | **4 of 4** |
+### On whole sessions
 
-Their approach is inert here for a structural reason: it **rewrites** blocks,
-and rewriting a message that carries signed reasoning is a permanent HTTP 400.
-Every assistant turn that reasoned is such a message &mdash; roughly half of all
-conversation history, permanently off limits to them. We **remove** instead,
-which the API accepts, so we reach the region nobody else can touch. The longer
-your session runs, the further ahead we get.
+`node bench/compression/session-replay.mjs` replays real recorded conversations
+turn by turn and prices each the way a provider does. Four independent sessions,
+whole request including system prompt and tool schema, against no proxy:
+
+| conversation length | **ours** | cheaper on |
+| ------------------- | -------- | ---------- |
+| 10 turns            | **0.953x** | **4 of 4** |
+| 20 turns            | **0.915x** | **4 of 4** |
+
+This is the region nothing else touches: conversation history is ~65% of a live
+request and the only part that grows every turn. The saving grows with session
+length, because model reasoning accumulates.
 
 ### On end-to-end agent tasks
 
-On the THOL agent benchmark, 16 real tasks against a no-proxy control:
+THOL, 16 real tasks against a no-proxy control:
 
 - **cheaper on 11 of 16 tasks**
-- **median cost 0.926x**, mean 0.946x
-- **median turns 0.671x** &mdash; a third fewer round trips
-- **zero quality cost**: mean score 0.994 against control's 0.994, lower on
-  **0 of 16 tasks**
+- **median cost 0.926x**, **median turns 0.671x**
+- **zero quality cost**: mean score **0.994** against control's **0.994**,
+  lower on **0 of 16 tasks**
 
-One run per task, so the aggregate confidence interval still spans 1.0 &mdash;
-the per-task tally and the score parity are the solid parts. Every figure on
-this page is regenerated from the committed benchmarks rather than quoted, and
-the harnesses ship in this repository so you can check them.
-
+One run per task, so the aggregate interval still spans 1.0; the per-task tally
+and the score parity are the solid parts. Every figure here is regenerated from
+the committed benchmarks, which ship in this repository.
 
 ## The 30-second version
 
@@ -463,11 +469,14 @@ schema, against no proxy at all:
 | 10    | 1.000x            | **0.953x**           | 4 of 4     |
 | 20    | 0.999x            | **0.915x**           | 4 of 4     |
 
-Their design is inert on this traffic for a structural reason rather than an
-incidental one: it REWRITES blocks, and a message carrying signed thinking
-cannot be rewritten without a permanent 400. Every assistant turn that reasoned
-is such a message. Removing a signed block is a different operation, which the
-API accepts, and that is the region this project attacks.
+Why the gap: conversation history is ~65% of a live request and the part that
+grows every turn, and roughly half of it is model reasoning carried in signed
+blocks. This project REMOVES those, an operation tested against the live API and
+accepted. A design that rewrites blocks instead has to leave signed content
+alone -- the constraint our own engines observe, and the one our reimplementation
+of their design is held to here. Whether their shipped product handles signed
+content differently we have not tested, so read this column as a result about
+the design as published, not about their binary.
 
 **What is still not measured: whether the model does the job as well.** Every
 figure above is transmission cost with behaviour held fixed. A transform that
