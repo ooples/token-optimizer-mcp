@@ -579,7 +579,12 @@ const server = new Server(
     version: packageVersion,
   },
   {
-    instructions: SERVER_INSTRUCTIONS,
+    instructions:
+      SERVER_INSTRUCTIONS +
+      ' Discover only the schema for the tool you need. In code-mode hosts with ' +
+      'ALL_TOOLS, filter by the exact tool-name suffix (for example __smart_read) ' +
+      'and print that entry only. To discover names, list names without descriptions ' +
+      'first. Broad catalog dumps can exhaust the context budget.',
     capabilities: {
       tools: {},
     },

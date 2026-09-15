@@ -574,12 +574,14 @@ describe('colour is asked away at the source', () => {
   it('and none of it survives into the caller', () => {
     const after = run(
       [
+        // Explicit caller values make this independent of the host's color flags.
+        'NO_COLOR=caller FORCE_COLOR=caller',
         boundedRewrite('echo hi').command,
         'echo "[${NO_COLOR-unset}][${FORCE_COLOR-unset}]"',
       ].join('\n')
     ).stdout.trim();
 
-    expect(after.split('\n').pop()).toBe('[unset][unset]');
+    expect(after.split('\n').pop()).toBe('[caller][caller]');
   });
 });
 

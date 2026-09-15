@@ -170,3 +170,22 @@ but no run called an MCP tool. Mean total input was 89,910 versus 91,780.5
 profile because of the observed cache mix. This does not demonstrate savings
 from smaller MCP schemas or correct MCP cache use. A separate controlled cache
 diagnostic is necessary. Both configurations keep the proxy enabled.
+
+## Controlled MCP cache comparison: four cache passes, file profile loses
+
+`profile-mcp/` uses seeds 13-14 and requires successful reads on both sides of
+the external replacement plus a reported cached diff. All four runs passed
+that check and the independent artifact grader. The core configuration averaged
+191,931.5 input tokens; files averaged 210,492.5, 9.7% more. Its estimated token
+cost was 59.4% higher. The file profile is an opt-in experiment, not a proven
+Codex optimization, and the default remains core.
+
+Large wildcard discovery calls contributed substantial overhead: one run
+printed metadata selected with `/search|optimizer|mcp/`, producing a response
+reported as 57,441 tokens before client truncation. Both profiles incurred
+large discovery output. The exact Codex invocation with `--ignore-user-config`
+was independently checked to expose only the seven file-profile tools; an
+earlier suspicion of inherited global MCP configuration was not confirmed.
+
+The next candidate adds bounded discovery guidance to MCP initialization:
+retrieve the exact needed tool schema, or list names before descriptions.

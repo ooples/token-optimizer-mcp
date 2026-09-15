@@ -7,8 +7,10 @@ Recorded before examining results from this campaign.
   multi-file money refactor, external route refresh.
 - Arms: control, our compression proxy, installed HeadRoom proxy.
 - Three repetitions per task and arm, each arm in each position once: 54 runs.
-- Workflow seeds 15-17 (`SEED_OFFSET=14`). The JSON/code/log fixtures are fixed
-  regressions; their content does not change with this seed offset.
+- Workflow seeds 15-17 (`SEED_OFFSET=14`). Refresh route positions vary. The
+  JSON/code/log fixtures and the post-seed-4 bugfix/refactor variants are fixed
+  regressions; their content does not change with this seed offset. This is
+  new-run verification, not six unseen task designs.
 - Natural tool selection for workflows; the existing controlled initial-read
   contract remains for JSON/code/log tasks. No new product tuning during the run.
 - Use the same compiled build throughout. Save manifest and startup provenance.
