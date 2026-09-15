@@ -1001,12 +1001,26 @@ export function v4Substitute(
   options: StrategyOptions = {}
 ): StrategyResult {
   const substitution = substituteHistory(request.messages, {
-    // NO QUERY, NO SPILL, NO EMBEDDINGS -- the three inputs that would make the
-    // same block compress differently on a later turn. `tuning` is fixed for
-    // the life of the proxy by design, so what remains is a pure function of
-    // the block's own text, which is what the append-only rule requires.
+    // NO QUERY AND NO EMBEDDINGS -- those depend on the live question, so the
+    // same block would compress differently as the conversation moves and the
+    // prefix would churn. `tuning` is fixed for the life of the proxy.
+    //
+    // THE SPILL SINK IS PASSED, and withholding it was a real defect rather
+    // than caution. I excluded it alongside the query on the assumption that
+    // it was another source of variance; it is not. The sink is
+    // CONTENT-ADDRESSED -- the same bytes always spill to the same path, which
+    // both the proxy and the benchmark harness guarantee -- so a block's
+    // compressed form stays a pure function of its own content, and the
+    // append-only rule holds exactly as before.
+    //
+    // What it costs to withhold is most of the compression. Without a sink the
+    // engines can only shrink content in place; with one they can move a large
+    // tool result out and leave a path the agent can read back, which is the
+    // whole mechanism. Measured on the agent-loop fixture: 24.5% reduction
+    // without it against v3-history's 85.1% on identical bytes.
     compressToolResult: (text) =>
-      compressBlock(text, { tuning: options.tuning }).text,
+      compressBlock(text, { tuning: options.tuning, spill: options.spill })
+        .text,
   });
   // BOTH REGIONS COUNT, and gating on `substituted` alone silently threw one
   // away. That counter tracks assistant REASONING substitutions only; tool

@@ -565,10 +565,119 @@ function request(system, cachedTurns, freshBlocks) {
   return { system, messages, tools: [] };
 }
 
+/**
+ * A request shaped like an AGENT LOOP rather than a chat.
+ *
+ * WHY THIS EXISTS. Every other fixture here is `text` blocks, which is what a
+ * conversation looks like and not what an agent's request looks like. A real
+ * one alternates: the assistant reasons (a SIGNED `thinking` block) and calls a
+ * tool, then the user turn carries the `tool_result` that came back. Measured
+ * on a real 27-turn session, that history is 52% thinking, 36% tool results and
+ * 3% assistant text -- so a corpus of pure text exercises 3% of the shape and
+ * silently reports any history-aware arm as doing nothing.
+ *
+ * The signature is real in FORM, not cryptographically valid: nothing here
+ * verifies it, and what the engines branch on is its presence.
+ *
+ * `turns` pairs of (assistant reasons + acts, user returns a result). The
+ * breakpoint sits on the last cached turn, exactly as a client places it.
+ */
+function agenticRequest(system, turns, freshBlocks) {
+  const messages = [];
+  for (const [i, turn] of turns.entries()) {
+    const last = i === turns.length - 1;
+    messages.push({
+      role: 'assistant',
+      content: [
+        {
+          type: 'thinking',
+          thinking: turn.thinking,
+          signature: `sig-${i}-${turn.thinking.length}`,
+        },
+        {
+          type: 'tool_use',
+          id: `tu_${i}`,
+          name: turn.tool,
+          input: turn.input,
+        },
+      ],
+    });
+    messages.push({
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: `tu_${i}`,
+          content: turn.result,
+          ...(last ? { cache_control: { type: 'ephemeral' } } : {}),
+        },
+      ],
+    });
+  }
+  messages.push({
+    role: 'user',
+    content: freshBlocks.map((text) => ({ type: 'text', text })),
+  });
+  return { system, messages, tools: [] };
+}
+
+/**
+ * Reasoning of the length a model actually produces.
+ *
+ * Deterministic from the seeded rng so two runs of the benchmark compare the
+ * same bytes. Deliberately prose rather than filler: the engines classify
+ * content, and a block of repeated words would be compressed by a path no real
+ * thinking block takes.
+ */
+function reasoning(r, lines) {
+  const out = [];
+  for (let i = 0; i < lines; i += 1) {
+    out.push(
+      `Considering option ${Math.floor(r() * 40) + 1}: the call site in module ` +
+        `${pick(r, ['auth', 'cache', 'router', 'ledger', 'wiki'])} reads the ` +
+        `${pick(r, ['config', 'header', 'token', 'manifest'])} before the guard ` +
+        `runs, so the ordering matters here and I should check the caller first.`
+    );
+  }
+  return out.join('\n');
+}
+
 /** The four workloads. */
 export function fixtures() {
   const r = rng(20260909);
   return [
+    {
+      // THE SHAPE THE PROXY ACTUALLY SEES, and the only fixture here that
+      // exercises a history-aware arm at all. Signed reasoning plus tool
+      // results, which together are ~88% of a real request's history.
+      name: 'agent-loop',
+      request: agenticRequest(
+        'You are a coding agent.',
+        Array.from({ length: 6 }, () => ({
+          thinking: reasoning(r, 12),
+          tool: 'Read',
+          input: { file_path: `src/compress/module${Math.floor(r() * 9) + 1}.ts` },
+          result: searchJson(r, 60),
+        })),
+        ['Now fix the retry helper.']
+      ),
+    },
+    {
+      // The same shape over log output rather than structured rows, because
+      // the engines route those differently and an arm can win one and lose
+      // the other.
+      name: 'agent-loop-logs',
+      request: agenticRequest(
+        'You are an SRE agent.',
+        Array.from({ length: 5 }, () => ({
+          thinking: reasoning(r, 16),
+          tool: 'Bash',
+          input: { command: 'kubectl logs deploy/api --since=1h' },
+          result: structuredLog(r, 200),
+        })),
+        ['Which pod is failing?']
+      ),
+    },
     {
       name: 'code-search',
       theirs: { before: 17765, after: 1408 },
