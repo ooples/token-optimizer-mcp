@@ -197,6 +197,101 @@
       "id": "logs-2",
       "family": "logs",
       "started": "2026-09-15T23:26:25.384Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\logs-2\\run-Bh1Cxa",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:27:26.361Z"
+    },
+    {
+      "id": "bugfix-6",
+      "family": "bugfix",
+      "started": "2026-09-15T23:27:28.636Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\bugfix-6\\run-i2mwLB",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:29:28.361Z"
+    },
+    {
+      "id": "refactor-2",
+      "family": "refactor",
+      "started": "2026-09-15T23:29:30.457Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\refactor-2\\run-swCVWk",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:31:51.852Z"
+    },
+    {
+      "id": "json-4",
+      "family": "json",
+      "started": "2026-09-15T23:31:53.980Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\json-4\\run-shzt2x",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:32:45.642Z"
+    },
+    {
+      "id": "refactor-8",
+      "family": "refactor",
+      "started": "2026-09-15T23:32:47.669Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\refactor-8\\run-JL1GlC",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:35:02.945Z"
+    },
+    {
+      "id": "bugfix-1",
+      "family": "bugfix",
+      "started": "2026-09-15T23:35:04.982Z",
       "status": "running"
     }
   ],
