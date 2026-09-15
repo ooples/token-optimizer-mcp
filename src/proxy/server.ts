@@ -47,6 +47,7 @@ import {
   deferTools,
   withAdvancedToolUse,
   DEFAULT_KEEP_RELEVANT,
+  SMALL_TOOL_CHARS,
 } from '../compress/tools.js';
 import {
   accountingPath,
@@ -475,6 +476,7 @@ export function compressBody(
         // the prefix every turn. See taskIn for the measurement.
         query: taskIn(parsed),
         keepRelevant: keepToolsFromEnv(),
+        smallToolChars: smallToolCharsFromEnv(),
       });
       parsed = out.request;
       deferred = out.deferredCount;
@@ -761,6 +763,34 @@ export function keepToolsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
   if (raw === undefined || raw.trim() === '') return DEFAULT_KEEP_RELEVANT;
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 0) return DEFAULT_KEEP_RELEVANT;
+  return n;
+}
+
+/**
+ * Below how many characters a tool definition is exempt from deferral.
+ *
+ * A DIAL BECAUSE THE DEFAULT IS A PER-TOOL ANSWER TO A PER-REQUEST QUESTION.
+ * `SMALL_TOOL_CHARS` exempts anything under 1,500 characters, reasoning that
+ * deferring a small definition risks a discovery round trip worth more than it
+ * saves. Each individual judgement is defensible and the aggregate is not:
+ * measured on captured wire traffic, 88 of 115 real tools fall under the floor
+ * and together hold about 55KB that is never deferred. Tools are 66.9% of a
+ * real request, so that is the largest single region this proxy declines to
+ * touch.
+ *
+ * For comparison on the same traffic, a competitor's proxy defers 107 of those
+ * 115 definitions where we defer 25.
+ *
+ * Zero defers every deferrable definition, which is the aggressive end and is
+ * exactly what the comparison is for.
+ */
+export function smallToolCharsFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const raw = env.TOKEN_OPTIMIZER_PROXY_SMALL_TOOL_CHARS;
+  if (raw === undefined || raw.trim() === '') return SMALL_TOOL_CHARS;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return SMALL_TOOL_CHARS;
   return n;
 }
 

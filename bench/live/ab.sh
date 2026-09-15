@@ -27,6 +27,19 @@
 #   3. Nothing confirmed the proxy was answering before a run was spent on it.
 #      There is a liveness probe now, and an arm whose proxy never comes up is
 #      reported as SKIP rather than scored.
+#   4. ARMS RAN IN A FIXED ORDER, so one arm was always last -- and position is
+#      worth real money here. The provider caches by prefix and every arm starts
+#      from the same client request, so a later arm reads prefix cache an earlier
+#      arm paid to create. Measured: the competitor arm, always last, read 37,655
+#      cached tokens at its fourth request having written 1,192, a cache no
+#      request in its own ledger created. Its headline win was partly a position
+#      in a list. Arms are rotated now, so over N reps each arm holds each
+#      position exactly once and position cancels out of the mean.
+#   5. CONTROL HAD NO LEDGER, because it ran with no proxy -- so the one arm
+#      every other arm is measured against was the only arm with no measurement,
+#      and every cost claim was really proxy-versus-proxy. Control now runs
+#      through the same recorder in null mode, which forwards bytes and does
+#      nothing else.
 #
 # Correctness is taken from re-running the test suite, never from the agent's
 # own report: an agent that says it succeeded and did not is exactly what this
@@ -34,7 +47,9 @@
 #
 # Usage:
 #   bash bench/live/ab.sh
-#     ARMS=control,proxy,substitute   which arms to run
+#     ARMS=control,proxy,aggressive,headroom   which arms to run
+#     (REPS should be a multiple of the arm count, so the rotation completes
+#     and every arm has held every position the same number of times.)
 #     REPS=3                          repetitions per arm
 #     OUT=/path                       where to write results
 
@@ -45,12 +60,13 @@ OUT="${OUT:-${TEMP:-/tmp}/live-ab}"
 REPS="${REPS:-1}"
 ARMS="${ARMS:-control,proxy,substitute}"
 PORT_BASE="${PORT_BASE:-8830}"
+HEADROOM_PORT="${HEADROOM_PORT:-8787}"
 
 command -v claude >/dev/null 2>&1 || { echo "claude CLI not found" >&2; exit 2; }
 python -m pytest --version >/dev/null 2>&1 || { echo "pytest not available" >&2; exit 2; }
 
 rm -rf "$OUT"; mkdir -p "$OUT"
-echo "arm,rep,verdict,seconds,weighted_input,output" > "$OUT/results.csv"
+echo "arm,rep,position,verdict,seconds,weighted_input,output" > "$OUT/results.csv"
 
 seed() {
   printf 'def add(a, b):\n    return a - b\n\ndef mul(a, b):\n    return a + b\n' > "$1/calc.py"
@@ -61,8 +77,20 @@ seed() {
 proxy_env_for() {
   case "$1" in
     proxy)      echo "" ;;
+    # Recorded, not compressed. Null mode forwards bytes and does nothing else,
+    # so this is the untransformed client request measured on our own ledger --
+    # the baseline every other arm is compared against.
+    control)    echo "TOKEN_OPTIMIZER_PROXY_NULL=1" ;;
     nodefer)    echo "TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS=0" ;;
     substitute) echo "TOKEN_OPTIMIZER_PROXY_SUBSTITUTE=1" ;;
+    # Defer every deferrable definition, rather than exempting the 88 of 115
+    # that individually look too small to bother with and collectively are the
+    # largest region we decline to touch.
+    aggressive) echo "TOKEN_OPTIMIZER_PROXY_SMALL_TOOL_CHARS=0" ;;
+    # The competitor's arm runs OUR proxy in null mode: it compresses nothing
+    # and only records, so their compressor's output is measured on the same
+    # instrument as ours rather than on their own reporting.
+    headroom)   echo "TOKEN_OPTIMIZER_PROXY_NULL=1" ;;
     *)          echo "" ;;
   esac
 }
@@ -72,6 +100,9 @@ port_for() { # deterministic per arm, so two arms never collide
     proxy) echo $((PORT_BASE));;
     nodefer) echo $((PORT_BASE+1));;
     substitute) echo $((PORT_BASE+2));;
+    headroom) echo $((PORT_BASE+3));;
+    aggressive) echo $((PORT_BASE+4));;
+    control) echo $((PORT_BASE+5));;
     *) echo 0;;
   esac
 }
@@ -88,30 +119,56 @@ run_arm() { # arm rep
   local arm="$1" rep="$2"
   local work="$OUT/$arm-$rep"; mkdir -p "$work"; seed "$work"
   local ledger="$OUT/$arm-$rep.jsonl"
-  local pid="" base="" port
+  local pid="" hrpid="" base="" port
   port=$(port_for "$arm")
 
-  if [ "$arm" != "control" ]; then
-    # Stderr to a file, never /dev/null: defect 2.
-    env TOKEN_OPTIMIZER_PROXY=1 \
-        TOKEN_OPTIMIZER_PROXY_ACCOUNTING="$ledger" \
-        $(proxy_env_for "$arm") \
-        node "$PKG/dist/proxy/cli.js" --port "$port" --quiet \
-        >/dev/null 2>"$OUT/$arm-$rep.proxy.err" &
-    pid=$!
-    base="http://127.0.0.1:$port"
-
-    # Defect 3: prove it answers before spending a run on it.
-    local up=1
-    for _ in $(seq 1 15); do alive "$port" && { up=0; break; }; sleep 2; done
-    if [ "$up" != "0" ]; then
-      kill "$pid" 2>/dev/null
-      printf '%-11s rep%-2s %-5s  proxy never came up -- see %s\n' \
-        "$arm" "$rep" "SKIP" "$OUT/$arm-$rep.proxy.err"
-      echo "$arm,$rep,SKIP,0,," >> "$OUT/results.csv"
+  # OURS IN FRONT, THEIRS BEHIND, for the competitor arm. Weighted input is read
+  # from the `usage` block of the API's RESPONSE, and a response passes back
+  # through every hop -- so a null-mode recorder in front sees exactly what the
+  # provider billed for the request THEIR compressor sent, without ours having
+  # touched it. Putting theirs in front instead required them to honour
+  # ANTHROPIC_BASE_URL as an upstream, which they do not, and the arm recorded
+  # nothing at all.
+  local upstream=""
+  if [ "$arm" = "headroom" ]; then
+    python -m headroom.cli proxy --port "$HEADROOM_PORT" \
+      >/dev/null 2>"$OUT/$arm-$rep.headroom.err" &
+    hrpid=$!
+    local hrup=1
+    for _ in $(seq 1 30); do alive "$HEADROOM_PORT" && { hrup=0; break; }; sleep 2; done
+    if [ "$hrup" != "0" ]; then
+      kill "$hrpid" 2>/dev/null
+      printf '%-11s rep%-2s %-5s  competitor proxy never came up -- see %s\n' \
+        "$arm" "$rep" "SKIP" "$OUT/$arm-$rep.headroom.err"
+      echo "$arm,$rep,$POSITION,SKIP,0,," >> "$OUT/results.csv"
       return
     fi
+    upstream="http://127.0.0.1:$HEADROOM_PORT"
   fi
+
+  # EVERY ARM RUNS THROUGH OUR PROXY, which is what makes the arms comparable:
+  # it compresses for ours, and only records for control and the competitor.
+  # Stderr to a file, never /dev/null: defect 2.
+  env TOKEN_OPTIMIZER_PROXY=1 \
+      TOKEN_OPTIMIZER_PROXY_ACCOUNTING="$ledger" \
+      $(proxy_env_for "$arm") \
+      node "$PKG/dist/proxy/cli.js" --port "$port" --quiet \
+      ${upstream:+--upstream "$upstream"} \
+      >/dev/null 2>"$OUT/$arm-$rep.proxy.err" &
+  pid=$!
+  base="http://127.0.0.1:$port"
+
+  # Defect 3: prove it answers before spending a run on it.
+  local up=1
+  for _ in $(seq 1 15); do alive "$port" && { up=0; break; }; sleep 2; done
+  if [ "$up" != "0" ]; then
+    kill "$pid" 2>/dev/null
+    printf '%-11s rep%-2s %-5s  proxy never came up -- see %s\n' \
+      "$arm" "$rep" "SKIP" "$OUT/$arm-$rep.proxy.err"
+    echo "$arm,$rep,$POSITION,SKIP,0,," >> "$OUT/results.csv"
+    return
+  fi
+
 
   local start; start=$(date +%s)
   # Defect 1: `env`, because `${base:+VAR=$base}` is parsed as a command.
@@ -120,6 +177,7 @@ run_arm() { # arm rep
       --permission-mode bypassPermissions > "$work/agent.log" 2>&1 )
   local secs=$(( $(date +%s) - start ))
   [ -n "$pid" ] && kill "$pid" 2>/dev/null
+  [ -n "$hrpid" ] && kill "$hrpid" 2>/dev/null
 
   local verdict="FAIL"
   ( cd "$work" && timeout 120 python -m pytest -q >/dev/null 2>&1 ) && verdict="PASS"
@@ -139,16 +197,35 @@ run_arm() { # arm rep
     " "$ledger" 2>/dev/null)"
   fi
 
-  printf '%-11s rep%-2s %-5s %4ss  weighted-input=%-9s output=%s\n' \
-    "$arm" "$rep" "$verdict" "$secs" "${wi:-n/a}" "${out:-n/a}"
-  echo "$arm,$rep,$verdict,$secs,$wi,$out" >> "$OUT/results.csv"
+  printf '%-11s rep%-2s pos%-2s %-5s %4ss  weighted-input=%-9s output=%s\n' \
+    "$arm" "$rep" "$POSITION" "$verdict" "$secs" "${wi:-n/a}" "${out:-n/a}"
+  echo "$arm,$rep,$POSITION,$verdict,$secs,$wi,$out" >> "$OUT/results.csv"
 }
 
 echo "arm         rep  verdict  time   billed"
 echo "------------------------------------------------------------"
 for rep in $(seq 1 "$REPS"); do
   IFS=',' read -ra list <<< "$ARMS"
-  for arm in "${list[@]}"; do run_arm "$arm" "$rep"; done
+  # ROTATED, because position in this loop is worth real money: an arm that
+  # runs later reads prefix cache an earlier arm paid to create, and the
+  # competitor arm running last read 37,655 cached tokens it never wrote.
+  #
+  # Rotation rather than a shuffle: over N reps each arm holds each position
+  # exactly once, so position cancels out of the mean by construction. A
+  # seeded shuffle put one arm last in two runs of three, which is the bias
+  # this exists to remove.
+  local_n=${#list[@]}
+  rotated=()
+  for k in $(seq 0 $((local_n-1))); do
+    rotated+=("${list[$(( (k + rep - 1) % local_n ))]}")
+  done
+  list=("${rotated[@]}")
+  echo "  [rep $rep order: ${list[*]}]"
+  POSITION=0
+  for arm in "${list[@]}"; do
+    POSITION=$((POSITION+1))
+    run_arm "$arm" "$rep"
+  done
 done
 
 echo
@@ -156,9 +233,9 @@ echo "=== summary (weighted input = input + 1.25*cache_write + 0.1*cache_read) =
 node -e "
   const fs=require('fs');
   const rows=fs.readFileSync(process.argv[1],'utf8').trim().split('\n').slice(1)
-    .map(l=>l.split(',')).filter(r=>r[2]!=='SKIP');
+    .map(l=>l.split(',')).filter(r=>r[3]!=='SKIP');
   const by={};
-  for(const [arm,,verdict,secs,wi,out] of rows){
+  for(const [arm,,,verdict,secs,wi,out] of rows){
     (by[arm] ||= {n:0,pass:0,secs:0,wi:0,out:0,wiN:0});
     by[arm].n++; if(verdict==='PASS') by[arm].pass++;
     by[arm].secs+=Number(secs)||0;
