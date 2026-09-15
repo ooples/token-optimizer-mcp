@@ -1,0 +1,109 @@
+{
+  "started": "2026-09-15T23:07:33.651Z",
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp",
+  "plannedPairs": 70,
+  "pairs": [
+    {
+      "id": "mixed-9",
+      "family": "mixed",
+      "started": "2026-09-15T23:07:34.678Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\mixed-9\\run-KwKpXG",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:09:13.490Z"
+    },
+    {
+      "id": "code-5",
+      "family": "code",
+      "started": "2026-09-15T23:09:15.577Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\code-5\\run-33em4V",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:10:05.699Z"
+    },
+    {
+      "id": "refactor-6",
+      "family": "refactor",
+      "started": "2026-09-15T23:10:07.815Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\refactor-6\\run-0WYeBS",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:12:32.233Z"
+    },
+    {
+      "id": "refresh-2",
+      "family": "refresh",
+      "started": "2026-09-15T23:12:34.334Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\refresh-2\\run-Umj9r0",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:15:03.553Z"
+    },
+    {
+      "id": "bugfix-2",
+      "family": "bugfix",
+      "started": "2026-09-15T23:15:05.502Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\bugfix-2\\run-1AqLgr",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:17:11.679Z"
+    },
+    {
+      "id": "refresh-7",
+      "family": "refresh",
+      "started": "2026-09-15T23:17:13.717Z",
+      "status": "running"
+    }
+  ],
+  "status": "running"
+}
