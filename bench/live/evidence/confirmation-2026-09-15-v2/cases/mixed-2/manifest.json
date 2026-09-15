@@ -1,0 +1,17 @@
+{
+  "model": "gpt-6-astra",
+  "arms": [
+    "headroom",
+    "proxy"
+  ],
+  "reps": 1,
+  "tasks": [
+    "refresh"
+  ],
+  "balanced": false,
+  "seedOffset": 575906577,
+  "readMode": "mixed",
+  "mcpDiscovery": "bounded",
+  "caseSuite": "heldout-v1",
+  "started": "2026-09-15T23:20:08.177Z"
+}
