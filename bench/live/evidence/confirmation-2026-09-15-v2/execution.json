@@ -292,6 +292,101 @@
       "id": "bugfix-1",
       "family": "bugfix",
       "started": "2026-09-15T23:35:04.982Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\bugfix-1\\run-DJAT5S",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:37:24.429Z"
+    },
+    {
+      "id": "mixed-1",
+      "family": "mixed",
+      "started": "2026-09-15T23:37:26.584Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\mixed-1\\run-exy3MF",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:39:01.507Z"
+    },
+    {
+      "id": "refresh-3",
+      "family": "refresh",
+      "started": "2026-09-15T23:39:03.490Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\refresh-3\\run-dAdnD4",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:40:49.221Z"
+    },
+    {
+      "id": "logs-1",
+      "family": "logs",
+      "started": "2026-09-15T23:40:51.223Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\logs-1\\run-Wyz4PM",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:41:46.711Z"
+    },
+    {
+      "id": "refresh-4",
+      "family": "refresh",
+      "started": "2026-09-15T23:41:48.698Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\refresh-4\\run-bC4jOt",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:43:31.793Z"
+    },
+    {
+      "id": "json-10",
+      "family": "json",
+      "started": "2026-09-15T23:43:33.821Z",
       "status": "running"
     }
   ],
