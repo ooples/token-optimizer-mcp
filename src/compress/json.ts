@@ -36,6 +36,8 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
+import { needleRows, shapeRepresentatives } from './needles.js';
+import { compressNestedStrings } from './nested.js';
 import { activeRanker } from './ranking.js';
 import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
@@ -91,8 +93,28 @@ function shapeOf(row: unknown): string {
   return `${typeof row}s`;
 }
 
+/**
+ * Above this share of anomalous rows, the anomaly rule is not discriminating.
+ *
+ * An array of three interleaved table shapes has no common key set, so every
+ * row reads as exceptional and the keep set swallows the array. Past this
+ * point shape diversity is preserved by keeping one representative of each
+ * shape instead, which is what the rule was for.
+ */
+const MAX_ANOMALOUS_SHARE = 0.5;
+
 /** Keys present in at least this fraction of rows define the common shape. */
 const COMMON_KEY_SHARE = 0.8;
+
+/** The way a row departs from the common shape, as a comparable key. */
+function deviationOf(
+  keys: readonly string[],
+  common: ReadonlySet<string>
+): string {
+  const extra = keys.filter((key) => !common.has(key)).sort();
+  const missing = [...common].filter((key) => !keys.includes(key)).sort();
+  return `+${extra.join(',')}|-${missing.join(',')}`;
+}
 
 /**
  * Which rows depart from the shape the rest of the array shares.
@@ -101,8 +123,28 @@ const COMMON_KEY_SHARE = 0.8;
  * `is_needle`, `error`, `status` -- or lacks one most rows carry. Both
  * directions matter: an extra field marks a special record, and a missing
  * field marks an incomplete one, and a reader wants each.
+ *
+ * ROWS ARE GROUPED BY HOW THEY DEVIATE, and each group is capped at
+ * `maxPerDeviation`. Measured on their api-responses fixture: 60 of 200 rows
+ * carry an optional `relationships` key, so every one of them departed from
+ * the common shape and all 60 were kept whole -- 31% of the array retained,
+ * 75.8% reduction against their 91.4%. Sixty rows deviating IDENTICALLY are
+ * one subpopulation, not sixty anomalies, and the shape rule already keeps a
+ * representative of it. The global share cap could not catch this: 60 is well
+ * under half the array, so the backstop never fired.
+ *
+ * A deviation nobody else shares is still kept in full -- that is the error
+ * row, the record with the unexpected field, the thing this rule exists for.
+ *
+ * The cap is `tuning.keepRows` rather than a constant, because the profiles
+ * disagree about how much evidence is worth keeping (1 row on the aggressive
+ * profile, 8 on the conservative one) and a fixed number would have quietly
+ * overridden both.
  */
-function anomalousRows(rows: readonly unknown[]): Set<number> {
+function anomalousRows(
+  rows: readonly unknown[],
+  maxPerDeviation: number
+): Set<number> {
   const frequency = new Map<string, number>();
   let objects = 0;
 
@@ -121,14 +163,28 @@ function anomalousRows(rows: readonly unknown[]): Set<number> {
       .map(([key]) => key)
   );
 
-  const odd = new Set<number>();
+  // GROUPED BY HOW THEY DEVIATE, not just counted. A deviation shared by many
+  // rows is a shape; a deviation shared by none is an anomaly. Only the second
+  // kind earns the whole row.
+  const byDeviation = new Map<string, number[]>();
   rows.forEach((row, index) => {
     if (!row || typeof row !== 'object' || Array.isArray(row)) return;
     const keys = Object.keys(row as Record<string, unknown>);
     const extra = keys.some((key) => !common.has(key));
     const missing = [...common].some((key) => !keys.includes(key));
-    if (extra || missing) odd.add(index);
+    if (!extra && !missing) return;
+    const deviation = deviationOf(keys, common);
+    const bucket = byDeviation.get(deviation);
+    if (bucket) bucket.push(index);
+    else byDeviation.set(deviation, [index]);
   });
+
+  const odd = new Set<number>();
+  for (const indices of byDeviation.values()) {
+    // Ordered by position, so the rows kept are the first occurrences rather
+    // than an arbitrary slice -- the same bias the head-of-array rule uses.
+    for (const index of indices.slice(0, maxPerDeviation)) odd.add(index);
+  }
   return odd;
 }
 
@@ -147,6 +203,11 @@ export function compressJson(
   if (!looksLikeJson(text)) return unchanged(text);
 
   let parsed: unknown;
+  let nestedElisions: readonly Elision[] = [];
+  // Set when a nested string was compressed lossily. Every `lossless: !nestedLossy`
+  // return below is conditioned on it, because a document is only lossless if
+  // its nested values were too.
+  let nestedLossy = false;
   try {
     parsed = JSON.parse(text);
   } catch {
@@ -155,7 +216,30 @@ export function compressJson(
     return unchanged(text);
   }
 
-  const elisions: Elision[] = [];
+  // CONTENT THAT ARRIVED AS A STRING. A tool result serialised into a
+  // `content` field is invisible to everything below, which stops at the
+  // container -- and on HeadRoom's own conversation fixtures that is where
+  // almost all of the bulk lives. Descending first means the structural work
+  // below operates on already-compressed values, and the caller's `nested`
+  // handler decides which engine each string deserves.
+  if (ctx.compressNested) {
+    const inner = compressNestedStrings(
+      parsed,
+      ctx.compressNested,
+      ctx,
+      ctx.stringDepth ?? 0
+    );
+    if (inner.removed > 0) {
+      parsed = inner.value;
+      nestedElisions = inner.elisions;
+      // A lossy nested string makes the whole document lossy. Without this the
+      // structural passes below decided `lossless` alone and could report true
+      // for a document whose inner content needs external recovery.
+      if (!inner.lossless) nestedLossy = true;
+    }
+  }
+
+  const elisions: Elision[] = [...nestedElisions];
 
   const nulls = countNulls(parsed);
   const stripped = nulls ? dropNulls(parsed) : parsed;
@@ -165,6 +249,9 @@ export function compressJson(
     elisions.push({
       removed: count(nulls, 'null field'),
       recoverAt: null,
+      // This ELISION is lossless on its own terms whatever happened elsewhere:
+      // an absent key and a null key read the same. Per-elision flags describe
+      // their own transform; the document-level claim is the engine's return.
       lossless: true,
     });
   }
@@ -175,7 +262,7 @@ export function compressJson(
     elisions.push({
       removed: count(text.length - minified.length, 'byte') + ' of whitespace',
       recoverAt: null,
-      // Re-serialising restores it exactly.
+      // Re-serialising restores it exactly, independently of nested content.
       lossless: true,
     });
   }
@@ -190,9 +277,28 @@ export function compressJson(
     Array.isArray(stripped) &&
     stripped.length >= tuning.minRowsToElide
   ) {
-    const odd = anomalousRows(stripped);
-    // Head rows for shape, plus every row that departs from it, in order.
-    const keep = new Set<number>(odd);
+    // WHAT MUST SURVIVE, from three rules that cover each other's blind
+    // spots. Measured on HeadRoom's own fixtures, each rule alone fails at
+    // one extreme: the anomaly rule keeps everything when an array has no
+    // single common shape (their database-rows, 300 of 300 flagged, nothing
+    // elided, 25.7% against their 60.0%) and keeps nothing when every row is
+    // shaped alike (their agentic-conversation, 0 flagged, 45 of 48 rows
+    // elided, every needle destroyed at 99.6%).
+    const odd = anomalousRows(stripped, tuning.keepRows);
+    const keep = new Set<number>();
+    // 1. Content that a reader would come back for -- identifiers, failure
+    //    vocabulary -- which structure cannot see. Bounded, so an array made
+    //    of needles does not simply disable compression.
+    for (const i of needleRows(stripped)) keep.add(i);
+    // 2. One example of every distinct shape, which is what the anomaly rule
+    //    was protecting; taken this way it costs a handful of rows rather
+    //    than the whole array.
+    for (const i of shapeRepresentatives(stripped)) keep.add(i);
+    // 3. The anomalous rows themselves, but only while they are genuinely
+    //    exceptional. Past that share the term has stopped discriminating
+    //    and rule 2 already carries the shape information.
+    if (odd.size <= stripped.length * MAX_ANOMALOUS_SHARE)
+      for (const i of odd) keep.add(i);
     for (let i = 0; i < Math.min(tuning.keepRows, stripped.length); i += 1)
       keep.add(i);
 
@@ -211,7 +317,7 @@ export function compressJson(
     if (dropped < tuning.minRowsToElide - tuning.keepRows) {
       // Almost everything is exceptional, so there is no redundant tail to
       // remove and eliding a handful of rows would not pay for the marker.
-      return { text: minified, elisions, lossless: true };
+      return { text: minified, elisions, lossless: !nestedLossy };
     }
 
     // NO HOME MEANS NO ELISION. Without a spill the rows would be gone with
@@ -220,7 +326,7 @@ export function compressJson(
     // to avoid. The minified document is still a real saving, so keep it and
     // keep the rows.
     const recoverAt = spillFor(ctx, JSON.stringify(stripped), 'rows.json');
-    if (!recoverAt) return { text: minified, elisions, lossless: true };
+    if (!recoverAt) return { text: minified, elisions, lossless: !nestedLossy };
     const kept = [...keep].sort((a, b) => a - b).map((i) => stripped[i]);
     const sample = stripped.find((_row, i) => !keep.has(i));
     const keptText = JSON.stringify(kept);
@@ -251,5 +357,5 @@ export function compressJson(
     };
   }
 
-  return { text: minified, elisions, lossless: true };
+  return { text: minified, elisions, lossless: !nestedLossy };
 }

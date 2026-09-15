@@ -48,12 +48,47 @@ export interface CompressionOptions {
   /** Smallest repeated block worth a back-reference, in bytes. Default 600. */
   readonly minDedupBytes?: number;
   /**
-   * Above this many characters of cached prefix, a conversation we have never
-   * seen is left alone rather than re-anchored. Default 20000.
+   * Above this many MESSAGES, a conversation we have never seen is left alone
+   * rather than re-anchored.
+   *
+   * A message count, not a character count, and the distinction matters: a
+   * first request can be enormous -- a large system prompt and a full tool
+   * schema arrive before the user has said anything -- and it is still a
+   * conversation seen from the start, where the prefix is written either way
+   * and anchoring is free. Gating that on SIZE refused to anchor exactly the
+   * requests where anchoring costs nothing. Default 4.
    */
-  readonly coldPrefixLimit?: number;
+  readonly coldMessageLimit?: number;
   /** Characters of graph findings allowed in the cached prefix. Default 2000. */
   readonly knowledgeBudgetChars?: number;
+  /**
+   * How many turns a conversation is ASSUMED to run, for the rewrite decision.
+   *
+   * A PRIOR, AND IT HAS TO BE ONE. Rewriting a cached prefix spends a 1.25x
+   * write now to buy 0.1x reads later, so it repays only if enough turns
+   * follow -- and turns REMAINING is the one quantity nothing in the request
+   * can observe. The minimum share a rewrite must remove is
+   * `1.25 / 0.1 / assumedSessionTurns`: at 100 that is 12.5%, at 13 it is 96%,
+   * which is to say never.
+   *
+   * WHY NOT DERIVE IT FROM THE CONVERSATION INSTEAD. That was the obvious fix
+   * and it is wrong. A threshold computed from turns-so-far necessarily differs
+   * between two consecutive turns, so a conversation near the boundary declines
+   * the rewrite on one turn and accepts it on the next -- and that flip is not
+   * a small error, it re-sends the whole prefix at 1.25x instead of re-reading
+   * it at 0.1x. Implemented and measured: it broke the proof's STEADY gate on
+   * three of six workloads, re-anchoring COSTING tokens on code-search (1066 vs
+   * 871), sre-debugging (2139 vs 1795) and raw-build-log (17936 vs 15949).
+   *
+   * So the length-awareness lives here, fixed for the life of a proxy like
+   * every other dial, rather than in a decision that can change under a
+   * conversation. Measured justification for moving it: THOL's tasks run 6-27
+   * turns and lose money on cache writes below about 13, while this project's
+   * own session transcripts run 184-2,319. A workload should say which it is.
+   *
+   * Default 100.
+   */
+  readonly assumedSessionTurns?: number;
   /**
    * May an engine remove something it cannot reconstruct from the output?
    *
@@ -85,8 +120,9 @@ export const DEFAULT_TUNING: Tuning = Object.freeze({
   maxLiveShare: 0.5,
   minRun: 3,
   minDedupBytes: 600,
-  coldPrefixLimit: 20_000,
+  coldMessageLimit: 4,
   knowledgeBudgetChars: 2000,
+  assumedSessionTurns: 100,
   allowLossy: true,
 });
 
@@ -175,8 +211,9 @@ export function resolveTuning(
     maxLiveShare: pick('maxLiveShare'),
     minRun: pick('minRun'),
     minDedupBytes: pick('minDedupBytes'),
-    coldPrefixLimit: pick('coldPrefixLimit'),
+    coldMessageLimit: pick('coldMessageLimit'),
     knowledgeBudgetChars: pick('knowledgeBudgetChars'),
+    assumedSessionTurns: pick('assumedSessionTurns'),
     allowLossy: pick('allowLossy'),
   };
 }

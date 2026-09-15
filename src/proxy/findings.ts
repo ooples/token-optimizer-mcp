@@ -20,6 +20,7 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Finding } from '../compress/knowledge.js';
+import { sharedGraphFor } from './graph-scope.js';
 
 /** Where a project keeps its graph, matching `hooks-core/wiki.mjs#wikiDir`. */
 function graphDir(root: string): string {
@@ -27,15 +28,32 @@ function graphDir(root: string): string {
 }
 
 /**
+ * Findings plus whether the graph they came from is shared across projects.
+ *
+ * The flag travels WITH the findings because it qualifies them: on a shared
+ * graph a `project` claim is a fact about some tree, and nothing downstream can
+ * say which. Returning the two separately invites a caller to use one without
+ * the other, which is how `scope` came to be dropped here in the first place.
+ */
+export interface LoadedFindings {
+  readonly findings: Finding[];
+  readonly sharedGraph: boolean;
+}
+
+export async function loadFindings(root: string): Promise<Finding[]> {
+  return (await loadFindingsFrom(root)).findings;
+}
+
+/**
  * Loads active findings for one project.
  *
- * Read ONCE when the proxy starts rather than per request. The graph changes
- * during a session -- this session wrote five findings into it -- but a block
- * that changes mid-session cannot sit in a cached prefix anyway, so re-reading
- * per request would spend I/O to produce a value the cache rules then throw
- * away. New findings reach the next session, which is when they are free.
+ * Called at proxy startup and then again on a throttled background refresh --
+ * never on the request path, which is synchronous. A block that changes
+ * mid-conversation cannot sit in a cached prefix, so the refresh does not
+ * serve the conversation it runs during; it serves the next one, which is what
+ * makes a finding written today reach tomorrow without a restart.
  */
-export async function loadFindings(root: string): Promise<Finding[]> {
+export async function loadFindingsFrom(root: string): Promise<LoadedFindings> {
   const dir = graphDir(root);
 
   // NO EXISTENCE CHECKS, and not merely to satisfy `n/no-sync`. Every one of
@@ -62,7 +80,7 @@ export async function loadFindings(root: string): Promise<Finding[]> {
 
     const graph = wikiMod.load(dir);
     const active = curateMod.activeFindings(graph) as Record<string, unknown>[];
-    return active
+    const findings = active
       .filter((node) => typeof node.claim === 'string')
       .map((node) => ({
         claim: node.claim as string,
@@ -73,10 +91,31 @@ export async function loadFindings(root: string): Promise<Finding[]> {
         origin: typeof node.origin === 'string' ? node.origin : undefined,
         pinned: node.pinned === true,
         retired: node.retired === true,
+        // CARRIED THROUGH, because these two decide whether a finding is safe
+        // to put in a cached prefix and both were being dropped here. Measured
+        // on this repository: of 319 claim-bearing nodes, 66 are stale and 25
+        // are not verified. A stale finding is one whose anchored code has
+        // since changed, so it is advice derived from a tree that no longer
+        // exists -- and in the prefix it is re-read on every turn.
+        confidenceLabel:
+          typeof node.confidenceLabel === 'string'
+            ? node.confidenceLabel
+            : undefined,
+        stale: node.stale === true,
+        // THE THIRD FIELD THAT DECIDES SAFETY IN A PREFIX, and it was missing.
+        // Without it `knowledgeBlock` cannot tell a claim that travels from one
+        // that is true only of the tree it came from, so a shared graph serves
+        // one project's specifics to another as if they were established fact.
+        scope: typeof node.scope === 'string' ? node.scope : undefined,
       }));
+
+    return {
+      findings,
+      sharedGraph: sharedGraphFor(dir, wikiMod),
+    };
   } catch {
     // A pruned runtime, an unreadable directory, a corrupt line. None of them
     // is a reason to stop compressing.
-    return [];
+    return { findings: [], sharedGraph: false };
   }
 }

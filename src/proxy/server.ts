@@ -37,10 +37,26 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createHmac, randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { v1Frontier, type StrategyResult } from '../compress/strategy.js';
+import {
+  v1Frontier,
+  v4Substitute,
+  taskIn,
+  type StrategyResult,
+} from '../compress/strategy.js';
+import {
+  deferTools,
+  withAdvancedToolUse,
+  DEFAULT_KEEP_RELEVANT,
+} from '../compress/tools.js';
+import {
+  accountingPath,
+  appendRecord,
+  tapUsage,
+  type CompressionFacts,
+} from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import type { Finding } from '../compress/knowledge.js';
-import { loadFindings } from './findings.js';
+import { loadFindingsFrom } from './findings.js';
 import {
   presetFromEnv,
   resolveTuning,
@@ -92,6 +108,40 @@ export function upstreamIsDefault(options: ProxyOptions): boolean {
 /** Requests above this are worth compressing; below it the work is noise. */
 const MIN_BYTES = 4096;
 
+/**
+ * The share of a request compression must remove before it is worth sending.
+ *
+ * AN ELISION IS NOT FREE, and the byte count alone never said so. Every elision
+ * replaces content with a path the agent can read back, and reading it back
+ * costs a TURN -- which on these workloads costs far more than the tokens the
+ * elision saved. Measured on four THOL tasks: the proxy removed 2.47% of bytes
+ * and spent three extra turns against control, 37 to 34, for a net cost of
+ * $0.53 against $0.42.
+ *
+ * So a rewrite now has to clear a floor that is proportional to the request,
+ * not merely be smaller than it. Below the floor the original is forwarded
+ * untouched: no elision to read back, no rewritten prefix, and nothing for the
+ * provider to re-cache.
+ *
+ * WHY 0.5%, AND WHY NOT 5%. I set this to 5% first, reasoning that a 2.5%
+ * rewrite could not justify the turn an elision might cost. The measurement
+ * said otherwise and the floor had to come back down. With the floor at 5% the
+ * proxy passed 22 of 22 requests through untouched and the screen came out at
+ * 37 turns and $0.58; with compression actually applied it was 37 turns and
+ * $0.53. Identical turns, LOWER cost -- so the elisions were never buying those
+ * extra turns, and suppressing them only removed the saving.
+ *
+ * What the floor is still for is the case it was always for: a rewrite that
+ * shaves a handful of bytes is not worth an elision the agent might read back.
+ * 0.5% keeps that guard while leaving the achievable 2.5% intact.
+ *
+ * It is NOT a cache-economics guard. The ledger settled that separately: cache
+ * writes were 5.5% of cached tokens against 94.5% reads, with per-request writes
+ * falling to 150 tokens as reads climbed past 30,000, so re-anchoring reproduces
+ * a byte-stable prefix and the cache is hitting. The cost is turns, not writes.
+ */
+const MIN_SAVING_SHARE = 0.005;
+
 export interface ProxyOptions {
   readonly port?: number;
   readonly upstream?: string;
@@ -131,6 +181,33 @@ export interface ProxySummary {
    * compression figure beside it a lie.
    */
   readonly injectedChars?: number;
+  /**
+   * Which branch the anchor decision took, and how many elisions the
+   * strategy produced.
+   *
+   * DIAGNOSTIC, AND IT EXISTS BECAUSE INFERENCE FAILED TWICE. Two campaigns
+   * reported 'compression did not pay' on every request, and reading the code
+   * produced two confident explanations that a local reproduction then
+   * disproved. These two fields separate the remaining possibilities without
+   * guessing: no elisions means nothing was touchable or no engine claimed the
+   * content, while elisions with no saving means the rewrite grew the payload.
+   * Neither records any payload.
+   */
+  readonly anchorReason?: string;
+  readonly elisions?: number;
+  /** Section sizes, for locating where a request's bytes live. No content. */
+  readonly deferredTools?: number;
+  /** Probe: thinking blocks removed from older assistant turns. */
+  readonly droppedThinking?: number;
+  readonly deferredToolChars?: number;
+  readonly systemChars?: number;
+  readonly toolsChars?: number;
+  readonly toolCount?: number;
+  readonly mcpToolChars?: number;
+  readonly topTools?: string;
+  readonly coreToolChars?: number;
+  readonly messagesChars?: number;
+  readonly messageCount?: number;
 }
 
 /** Enabled only on an explicit opt-in, and never when the kill switch is set. */
@@ -255,7 +332,9 @@ export function compressBody(
   spill: (content: string, hint: string) => string,
   anchors?: AnchorStore,
   findings?: readonly Finding[],
-  tuning?: Tuning
+  tuning?: Tuning,
+  /** True when `findings` came from a graph shared across projects. */
+  sharedGraph?: boolean
 ): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
   const before = body.length;
   const unchanged = (reason: string) => ({
@@ -267,6 +346,77 @@ export function compressBody(
       reason,
     },
   });
+
+  // A TRUE NULL PROXY, for isolating what the transport itself costs.
+  // Identical work through the proxy measured 45% more tokens than without it
+  // -- same tool calls, same turns -- which cannot come from compression. This
+  // switch forwards bytes and does nothing else, so a run with it on says
+  // whether that overhead belongs to our rewriting or to being proxied at all.
+  if (/^(1|true|yes|on)$/i.test(process.env.TOKEN_OPTIMIZER_PROXY_NULL || '')) {
+    // WHERE THE BYTES ACTUALLY ARE, measured but never recorded. A matched pair
+    // showed the proxied run carrying ~9,400 more tokens per request than the
+    // same run without a proxy, while the CONVERSATION was the same size (9,035
+    // against 9,488 characters). So the difference lives in the static part --
+    // system prompt and tool schema, which are ~98% of a 120 KB request -- and
+    // nothing was reporting their sizes. Sizes only; no content is recorded.
+    let shape: Record<string, number | string> | undefined;
+    try {
+      const seen = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
+      const sizeOf = (v: unknown): number =>
+        v === undefined ? 0 : JSON.stringify(v).length;
+      shape = {
+        systemChars: sizeOf(seen.system),
+        toolsChars: sizeOf(seen.tools),
+        toolCount: Array.isArray(seen.tools) ? seen.tools.length : 0,
+        // Split by origin, because which half is actually big decides what is
+        // worth deferring -- a client's built-in descriptions can dwarf an MCP
+        // server's terse schemas, or the reverse, and guessing gets it wrong.
+        coreToolChars: Array.isArray(seen.tools)
+          ? seen.tools
+              .filter(
+                (t) =>
+                  typeof (t as { name?: string })?.name === 'string' &&
+                  !(t as { name: string }).name.startsWith('mcp__')
+              )
+              .reduce((a, t) => a + JSON.stringify(t).length, 0)
+          : 0,
+        // The biggest definitions by name, because an average hides which ones
+        // are worth attacking.
+        topTools: Array.isArray(seen.tools)
+          ? seen.tools
+              .map((t) => ({
+                n: String((t as { name?: string })?.name ?? '?'),
+                c: JSON.stringify(t).length,
+              }))
+              .sort((a, b) => b.c - a.c)
+              .slice(0, 10)
+              .map((t) => `${t.n}:${t.c}`)
+              .join(' ')
+          : '',
+        mcpToolChars: Array.isArray(seen.tools)
+          ? seen.tools
+              .filter((t) =>
+                (t as { name?: string })?.name?.startsWith('mcp__')
+              )
+              .reduce((a, t) => a + JSON.stringify(t).length, 0)
+          : 0,
+        messagesChars: sizeOf(seen.messages),
+        messageCount: Array.isArray(seen.messages) ? seen.messages.length : 0,
+      };
+    } catch {
+      // Not JSON; the null path forwards it regardless.
+    }
+    return {
+      body,
+      summary: {
+        beforeBytes: before,
+        afterBytes: before,
+        compressed: false,
+        reason: 'null proxy',
+        ...(shape ?? {}),
+      },
+    };
+  }
 
   if (before < MIN_BYTES) return unchanged('below the size floor');
 
@@ -280,9 +430,157 @@ export function compressBody(
   }
   if (!Array.isArray(parsed.messages)) return unchanged('no messages array');
 
+  // TOOL DEFERRAL IS ITS OWN CAPABILITY, and deliberately not folded into the
+  // compression path. They address different halves of the request and keeping
+  // them separate is what lets either be measured without the other's effect
+  // being attributed to it.
+  //
+  // MEASURED ACROSS 116 LIVE REQUESTS, tool definitions are 28.7% of a request
+  // (p10 25.3%, median 29.2%, p90 31.6%). An earlier note here said 47.6%; that
+  // came from a single 179,564-byte request and was not representative.
+  //
+  // Compression reaches the other half and reaches it well -- it removes 91.7%
+  // of the FRESH region, which is the same figure it scores on fixtures. But
+  // the fresh region is only 3.7-8.0% of a live request, the rest being cached
+  // prefix billed at 0.1x, so 91.7% of it is 3.4% of the request. Deferral is
+  // what reaches the 28.7%, and it reaches it in the prefix, where every
+  // subsequent turn re-reads what was removed.
+  //
+  // ON BY DEFAULT, decided on the campaign: with deferral the proxy is cheaper
+  // than control on 11 of 16 THOL tasks against 4 of 16 without it, at
+  // identical scores (1.000 on every task) and a median 33% turn reduction.
+  // Set TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS=0 to turn it off.
+  let deferred = 0;
+  let deferredChars = 0;
+  if (
+    !/^(0|false|no|off)$/i.test(
+      process.env.TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS || ''
+    )
+  ) {
+    try {
+      // The task text steers which non-core tools stay loaded, so the model
+      // never has to search for one -- and a search costs a round trip plus a
+      // second cold prefix write.
+      const out = deferTools(parsed, {
+        // taskIn, NOT questionIn: the tools array is part of the cached
+        // prefix, so steering it with text that changes every turn changes
+        // the prefix every turn. See taskIn for the measurement.
+        query: taskIn(parsed),
+        keepRelevant: keepToolsFromEnv(),
+      });
+      parsed = out.request;
+      deferred = out.deferredCount;
+      deferredChars = out.deferredChars;
+    } catch {
+      // Fails open like everything else here: a tools array we cannot rewrite
+      // is forwarded as it arrived.
+    }
+  }
+
+  // A PROBE, NOT THE FEATURE. The substitution design in the plan turns on one
+  // untested question -- will the API accept history whose older assistant turns
+  // have had their `thinking` blocks removed? `frontier.ts` refuses to touch a
+  // signed block and cites HeadRoom's issue #3456, but that is their bug report,
+  // and removal is not rewriting: a signature covers block CONTENT, so deleting
+  // the block leaves nothing to mismatch.
+  //
+  // A direct probe against /v1/messages returned 429 on every variant including
+  // its control, so this asks the question down the path that demonstrably
+  // works instead: the real client, through this proxy, against the rig.
+  //
+  // Safe to do minimally because it was measured: across a 29-message
+  // conversation, `thinking` never shared a message with any other block type,
+  // so dropping those messages orphans no tool_use/tool_result pairing. The
+  // newest assistant turn keeps its thinking, since that is the one the
+  // provider may still require for continuity.
+  //
+  // Off unless asked for, and it stays a probe until the answer is in.
+  //
+  // TWO MODES, because exempting the newest turn cost more than it saved. `1`
+  // keeps that turn's thinking; `all` drops every one.
+  //
+  // MEASURED. With the newest turn exempt, the exemption BOUNDARY MOVES each
+  // turn -- the block kept at turn N is dropped at turn N+1 -- so the prefix
+  // changes at that point on every request and is re-written there. On the four
+  // longest THOL tasks turns fell hard (0.49, 0.67, 0.29, 0.82 against control)
+  // while cost rose on three of four (0.62, 1.48, 1.10, 1.34):
+  // code-debug-pipeline-py took 71% fewer turns and still cost 10% more, so
+  // per-turn cost had roughly quadrupled. Dropping every block instead makes
+  // the transform a pure function of the history, so the prefix one turn
+  // produces is the prefix the next reproduces.
+  //
+  // THE VERDICT, AND IT IS NEGATIVE. Stabilising the transform worked -- against
+  // control on the four longest tasks, `all` beat `keep newest` on three of four
+  // (1.01 vs 1.48, 0.71 vs 1.10, 1.32 vs 1.34; cascade went the other way, 0.72
+  // vs 0.62). But DEFERRAL ALONE beats both on three of four (0.93, 0.93, 0.54,
+  // 0.98), so removing thinking costs more than it saves even once the prefix is
+  // stable. Turns fall hard and consistently -- 0.31, 0.67, 0.75, 0.94 against
+  // control, at score 1.0 everywhere -- and that does not convert into money.
+  //
+  // So this stays OFF and stays a probe. It is kept rather than deleted because
+  // it answered the question the plan was gated on (the API does accept the
+  // removal) and because the turn reduction is real and unexplained, which is
+  // worth understanding before anything else is built on top.
+  //
+  // n=1 per task on four tasks. Enough to stop, not enough to have proven a
+  // mechanism.
+  const dropMode = (
+    process.env.TOKEN_OPTIMIZER_PROXY_DROP_THINKING || ''
+  ).toLowerCase();
+  const keepNewestThinking = dropMode !== 'all';
+  let droppedThinking = 0;
+  if (/^(1|true|yes|on|all)$/.test(dropMode)) {
+    try {
+      const msgs = parsed.messages ?? [];
+      let lastAssistant = -1;
+      for (let i = msgs.length - 1; keepNewestThinking && i >= 0; i--) {
+        if (msgs[i]?.role === 'assistant') {
+          lastAssistant = i;
+          break;
+        }
+      }
+      const kept = msgs
+        .map((m, i) => {
+          if (m?.role !== 'assistant' || i === lastAssistant) return m;
+          const content = m.content;
+          if (!Array.isArray(content)) return m;
+          const next = content.filter((b) => {
+            const type = (b as { type?: string })?.type;
+            const drop = type === 'thinking' || type === 'redacted_thinking';
+            if (drop) droppedThinking += 1;
+            return !drop;
+          });
+          return next.length === content.length ? m : { ...m, content: next };
+        })
+        .filter((m) => !Array.isArray(m?.content) || m.content.length > 0);
+      parsed = { ...parsed, messages: kept };
+    } catch {
+      // Fails open, like every other rewrite here.
+      droppedThinking = 0;
+    }
+  }
+
+  // THE ONE PLACE A STRATEGY IS CHOSEN, and until now it was not a choice at
+  // all: `v1Frontier` was named directly, so `v4Substitute` could be registered,
+  // tested and benchmarked while remaining unreachable from the running proxy.
+  // That is the shape tool deferral shipped in for months -- present, correct,
+  // and never once executed on real traffic.
+  //
+  // Off unless asked. Substitution removes model reasoning from history, and
+  // whether that costs the model something it needed is the one question no
+  // offline instrument can answer.
+  const substitute = /^(1|true|yes|on)$/i.test(
+    (process.env.TOKEN_OPTIMIZER_PROXY_SUBSTITUTE || '').trim()
+  );
   let result: StrategyResult;
   try {
-    result = v1Frontier(parsed, { spill, anchors, findings, tuning });
+    result = (substitute ? v4Substitute : v1Frontier)(parsed, {
+      spill,
+      anchors,
+      findings,
+      sharedGraph,
+      tuning,
+    });
   } catch {
     return unchanged('compression threw');
   }
@@ -292,9 +590,53 @@ export function compressBody(
   // deliberately added, which is the one case where growing the request is
   // the point. It is charged in the summary either way, and it only
   // happens on a turn the prefix was being rewritten anyway.
-  const added = result.injectedChars > 0;
-  if (!added && next.length >= before)
-    return unchanged('compression did not pay');
+  const added = result.injectedChars > 0 || deferred > 0;
+  // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
+  // shaves a couple of percent still plants elisions the agent may read back,
+  // and one such turn costs more than the whole saving.
+  const saved = before - next.length;
+  if (!added && saved < before * MIN_SAVING_SHARE) {
+    // REMEMBERED EVEN THOUGH WE SENT THE CLIENT'S BYTES, and forgetting here was
+    // a deadlock rather than a missed optimisation.
+    //
+    // `remember` used to sit only past this return, so a turn that compressed
+    // nothing was never recorded -- and a FIRST turn legitimately compresses
+    // nothing, because the only content it could touch is already behind the
+    // client's cache marker. The store therefore stayed empty, turn two saw
+    // `first-turn` again and got no floor, compressed nothing, and was not
+    // recorded either. It could not compress because it never remembered, and
+    // never remembered because it had not compressed.
+    //
+    // Measured: six live proxy runs, every request reporting `first-turn` and
+    // 0 elisions, while the identical requests replayed through one store
+    // offline removed 4.3%. That gap was this line.
+    //
+    // `anchored: false` is the honest value and the load-bearing one: we sent
+    // the client's prefix, so the next turn must be told the provider holds
+    // THEIRS, not ours. What the record carries that matters is the breakpoint,
+    // which is what tells the next turn where the cache ends.
+    if (anchors && result.anchor)
+      anchors.remember(result.anchor.key, {
+        ...result.anchor.record,
+        anchored: false,
+      });
+    // Reported with its diagnostics, because this is the branch that fired on
+    // every request of two campaigns and the byte counts alone could not say why.
+    return {
+      body,
+      summary: {
+        beforeBytes: before,
+        afterBytes: before,
+        compressed: false,
+        reason:
+          saved > 0
+            ? `saving ${((saved / before) * 100).toFixed(2)}% is below the ${(MIN_SAVING_SHARE * 100).toFixed(0)}% floor`
+            : 'compression did not pay',
+        anchorReason: result.anchor?.reason,
+        elisions: result.elisions.length,
+      },
+    };
+  }
 
   // COMMITTED ONLY NOW, because everything above can still decide not to send
   // this body. Remembering `anchored: true` for a rewrite that was then
@@ -310,6 +652,11 @@ export function compressBody(
       beforeBytes: before,
       afterBytes: next.length,
       compressed: true,
+      deferredTools: deferred,
+      droppedThinking,
+      deferredToolChars: deferredChars,
+      anchorReason: result.anchor?.reason,
+      elisions: result.elisions.length,
       ...(added ? { injectedChars: result.injectedChars } : {}),
     },
   };
@@ -346,9 +693,67 @@ const HOP_BY_HOP = new Set([
  * measures turns and it has not been run against this. Folding an unproven
  * addition into a proven reduction would make the reduction untrue.
  */
+/**
+ * How stale the in-memory findings may get before a background re-read.
+ *
+ * The read is a full synchronous parse of the graph -- 40-58ms on a project
+ * graph, and it was measured at 1,118ms on a 75MB unrooted one -- so it is
+ * throttled rather than done per request. Sixty seconds is well inside the gap
+ * between sessions, which is when a fresher block can actually be used, and far
+ * longer than a burst of turns within one conversation, where it cannot.
+ */
+const FINDINGS_REFRESH_MS = 60_000;
+
 export function knowledgeEnabled(env: NodeJS.ProcessEnv): boolean {
   if (env.TOKEN_OPTIMIZER_MODE === 'off') return false;
   return /^(1|true|yes|on)$/i.test(env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE || '');
+}
+
+/**
+ * How many characters of established knowledge go into the cached prefix.
+ *
+ * A KNOB FOR THE SAME REASON THE TOOL APERTURE IS ONE. The default of 2,000
+ * fits six to eight lines out of 72,736 characters of eligible claim text --
+ * 2.7% of what this project has worked out -- and that number was never chosen
+ * against a measurement, only against a worry that a longer block would bury
+ * the relevant lines. The block is charged once as a cache write and then read
+ * at 0.1x, so widening it is cheap per turn and expensive only once; whether it
+ * buys turns is a question for the rig, not for an argument.
+ *
+ * Returns undefined when unset so the preset's own value survives; falling
+ * back to the constant here would silently override a preset that chose a
+ * different budget on purpose.
+ */
+export function knowledgeCharsFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): number | undefined {
+  const raw = env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE_CHARS;
+  if (raw === undefined || raw.trim() === '') return undefined;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) return undefined;
+  return n;
+}
+
+/**
+ * How many large tool definitions stay loaded when deferral is on.
+ *
+ * A KNOB BECAUSE THE RIGHT VALUE IS MEASURED, NOT REASONED. The default of
+ * five was a guess; the first campaign to run deferral end to end deferred 14
+ * of 26 definitions, cut the model's context from 29,824 prefix tokens to
+ * 19,138 -- below the 20,431 of an arm with no proxy at all -- and the
+ * transcripts show the tool search tool was never once invoked. Nothing was
+ * searched for, so the guess was too cautious, and finding out how much too
+ * cautious costs a campaign rather than an argument.
+ *
+ * Out-of-range and unparseable values fall back to the default rather than
+ * throwing: a typo in an environment variable must not take a session down.
+ */
+export function keepToolsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS;
+  if (raw === undefined || raw.trim() === '') return DEFAULT_KEEP_RELEVANT;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return DEFAULT_KEEP_RELEVANT;
+  return n;
 }
 
 /**
@@ -414,7 +819,8 @@ function forward(
   upstream: string,
   req: IncomingMessage,
   res: ServerResponse,
-  body: Buffer
+  body: Buffer,
+  facts?: CompressionFacts
 ): void {
   const path = requestPath(req.url);
   if (path === null) {
@@ -458,6 +864,13 @@ function forward(
   // Set last and unconditionally: the body was rewritten, so its length is
   // ours to state and no longer the client's.
   headers['content-length'] = String(body.length);
+  // THE BETA THAT MAKES defer_loading MEAN ANYTHING. Appended to whatever the
+  // client already asked for, never replacing it -- overwriting would switch
+  // off betas it needs and the failure would surface far from here.
+  if (facts?.deferredTools)
+    headers['anthropic-beta'] = withAdvancedToolUse(
+      req.headers['anthropic-beta']
+    );
 
   const upstreamReq = send(
     {
@@ -469,7 +882,67 @@ function forward(
       headers,
     },
     (upstreamRes) => {
-      res.writeHead(upstreamRes.statusCode || 502, upstreamRes.headers);
+      // HOP-BY-HOP HEADERS ARE STRIPPED IN BOTH DIRECTIONS, and doing it in
+      // only one was a real defect rather than an untidiness.
+      //
+      // The request path has always dropped them. The response path forwarded
+      // `upstreamRes.headers` wholesale, so the upstream's `transfer-encoding`,
+      // `connection` and `keep-alive` were copied onto a DIFFERENT connection
+      // -- ours to the client. `transfer-encoding: chunked` is the damaging
+      // one: Node is already deciding framing for this response, and being
+      // handed a conflicting declaration is how a streamed body arrives
+      // differently from the way it was sent.
+      //
+      // That matters here more than it would in most proxies, because the body
+      // is an SSE stream the agent consumes incrementally. Measured: a proxy
+      // doing NOTHING but forwarding bytes cost ~30% more than no proxy, and
+      // control's per-rep token counts are deterministic (97,255 / 97,249 /
+      // 97,227) while the proxied ones scatter (111,957 to 175,745). Identical
+      // request bytes cannot move the model, so the divergence was on the way
+      // back.
+      //
+      // `Connection` also NAMES further headers that are single-hop, and those
+      // go too -- the sender is telling us which ones it considers local to its
+      // own connection, and passing those on is the same mistake as passing on
+      // `Connection` itself.
+      const upstreamHopByHop = new Set(
+        String(upstreamRes.headers.connection ?? '')
+          .split(',')
+          .map((name) => name.trim().toLowerCase())
+          .filter(Boolean)
+      );
+      const responseHeaders: Record<string, string | string[]> = {};
+      for (const [key, value] of Object.entries(upstreamRes.headers)) {
+        if (value === undefined) continue;
+        if (HOP_BY_HOP.has(key) || upstreamHopByHop.has(key)) continue;
+        responseHeaders[key] = value;
+      }
+      res.writeHead(upstreamRes.statusCode || 502, responseHeaders);
+      // WATCHED BEFORE IT IS PIPED, and watching is all it does: a `data`
+      // listener does not consume a stream in flowing mode, so every byte still
+      // reaches `pipe` unchanged. Registered first so no chunk can be missed by
+      // a listener attached after delivery has already begun.
+      const ledger = facts ? accountingPath() : null;
+      if (ledger && facts) {
+        // THE ENCODING HAS TO BE HANDED OVER, and forgetting to was why the
+        // ledger still recorded no usage after the decoder was written: the
+        // parameter existed, the call site never passed it, and every test fed
+        // the tap plaintext so nothing caught it.
+        const encoding = upstreamRes.headers['content-encoding'];
+        tapUsage(
+          upstreamRes,
+          (usage) => {
+            appendRecord(ledger, {
+              ts: new Date().toISOString(),
+              path: requestPath(req.url) ?? '/',
+              status: upstreamRes.statusCode || 0,
+              ...facts,
+              usage,
+            });
+          },
+          typeof encoding === 'string' ? encoding : undefined
+        );
+      }
       // Piped, not buffered: an SSE stream must arrive as it is produced, or
       // the agent sits waiting for a response that has already started.
       upstreamRes.pipe(res);
@@ -520,18 +993,68 @@ export async function startProxy(
   // One preset for the life of the proxy. Changing dials mid-session would
   // change how the cached prefix compresses, which is the one thing that must
   // not move -- see anchor.ts.
+  // The knowledge budget is the one dial with its own variable, because it is
+  // the one being swept: an explicit `compression` option still wins over it,
+  // so this layers in rather than overriding the caller.
+  const knowledgeChars = knowledgeCharsFromEnv(process.env);
   const tuning = resolveTuning(
-    options.compression ?? {},
+    {
+      ...(knowledgeChars === undefined
+        ? {}
+        : { knowledgeBudgetChars: knowledgeChars }),
+      ...(options.compression ?? {}),
+    },
     options.preset ?? presetFromEnv(process.env)
   );
-  // Read once at startup, not per request. The graph does change during a
-  // session, but a block that changes mid-session cannot live in a cached
-  // prefix anyway -- so re-reading would spend I/O to produce a value the
-  // cache rules immediately discard. New findings reach the next session,
-  // which is when they are free.
-  const findings = knowledgeEnabled(process.env)
-    ? await loadFindings(options.projectRoot || process.cwd())
-    : [];
+  // Read at startup, then refreshed in the background -- see the block below,
+  // which owns the reasoning about why the refresh cannot be synchronous.
+  const knowledgeOn = knowledgeEnabled(process.env);
+  const graphRoot = options.projectRoot || process.cwd();
+  const loaded = knowledgeOn
+    ? await loadFindingsFrom(graphRoot)
+    : { findings: [], sharedGraph: false };
+  // MUTABLE, AND REFRESHED IN THE BACKGROUND. Read once per process was a real
+  // defect: a finding written today did not reach tomorrow's session until the
+  // proxy restarted, and this project writes findings continuously.
+  //
+  // NOT refreshed synchronously per request, for two separate reasons. The
+  // request path is synchronous and this read is not, and more importantly the
+  // block may only CHANGE on a turn where the cached prefix is already lost --
+  // `first-turn` and `client-invalidated`. On `already-anchored` the provider
+  // holds our prefix and reproducing it byte for byte is the cache hit, so a
+  // fresher block there would buy nothing and cost everything.
+  //
+  // So the refresh is decoupled: it runs after a response, throttled, and the
+  // newer findings are picked up by the next conversation that starts. Within
+  // one conversation the block still cannot change, which is not a limitation
+  // of this code but of what a cached prefix is.
+  let findings = loaded.findings;
+  let sharedGraphFlag = loaded.sharedGraph;
+  let lastFindingsRead = Date.now();
+  let refreshing = false;
+  const refreshFindings = (): void => {
+    if (!knowledgeOn || refreshing) return;
+    if (Date.now() - lastFindingsRead < FINDINGS_REFRESH_MS) return;
+    refreshing = true;
+    void loadFindingsFrom(graphRoot)
+      .then((next) => {
+        findings = next.findings;
+        sharedGraphFlag = next.sharedGraph;
+        lastFindingsRead = Date.now();
+      })
+      .catch(() => {
+        // A graph that cannot be re-read leaves the previous findings in place,
+        // which is strictly better than serving none.
+        lastFindingsRead = Date.now();
+      })
+      .finally(() => {
+        refreshing = false;
+      });
+  };
+  // CARRIED WITH THE FINDINGS, not recomputed here. A shared graph -- the
+  // unrooted fallback, or one mounted across several repositories -- holds
+  // `project` claims about trees other than this one, and only the loader knows
+  // which graph it opened.
 
   const guessing = upstreamIsDefault(options);
   const limit = bodyLimitFor(options);
@@ -591,10 +1114,19 @@ export async function startProxy(
         spill,
         anchors,
         findings,
-        tuning
+        tuning,
+        sharedGraphFlag
       );
+      refreshFindings();
       options.onSummary?.({ path: req.url || '/', ...summary });
-      forward(upstream, req, res, next);
+      // SPREAD, NOT RE-LISTED. This was seventeen fields copied across by hand,
+      // and the ledger is only as good as that list is complete: injectedChars
+      // was missing from it, so the proxy printed `+1927 injected` to its log
+      // while the ledger line beside it said nothing, and an A/B of the
+      // knowledge block read its own effect as zero. The summary IS the
+      // compression facts -- every field of it belongs in the ledger, and a
+      // field added to one should never need remembering in the other.
+      forward(upstream, req, res, next, summary);
     })();
   });
 

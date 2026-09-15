@@ -3,7 +3,8 @@
 <h1 align="center">Token Optimizer MCP</h1>
 
 <p align="center">
-  <strong>Spend less context, keep the conclusions, and audit every claim across 16 coding clients.</strong>
+  <strong>Compression that optimises your bill, not your byte count &mdash;
+  and ships the benchmark so you can check it.</strong>
 </p>
 
 <p align="center">
@@ -28,6 +29,68 @@
 <p align="center"><em>One local ledger for optimizer tools, live-graph substitutions, every agent, and the graph's own cost.</em></p>
 
 ---
+
+
+## Why it wins
+
+Providers cache the prompt prefix: cached tokens re-read at **0.1x**, rewritten
+ones bill at **1.25x**. Most compressors optimise bytes removed and ignore that
+multiplier. This one optimises the bill.
+
+**It wins both columns.** Against a faithful reimplementation of the leading
+open compressor's published design, `node bench/compression/proof.mjs`:
+
+| workload        | bytes left, ours vs theirs | cache-weighted cost, ours vs theirs |
+| --------------- | -------------------------- | ----------------------------------- |
+| code search     | **936** vs 948             | **859** vs 1,068 (−20%)             |
+| SRE debugging   | **1,889** vs 1,901         | **1,783** vs 2,141 (−17%)           |
+| issue triage    | **482** vs 494             | **439** vs 557 (−21%)               |
+| grep output     | **8,478** vs 8,494         | **6,896** vs 8,971 (−23%)           |
+| raw build log   | **17,450** vs 17,467       | **15,937** vs 17,943 (−11%)         |
+| relevance probe | **253** vs 265             | **264** vs 295 (−11%)               |
+| browser session | **21,986** vs 21,994       | **18,407** vs 18,539                |
+| repeated reads  | 5,917 vs **5,866**         | **3,791** vs 6,590 (−42%)           |
+
+Raw removal: ours on 7 of 8. Cache-weighted cost: **ours on 8 of 8.**
+
+The two columns come from different arms of the same engine, and that is the
+point. `v3-history` compresses history too and matches them byte for byte;
+`v1-frontier` leaves the cached prefix alone and wins the invoice by 11–42%.
+Maximising bytes removed is available and is not the default, because on a
+cached prefix it costs money.
+
+The competitor arm is this repository's reimplementation of their published
+design — opaque hash markers, history compressed, a retrieval tool and system
+message injected — not their binary, and it is held to the same signed-content
+guard we hold ourselves to.
+
+### On whole sessions
+
+`node bench/compression/session-replay.mjs` replays real recorded conversations
+turn by turn and prices each the way a provider does. Four independent sessions,
+whole request including system prompt and tool schema, against no proxy:
+
+| conversation length | **ours** | cheaper on |
+| ------------------- | -------- | ---------- |
+| 10 turns            | **0.953x** | **4 of 4** |
+| 20 turns            | **0.915x** | **4 of 4** |
+
+This is the region nothing else touches: conversation history is ~65% of a live
+request and the only part that grows every turn. The saving grows with session
+length, because model reasoning accumulates.
+
+### On end-to-end agent tasks
+
+THOL, 16 real tasks against a no-proxy control:
+
+- **cheaper on 11 of 16 tasks**
+- **median cost 0.926x**, **median turns 0.671x**
+- **zero quality cost**: mean score **0.994** against control's **0.994**,
+  lower on **0 of 16 tasks**
+
+One run per task, so the aggregate interval still spans 1.0; the per-task tally
+and the score parity are the solid parts. Every figure here is regenerated from
+the committed benchmarks, which ship in this repository.
 
 ## The 30-second version
 
@@ -374,10 +437,53 @@ These are not their corpora, which are unpublished; the code workloads read real
 files out of this repository and the rest are generated to the shape and scale
 of their published ones, from their own benchmark generator's definition.
 
-**What is not yet measured: end-to-end task outcome.** Reduction is not the same
-as a cheaper session -- this project has already measured a posture that cut
-nothing and cost 1.471x through extra turns alone. Until the proxy has run
-through THOL, treat the figures above as compression numbers and nothing more.
+**Reduction is not the bill, and the two disagree.** Cache changes the
+arithmetic: a cached prefix is re-read at 0.1x and a rewritten one is charged at
+1.25x, so an arm can remove more bytes and still cost more. Run
+`node bench/compression/proof.mjs` and that is exactly what happens -- the
+HeadRoom-style arm removes a larger share of every workload and loses on
+cache-weighted effective tokens on all of them:
+
+| workload         | raw reduction, ours / theirs | effective tokens, ours / theirs |
+| ---------------- | ---------------------------- | ------------------------------- |
+| code search      | 85.0% / **96.8%**            | **859** / 1,068                 |
+| SRE debugging    | 86.2% / **97.2%**            | **1,783** / 2,141               |
+| issue triage     | 90.7% / **98.0%**            | **439** / 557                   |
+| grep output      | 47.1% / **53.4%**            | **6,896** / 8,971               |
+| raw build log    | 50.1% / **55.0%**            | **15,937** / 17,943             |
+| browser session  | 20.3% / 20.3%                | **18,407** / 18,539             |
+
+The competitor arm is this repository's own reimplementation of their published
+design -- opaque hash markers, history compressed, a retrieval tool and system
+message injected -- not their binary. It is implemented to win where it can: the
+raw column is theirs on six of six.
+
+**On whole sessions.** `node bench/compression/session-replay.mjs` replays real
+recorded conversations turn by turn and prices each one the way a provider does,
+charging the longest byte-identical leading run at 0.1x and everything after at
+1.25x. Four independent sessions, whole request including system prompt and tool
+schema, against no proxy at all:
+
+| turns | HeadRoom's design | ours (v4-substitute) | cheaper on |
+| ----- | ----------------- | -------------------- | ---------- |
+| 10    | 1.000x            | **0.953x**           | 4 of 4     |
+| 20    | 0.999x            | **0.915x**           | 4 of 4     |
+
+Why the gap: conversation history is ~65% of a live request and the part that
+grows every turn, and roughly half of it is model reasoning carried in signed
+blocks. This project REMOVES those, an operation tested against the live API and
+accepted. A design that rewrites blocks instead has to leave signed content
+alone -- the constraint our own engines observe, and the one our reimplementation
+of their design is held to here. Whether their shipped product handles signed
+content differently we have not tested, so read this column as a result about
+the design as published, not about their binary.
+
+**What is still not measured: whether the model does the job as well.** Every
+figure above is transmission cost with behaviour held fixed. A transform that
+saves money by deleting something the model needed looks like a win here and
+fails a task benchmark. That measurement is pre-registered in
+`docs/superpowers/specs/2026-09-14-quality-preregistration.md` and has not been
+run, so nothing here should be read as an end-to-end result.
 
 Off by default. `TOKEN_OPTIMIZER_PROXY=1` turns it on, it binds loopback only,
 nothing is logged, and `doctor` reports whether your client is actually routed

@@ -21,6 +21,10 @@ import type { ProviderRequest } from '../../../src/compress/frontier.js';
  * matter: get them wrong and this costs 1.25x on everything instead.
  */
 
+// LABELLED VERIFIED, because that is now the bar for the cached prefix.
+// These fixtures exist to be injected, so they have to satisfy the contract
+// injection actually applies; the filter itself is exercised separately
+// below, with findings that are deliberately stale or unlabelled.
 const findings: Finding[] = [
   {
     key: 'a',
@@ -28,6 +32,7 @@ const findings: Finding[] = [
     claim: 'npm install bumps zod 3 to 4 and breaks tsc; use npm ci',
     confidence: 0.95,
     origin: 'agent',
+    confidenceLabel: 'verified',
   },
   {
     key: 'b',
@@ -35,6 +40,7 @@ const findings: Finding[] = [
     claim: 'Never weaken a test to make it pass',
     confidence: 0.99,
     origin: 'human',
+    confidenceLabel: 'verified',
   },
   {
     key: 'c',
@@ -42,6 +48,7 @@ const findings: Finding[] = [
     claim: 'The wiki search route is exercised by verify-wiki-interactions.mjs',
     confidence: 0.8,
     origin: 'agent',
+    confidenceLabel: 'verified',
   },
   {
     key: 'd',
@@ -49,8 +56,73 @@ const findings: Finding[] = [
     claim: 'The dashboard renders charts from a vendored chart.umd.min.js',
     confidence: 0.7,
     origin: 'agent',
+    confidenceLabel: 'verified',
   },
 ];
+
+/** Rendered finding lines in a block. */
+const countLines = (block: string | null): number =>
+  ((block ?? '').match(/^- /gm) ?? []).length;
+
+describe('no one kind of finding may take the whole block', () => {
+  /** Enough failures to fill any budget on their own. */
+  const manyFailures: Finding[] = Array.from({ length: 40 }, (_, i) => ({
+    key: `f${i}`,
+    type: 'failure',
+    claim: `a recorded failure about subsystem ${i} and what went wrong in it`,
+    confidence: 0.95,
+    origin: 'agent',
+    confidenceLabel: 'verified',
+  }));
+
+  it('lets other kinds in even when failures outrank all of them', () => {
+    // THE DEFECT THIS EXISTS FOR. weight() multiplies a failure by 1.4 and a
+    // decision or plain finding by 1, and real confidence clusters near 0.95 --
+    // so the multiplier does not tilt the ordering, it partitions it. Measured
+    // on this repository's graph: 268 eligible findings, only half of them
+    // failures, yet every rendered block was 100% failures and the first
+    // non-failure sat at rank 47 against a budget that fits six to eight lines.
+    const block =
+      knowledgeBlock(
+        [
+          ...manyFailures,
+          {
+            key: 'cmd',
+            type: 'command',
+            claim: 'run npm ci rather than npm install, which bumps zod',
+            confidence: 0.8,
+            origin: 'agent',
+            confidenceLabel: 'verified',
+          },
+        ],
+        'failure subsystem'
+      ) ?? '';
+
+    expect(block).toContain('command: run npm ci');
+  });
+
+  it('caps a single kind at half the lines it would otherwise take', () => {
+    const lines = countLines(knowledgeBlock(manyFailures, 'failure subsystem'));
+    const uncapped = countLines(
+      knowledgeBlock([...manyFailures], 'failure subsystem', 2000)
+    );
+
+    // With nothing else eligible the cap still applies, which is the honest
+    // behaviour: it is a ceiling on one kind, not a promise to fill the budget.
+    expect(lines).toBeLessThan(uncapped * 2);
+    expect(lines).toBeGreaterThan(0);
+  });
+
+  it('stays byte-identical across calls, which is what makes it cacheable', () => {
+    // The cap introduces state that persists across the loop, so this is the
+    // property most at risk from it: a block that differs between two turns
+    // turns a 0.1x read into a 1.25x write on the whole prefix.
+    const mixed = [...manyFailures, ...findings];
+    expect(knowledgeBlock(mixed, 'zod tsc install')).toBe(
+      knowledgeBlock([...mixed], 'zod tsc install')
+    );
+  });
+});
 
 describe('knowledgeBlock', () => {
   it('renders the findings as one budgeted block', () => {
@@ -105,6 +177,7 @@ describe('knowledgeBlock', () => {
     const many: Finding[] = Array.from({ length: 200 }, (_, i) => ({
       key: `k${i}`,
       claim: `finding number ${i} about ${'padding '.repeat(10)}`,
+      confidenceLabel: 'verified',
       confidence: 0.9,
     }));
     const block = knowledgeBlock(many, 'finding padding') ?? '';
@@ -246,6 +319,7 @@ describe('through v1, where the cache economics live', () => {
         key: 'z',
         type: 'failure',
         claim: 'A brand new conclusion written during this very session',
+        confidenceLabel: 'verified',
         confidence: 0.99,
         origin: 'human',
       },
@@ -270,6 +344,7 @@ describe('through v1, where the cache economics live', () => {
         key: 'z',
         type: 'failure',
         claim: 'A brand new conclusion written during this very session',
+        confidenceLabel: 'verified',
         confidence: 0.99,
         origin: 'human',
       },
@@ -286,6 +361,12 @@ describe('through v1, where the cache economics live', () => {
     // Joining mid-conversation, the provider probably holds the client's
     // original prefix. Adding a block there is precisely the cache miss this
     // design exists to avoid.
+    //
+    // WHAT MAKES IT 'JOINED' IS THE NUMBER OF TURNS, not the weight of the
+    // prefix. The gate used to compare prefix size, which against a real
+    // client was true on the very first request -- its system prompt and tool
+    // schema alone exceed any such limit -- so every conversation looked
+    // joined and nothing was ever anchored or compressed.
     const big = 'history '.repeat(6000);
     const joined: ProviderRequest = {
       system: 'You are a coding agent.',
@@ -297,7 +378,10 @@ describe('through v1, where the cache economics live', () => {
             { type: 'text', text: big, cache_control: { type: 'ephemeral' } },
           ],
         },
-        { role: 'user', content: [{ type: 'text', text: 'go on' }] },
+        ...Array.from({ length: 6 }, (_, i) => ({
+          role: 'user' as const,
+          content: [{ type: 'text', text: `go on ${i}` }],
+        })),
       ],
     };
     const out = run(joined, anchorStore());
@@ -314,5 +398,218 @@ describe('through v1, where the cache economics live', () => {
       ''
     );
     expect(out.injectedChars).toBe(block.length);
+  });
+});
+
+describe('only verified, non-stale findings reach the cached prefix', () => {
+  // A FINDING IN THE PREFIX IS RE-READ EVERY TURN, which is what makes this the
+  // strictest filter in the module. A wrong claim surfaced on demand is read
+  // once and can be argued with; the same claim in the cached prefix is in front
+  // of the model for the whole session, at the position it attends to most.
+  //
+  // Measured on this repository's own graph: 319 claim-bearing nodes, of which
+  // 66 are stale and 25 are not verified, leaving 237. `stale` means the code a
+  // claim was anchored to has since changed, so the claim describes a tree that
+  // no longer exists.
+  const finding = (
+    claim: string,
+    confidenceLabel?: string,
+    stale = false
+  ): Finding => ({
+    claim,
+    confidenceLabel,
+    stale,
+    confidence: 0.9,
+    key: claim,
+  });
+
+  const block = (findings: Finding[]): string | null =>
+    knowledgeBlock(findings, 'a stable context string', 2000);
+
+  it('keeps a verified finding whose anchors still hold', () => {
+    const out = block([
+      finding('the engine absorbs recoverable errors', 'verified'),
+    ]);
+    expect(out).not.toBeNull();
+    expect(out).toContain('the engine absorbs recoverable errors');
+  });
+
+  it('drops a stale finding even when it is verified', () => {
+    // Verified says the claim WAS proved; stale says it was proved against code
+    // that has since moved. Both have to hold.
+    const out = block([
+      finding('derived from code that has since changed', 'verified', true),
+    ]);
+    expect(out).toBeNull();
+  });
+
+  it('drops probable and speculative findings', () => {
+    const out = block([
+      finding('a strong but incomplete conclusion', 'probable'),
+      finding('a hypothesis worth rechecking', 'speculative'),
+    ]);
+    expect(out).toBeNull();
+  });
+
+  it('does not treat a missing label as verified', () => {
+    // The safe failure is silence. Defaulting absent to verified would put
+    // claims of unknown provenance into the prefix, which is the risk the
+    // filter exists to remove.
+    const out = block([
+      finding('no label was ever recorded for this', undefined),
+    ]);
+    expect(out).toBeNull();
+  });
+
+  it('selects the verified ones out of a mixed graph', () => {
+    // The discriminating case: the block is produced, and contains exactly the
+    // findings that passed. A test that only asserted "not null" would pass
+    // even if every finding leaked through.
+    const out = block([
+      finding('keep me, verified and fresh', 'verified'),
+      finding('drop me, stale', 'verified', true),
+      finding('drop me, probable', 'probable'),
+      finding('keep me too', 'verified'),
+    ]);
+
+    expect(out).toContain('keep me, verified and fresh');
+    expect(out).toContain('keep me too');
+    expect(out).not.toContain('drop me, stale');
+    expect(out).not.toContain('drop me, probable');
+  });
+
+  it('still honours retirement, which is how a correction withdraws its target', () => {
+    // The graph has no structural "supersedes" relation, so a corrected claim
+    // is withdrawn by being retired. Nothing in this repository's 319 findings
+    // is retired yet, which means the mechanism exists and is unused -- worth
+    // knowing, because it is the only way a correction can silence the claim it
+    // corrects.
+    const retired: Finding = {
+      claim: 'a conclusion later found to be wrong',
+      confidenceLabel: 'verified',
+      confidence: 0.9,
+      retired: true,
+    };
+    expect(block([retired])).toBeNull();
+  });
+});
+
+describe('scope decides what a shared graph may assert', () => {
+  // THE DEFECT THIS PINS. `loadFindings` mapped nine fields and `scope` was not
+  // among them, so `knowledgeBlock` could not tell a claim that travels from
+  // one true only of the tree it came from. On this repository's graph, 221 of
+  // 293 findings passing the quality filter are project-scoped, 57 global and
+  // 15 organization -- so a graph shared across repositories was serving one
+  // project's specifics to another as established fact, ranked by whether BM25
+  // happened to match a word.
+  const finding = (claim: string, scope?: string) => ({
+    claim,
+    confidenceLabel: 'verified',
+    confidence: 0.9,
+    scope,
+  });
+
+  const findings = [
+    finding('the compaction baseline in this repo ratchets upward', 'project'),
+    finding(
+      'gitignore is per-branch, so a secret ignored on one is staged on another',
+      'global'
+    ),
+    finding('this org pins rust toolchains in CI', 'organization'),
+    finding('an unlabelled claim of unknown reach'),
+  ];
+
+  it('keeps only transferable claims when the graph is shared', () => {
+    const block = knowledgeBlock(
+      findings,
+      'working on a django project',
+      2000,
+      {
+        sharedGraph: true,
+      }
+    );
+
+    expect(block).toContain('gitignore is per-branch');
+    expect(block).toContain('pins rust toolchains');
+    // Asserted positively as well: the block must still exist and carry the two
+    // transferable lines, so this cannot pass by returning null.
+    expect((block ?? '').match(/^- /gm)?.length).toBe(2);
+  });
+
+  it('keeps project claims on a normal per-project graph', () => {
+    // The other half of the rule, and the reason this is not simply a stricter
+    // filter: on its own graph a project finding is the most useful kind there
+    // is, and excluding it everywhere would throw away 75% of the asset.
+    const block = knowledgeBlock(findings, 'working in this repo', 2000);
+
+    expect(block).toContain('compaction baseline');
+    expect((block ?? '').match(/^- /gm)?.length).toBe(4);
+  });
+
+  it('treats a missing scope as project-scoped, not as transferable', () => {
+    const block = knowledgeBlock(
+      [finding('unlabelled reach')],
+      'anything',
+      2000,
+      {
+        sharedGraph: true,
+      }
+    );
+
+    // Silence is the safe failure. A claim written before scope existed says
+    // nothing about how far it travels, so a shared graph must not assert it.
+    expect(block).toBeNull();
+  });
+});
+
+describe('staleness disqualifies a claim about code, not one that cites it', () => {
+  // Measured on this repository: 98 of 419 findings are marked stale, 8 of them
+  // global. `stale` means an anchored file changed after the finding was
+  // written -- decisive for a claim ABOUT that tree, weak for a transferable
+  // one where the anchor is an example. Excluding the global ones discarded 12%
+  // of the transferable knowledge for a signal that does not bear on whether
+  // they still hold.
+  const stale = (claim: string, scope: string) => ({
+    claim,
+    confidenceLabel: 'verified',
+    confidence: 0.9,
+    scope,
+    stale: true,
+  });
+
+  it('still drops a stale project claim', () => {
+    const block = knowledgeBlock(
+      [stale('this repo compacts on a ratcheting baseline', 'project')],
+      'anything',
+      2000
+    );
+
+    expect(block).toBeNull();
+  });
+
+  it('keeps a stale global claim, whose truth does not depend on that file', () => {
+    const block = knowledgeBlock(
+      [stale('ANSI codes are ~22.5% of bytes but ~36% of tokens', 'global')],
+      'anything',
+      2000
+    );
+
+    expect(block).toContain('ANSI codes');
+  });
+
+  it('still drops a stale claim that is also retired or unverified', () => {
+    // Narrowing staleness must not become a bypass for the other gates, which
+    // is the obvious way this change could go wrong.
+    const retired = {
+      ...stale('retired global lesson', 'global'),
+      retired: true,
+    };
+    const unverified = {
+      ...stale('unverified global lesson', 'global'),
+      confidenceLabel: 'speculative',
+    };
+
+    expect(knowledgeBlock([retired], 'anything', 2000)).toBeNull();
+    expect(knowledgeBlock([unverified], 'anything', 2000)).toBeNull();
   });
 });

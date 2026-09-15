@@ -6,7 +6,13 @@ import {
   messageIsSigned,
   type ProviderRequest,
 } from '../../../src/compress/frontier.js';
-import { STRATEGIES, v1Frontier, ccrStyle } from '../../../src/compress/strategy.js';
+import {
+  STRATEGIES,
+  v1Frontier,
+  ccrStyle,
+  taskIn,
+  questionIn,
+} from '../../../src/compress/strategy.js';
 import { classify, compressBlock } from '../../../src/compress/router.js';
 
 /**
@@ -46,7 +52,12 @@ function request(cached: string, fresh: string): ProviderRequest {
   return {
     system: 'You are an agent.',
     messages: [
-      { role: 'user', content: [{ type: 'text', text: cached, cache_control: { type: 'ephemeral' } }] },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: cached, cache_control: { type: 'ephemeral' } },
+        ],
+      },
       { role: 'user', content: [{ type: 'text', text: fresh }] },
     ],
     tools: [],
@@ -63,8 +74,18 @@ describe('frontier', () => {
   it('finds the last cache breakpoint, not the first', () => {
     const r: ProviderRequest = {
       messages: [
-        { role: 'user', content: [{ type: 'text', text: 'a', cache_control: { type: 'ephemeral' } }] },
-        { role: 'user', content: [{ type: 'text', text: 'b', cache_control: { type: 'ephemeral' } }] },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'a', cache_control: { type: 'ephemeral' } },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'b', cache_control: { type: 'ephemeral' } },
+          ],
+        },
         { role: 'user', content: [{ type: 'text', text: 'c' }] },
       ],
     };
@@ -72,7 +93,11 @@ describe('frontier', () => {
   });
 
   it('reports no breakpoint when nothing is cached', () => {
-    expect(lastCacheBreakpoint({ messages: [{ role: 'user', content: [{ text: 'a' }] }] })).toBeNull();
+    expect(
+      lastCacheBreakpoint({
+        messages: [{ role: 'user', content: [{ text: 'a' }] }],
+      })
+    ).toBeNull();
   });
 
   it('treats everything as fresh when there is no frontier', () => {
@@ -98,7 +123,12 @@ describe('frontier', () => {
     // The signature covers the message as the provider received it, so a
     // sibling block cannot be rewritten either.
     expect(
-      messageIsSigned({ content: [{ type: 'thinking', signature: 's' }, { type: 'text', text: 'x' }] })
+      messageIsSigned({
+        content: [
+          { type: 'thinking', signature: 's' },
+          { type: 'text', text: 'x' },
+        ],
+      })
     ).toBe(true);
   });
 });
@@ -110,8 +140,12 @@ describe('v1 frontier strategy', () => {
     const out = v1Frontier(req, { spill });
 
     const messages = out.request.messages ?? [];
-    const prefix = Array.isArray(messages[0].content) ? messages[0].content[0].text : '';
-    const fresh = Array.isArray(messages[1].content) ? messages[1].content[0].text : '';
+    const prefix = Array.isArray(messages[0].content)
+      ? messages[0].content[0].text
+      : '';
+    const fresh = Array.isArray(messages[1].content)
+      ? messages[1].content[0].text
+      : '';
 
     expect(prefix).toBe(cached);
     expect(fresh!.length).toBeLessThan(cached.length);
@@ -155,7 +189,9 @@ describe('ccr control arm', () => {
     const out = ccrStyle(request(rows(60), rows(60)), { spill });
     expect(out.injectedChars).toBeGreaterThan(0);
     expect(JSON.stringify(out.request.tools)).toContain('headroom_retrieve');
-    expect(String(out.request.system)).toContain('Compressed Context Available');
+    expect(String(out.request.system)).toContain(
+      'Compressed Context Available'
+    );
   });
 
   it('emits opaque markers, which is the design being compared against', () => {
@@ -168,7 +204,13 @@ describe('ccr control arm', () => {
     const bulk = rows(60);
     const req: ProviderRequest = {
       messages: [
-        { role: 'assistant', content: [{ type: 'thinking', signature: 's' }, { type: 'text', text: bulk }] },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', signature: 's' },
+            { type: 'text', text: bulk },
+          ],
+        },
       ],
     };
     const content = ccrStyle(req, {}).request.messages?.[0].content;
@@ -179,9 +221,11 @@ describe('ccr control arm', () => {
 describe('router', () => {
   it('classifies each content type, and checks diff before code', () => {
     expect(classify('{"a":1}')).toBe('json');
-    expect(classify('src/a.ts:1: x\nsrc/a.ts:2: y\nsrc/a.ts:3: z\nsrc/a.ts:4: w\nsrc/a.ts:5: v\nsrc/a.ts:6: u')).toBe(
-      'search'
-    );
+    expect(
+      classify(
+        'src/a.ts:1: x\nsrc/a.ts:2: y\nsrc/a.ts:3: z\nsrc/a.ts:4: w\nsrc/a.ts:5: v\nsrc/a.ts:6: u'
+      )
+    ).toBe('search');
     expect(classify('diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b')).toBe('unknown');
   });
 
@@ -189,7 +233,9 @@ describe('router', () => {
     // "Compression increasing prompt size" is a defect their own changelog
     // records fixing elsewhere, and it is trivially preventable by measuring.
     for (const sample of ['{}', '[]', 'a', '{"a":null}', 'x'.repeat(50)]) {
-      expect(compressBlock(sample).text.length).toBeLessThanOrEqual(sample.length);
+      expect(compressBlock(sample).text.length).toBeLessThanOrEqual(
+        sample.length
+      );
     }
   });
 
@@ -217,7 +263,9 @@ describe('router', () => {
 
     const interleaved = await Promise.all(
       Array.from({ length: 40 }, (_, i) =>
-        Promise.resolve().then(() => (i % 2 ? withoutSpill().text : withSpill().text))
+        Promise.resolve().then(() =>
+          i % 2 ? withoutSpill().text : withSpill().text
+        )
       )
     );
 
@@ -246,5 +294,181 @@ describe('every strategy', () => {
     const before = JSON.stringify(req);
     for (const run of Object.values(STRATEGIES)) run(req, { spill });
     expect(JSON.stringify(req)).toBe(before);
+  });
+});
+
+describe('a tool result is compressed like any other content', () => {
+  // THE DEFECT THIS PINS MADE THE WHOLE PRODUCT INERT ON REAL TRAFFIC.
+  //
+  // `mapBlocks` keyed on `block.text`. A tool_result has no `text` -- the file
+  // that was read, the command output, the search hits all sit under `content`,
+  // either as a plain string or as nested text blocks -- so every one was
+  // returned untouched. A coding agent's conversation is overwhelmingly tool
+  // results, which is precisely the content this engine exists to compress.
+  //
+  // Measured through the rig on 23 real requests before the fix: 2.79 MB of
+  // traffic, largest request 128 KB, and 23 of 23 reported "compression did not
+  // pay" having removed 0 bytes.
+  const NEWLINE = String.fromCharCode(10);
+  const payload = Array.from(
+    { length: 120 },
+    (_, i) =>
+      `export function helper${i}(input: number): number {` +
+      NEWLINE +
+      `  const doubled = input * 2;` +
+      NEWLINE +
+      `  const shifted = doubled + ${i};` +
+      NEWLINE +
+      `  return shifted;` +
+      NEWLINE +
+      `}`
+  ).join(NEWLINE);
+
+  const ask = {
+    role: 'user',
+    content: [{ type: 'text', text: 'read the helpers file' }],
+  };
+  const call = {
+    role: 'assistant',
+    content: [
+      {
+        type: 'tool_use',
+        id: 'tu_1',
+        name: 'Read',
+        input: { file_path: 'h.ts' },
+      },
+    ],
+  };
+
+  const shrink = (request: ProviderRequest): number => {
+    const before = JSON.stringify(request).length;
+    const out = v1Frontier(request, { spill: () => '/spill/x.txt' });
+    return before - JSON.stringify(out.request).length;
+  };
+
+  it('compresses a tool result whose content is an array of blocks', () => {
+    const removed = shrink({
+      messages: [
+        ask,
+        call,
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tu_1',
+              content: [{ type: 'text', text: payload }],
+            },
+          ],
+        },
+      ],
+    } as unknown as ProviderRequest);
+
+    expect(removed).toBeGreaterThan(1000);
+  });
+
+  it('compresses a tool result whose content is a plain string', () => {
+    // The API accepts both shapes and clients use both, so a fix for one that
+    // missed the other would leave the defect live for half of real traffic.
+    const removed = shrink({
+      messages: [
+        ask,
+        call,
+        {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'tu_1', content: payload },
+          ],
+        },
+      ],
+    } as unknown as ProviderRequest);
+
+    expect(removed).toBeGreaterThan(1000);
+  });
+
+  it('leaves a tool_use input alone', () => {
+    // A tool_use block also carries structured fields, and it must NOT be
+    // rewritten: its input is an argument the model chose, not output to be
+    // summarised. Rewriting it would change what the tool is asked to do.
+    const request = {
+      messages: [
+        ask,
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu_1',
+              name: 'Write',
+              input: { file_path: 'h.ts', contents: payload },
+            },
+          ],
+        },
+      ],
+    } as unknown as ProviderRequest;
+
+    const out = v1Frontier(request, { spill: () => '/spill/x.txt' });
+    const sent = JSON.stringify(out.request);
+
+    // The argument survives intact, character for character.
+    expect(sent).toContain('helper119');
+    expect(sent).toContain('helper0');
+  });
+});
+
+describe('taskIn steers tool deferral without moving the cached prefix', () => {
+  // Content as BLOCKS, which is the wire shape -- questionIn walks text blocks
+  // and ignores a plain string, so a string fixture would make both helpers
+  // return the system prompt and the comparison below would pass vacuously.
+  const turn = (role: string, text: string) => ({
+    role,
+    content: [{ type: 'text', text }],
+  });
+  const session = (latest: string) => ({
+    system: 'You are a coding agent.',
+    messages: [
+      turn('user', 'Build a sales report as a PDF from sales.csv.'),
+      turn('assistant', 'Reading the file.'),
+      turn('user', latest),
+    ],
+  });
+
+  it('returns the same steering text as the conversation grows', () => {
+    // THE REGRESSION THIS PINS. Steering deferral on the live question kept a
+    // stable COUNT of 14 deferred tools while choosing a different SET each
+    // turn: 11 distinct deferredToolChars values over 41 requests. Each change
+    // rewrites the tools array at the front of the prefix, so cache creation
+    // rose 2,188 -> 7,048 tokens while reads fell 30,307 -> 14,181 -- weighted
+    // at 1.25x and 0.1x that is 5,766 -> 10,228, a feature making the bill
+    // 1.77x worse while removing 38,322 characters per request.
+    const early = taskIn(session('What are the rate limits?'));
+    const later = taskIn(session('Now format the totals as currency.'));
+
+    expect(early).toBe(later);
+    expect(early).toContain('Build a sales report as a PDF');
+  });
+
+  it('differs from questionIn, which is allowed to follow the live turn', () => {
+    // Asserted positively on both sides: content compression works after the
+    // cache frontier and SHOULD track the current question, so the two helpers
+    // are meant to disagree. A test that only checked taskIn's stability would
+    // still pass if questionIn were quietly frozen too.
+    const a = questionIn(session('What are the rate limits?'));
+    const b = questionIn(session('Now format the totals as currency.'));
+
+    expect(a).not.toBe(b);
+    expect(b).toContain('currency');
+  });
+
+  it('falls back past a first turn that carries no text', () => {
+    const imageOnly = {
+      system: 'You are a coding agent.',
+      messages: [
+        { role: 'user', content: [{ type: 'image', source: {} }] },
+        turn('user', 'Describe the screenshot.'),
+      ],
+    };
+
+    expect(taskIn(imageOnly)).toContain('Describe the screenshot');
   });
 });

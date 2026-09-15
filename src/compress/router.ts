@@ -34,6 +34,8 @@ import { compressLog, looksLikeLog } from './log.js';
 import { compressProse, looksLikeProse } from './prose.js';
 import { compressSearchResults, looksLikeSearchResults } from './search.js';
 import { engineFor, registerEngine, runEngine } from './registry.js';
+import { readNumbering } from './numbering.js';
+import { foldRepeatedSegments, looksRepetitive } from './segments.js';
 import type { CompressionResult, ContentKind, EngineContext } from './types.js';
 import { unchanged } from './types.js';
 import { DEFAULT_TUNING } from './options.js';
@@ -50,6 +52,30 @@ registerEngine({
   priority: 70,
   claims: (text) => looksLikeDiff(text),
   compress: (text) => unchanged(text),
+});
+
+/**
+ * Repeated sections inside one document, folded losslessly.
+ *
+ * PRIORITY ABOVE json BUT BELOW diff, because it must see a document before
+ * an engine that would treat it as prose or code, and must never see a diff.
+ * It claims only text that is genuinely repetitive -- a real majority of its
+ * segments byte-identical -- so ordinary documents fall straight through to
+ * the engines that already handle them.
+ */
+registerEngine({
+  name: 'segments',
+  priority: 65,
+  // NEVER JSON, WHATEVER IT LOOKS LIKE. A large array of similar objects,
+  // pretty-printed with blank lines between them, satisfies `looksRepetitive`
+  // -- and this engine outranks `json` (65 against 60), so it won the claim,
+  // removed whole blocks and appended a plain-English note. The result is not
+  // parseable JSON, which is a different and worse failure than compressing it
+  // badly: a consumer that parses the value gets an exception rather than a
+  // smaller document. `json` handles this content correctly and is right
+  // behind it.
+  claims: (text) => !looksLikeJson(text) && looksRepetitive(text),
+  compress: foldRepeatedSegments,
 });
 
 registerEngine({
@@ -90,6 +116,7 @@ registerEngine({
 /** Built-in names, so a caller can tell ours from a third party's. */
 export const BUILT_IN_ENGINES = Object.freeze([
   'diff',
+  'segments',
   'json',
   'search',
   'log',
@@ -133,6 +160,22 @@ export function compressBlock(
   text: string,
   ctx: EngineContext = {}
 ): CompressionResult {
+  // A numbered read is detected on its BARE content and re-numbered
+  // afterwards. Detecting on the numbered form finds nothing at all --
+  // see readNumbering, where the measurement is recorded.
+  const numbering = readNumbering(text);
+  if (numbering) {
+    const inner = compressBlock(numbering.stripped, ctx);
+    if (inner.text === numbering.stripped) return unchanged(text);
+    // The engine's own elision count is its marker budget: it may add one line
+    // per elision and no more. Anything further means it rewrote a line it was
+    // supposed to keep, and `restore` then declines rather than emitting
+    // partially numbered output.
+    return {
+      ...inner,
+      text: numbering.restore(inner.text, inner.elisions.length),
+    };
+  }
   const engine = engineFor(text, ctx);
   if (!engine) return unchanged(text);
   // RESOLVED ONCE, HERE. An engine reading `ctx.tuning?.keepRows ?? 3`
@@ -143,6 +186,10 @@ export function compressBlock(
   const tuned: EngineContext = {
     ...ctx,
     tuning: ctx.tuning ?? DEFAULT_TUNING,
+    // The router hands ITSELF to the engines, so a string found inside a
+    // document is routed by exactly the same rules as one found at the top.
+    // Supplied here rather than imported by the engine, which would cycle.
+    compressNested: ctx.compressNested ?? compressBlock,
   };
   return runEngine(engine, text, tuned);
 }

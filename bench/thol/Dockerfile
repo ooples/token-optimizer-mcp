@@ -67,11 +67,6 @@ RUN useradd -ms /bin/bash bench
 # meaningless comparison rather than an error.
 #
 # To measure a published release, check out its tag and build from there.
-COPY thol/pkg/optimizer.tgz /tmp/optimizer.tgz
-# The tree that produced the tarball, so a result is attributable to exact
-# content rather than to a version string that cannot tell two branches apart.
-COPY thol/pkg/provenance.json /opt/optimizer-provenance.json
-RUN npm install -g /tmp/optimizer.tgz
 
 # The competitors, pinned, installed from the registry because that is how a
 # user gets them.
@@ -113,12 +108,6 @@ RUN npm install -g claude-token-optimizer@2.3.20 tokenjuice@0.8.1
 # marker is unreadable (plugin/launch.mjs, the `catch` falls through to
 # `return true`), so a large REFRESH_INTERVAL_MS alone does not pin anything.
 ENV TOKEN_OPTIMIZER_RUNTIME=/opt/token-optimizer-runtime
-RUN mkdir -p ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
-    && cd ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
-    && npm install --prefix . --no-audit --no-fund /tmp/optimizer.tgz \
-    && printf '%s' "${OPTIMIZER_VERSION}" > ${TOKEN_OPTIMIZER_RUNTIME}/current \
-    && node -e "require('fs').writeFileSync(process.env.TOKEN_OPTIMIZER_RUNTIME + '/.last-refresh', String(Date.now()))" \
-    && chown -R bench:bench ${TOKEN_OPTIMIZER_RUNTIME}
 
 USER bench
 WORKDIR /home/bench
@@ -299,6 +288,30 @@ RUN bash -lc 'set -eu; \
     done; \
     echo "competitor toolchain reachable as $(id -un), login shell included"'
 
+
+# THE OPTIMIZER GOES LAST, and that is a caching decision rather than a
+# logical one. `npm run bench:build` repacks optimizer.tgz on every code change,
+# and Docker invalidates every layer after a changed COPY -- so while these
+# steps sat near the top, editing one TypeScript file rebuilt cargo, rustup and
+# uv underneath them. That cost about eight minutes and enough memory that three
+# consecutive rebuilds were killed by the host. Nothing above depends on the
+# optimizer, so putting it here leaves the expensive toolchain layers cached and
+# a code change rebuilds only what actually changed.
+USER root
+COPY thol/pkg/optimizer.tgz /tmp/optimizer.tgz
+# The tree that produced the tarball, so a result is attributable to exact
+# content rather than to a version string that cannot tell two branches apart.
+COPY thol/pkg/provenance.json /opt/optimizer-provenance.json
+RUN npm install -g /tmp/optimizer.tgz
+
+RUN mkdir -p ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
+    && cd ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
+    && npm install --prefix . --no-audit --no-fund /tmp/optimizer.tgz \
+    && printf '%s' "${OPTIMIZER_VERSION}" > ${TOKEN_OPTIMIZER_RUNTIME}/current \
+    && node -e "require('fs').writeFileSync(process.env.TOKEN_OPTIMIZER_RUNTIME + '/.last-refresh', String(Date.now()))" \
+    && chown -R bench:bench ${TOKEN_OPTIMIZER_RUNTIME}
+
+USER bench
 
 # Pin the optimizer's warm-launch shim to the installed copy. launch.mjs
 # background-refreshes to @latest every 6h by default, which would let the

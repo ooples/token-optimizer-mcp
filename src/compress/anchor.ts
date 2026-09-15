@@ -59,6 +59,7 @@ import {
   lastCacheBreakpoint,
   type Block,
   type ProviderRequest,
+  type Position,
 } from './frontier.js';
 
 /**
@@ -79,7 +80,26 @@ export const MAX_TRACKED = 1000;
  * that ends next turn is the single most expensive mistake available here, and
  * it is worse than compressing nothing. Roughly five thousand tokens.
  */
-export const COLD_PREFIX_LIMIT = 20_000;
+/**
+ * How many messages a conversation may already have and still count as one we
+ * are seeing from its start.
+ *
+ * THIS REPLACED A PREFIX-SIZE TEST, and the replacement is the whole point.
+ * The old rule anchored only when the cached prefix was under 20,000
+ * characters, as a stand-in for "did we see this conversation from the
+ * beginning". Against Claude Code that stand-in is always false: its system
+ * prompt and tool schema alone exceed 20,000 characters on the very first
+ * request, so every conversation was classified as joined-mid-conversation,
+ * the proxy never anchored, v1 kept respecting a frontier that sits at the
+ * newest turn, and NOTHING was ever compressed -- measured at 0 bytes removed
+ * across 44 real requests in two campaigns.
+ *
+ * Message count asks the question directly. A proxy running before its client
+ * sees the conversation at one or two messages however heavy they are; a proxy
+ * attached to a session already in flight sees many, and still declines --
+ * which is the protection the old limit was there to provide.
+ */
+export const COLD_MESSAGE_LIMIT = 4;
 
 /** Everything at or before the breakpoint, which is what the provider caches. */
 function prefixOf(request: ProviderRequest): string {
@@ -91,6 +111,20 @@ function prefixOf(request: ProviderRequest): string {
   ];
   (request.messages ?? []).forEach((message, mi) => {
     const content = message?.content;
+    // A STRING AND A ONE-TEXT-BLOCK ARRAY ARE THE SAME MESSAGE, and this
+    // used to skip the string form entirely -- so the text vanished from the
+    // digest and the prefix read as changed.
+    //
+    // That is not hypothetical. Claude Code sends the SessionStart block as
+    // an array of text blocks on one turn and as a plain string on the next:
+    // captured back to back, message 0 was byte-identical while message 1
+    // carried the same 22,755 characters in a different container. Every
+    // turn therefore reported client-invalidated, the conversation was never
+    // recognised, and anything keyed on recognising it never ran.
+    if (typeof content === 'string') {
+      if (!isAfter({ message: mi, block: 0 }, breakpoint)) parts.push(content);
+      return;
+    }
     if (!Array.isArray(content)) return;
     content.forEach((raw, bi) => {
       const block = raw as Block;
@@ -212,6 +246,18 @@ export interface AnchorRecord {
   /** Digest of the CLIENT's prefix as it arrived, so a change is detectable. */
   readonly prefixDigest: string;
   /**
+   * Length of the prefix that digest covers.
+   *
+   * WITH IT, EXTENSION IS PROVABLE. Re-digesting exactly this many
+   * characters of the new prefix and comparing answers "is what I saw last
+   * time still an exact prefix of what I see now" -- which separates a
+   * conversation that grew from one whose history was edited. A sample
+   * comparison cannot: samples are spot checks at doubling offsets, so an
+   * edit that lands between two of them passes, and a test pinning that
+   * exact case is what caught the guess.
+   */
+  readonly prefixLength?: number;
+  /**
    * Digests sampled across that prefix, at doubling offsets.
    *
    * THIS IS WHAT SEPARATES AN EDIT FROM A COLLISION. Two different sessions
@@ -226,6 +272,43 @@ export interface AnchorRecord {
   readonly samples: readonly string[];
   /** Did we rewrite that prefix? */
   readonly anchored: boolean;
+  /**
+   * Where this conversation's cache breakpoint sat when we last saw it.
+   *
+   * THE ONE FACT THAT SAYS WHAT IS NOT YET CACHED. A client puts its
+   * cache_control marker on the LAST message of every request -- verified
+   * across three consecutive captured turns, which reported breakpoints at
+   * message 1 of 2, 3 of 4 and 5 of 6 -- so "after the breakpoint in THIS
+   * request" is always empty and a frontier policy reading it compresses
+   * nothing at all.
+   *
+   * Between the breakpoint we saw last turn and the one in this request
+   * lies everything the conversation has grown since, which the provider
+   * has not cached yet and is about to cache now. Rewriting THAT costs no
+   * invalidation, shrinks the 1.25x write happening this turn, and shrinks
+   * every 0.1x read after it.
+   */
+  readonly breakpoint?: Position | null;
+  /**
+   * Where compression STARTED for this conversation, and never moves after.
+   *
+   * A FROZEN BOUNDARY IS WHAT MAKES THE PREFIX REPRODUCIBLE. `breakpoint`
+   * advances every turn as the client moves its cache marker, and using it
+   * as the compression floor means a span compressed on turn N falls BELOW
+   * the floor on turn N+1 and would be sent uncompressed -- the provider
+   * then holds our bytes and receives the client's, which is a miss on
+   * everything from that point on.
+   *
+   * Measured before this existed: 20 of 418 message-turns changed across a
+   * 30-turn replay, which invalidated a modelled 21% effective-token saving
+   * outright, because every one of those changes is a cache miss rather
+   * than the 0.1x read the model assumed.
+   *
+   * Frozen, the rule is simply: everything after this point is compressed,
+   * every turn, by a transform that depends only on the content. Same
+   * input, same output, cache hit.
+   */
+  readonly compressFrom?: Position | null;
   /**
    * The knowledge block we last put in this prefix, if any.
    *
@@ -268,6 +351,8 @@ export type AnchorReason =
   | 'first-turn'
   | 'client-invalidated'
   | 'joined-mid-conversation'
+  /** The same conversation, one or more turns longer. The common case. */
+  | 'extended'
   | 'left-alone';
 
 export interface AnchorDecision {
@@ -290,7 +375,7 @@ export interface AnchorDecision {
 export function anchorDecision(
   request: ProviderRequest,
   store: AnchorStore,
-  coldPrefixLimit: number = COLD_PREFIX_LIMIT
+  coldMessageLimit: number = COLD_MESSAGE_LIMIT
 ): AnchorDecision {
   const key = conversationKey(request);
   const prefix = prefixOf(request);
@@ -313,14 +398,54 @@ export function anchorDecision(
   }
 
   if (previous && sameConversation) {
-    // Same opening, different prefix: the client changed history under us --
-    // an edit, a new system prompt, a compaction. That miss has already
-    // happened, so what replaces it may as well be smaller.
+    // GROWTH IS NOT AN EDIT, and conflating them cost this design its whole
+    // purpose. isContinuation has already established that every sample the
+    // two prefixes share is identical, so a differing digest with no fewer
+    // samples than before means the conversation got LONGER, not that
+    // anything cached was rewritten -- which is what happens on every single
+    // turn, because the client moves its cache_control marker forward and the
+    // prefix legitimately extends.
+    //
+    // Captured back to back: between two turns message 3 differed only by the
+    // removal of its cache_control marker, its 20,026 characters of text
+    // byte-identical, and the prefix simply reached further. Calling that
+    // 'client-invalidated' forced a rewrite every turn and meant the
+    // conversation was never once recognised as continuing.
+    //
+    // Safe by construction: this keeps whatever posture we already had
+    // (`previous.anchored`) rather than switching, and carries the stored
+    // breakpoint forward, so nothing before it is touched either way.
+    const grew =
+      previous.prefixLength !== undefined &&
+      prefix.length >= previous.prefixLength &&
+      digest(prefix.slice(0, previous.prefixLength)) === previous.prefixDigest;
+    if (grew) {
+      return {
+        reanchor: previous.anchored,
+        reason: 'extended',
+        key,
+        record: {
+          ...previous,
+          prefixDigest,
+          prefixLength: prefix.length,
+          samples,
+        },
+      };
+    }
+
+    // Genuinely shorter: history was compacted or edited away under us.
+    // That miss has already happened, so what replaces it may as well be
+    // smaller.
     return {
       reanchor: true,
       reason: 'client-invalidated',
       key,
-      record: { prefixDigest, samples, anchored: true },
+      record: {
+        prefixDigest,
+        prefixLength: prefix.length,
+        samples,
+        anchored: true,
+      },
     };
   }
 
@@ -331,13 +456,21 @@ export function anchorDecision(
   // THE DIAL, NOT THE CONSTANT. `coldPrefixLimit` was declared in options.ts with this
   // exact meaning and a matching default, while this line read the module constant --
   // so setting it changed nothing, on the most expensive decision in this file.
-  if (prefix.length <= coldPrefixLimit) {
-    // A conversation at its start. The prefix is written either way.
+  // EARLY IN ITS LIFE, NOT SMALL. A first request can be enormous -- a large
+  // system prompt and a full tool schema arrive before the user has said
+  // anything -- and it is still a conversation we are seeing from the start,
+  // where the prefix is written either way and anchoring is free.
+  if ((request.messages ?? []).length <= coldMessageLimit) {
     return {
       reanchor: true,
       reason: 'first-turn',
       key,
-      record: { prefixDigest, samples, anchored: true },
+      record: {
+        prefixDigest,
+        prefixLength: prefix.length,
+        samples,
+        anchored: true,
+      },
     };
   }
 
@@ -345,6 +478,11 @@ export function anchorDecision(
     reanchor: false,
     reason: 'joined-mid-conversation',
     key,
-    record: { prefixDigest, samples, anchored: false },
+    record: {
+      prefixDigest,
+      prefixLength: prefix.length,
+      samples,
+      anchored: false,
+    },
   };
 }

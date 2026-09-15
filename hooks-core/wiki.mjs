@@ -391,6 +391,27 @@ function ignoreSelf(dir) {
 // runs after the import, so the module had already captured the default.
 const compactFloorBytes = () =>
   Number(process.env.TOKEN_OPTIMIZER_GRAPH_COMPACT_BYTES) || 8_000_000;
+/**
+ * Largest number of regenerable structure nodes a graph may keep.
+ *
+ * A real project graph here holds 4,687 nodes; the unrooted fallback had
+ * grown to 193,592 because nothing ever bounded it. Structure is rebuilt the
+ * next time a file is touched, so evicting the oldest costs a re-scan and
+ * nothing else.
+ */
+const maxStructureNodes = () => {
+  // VALIDATED, NOT JUST DEFAULTED. `|| 20_000` already caught NaN and zero
+  // because both are falsy, which made it look complete -- and it let through
+  // the two values that are actively destructive. A NEGATIVE cap makes
+  // `keepStructure` zero, so compaction evicts every evictable node and the
+  // graph is emptied. `Infinity` makes `nodes.size > cap` permanently false, so
+  // eviction never runs and the cap silently does not exist. A fractional value
+  // slices at a non-integer index.
+  const raw = Number(process.env.TOKEN_OPTIMIZER_GRAPH_MAX_NODES);
+  if (!Number.isFinite(raw) || raw < 1) return 20_000;
+  return Math.floor(raw);
+};
+
 const markerPath = (dir) => join(dir, 'graph.compact.json');
 
 /** Cheap enough to test on every line, which is the point. */
@@ -415,7 +436,14 @@ function compactionBaseline(dir) {
   try {
     const raw = JSON.parse(readFileSync(markerPath(dir), 'utf8'));
     const n = Number(raw.sizeAfter);
-    return Number.isFinite(n) && n > 0 ? n : compactFloorBytes();
+    // CAPPED, because this baseline is what the last compaction achieved and
+    // the trigger is a multiple of it. Uncapped it ratchets: a graph that
+    // compacted to 87MB sets the bar to 87MB and never fires again below
+    // 174MB, which is how the unrooted graph reached 392,563 lines.
+    const ceiling = compactFloorBytes() * 4;
+    return Number.isFinite(n) && n > 0
+      ? Math.min(n, ceiling)
+      : compactFloorBytes();
   } catch {
     return compactFloorBytes();
   }
@@ -451,6 +479,10 @@ function compactIfWasteful(dir) {
     const nodes = new Map();
     const edges = new Map();
     const snaps = new Map();
+    // Classification only -- never serialised. The raw line is what gets
+    // written back, exactly as the surrounding code requires.
+    const nodeMeta = new Map();
+    const edgeMeta = new Map();
     // KEPT VERBATIM THROUGH THE REBUILD, exactly as the main log keeps what it
     // cannot parse. These lines are not evictable by the snapshot budget below
     // because their size cannot be attributed to an id we understand -- and
@@ -511,15 +543,21 @@ function compactIfWasteful(dir) {
         if (typeof record.snapshot === 'string' && record.snapshot) {
           const { snapshot, ...rest } = record;
           nodes.set(view.id, JSON.stringify(rest));
+          nodeMeta.set(view.id, { kind: view.kind, at: view.at || 0 });
           snaps.set(view.id, { at: record.at || 0, snapshot, v: record.v ?? GRAPH_VERSION });
         } else {
           nodes.set(view.id, line);
+          nodeMeta.set(view.id, { kind: view.kind, at: view.at || 0 });
         }
       } else if (view.t === 's') {
         if (typeof record.snapshot === 'string' && record.snapshot) {
           snaps.set(view.id, { at: record.at || 0, snapshot: record.snapshot, v: record.v ?? GRAPH_VERSION });
         }
-      } else if (view.t === 'e') edges.set(`${view.from}|${view.edge}|${view.to}`, line);
+      } else if (view.t === 'e') {
+        const key = `${view.from}|${view.edge}|${view.to}`;
+        edges.set(key, line);
+        edgeMeta.set(key, { from: view.from, to: view.to });
+      }
       else edges.set('raw:' + edges.size, line);
     }
 
@@ -576,6 +614,56 @@ function compactIfWasteful(dir) {
 
     // EDGES BEFORE NODES, matching putNodeWithEdges: a torn write can then only
     // lose a finding, never leave one anchored to nothing.
+    // EVICTION, so compaction can reclaim a graph of distinct records rather
+    // than only superseded ones. Findings and their anchors are never
+    // evicted; structure is regenerated the next time a file is touched.
+    const anchored = new Set();
+    for (const [id, meta] of nodeMeta) {
+      if (meta.kind === "finding") anchored.add(id);
+    }
+    // THE FULL CLOSURE, not one insertion-ordered pass. A single sweep makes
+    // retention depend on the order edges happen to sit in `edgeMeta`: if an
+    // edge A->B is visited before whatever made A anchored, B is never marked,
+    // and compaction then evicts a node that a finding transitively reaches --
+    // deleting its incident edge with it.
+    //
+    // WORKLIST, NOT REPEATED SWEEPS. Re-scanning every edge until nothing
+    // changes is correct but quadratic: a chain recorded in reverse order needs
+    // one whole scan per newly anchored node, and this runs synchronously
+    // during compaction on a graph that can hold tens of thousands of them.
+    // Indexing once by source and walking outward touches each edge a bounded
+    // number of times instead.
+    const outgoing = new Map();
+    for (const [, meta] of edgeMeta) {
+      const list = outgoing.get(meta.from);
+      if (list) list.push(meta.to);
+      else outgoing.set(meta.from, [meta.to]);
+    }
+    const queue = [...anchored];
+    while (queue.length) {
+      const from = queue.pop();
+      const targets = outgoing.get(from);
+      if (!targets) continue;
+      for (const to of targets) {
+        if (anchored.has(to)) continue;
+        anchored.add(to);
+        queue.push(to);
+      }
+    }
+    const cap = maxStructureNodes();
+    if (nodes.size > cap) {
+      const evictable = [...nodeMeta.entries()]
+        .filter(([id]) => !anchored.has(id))
+        .sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
+      const keepStructure = Math.max(0, cap - anchored.size);
+      for (const [id] of evictable.slice(keepStructure)) nodes.delete(id);
+      // Edges whose endpoints are gone would anchor a finding to nothing,
+      // which is the dangling reference this design forbids everywhere else.
+      for (const [key, meta] of edgeMeta) {
+        if (!nodes.has(meta.from) || !nodes.has(meta.to)) edges.delete(key);
+      }
+    }
+
     const out = [...edges.values(), ...nodes.values()].join('\n') + '\n';
     const tmp = path + '.compact';
     writeFileSync(tmp, out, { mode: 0o600 });

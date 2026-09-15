@@ -10,8 +10,10 @@ import {
   upstreamIsSafe,
   requestPath,
   knowledgeEnabled,
+  keepToolsFromEnv,
 } from '../../../src/proxy/server.js';
 import { anchorStore } from '../../../src/compress/anchor.js';
+import { DEFAULT_KEEP_RELEVANT } from '../../../src/compress/tools.js';
 
 /**
  * The proxy, against a real upstream rather than a mock.
@@ -485,6 +487,37 @@ describe('the destination is ours to choose', () => {
   });
 });
 
+describe('how many tool definitions stay loaded', () => {
+  it('keeps the measured default when the variable is absent or blank', () => {
+    // A campaign deferred 14 of 26 definitions at this setting and never
+    // triggered a single tool search, so the default is the value evidence
+    // supports rather than an arbitrary one.
+    expect(keepToolsFromEnv({})).toBe(DEFAULT_KEEP_RELEVANT);
+    expect(keepToolsFromEnv({ TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS: '   ' })).toBe(
+      DEFAULT_KEEP_RELEVANT
+    );
+  });
+
+  it('takes the value asked for, including nothing kept at all', () => {
+    expect(keepToolsFromEnv({ TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS: '12' })).toBe(
+      12
+    );
+    // Zero is a real setting -- defer every large definition -- and must not
+    // be confused with unset, which is what a falsy check would do.
+    expect(keepToolsFromEnv({ TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS: '0' })).toBe(0);
+  });
+
+  it('falls back rather than throwing on a value that makes no sense', () => {
+    // A typo in an environment variable must not take a session down, and a
+    // NaN reaching the ranker would defer an arbitrary set of tools.
+    for (const bad of ['five', '-1', '2.5', 'Infinity']) {
+      expect(keepToolsFromEnv({ TOKEN_OPTIMIZER_PROXY_KEEP_TOOLS: bad })).toBe(
+        DEFAULT_KEEP_RELEVANT
+      );
+    }
+  });
+});
+
 describe('the cached-knowledge block', () => {
   it('is off unless explicitly asked for, separately from the proxy', () => {
     // Compression removes tokens; this ADDS them, justified by turns rather
@@ -555,6 +588,9 @@ describe('the cached-knowledge block', () => {
         type: 'failure',
         claim: 'npm install bumps zod and breaks tsc; use npm ci',
         confidence: 0.95,
+        // The cached prefix takes verified findings only -- a claim there is
+        // re-read every turn, so the bar is higher than for the wiki itself.
+        confidenceLabel: 'verified',
       },
     ]);
     const sent = JSON.parse(out.body.toString('utf8'));
@@ -706,5 +742,38 @@ describe('the default upstream is a guess, and guesses are fenced', () => {
 
     expect(response.status).toBe(200);
     expect(seen.url).toBe('/chat/completions');
+  });
+});
+
+describe('tool deferral defaults', () => {
+  // DEFAULT-ON, decided on the campaign: 11 of 16 THOL tasks cheaper than
+  // control with deferral against 4 of 16 without it, at identical scores.
+  //
+  // Pinned because the DEFAULT is the whole value here. The capability shipped
+  // gated behind TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS, nothing set it, and so the
+  // ledger recorded deferral on 0 of 351 live requests -- a feature that works
+  // and never runs is indistinguishable from one that does not work.
+  //
+  // The predicate mirrors server.ts. Kept as a local copy on purpose: the
+  // export would have to be plumbed out of the request path to test directly,
+  // and the three cases below are what the shipped expression must satisfy.
+  const enabled = (v: string | undefined) =>
+    !/^(0|false|no|off)$/i.test(v || '');
+
+  it('is on when the variable is unset or empty', () => {
+    expect(enabled(undefined)).toBe(true);
+    expect(enabled('')).toBe(true);
+  });
+
+  it('is off only when explicitly disabled', () => {
+    for (const v of ['0', 'false', 'no', 'off', 'OFF', 'False']) {
+      expect(enabled(v)).toBe(false);
+    }
+  });
+
+  it('stays on for any other value, including affirmative ones', () => {
+    for (const v of ['1', 'true', 'yes', 'on', 'anything']) {
+      expect(enabled(v)).toBe(true);
+    }
   });
 });

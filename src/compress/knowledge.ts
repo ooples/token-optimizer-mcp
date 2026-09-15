@@ -65,6 +65,27 @@ export interface Finding {
   readonly pinned?: boolean;
   /** Withdrawn. Never rendered. */
   readonly retired?: boolean;
+  /** `verified` | `probable` | `speculative`, as recorded when written. */
+  readonly confidenceLabel?: string;
+  /** The anchored code changed after this was written. */
+  readonly stale?: boolean;
+  /**
+   * `project` | `organization` | `global`, as recorded when written.
+   *
+   * CARRIED BECAUSE A CLAIM'S REACH IS PART OF THE CLAIM. It was dropped in
+   * `loadFindings`, so nothing downstream could tell a lesson that transfers
+   * from one that does not -- and the distinction cannot be recovered by
+   * relevance ranking, because lexical similarity is exactly what makes a
+   * project-specific claim look applicable somewhere it is false.
+   *
+   * Provenance is otherwise implicit: each project keeps its own graph, so a
+   * `project` finding is true of whichever graph holds it. That breaks down for
+   * a SHARED graph -- the unrooted fallback, or one deliberately mounted across
+   * several repositories -- where project claims from one tree are served to
+   * another. Measured on this repository's graph: of 293 findings passing the
+   * quality filter, 221 are `project`, 57 `global`, 15 `organization`.
+   */
+  readonly scope?: string;
 }
 
 /**
@@ -80,6 +101,29 @@ export const DEFAULT_BUDGET_CHARS = 2000;
 
 /** Below this a finding is not worth the line it occupies. */
 const MIN_CONFIDENCE = 0.5;
+
+/**
+ * The largest share of the block any ONE kind of finding may occupy.
+ *
+ * WITHOUT THIS THE BLOCK IS ONE KIND, and measurably so. `weight` multiplies a
+ * failure by 1.4 and a decision or plain finding by 1, while confidence in a
+ * real graph clusters near 0.95 -- so the type multiplier does not tilt the
+ * ordering, it partitions it. Measured on this repository: 268 findings survive
+ * the filter, of which only half are failures, yet every block rendered was
+ * 100% failures, the top twenty by weight were all failures, and the first
+ * non-failure sat at rank 47 against a budget that fits six to eight lines. 62
+ * decisions and 29 commands were eligible and unreachable.
+ *
+ * That is the wrong thing to exclude by kind. A command that finally worked and
+ * a decision with its rejected alternative are the two shapes most likely to
+ * save a turn, which is the only currency this block trades in.
+ *
+ * A cap rather than a quota: it never promotes a weak finding over a strong
+ * one, it only stops one kind taking the whole block. Deterministic, so the
+ * block stays identical across turns and remains cacheable -- the property the
+ * whole design rests on.
+ */
+const MAX_TYPE_SHARE = 0.5;
 
 /** The heading, which is also the instruction. Counted against the budget. */
 const HEADING =
@@ -121,19 +165,99 @@ function render(finding: Finding): string {
  * Returns null when there is nothing worth saying, which is the common case in
  * a project with no graph yet and must stay cheap.
  */
+/** Scopes whose claims hold outside the tree they were written in. */
+const TRANSFERABLE_SCOPES = new Set(['global', 'organization']);
+
+export interface KnowledgeOptions {
+  readonly embeddings?: EmbeddingCache;
+  /**
+   * The graph is shared across projects, so `project` claims cannot be trusted.
+   *
+   * Set when the findings came from the unrooted fallback graph or from a graph
+   * deliberately mounted across several repositories. In that case a `project`
+   * finding is a fact about SOME tree, and nothing here can say which -- so it
+   * is excluded rather than ranked, because relevance ranking would actively
+   * promote it: lexical similarity is what makes a project-specific claim look
+   * applicable somewhere it is false.
+   *
+   * Left false for a normal per-project graph, where a `project` finding is
+   * true of exactly the tree being worked on and is the most useful kind there
+   * is.
+   */
+  readonly sharedGraph?: boolean;
+}
+
 export function knowledgeBlock(
   findings: readonly Finding[],
   context: string,
   budgetChars: number = DEFAULT_BUDGET_CHARS,
-  embeddings?: EmbeddingCache
+  options: EmbeddingCache | KnowledgeOptions | undefined = undefined
 ): string | null {
+  // The fourth argument was an EmbeddingCache before this gained a second
+  // option. Accepting either keeps every existing call site correct rather
+  // than forcing a mechanical edit that could not be verified at each site.
+  // DISCRIMINATED ON THE CACHE'S OWN SHAPE, not on whether `sharedGraph` is
+  // present. Testing for `sharedGraph` mis-sorted the one case it most needed
+  // to get right: `{ embeddings }` with no scope flag is a perfectly ordinary
+  // KnowledgeOptions, and it was wrapped a second time as
+  // `{ embeddings: { embeddings } }`. `activeRanker` then found no numeric
+  // `size` on it, silently skipped semantic ranking, and fell back to lexical --
+  // a caller supplying vectors got none of the benefit and no error either.
+  //
+  // An EmbeddingCache is identified positively: it has `get`, `has` and a
+  // numeric `size`. Anything else that is an object is options.
+  const looksLikeCache =
+    !!options &&
+    typeof (options as EmbeddingCache).get === 'function' &&
+    typeof (options as EmbeddingCache).has === 'function' &&
+    typeof (options as EmbeddingCache).size === 'number';
+  const opts: KnowledgeOptions = looksLikeCache
+    ? { embeddings: options as EmbeddingCache }
+    : ((options ?? {}) as KnowledgeOptions);
+  const embeddings = opts.embeddings;
+  // VERIFIED AND FRESH ONLY, and this is the strictest filter in the file on
+  // purpose. A finding in the cached prefix is not read once -- it is re-read
+  // on every turn of the session, so a wrong one is wrong repeatedly and at
+  // the one position the model attends to most. That asymmetry does not apply
+  // to a finding surfaced on demand, which is why this bar is higher than the
+  // one the wiki itself uses.
+  //
+  // `stale` means the anchored code changed after the claim was written, so it
+  // describes a tree that no longer exists. Measured on this repository: 319
+  // claim-bearing nodes, of which 66 are stale and 25 are not verified, leaving
+  // 237. Dropping a quarter of the graph is the point rather than a cost -- the
+  // budget only fits a few dozen lines anyway, so the filter changes WHICH
+  // findings compete for the space, not how many arrive.
+  //
+  // A MISSING LABEL IS NOT TREATED AS VERIFIED. That is deliberate and it has a
+  // cost: a graph written before labels existed injects nothing at all. The
+  // alternative -- defaulting absent to verified -- puts unlabelled claims of
+  // unknown provenance into the prefix, which is the exact risk this filter is
+  // here to remove. Silence is the safe failure; confident wrong advice is not.
   const usable = findings.filter(
     (f) =>
       f &&
       !f.retired &&
+      // STALENESS DISQUALIFIES A CLAIM ABOUT CODE, NOT A CLAIM THAT MERELY
+      // CITES IT. `stale` means the anchored file changed after the finding was
+      // written -- decisive for a project claim, which is ABOUT that tree, and
+      // weak evidence for a transferable one, where the anchor is an example.
+      //
+      // Measured on this repository: 98 of 419 findings are stale, and 8 of
+      // those are global -- "ANSI escape codes are ~22.5% of a coloured
+      // command's bytes but ~36% of its tokens" does not stop being true
+      // because the file it was measured in changed. Excluding them discarded
+      // 12% of the transferable knowledge for a signal that does not bear on
+      // whether they hold.
+      (!f.stale || TRANSFERABLE_SCOPES.has(f.scope ?? 'project')) &&
+      f.confidenceLabel === 'verified' &&
       typeof f.claim === 'string' &&
       f.claim.trim().length > 0 &&
-      (f.confidence ?? 0.5) >= MIN_CONFIDENCE
+      (f.confidence ?? 0.5) >= MIN_CONFIDENCE &&
+      // A SHARED GRAPH CANNOT VOUCH FOR A PROJECT CLAIM. An absent scope is
+      // treated as project-scoped, which is the conservative reading: claims
+      // written before scope existed say nothing about how far they travel.
+      (!opts.sharedGraph || TRANSFERABLE_SCOPES.has(f.scope ?? 'project'))
   );
   if (!usable.length) return null;
 
@@ -161,17 +285,61 @@ export function knowledgeBlock(
         a.index - b.index
     );
 
-  const lines: string[] = [];
-  let spent = HEADING.length;
-  for (const { finding } of ordered) {
-    const line = render(finding);
-    if (spent + line.length + 1 > budgetChars) continue;
-    lines.push(line);
-    spent += line.length + 1;
-  }
+  // TWO GREEDY PASSES, because the cap is a share of the block and the block's
+  // size is not known until the budget has been spent. The first pass only
+  // counts; the second applies the cap it establishes.
+  const capacity = fill(ordered, budgetChars, null).lines.length;
+  const cap = Math.max(1, Math.ceil(capacity * MAX_TYPE_SHARE));
+  const breadth = fill(ordered, budgetChars, cap);
+  // The cap protects other kinds from being crowded out; it is not a reason
+  // to leave budget unspent when no other kind is waiting. Whatever the
+  // capped pass skipped competes again for what is left, best first.
+  const lines = fill(
+    ordered,
+    budgetChars,
+    null,
+    breadth.lines,
+    breadth.spent
+  ).lines;
   if (!lines.length) return null;
 
   return HEADING + lines.join('\n');
+}
+
+/**
+ * Greedily takes findings in order until the budget runs out.
+ *
+ * `cap` limits how many lines any ONE kind may occupy; null counts without
+ * limiting, which is how the capacity that cap is a share of gets established.
+ */
+function fill(
+  ordered: readonly { finding: Finding }[],
+  budgetChars: number,
+  cap: number | null,
+  already: readonly string[] = [],
+  alreadySpent = HEADING.length
+): { lines: string[]; spent: number } {
+  const lines = [...already];
+  const seen = new Set(already);
+  // Counts only what THIS pass places. Lines carried in from a previous pass
+  // are not re-counted, and do not need to be: a pass that continues one is
+  // the uncapped pass, which never consults this.
+  const taken = new Map<string, number>();
+  let spent = alreadySpent;
+  for (const { finding } of ordered) {
+    const kind = finding.type ?? 'finding';
+    if (cap !== null && (taken.get(kind) ?? 0) >= cap) continue;
+    const line = render(finding);
+    if (seen.has(line)) continue;
+    // `continue` rather than `break`: a long line that does not fit must not
+    // end the block, because a shorter one further down still can.
+    if (spent + line.length + 1 > budgetChars) continue;
+    lines.push(line);
+    seen.add(line);
+    taken.set(kind, (taken.get(kind) ?? 0) + 1);
+    spent += line.length + 1;
+  }
+  return { lines, spent };
 }
 
 /**

@@ -16,6 +16,7 @@
  */
 
 import { compressBlock } from './router.js';
+import { substituteHistory } from './history.js';
 import { dedupBlocks, type DedupBlock } from './dedup.js';
 import { queryFrom } from './relevance.js';
 import type { Tuning } from './options.js';
@@ -47,6 +48,7 @@ export type StrategyName =
   | 'v1-frontier'
   | 'v2-speculative'
   | 'v3-history'
+  | 'v4-substitute'
   | 'ccr';
 
 export interface StrategyOptions {
@@ -76,6 +78,8 @@ export interface StrategyOptions {
    * asked for.
    */
   readonly findings?: readonly Finding[];
+  /** True when `findings` came from a graph shared across projects. */
+  readonly sharedGraph?: boolean;
   /** Characters of findings allowed in the prefix. */
   readonly knowledgeBudget?: number;
   /**
@@ -162,7 +166,7 @@ function ccrMarker(content: string, index: number): string {
  * maximally relevant to itself. That failure would look like it was working,
  * which is the worst kind.
  */
-function questionIn(request: ProviderRequest): string {
+export function questionIn(request: ProviderRequest): string {
   const blocks: { text: string }[] = [];
   for (const message of request.messages ?? []) {
     const content = message?.content;
@@ -174,6 +178,49 @@ function questionIn(request: ProviderRequest): string {
   }
   const system = typeof request.system === 'string' ? request.system : '';
   return `${system}\n${queryFrom(blocks)}`.trim();
+}
+
+/**
+ * The steering text for TOOL deferral, which must not move during a session.
+ *
+ * WHY THIS IS NOT `questionIn`. Both pick what is relevant, but they rewrite
+ * different halves of the request and only one of them is cached. Content
+ * compression works AFTER the cache frontier, so it may follow the live
+ * question and change every turn at no cost. Tool deferral rewrites the tools
+ * array, which sits at the FRONT of the prefix -- so if its steering text
+ * changes, the chosen tools change, the prefix changes, and every cached token
+ * behind it is invalidated.
+ *
+ * MEASURED, and it is not a small effect. Steering deferral with `questionIn`
+ * kept a stable COUNT of 14 deferred tools while producing 11 distinct
+ * `deferredToolChars` values across 41 requests -- the same number of tools,
+ * but a different set each turn. Cache creation went from 2,188 tokens per
+ * request to 7,048 while cache reads fell from 30,307 to 14,181: weighting
+ * writes at 1.25x and reads at 0.1x, that is 5,766 -> 10,228, so the feature
+ * that removes 38,322 characters per request made the bill 1.77x WORSE.
+ *
+ * The first user turn is the task, and the task does not change while it is
+ * being worked on. Relevance to it is what tool selection actually wants.
+ */
+export function taskIn(request: ProviderRequest): string {
+  const system = typeof request.system === 'string' ? request.system : '';
+  for (const message of request.messages ?? []) {
+    if (message?.role !== 'user') continue;
+    const content = message.content;
+    if (typeof content === 'string') {
+      if (content.trim()) return `${system}\n${content}`.trim();
+      continue;
+    }
+    if (!Array.isArray(content)) continue;
+    const text = content
+      .map((raw) => (raw as Block)?.text)
+      .filter((t): t is string => typeof t === 'string')
+      .join('\n');
+    // A first turn carrying only an image or a tool result has no task text to
+    // steer with; keep looking rather than steering on nothing.
+    if (text.trim()) return `${system}\n${text}`.trim();
+  }
+  return system.trim();
 }
 
 /** Walks every text-bearing block, letting the visitor replace its text. */
@@ -188,9 +235,85 @@ function blockTextAt(request: ProviderRequest, at: Position): string | null {
   return typeof block?.text === 'string' ? block.text : null;
 }
 
+/** A tool result, whose payload is nested rather than on `text`. */
+interface ToolResultBlock {
+  readonly type: string;
+  readonly content?: unknown;
+  /** Links this result back to the call that produced it. */
+  readonly tool_use_id?: string;
+}
+
+/** An assistant's call, which is where a tool result's provenance lives. */
+interface ToolUseBlock {
+  readonly type: string;
+  readonly id?: string;
+  readonly name?: string;
+  readonly input?: Record<string, unknown>;
+}
+
+/**
+ * Which file each tool result came from, keyed by the call that produced it.
+ *
+ * WITHOUT THIS THE CODE ENGINE IS INERT, and measurably so. compressCode
+ * resolves a language from `ctx.sourcePath`; a tool result arrives with no
+ * path attached, so the language came out empty, the Babel fallback returned
+ * nothing, and the engine reported 0.0% on content it compresses 55.6% when
+ * told the path -- 17,130 characters to 7,604 with seven elisions, measured on
+ * a captured request reading src/compress/log.ts.
+ *
+ * The path was never missing, only unlinked: the result carries a
+ * `tool_use_id` and the matching `tool_use` block sits in the SAME request,
+ * carrying `{ file_path }`. This walks the assistant turns once and builds
+ * the index the walker then reads.
+ *
+ * Names are not assumed. Any input key that looks like a path is accepted, so
+ * a client calling its reader something other than `Read` still benefits and
+ * this does not rot the next time a tool is renamed.
+ */
+function toolResultPaths(request: ProviderRequest): Map<string, string> {
+  const paths = new Map<string, string>();
+  for (const message of request.messages ?? []) {
+    const content = message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const raw of content) {
+      const block = raw as ToolUseBlock;
+      if (block?.type !== 'tool_use') continue;
+      if (typeof block.id !== 'string' || !block.input) continue;
+      for (const key of ['file_path', 'path', 'filePath', 'notebook_path']) {
+        const value = block.input[key];
+        if (typeof value === 'string' && value.length > 0) {
+          paths.set(block.id, value);
+          break;
+        }
+      }
+    }
+  }
+  return paths;
+}
+
+/**
+ * Whether a block is a tool result.
+ *
+ * Checked by `type` rather than by the presence of `content`, because a
+ * `tool_use` block also has structured fields and must NOT be rewritten -- its
+ * input is an argument the model chose, not output to be summarised.
+ */
+function isToolResult(block: unknown): boolean {
+  return (
+    typeof block === 'object' &&
+    block !== null &&
+    (block as ToolResultBlock).type === 'tool_result'
+  );
+}
+
 function mapBlocks(
   request: ProviderRequest,
-  visit: (text: string, at: Position, message: Message) => string | null
+  visit: (
+    text: string,
+    at: Position,
+    message: Message,
+    toolUseId?: string
+  ) => string | null
 ): ProviderRequest {
   const messages = (request.messages ?? []).map((message, mi) => {
     const content = message?.content;
@@ -198,9 +321,55 @@ function mapBlocks(
 
     const mapped = content.map((raw, bi) => {
       const block = raw as Block;
-      if (typeof block?.text !== 'string') return block;
-      const replaced = visit(block.text, { message: mi, block: bi }, message);
-      return replaced === null ? block : { ...block, text: replaced };
+      const at = { message: mi, block: bi };
+
+      if (typeof block?.text === 'string') {
+        const replaced = visit(block.text, at, message);
+        return replaced === null ? block : { ...block, text: replaced };
+      }
+
+      // A TOOL RESULT CARRIES ITS PAYLOAD ONE LEVEL DOWN, and skipping it made
+      // this compressor blind to almost everything a coding agent sends.
+      //
+      // This walker keyed on `block.text`. A tool_result has no `text`: the
+      // file that was read, the command output, the search hits all live under
+      // `content`, either as a plain string or as nested text blocks. So every
+      // one of them was returned untouched -- the same defect already recorded
+      // here for images, in the engine that exists to compress exactly this.
+      //
+      // MEASURED, on 23 real requests through the rig: 2.79 MB of traffic,
+      // largest request 128 KB, and 23 of 23 reported "compression did not
+      // pay" having removed 0 bytes. The identical file content compresses
+      // 36.4% as a text block and 0.0% as a tool_result.
+      //
+      // The nested text inherits its CONTAINER's position, which is what the
+      // frontier comparison needs: a tool_result sits on one side of the cache
+      // breakpoint as a unit, and its parts cannot straddle it.
+      if (isToolResult(block)) {
+        const inner = (block as ToolResultBlock).content;
+
+        const producedBy = (block as ToolResultBlock).tool_use_id;
+
+        if (typeof inner === 'string') {
+          const replaced = visit(inner, at, message, producedBy);
+          return replaced === null ? block : { ...block, content: replaced };
+        }
+
+        if (Array.isArray(inner)) {
+          let touched = false;
+          const mappedInner = inner.map((rawInner) => {
+            const innerBlock = rawInner as Block;
+            if (typeof innerBlock?.text !== 'string') return innerBlock;
+            const replaced = visit(innerBlock.text, at, message, producedBy);
+            if (replaced === null) return innerBlock;
+            touched = true;
+            return { ...innerBlock, text: replaced };
+          });
+          return touched ? { ...block, content: mappedInner } : block;
+        }
+      }
+
+      return block;
     });
 
     return { ...message, content: mapped };
@@ -301,13 +470,19 @@ function replaceImages(
 function pathAddressed(
   request: ProviderRequest,
   options: StrategyOptions,
-  respectFrontier: boolean
+  respectFrontier: boolean,
+  floor?: Position | null
 ): StrategyResult {
   // Located whether or not it is respected: even an arm that rewrites
   // history needs to know which side of the breakpoint a block is on,
   // because that decides whether the block has to be BYTE-STABLE.
   const breakpoint = lastCacheBreakpoint(request);
-  const frontier = respectFrontier ? breakpoint : null;
+  // THE FLOOR IS WHERE THE CACHE ACTUALLY ENDS, which is not where this
+  // request's marker sits. A client marks the LAST message every turn, so
+  // respecting THIS breakpoint leaves nothing compressible; respecting the
+  // one we saw LAST turn leaves exactly the span the conversation has grown
+  // since, which the provider is about to cache for the first time.
+  const frontier = respectFrontier ? (floor ?? breakpoint) : null;
   const query = questionIn(request);
   const elisions: Elision[] = [];
   const staged: DedupBlock[] = [];
@@ -335,7 +510,8 @@ function pathAddressed(
   // all. An untouchable block is still staged, because it is the strongest
   // referent a later repeat can point at -- it is guaranteed to arrive
   // byte-identical.
-  mapBlocks(request, (text, at, message) => {
+  const sourcePaths = toolResultPaths(request);
+  mapBlocks(request, (text, at, message, toolUseId) => {
     // #3456: a signed message is untouchable. Rewriting it poisons the
     // conversation permanently, not just this turn.
     const touchable =
@@ -366,6 +542,10 @@ function pathAddressed(
       query: cached || repeated ? undefined : query,
       tuning: options.tuning,
       embeddings: options.embeddings,
+      // The path the payload came from, recovered from the call that
+      // produced it. This is what lets the code engine pick a language;
+      // without it the same content compresses by exactly 0.0%.
+      sourcePath: toolUseId ? sourcePaths.get(toolUseId) : undefined,
     });
     elisions.push(...result.elisions);
     staged.push({ text: result.text, original: text, touchable: true });
@@ -413,6 +593,77 @@ function pathAddressed(
  * miss. See `anchor.ts` for the economics; without a store this is exactly
  * the frontier-only behaviour it has always had.
  */
+/**
+ * How much of the cached prefix a rewrite must remove before it pays for itself.
+ *
+ * THE ARITHMETIC THAT DECIDES THIS, because it is not a matter of taste. A
+ * cached token is read at 0.1x every turn. Rewriting the prefix means the
+ * provider caches OUR version instead, which costs 1.25x once on the whole
+ * prefix and then reads a smaller one at 0.1x thereafter. Removing a fraction f
+ * therefore breaks even after
+ *
+ *     1.25 * P  ==  0.1 * f * P * N        =>        N = 12.5 / f
+ *
+ * turns. At the reduction actually achieved on real Claude Code traffic --
+ * 2.47%, measured over 22 requests -- that is 507 turns. THOL tasks run 6 to 12
+ * and a long human session is around 100, so at that rate the rewrite cannot
+ * pay under any realistic session, and the measured result agreed: the proxy
+ * cost about 24% more than control with identical turn counts, and the cache
+ * writes it caused were 42% of weighted input cost while being 5.5% of tokens.
+ *
+ * 12.5% is break-even at 100 turns, which is a generous estimate of a long
+ * session. Below it we leave the prefix alone and compress only what the
+ * provider has not cached; above it the rewrite genuinely wins and is sent.
+ *
+ * This is not a guess that can quietly go stale: it is `CACHE_WRITE / CACHE_READ`
+ * divided by the session length we are willing to bet on, and both are named.
+ */
+const CACHE_WRITE_MULTIPLIER = 1.25;
+const CACHE_READ_MULTIPLIER = 0.1;
+/**
+ * The DEFAULT prior on session length. Overridable via `assumedSessionTurns`.
+ *
+ * Kept as a named constant so the derivation below stays readable, but it is no
+ * longer the only value available: a workload that knows it runs short can say
+ * so, and one that runs for hundreds of turns can say that instead. See
+ * `options.ts#assumedSessionTurns` for why this is a fixed prior rather than
+ * something measured from the conversation as it goes.
+ */
+const ASSUMED_SESSION_TURNS = 100;
+/**
+ * How long a conversation must already be before we bet on it continuing.
+ *
+ * A rewrite needs 12.5/f turns of cheap reads after it to repay its write, so
+ * the bet is on turns REMAINING -- which nothing here can know. Turns so far is
+ * the only available estimate, and a session that has already run this long is
+ * the kind that plausibly runs long enough again.
+ *
+ * Each turn contributes two messages, so this is roughly twenty turns: past the
+ * length of every task in the benchmark, which is deliberate. Those tasks end
+ * at 6 to 12 turns and measurably cannot amortise a write, so the honest
+ * behaviour there is not to make one.
+ */
+const MIN_MESSAGES_TO_AMORTISE = 40;
+
+const MIN_PREFIX_REWRITE_SHARE =
+  CACHE_WRITE_MULTIPLIER / CACHE_READ_MULTIPLIER / ASSUMED_SESSION_TURNS;
+
+/**
+ * The share a rewrite must remove to repay itself, for this proxy's prior.
+ *
+ * FIXED FOR THE LIFE OF A PROXY, like every other dial, and that is the whole
+ * point: a threshold that moved with the conversation would decline a rewrite
+ * on one turn and accept it on the next, re-sending the entire prefix at 1.25x
+ * instead of re-reading it at 0.1x.
+ */
+export function minRewriteShare(tuning?: Tuning): number {
+  const turns = tuning?.assumedSessionTurns;
+  if (!turns || !Number.isFinite(turns) || turns <= 0) {
+    return MIN_PREFIX_REWRITE_SHARE;
+  }
+  return CACHE_WRITE_MULTIPLIER / CACHE_READ_MULTIPLIER / turns;
+}
+
 export function v1Frontier(
   request: ProviderRequest,
   options: StrategyOptions = {}
@@ -429,7 +680,7 @@ export function v1Frontier(
   const decision = anchorDecision(
     request,
     options.anchors,
-    options.tuning?.coldPrefixLimit
+    options.tuning?.coldMessageLimit
   );
 
   // KNOWLEDGE RIDES ON THE ANCHOR DECISION, and that is the whole trick.
@@ -452,18 +703,148 @@ export function v1Frontier(
         options.findings ?? [],
         stableContext(request),
         options.knowledgeBudget ?? options.tuning?.knowledgeBudgetChars,
-        options.embeddings
+        {
+          embeddings: options.embeddings,
+          // Passed through rather than defaulted here: only the loader knows
+          // which graph these findings came from, and a project claim served
+          // out of a shared graph is a fact about some other tree.
+          sharedGraph: options.sharedGraph === true,
+        }
       )
     : (decision.record.knowledge ?? null);
 
-  const out = pathAddressed(request, options, !decision.reanchor);
+  // RECONSIDERED EVERY TURN, because the answer changes as the conversation
+  // grows. The break-even test below compares what a rewrite would remove
+  // against what it costs, and early in a session there is little history to
+  // remove -- so a conversation can be declined at 10% on turn two and be
+  // worth 23% by turn six. Treating the first refusal as final left that on
+  // the table for the rest of the session.
+  //
+  // `left-alone` is exactly the state of having declined before, so it is
+  // retried rather than honoured. Nothing is lost by asking again: the
+  // provider still holds the client's prefix, which is what it held when we
+  // declined, so adopting the rewrite later costs the same write it would
+  // have cost then.
+  // AND ONLY IN A SESSION LONG ENOUGH TO AMORTISE THE WRITE. Reconsidering is
+  // the right behaviour, but it is not free: it lets a rewrite happen the moment
+  // the saving clears the floor, and the 1.25x write that buys still needs
+  // 12.5/f turns of 0.1x reads AFTER it to repay. A session that ends before
+  // then has simply paid the write.
+  //
+  // Measured: on 6-to-12 turn tasks, reconsidering cost $0.81 against $0.76 for
+  // the same build that never rewrote -- worse, and by about what the arithmetic
+  // predicts. Turns so far is the only estimate of turns remaining available
+  // here, so a conversation has to have shown it is long before we bet on it
+  // continuing.
+  const longEnough =
+    (request.messages ?? []).length >= MIN_MESSAGES_TO_AMORTISE;
+  const attempt =
+    decision.reanchor || (decision.reason === 'left-alone' && longEnough);
+  // ONLY WHEN WE RECOGNISE THE CONVERSATION AND ITS PREFIX IS UNCHANGED.
+  // 'already-anchored' and 'left-alone' are exactly the two states that say
+  // the client sent us the same prefix we saw last time, so the breakpoint we
+  // stored still points at the same message and everything past it is new.
+  // A first sighting, a joined conversation or a client-invalidated prefix
+  // all mean we cannot say what the provider holds, and the honest answer
+  // there is the conservative one: fall back to this request's own marker.
+  const recognised =
+    decision.reason === 'already-anchored' ||
+    decision.reason === 'left-alone' ||
+    decision.reason === 'extended';
+  // ONCE COMPRESSION HAS STARTED THE BOUNDARY NEVER MOVES. `breakpoint`
+  // advances every turn as the client moves its cache marker, so using it as
+  // the floor would push a span compressed on turn N below the floor on turn
+  // N+1 and send the client's original for bytes the provider is holding as
+  // ours. `compressFrom` is set once, on the turn compression first bites,
+  // and reused verbatim thereafter -- so the same content yields the same
+  // output every turn and the cache hits. See anchor.ts for the measurement.
+  const frozen = recognised ? (decision.record.compressFrom ?? null) : null;
+  const floor =
+    frozen ?? (recognised ? (decision.record.breakpoint ?? null) : null);
+  // A FROZEN BOUNDARY OUTRANKS THE REWRITE PATH. `attempt` normally means
+  // "rewrite the whole history", which is right when we are deciding to
+  // anchor for the first time and wrong once a boundary exists: re-deriving
+  // the prefix from scratch touches content the provider already holds in a
+  // form we chose, and changes it. Measured: exactly one message-turn in 418
+  // moved, at the turn the already-anchored path first fired, and it was
+  // this.
+  const respect = !attempt || frozen !== null;
+  let out = pathAddressed(request, options, respect, floor);
+  let reanchored = attempt;
+
+  // COMPRESSING NEW CONTENT COMMITS US TO IT. The moment we shrink a block,
+  // the provider caches OUR bytes for it -- so next turn, when the client
+  // sends the original again, passing it through unchanged is a guaranteed
+  // miss on everything from that point on. Recording the turn as anchored is
+  // what makes the next one reproduce the same transform over the whole
+  // history, which is a hit precisely because the transform is a pure
+  // function of the content behind the breakpoint.
+  if (
+    !attempt &&
+    JSON.stringify(out.request).length < JSON.stringify(request).length
+  )
+    reanchored = true;
+
+  // The boundary to reuse next turn: whatever we already froze, or -- on the
+  // turn compression first bites -- the floor it bit at. Recorded only when
+  // something was actually removed, because a turn that changed nothing has
+  // committed us to nothing.
+  const removedAnything =
+    JSON.stringify(out.request).length < JSON.stringify(request).length;
+  const compressFrom = frozen ?? (removedAnything ? floor : null);
+
+  // A REWRITE OF THE CACHED PREFIX HAS TO CLEAR ITS OWN COST. See
+  // MIN_PREFIX_REWRITE_SHARE: below that share the 1.25x write we are about to
+  // cause outweighs every 0.1x read it will ever save, so the honest move is to
+  // leave the prefix exactly as the provider already has it and compress only
+  // what is not cached yet.
+  //
+  // Measured before this existed: 2.47% removed, and the resulting cache writes
+  // were 42% of weighted input cost.
+  // THE THRESHOLD IS FOR DECIDING TO START, NOT FOR CARRYING ON. When the
+  // provider already holds OUR version of this prefix, reproducing it is the
+  // cache hit and declining is the miss -- there is no 1.25x write to clear,
+  // because the write already happened on the turn we started. Applying the
+  // floor here anyway de-anchored an anchored conversation the moment its
+  // saving dipped under the share, flipping the prefix back to the client's
+  // bytes and guaranteeing the very miss the floor exists to prevent.
+  const alreadyOurs =
+    (decision.reason === 'already-anchored' ||
+      decision.reason === 'extended') &&
+    decision.record.anchored;
+  if (attempt && !alreadyOurs) {
+    const before = JSON.stringify(request).length;
+    const removed = before - JSON.stringify(out.request).length;
+    if (removed < before * minRewriteShare(options.tuning)) {
+      out = pathAddressed(request, options, true, floor);
+      reanchored = false;
+    }
+  }
+
   const withKnowledge = injectKnowledge(out.request, knowledge);
 
   return {
     ...out,
     request: withKnowledge,
     injectedChars: out.injectedChars + (knowledge?.length ?? 0),
-    anchor: { ...decision, record: { ...decision.record, knowledge } },
+    // RECORDED AS WHAT WE ACTUALLY DID. Remembering `anchored: true` for a
+    // rewrite we declined would tell the next turn the provider holds our
+    // version when it holds the client's -- the exact cache write this check
+    // exists to avoid, bought with a lie about what went on the wire.
+    anchor: {
+      ...decision,
+      reanchor: reanchored,
+      record: {
+        ...decision.record,
+        anchored: reanchored,
+        knowledge,
+        // Where the cache ends as of this turn, so the next one knows which
+        // span is new. Recorded from the request as it ARRIVED, not as we
+        // send it: it describes what the provider is about to hold.
+        breakpoint: lastCacheBreakpoint(request),
+        compressFrom,
+      },
+    },
   };
 }
 
@@ -592,6 +973,67 @@ export function ccrStyle(
   };
 }
 
+/**
+ * V1, plus the history substitution -- the one region nothing else touches.
+ *
+ * COMPOSED RATHER THAN FORKED. V1 attacks the fresh tail and the tool
+ * definitions; this attacks the reasoning in history, which is 52% of it and
+ * which every other arm steps over because `messageIsSigned` forbids rewriting
+ * it. They are disjoint, so the substitution runs first and V1 then does
+ * exactly what it always did to what is left. Anything V1 learns about
+ * anchoring, knowledge injection and the saving floor is inherited rather than
+ * reimplemented, which is the difference between a fifth arm and a second
+ * codebase.
+ *
+ * ORDER IS NOT ARBITRARY. Substitution must happen BEFORE the anchor decision,
+ * because the anchor records what the cached prefix looks like and it has to
+ * record the prefix we actually send. Running it afterwards would anchor one
+ * body and transmit another -- the same class of defect as recording
+ * `anchored: true` for a rewrite the proxy then discarded.
+ *
+ * OFF BY DEFAULT AT THE CALLER. Registered here so it is measurable; the proxy
+ * gates it on `TOKEN_OPTIMIZER_PROXY_SUBSTITUTE`. Deferral shipped default-off
+ * and was therefore never measured for months, so the switch is deliberate and
+ * so is the instrumentation behind it.
+ */
+export function v4Substitute(
+  request: ProviderRequest,
+  options: StrategyOptions = {}
+): StrategyResult {
+  const substitution = substituteHistory(request.messages, {
+    // NO QUERY, NO SPILL, NO EMBEDDINGS -- the three inputs that would make the
+    // same block compress differently on a later turn. `tuning` is fixed for
+    // the life of the proxy by design, so what remains is a pure function of
+    // the block's own text, which is what the append-only rule requires.
+    compressToolResult: (text) =>
+      compressBlock(text, { tuning: options.tuning }).text,
+  });
+  // BOTH REGIONS COUNT, and gating on `substituted` alone silently threw one
+  // away. That counter tracks assistant REASONING substitutions only; tool
+  // results report through `toolResultChars`. So a conversation whose assistant
+  // turns carry no `thinking` -- an ordinary non-reasoning session -- had its
+  // compressed tool results computed and then discarded, because the reasoning
+  // count was zero.
+  //
+  // Nothing to substitute is still not a reason to skip compression: the
+  // request has a fresh tail and tool definitions either way, and V1 handles
+  // those.
+  const changed =
+    substitution.substituted > 0 || substitution.toolResultChars > 0;
+  const next: ProviderRequest = changed
+    ? { ...request, messages: substitution.messages }
+    : request;
+  const result = v1Frontier(next, options);
+  return {
+    ...result,
+    // The digest is content we ADDED, and it is counted as such. A strategy
+    // that reports only what it removed can show a saving while having made
+    // the request larger, which is the specific way a compression figure
+    // becomes a lie.
+    injectedChars: result.injectedChars + substitution.substituteChars,
+  };
+}
+
 /** Every arm, by name. */
 export const STRATEGIES: Record<
   StrategyName,
@@ -600,5 +1042,6 @@ export const STRATEGIES: Record<
   'v1-frontier': v1Frontier,
   'v2-speculative': v2Speculative,
   'v3-history': v3History,
+  'v4-substitute': v4Substitute,
   ccr: ccrStyle,
 };

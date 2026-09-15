@@ -3,7 +3,8 @@ import {
   anchorDecision,
   anchorStore,
   conversationKey,
-  COLD_PREFIX_LIMIT,
+  COLD_MESSAGE_LIMIT,
+  type AnchorStore,
 } from '../../../src/compress/anchor.js';
 import { v1Frontier } from '../../../src/compress/strategy.js';
 import type { ProviderRequest } from '../../../src/compress/frontier.js';
@@ -72,12 +73,20 @@ function large(
         content: [
           {
             type: 'text',
-            text: `${payload('history', Math.ceil(COLD_PREFIX_LIMIT / 40))}\n${tail}`,
+            text: `${payload('history', 500)}\n${tail}`,
             cache_control: { type: 'ephemeral' },
           },
         ],
       },
-      { role: 'user', content: [{ type: 'text', text: 'go on' }] },
+      // ENOUGH TURNS TO BE A CONVERSATION ALREADY IN FLIGHT, which is what this
+      // fixture means and what the gate now actually tests. It used to mean
+      // 'big prefix', because the gate compared prefix SIZE -- a stand-in that
+      // was always false against a real client, whose system prompt and tool
+      // schema exceed any such limit on the very first request.
+      ...Array.from({ length: COLD_MESSAGE_LIMIT + 1 }, (_, i) => ({
+        role: 'user' as const,
+        content: [{ type: 'text', text: `go on ${i}` }],
+      })),
     ],
   };
 }
@@ -205,7 +214,13 @@ ${payload(tail, 400)}`,
             },
           ],
         },
-        { role: 'user', content: [{ type: 'text', text: 'go on' }] },
+        // Long enough to be a conversation already in flight, which is what
+        // 'joined-mid-conversation' now means: the gate asks how far along the
+        // conversation is, not how many bytes its prefix weighs.
+        ...Array.from({ length: COLD_MESSAGE_LIMIT + 1 }, (_, i) => ({
+          role: 'user' as const,
+          content: [{ type: 'text', text: `go on ${i}` }],
+        })),
       ],
     });
 
@@ -375,5 +390,111 @@ describe('v1 with an anchor store', () => {
     // The body the question named survives, and a neighbour's does not.
     expect(fresh).toContain("body-of-handler3'");
     expect(fresh).not.toContain("body-of-handler11'");
+  });
+});
+
+describe('a declined rewrite is reconsidered as the conversation grows', () => {
+  // WHY THE FIRST REFUSAL MUST NOT BE FINAL. Rewriting the cached prefix has to
+  // repay its own 1.25x cache write out of 0.1x reads, so it is refused while
+  // the saving is too small. Early in a session there is barely any history to
+  // remove, so the saving is ALWAYS small then -- and treating that refusal as
+  // permanent left the rest of the session uncompressed.
+  //
+  // Measured in a six-turn simulation: declined at 10.3% on turn two, worth
+  // 22.7% by turn six. Before this, turns two through six all removed nothing.
+  const NEWLINE = String.fromCharCode(10);
+  const body = (n: number): string =>
+    Array.from(
+      { length: n },
+      (_, i) =>
+        `export function helper${i}(input: number): number {` +
+        NEWLINE +
+        `  const doubled = input * 2;` +
+        NEWLINE +
+        `  const shifted = doubled + ${i};` +
+        NEWLINE +
+        `  return shifted;` +
+        NEWLINE +
+        `}`
+    ).join(NEWLINE);
+
+  const conversation = (turns: number): ProviderRequest => {
+    const messages: unknown[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'fix the failing test' }],
+      },
+    ];
+    for (let i = 0; i < turns; i += 1) {
+      messages.push({
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: `t${i}`,
+            name: 'Read',
+            input: { file_path: `f${i}.ts` },
+          },
+        ],
+      });
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: `t${i}`,
+            content: [{ type: 'text', text: body(60) }],
+            ...(i === turns - 1
+              ? { cache_control: { type: 'ephemeral' } }
+              : {}),
+          },
+        ],
+      });
+    }
+    return {
+      // SIZED SO THE EARLY REFUSAL IS GENUINE. At repeat(400) this fixture
+      // removed 14.12% on its very first turn and the rewrite was adopted --
+      // so `early` came out non-zero and the test below stopped testing what
+      // it claims. That was not a policy change: the code engine had started
+      // firing on the tool_result once a sourcePath could be recovered from
+      // the matching tool_use, and the same fixture suddenly cleared the
+      // floor. At repeat(1200) the saving is 6.8% against a 12.5% floor, so
+      // the refusal is real, while turn 24 still clears it at 26.3% and the
+      // rewrite is still adopted. Both halves now discriminate.
+      system: 'You are a coding agent. '.repeat(1200),
+      messages,
+    } as unknown as ProviderRequest;
+  };
+
+  const removedFrom = (
+    request: ProviderRequest,
+    anchors: AnchorStore
+  ): number => {
+    const before = JSON.stringify(request).length;
+    const out = v1Frontier(request, { spill: () => '/spill/x.txt', anchors });
+    if (out.anchor) anchors.remember(out.anchor.key, out.anchor.record);
+    return before - JSON.stringify(out.request).length;
+  };
+
+  it('adopts the rewrite on a later turn after refusing an early one', () => {
+    const anchors = anchorStore();
+
+    // A first turn with almost no history: the rewrite cannot repay its write.
+    const early = removedFrom(conversation(1), anchors);
+    expect(early).toBe(0);
+
+    // The same conversation once it has accumulated enough to be worth it --
+    // both in saving AND in length, since the write only repays out of the
+    // turns that follow it, and a session that ends first has just paid it.
+    const later = removedFrom(conversation(24), anchors);
+    expect(later).toBeGreaterThan(0);
+  });
+
+  it('keeps refusing while the saving stays below the floor', () => {
+    // The other half, without which the test above would pass against a rule
+    // that simply always rewrote.
+    const anchors = anchorStore();
+    expect(removedFrom(conversation(1), anchors)).toBe(0);
+    expect(removedFrom(conversation(1), anchors)).toBe(0);
   });
 });
