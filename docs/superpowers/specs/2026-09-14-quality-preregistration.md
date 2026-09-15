@@ -89,20 +89,35 @@ ship and the digest design is reconsidered.
 ### Sample size
 
 McNemar's power depends on the **discordance rate**, which cannot be known
-before the pilot. So the rule is stated in the unit the test actually consumes:
+before the pilot. So the rule is stated in the unit the test actually consumes,
+under assumptions fixed here so the numbers can be checked:
 
-| effect | discordant pairs needed |
-| --- | --- |
-| odds ratio 2.0 (substitution diverges twice as often) | **~35** |
-| odds ratio 1.5 | **~110** |
+**α = 0.05, one-sided; target power 1 − β = 0.80.** Under McNemar the test
+reduces to a binomial on the discordant pairs alone, asking whether the share
+favouring "substitution diverged" exceeds ½. For a discordant-pair count `d` and
+an odds ratio `ψ`, the alternative proportion is `p = ψ / (1 + ψ)`, and
+`d ≈ (z₀.₀₅·½ + z₀.₂₀·√(p(1−p)))² / (p − ½)²` with z₀.₀₅ = 1.645 and
+z₀.₂₀ = 0.842.
+
+| effect | p | discordant pairs `d` |
+| --- | --- | --- |
+| ψ = 2.0 (substitution diverges twice as often) | 0.667 | **~35** |
+| ψ = 1.5 | 0.600 | **~110** |
 
 Total turns follow from the discordance rate the pilot measures:
-`turns = discordant_pairs / discordance_rate`. At a 10% discordance rate, an
-odds ratio of 2.0 needs ~350 turns; at 25%, ~140.
+`turns = d / discordance_rate`. At a 10% discordance rate, ψ = 2.0 needs ~350
+turns; at 25%, ~140.
 
-**The pilot's job is to measure that rate**, and the full sample size is
-computed from it and recorded before the main run. This replaces the earlier
-~250/~900 figures, which were derived from the wrong test.
+**The pilot's job is to measure that rate.** It is a pilot and not a verdict:
+its own discordant pairs are too few to test with, and no decision is read from
+it. The full sample size is computed from its rate using the formula above and
+**written into this file before the main run**, so the stopping point is fixed
+in advance rather than chosen once results start arriving. A run that reaches
+its declared turn count without accumulating `d` discordant pairs is reported as
+underpowered rather than tested anyway.
+
+This replaces the earlier ~250/~900 figures, which were derived from a
+two-proportion test that assumed independence this design does not have.
 
 ### Sampling rule, with quotas
 

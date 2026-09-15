@@ -625,15 +625,29 @@ function compactIfWasteful(dir) {
     // retention depend on the order edges happen to sit in `edgeMeta`: if an
     // edge A->B is visited before whatever made A anchored, B is never marked,
     // and compaction then evicts a node that a finding transitively reaches --
-    // deleting its incident edge with it. Repeating until nothing new is
-    // marked makes the result independent of that order.
-    for (let grew = true; grew; ) {
-      grew = false;
-      for (const [, meta] of edgeMeta) {
-        if (anchored.has(meta.from) && !anchored.has(meta.to)) {
-          anchored.add(meta.to);
-          grew = true;
-        }
+    // deleting its incident edge with it.
+    //
+    // WORKLIST, NOT REPEATED SWEEPS. Re-scanning every edge until nothing
+    // changes is correct but quadratic: a chain recorded in reverse order needs
+    // one whole scan per newly anchored node, and this runs synchronously
+    // during compaction on a graph that can hold tens of thousands of them.
+    // Indexing once by source and walking outward touches each edge a bounded
+    // number of times instead.
+    const outgoing = new Map();
+    for (const [, meta] of edgeMeta) {
+      const list = outgoing.get(meta.from);
+      if (list) list.push(meta.to);
+      else outgoing.set(meta.from, [meta.to]);
+    }
+    const queue = [...anchored];
+    while (queue.length) {
+      const from = queue.pop();
+      const targets = outgoing.get(from);
+      if (!targets) continue;
+      for (const to of targets) {
+        if (anchored.has(to)) continue;
+        anchored.add(to);
+        queue.push(to);
       }
     }
     const cap = maxStructureNodes();

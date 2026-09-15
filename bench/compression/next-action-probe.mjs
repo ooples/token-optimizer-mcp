@@ -151,7 +151,18 @@ function sampledCuts(messages, n) {
     }
   }
 
-  const quota = Math.max(1, Math.floor(n / BANDS.length));
+  // LARGEST-REMAINDER APPORTIONMENT, so the sample actually has `n` turns in
+  // it. A flat `floor(n / bands)` silently returned 8 when asked for 10 -- the
+  // remainder was dropped, so every run was 20% smaller than requested and the
+  // discordance rate this probe exists to measure was computed from fewer pairs
+  // than the caller had budgeted for.
+  //
+  // The extra goes to the earliest bands, deterministically, so a re-run
+  // samples identically. That makes the split uneven by at most one turn, which
+  // is the smallest deviation from the spec's equal-weighting that can still
+  // return the requested count.
+  const base = Math.floor(n / BANDS.length);
+  const extra = n % BANDS.length;
   const picked = [];
   const shortfall = [];
 
@@ -160,8 +171,9 @@ function sampledCuts(messages, n) {
     const inBand = cuts.filter(
       (c) => c.turn >= band.min && c.turn <= band.max
     );
+    const quota = base + (index < extra ? 1 : 0);
     if (!inBand.length) {
-      shortfall.push(`${band.label}: none available`);
+      if (quota > 0) shortfall.push(`${band.label}: 0 of ${quota}`);
       return;
     }
     const take = Math.min(quota, inBand.length);
@@ -172,7 +184,7 @@ function sampledCuts(messages, n) {
     for (let i = 0; i < take; i += 1) {
       picked.push(inBand[Math.floor(i * step)]);
     }
-    void index;
+
   });
 
   return { cuts: picked, shortfall };

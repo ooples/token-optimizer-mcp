@@ -53,8 +53,16 @@ const MIN_LINES = 3;
 export interface Numbering {
   /** The content with its line numbers removed. */
   readonly stripped: string;
-  /** Puts the original numbers back on the lines that survived. */
-  restore(compressed: string): string;
+  /**
+   * Puts the original numbers back on the lines that survived.
+   *
+   * `markerBudget` is how many lines the engine was ENTITLED to invent: one per
+   * elision it reported. Everything else it emits should be a line it kept
+   * verbatim, because that is the assumption line-matching rests on. Passing
+   * the real count is what lets this tell an added marker apart from a rewritten
+   * line; omitting it assumes none and is the strictest reading.
+   */
+  restore(compressed: string, markerBudget?: number): string;
 }
 
 /**
@@ -77,7 +85,7 @@ export function readNumbering(text: string): Numbering | null {
 
   return {
     stripped: bare.join('\n'),
-    restore(compressed: string): string {
+    restore(compressed: string, markerBudget = 0): string {
       // The engines remove whole lines and insert markers; they never rewrite a
       // line they keep. So walking the two in step and advancing only on a
       // match re-attaches each surviving line's ORIGINAL number, while an
@@ -113,18 +121,21 @@ export function readNumbering(text: string): Numbering | null {
 
       // FAIL CLOSED WHEN THE ASSUMPTION IS VIOLATED. This restores numbers by
       // matching whole lines, which assumes engines only ever REMOVE lines. An
-      // engine that rewrites them leaves most output unmatched, and every
-      // unmatched line is emitted with no number -- silently breaking the line
-      // addressing the numbers exist to provide, in output that still looks
-      // numbered because the surviving lines kept theirs.
+      // engine that REWRITES one leaves it unmatched, and it is then emitted
+      // with no number while the lines around it keep theirs -- silently
+      // breaking the line addressing the numbers exist to provide, in output
+      // that still reads as fully numbered.
       //
-      // Partial numbering is the worst of the three options: worse than
-      // numbering everything and worse than numbering nothing, because it
-      // reads as complete. So when most lines did not survive intact, the bare
-      // compressed text is returned and the caller sees output it can
-      // recognise as unnumbered.
-      const matched = lines.length - unmatched;
-      if (lines.length > 0 && matched < lines.length / 2) return compressed;
+      // THE BUDGET IS THE DISCRIMINATOR, and a line-count threshold was not.
+      // An engine is entitled to invent exactly one line per elision it
+      // reported: that is its marker. Any unmatched line beyond that budget is
+      // a retained line it rewrote -- `compressJson` minifying a document into
+      // one line, or `log.ts` replacing a kept log line with a rendered
+      // template. Counting those against the elisions the engine itself
+      // declared distinguishes the two cases exactly, where "more than half
+      // survived" merely made the failure rarer and left it silent when a
+      // handful of lines were rewritten.
+      if (unmatched > markerBudget) return compressed;
 
       return out.join('\n');
     },
