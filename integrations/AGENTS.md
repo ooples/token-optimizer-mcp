@@ -3,7 +3,15 @@
 This project provides a `token-optimizer` MCP server. Use a named optimizer tool
 only when that exact schema is visible in the current CLI tool inventory; an MCP
 config file alone does not prove registration. If a tool is absent, keep the
-native operation available and bound its output. When registered, prefer:
+native operation available and bound its output.
+
+Keep tool discovery bounded too. In code-mode hosts with `ALL_TOOLS`, retrieve
+only the exact schema needed next, for example
+`ALL_TOOLS.filter(t => t.name.endsWith('__smart_read'))`. If the name is unknown,
+list tool names without descriptions first. Broad matches such as `mcp`,
+`optimizer`, or `search` can print thousands of tokens of unrelated schemas.
+
+When registered, prefer:
 
 - **`smart_read`** instead of reading a file directly when the file is **large**
   (>~400 lines / >25 KB) or you have **already read it** this session — on

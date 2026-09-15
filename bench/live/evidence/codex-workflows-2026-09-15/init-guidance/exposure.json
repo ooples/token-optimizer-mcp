@@ -1,0 +1,22 @@
+[
+  {
+    "arm": "full",
+    "rep": 1,
+    "initializationGuidanceVisible": false
+  },
+  {
+    "arm": "full-files",
+    "rep": 1,
+    "initializationGuidanceVisible": false
+  },
+  {
+    "arm": "full-files",
+    "rep": 2,
+    "initializationGuidanceVisible": false
+  },
+  {
+    "arm": "full",
+    "rep": 2,
+    "initializationGuidanceVisible": false
+  }
+]

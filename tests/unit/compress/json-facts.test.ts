@@ -1,5 +1,8 @@
 import { test, expect } from '@jest/globals';
-import { booleanFacts } from '../../../src/compress/json-facts.js';
+import {
+  booleanFacts,
+  rareBooleanRows,
+} from '../../../src/compress/json-facts.js';
 import { compressBlock } from '../../../src/compress/router.js';
 
 function counts(rows: unknown[]) {
@@ -30,9 +33,27 @@ test('complete-array elision carries exact counts, including a rare disabled rec
   });
   expect(result.text.length).toBeLessThan(JSON.stringify(rows).length);
   expect(result.text).toContain('exact boolean counts over all 240 rows');
+  expect(result.text).toContain('route-122');
   expect(result.text).toContain(
     '"enabled":{"true":239,"false":1,"missing":0,"other":0}'
   );
+});
+
+test('rare populations preserve every matching row without treating missing as false', () => {
+  const rows = Array.from({ length: 240 }, (_, i) => ({
+    healthy: i !== 122 && i !== 219,
+    alerted: i === 177,
+  }));
+  expect(
+    [...rareBooleanRows([...rows, {}, { healthy: null }])].sort((a, b) => a - b)
+  ).toEqual([122, 177, 219]);
+  expect(
+    rareBooleanRows(
+      Array.from({ length: 240 }, (_, i) => ({
+        enabled: i >= 9,
+      }))
+    ).size
+  ).toBe(0);
 });
 test('fact size is bounded and hostile property names remain data', () => {
   const row = Object.fromEntries(

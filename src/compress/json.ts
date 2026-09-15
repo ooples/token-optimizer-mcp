@@ -36,7 +36,7 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
-import { booleanFacts } from './json-facts.js';
+import { booleanFacts, rareBooleanRows } from './json-facts.js';
 import { needleRows, shapeRepresentatives } from './needles.js';
 import { compressNestedStrings } from './nested.js';
 import { activeRanker } from './ranking.js';
@@ -286,7 +286,7 @@ export function compressJson(
     // shaped alike (their agentic-conversation, 0 flagged, 45 of 48 rows
     // elided, every needle destroyed at 99.6%).
     const odd = anomalousRows(stripped, tuning.keepRows);
-    const keep = new Set<number>();
+    const keep = rareBooleanRows(stripped);
     // 1. Content that a reader would come back for -- identifiers, failure
     //    vocabulary -- which structure cannot see. Bounded, so an array made
     //    of needles does not simply disable compression.

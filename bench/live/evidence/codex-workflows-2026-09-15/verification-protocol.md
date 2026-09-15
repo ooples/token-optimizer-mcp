@@ -2,6 +2,9 @@
 
 Recorded before examining results from this campaign.
 
+Status: deferred at the user's request. No runs started. Product improvements
+in measured losing areas take priority; use focused checks for changed behavior.
+
 - Model: gpt-6-astra; local Codex and installed HeadRoom binaries.
 - Tasks: JSON outlier lookup, code search, log diagnosis, retry-policy bugfix,
   multi-file money refactor, external route refresh.

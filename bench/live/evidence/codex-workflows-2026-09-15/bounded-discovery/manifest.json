@@ -1,0 +1,16 @@
+{
+  "model": "gpt-6-astra",
+  "arms": [
+    "full",
+    "full-files"
+  ],
+  "reps": 2,
+  "tasks": [
+    "refresh"
+  ],
+  "balanced": true,
+  "seedOffset": 26,
+  "readMode": "mcp",
+  "mcpDiscovery": "bounded",
+  "started": "2026-09-15T21:39:30.382Z"
+}

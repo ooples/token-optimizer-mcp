@@ -33,6 +33,9 @@ if (!Number.isInteger(seedOffset) || seedOffset < 0)
 
 const tasks = (process.env.TASKS || 'logs,json,code').split(',');
 const readMode = process.env.READ_MODE || 'natural';
+const mcpDiscovery = process.env.MCP_DISCOVERY || 'bounded';
+if (!['bounded', 'legacy'].includes(mcpDiscovery))
+  throw Error('Invalid MCP_DISCOVERY');
 if (
   !['natural', 'truncated', 'mcp'].includes(readMode) ||
   (readMode !== 'natural' && tasks.some((t) => t !== 'refresh')) ||
@@ -196,6 +199,7 @@ await writeFile(
       balanced: reps % arms.length === 0,
       seedOffset,
       readMode,
+      mcpDiscovery,
       started: new Date().toISOString(),
     },
     null,
@@ -350,6 +354,9 @@ try {
             );
             args[args.length - 1] +=
               ' Use token_optimizer smart_read for large or repeated reads, smart_glob for discovery, and smart_edit for edits when useful. Tool calls and retrieval costs are part of this task.';
+            if (mcpDiscovery === 'bounded')
+              args[args.length - 1] +=
+                ' Keep tool discovery bounded: in code mode retrieve only the exact needed schema, e.g. ALL_TOOLS.filter(t => t.name.endsWith("__smart_read")). If a name is unknown, list names without descriptions first. Broad matches for mcp, optimizer, or search can dump unrelated schemas.';
           }
           if (codex.endsWith('.js')) args.unshift(codex);
           const agentStarted = Date.now();
