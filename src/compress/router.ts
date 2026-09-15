@@ -30,6 +30,10 @@
 
 import { compressCode, looksLikeCode, looksLikeDiff } from './code.js';
 import { compressJson, looksLikeJson } from './json.js';
+import {
+  compressJsonSections,
+  looksLikeJsonSections,
+} from './json-sections.js';
 import { compressLog, looksLikeLog } from './log.js';
 import { compressTap, looksLikeTap } from './tap.js';
 import {
@@ -86,8 +90,11 @@ registerEngine({
 registerEngine({
   name: 'json',
   priority: 60,
-  claims: (text) => looksLikeJson(text),
-  compress: compressJson,
+  claims: (text) => looksLikeJson(text) || looksLikeJsonSections(text),
+  compress: (text, ctx) => {
+    const result = compressJson(text, ctx);
+    return result.text === text ? compressJsonSections(text, ctx) : result;
+  },
 });
 
 registerEngine({

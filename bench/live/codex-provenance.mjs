@@ -40,6 +40,7 @@ export async function provenance(root, codex, python, proxyBin) {
       'router.js',
       'tap.js',
       'json-fragments.js',
+      'json-sections.js',
       'json.js',
       'json-facts.js',
     ].map((name) => join(dirname(proxyBin), '../compress', name)),

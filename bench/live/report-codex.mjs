@@ -108,6 +108,25 @@ for (const row of results) {
       read = mcpRefreshEvidence(events, join(work, 'routes.json'));
       if (!read.passed) verdict = 'INVALID_MCP';
     }
+    if (manifest.readMode === 'mixed') {
+      const first = events.find(
+        (e) =>
+          e.type === 'item.completed' && e.item?.type === 'command_execution'
+      )?.item;
+      const output = (first?.aggregated_output || '').replaceAll('\r\n', '\n');
+      const source = workflow(row.task, row.seed ?? row.rep)
+        .files['routes.json'].replaceAll('\r\n', '\n')
+        .trim();
+      read = {
+        completeMixedRead:
+          first?.exit_code === 0 &&
+          output.includes(source) &&
+          output.includes(
+            'Only work in this benchmark directory. Do not search parent directories or use external services.'
+          ),
+      };
+      if (!read.completeMixedRead) verdict = 'INVALID_READ';
+    }
     clientErrors = [
       ...new Set(
         events

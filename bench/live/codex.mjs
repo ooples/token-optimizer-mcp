@@ -37,13 +37,13 @@ const mcpDiscovery = process.env.MCP_DISCOVERY || 'bounded';
 if (!['bounded', 'legacy'].includes(mcpDiscovery))
   throw Error('Invalid MCP_DISCOVERY');
 if (
-  !['natural', 'truncated', 'mcp'].includes(readMode) ||
+  !['natural', 'truncated', 'mcp', 'mixed'].includes(readMode) ||
   (readMode !== 'natural' && tasks.some((t) => t !== 'refresh')) ||
   (readMode === 'mcp' &&
     arms.some((a) => !['mcp', 'full', 'full-files'].includes(a)))
 )
   throw Error(
-    'Invalid READ_MODE: truncated/mcp require refresh; mcp requires MCP-enabled arms'
+    'Invalid READ_MODE: truncated/mcp/mixed require refresh; mcp requires MCP-enabled arms'
   );
 
 if (
@@ -331,7 +331,9 @@ try {
                   ? 'First read routes.json using one shell command, setting the tool output budget to 2000 tokens. Do not filter or parse this first read. This intentionally tests a truncated initial view; use subsequent tools to complete the task. '
                   : readMode === 'mcp'
                     ? 'This is an MCP cache diagnostic. Use token_optimizer smart_read on the absolute path of routes.json before recording before.json. After running node refresh.mjs, use smart_read on that same absolute path again before writing answer.json. Keep default caching and diffMode enabled. You may use any other tools needed, including expand to recover a preview. '
-                    : '') + f.prompt
+                    : readMode === 'mixed'
+                      ? 'First use one shell command to print AGENTS.md followed by the complete routes.json, with an output budget of 18000 tokens. Do not filter, parse, or summarize that first read. Then complete the task using any tools needed. '
+                      : '') + f.prompt
               : `First read the complete ${f.name} using one shell command. Set the tool output budget to 18000 tokens so the read is not truncated. Do not filter, search, summarize, or parse the file in that first command. Then, using the returned content, ${f.question} Do not modify the source fixture. Finish after writing the answer.`,
           ];
           const command = codex.endsWith('.js') ? process.execPath : codex;
