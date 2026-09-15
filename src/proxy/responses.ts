@@ -3,7 +3,7 @@
  * Compression is a stable function of each output, so appending a turn does not
  * rewrite the already-compressed prefix based on a newer user query.
  */
-import { compressBlock } from '../compress/router.js';
+import { cachedOutput } from './output-cache.js';
 import type { Tuning } from '../compress/options.js';
 import type { CompressionFacts } from './accounting.js';
 
@@ -29,7 +29,7 @@ export function compressResponses(
       return item;
     const compress = (text: string): string => {
       if (text.length < 1024) return text;
-      const result = compressBlock(text, { spill, tuning });
+      const result = cachedOutput(text, spill, tuning);
       if (result.text === text) return text;
       elisions += result.elisions.length;
       return result.text;

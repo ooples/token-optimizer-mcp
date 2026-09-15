@@ -187,5 +187,21 @@ large discovery output. The exact Codex invocation with `--ignore-user-config`
 was independently checked to expose only the seven file-profile tools; an
 earlier suspicion of inherited global MCP configuration was not confirmed.
 
-The next candidate adds bounded discovery guidance to MCP initialization:
-retrieve the exact needed tool schema, or list names before descriptions.
+Initialization-only guidance was not delivered to the model in the capture
+audit. Explicit bounded discovery guidance is now shipped in integrations/AGENTS.md;
+see [the diagnostic](bounded-discovery/README.md) for its limitations.
+
+## Rare boolean preservation and local performance work
+
+[The nine-run refresh screen](rare-boolean/README.md) passed all attempts.
+Our proxy averaged 25.9% less input, a 32.3% lower standard-rate cost scenario,
+21.7% fewer requests, and 16.2% lower agent time than installed HeadRoom. It
+still lost on speed in one round and was 2.8% slower than control on mean agent
+time. This does not establish superiority on every task.
+
+Subsequent V8 profiling motivated a bounded per-proxy cache of unchanged tool
+outputs. [The local replay](response-cache-profile.json) measured about 48%
+lower mean compression time and 54% fewer sampled allocation bytes. All six
+captured requests produced byte-identical old/new compressed bodies in a
+separate check. These are local processing results, not a competitor CPU or
+allocation comparison and not proof of end-to-end latency gains.

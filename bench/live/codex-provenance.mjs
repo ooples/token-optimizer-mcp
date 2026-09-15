@@ -32,6 +32,7 @@ export async function provenance(root, codex, python, proxyBin) {
       'cli.js',
       'server.js',
       'responses.js',
+      'output-cache.js',
       'accounting.js',
       'capture.js',
     ].map((name) => join(dirname(proxyBin), name)),
