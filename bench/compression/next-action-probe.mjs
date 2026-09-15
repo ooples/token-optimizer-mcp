@@ -144,7 +144,9 @@ function actionOf(content) {
         ['file_path', 'path', 'command', 'pattern', 'query']
           .map((k) => input[k])
           .find((v) => typeof v === 'string' && v.trim()) ?? '';
-      calls.push(`${b.name}(${target.replace(/\s+/g, ' ').trim().slice(0, 80)})`);
+      calls.push(
+        `${b.name}(${target.replace(/\s+/g, ' ').trim().slice(0, 80)})`
+      );
     } else if (b?.type === 'text' && b.text?.trim()) {
       text = true;
     }
@@ -153,11 +155,50 @@ function actionOf(content) {
   return text ? 'ANSWER' : 'empty';
 }
 
-const creds = JSON.parse(
-  readFileSync(join(homedir(), '.claude', '.credentials.json'), 'utf8')
-);
-const token = creds.claudeAiOauth?.accessToken;
-if (!token && !DRY) throw new Error('no OAuth access token');
+/**
+ * Two auth paths, because they have SEPARATE rate limits.
+ *
+ * ANTHROPIC_API_KEY wins when set. The subscription OAuth token is what a
+ * developer has to hand and costs nothing extra, but its limit is shared with
+ * every other Claude Code session on the account -- which is exactly what
+ * stopped this probe's first run, with a bare 16-token request getting 429
+ * alongside the 180,000-token ones. A key billed to the API account is not
+ * subject to that, so the probe can run while ordinary work continues.
+ */
+function auth() {
+  const key = (process.env.ANTHROPIC_API_KEY || '').trim();
+  if (key) return { headers: { 'x-api-key': key }, kind: 'ANTHROPIC_API_KEY' };
+  try {
+    const creds = JSON.parse(
+      readFileSync(join(homedir(), '.claude', '.credentials.json'), 'utf8')
+    );
+    const token = creds.claudeAiOauth?.accessToken;
+    if (token) {
+      return {
+        headers: {
+          authorization: `Bearer ${token}`,
+          'anthropic-beta': 'oauth-2025-04-20',
+        },
+        kind: 'subscription OAuth (shared limit)',
+      };
+    }
+  } catch {
+    // Falls through to the error below, which names both options.
+  }
+  return null;
+}
+
+const AUTH = auth();
+if (!AUTH && !DRY) {
+  throw new Error(
+    'no credentials: set ANTHROPIC_API_KEY, or sign in so ~/.claude/.credentials.json exists'
+  );
+}
+
+/** Retry budget for a 429. Beyond this the run stops rather than grinding on. */
+const MAX_ATTEMPTS =
+  Number(process.env.MAX_ATTEMPTS) > 0 ? Number(process.env.MAX_ATTEMPTS) : 5;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const cost = { write: 0, read: 0, input: 0, output: 0, calls: 0 };
 
@@ -186,6 +227,32 @@ function marked(messages) {
   return [...messages.slice(0, -1), { ...last, content }];
 }
 
+/**
+ * Everything a failed response can tell us, since the body tells us almost nothing.
+ *
+ * This provider's 429 body is {"type":"rate_limit_error","message":"Error"} --
+ * no detail, no retry-after, no rate-limit headers. The first run reported that
+ * as "HTTP 429 Error", which is indistinguishable from a bug in this file. The
+ * request id is the one durable handle, so it is always carried.
+ */
+function describeFailure(res, text) {
+  let detail = text.slice(0, 200);
+  let requestId = res.headers.get('request-id') || '';
+  try {
+    const parsed = JSON.parse(text);
+    detail = parsed.error?.message || detail;
+    requestId = requestId || parsed.request_id || '';
+  } catch {
+    /* keep the raw body */
+  }
+  const retry = res.headers.get('retry-after');
+  return (
+    `HTTP ${res.status} ${res.statusText || ''} ${detail}` +
+    (retry ? ` retry-after=${retry}` : '') +
+    (requestId ? ` [${requestId}]` : '')
+  );
+}
+
 async function ask(messages, tools) {
   const body = {
     model: MODEL,
@@ -194,34 +261,54 @@ async function ask(messages, tools) {
     messages: marked(messages),
     ...(tools.length ? { tools } : {}),
   };
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${token}`,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'oauth-2025-04-20',
-    },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    let detail = text.slice(0, 300);
-    try {
-      detail = JSON.parse(text).error?.message ?? detail;
-    } catch {
-      /* keep the raw body */
+
+  let last = '';
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        ...AUTH.headers,
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+
+    if (res.ok) {
+      const parsed = JSON.parse(text);
+      const u = parsed.usage ?? {};
+      cost.calls += 1;
+      cost.write += u.cache_creation_input_tokens ?? 0;
+      cost.read += u.cache_read_input_tokens ?? 0;
+      cost.input += u.input_tokens ?? 0;
+      cost.output += u.output_tokens ?? 0;
+      return { action: actionOf(parsed.content) };
     }
-    return { error: `HTTP ${res.status} ${detail}` };
+
+    last = describeFailure(res, text);
+
+    // RETRY ONLY WHAT RETRYING CAN FIX. A 429 or a 5xx may pass on a second
+    // attempt; a 400 is a malformed request and will be malformed forever, so
+    // retrying it burns the budget and hides the real error behind a delay.
+    const worthRetrying = res.status === 429 || res.status >= 500;
+    if (!worthRetrying || attempt === MAX_ATTEMPTS) return { error: last };
+
+    // Honour the server's own figure when it gives one; otherwise exponential
+    // with jitter, so several stalled calls do not resume in lockstep and
+    // re-trigger the same limit together.
+    const stated = Number(res.headers.get('retry-after'));
+    const wait =
+      Number.isFinite(stated) && stated > 0
+        ? stated * 1000
+        : Math.min(60_000, 2 ** attempt * 1000) + Math.random() * 1000;
+    process.stdout.write(
+      `    ${res.status}, waiting ${(wait / 1000).toFixed(1)}s (attempt ${attempt}/${MAX_ATTEMPTS})
+`
+    );
+    await sleep(wait);
   }
-  const parsed = JSON.parse(text);
-  const u = parsed.usage ?? {};
-  cost.calls += 1;
-  cost.write += u.cache_creation_input_tokens ?? 0;
-  cost.read += u.cache_read_input_tokens ?? 0;
-  cost.input += u.input_tokens ?? 0;
-  cost.output += u.output_tokens ?? 0;
-  return { action: actionOf(parsed.content) };
+  return { error: last };
 }
 
 const dollars = () =>
@@ -233,8 +320,66 @@ const dollars = () =>
 
 const paths = process.argv.slice(2);
 if (!paths.length) {
-  console.error('usage: node bench/compression/next-action-probe.mjs <transcript.jsonl> [...]');
+  console.error(
+    'usage: node bench/compression/next-action-probe.mjs <transcript.jsonl> [...]'
+  );
   process.exit(2);
+}
+
+/**
+ * Is the account able to serve ANY request right now?
+ *
+ * ONE TINY CALL BEFORE THE RUN, and it exists because of how the first attempts
+ * failed. A sustained account-level 429 is indistinguishable per-request from a
+ * burst, so every sample entered the retry loop, waited out its backoff, failed,
+ * and moved on -- a 4-turn run spent 30 seconds of sleeping to learn one fact it
+ * could have learned in a single 16-token call.
+ *
+ * It also settles the question that matters for what to do next: a minimal
+ * request failing rules out payload size, so the answer is wait or switch
+ * credentials, never shrink the prefixes -- and shrinking them would destroy the
+ * measurement, since removed reasoning accumulates with conversation length.
+ *
+ * Deliberately NOT retried. This is the check that decides whether retrying is
+ * worth anything.
+ */
+async function preflight() {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'anthropic-version': '2023-06-01',
+      ...AUTH.headers,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 16,
+      messages: [{ role: 'user', content: 'hi' }],
+    }),
+  });
+  if (res.ok) return null;
+  return describeFailure(res, await res.text());
+}
+
+// Say which credential is in use BEFORE spending anything. The two have
+// separate limits and separate bills, and a run that silently used the wrong
+// one is a result nobody can attribute.
+if (!DRY) {
+  console.log(
+    `auth: ${AUTH.kind}   model: ${MODEL}   temperature: ${TEMPERATURE}`
+  );
+  const blocked = await preflight();
+  if (blocked) {
+    console.log(`\npreflight failed: ${blocked}`);
+    console.log(
+      '\nA 16-token request failed, so this is not about prefix size, and no ' +
+        'amount of retrying or sampling smaller turns will help. Either the ' +
+        'limit clears with time, or set ANTHROPIC_API_KEY, which is billed ' +
+        'and limited separately from the subscription token.\n' +
+        '\nNothing was sent. No samples, no cost, no verdict.'
+    );
+    process.exit(4);
+  }
 }
 
 let floorDiverged = 0;
@@ -248,7 +393,9 @@ for (const path of paths) {
   const messages = messagesFrom(path);
   const cuts = sampledCuts(messages, SAMPLES);
   const name = path.split(/[\\/]/).pop();
-  console.log(`\n${name}  --  ${messages.length} messages, sampling ${cuts.length} turn(s)`);
+  console.log(
+    `\n${name}  --  ${messages.length} messages, sampling ${cuts.length} turn(s)`
+  );
 
   for (const cut of cuts) {
     const control = messages.slice(0, cut);
@@ -276,7 +423,11 @@ for (const path of paths) {
     const b = await ask(control, tools);
     const s = await ask(substitution.messages, tools);
 
-    for (const [label, r] of [['control-A', a], ['control-B', b], ['substituted', s]]) {
+    for (const [label, r] of [
+      ['control-A', a],
+      ['control-B', b],
+      ['substituted', s],
+    ]) {
       if (r.error) failures.push(`turn ${cut} ${label}: ${r.error}`);
     }
     if (a.error || b.error || s.error) continue;
@@ -295,7 +446,9 @@ for (const path of paths) {
 
 console.log(`\n${'='.repeat(74)}`);
 if (notFired) {
-  console.log(`skipped ${notFired} turn(s) where the substitution did not fire`);
+  console.log(
+    `skipped ${notFired} turn(s) where the substitution did not fire`
+  );
 }
 if (failures.length) {
   console.log(`\n${failures.length} request(s) failed:`);
@@ -314,8 +467,12 @@ if (!floorPairs) {
 
 const floorRate = floorDiverged / floorPairs;
 const subRate = subDiverged / subPairs;
-console.log(`\n  control vs control  ${floorDiverged}/${floorPairs}  = ${(floorRate * 100).toFixed(1)}%   <- the FLOOR`);
-console.log(`  control vs substituted  ${subDiverged}/${subPairs}  = ${(subRate * 100).toFixed(1)}%`);
+console.log(
+  `\n  control vs control  ${floorDiverged}/${floorPairs}  = ${(floorRate * 100).toFixed(1)}%   <- the FLOOR`
+);
+console.log(
+  `  control vs substituted  ${subDiverged}/${subPairs}  = ${(subRate * 100).toFixed(1)}%`
+);
 
 console.log(`\n  cost: ${cost.calls} calls, $${dollars().toFixed(4)}`);
 console.log(
