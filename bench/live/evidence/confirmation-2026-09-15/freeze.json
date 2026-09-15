@@ -1,0 +1,2129 @@
+{
+  "created": "2026-09-15T22:44:35.808Z",
+  "root": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp",
+  "headroom": "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom",
+  "codex": "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex",
+  "node": "v22.15.0",
+  "pythonDependencies": [
+    [
+      "Authlib",
+      "1.6.4"
+    ],
+    [
+      "Deprecated",
+      "1.3.1"
+    ],
+    [
+      "GitPython",
+      "3.1.45"
+    ],
+    [
+      "Jinja2",
+      "3.1.6"
+    ],
+    [
+      "MarkupSafe",
+      "3.0.2"
+    ],
+    [
+      "PyGithub",
+      "1.59.1"
+    ],
+    [
+      "PyJWT",
+      "2.11.0"
+    ],
+    [
+      "PyMuPDF",
+      "1.27.2.2"
+    ],
+    [
+      "PyNaCl",
+      "1.6.2"
+    ],
+    [
+      "PySocks",
+      "1.7.1"
+    ],
+    [
+      "PyYAML",
+      "6.0.2"
+    ],
+    [
+      "Pygments",
+      "2.19.2"
+    ],
+    [
+      "Spire.Presentation.Free",
+      "9.12.0"
+    ],
+    [
+      "Werkzeug",
+      "3.1.1"
+    ],
+    [
+      "aiofiles",
+      "24.1.0"
+    ],
+    [
+      "aiohappyeyeballs",
+      "2.6.1"
+    ],
+    [
+      "aiohttp",
+      "3.14.3"
+    ],
+    [
+      "aioredis",
+      "2.0.1"
+    ],
+    [
+      "aiosignal",
+      "1.4.0"
+    ],
+    [
+      "annotated-doc",
+      "0.0.4"
+    ],
+    [
+      "annotated-types",
+      "0.7.0"
+    ],
+    [
+      "antlr4-python3-runtime",
+      "4.13.2"
+    ],
+    [
+      "anyio",
+      "4.9.0"
+    ],
+    [
+      "applicationinsights",
+      "0.11.10"
+    ],
+    [
+      "argcomplete",
+      "3.5.3"
+    ],
+    [
+      "ast-grep-cli",
+      "0.45.3"
+    ],
+    [
+      "async-timeout",
+      "5.0.1"
+    ],
+    [
+      "attrs",
+      "25.3.0"
+    ],
+    [
+      "azure-ai-agents",
+      "1.1.0"
+    ],
+    [
+      "azure-ai-projects",
+      "1.0.0"
+    ],
+    [
+      "azure-appconfiguration",
+      "1.7.2"
+    ],
+    [
+      "azure-batch",
+      "15.0.0b1"
+    ],
+    [
+      "azure-cli",
+      "2.84.0"
+    ],
+    [
+      "azure-cli-core",
+      "2.84.0"
+    ],
+    [
+      "azure-cli-telemetry",
+      "1.1.0"
+    ],
+    [
+      "azure-common",
+      "1.1.28"
+    ],
+    [
+      "azure-core",
+      "1.38.2"
+    ],
+    [
+      "azure-cosmos",
+      "3.2.0"
+    ],
+    [
+      "azure-data-tables",
+      "12.4.0"
+    ],
+    [
+      "azure-datalake-store",
+      "1.0.1"
+    ],
+    [
+      "azure-keyvault-administration",
+      "4.4.0"
+    ],
+    [
+      "azure-keyvault-certificates",
+      "4.7.0"
+    ],
+    [
+      "azure-keyvault-keys",
+      "4.11.0"
+    ],
+    [
+      "azure-keyvault-secrets",
+      "4.7.0"
+    ],
+    [
+      "azure-keyvault-securitydomain",
+      "1.0.0b1"
+    ],
+    [
+      "azure-mgmt-advisor",
+      "9.0.0"
+    ],
+    [
+      "azure-mgmt-apimanagement",
+      "4.0.0"
+    ],
+    [
+      "azure-mgmt-appconfiguration",
+      "5.0.0"
+    ],
+    [
+      "azure-mgmt-appcontainers",
+      "2.0.0"
+    ],
+    [
+      "azure-mgmt-applicationinsights",
+      "1.0.0"
+    ],
+    [
+      "azure-mgmt-authorization",
+      "5.0.0b1"
+    ],
+    [
+      "azure-mgmt-batch",
+      "17.3.0"
+    ],
+    [
+      "azure-mgmt-batchai",
+      "7.0.0b1"
+    ],
+    [
+      "azure-mgmt-billing",
+      "6.0.0"
+    ],
+    [
+      "azure-mgmt-botservice",
+      "2.0.0"
+    ],
+    [
+      "azure-mgmt-cdn",
+      "12.0.0"
+    ],
+    [
+      "azure-mgmt-cognitiveservices",
+      "14.1.0"
+    ],
+    [
+      "azure-mgmt-compute",
+      "34.1.0"
+    ],
+    [
+      "azure-mgmt-containerinstance",
+      "10.2.0b1"
+    ],
+    [
+      "azure-mgmt-containerregistry",
+      "14.1.0b1"
+    ],
+    [
+      "azure-mgmt-containerservice",
+      "40.2.0"
+    ],
+    [
+      "azure-mgmt-core",
+      "1.6.0"
+    ],
+    [
+      "azure-mgmt-cosmosdb",
+      "9.9.0"
+    ],
+    [
+      "azure-mgmt-datalake-store",
+      "1.1.0b1"
+    ],
+    [
+      "azure-mgmt-datamigration",
+      "10.0.0"
+    ],
+    [
+      "azure-mgmt-eventgrid",
+      "10.2.0b2"
+    ],
+    [
+      "azure-mgmt-eventhub",
+      "12.0.0b1"
+    ],
+    [
+      "azure-mgmt-extendedlocation",
+      "1.0.0b2"
+    ],
+    [
+      "azure-mgmt-hdinsight",
+      "9.1.0b2"
+    ],
+    [
+      "azure-mgmt-imagebuilder",
+      "1.3.0"
+    ],
+    [
+      "azure-mgmt-iotcentral",
+      "10.0.0b2"
+    ],
+    [
+      "azure-mgmt-iothub",
+      "5.0.0b1"
+    ],
+    [
+      "azure-mgmt-iothubprovisioningservices",
+      "1.1.0"
+    ],
+    [
+      "azure-mgmt-keyvault",
+      "13.0.0"
+    ],
+    [
+      "azure-mgmt-loganalytics",
+      "13.0.0b4"
+    ],
+    [
+      "azure-mgmt-managementgroups",
+      "1.0.0"
+    ],
+    [
+      "azure-mgmt-maps",
+      "2.0.0"
+    ],
+    [
+      "azure-mgmt-marketplaceordering",
+      "1.1.0"
+    ],
+    [
+      "azure-mgmt-media",
+      "9.0.0"
+    ],
+    [
+      "azure-mgmt-monitor",
+      "7.0.0"
+    ],
+    [
+      "azure-mgmt-msi",
+      "7.1.0"
+    ],
+    [
+      "azure-mgmt-mysqlflexibleservers",
+      "1.1.0b2"
+    ],
+    [
+      "azure-mgmt-netapp",
+      "10.1.0"
+    ],
+    [
+      "azure-mgmt-policyinsights",
+      "1.1.0b4"
+    ],
+    [
+      "azure-mgmt-postgresqlflexibleservers",
+      "3.0.0b1"
+    ],
+    [
+      "azure-mgmt-privatedns",
+      "1.0.0"
+    ],
+    [
+      "azure-mgmt-rdbms",
+      "10.2.0b17"
+    ],
+    [
+      "azure-mgmt-recoveryservices",
+      "4.0.0"
+    ],
+    [
+      "azure-mgmt-recoveryservicesbackup",
+      "9.2.0"
+    ],
+    [
+      "azure-mgmt-redhatopenshift",
+      "3.0.0"
+    ],
+    [
+      "azure-mgmt-redis",
+      "14.5.0"
+    ],
+    [
+      "azure-mgmt-resource",
+      "24.0.0"
+    ],
+    [
+      "azure-mgmt-resource-deployments",
+      "1.0.0b1"
+    ],
+    [
+      "azure-mgmt-resource-deploymentscripts",
+      "1.0.0b1"
+    ],
+    [
+      "azure-mgmt-resource-deploymentstacks",
+      "1.0.0"
+    ],
+    [
+      "azure-mgmt-resource-templatespecs",
+      "1.0.0b1"
+    ],
+    [
+      "azure-mgmt-search",
+      "9.2.0"
+    ],
+    [
+      "azure-mgmt-security",
+      "6.0.0"
+    ],
+    [
+      "azure-mgmt-servicebus",
+      "10.0.0b1"
+    ],
+    [
+      "azure-mgmt-servicefabric",
+      "2.1.0"
+    ],
+    [
+      "azure-mgmt-servicefabricmanagedclusters",
+      "2.1.0b1"
+    ],
+    [
+      "azure-mgmt-servicelinker",
+      "1.2.0b3"
+    ],
+    [
+      "azure-mgmt-signalr",
+      "2.0.0b2"
+    ],
+    [
+      "azure-mgmt-sql",
+      "4.0.0b22"
+    ],
+    [
+      "azure-mgmt-sqlvirtualmachine",
+      "1.0.0b5"
+    ],
+    [
+      "azure-mgmt-storage",
+      "24.0.0"
+    ],
+    [
+      "azure-mgmt-synapse",
+      "2.1.0b5"
+    ],
+    [
+      "azure-mgmt-trafficmanager",
+      "1.0.0"
+    ],
+    [
+      "azure-mgmt-web",
+      "9.0.0"
+    ],
+    [
+      "azure-monitor-query",
+      "1.2.0"
+    ],
+    [
+      "azure-storage-blob",
+      "12.28.0b1"
+    ],
+    [
+      "azure-storage-common",
+      "1.4.2"
+    ],
+    [
+      "azure-storage-file-datalake",
+      "12.23.0b1"
+    ],
+    [
+      "azure-storage-file-share",
+      "12.24.0b1"
+    ],
+    [
+      "azure-storage-queue",
+      "12.15.0b1"
+    ],
+    [
+      "azure-synapse-accesscontrol",
+      "0.5.0"
+    ],
+    [
+      "azure-synapse-artifacts",
+      "0.21.0"
+    ],
+    [
+      "azure-synapse-managedprivateendpoints",
+      "0.4.0"
+    ],
+    [
+      "azure-synapse-spark",
+      "0.7.0"
+    ],
+    [
+      "bcrypt",
+      "5.0.0"
+    ],
+    [
+      "boto3",
+      "1.43.93"
+    ],
+    [
+      "botocore",
+      "1.43.93"
+    ],
+    [
+      "capstone",
+      "5.0.9"
+    ],
+    [
+      "certifi",
+      "2025.7.14"
+    ],
+    [
+      "cffi",
+      "2.0.0"
+    ],
+    [
+      "cfgv",
+      "3.4.0"
+    ],
+    [
+      "chardet",
+      "5.2.0"
+    ],
+    [
+      "charset-normalizer",
+      "3.4.2"
+    ],
+    [
+      "click",
+      "8.5.0"
+    ],
+    [
+      "colorama",
+      "0.4.6"
+    ],
+    [
+      "comtypes",
+      "1.4.16"
+    ],
+    [
+      "contourpy",
+      "1.3.3"
+    ],
+    [
+      "cryptography",
+      "46.0.1"
+    ],
+    [
+      "cycler",
+      "0.12.1"
+    ],
+    [
+      "cyclopts",
+      "3.24.0"
+    ],
+    [
+      "decorator",
+      "5.2.1"
+    ],
+    [
+      "detect-secrets",
+      "1.5.0"
+    ],
+    [
+      "distlib",
+      "0.4.0"
+    ],
+    [
+      "distro",
+      "1.9.0"
+    ],
+    [
+      "dnspython",
+      "2.8.0"
+    ],
+    [
+      "docstring_parser",
+      "0.17.0"
+    ],
+    [
+      "docutils",
+      "0.22.2"
+    ],
+    [
+      "docx2pdf",
+      "0.1.8"
+    ],
+    [
+      "email-validator",
+      "2.3.0"
+    ],
+    [
+      "et_xmlfile",
+      "2.0.0"
+    ],
+    [
+      "exceptiongroup",
+      "1.3.0"
+    ],
+    [
+      "fabric",
+      "3.2.2"
+    ],
+    [
+      "fastapi",
+      "0.136.1"
+    ],
+    [
+      "fastmcp",
+      "2.12.3"
+    ],
+    [
+      "fastuuid",
+      "0.14.0"
+    ],
+    [
+      "filelock",
+      "3.18.0"
+    ],
+    [
+      "flatbuffers",
+      "25.12.19"
+    ],
+    [
+      "fonttools",
+      "4.62.1"
+    ],
+    [
+      "frozenlist",
+      "1.7.0"
+    ],
+    [
+      "fsspec",
+      "2026.2.0"
+    ],
+    [
+      "git-filter-repo",
+      "2.47.0"
+    ],
+    [
+      "gitdb",
+      "4.0.12"
+    ],
+    [
+      "greenlet",
+      "3.4.0"
+    ],
+    [
+      "grpcio",
+      "1.81.0"
+    ],
+    [
+      "grpcio-tools",
+      "1.81.0"
+    ],
+    [
+      "h11",
+      "0.16.0"
+    ],
+    [
+      "h2",
+      "4.4.1"
+    ],
+    [
+      "headroom-ai",
+      "0.37.0"
+    ],
+    [
+      "hf-xet",
+      "1.6.0"
+    ],
+    [
+      "hpack",
+      "4.2.0"
+    ],
+    [
+      "httpcore",
+      "1.0.9"
+    ],
+    [
+      "httptools",
+      "0.7.1"
+    ],
+    [
+      "httpx",
+      "0.28.1"
+    ],
+    [
+      "httpx-sse",
+      "0.4.1"
+    ],
+    [
+      "huggingface_hub",
+      "1.31.0"
+    ],
+    [
+      "humanfriendly",
+      "10.0"
+    ],
+    [
+      "hyperframe",
+      "6.1.0"
+    ],
+    [
+      "identify",
+      "2.6.12"
+    ],
+    [
+      "idna",
+      "3.10"
+    ],
+    [
+      "importlib_metadata",
+      "8.9.0"
+    ],
+    [
+      "iniconfig",
+      "2.1.0"
+    ],
+    [
+      "invoke",
+      "2.2.1"
+    ],
+    [
+      "isodate",
+      "0.7.2"
+    ],
+    [
+      "javaproperties",
+      "0.5.2"
+    ],
+    [
+      "jiter",
+      "0.16.0"
+    ],
+    [
+      "jmespath",
+      "1.1.0"
+    ],
+    [
+      "joblib",
+      "1.5.1"
+    ],
+    [
+      "jsondiff",
+      "2.0.0"
+    ],
+    [
+      "jsonschema",
+      "4.25.0"
+    ],
+    [
+      "jsonschema-path",
+      "0.3.4"
+    ],
+    [
+      "jsonschema-specifications",
+      "2025.4.1"
+    ],
+    [
+      "keystone-engine",
+      "0.9.2"
+    ],
+    [
+      "kiwisolver",
+      "1.5.0"
+    ],
+    [
+      "knack",
+      "0.11.0"
+    ],
+    [
+      "lazy-object-proxy",
+      "1.12.0"
+    ],
+    [
+      "litellm",
+      "1.100.1"
+    ],
+    [
+      "loguru",
+      "0.7.3"
+    ],
+    [
+      "lxml",
+      "6.0.2"
+    ],
+    [
+      "magika",
+      "1.0.3"
+    ],
+    [
+      "markdown-it-py",
+      "4.0.0"
+    ],
+    [
+      "matplotlib",
+      "3.10.8"
+    ],
+    [
+      "mcp",
+      "1.30.0"
+    ],
+    [
+      "mcp-server-git",
+      "2025.9.25"
+    ],
+    [
+      "mdurl",
+      "0.1.2"
+    ],
+    [
+      "microsoft-security-utilities-secret-masker",
+      "1.0.0b4"
+    ],
+    [
+      "ml_dtypes",
+      "0.5.4"
+    ],
+    [
+      "more-itertools",
+      "10.8.0"
+    ],
+    [
+      "mpmath",
+      "1.3.0"
+    ],
+    [
+      "msal",
+      "1.35.0b1"
+    ],
+    [
+      "msal-extensions",
+      "1.2.0"
+    ],
+    [
+      "msgpack",
+      "1.1.1"
+    ],
+    [
+      "msoffcrypto-tool",
+      "5.4.2"
+    ],
+    [
+      "msrest",
+      "0.7.1"
+    ],
+    [
+      "multidict",
+      "6.6.4"
+    ],
+    [
+      "networkx",
+      "3.6.1"
+    ],
+    [
+      "nodeenv",
+      "1.9.1"
+    ],
+    [
+      "numpy",
+      "2.3.1"
+    ],
+    [
+      "oauthlib",
+      "3.3.1"
+    ],
+    [
+      "office-word-mcp-server",
+      "1.1.10"
+    ],
+    [
+      "olefile",
+      "0.47"
+    ],
+    [
+      "onnx",
+      "1.21.0"
+    ],
+    [
+      "onnxruntime",
+      "1.26.0"
+    ],
+    [
+      "openai",
+      "2.54.0"
+    ],
+    [
+      "openapi-core",
+      "0.19.5"
+    ],
+    [
+      "openapi-pydantic",
+      "0.5.1"
+    ],
+    [
+      "openapi-schema-validator",
+      "0.6.3"
+    ],
+    [
+      "openapi-spec-validator",
+      "0.7.2"
+    ],
+    [
+      "openpyxl",
+      "3.1.5"
+    ],
+    [
+      "opentelemetry-api",
+      "1.44.0"
+    ],
+    [
+      "opentelemetry-sdk",
+      "1.44.0"
+    ],
+    [
+      "opentelemetry-semantic-conventions",
+      "0.65b0"
+    ],
+    [
+      "orjson",
+      "3.12.0"
+    ],
+    [
+      "packaging",
+      "25.0"
+    ],
+    [
+      "pandas",
+      "2.3.1"
+    ],
+    [
+      "paramiko",
+      "3.5.1"
+    ],
+    [
+      "parse",
+      "1.20.2"
+    ],
+    [
+      "pathable",
+      "0.4.4"
+    ],
+    [
+      "pdf2image",
+      "1.17.0"
+    ],
+    [
+      "pillow",
+      "11.3.0"
+    ],
+    [
+      "pip",
+      "25.0.1"
+    ],
+    [
+      "pip",
+      "25.1.1"
+    ],
+    [
+      "pkginfo",
+      "1.12.1.2"
+    ],
+    [
+      "platformdirs",
+      "4.3.8"
+    ],
+    [
+      "playwright",
+      "1.58.0"
+    ],
+    [
+      "pluggy",
+      "1.6.0"
+    ],
+    [
+      "plum-dispatch",
+      "1.7.4"
+    ],
+    [
+      "portalocker",
+      "2.10.1"
+    ],
+    [
+      "pre_commit",
+      "4.2.0"
+    ],
+    [
+      "prometheus_client",
+      "0.22.1"
+    ],
+    [
+      "prompt_toolkit",
+      "3.0.53"
+    ],
+    [
+      "propcache",
+      "0.3.2"
+    ],
+    [
+      "protobuf",
+      "6.33.6"
+    ],
+    [
+      "psutil",
+      "7.0.0"
+    ],
+    [
+      "py-deviceid",
+      "0.1.1"
+    ],
+    [
+      "pyOpenSSL",
+      "25.3.0"
+    ],
+    [
+      "pycomposefile",
+      "0.0.34"
+    ],
+    [
+      "pycparser",
+      "2.23"
+    ],
+    [
+      "pydantic",
+      "2.11.7"
+    ],
+    [
+      "pydantic-settings",
+      "2.15.0"
+    ],
+    [
+      "pydantic_core",
+      "2.33.2"
+    ],
+    [
+      "pyee",
+      "13.0.1"
+    ],
+    [
+      "pymsalruntime",
+      "0.20.2"
+    ],
+    [
+      "pyodbc",
+      "5.3.0"
+    ],
+    [
+      "pyparsing",
+      "3.3.2"
+    ],
+    [
+      "pypdf",
+      "6.14.2"
+    ],
+    [
+      "pypdfium2",
+      "5.9.0"
+    ],
+    [
+      "pyperclip",
+      "1.10.0"
+    ],
+    [
+      "pyreadline3",
+      "3.5.4"
+    ],
+    [
+      "pytest",
+      "8.4.1"
+    ],
+    [
+      "python-dateutil",
+      "2.9.0.post0"
+    ],
+    [
+      "python-docx",
+      "1.2.0"
+    ],
+    [
+      "python-dotenv",
+      "1.1.1"
+    ],
+    [
+      "python-multipart",
+      "0.0.20"
+    ],
+    [
+      "python-pptx",
+      "1.0.2"
+    ],
+    [
+      "pytorch-benchmarks",
+      "0.1.0"
+    ],
+    [
+      "pytorch-benchmarks",
+      "0.1.0"
+    ],
+    [
+      "pytz",
+      "2025.2"
+    ],
+    [
+      "pywin32",
+      "311"
+    ],
+    [
+      "referencing",
+      "0.36.2"
+    ],
+    [
+      "regex",
+      "2026.9.10"
+    ],
+    [
+      "reportlab",
+      "4.5.1"
+    ],
+    [
+      "requests",
+      "2.32.4"
+    ],
+    [
+      "requests-oauthlib",
+      "2.0.0"
+    ],
+    [
+      "rfc3339-validator",
+      "0.1.4"
+    ],
+    [
+      "rich",
+      "14.1.0"
+    ],
+    [
+      "rich-rst",
+      "1.3.1"
+    ],
+    [
+      "rpds-py",
+      "0.26.0"
+    ],
+    [
+      "s3transfer",
+      "0.19.2"
+    ],
+    [
+      "safetensors",
+      "0.8.0"
+    ],
+    [
+      "scikit-learn",
+      "1.7.1"
+    ],
+    [
+      "scipy",
+      "1.16.1"
+    ],
+    [
+      "scp",
+      "0.13.6"
+    ],
+    [
+      "semver",
+      "3.0.4"
+    ],
+    [
+      "setuptools",
+      "82.0.1"
+    ],
+    [
+      "shellingham",
+      "1.5.4"
+    ],
+    [
+      "six",
+      "1.17.0"
+    ],
+    [
+      "smmap",
+      "5.0.2"
+    ],
+    [
+      "sniffio",
+      "1.3.1"
+    ],
+    [
+      "sqlite-vec",
+      "0.1.9"
+    ],
+    [
+      "sse-starlette",
+      "3.0.2"
+    ],
+    [
+      "sshtunnel",
+      "0.1.5"
+    ],
+    [
+      "starlette",
+      "0.48.0"
+    ],
+    [
+      "structlog",
+      "25.4.0"
+    ],
+    [
+      "sympy",
+      "1.14.0"
+    ],
+    [
+      "tabulate",
+      "0.10.0"
+    ],
+    [
+      "threadpoolctl",
+      "3.6.0"
+    ],
+    [
+      "tiktoken",
+      "0.14.0"
+    ],
+    [
+      "tokenizers",
+      "0.23.2"
+    ],
+    [
+      "tomlkit",
+      "0.15.1"
+    ],
+    [
+      "torch",
+      "2.11.0+cpu"
+    ],
+    [
+      "tqdm",
+      "4.67.1"
+    ],
+    [
+      "transformers",
+      "5.17.0"
+    ],
+    [
+      "tree-sitter",
+      "0.26.0"
+    ],
+    [
+      "tree-sitter-language-pack",
+      "1.18.0"
+    ],
+    [
+      "tree-sitter-python",
+      "0.25.0"
+    ],
+    [
+      "tree-sitter-typescript",
+      "0.23.2"
+    ],
+    [
+      "typer",
+      "0.27.2"
+    ],
+    [
+      "typing-inspection",
+      "0.4.2"
+    ],
+    [
+      "typing_extensions",
+      "4.14.1"
+    ],
+    [
+      "tzdata",
+      "2025.2"
+    ],
+    [
+      "urllib3",
+      "2.5.0"
+    ],
+    [
+      "uvicorn",
+      "0.37.0"
+    ],
+    [
+      "virtualenv",
+      "20.32.0"
+    ],
+    [
+      "watchdog",
+      "6.0.0"
+    ],
+    [
+      "watchfiles",
+      "1.2.0"
+    ],
+    [
+      "wcwidth",
+      "0.8.3"
+    ],
+    [
+      "websocket-client",
+      "1.8.0"
+    ],
+    [
+      "websockets",
+      "16.0"
+    ],
+    [
+      "win32_setctime",
+      "1.2.0"
+    ],
+    [
+      "wrapt",
+      "2.1.2"
+    ],
+    [
+      "xlsxwriter",
+      "3.2.5"
+    ],
+    [
+      "xmltodict",
+      "0.15.1"
+    ],
+    [
+      "yarl",
+      "1.20.1"
+    ],
+    [
+      "zipp",
+      "4.1.0"
+    ],
+    [
+      "zstandard",
+      "0.25.0"
+    ]
+  ],
+  "sha256": {
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analysis\\project-analyzer.js": "aa37ce0fa674a5fa81452e2d08dc3c97a7ab9a1f2ee4344f5d632ae8c3440fd2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analysis\\report-generator.js": "1357c3c0e56b5f9855d8f0bd1678e9029d2ebaa37a1f2abbfc4509036c6189ba",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analysis\\session-analyzer.js": "07e0b1adcd8f05d8447b19d1361b07a2f02f0c4e16ccb95a164709dc5c9cbd20",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analytics\\analytics-manager.js": "7f9e58ee68a6fbb3e2c2c5890403a61f474636dadb2caebf9b6a2b105d23c422",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analytics\\analytics-storage.js": "a2065550132fd3afbdf9afe12b48dbd0e30da5e64b7f7d86083e7b50a4a29ce1",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analytics\\analytics-types.js": "322b52609ea96709214f250f55862a2b00d98e891b605e16957542dfeee17bf5",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analytics\\native-provider-usage.js": "700a4df58b1b09941d7c19d618af2065422b908176f478a2b2355fb5aa4fedc4",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analytics\\optimization-storage.js": "433ab604f3e032c9792bfef94519320ec105087e59e3decc6c2d25a9a4a5407d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analytics\\provider-pricing.js": "e87ea433769f65cc668d3fa370fbf42dd0fa81518fe4d53f8a3d43dbda8376fa",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analytics\\record-tool-analytics.js": "2b59b5e5c098c56a3136c5577e43615523f2b61a722ab290ad992f12ad8b0456",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\analytics\\savings-classification.js": "b0f34abc99863f1315688bf1cde67a9783b51b67ce9cd607a2b2bd3b3e3ce90e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\anchor.js": "1bb2c3fffe21f71e2986ed2497df8000e5d49b26e2037bac01e7909e76c2a820",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\annotate.js": "ec3cd08edc438f65a8cf23b515df8caef7dc54170555f6bda1a43bf4d8239130",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\code.js": "fb16f23837c08088893203d5103e17d269cd7d780ef8ad7b79d3d5fe5da3c46e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\dedup.js": "1b792395d351ab328c9d323bd638ba42b63f75bd04cd4dec0a5c329df115d9c1",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\embedding.js": "d2165556b4324611effe4f8d6571efcdbd27956624e3e1983acf2f54ae8d4300",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\frontier.js": "8832e82091f940905ffb3353c7754bcfcdbe29b72c3c7a271777c245e9c58f28",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\history.js": "95f110033a4aab90e94e0c888e9f54f4964b5da5adc9b5606a0103d685cb80b6",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\images.js": "eb00dd649e84e9a7e893fd9b5dc7fe7a3e1cf802913aafc9369ae72587074921",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\json-facts.js": "48df0bbb6266d5597680926a662860697e7f2ab8c66fb6c2db27baea5ef75eff",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\json-fragments.js": "f86ffa1d276639477705f5bebf979aedfe856d3a35cb22e51f1bd00aed76f0d6",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\json-sections.js": "05a2cda96106c0dc3791702e8feb77d10e28c13a22763b60c062c692d46a2292",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\json.js": "c021cd9d2cdb46da13d84d81a311acc20f476a2c948beff92866002e95b2aa90",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\knowledge.js": "797e6c4eacbc38e9a6eea28f0574c7063026b94402275d585ee1166262ec7d41",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\log.js": "ae6e9051cd773151d2e3a17131b76b65778947f6b9817466d397b10d4b685942",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\needles.js": "a44b5219ed8601b000d9600e4cfc2a164bc4ef4ba1e9480c1fadd312181923e2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\nested.js": "8e03c02072af621a95bfe114d2aa9c4e9f4979a78b86c9774595dd2e664afe69",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\numbering.js": "022c02a46c290ea9b963e516d873c60607bb394070286d237378b77b63cbdda9",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\onnx.js": "46bace0fc86b09ac5154f7c504921c1ed834e44e0f401e59d30d7ddc82facfca",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\options.js": "f9a72becad2e578f5de62551713b289913071df7c271ff85443790d84ab41f79",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\prose.js": "7c7d2d55c29516128448d23ca6057b148f9287ac0f7bb5e246b94c2acdc3cc21",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\ranking.js": "b8026bda516f3355a403fdcfc836760c86d6ab5338e07e8f8984fd105db7c385",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\registry.js": "2dc4a26b045f521a3bbab98795c9fede85de4969fa138bbf474e7515b6c24b5a",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\relevance.js": "1ea7ab0eabc0258aab6ebf297ef141a98fa7cb3b92f767bb66903e8de23b2e0f",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\router.js": "ff49c5207512d940840cc84812e0ec42e9705159fafe9efd37b3fcfedd296ff5",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\search.js": "19c278e98c13b7df54c72bbca7c95de1493192cf46b16503f986a733ad36a35c",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\segments.js": "7878691fe27b038dcc9b85cd8d7f7f3b4edec32c186ced02f6912748a2995cf2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\strategy.js": "7f5521f95af883857f6efaa12b3ea0fd932e7e9366512fad83ab6471043382f7",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\structural.js": "6214bebfa77fd7d3070bf4b4af7eabc21f2df1047e1f00c9ea411a90065b1fe0",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\tap.js": "fd32dfd41265b57d151588ce3586fa0ea2b09f4b4eabead005f60ee1c8ff2fce",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\tools.js": "993eac88d99300d3c9039b5af152514d8b46fc2c6d677edb4a5a35ab1b2f498d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\types.js": "d3bd0b64c1632b92b4b60c0df0f901e35a90c38e3c56b6f3153bc877c0339783",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\FoundationModelEmbeddingGenerator.js": "24142ffc2be4d4ce67161e0ccc58486b08333eed087b0050b0b8f2f4f2be1875",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\InMemoryVectorStore.js": "e55bc34d94c2792a2e81d10b8c46a9b5e34465f2e24e9f106ef129513f0044a8",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\cache-engine.js": "786d46ff3e86d066253f62bb714e2b71abc890ff7eca942451ba7e7d8a920746",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\compression-engine.js": "33a5164ff301808062234f2407ad4f2638a6b0ffeb65209f935bbf64ce1fedc4",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\config.js": "ebe035880cfe49b090dd6b7b117bc4aa09cfbcd700fd542740d1fc981ea58664",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\metrics-adapter.js": "2885348479e1ed97933cac75c9f17e6f3012089ee08498686d8101bf51aeb9df",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\metrics.js": "503c641a19f37da815b93fdb15333c113f97c0fe9fd0ed1969a827a47e135866",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\session-manager.js": "fc02c16f99e0e30cfba1e408450abd1af17dd1f0c40c37278d2622b629919d95",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\session.js": "5ce58752e7b1ab39bac0c78fd43655a1a9f13822073f6dbcd820c5caf7d9dfe8",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\summarization.js": "142e306cccdb1c375943d18458ad314beeef6c9b694158e5d90c533570d7e60d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\token-counter-adapter.js": "564faa1537c947f3fb0123956678cea0f46b3b04506fef3088c50f40c24260a0",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\token-counter.js": "5b669fdc123eaf36270fb61e044029cff06a5077844ea208baf817a419b5abbc",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\tokenizers\\google-ai-tokenizer.js": "c92de224be835d68024a4ee6229964c18d8b5ad6c953aa2aa83e258d0a65b05e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\tokenizers\\heuristic-tokenizer.js": "f9eaf04d9255e100b28f74f28b603ac4027c675cd1da0efee4a623710267cb12",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\tokenizers\\i-tokenizer.js": "9f3c4601957cc09cc335e841b2e7662a7e03140419af409c2fd51796738fa369",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\tokenizers\\tiktoken-tokenizer.js": "7e3b6d300a1f54a496a46428f04ad12e01f104656d6164755471ff0afcf96934",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\tokenizers\\tokenizer-factory.js": "01a8667087a14419dcbdab06b626a1729241fc9ca3c94a821aa81fbb6e9862fc",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\core\\types.js": "34a3e404d5e4764c6055fe012019685954a7c970372cba61bcc417ff06c97361",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\dashboard\\public\\js\\charts.js": "52fdeca037397435dc08ae617129718c79fd59a342d9c8a5160370f1339567de",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\dashboard\\public\\js\\dashboard.js": "32f23398145452ca81dc9e3e2bc95c68d7d2b7e8f1608ffbf5c821c9cac37664",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\dashboard\\public\\js\\graph3d.js": "848d036b7431b180520b26c5083ba0a64c79f86500e4b4a6345997177ac37205",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\dashboard\\public\\js\\wiki.js": "a93a259076aa388706e83d95e6b9edecfb60cadcf907efaee2d68130c48bc6c7",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\dashboard\\public\\vendor\\chart.umd.min.js": "321e3a3fa98da4aaa957d10be57cbb514de0989eed8f9d726b5d05902cd01904",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\interfaces\\IEmbeddingGenerator.js": "fc45c9dd8710b36888d2caa30590f8c4c3bf6e3444071d846d8aa5152e37bac3",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\interfaces\\IFoundationModel.js": "bce3b410610f99333eb921dd5fe2fffc396c94e47d0f9ddef6eed41c775fa2f1",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\interfaces\\IMetrics.js": "002eb336f6cfa213228292a1652b6e4e8007b5fd32d2af362e38e8718767ff33",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\interfaces\\ITokenCounter.js": "9639577aff8db305415b868e554de82e684ca776590ba86e30863a55a9ccb67b",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\interfaces\\IVectorStore.js": "40b3cb9a16c3215eba968551c019a253b0513b8a4d8b4cf3d049a3f35838ed30",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\modules\\CompressionModule.js": "0871153720f5c9e8ff28d307bee0a355cad5f4d788537e4940d272ce753519f7",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\modules\\DeduplicationModule.js": "4c3f11d3b8338d127ad61184e8b91e98552395de33c6f63754a1a61fcc56b8be",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\modules\\IOptimizationModule.js": "e67aa82ab979864086dc717317a1cf302c2c6d0c7ca8fc991cf1bf00e8d390d3",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\modules\\MockFoundationModel.js": "d0402d9a853531e4ead16592c310e73c9e70fa5d2c74f19c8960a8c0887c1634",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\modules\\SummarizationModule.js": "a90a6587af362870927c73c0780756913d2d497dbf9f1dbafe892756df96b076",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\modules\\WhitespaceOptimizationModule.js": "7dc21f866c85e6b12299e8f01c6a198345e36552cd8f70e647d8d051a4e5d71f",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\accounting.js": "1be2326a2449290a13c3c0cf1c2506e71c05107df9c4222c98a86de139e15bf1",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\capture.js": "d2912dbebd594cde64707a865a8f6a9ca5bb973f4de7b394ccfbcfb78e238316",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\cli.js": "53a4ad2ee11775705dadefc5b3b05e3792adab64801286537e9d2a962238549e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\findings.js": "dbea31d1ff55d85fcbaf2150d610e299c46b451ff18906b689a47a952c7fe7f4",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\graph-scope.js": "4713c1c39f7f8156982b03f7841d989c260e61195c9ccdb7604935aa014c1ee3",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\output-cache.js": "6fccfeea99f0ba497a0a3ab05b6545f2a615dc1763fe237e5be8b32e9fb83113",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\responses.js": "e267989ed11e4ae248ad6a6f0e2243b320e5816ea1f164b857aee5dd1045dda9",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\server.js": "ae189030b37ce1bf6e525e97ee332d5f50b3d66805e43d3d984c59ce5d1eefca",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\audit-tool.js": "c78e5c1982ce46ef43cb7f950d3fbed681aa1aaaecd3c0ceb75f1145b891ea72",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\cache-tool.js": "e4bd660a4cd4dda2db4bb8e5eef676f536beee13998d300643cd8469d99f9e67",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\daemon.js": "d8ee5eecb7841d5195449947e1acf3a33bc5ee6580e2672c1c7536a2d03e2f2c",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\dashboard-analytics.js": "c066b06892f4d1dce45e46c9b53e91d0756c202f3705007c1e846d8a349e9e78",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\disclosure.js": "73ecb0c94b23dbf67b3423ce75c34409bb9fdc6f97356276e28e068d87f77902",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\doctor-tool.js": "33ad032ae5cee356b9c1aa20d5ac434f8bac1292bbdc10b0a32ccdeaff5c04a6",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\fleet-tool.js": "5e97719670650c6103a16a4bb0a78c87c3f82a37cbfe8e9824ef620a9bfc9cfe",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\hook-diagnostics.js": "54718393b24eaa7ae7d1a1034bef02f459a6cd661e6f79eb6ab50fceea5a0848",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\index.js": "6a49f1c1ced0ae092da9b7c23ec61c1cc1694dc7e8652ed9da7c317d81e304d2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\lifecycle.js": "7ee91bec1d291057b5a06d2ce7c4bdd53ace153362e81e08af84c1ac5bd568a2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\mcp-diagnostics.js": "51ad98c6d16023daec770de7d9032ca262acf2a8144d7715731bb92c471bd6c1",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\mcp-evidence.js": "228824f47be0a51f3fbbc5ebf8e52aa41535884faf5bd1d76abe107b07e18f2b",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\routing-tool.js": "469cf5543911243564b2388151e783315c0fd837db1bbbed8cb025838311326d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\session-log-parser.js": "7653e85794ae50208b888ac0d30afa4b4ecaffa637210423c49f919e98eadf5e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\tool-arguments.js": "d06adeddadee26243295d220c738e03999cba1377aec09c7cda2f453cfafa07d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\tool-profile.js": "586f6e42c89ae9893af85f461c8d751bba9c54e6d67ab6db8f6bd6e14d15e2a4",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\ucr-routes.js": "a1f4222e05a8cd665860b68b7e406b7e45838523b5997b1a51a3cb41f3ebb629",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\ucr-tools.js": "dcc90a8e08e6b8a20a3171c639af3c6dda3f0bcbae69b772feb58f28147a9e5c",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\waste-tool.js": "77c6351524ed7cc5a9ca6ffc428811f64482b96db5e4e78d75f066d892f3a775",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\web-server.js": "11d58db7ad8fda263fcf92f02a4b1b5425eaf3f68f60130dfbd9f830e21f5a14",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\wiki-routes.js": "54a6f27504004612513d60bfdcfdbbc0ba3344684f5b9d04334c0745fb6fc85e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\services\\MarkerBasedOptimizer.js": "20f3c0aec73fb60b401d42ede1de9d6b692e56b1d0f33b15dac506f2298ccf5d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\services\\TokenOptimizer.js": "074aeb91c7c5a261c76e60d880b87c619fffa1a304176e0c23470aeb6339b712",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\cache-analytics.js": "1ec2d91905006c6012c28ce24d1cdc82a71a044e45e1990d05341d84c0268d8f",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\cache-benchmark.js": "efc58c3b8b6fb9499360751536dda609e733f622df1b843bb5fa2e84fc71882c",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\cache-compression.js": "cfd14cfa2ac8238116742e3f2ef50de823a9135515df52093b2def5195e668bd",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\cache-invalidation.js": "d26b25d188bf41eb69ddb8350614a22c63f0ae7686c03fe728787f8c6a0e044a",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\cache-optimizer.js": "23f4ee1286db222440b04d37c427670830c18d9cd7bef45b97c0a08eb981c5ba",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\cache-partition.js": "8ea7937c426465026b3ecf34b06fb2c2c4fdd47e476b46b7eacbf27e1c588a24",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\cache-replication.js": "73f94052261a17fb72aecc0705eca68ef71f13df82ecaa7e0d36688487c17efe",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\cache-warmup.js": "90c4da3d016c411f6eefb9948ff44898c0fda17491810902e460b1e158cad43e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\index.js": "23a1a937568a9ed94d2ca6543ab5ca7fb36e054fb5c8fd0bfa37cdd8218eca80",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\predictive-cache.js": "a16918ac00285deb2a26d1e4f169db865c2dae718f65bfe91e6a085186d1820e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\advanced-caching\\smart-cache.js": "d2048e560cf95dabad94948a096819ae7864c2da46fad3ff3250c1efc2ce4ecd",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\analytics\\export-analytics.js": "0cf83db3acc2d6697d49cad188f131910cae9061e01160a10a1b7ce70ad31d96",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\analytics\\get-action-analytics.js": "f8d3313fe42dc0039bc5f766921e7626012cff0e79b38b84e8b7258b5ab8cf40",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\analytics\\get-hook-analytics.js": "4c982ec19a50a92e4b4b7ea4aa128e96ac9657518b6a7c8391b376d5f7637080",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\analytics\\get-mcp-server-analytics.js": "94ed23d880910c0fcbf411a14e33f51474cf9eb8bc1aeac972c5903c944f2098",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\analytics\\get-optimization-report.js": "905d28168859b430dfaa361e2652ac1431f80b207256c613b8d17b45d51f9962",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\analytics\\index.js": "a96d7b857fa3e7f48e87a09e3c7931dfeef366de1dbffe0ac20f2182ae7e3973",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\index.js": "c6e9bc63238a5070e31962ece45dd11bd83f169b0afd75bdb2802233c4d36643",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\smart-api-fetch.js": "f3ae259aad5d34e90a83edacc7b0768e2ea1ec2e867dedce783c9eec933f803d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\smart-cache-api.js": "1a4d082a496cbdcf5335305fbf6ff3111cbb53d231d2691d1558af6cd0116154",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\smart-database.js": "0c59be9e9d0b4a34465ea2c7e7c4e17e519cefd008950ffae3667a071433247d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\smart-graphql.js": "42ce3e92fc2ab6e02c87631a0eda2ca089b8901ba78d9bdf90449d3808029ba0",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\smart-migration.js": "4668fa4fa1327989220cb2f5e3ac3c98e749d804064615ff7b4c1022d38d605f",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\smart-orm.js": "ff6e8e585631cfea842baf0b08ed4bce41c43390f5705bce97157aa90a5dcf11",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\smart-rest.js": "0078246eedc60ef1950214d4dabab4d25282d20cda2c476e40a35f0fb9469de5",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\smart-schema.js": "f7d06252f0a779bff10c160ff970c1081134f0007840884e5fb4803d97eb598e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\smart-sql.js": "095ece64f5a92a87cb7a922fd41a451756689e481ed09754d5387519c679c151",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\api-database\\smart-websocket.js": "12c91fe8a74b0731994bb47ecd5e13e7a6ed59f465b6e342cb9b301c3e224c55",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\index.js": "a7544a3c51c393e5bad07cb34b1a216cb7aa736b41c6bf4c91b0a113d14966cd",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\run-node-bin.js": "a311a2dff2a622b5a68fbf5e7ff88ea76dd987dd15b05c01eb48b49300f21c63",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\smart-build.js": "2e5e06fee7bb9eb85214e9c1122724567ea43e6066ad174b35bd24a7bbf9cfba",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\smart-docker.js": "d44e8e391018b51a2e24f58a3ad5a9568103fa34e86b54a7f7456754749f5bfc",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\smart-install.js": "7b769f51668d5a85cda23f4b6fc1bae6955876db0471205b0389c3360983bb0f",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\smart-lint.js": "fc6ca5cf50312eabce08f4c49ea35fc3bf754d2744cd1fc3309c2a6609f9e96a",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\smart-logs.js": "8c59bdeaf96b4a1ba857f923743bb9dd0fa320ab072722d3c99d35fe270a51c7",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\smart-network.js": "a80370ba84e67368115eee6c5265326518e2e18e6f841b90de12ce136cfbc6e9",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\smart-processes.js": "4411a2757141f427471d0dc2867e012768e1d6662fe181c612ccab1c3f7f1055",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\smart-system-metrics.js": "e107d638c9dc80a0740099739c3d6c7a34e1f6de5823011554a4dbad23614311",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\smart-test.js": "2dabd115946476120d775b5c6abfdfa69813301c53ce62153f30d1c637cdb8e3",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\smart-typecheck.js": "79480c0af8ff718ad9ff8817dfc4bf442efe8e64e4f155300ea16dc84eba4769",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\test-frameworks.js": "9c2c56696c15314d368dc87c9c3d843320eba844d316b15e7839c00e768f7b9b",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\build-systems\\wmic-process-parser.js": "84776f3ff216824a10f3d18e28ccec43ae503b55c04826778f5ddc6dd63aa80d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\code-analysis\\index.js": "342b42fa89bb11039a238330624c57851778bbf79edcfef749c43cb6e01268dc",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\code-analysis\\smart-ast-grep.js": "527aca2cc477f8d6714a3e77f180e979f9133828fff381a29305020d5ef13ad8",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\code-analysis\\smart-complexity.js": "b07cccf5a0b669220fb12e14329669e283d1e81f30adca1472ad56fea64d7d0e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\code-analysis\\smart-dependencies.js": "751832a02655804bcd845bfea7f8c65436403f9fc4bb3fe70ebfc005561ecd5f",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\code-analysis\\smart-exports.js": "a7a65fada455731e4c024cc575484411ad1a5101f41bdaaf93e1a6bc440a5511",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\code-analysis\\smart-imports.js": "89112d6e3f4ee8bc2335bb6499aa399dd557df50c8c8b12964b435bcc2587b09",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\code-analysis\\smart-refactor.js": "0d9cfc5fa97c6a5ad7392e35702deb579dc5a9af4e3efcb1885c3d3a4c7aebec",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\code-analysis\\smart-security.js": "a2ad530ccce29e0fafa5a0165dcedbd880296d027521e4531f9711809905bb5e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\code-analysis\\smart-symbols.js": "ddb50221e6622374b145f452c6c5ff0ccab68fbc4015668fc0851679cf3f8fcf",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\code-analysis\\smart-typescript.js": "b53cc698bc217e33137a391c0357ca68f6b80fe200a6660a59203100d34345ab",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\configuration\\index.js": "a1a61ed64978316d382d762560fdbaf92bc82842701571e04b026fd3b915bafa",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\configuration\\smart-config-read.js": "5f22602bd24e6d8b946fe2ac68788959476ff561105b68835e5edf3f52bfbc4e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\configuration\\smart-env.js": "c8b62e3e06d6375dad753938348ff314e8f25a5decbdbc3cda494616f38a0c18",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\configuration\\smart-package-json.js": "fcdd3bbee9260427dc0ed5b25bd1a6557d46d1979c2a561c77ee7de54028b550",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\configuration\\smart-tsconfig.js": "c6ff1408bdd18adeeade6f05c9b1bda9599350a97a3f72c559f4df59e67fa69f",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\configuration\\smart-workflow.js": "09ed779467b81d116ac07a3cc30ad4809078e9e5124c54efa92a105ac92fabc1",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\context-delta-tool.js": "aaeec6b2a093cd22abc9cffa26c489e5f9e3d56e6b1b71d4aba298f434bddd2c",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\alert-manager.js": "799b2fc22c9f6f1746a3dadae517d8fda1d03923cfff27753ef43388c0c06be8",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\custom-widget.js": "168e2e5cc99898ce586ca7bbf40e6aba3e115845e215347c054eecc3072b71fe",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\data-visualizer.js": "59e7c99b537ee87196415e6522faef934a81f56810ab4984e7cff62776ec4d2b",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\health-monitor.js": "e628dd97e86ea6542e6cf0720ceec6aec954e3331329fdd8e38a257c97083144",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\index.js": "c8b03edbb8ebabe69f4929fcaf88cbe2e7ef0043bf355ba4bd7c377e7e46e942",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\log-dashboard.js": "188ce1878e6c6b8477298eed0dc240589340fd5a7eef76a47090d7203e8b5bf8",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\metric-collector.js": "6fbf44ef5a9100b9be1754ad4a6bbc81e91f399b2586263949c48da9d9c8ae71",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\monitoring-integration.js": "85cee46e860e298147e5ce9e75d1a24be48eb7214d72857d90549879a37f4c47",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\performance-tracker.js": "c625c01a12cae944f419fd96c8e20466e1415c741cd918f92fc901c59611a333",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\report-generator.js": "715f4e71e10ed7e1c9a1ac78a03494570e7d4878e738e6a981fbb7cde7e7d6de",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\dashboard-monitoring\\smart-dashboard.js": "c34c6e74c5ee228cd0471515a71055abaa8342a55f49475c947961e00d1dadfd",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\authored-base.js": "1f56ff91ac633fd1c04c03f80d6114abdec4a2e55eac35eefe094a8cc48cd945",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\index.js": "3b5baa456e5437f2107feae9c17665468a3ada13d7d61c406cf2e6f20ac6cb7a",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-branch.js": "270e68706249de8812432753ac48c7c9527cf0b5450475922586a33ff28594ba",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-diff.js": "dcc722a88a1b5b05cdf1c687f2b9aa7caa57b76b78c393517cd070848c946ebc",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-edit.js": "ebda0130a7350a29f20d8c57d66c0f66c2a9f42d80c8459502fff12005a6bc23",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-glob.js": "d6abde79c76195cf1a984f71bf3083dbf32f6f953f67c3e1512a12fbd02356d2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-grep.js": "25a2f106e0102beb9ac9eedaf38223cd3d71744c860ca550a4efa4a2ccf33f07",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-log.js": "a0804bf38ba163d76a9d01d2e8e91e6c10d86f0eabfda548f6687b6650a30006",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-merge.js": "0847dc30bb2323bc4704c09bf6e8bb1f59a1ee406d4e89791b1e0ef72b24a3b2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-read.js": "60da85f59440fb857c4c2a837bb3b28fc776c4ae48578d034bbbbe674576f194",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-status.js": "0c7b112104425a777311cc12e27172509d02691dcd48e01b4e3c6a2994b01afc",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-write.js": "71285e1c92c7d03e673a643c704c7b09cd77d074b72ad1069cc43b271d422109",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\anomaly-explainer.js": "85c05bf111009111e9d86d18c1b2e9f51f04aa7734341b63a68331844e4cef09",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\hooks-core-loader.js": "3ff2b555cfd71c8a2f3c8f998dc7b80f9e7673b5084c281bac0730d45cc12a4c",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\index.js": "371e79ce1389ec546e77104e653b482a83f92395976003f685f25674d120f42c",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\intelligent-assistant.js": "00b4c45c7a5e88b5ab84e29328d4c76d568436c5a62b9041b28c7e07e3f25865",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\knowledge-graph.js": "78d29bbcf302191dc179e2f15406b19dbcf984953eab7a2e7b961dbafdcb8fa0",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\natural-language-query.js": "77157e314ef68ce3f4176d109566fefc3a09fcc1644b35d2726bc43800c7ddca",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\pattern-recognition.js": "b85ebf5b9e108d649b522a872566ff5489a5708649b9a5dc08afa00b004f8d2b",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\predictive-analytics.js": "88d5abc6396328ff0c5599670eb81c16a9e1cf678cd3bf50364c5ea94e038693",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\recommendation-engine.js": "f82097e213f5bd46f6b924342deb06884b62ce119d190624021dd836ec9d71de",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\sentiment-analysis.js": "cad468e3408faf20f4e8678536facc5f99aa7cd643901ea3f8d9596826d85c2e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\shared-instances.js": "16401bddda1d22ad65ac1bca3c58c925b1cb37768071c36d042f71dcd525f0eb",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\smart-summarization.js": "9aec2a9c931730d80155c2369e30f2fb6b9d0ca4c6d43deadfed2d3fe23b069a",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\wiki-query.js": "d695ac6cc652d06a628647b93bb9850b1b3f7897179d065889d191249cd5d851",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\wiki-read.js": "8dd78ab8b0dea43b2b8398b220c2766414a6975fa7652f1c49a89960c3e1abc3",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\intelligence\\wiki-write.js": "6c4695343c14f8fa6760337b92095f58ed12eecd45329bb274b80bedcb3b1b4e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\optimization-storage-tool.js": "b0f51217e6b79cdb616037a6188522431a533c71de7da26762841b1b2335c697",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\output-formatting\\index.js": "9913bcb4a7752e16e9ac5c69a498c6fd26732681a1e7ec2b60ac32aec833fa3e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\output-formatting\\smart-pretty.js": "ce3403d5e44849990b236bd75e5ff1f0a22651a776bc46814710df8333f0a3d8",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\shared\\append-all.js": "28c18bba5e668bb33ee651b8086af1bced73a73c056a3cff867cbe8c3f459c43",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\shared\\bounded-traversal.js": "b403f85fd7e6d136c707bb8f124c8e9d820c9b24b59ea9251eaf568df2874287",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\shared\\compression-utils.js": "4912de7b3449e9ff997b9869f0c4a84992fe68660f51fbc2ba630f1ea2636fe8",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\shared\\diff-utils.js": "e5d32cfae9cb73f088eee39426e89e27a1d6e7b465019cf4311d77f379a725a6",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\shared\\hash-utils.js": "3723a1ccd73e0bd4af911348502493da63ca5f587a4bf613dc0e450f46e0b5e2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\shared\\optional-dependency.js": "69e2b6acb42cadbe93e665c1d38b1c38d27dc1d07853127c48ffb394d12758f7",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\shared\\savings.js": "7e39e4e783c08194935b1ca0203db92bcb16e113d3f23a63dbbc9f9e87214301",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\shared\\syntax-utils.js": "f8df0067c579f5f91a271e5063c74c23849237a97798f5ce9dafe9cfdbaabcf1",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\system-operations\\index.js": "1e927551b38638c009b9c24edc67eb772f1b032882833e0328d0fc6791818a98",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\system-operations\\smart-archive.js": "75c134a8da89f50f423c8f2ca7f9703d9044b07c5be0cd034d565d78f9ad6377",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\system-operations\\smart-cron.js": "f20f9f5bd8bd18db3786b1b96414abd9f48e221b27fda5b994dd7e8a93e3ddba",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\system-operations\\smart-process.js": "77a7d3466a6148b771f84000600aaadcaea3970a692dc331bf8aab663ab7eb31",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\system-operations\\smart-service.js": "c3bae74645a05000ca134bd9339d7848b266c2aa84a37e5c977d037a2b0d7deb",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\system-operations\\smart-user.js": "3d93f9a446de5806227a6800617ce4c3b068276cd40331a982df61ee3d1a97c0",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\cache-helper.js": "fa06e7a2da10c7138095ae9387a760c1f5d7ec30c1190a57102a347aea7cd525",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\cache-metrics.js": "a637bc5b37310819093ce695c68be9864b3a329dc51e329220bae87e57dc9320",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\csv-with-header.js": "1215ef6389a22c763f58d3507213df5d80cdbf3da54bda4e251cec329164a137",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\diff.js": "08b7b6f604683dd3d5e2fad2ce712803fcc5e77066c1b27b2efaa46d3b1e8f56",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\disk-output.js": "e9d5d102cd83fdcbd89641f557c314dfcf24154aabcba3cb12429b80a8b540f0",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\file-backup.js": "14b5116704aae0bb933a5580d284c1d5e448955fa41fd59359ae9470e02bbdba",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\fs-generation.js": "bfec71373757bbf52ab9bb0c194b0bc87d8d3baad7eb7d30e4b693a95680512d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\gzip.js": "b64eee37d1f7a17068f95cfdc00aab78be37e4b5f8d9e7bd572745bda3785ef8",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\lru-cache.js": "24aeb3a446208ab32482085e95d1b4b916a697a77e7ac517807d28b8260136a8",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\lru-memoize.js": "246a4576eba04fc03570e1eb79dd86c4838f081ef96718e6006a405c61a96460",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\net-command-output.js": "18b76606680973ca458eb1f833adfb8c81e508dc5b9b104bf6e24fff27f50d17",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\safe-exec.js": "d4c326f509e11ba14fa8f6fce54410aa22fb1bed598adf2f0830f399fc2397e2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\search-scope.js": "dd463f8092fd34debc3daeaaa41e60db843ec7db4dbcd6bac73bfb8b04306231",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\session-id.js": "526b3710f05f63252eaf42705c2e42a995bd3fe9162bfcee7803704fd2d27188",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\thinking-mode.js": "1c1a874e6361f6310fd866855e5f44bb82999c03ce06a8447e78d0f65755c187",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\utils\\wmic-csv.js": "4f5bb14709af10a56a4ecd2176bf6abbda33665d08c90f04e4919be0ecf7d9ac",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\validation\\tool-schemas.js": "fcfbaade5914af2db36632b16e65ae1922e3f89c0062fbff76997e9fa907e903",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\validation\\validator.js": "ac2bb03cda79cfba62bdef7bc9fcd34c7c7b25f3a3f2439048ab1bbd4dba070e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\__init__.py": "4ea23119219bb4d881d1359a540b5ab4f848a582e3b3404f2b7f27dbb5275781",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\_core.pyd": "d81394d25b17fb3ef29dfe02872c16da88458d920b8fbfac4192485ef8311f19",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\_ort.py": "7ae446bc081dfd6011fb892c65f6d8f7f477dbad7feb74cd09a9f1fe1cb3476f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\_subprocess.py": "f23ebd196addb0a65c30537beed60c723454a9b9cbfdb96d6d962c15bbdfbc09",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\_version.py": "c79e9144ea774d5d8e6dfdd473b83f025f1a9646c5ff102d6a372dc97222f73f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\agent_savings.py": "5d928a55fcb59b0cfc50d736ef2984f3d619feb451544549c4c0d93cb5e9a342",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\audit\\__init__.py": "376cc794de16eaed62851121b9763b11643120b51d0b5eaf35d5b587a0b6c6b1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\audit\\codex.py": "c123552fc3b81c3a5c557dc9dd76fbf80bb7766a9b3543812b9b07398c949323",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\audit\\maturation.py": "1289ef90f82e285268c6014cbf33a4a3b900cdd3faa493f35e1fa83675d8c54d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\audit\\reads.py": "794c70d5106d74900b14979a767e320ba4886d947f594726d632ee8063fbf2e3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\backends\\__init__.py": "38a9ef342889a3785985cdffb2b2d1a5d693bd255867359e6ba26cdfe074bbf1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\backends\\anyllm.py": "dc8ee887e1b147dd937f0304c0ce6f1253aa7b670e8526e4e3bc4399b4215ed9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\backends\\base.py": "8c18df938cff7ce40396bb49b8967641d5d61e6f5e4fb363f6ad66fe5b841838",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\backends\\litellm.py": "1cffe620eedc3286633a512b3151964f647d09a0d647fd296c93d36a89eb6fbd",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\binaries.py": "b2029eeec160589bb7935a5d970f7b3673cb79e6f7d9dad4ef04426cb6b672b8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\__init__.py": "15c60c7d714ec79e2047fc88097233b03edf2f577ee4070f388407be085cfcec",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\anthropic.py": "85b9f58a3c71f096923f7934b508ad674fe07c2ed1d78848a8c423e2fb873faf",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\backends\\__init__.py": "b6cd589f2ac9395eb6131b57144bd65b926433b988352b072ea30bd1344e2aee",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\backends\\base.py": "72e4fadbc5c45087d2d46926fd3f87588dc557bddb4f72d5322592ba1871ac7d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\backends\\memory.py": "ac2b610fc4c0cc5a41556acabc5ed69b0ba70c699d56967a79ea8c6e52e5cf8b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\backends\\sqlite.py": "ed0ecab03790b9a8a61ec21b67672a55aeb4b3a6ab7e0aee2559178c28cd2f1b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\base.py": "4025e52a8480fbb81fbd35510dee52e9ce87e692329c1b5be20ce820415dabff",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\compression_cache.py": "82841d68b367fe968ae77a9022d8bf357fcd5e3389eb573685b9f0e0e908fd74",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\compression_feedback.py": "5c956336161257756744e02b4756662deaf5bec645f819ed5553d7473d450c20",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\compression_store.py": "59db2022f4fd7dad26405d437070373a2b90d0eb630d33f4302ba8cb6e47c43d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\compression_strategy_outcomes.py": "1e8d4878f3e91fa973ac1a7f560052ff831a060a4b7e84bf15e4149169c26cf6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\dynamic_detector.py": "d817fed7afe02358f1e67c3dbdebecd96ed4efc67a627a752884babf2c7bff57",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\google.py": "3f2206e92b55fd5450bca7727f05fe093913ad209a6f1e95b44389d3705cd56a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\openai.py": "19da3fe1146b57041e25878607527a12b75687372f1ed52ed0ed313da4383348",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\prefix_tracker.py": "2879f10a0becc698ba110264ca855f685f2ccb02cbbb12b8b2edf7759f6ba01f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\registry.py": "36b486caff9677351c476e16ccfc36f2755d17e1457bae5f1975c8e099c55b71",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\semantic.py": "2390392df66200b846b241ec29ec4ebd5190b008c06650742e783ece0234b4a5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cache\\ttl_observations.py": "91ada1caf9e529f5698ffa83bf5ce2a4ad0b19c434e1a72f32454e07505a0d3d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\capture\\__init__.py": "8f6f47c223a8bcc289a93ea82f92b91497c0af16fa29cab54cbf24f614bc5e3e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\capture\\network_diff.py": "f42b85d1aea38350969af082982f865e9d9bd9fa9600e28318a1b87f4d304ff2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\ccr\\__init__.py": "304ea1d370c15580a0740ab2c524f2c9307efbfc7d2d26384a76dc2aad36d729",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\ccr\\batch_processor.py": "bb35076a6827baa6559e8020bd4ea666735b5491b9453d0d2c8acb39d09bc6a9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\ccr\\batch_store.py": "d8345d51f48284f7112569736c8c3efb7f5349885a632c08f5a36e917ff19b39",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\ccr\\context_tracker.py": "9931b5e5dac0667920219fc1caf3bfbc6848e3e6353f67a8568da80b18f4d172",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\ccr\\marker_resolution.py": "fedd3ef09a6813056b570af7b5a575a30bf8f33fb95df6978dbddef36ccc68ea",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\ccr\\mcp_http.py": "37b555acbdd4fc73df4309f8a4024ae14fe77d5655e32944cc93cf4cd999efc6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\ccr\\mcp_server.py": "d01948aa78de55a79b1c1e00c71ece5bf13d0bdc2d5eb066db5b2fb70bc29adf",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\ccr\\response_handler.py": "55bf647518c221fea2890e5d203e20f7061c7c52c238ce4bdb9d4fe380572a5e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\ccr\\tool_calls.py": "4165d885647b56395ff90121420b189b283de0518df6d7e62bde9ddac5b0e14e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\ccr\\tool_injection.py": "708427ed7dbd6e488ee54eb21f47e1edc165d1a5458836a003b7c2056e20b492",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli.py": "fe24df105997936e727e151bc7160264f57bbd10548fc854228218d5f0a575c5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\__init__.py": "6f9a7c59bfd0a7bd6d855caec9cdcd96d49e7e2cdd492324824bb158c24e4cf6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\__main__.py": "ca7d8fcafba3817d9de066ca3e290f08813fdf81fb54158328d143cd1054deb3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\_utils\\__init__.py": "afb0bdc0d7ebde60df238b3b38b638b95de38a157fee4d89f98dc4f63ac783e5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\_utils\\formatting.py": "ef94f5593c3da0617300626bb58c83e20d1b0e80cea9c3296205b77ab458df70",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\_utils\\parsers.py": "1aa1945fb9e23a4862fa86f651942f9a04a010b765ad9dab3affacdb4dc03f8a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\agent_savings.py": "d0d100b5b33d09993b8ad8821437df2ef75cab45bdd9770ad64dbc5845458560",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\audit.py": "1ceedc0836ad6a2b802eb4b264aae4a2d2507039ef65f29615342499fb031b35",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\capture.py": "9f9615337f0d737f82e6349f5bb7d65105f5ed23355af488636c663df47a83e4",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\copilot_auth.py": "f82c871afde6f03b96d74e9f4b5f6bd613d97740856bbd018bcaf5dfadaf5297",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\doctor.py": "f31e9d4bd663e5e66bef44bd3ec44011d535046f91b653b1508c0f974e828636",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\evals.py": "4cdcf1b9edf369e0ef940509e685cac57dff4a3a5e815f1d8c28ca4eef5a2c42",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\extensions.py": "a5f65d78b924f8f8be915093b8d28e700599605a48483d0fff477ea93550005f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\init.py": "fb2a1250e5c49616be293e2b4200398de8ee15d371117f8a905138ddf06f5d96",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\inspect.py": "40899f055f6dddceedf44dd9dc19827512a30d527193e487d47ca3a794b7ac11",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\install.py": "6fbe992b2b11543176566183924da28f3919c60389b7207ec3264e8bd852d4df",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\learn.py": "0a6c97df315945cfd8faeefbd883b0153b5b3bb79336df904162212122399cfb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\main.py": "f8afd519bc4e756dae452b2fa46d0ea5b599ee6017287dc65175dec9a1918c70",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\mcp.py": "9a92ddc3cdc0f62beaf50f7df49bee0d26b77ae72f344a254c32aad55ee74d48",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\memory.py": "e091d85326eb1df3ca64264391dd6d44f912b9a3cc05e2ac58636222e606fc2c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\output_savings.py": "faebbd6f7bc0079ffb652b943d698d1123b8a38e7508c898ca9b19d32b45b2ff",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\perf.py": "f247a6ee64088178dc9df04d9c0acc1132eb53e5f496dfd6e740bd387c109743",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\proxy.py": "32b702f587a1530d4eca1f65ffe4d258e4637bba986b688216984f030bf44be7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\recover.py": "9979cce2bdfdb372ae303a06c83b693e24de9e3bc5d8ec115834bedd04662cb1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\rollout.py": "7b3c91561fa82a74f73140aaa10657018c5604fe0ded2262fc0ad7b026b590ae",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\savings.py": "d8b8608452f9b908e1a11ffee1cdc596b5c895e1e9ce57bd57e1031667bc91a7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\toin_publish.py": "db11e82c82134b28c27ff09ba05e16d0524239a1b9ef49e0c85dc895c9c7836c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\tools.py": "35be4b707a2607a7cdff8317281aeedc2675594fd2d15a6e9ab55fd78f9963b5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\update.py": "5bbfe592cac9ebb04758dd209e52e6b791fcba120652b025f473c5069a25f404",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\cli\\wrap.py": "2d557e1c96545e4fa3efc7e1ee92af0bfa4b6cea8a6572fc636d7e8103b01b46",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\client.py": "ae286189d70cb698af541b9d8bc409396927b2f3a5114c3d1bdf9c41086498fa",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\compress.py": "31b365c05b18c8567e87f6fa25e406a1dd251f6feecff370edcaed83f40c0701",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\compression\\__init__.py": "f544e50060a2b461c8cd2463856f98cc1da79f3c1fef07b009ff09cd1c71e36b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\compression\\detector.py": "afb218ae7a1d859d87bdefd53917b2fef154cf98b06b3606666a9ecbdc07ec09",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\compression\\handlers\\__init__.py": "b4f5c4ac7f5439c4c4ed5c967ace110ee017296b16208e2784168efc47dbe803",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\compression\\handlers\\base.py": "40819b16802357e131fd4e12b4b06a1fd92c20d833a50b099fc230d72f6c0af2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\compression\\handlers\\code_handler.py": "d095db70da2c50f862b3925ec108c79ef9a66d124773a339fe5cccaee1c3d256",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\compression\\handlers\\json_handler.py": "b876e109b680a9742d7a0b22e83c85e6a2e9af9dc3ca6400395a748c9801c298",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\compression\\masks.py": "ad051e926f599f25aa5081e93198840139d20a3d854c2e2526da88fd1be13ba1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\compression\\universal.py": "11b0ca0d33eec7116213329ad3d42816f32c65df69d0a8c14cc219dc00c4b11a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\config.py": "ff0ce99c555a9f8f4e1b06d660a6c37dbd5583650842c7330e16374ec0176448",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\context_tool_cleanup.py": "dc85be2801b0aec10b900ab6ab91e3ee64436f160311d6a795e42e575e19f9e9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\copilot_auth.py": "989d79d919303234fdca0eb7bdce4eed0f24117aa29871a008cfae68e7abef82",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\copilot_linux_secret.py": "42b9eb9c85789ff158d17ab4117c567c57330bce7e6cadaf34af35974c38c5b1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\copilot_macos_keychain.py": "20000cf999f60586db05723c31f52793ee5f0db5e83565f462f55f86233fa3c8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\dashboard\\__init__.py": "82ceba252f066f3e81555bf7f2152286b6aacc3d764a51f957661e7d6074dacc",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\__init__.py": "548c3a9d56a62ce28c0eb84b33c9709ae65ddc99ccc3893919546a5f4e591e24",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\__main__.py": "fee9d660c011209a2eec2405778fb799b65e42dccafe2de4c9af3ce559c6759d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\adversarial_grid.py": "702ca496e283d1104f9b52c181e048c4478e4b1ca5ae34ee8a365bd04008a34e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\batch_compression_eval.py": "61bed67709facf7d9161c3336661b6a69d238ad0877d63ce5a367dc9a900a484",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\comprehensive_benchmark.py": "d4a202354efb8f083fe2f99b0eb502801a10962b6200394a754a73e7cb75b6a6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\core.py": "ff5636bb379f7a42db55fd450436548d32733e5a4a545900034c64bc898b1401",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\cost_tracker.py": "0153064b67699e8bdf7d05618c119f1b6ccc998841ed982fe314fc4b2570efa3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\datasets.py": "885e0d14f3e4f7f26ad7dba9f3bd3d9b3d511142cb51c7131aea746e69eabf41",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\html_extraction.py": "46da86558c7dff24181a68a14b7136e9e238c931b4c75e72f09a0a85f6456119",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\html_oss_benchmarks.py": "2beb8f9049cf6a56b80654891e321438931e74bbaf5c68b287cd8877533fb928",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\memory\\__init__.py": "0573b20f99ec65850543ae8429f264e3fa52dae4b37d97427fe69f4895184111",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\memory\\judge.py": "4b89f644fb52af0c9f4e5d539f7b822c623c8a0adec938c4583d9eaaaab58fb3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\memory\\locomo.py": "f1da8f4655924611e9cf8b9b268c480f4f46bf408b7b954d2a193d27d246ee0d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\memory\\runner.py": "2663e2d351ad148bda19a19aefdd73f3b902e6340176918a96e40ef1d5c84787",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\memory\\runner_v2.py": "f60e34b4a4cd723033c0e0b6bd99334fe149882a5363c7e5851d686c93bb496c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\memory\\runner_v3.py": "eecf74e031f2e351469f1da94a0fe38f0535a6439d07ff352d0472cdb9061807",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\metrics.py": "e77a32b48dad4b88147aa1b4bfd4ed390c1f7638be77424c9d8578465c735a98",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\prompt_comparison.py": "08cf2ab4ef17117eabd0f5d7810e3b145fc84e542003e137f3eefa5a2c2e7e3c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\reports\\__init__.py": "6e7a338929e42f73524a904c71135b31155fcb817de3bb8aac21d7ed2bb72dd5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\reports\\report_card.py": "3c94dc8e5d99cf7a6f85a5aae93b5cce82b1f40719bfc1a54b1ca9199c53baf2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\runners\\__init__.py": "6b98190b0bf471cf4721d2e442104c3fa94b2053d8af0b0d030e9a0df411db2a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\runners\\before_after.py": "123a12932ceb31ffe2439fbce6a09d2db629eccf4946595ac54d591ec6f51f49",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\runners\\compression_only.py": "687bbf0beb2be3521e91ae9a1392d6381656456d9e197f2eb5df1dc268c1b5d3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\session_probes.py": "6de4b79d9489830be69504aac3d41365fb5548f9fb72fc87b89bdcd4329d487a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\evals\\suite_runner.py": "23ec1a61d679792e77fc35b3be32deb0b4fb26505b22198791b949c51b80b106",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\exceptions.py": "751a66b893db458d8b96412af160dcc71b6fe96ce538eab2792b30ad95a49a03",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\fsutil.py": "4cae9473b7f008693eed41af6bac426db67091d80a24c17ad0d8ea58df9ea70c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\graph\\__init__.py": "f0ed8ecd8eb3c1e407d3c6e152996ac12b3809d24692d6357df746b81acc0e3b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\graph\\installer.py": "93f961461da9f9f692ba120910feee3c70e3166a9d4523fe861d8d456636d4f1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\graph\\watcher.py": "ec0b583dac083a138c03906081547274f625fbc949a2d63e7c30d97e275319f3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\hooks.py": "e18fad94479310bb6373f347a2bd4bba1a9e9d6dca927110f758cf9c53444430",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\image\\__init__.py": "14396345340520341f318fcacfa3350cf3ec39849180404a248eda38f76d93fd",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\image\\compressor.py": "7c348a706be73079ab58766a03a5db019d20b031e8be44196636680bf05fe1ba",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\image\\image_types.py": "72616416177c735e87e81d6dc835c3b5334252f407d938ecf2ea654b3233cfc3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\image\\onnx_router.py": "70e5eb543fde98268263af2677e18893dae8fdac5f8349b29684c1e55d32dafe",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\image\\tile_optimizer.py": "2ea33c0ded601058f2ac2bc21e4c13419e8566ed776ed0191bbc34c752486bc1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\image\\trained_router.py": "22706f2612b6c01454acc0fd51a450183e6f0e01d05b850b22b22e5f8306c627",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\install\\__init__.py": "35ba91e22b55dd47dc6ce9105ade50a237deef20c3b48a7116e8ba213ad30805",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\install\\health.py": "21214b8b99a6270634a61a619f6969e18ad0238bb80ff9a9be36094c27219baa",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\install\\models.py": "e8a97014da37f63e790143e18fd205f7f51ce1afa4cb0dd0ec32647bb14d6fb4",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\install\\paths.py": "4200860ccb1e6a648160f203de550fceb2374e2b89fc163db7a1d4a3bdc60d63",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\install\\planner.py": "1bd35c30080ba4b08e399562242ebe76b041781b67b813a124fb686503d63c12",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\install\\providers.py": "cd588b3348e5deb9ef1de5cb147db31e8d1e07650544e2aa44166b34d02e274c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\install\\runtime.py": "0f6071fad63f4fe46457686ec71da7e2d9f1f91102033d6122457d2a81a2a8a3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\install\\state.py": "e6a99fae8ed3b696bb3cad5ed6ed3dbf46d77018efd09c1dccb7b6048681d9ae",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\install\\supervisors.py": "30521b823e2ee521e198534349476fd774f378a5235ed06fd037bab1249f2228",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\__init__.py": "b6a45b06c6c412b5a59a64e2e32f4d694efdd7a4ad778130d20e4f4773a57cb7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\agno\\__init__.py": "99b5489ba0c4dbc6e3af75de5e0d9c94c2173aee53af541fe760f55db1ff4b6c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\agno\\hooks.py": "2c6f134ba3c5a1f239382ce1a9fe1b62611e955d6599ec58745588c2d78a86c8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\agno\\model.py": "48d35d7baf8701297d92f157c0a09b597de7973522dbf7092dadba28665aed83",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\agno\\providers.py": "d4bf6e6f83ee1c926569939b1a33d5f00699b6af87b7f1322aa8e1a96d8ca75d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\asgi.py": "10b817d8fb89ec3b53955068d9ff4a632094de15f9ac9ef941827aea42cbbe78",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\autogen\\__init__.py": "340d90af9fda5357d264d70e1921b40a72da5421b945d189aea1acbf744c4911",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\autogen\\agents.py": "fad20d07c26640c30b573682af665c456616429d896d8dcd6284049cedfc6057",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\crewai\\__init__.py": "2b80141785e2f19115e24502a1077b10075f07bd7e134ac5591677582dcbb200",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\crewai\\agents.py": "5fee9475063b37b5561c7c2a9ec005763860d38870fbe82a4743e82009505afd",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\langchain\\__init__.py": "2d90628209874c8afe1fb5908449ef6291594828d435e70fbdfac5fc99b767d9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\langchain\\agents.py": "66e649920655aa1ae8ee1d7869706ec2e94379989efc1a883c03d0dca8de8835",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\langchain\\chat_model.py": "6f7d75923e2d3e248b3cbb27fdf18e7dbcc6fb508d95fd62d2633d35c5302a0b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\langchain\\langgraph.py": "373a2e708d14fe5d0da98acbb7a771bb7e10169d710a4e0950bd7c16acc94714",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\langchain\\langsmith.py": "7db7c343a6c6da9b01ec3e7a3d7af7929eac02836657907a8d652ae5db1483c6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\langchain\\memory.py": "25185fd3578395e368fa494dbd84fb0776200df6389a47c7b6e03083060a0989",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\langchain\\providers.py": "d5711286796a9e16b0276fd2f245ec116edb7519c8f6e62f795c5c4cfdd7b7e1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\langchain\\retriever.py": "90787d52742142e297f3b8e19020956b7d8c8b048b0284b3b126072aefa79feb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\langchain\\streaming.py": "1b6e316e8a59210a3b77f98b27d538d10e03233602b9a9981110b55691b34ac2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\litellm_callback.py": "8ee043f0c5046f1c7d4bd66c5a12162f6407c694867ba726371ef4933901ed93",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\mcp\\__init__.py": "6955585d14793c6a3edb1236b110159c4bafa97d4472188f6af5544e7cda21b1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\mcp\\server.py": "418986b73dd3a79c719c99b5e2dbf29de629464923bd53c27edfcd9dd113d89f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\strands\\__init__.py": "6900f89d671ad0ae4c851109e6221b5a9978f2d7cbc324968ce17aec72e72734",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\strands\\bundle.py": "f6c2c3ea64aa22ffced4d4a1bc367bf62cdaf65047614c499c5069fd39cbfb8a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\strands\\hooks.py": "ce4a6026de36ea0b960aa147bf325a1c9a99c00ccb47626a7a15d303a93bbfea",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\strands\\model.py": "613f58f9ba757086371edcf29312ae4ee2db0b4aefbc3b9a757c736fb099c0d7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\integrations\\strands\\providers.py": "5d74ed63eecd8c65a2cef1a56c75d80fb775d53286b4020af02a18353d094256",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\__init__.py": "53fd1e5c8b40bd023956083378be9a6be024f40e57367c8a32796396a33fc842",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\_shared.py": "73b1f20cad9af1d1107ec63626a408b453a0881488e75769448fa428dc20f430",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\analyzer.py": "0b07314d29e27bd45958ed11e3b8b8d6cc89c2b7e589034bc76f5539a04a814f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\base.py": "44186eb3f80f60c9f44dedf335214795a2983821736ffd619ceb564ed54bfb4b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\fixtures.py": "646d41dcba5c976742bba5ca5e6d1ef6558bf72a7d4278337d0d567b1f24b8cb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\loops.py": "3171fda4ed1dcd9c93b27ad3c8cb73ea461c4120f12304642763a37e7cd8856f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\models.py": "f1e6aafd0e58f3e23b7ce52d26d16ce31514fbb2e38bc0ff26155885ecbdd0d3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\plugins\\__init__.py": "c6e95cd69ae7c529f25202cd0fed3174c3fef058aa386674e0dffe981f833a49",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\plugins\\claude.py": "6f239301318eaf8ccb0c97b8e1ab05fa8a87fdf24194eab1d7d14498a5ba5b9d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\plugins\\codex.py": "9c1baa845ce5c4209b51ed2295b4f3df96c2a6531180aa6445cea7c0c6802bb1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\plugins\\gemini.py": "1777b12d87d36d25a47b1555d27895158f75038b879d799651d634d2bfdaa7a9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\plugins\\grok.py": "d7db84516fbcb6872a22f9c1d81d7f0a09cd3c7bd39062a5d07b47ceadeba1fb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\plugins\\opencode.py": "84f0aa142d9f236e294edb5c96df6316f54228fe9c578a9c8bdb9afca2954daf",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\registry.py": "8f673b51d60b26c73b2ef4c4c2296697c9a28ea27737a0d54ce9027e0a8da991",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\scanner.py": "f8347ebac27e4cb49505d4180ea30aa18f539760228b6fce718559da8caf0cb7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\verbosity.py": "8c0851cdbec9d03cda52470b46a37d828c4d62de7f5578c79e921c1a601bf9ee",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\learn\\writer.py": "d76edefa0de797ccabd42ea88bcc63bfcd3c1362e29bdb9239251d24eddb0e4d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\mcp_registry\\__init__.py": "daa81d04492d9c452f46d33e715b2487fcff889ddfa1ca070ed6167c10d9c631",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\mcp_registry\\base.py": "bc87201e459f0af18eefb065c46b3e9eb552ab4486580715633984f87d191501",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\mcp_registry\\claude.py": "715a376e1861aa31599da3859bf182055d98da7225b53151b5602950fddbb7a1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\mcp_registry\\codex.py": "81acdb381175d4a6cf4d36d5aac8f7409fc1ccbb638261b3652f86e1a06936c9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\mcp_registry\\display.py": "441b49bafa276f1826a8d504b1371fae4a1ef16b5445a262b93a449bbfb79d6e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\mcp_registry\\grok.py": "6949032667e75aa0cef431b8ad22fbb6bf59c29511f5aca4be2133e5e135d6d9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\mcp_registry\\install.py": "44c3292daa1c21735bb6e103fa79162f61e8e825f02432a677cd29fba8d14d1c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\mcp_registry\\ledger.py": "81e55ea76493987a19226c198ed5c1ed61d87091a06d841047a0c78c2510b8b2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\mcp_registry\\opencode.py": "ce9be03c9ad8e044ce9ad63e540641dea240250a4afa1fef576b19466e503527",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\mcp_registry\\server_json.py": "87862add6336405571f00d42e10e055d5b7ea5790a3ce2c9657ec38ea696ba64",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\__init__.py": "da79215649bdae5f4e72452c8ac9050c1f5a16d64255fdc2fe3174d10e29063d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\adapters\\__init__.py": "ed5b3bf6f5955ff9496e18d3cd020acd0e0c787370a315e966821699ed8da28a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\adapters\\cache.py": "548bb6e485d5d7de6cb8582883ca651db6fb15c5dde799c024ec32d0608120a8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\adapters\\embedders.py": "1e4ce81e80407307b5b7dd870cfbeea7d89c7934102fa03663075e92e5274241",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\adapters\\fts5.py": "cee09b2898ddbb78a3511fc59d1c7b7ff10e0d2c71621f71dc8944c809fac665",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\adapters\\graph.py": "9b07ad3e35e224c3f486c22924a2295150b819427f6f4f604b82ac4f22a542f1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\adapters\\graph_models.py": "2695abf036460e4549eb724c216ff7ec042cb8494d488b1e44bd15737ca556d2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\adapters\\hnsw.py": "4e177f8b28e3703fde473eb5c493f88b30619a96667fd0037ce99b9b6d3d034a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\adapters\\sqlite.py": "65eaf2f11766d327c75c0d25fa4c9a0188440b5f43e99e40a5675db47919cbd7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\adapters\\sqlite_graph.py": "b22a2a173fb28ab64fa5c134221c08caaf84987ca9477b9d9608ba060b23f456",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\adapters\\sqlite_vector.py": "aadadf6890104a36bdb84ea150eabfd7b6313ae8797844bafd658f2471d4fdcb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\backends\\__init__.py": "2ce2aa0cbfbfa4681522cee4a0a706ffd939d7ee4cea5868ea7f5011c85e747a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\backends\\direct_mem0.py": "518cb1071925bc1eb5de39cee654ad8b6fea73730accec50af7777f63762896b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\backends\\local.py": "3bc2bd0982beceeff9bccd4c5d4600b2a6163ff975dfb6c2104b126cc589d73d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\backends\\mem0.py": "4f483d5dfaa5ca0b879245a837305c44959b0466096104820112e2fadc09f124",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\backends\\mem0_system_adapter.py": "96019eceadfa9aa174b7ee935c4a79d05555bc41b0c914848353c87dfaca077c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\bridge.py": "3eb46d639c51da45543ce09df3fe268f081ff7299e50f68b2cf0aa0b57e473c8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\bridge_config.py": "356de1314930e516877bbd965deaf36475f6a1314e5514524d243dca1fba3245",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\bridge_parsers.py": "c54f980764e1336476002a6efbf7da7982ae65644d256cf755bfe4c3bc4b1757",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\budget.py": "9bae1bc91fd5f2a97c68637256bf87564375dae985586b13b848800c6aee94c7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\config.py": "e651d551a6a0701a50a6e09f3e06b10f3b89a103d76b78b3caad089a33ee0653",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\core.py": "61dbcb23db7e9802ea1a55e6ec4fba03e26646c5d510939775173982f688223e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\easy.py": "5f7f9a76303d6e38a7dc5aa9ae562c8cfd29b24c869a7b0c4c0909ed63816830",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\extraction.py": "f0d9710d57288f370e9d01f2d6efde2cecf2283d3965683806eef1f0c2e36661",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\factory.py": "bc6f2744e499e66f7560a5e790e7699678d2c2b248a6dabbfe39f53c0f576977",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\inline_extractor.py": "8a14db343be40a10ad191b9c2bea56b8093f2b3732a5592fe9549d08d979780b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\mcp_server.py": "095021a4ed2f54599b7b8b655234456b9311d67df805171f3f409da5cf29c676",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\models.py": "47b063ca58166874a24d34d441b74b23d2db9e155a1b7f1277d9c238cf0268ec",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\ports.py": "83b574446b061bc89206ccee41c33208e9e65f1ba8fe52184c5010783fabf0d3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\qdrant_env.py": "c94ef4f0055cd985c651e63bced07c12ba940feff723bf2fddab263b54a3013a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\storage_router.py": "90c712d09675c572353a7bd41ab2ef61017845238e1af1671c0fb41514922cf9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\sync.py": "8e1611674637c9031a06f98a8bd7042ece89d556262f5548d8ff4b5091a9a9e7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\sync_adapters\\__init__.py": "18d2625864e46531f2c1fcf2c9cf07c9c6a56c23cb0810f8b36666b090863be8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\sync_adapters\\claude_code.py": "dffa61636a67f06ff5e66d05fe9407a70b9f678a5b727c27359742c95591377b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\sync_adapters\\codex_agent.py": "8c09bd77267dd89ae0e01067522dac5f1f8241c22cad74feeb7e511adde0e980",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\system.py": "54cf6450c50ea5e5d1e138c3cdac132901658a70223de5be005bef369a970aa5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\tools.py": "b05ec27eb5d60659258e1de3feadb3cc87aa49d613d1d26e50ecd1aed7e584a5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\tracker.py": "0120f240e5d02341a9648b4cb9a42b3e4edab9a8f71d9f6399446f35a6214b26",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\traffic_learner.py": "49814e1f3f787e663c12e2bf6b95f1351668314202f9056b847d1ae515d7e18a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\wrapper.py": "8fccd35ea16fc5ae5a41863230f34bcf5d2513d769fd109013b9c4a055bab3c4",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\wrapper_tools.py": "b8f70ba37aec221dae9b412ac7f6b370dbb53717f3d4ba4ec4d399a908fffa92",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\writers\\__init__.py": "83dcfd0c08dc99bc9a61a2f68651eda84f7e5a93fad9e15bf9c57aaff6d86f46",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\writers\\base.py": "360c9165a135a5df4d13ffed79d1c9d2e232bb4e661c3b8f93309f74aa7f551a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\writers\\claude_writer.py": "51a4dd23778622b35136864e46369e792205facc16afcdb309f18b1e6cca634e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\writers\\codex_writer.py": "5d48f20365120945e6e05529f14cce267d267670fd7a80ea51b223ce740a3491",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\writers\\cursor_writer.py": "751d9db28472633e7849cc635404a19964f2e5d8d1ce8bdba39598f1ccb5b3d4",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\memory\\writers\\generic_writer.py": "2f15a24ab20e971c7f6307befe89c85c9a69ee37cf66a508dc7ecfde792073a6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\models\\__init__.py": "79e57fe2ddb0367360b0e11b8bbc8d136025a807602f7e1719ecb1f6f5f0ad6b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\models\\config.py": "7876344a275114cbdfad9d79747c760434bbcdc4a87bc7af3107a1bbd7433a53",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\models\\ml_models.py": "7ec73a10952ab5c60ef6fb19984ae6e4fbd6dd851c30d20c1f63e9e4c8d5132b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\models\\registry.py": "2bac2808d119fbd8ce7dac65c887bb90f75f76dd6b0c8f5cb49481a3fe8c1159",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\observability\\__init__.py": "704f1ee8523c00f062bcfa4310f944af581f61613a9f0e0c2864756f526e70ff",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\observability\\metrics.py": "84900fa2dff3bbc0ad7c38f2acba4b22a92dbe5e233461ea6591c687d2cdbd6d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\observability\\tracing.py": "987db60b35baf4da41b97f8f3752d70b44b314eba09b09efdbe8650e6b7fac69",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\offline.py": "3a89e6f722ec3b5e6313c53674edb70de9d40efb6bb2995f38fd25d7875de7ff",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\onnx_runtime.py": "f0a1bf314a9177f5c0ce2efa0e1823789216858a8d06994ffbbb3a4745e94b3d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\parser.py": "e7f395d584389acac60c514e447f2a8d73095e4b8710d6dc5b217543625628d8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\paths.py": "28fc7b643d67bba0e7aadcd9fac4c521304d1636c52accd8c43dd4ac9ef5c009",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\perf\\__init__.py": "acf57e1b939d7a48fe3c8b6156d339f56bb6888bd10e914e52624acf33b83f8b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\perf\\analyzer.py": "972121478a21571e061c3f6d60be972fa35250ed6fb4ace84169e1e6adf40fd0",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\pipeline.py": "57c5ad702da06ee5069e3b47a112ec20fb0ef157df1cb660ac438ef4adfad402",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\pricing\\__init__.py": "52d785c3bf8eafff4e669d30a2d670ded6e53fe096b20e8346b2f273bc464875",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\pricing\\anthropic_prices.py": "5eedfd9beba2e0054db78213f6d26412f6db7b9103f718bb3527b9007183afb2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\pricing\\cache_ttl.py": "13c6b22d988ed57c0418395f495538e2159e57b3eedae195728782928862f918",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\pricing\\deepseek_prices.py": "a9f1fde58caa7a236afcdd5b066716e4b6558a743e9b6851e70bdc5b2b264265",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\pricing\\litellm_model_resolution.py": "8972f811185878f3033a5e263c17ebd3d26747249da8b092eb367a077560af98",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\pricing\\litellm_pricing.py": "61fa0b977637eb7a3fef72bcff359d91cbe954e5989eb090c4f7504f221c0768",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\pricing\\openai_prices.py": "6ec78b0d61be7e769dfcaa762d5b62ccab13856438ef933acbb8a533a705b55d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\pricing\\registry.py": "c022caa736a944dad82a19f381d9b9bc7ea7ee041bd40d7a62fa97378ab3eab0",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\__init__.py": "e4bc6e0be08f1011ce7638e122df4bab215a618bc81f4df47ea72019f62e2f85",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\aider\\__init__.py": "f35214a1e72de214dd6bdf2b17af48793126cb97ee49f41f255077cc0575fb5f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\aider\\install.py": "07b1369f3cd926f9a87cce510b53cd95893149868d991fd2d6f4a9513a84d361",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\aider\\runtime.py": "ec7f2ba67942f77f08ca5bfa941b5a1823fe4bb5cafd29d7f048a6590516622f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\anthropic.py": "aacd4f54cda37e675ff4800a032577e3d2d1f9e598efd8d93b829f2b89e7c38f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\base.py": "47f06646378d65c3da6368a7edfe5fa8a5ea433d39f5e2df539ca31f316bce6f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\claude\\__init__.py": "bb5bdef60c4e91e8d3df4dcd07e5c4db15d0e358c1c98b6ed2c552f8c8b7c3bf",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\claude\\install.py": "3e8728a0ad5735afafba9e6bb65a8ddb34b5d58322e16ab6500ce5bbbb51007a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\claude\\runtime.py": "c5dc04fc90b7b0c8485e2646cec16799edc4f5410b6d19a25c641609da7b24af",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\claude\\vscode.py": "1ae873857d6478e9430d7393834e3ae8ec6548211e28c06234278e4fdba3358c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\cloudcode\\__init__.py": "16e37fbcc16963c8aa723a1fc87e73b00fcb26c7677df8d82ca4f5415115200f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\cloudcode\\runtime.py": "4e5dee8c9fc73ae1b9d012bf0ca82358838d5466247acec3aea690726663ff45",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\__init__.py": "4fe51f4869cfcfe5ba47dd88487c1ff8da7b925901f7c3cadeec8a3862ad9aab",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\endpoints.py": "eea5d8cebd4129a58925d6425a9e66bd84272c36d7afd7abdfc6ea673b214003",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\headers.py": "16bf861b5d180ccbed3c0b59da4d8f7c69b4f9ec2049e7b9b68eaa9eb538a6e0",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\images.py": "c5e8953e40cd287c5234d312ee453520b74b7425bb39c5d6e465464737360a32",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\install.py": "cbe5152f86f5c3f15b7ec67237d311464bafc35c68630af913115a074c395d1a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\live.py": "95a8884356bde512dca78cbfe921226840aa65ba19f977171474d3e97c31ab37",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\model_metadata.py": "bc820d0044591d1667606b45ec1820a044704e498680be397575da92366a2c83",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\recovery.py": "5428a19be62720cb701a042c69bfc5d0a5e953a428d209ec8bf46460c2c2704b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\responses.py": "24059f51b8cee32019a22004cec3bb7b42a48a5ec4110358ae14b0bb41b8d221",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\runtime.py": "abf4dcfc00d9d1e587385da0957df5f5e14a61c45a0bfda5a069c25e8a6c0e30",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\codex\\threads.py": "34b1cebecb475f15cd7c12cbbe19f838727393b321dded5194e4f69d72e546ed",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\cohere.py": "a52febd6fc9dd7733395ec2101b78bbb5d3fbc4aafe0f654ef6fd7441bc59264",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\copilot\\__init__.py": "3ea999c7fae1f7411d9f62a869a1f4a57dc4910714ac750c3a828609a5dc89bf",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\copilot\\install.py": "2d76a3d9850439896a0294d27bdf5249524522e4479cb0a6c9b558d1a5f5628d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\copilot\\vscode.py": "b0a98892ed693a63bfe10e79cd3644b1b909d5dde7866a01b9bf7d445e0ac367",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\copilot\\wrap.py": "1774bbe752785888ea6e7bbc53e806617d7dd18b778bb13c73f71f1ec71a6739",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\cortex_code\\__init__.py": "74c8507b0ea122b096f24d65057d9a165ae47169963c6d9119c39fae9e40e159",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\cortex_code\\install.py": "da6465278253dcf5cd64b97ac06a079b0a8e1af327d1687f6fdbd2cbe7c07464",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\cortex_code\\runtime.py": "9976765b522e39e8ad992bef81451f82dac0b17a1089265459a9471af9495d0a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\cursor\\__init__.py": "32bf3eb93e175e485e24d86c4575e9dfefb50eded9654047b66af2e12372ceb1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\cursor\\install.py": "7b9014ebaf1c1b8c7e5ac7649b824607b973029eb73ba439891fc4878e523787",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\cursor\\runtime.py": "b1267cebd52137f611bfd0a36c8cfd125f20f2badb71730166fb4fbb4298ded2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\gemini\\__init__.py": "396f5aaf6830b6db4a4fc670be70d58e3e3b183685126e66917cb742761b765e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\gemini\\runtime.py": "f2ddcbd9c063a7125b9ac17049603e33f591c38ec01375f1fc247dd1a26aeae9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\google.py": "ee1528b5af8039dc832e2b745a9e1ea853ce9691597695dc6f782ab28cf4d0ab",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\grok\\__init__.py": "01974f570c0ddd629528a1016f04569e6c350b5c5ac6416c42a9be90ff8d7102",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\grok\\install.py": "336a2acaeb0a784c258922fec4a7c6fc2204128a75c292470e3445db37b3a287",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\grok\\runtime.py": "05ea06f63ebdcf1e2958a790a85010b83596b98a958c5d7f9e3cdd5afa2ab6b6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\grok_build\\__init__.py": "e5a47b558b8acdd860ba62fc6c92eb113b5bcf001429b5468c3ea260b33f22d6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\grok_build\\config.py": "eefbf6d31b36920160368a542269aac8f89520844b8d94e5a666808c2a0f2b4b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\grok_build\\install.py": "f62cbbe7a569d2477bba2dafffc84a6ae24921b3637d24a5ecba733394b24ad7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\grok_build\\runtime.py": "48088219985bf52efa280d036104c7c92b169e3e75f661692f667d191a4fd873",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\hermes.py": "788dfc2e368b4e385829d9895cfafdbc64276d0d28aa1c0bcc7a2501f82e93b0",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\install_registry.py": "f932b039a81d68fdfc653e5086310e8913d1da379fd312eb45a37c05570bfd8a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\kimi\\__init__.py": "dd7509b027247c9148bb347bb0654cf7b3ba1bed4f57f2d2f86a8393eb59e2d5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\kimi\\runtime.py": "6b74d5df7422c2b5a56d21fffd4ff52bfe7381ef6cf85b3bf73ebf49900062d9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\litellm.py": "ed95be5a2652296ab21d068a1f295ccfa948c7f612af7922704ec43b63fb784b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\mistral_vibe\\__init__.py": "eb07454f73464aa507fa86959416513c7337d41b5805ac96dd52a782930ba737",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\mistral_vibe\\runtime.py": "14126fcce3dc61968b00163a0cfad2eb9269931d4043c06ddeb4b29f89cfd5c1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\model_metadata.py": "8c1abb07c81773ea46815e533f6b9e6fccebd3ecac43604d2e41716c579e2b43",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\omp\\__init__.py": "2d621f4232b56cbe10bc856cf3fc0e997a81becc8d2fa60f76f6b2386da2a32b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\omp\\runtime.py": "f4990da8e98a5facf2719955c64a009a6b806eec1f646f54477a6ab7ab84ed1d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\openai.py": "c3f5652b4851e845dba1bf53e297f8c0e4c81b9b65d34f98bc362cafac65e71a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\openai_compatible.py": "88aff39789ed8f916851102aabefc6125ee2b0740810861332c972735f391cc2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\openai_images.py": "8e9e1a9240b790126bd2163a0e7a2bed83e7ffc325d13ce5c61dd290b28480f6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\openai_responses.py": "82fd166938ad8f2e65bf1960f953a19a83ee292a5dd946b0e70959e530d7195c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\openclaw\\__init__.py": "c73eb0ac61972ed771bbf08872ae2da8c6251871cb8fe042d964bf030bd614c5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\openclaw\\install.py": "6f9410b214d0e2919e4622daf4220bb96b5049e900421c287b2b30dc4b7e2172",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\openclaw\\wrap.py": "01f4c32804261d860b4ad5ba76c9ccfca4453c60c5f8dd19ce08fd72428d8aa8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\opencode\\__init__.py": "30e66c63017f64c82fa8427c36ba9b4e076b24e93f9cbf52bef9a0ba036cb0ac",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\opencode\\config.py": "003d3cae7e4de88ce386a62c916b0f191faef4f62ea755b37f5236e8b0224e34",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\opencode\\install.py": "0ca2d7f46f5175de48d0d5e7be0cef5cc984a131e8fd416cfd6aca0d06379060",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\opencode\\runtime.py": "e571e790e984af83afc0d8c4cc32953eeee28881ce7b79a0294e6b866cf5e62a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\proxy_routes.py": "eeccfe5ddf3072fc1bb6a538618c2d4a49f87f0d853ae4f5157ce633034d6997",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\proxy_targets.py": "33159ccf29df453379dbf03e2f15f323d422b4f7f7f706bc99c44b019ae6dc53",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\registry.py": "829f9ebbd1565ba38dfaee4db23b6f4efb9c94d5fd2b2577cfc86f6529ec4e6f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\route_specs.py": "1a74d3b8d56c5d022c9292c22ec931104ff53b82e1fce77774a1fd69553d1354",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\vertex\\__init__.py": "f8ff51875aa19b5246c79dfd8c32a38b659d0970eb2584c63421bf5c2104c438",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\vertex\\runtime.py": "80d8e14d178cede578cfeedd65867e9ec0a873578bac38b21f7cee5a4038cfdb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\zcode\\__init__.py": "dd4c05456d095dfe620dc200c8eae78ad2c19e74a04a2df3625a3dee894e85c9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\providers\\zcode\\runtime.py": "7ffb981cc18469c22e066d229168d4b02e7ddb1da15a0b8051a08e3c3ce51180",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\__init__.py": "a6fcacdcd21d304ed5532009d4126bc3b986a70784c873117a7f9d9935d4470a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\audit.py": "8239d9b3699f7f2178ff44ada3e2d4f269dc091540323447cd7ec59afb503337",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\auth_mode.py": "7571bd6793efb451651413313338e4c7f3d6b4a91364396a4f4b5fb496f35b27",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\auth_policy.py": "aeeadb581b36e4308a8fb0661a07050ed8c108997afc1fe6058945f4702c081e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\background_compression.py": "cea37bd16196541908d92ae5a8da3780d9051c31dbea352ae7681858351334da",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\beta_header_merge.py": "5523b78535d37adeabf6db7df6d2b041b854e8e0399e8f5d84d116407b919b38",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\beta_header_policy.py": "60f81743fadd385dfa6610bfa7ec4c2b947a5c2b556b94d9fed78bf5c932f30f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\body_forwarding.py": "b603d68ec093dbe898bbf2cad47899bd1caed8a150a117d86b3b8fba7d2c1fa8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\budget_basis_policy.py": "eefd4ca8479c9ade3b59d99ccde7cd7c60e67b439339607cc9206513ffea6196",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\buffered_ccr_response.py": "f16870204158af917601bf9bbb377a050348eb9701469a92cec2adf4a4413446",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\cc_switch_reconciler.py": "aff3d99f610d077546b4ce29d878c9e5c98312f600eabe33810219b01bb6622e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\ccr_golden_policy.py": "f523ec502ccb55b58aa08485badb3d9d49a7c03a055bb063b2182220448ea8f3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\ccr_marker_policy.py": "2f7edddcab36b0acf88c3b1b24640043eccbc753ddd18252be1df9cddd211354",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\ccr_session_tracker.py": "dc349904bcf90f064355006997a7a728d25eff67c21d0c7016a11a090752b047",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\compression_decision.py": "75d460be69986c9432592ccdba7d00a378961f509f7f91cb82e7ddf8fc573329",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\cost.py": "c655d3fbaaef958459aa8816b35f26c8a4cfb3664061d089eeec8d81ac0a1d3e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\debug_introspection.py": "3c2b9a88897518fd36bfe714f4d2ca5fd1f3729d2afc7e5d99d7d7256945949f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\diagnostic_decode_policy.py": "6f6a393963c5b4630af590bf2e529f65ba9132e7f5cde258c7a76d8ccc211a58",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\extensions.py": "26faf9a6eaa2e1414f68181e950511994e7ed5cae25ff0813d594026cb962311",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\forwarded_headers.py": "68c182114ca59e088f178515e46535f63f735ede53d2c9e42a97cdbcbb750b32",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\forwarded_policy.py": "871c4522ceb85373743c8654a1a6e90e9b3e3d94fac449771b8f0f85b664a4fb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\handlers\\__init__.py": "c00a2a1ae5f005d16de3f80cf9ce85822ac6e9485bf43f39c0657cb28ec8c7a2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\handlers\\_debug_dump.py": "23e33b7b863db08794146d9c3b786c98271f2e6cc8bbaccc58c5c6403cecf084",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\handlers\\anthropic.py": "67a17872b24b9565fcb4535b3d7e161e5befd88d21cf27812d3db83932ad55ec",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\handlers\\batch.py": "362ea807998c51e0cccfdabe6b240f2c5cf0271d80f27dc8ecacbeb10ab3321b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\handlers\\bedrock.py": "5f3602ade29b8ff765902e90b75dbcd4c243be3213a209efb17d7b0a70468d96",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\handlers\\gemini.py": "ae60c762ed0bf1925583807c06e6f7c69597119ab76cab459441d9978692d253",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\handlers\\openai.py": "abde23cf8a258abe4d17197eb44471925719f1196597ef8bf551ae6012a79d8d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\handlers\\streaming.py": "de1aa8bfe19dd41ae7060acd8502f64987dbf7b726ab204839a73f539d308998",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\helpers.py": "00eb54bce0b6c527791eaa3b49cd17cb9cb452bc176ef30f7e5bc6482d14a1af",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\identity.py": "fc961e3bc47555e7870af083a4f8f17b3fa794597f008ee72ffe0320ea293294",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\image_compression_decision.py": "0469a1a46ce68ec318dcf81e38033f028f31956279ac2b100fa6f39c73d9a7e7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\image_compression_policy.py": "99dcdab97186c4647e3a50c40e2b05abbabb44cdf8849273b99a29cd71ca3224",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\image_isolation.py": "1d96734b304c8765382338082a2bed1556f054e18cb861702e459985b4499083",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\interceptors\\__init__.py": "37c349fd1d08e1f68a714b444a5478bfc89a563750b92a8d7d2568e878e6d589",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\interceptors\\astgrep.py": "ed4a905e77973c8cde9a158459ea7b7bb3392b58e4e33938d5cfe6eb7d5c4c3a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\interceptors\\base.py": "cb8133953d1ef818567e727a05ff828f1ee12a0edd8894cdd68e2ec2fd6901c8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\internal_header_policy.py": "d93bdd54e7084d7a70bd9e620fb3fd77147483d53db5476a4bdb840b925611b0",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\loop_callback_failure_policy.py": "882c676e2e2468c02357265b7aa0925d7c46dfb571dd42adeaef38f8f968e2bb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\loopback_guard.py": "4767bfe558f025a7963b70d05b58686965d64da50f37f83209c6e024f6d3a394",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\malloc_trim.py": "36bd7a56b85bd36d48155b0fcc388fd38d9b5f319901f17c12768bd88171c12b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_decision.py": "27accd7b30ac3b8b7c5a6d680c6505f2d0abd5bb236162678b3c28069b48671f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_decision_policy.py": "f80c1aa5cfcbe1400c13c1d3056505cb2eab9aa942bff6fea8f2886433ff5cc0",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_golden_policy.py": "14cb2fc8878acaef284b1ca376756ee6d8a83195b5b191eab60dd6670c0bd02e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_handler.py": "5c721959e0f52a1c74487e14781ccc6b3ab01187db78b807f22991b6e103012c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_injection.py": "20cabbf0fe4154c33edc23881a78009402e09631299e4fbf490c3d432186e91e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_injection_mode_policy.py": "12f1478ce31ac05aca85e228fec117db66c08ed5ae28505cdf52af2e51b4bf43",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_query.py": "c9395fb53281cfc0e95f47c037230ef48e65d558da1780416bef89a3d4d0a4d8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_query_policy.py": "58b45aa4aa7e08bc0056cfddc53afdd7be42a3c87ecb71e370103550cd5ecf6e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_rank_policy.py": "2be5a8fcb5058629d3039adcf638be06beb0c6d4fde276cacb202ec95971d5f2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_ranker.py": "e27f475501bbd270e93ea25d8ca5c151728d7d8246a37de5efae4e1b9b6b13b4",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\memory_tool_adapter.py": "287e71a2d700f7b0fcf8f43d5cd6e67e3cc4abaf77e56802115929c6aad3d7c9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\model_router.py": "e4111f45b2cf6159b5f43fb9d1540deae805071694c2595b0a4b525dcaf522b8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\models.py": "cdb9c7f98a94bfabeed91d7f68ab60f24444f6455f376ab2e0db361dc258bb8e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\modes.py": "1b31c1e178b6a4ac151d11b6252239dee988cdeb0d9ac50c5afc458063b14846",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\nonstream_sse_policy.py": "8db23a5b2b0ae36aec018f04e32f0cb9606c7d578241765bc8594b0e7d503388",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\outcome.py": "8a3405ee655b8347d7493253bc6017d5d13a99a18f7f678a9a6868cfe899bc05",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\output_effort_policy.py": "3d39563eb91e5cac577a12119237d785677b830893412bdecf1d093e0169f337",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\output_savings.py": "ad02f78c675a4e0cd0e225044c88d2ab964fd0bc12aa1f4905b3805284bd0dcf",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\output_savings_policy.py": "eb601b16f5b8d668fc0d11c0444801e842f3cf070fba6cddd3c28c393409d008",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\output_shaper.py": "ca2aa50577226580273c81f652bca024fb1576c51e44022d663094eaf2d26d6a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\output_steering.py": "821394944f985d79f4007563195fc503d4c0bcd0deccbc7e9b13bc5165c1ed82",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\output_turn_policy.py": "8f74b2c5828f037b46925758a4130347003a6b5c958813fb99c3818efc3a1d19",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\output_verbosity_policy.py": "f74f1c95722af9b97afc335e60d0b67530d6dc16e5c26580124fb5ce7a2e3236",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\passthrough.py": "d657c131f2b870602a9561cc4577b6ef257625abd135c6369b7671a2c5fc29de",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\persistent_metrics.py": "bd23cf2a4fa14e4d0325049c210450dcef7747b8b4577ea04eb42ab4d2335d41",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\probe_recorder.py": "53ba84848368875de3244a1b562f0c9468b3168b57eb9ab9d0f8dae109d38b5a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\project_context.py": "923c1ad41340e377fd3a4b1f741220a9902e1d53124cd724590380119f40e8e3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\project_name_policy.py": "3a1db08f8c8f7f8dc95cd4aff8c05acb62e4641508f81aaa8ebc12419a639b84",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\project_policy.py": "8326b32ce28cc94a034064555a32782309d9d450e21079e6b880b8132d9dd143",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\prometheus_metrics.py": "2e56724ee31e02befbaf4cc842e113a11cf19d4b3ababbf78696230fb1b894c4",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\proxy_mode_policy.py": "bce268a4a0961939f8176c6eca6ce99dffbfa1f306414c6b07a09b03a31f1e06",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\python_forwarder_mode_policy.py": "a1e68b57e89a702835cad5a372d1a80c1ecbaa47b989732f5442fa3fad53e0ae",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\query_log_policy.py": "79d3c25f355e5b1bd1067d16d6a19384006d085ff30514f541156571a61c40df",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\rate_limit_policy.py": "d1294ccc5ed7c3d0f93e8724917b90753d228c87eb5398451f6537e581d448f1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\rate_limiter.py": "2747a57d745d425e8c49f862ca47f34d68815b143e9f5483f48dcde2b6a2e76d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\request_limit_policy.py": "b1f6f6caeefdc4818433a1953022d7f87b997e9090cd1ae9b37d9019bbf55064",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\request_log_redaction_policy.py": "e1517454c81b43befa7c2658762c94e4dde94941057d74f9c13b9f9575a89f9e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\request_logger.py": "ce194765b2fbb8e995badad5985d4d74cf91f56b0efc4f73f4da4b03fd92b9be",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\request_scope.py": "834f269a64da7b0f8bb83014884c39badb0e87b2141813d71fbb908056db5c54",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\route_advice.py": "59e726ae8bb47091a0ea4d526a272f0ea2b62f6049d614131e9fe843b9722f1e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\runtime_env.py": "2403b5b6b719c2bda785893dae9c703ba51f88bbe3f4f3f2e0aff4849ffa9c18",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\savings_attribution.py": "5c6f332a59b4487377775a9d62b3544ad73ed326e6aa1e265411a569a53d0ac4",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\savings_tracker.py": "e4d886a0ad4f262a594dc253e01cc706edc6226d126aa7f16338e6d85a79f84b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\semantic_cache.py": "18fa58400c5b36acffb2740dc33ad1007720f5bebc8972141fbd539ddc70b1ec",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\semantic_cache_key.py": "ce1f7eeac759137fa3ffdc7415e7a544922731992dc1c9293b7eaf9c1776347a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\semantic_cache_key_policy.py": "a9cb22e104531fa996e6867f69b9f81dda7398e48d7544bc020ee2cde6219396",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\server.py": "db9e2fa8ba0d9f4decbaebe73d61216bc64391e4f1ee884bb8de99a6363b84ec",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\session_engine.py": "f1bd7c5df34d0479ceb0965113a7b26805274c860e8ae5b92d1ca0984a8036c8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\sse_byte_buffer_policy.py": "33c8ad7c90283f743f92177d75350ef8c06ead15402be34bbc59a23645fef7d2",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\ssl_context.py": "654194b697a4ca346150054f615c4123b18854b3c5baf4b16d0c84cc141402c8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\stage_timer.py": "9357a6ee820f6efa2d09de7ccec18145f6e4182ca5bdc2e7f752179fb5555842",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\stream_output_tokens.py": "1b65c6fd4251b3f138456e237c2e94d60a4b7318a72043aecdcfa0b745ab0b4d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\system_compaction.py": "32871b72b03c13657f9642bc7c3dc3c6315243974a1afec77a90d1b23e5397d4",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\token_counting.py": "2bc9890757c40930aa69ebb148a3689ed96d5de7f5565926a016642447593050",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\tool_definition_serialization.py": "66914129086a72206cd1f70929ca60b603bd72ef469c6afda1f81b227a55e3a4",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\tool_injection_config.py": "0246a51b9cc6f59f5b150fe2c5195d202f107dc1e57305af6b1724d46be4042d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\tool_injection_logging.py": "cb1f85892336a6868c23f1a4cf246227ec7bd43e76f70750e319dfc503a4e68d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\tool_injection_policy.py": "0d695e7b3f6d1e57b2f927d2ebbea8840f83e5a076e529d9772a47f2b3a91d06",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\tool_injection_tracker.py": "8086c7c70fb30ce8a6cebd53bbcb0c8b834d1fa0eeb1aaa62bc0cd3e9ce32e38",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\tool_name_policy.py": "973f31b6e3d826f0ae392443114755225eed83ae9d1bb62b5eb5c7d4a65c1f77",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\tool_schema_compaction.py": "4f7922cb6322bfe0976bfdcbe1978544d120f565e311a0d5510d16abbb91160f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\tool_schema_savings_policy.py": "e7a961a02e3e359aaa2a04d5a1bc8d207bf376c979b74d8d1ac0554db437c217",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\turn_hooks.py": "d717c23b6ba38ac6e525e738b16699bb45c38a82daa86fde66e16bd7289f7ec3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\upstream_guard.py": "2135cda8539490ac55d196c5b5c747a310e6296616b122b09e248e2df67fdbb0",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\upstream_trust.py": "c99781967bec3ed0881108526019387d2f4c95778a6a482f1d98d8ddb8670594",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\verbosity_controller.py": "2f62f10753bf1e3cfb5f15538fb2f6a277ba9d1e796beed82662d4a2f705e742",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\warmup.py": "73b6c95c366c1235596f7a0ff2754b1a5ac05fc8314d11b92bfaf2978b6e63c6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\wire_debug_format_policy.py": "485bf5cec70e0d54adfa285f6c68282bdacad08bd5236339c6c307ad866b68e5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\wire_debug_redaction_policy.py": "68446f7d8274424f302b97ab34a9bb46e62ee3c5a2b27995c6226c28d327c426",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\ws_headers.py": "094f9299abd47038dfd13f234eec36fe53bbfe1ca7b2d08fc54f8ecce154ba12",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\proxy\\ws_session_registry.py": "4fe5e4b14518a5cd4ad044d4478d6ef8acc892939086c227d56b0023594eb079",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\release_version.py": "61fb6a74ead3d83013a175fba8099fc75bd4c3144b5ac9b183ec09478dac0038",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\relevance\\__init__.py": "c824c9020cd61e30c21df8f9fa599130f6ac909e7f94fb0b678271c07dcfe9ef",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\relevance\\base.py": "65034cfd0ae37f81fdaeddf18b20782c4ca27ace851a650d77a57126b81f9400",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\relevance\\bm25.py": "66453d89d2da070563651545dd19ff714360895d84dc3691852a4f08df0a7e53",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\relevance\\embedding.py": "dfd243c2108a0b76f48e9a2eaa61af75fff58bd643091ce59516dc4d7cc1208b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\relevance\\hybrid.py": "3cc9961b3aa1a6a33b71fb62c09d44715db7b53e76509faee5b9a49ef6e3fe40",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\reporting\\__init__.py": "c6cbfd0ecc1741e630ed4b97f15f23a081c8e5d6e11cd55330360a62d27f9dac",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\reporting\\generator.py": "25c5c6eee3ba2d062f21776262c7effaedcc85c56429b59d131534582ebad553",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\rollout.py": "9d1d856497b127bd1314b9b22e05c2821f186f7f6a00d628de7f96fc187876d5",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\savings_ledger.py": "60422a7c60a1f0793cd5ce8997b45997607a25f1cca8649b40361b1bf8abf35b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\settings_store.py": "ce52e338e2b485b36aa163842e41f1dad05bd6b4d668eec3074cb58a1e15ffcd",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\shared_context.py": "81d072821be6ccd32fd1d8690e2288a41d519e02b797171cf31788f6d7e899e0",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\storage\\__init__.py": "153c078f3307a43f9e6c200bf98b8a23b590a900d842e2bcf999578b8cc4aa29",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\storage\\base.py": "c0967943bd5735b60473d9e49e4384753259f2b89eb00d2b22ebcd38d8fbe290",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\storage\\jsonl.py": "6f3aef678fc00889fd69a806eb0841c94f5a084cb71c19a9bcbe5e8c4fbf99c8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\storage\\sqlite.py": "1525cb8d8db8ede0fef440a38364f4c566ff632b6c12750ed463e90ae2128747",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\subscription\\__init__.py": "18e01a8a89eb8a13de8eed9ec6f9f3b97d996ab6fadcf2c957296b4e3488cfd0",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\subscription\\base.py": "edc2d270c9d80a330f875c56d6a44bc382dac72d4a54f0029f19ae4c243e87ad",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\subscription\\client.py": "a92b98f87b68c3c11643fb936072f62ccc5af4e929573df6fb0be5853caa78e1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\subscription\\codex_rate_limits.py": "46ee57a9fc46f1cdbc6ee01d953960e49070a6382b2a8b090be7538a678409eb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\subscription\\copilot_quota.py": "bc85261449aed05d3931fb54dc181064fbac6d137104406be2c79ec628afc21c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\subscription\\models.py": "42f1785fd2c46cc8058dc3922b75e6f0ca216e2805a3590576cf05b59aef40dc",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\subscription\\session_tracking.py": "3b57bde68a57b8d539c5ac0dbc1480368c3150a9f2ff250a0e5f390436b0fc2c",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\subscription\\tracker.py": "3e1003db46f7bdd2e2eb595cecd945725ac52d1a45a26f3998098a8a03b6d5b9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\__init__.py": "097f58a718c9874e532a73836fcfbec6987f97ec5fe20e6ab74a938897898498",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\backends\\__init__.py": "65a5e49d7f6029efcda56d4efc00d531118a9e7b8fb027dbba3745e783a2c6b3",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\backends\\base.py": "111d58dfd61e44c153e320ce9c7b6435c8970094b80b008e46080a56d5af30a6",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\backends\\filesystem.py": "dace5cfbdfdbaee88481e87a6bb138e2d4542883ff48981796da0f09ad428a94",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\beacon.py": "461218e697242048ec58a35b28d0efece9b4772373adeef8e7d67ae503aaae82",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\collector.py": "549af7d4f2811bd6382fede8425be25e0b8622d66cb8933279656aeac41294b1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\context.py": "9d6f7f7e0635afc2996e0374a165f1b0d3a18a9ba16fbaa54508aa9369788106",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\models.py": "78cc84d505c45c9f4ce7c105716ac1324284441603ae60dcd8b52377fd3ecf50",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\reporter.py": "fb5434d1a55003af29a75a9975e0cc85c14d60b79f5227a39a97d259b2f0e8e1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\session.py": "a59184da0ee35a02f884b15bc468d66fc89f8944404a752f399a483fd2a83e2a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\telemetry\\toin.py": "9337dde2c303ea92fd4357b5b49cb062854a5e73b89f27bc75a10ca795ecc761",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\testing\\__init__.py": "7e2fe4c605a7c50a8210494db3b0f147e36196914db175f7c149774c2bc96ab7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\testing\\harness.py": "e5257ab9d40ed6955254ce61037a3cb3ae2d6fa5956a5f51cd4536bc4ed39484",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\tokenizer.py": "08ac2a256b7ba3b00ef03b02ac6bd1ef3ccadffc9bfb662f800d8552130f4811",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\tokenizers\\__init__.py": "db4127cebe558e1c87868ee4e238a009a74ac5e79141ca8b051276f3699fbe1f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\tokenizers\\base.py": "5843f86c96a668e27fdc55bd23ee4d7fefc3f8364fe489d306bb18b3f061f56d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\tokenizers\\estimator.py": "b15401d98f4e679793708b3f741df68b360711e24b4f61e99faec2c5ed7abccc",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\tokenizers\\huggingface.py": "08ca2fe5944dca411012e72ba6c0e5d74b6101d051e27adbeaf8ed127183d888",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\tokenizers\\mistral.py": "6a52c0200846626e2e4f8dd46951376358f94e9da90a7e57b5129123d2fb0441",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\tokenizers\\registry.py": "662714bce4b6ce98786b38245c4012782cedfa750a2de080d8c7d55610ce6d22",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\tokenizers\\tiktoken_counter.py": "779992505651f608a4c0674e0caa6e9e587cec18e85ba387f963ab8ba8f91cba",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\__init__.py": "778b3f503f1baef3aa5fb72adacf1b52afc2f5a79701f99765cc365d84800e78",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\adaptive_sizer.py": "609231700afe8294b20ec10564b7b8a79ca40e8b869e8add6ea151eb95e97b6e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\anchor_selector.py": "6c3cb85f3577c3889a463a39cd43546ef29a366ecdc37ac6d2bd32428da4315d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\base.py": "2f4f2d7e275feac91bf52dfbfc59412e40d665103c53297851cafb0c7b9172b9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\cache_aligner.py": "97eeaef410ed1c9ef803344ff77e582b3a022eb271f7a3d608b052e18ed80807",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\code_compressor.py": "d2767e5ffa0f6ef57a93d4b4aa90a699aba512614e055f1ea2ddb458d54ae878",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\cold_prefix.py": "0a02799830e7785709cb1665b63ae257944a08baba616d3a725b881ba369436a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\compression_batches.py": "40bf2ac4604f579c1d1bd254eac7f4b7d43ca8b8fd9af19f16ef87846abdd32e",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\compression_policy.py": "a51cfadbfe69bd0300cca1cdb504dc1b6222e8dc4941beb536c6a20606ebb790",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\compression_summary.py": "a85390bf50905a0b4b7f9c652e370347bf77620e974ef751c2235c5a704f1f07",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\compression_units.py": "472e5384ce963baf41565af95ece611c032847c565a26b1eb2f44c9c934706fb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\compressor_registry.py": "4c3f59d5b48fc1350c4fe1606d4099623922b0dce826fa1afcea90e8e072e5a8",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\config_compressor.py": "98af803888675da1d95f44a3375164e8ed556898769d1b72e602bd6aab0baf2a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\content_detector.py": "485091ed800e14b5150ed49fae824fa24070b0ec45f0abb5a8e5d26a1063b0c7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\content_router.py": "3cb0c0572c504409763e66c4adf240abc939212a1e0c1f43d76135088498e8be",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\cross_turn_dedup.py": "7ff204b65f40617d505895841aa1cfc1ee54bf63ffe6520198f0aa05a850aa8d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\diff_compressor.py": "08e4af953015d7da8bb29342fb2b218511460b16222e6031d7bf34fd1f6f5216",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\error_detection.py": "0ee5e7df7a62f0b1c9e0cdc99b009a388edc72596173f60195a2ed843d468d3b",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\html_extractor.py": "d23ed35f98075aab2ae259c60e3af7eb67d218c537ad4356e60192054c2a8ecb",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\kompress_compressor.py": "1a4282e63eb63591d29c72b512f4a1fadd876707458ac8b8d1fe17e4d0940308",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\kompress_remote.py": "da2bd6d67017bd662d2453c2a91fb0fc0dd85c658aaa6170b864edced6652592",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\log_compressor.py": "103b4b4b79537711d0eded18146d68855b4e8b705a4172577a1c0c541e78a0d9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\lossless_compaction.py": "a97f1801a610ebcff4201600e3453634d118db57a8a36183bfe1918d98d67d60",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\lossless_provider.py": "5651358a1e5270529eaf785d9d234a358f65dd61008e9dca81375aee63941945",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\mixed_content.py": "333d296beed2f9a7ee001d2c7878dfc2b12fdfbda9c13603916f36b2e5842fd1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\observability.py": "39a7b6f937cc788dad7f2534608ee48916d0da89a5bd6c37e285bf3815251c5a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\pipeline.py": "a148902e14d822317aa100504aed22e1c4ccc11ef446c3e59df4248ee4cec6f7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\read_lifecycle.py": "bce38a89c8c65ed93e44c7304ae8ef197e6d617c5a3a21a9cd98f927db0d5154",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\read_maturation.py": "b7777f7f49dc87540eaa34a68cd6103fb04b5b790081a4c7a08e80952cbcd70d",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\recursive_json.py": "b71cfbc82d72b1df33c098ccb2eb5c1bb7bfabe00b099521c3a17b33e06b9d04",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\relevance_split.py": "a346eb20a10aaa9eacd43d3c8521dfa11f8d5722fdb0335b23c4c1bc2ca43c6f",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\search_compressor.py": "1e1c7816087a89033cdd0857b07ea77c1bbc9fcb0d5c5b27c01bcab989096e23",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\smart_crusher.py": "650498170ca09ef560b975aab91d71beda7b762b108405339416160b3ff63e17",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\spreadsheet_ingest.py": "14b12e0daceaad5ea625bedeb2d3cef551ef059bbc332e1e5a3cd65eb5ac7fc1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\tabular_ingest.py": "7f68bbe677ab50edb39b6407dcc31818ddee8558b666c35e57d76711ede6e6f7",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\tag_protector.py": "fc3471e91c62b954b860ed9047d6448ff9a5d3467aaea248605ab68ed6c153b9",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\text_crusher.py": "13c6c35a4d57f10e3b5d282be9f213bb6bcdaf15317038153bdba896ea591a78",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\transforms\\thinking_compactor.py": "66205a14b2eecb0f0358b0281acae0271b70710c61f81dc1e4989d404105201a",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\update_check.py": "b980cb540c4b84bf01c684b0fc2406899f424720b406630bd52f19c79e5ca083",
+    "C:\\Users\\yolan\\AppData\\Roaming\\Python\\Python313\\site-packages\\headroom\\utils.py": "b7b378466b89fe2d408f858c7c4abb996c6590cb54a423562f12a54f086897ce",
+    "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js": "61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70",
+    "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\package.json": "cfbad545e49f73f266dc7dd6da345c0a3397c173ebf5f9d0a1e3030d23bd4329",
+    "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex-code-mode-host.exe": "7b4987007702973dfeb49ec9a0c11f737488890e208ccb04f7a147769c4bb1f1",
+    "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe": "be96b992178b1e467c225800da0d65f2c86d5eba1ef0b14632f65db381cbdfde",
+    "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\codex-package.json": "c8a470c330ce5a399f0de0421bcf2cac102047f5277b6b5f86b1e29f16859629",
+    "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\codex-path\\rg.exe": "14231169855ec5205cf5a1b6f1db358ff4aed4247c86b69ce8aae647c77f6680",
+    "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\codex-resources\\codex-command-runner.exe": "a57ca8beb786a05f36c97309e8a716610c70ced9946dc1437bbbaf4566c0c403",
+    "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\codex-resources\\codex-windows-sandbox-setup.exe": "ea27f90a0746e2464a829cd6e1de0dcafb77c8be603de899661e8c006ef33937",
+    "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\package.json": "18c49eba7183828e84f3f9f387a915da8c918be452f9746b0a6685c82486cd97",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\codex-cost.mjs": "57c8ca7cbbd40dafc6b315b381523bee3e85a9140c0219d899b1c853a19bf28d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\codex-fixtures.mjs": "45ea6de0f770356fa543bb2b6ae8dd7d342ae37e5e80504674c1ea538fa4cbe1",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\codex-mcp-evidence.mjs": "1fec76a27d7e8e45259a2133dc5866c21e59bcf7c5a25ba81fbeb2145050acee",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\codex-output.mjs": "08e4ffa748f5aeb3cecf51b8a5ab485309332dedae1e6fee686cb6657e01eb7b",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\codex-provenance.mjs": "4ca77c3eda3868d0b244b1a9886381db68ed4140f2e60a0d294c0380290c3adc",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\codex-workflows.mjs": "0a593f25ce3bc132e78a298e86e9b90508939b3e9b1e810e0b05a8e481024f31",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\codex.mjs": "24a6adf3a3928181df1c2b1c8e04cb2f90675a2c1e26e6b594d10d442e84460f",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\confirmation-analyze.py": "d1fac4b10534bbc7247d5fdf3a61e3b0dc74593e9694e4c05286d1b33eeee5d4",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\confirmation-freeze.mjs": "18354b0f28a485b350a1e4074ba2aecdcd8c7d6f64ee96370eb54a5753166c58",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\confirmation-plan.mjs": "69b32caf9b973806b3451c1c1924f20aa8c8960a16cfb956cbf1da5133039ce1",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\confirmation-run.mjs": "9cb505a23fa216945fb89675dbb6884073065316a64cc974d1c350f183294b3d",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\confirmation-selfcheck.mjs": "6c0cca3f894cfb9fcd9645ae26e511b909b3d35915d661519d533f61fd9c5783",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\confirmation-stat-check.py": "4befa5d5bde5a3612d95627a7a7dcf72fe0be6ea4f36da94ce9aa9c06456d30e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\heldout-cases.mjs": "7cf5df655d577cd30d27048bff80c553f3df73e8910e6a075112ed9ccea5c983",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\profile-responses.mjs": "82dcabb76d24820af73b34b978372dda16427255aac60cf214d1b1e9b170675f",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\replay-codex.mjs": "863f21b54f608fc1eb265daacb00ad12860b9f6595f2a96c2766f4eabfb64301",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\report-codex.mjs": "3d24aaceac4b554065f141de5eecfb99cd2acc235465cb2fa320b21d6bbe35f2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\confirmation-2026-09-15\\plan.json": "efa5117df8ba12d1c9a7237cbf494d13f334196a02eeac83d0b9183b0ba3c2b0",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\confirmation-2026-09-15\\PROTOCOL.md": "6fba1c6f72a06a171a3835eedcb0ccef594b5d9f128945243c03a4b74a7b8b92",
+    "C:\\Program Files\\nodejs\\node.exe": "77bdff912b1c569b3e693fe126f619337c3e9d73dafbc4d0bf1d4f1f6a145761"
+  }
+}

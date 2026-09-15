@@ -86,8 +86,8 @@ export function workflow(task, seed = 1) {
   };
 }
 
-export async function validateWorkflow(task, work, seed = 1) {
-  const f = workflow(task, seed);
+export async function validateWorkflow(task, work, seed = 1, suppliedFixture) {
+  const f = suppliedFixture ?? workflow(task, seed);
   const failures = [];
   for (const [name, content] of Object.entries(f.files)) {
     if (
@@ -105,21 +105,27 @@ export async function validateWorkflow(task, work, seed = 1) {
     const after = await parse('answer.json');
     if (
       before.disabledCount !== f.beforeDisabled ||
-      after.disabledRoute !== `route-${f.marker}` ||
-      after.baseLimit !== 101 ||
-      after.effectiveLimit !== 7
+      after.disabledRoute !== (f.route ?? `route-${f.marker}`) ||
+      after.baseLimit !== (f.baseLimit ?? 101) ||
+      after.effectiveLimit !== (f.effectiveLimit ?? 7)
     )
       failures.push('Stale or incorrect configuration answer');
     if (
       seed >= 7 &&
-      JSON.stringify(before.disabledRoutes) !==
-        JSON.stringify([`route-${f.previous}`])
+      JSON.stringify(
+        Array.isArray(before.disabledRoutes)
+          ? [...before.disabledRoutes].sort()
+          : null
+      ) !== JSON.stringify([...(f.beforeIds ?? [`route-${f.previous}`])].sort())
     )
       failures.push('Missed pre-existing disabled route');
     if ((await readFile(join(work, 'routes.json'), 'utf8')) !== f.final)
       failures.push('Unexpected final routes');
     const override = await parse('override.json');
-    if (override.route !== `route-${f.marker}` || override.limit !== 7)
+    if (
+      override.route !== (f.route ?? `route-${f.marker}`) ||
+      override.limit !== (f.effectiveLimit ?? 7)
+    )
       failures.push('Unexpected override');
   } else {
     const moduleUrl = pathToFileURL(

@@ -2,14 +2,19 @@
 /** Summarize a Codex campaign without treating failures or absent usage as wins. */
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { fixture } from './codex-fixtures.mjs';
+import { fixture as developmentFixture } from './codex-fixtures.mjs';
 import { readEvidence } from './codex-output.mjs';
 import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
 import {
-  workflow,
+  workflow as developmentWorkflow,
   workflowTasks,
-  validateWorkflow,
+  validateWorkflow as validateDevelopmentWorkflow,
 } from './codex-workflows.mjs';
+import {
+  heldoutFixture,
+  heldoutWorkflow,
+  validateHeldoutWorkflow,
+} from './heldout-cases.mjs';
 
 const directory = resolve(process.argv[2] || '.');
 const manifest = JSON.parse(
@@ -18,6 +23,18 @@ const manifest = JSON.parse(
 const results = JSON.parse(
   await readFile(join(directory, 'results.json'), 'utf8')
 );
+if (
+  !['development', 'heldout-v1'].includes(manifest.caseSuite ?? 'development')
+)
+  throw Error('Unknown case suite');
+const fixture =
+  manifest.caseSuite === 'heldout-v1' ? heldoutFixture : developmentFixture;
+const workflow =
+  manifest.caseSuite === 'heldout-v1' ? heldoutWorkflow : developmentWorkflow;
+const validateWorkflow =
+  manifest.caseSuite === 'heldout-v1'
+    ? validateHeldoutWorkflow
+    : validateDevelopmentWorkflow;
 const failures = [];
 const identities = new Set();
 for (const row of results) {
@@ -41,7 +58,7 @@ for (const row of results) {
   const work =
     row.artifactLayout === 2 ? join(artifacts, 'workspace') : artifacts;
   const natural = workflowTasks.includes(row.task);
-  const f = natural ? null : fixture(row.task);
+  const f = natural ? null : fixture(row.task, row.seed ?? row.rep);
   let verdict = 'FAIL',
     read = null;
   try {
@@ -137,6 +154,7 @@ for (const row of results) {
     ];
   } catch {
     if (manifest.readMode === 'mcp') verdict = 'INVALID_MCP';
+    if (manifest.readMode === 'mixed') verdict = 'INVALID_READ';
   }
   if (
     row.exit !== 0 &&

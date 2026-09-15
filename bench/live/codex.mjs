@@ -14,17 +14,33 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@iarna/toml';
 import { readEvidence } from './codex-output.mjs';
-import { fixture } from './codex-fixtures.mjs';
+import { fixture as developmentFixture } from './codex-fixtures.mjs';
 import {
-  workflow,
+  workflow as developmentWorkflow,
   workflowTasks,
-  validateWorkflow,
+  validateWorkflow as validateDevelopmentWorkflow,
 } from './codex-workflows.mjs';
+import {
+  heldoutFixture,
+  heldoutWorkflow,
+  validateHeldoutWorkflow,
+} from './heldout-cases.mjs';
 
 import { provenance } from './codex-provenance.mjs';
 import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const caseSuite = process.env.CASE_SUITE || 'development';
+if (!['development', 'heldout-v1'].includes(caseSuite))
+  throw Error('Unknown CASE_SUITE');
+const fixture =
+  caseSuite === 'heldout-v1' ? heldoutFixture : developmentFixture;
+const workflow =
+  caseSuite === 'heldout-v1' ? heldoutWorkflow : developmentWorkflow;
+const validateWorkflow =
+  caseSuite === 'heldout-v1'
+    ? validateHeldoutWorkflow
+    : validateDevelopmentWorkflow;
 const arms = (process.env.ARMS || 'control,proxy,headroom').split(',');
 const reps = Number(process.env.REPS || arms.length);
 const seedOffset = Number(process.env.SEED_OFFSET || 0);
@@ -200,6 +216,7 @@ await writeFile(
       seedOffset,
       readMode,
       mcpDiscovery,
+      caseSuite,
       started: new Date().toISOString(),
     },
     null,
@@ -216,7 +233,7 @@ try {
         await mkdir(work, { recursive: true });
         const natural = workflowTasks.includes(task);
         const seed = seedOffset + rep + 1;
-        const f = natural ? workflow(task, seed) : fixture(task);
+        const f = natural ? workflow(task, seed) : fixture(task, seed);
         for (const [name, content] of Object.entries(
           natural ? f.files : { [f.name]: f.content }
         )) {
