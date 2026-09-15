@@ -55,6 +55,7 @@ import {
   type CompressionFacts,
 } from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
+import { captureDir, captureRequest } from './capture.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
 import {
@@ -417,6 +418,13 @@ export function compressBody(
       },
     };
   }
+
+  // CAPTURED BEFORE ANY DECISION, and before the size floor, because the corpus
+  // must be what ARRIVED rather than what we chose to act on. Recording only
+  // the requests we compressed would build a corpus selected by the very thing
+  // under test.
+  const capture = captureDir();
+  if (capture) captureRequest(capture, '/v1/messages', body);
 
   if (before < MIN_BYTES) return unchanged('below the size floor');
 
