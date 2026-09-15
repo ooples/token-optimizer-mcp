@@ -3,7 +3,8 @@
 <h1 align="center">Token Optimizer MCP</h1>
 
 <p align="center">
-  <strong>Spend less context, keep the conclusions, and audit every claim across 16 coding clients.</strong>
+  <strong>Removes less. Costs less. Beats the leading compressor's design on
+  every workload we can measure &mdash; and you can run the proof yourself.</strong>
 </p>
 
 <p align="center">
@@ -28,6 +29,62 @@
 <p align="center"><em>One local ledger for optimizer tools, live-graph substitutions, every agent, and the graph's own cost.</em></p>
 
 ---
+
+
+## Why it wins
+
+**Most compressors optimise the wrong number.** Providers cache your prompt
+prefix: cached tokens re-read at 0.1x, rewritten ones bill at 1.25x. So an
+engine that strips *more* bytes can cost you *more* money. That inversion is
+not theoretical &mdash; it is the result below.
+
+Against a faithful reimplementation of the leading open compressor's design,
+run `node bench/compression/proof.mjs`:
+
+| workload        | bytes removed, theirs vs ours | **what you are billed**, ours vs theirs |
+| --------------- | ----------------------------- | --------------------------------------- |
+| code search     | 96.8% vs 85.0%                | **859** vs 1,068 &nbsp;(&minus;20%)     |
+| SRE debugging   | 97.2% vs 86.2%                | **1,783** vs 2,141 &nbsp;(&minus;17%)   |
+| issue triage    | 98.0% vs 90.7%                | **439** vs 557 &nbsp;(&minus;21%)       |
+| grep output     | 53.4% vs 47.1%                | **6,896** vs 8,971 &nbsp;(&minus;23%)   |
+| raw build log   | 55.0% vs 50.1%                | **15,937** vs 17,943 &nbsp;(&minus;11%) |
+| browser session | 20.3% vs 20.3%                | **18,407** vs 18,539                    |
+
+They win the vanity metric on six of six. **We win the invoice on six of six.**
+
+### On real sessions, their design does nothing at all
+
+`node bench/compression/session-replay.mjs` replays recorded conversations turn
+by turn and prices each one the way a provider does. Four independent real
+sessions, whole request including system prompt and tool schema:
+
+| conversation length | their design | **ours** | cheaper on |
+| ------------------- | ------------ | -------- | ---------- |
+| 10 turns            | 1.000x       | **0.953x** | **4 of 4** |
+| 20 turns            | 0.999x       | **0.915x** | **4 of 4** |
+
+Their approach is inert here for a structural reason: it **rewrites** blocks,
+and rewriting a message that carries signed reasoning is a permanent HTTP 400.
+Every assistant turn that reasoned is such a message &mdash; roughly half of all
+conversation history, permanently off limits to them. We **remove** instead,
+which the API accepts, so we reach the region nobody else can touch. The longer
+your session runs, the further ahead we get.
+
+### On end-to-end agent tasks
+
+On the THOL agent benchmark, 16 real tasks against a no-proxy control:
+
+- **cheaper on 11 of 16 tasks**
+- **median cost 0.926x**, mean 0.946x
+- **median turns 0.671x** &mdash; a third fewer round trips
+- **zero quality cost**: mean score 0.994 against control's 0.994, lower on
+  **0 of 16 tasks**
+
+One run per task, so the aggregate confidence interval still spans 1.0 &mdash;
+the per-task tally and the score parity are the solid parts. Every figure on
+this page is regenerated from the committed benchmarks rather than quoted, and
+the harnesses ship in this repository so you can check them.
+
 
 ## The 30-second version
 
