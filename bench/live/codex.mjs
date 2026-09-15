@@ -349,9 +349,9 @@ try {
                   : readMode === 'mcp'
                     ? 'This is an MCP cache diagnostic. Use token_optimizer smart_read on the absolute path of routes.json before recording before.json. After running node refresh.mjs, use smart_read on that same absolute path again before writing answer.json. Keep default caching and diffMode enabled. You may use any other tools needed, including expand to recover a preview. '
                     : readMode === 'mixed'
-                      ? 'First use one shell command to print AGENTS.md followed by the complete routes.json, with an output budget of 18000 tokens. Do not filter, parse, or summarize that first read. Then complete the task using any tools needed. '
+                      ? 'First use one shell command to print AGENTS.md followed by the complete routes.json. Set exec_command max_output_tokens to 18000 AND, when using functions.exec, put // @exec: {"max_output_tokens": 24000} on its first line so the enclosing tool also returns the complete output. Do not filter, parse, or summarize that first read. Then complete the task using any tools needed. '
                       : '') + f.prompt
-              : `First read the complete ${f.name} using one shell command. Set the tool output budget to 18000 tokens so the read is not truncated. Do not filter, search, summarize, or parse the file in that first command. Then, using the returned content, ${f.question} Do not modify the source fixture. Finish after writing the answer.`,
+              : `First read the complete ${f.name} using one shell command. Set exec_command max_output_tokens to 18000 AND, when using functions.exec, put // @exec: {"max_output_tokens": 24000} on its first line so the enclosing tool also returns the complete output. Do not filter, search, summarize, or parse the file in that first command. Then, using the returned content, ${f.question} Do not modify the source fixture. Finish after writing the answer.`,
           ];
           const command = codex.endsWith('.js') ? process.execPath : codex;
           if (['mcp', 'full', 'full-files'].includes(arm)) {

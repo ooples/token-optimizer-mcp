@@ -66,6 +66,11 @@ let consecutiveInfrastructureFailures = 0;
 try {
   for (const item of plan.schedule) {
     await verifyFreeze(freeze);
+    const stop = await readFile(join(study, 'STOP.json'), 'utf8').catch((error) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (stop !== null) throw Error(`Operator checkpoint stop: ${stop}`);
     const caseRaw = join(raw, item.id),
       archived = join(study, 'cases', item.id);
     await mkdir(caseRaw, { recursive: true });
@@ -152,6 +157,8 @@ try {
     state.finished = new Date().toISOString();
     await verifyFreeze(freeze);
     await save();
+    if (audit.length === 2 && audit.every((r) => r.verdict === 'INVALID_READ'))
+      throw Error('Both arms failed initial exposure audit; stop incomplete for measurement review');
     consecutiveInfrastructureFailures = audit.some(
       (r) => r.verdict === 'PROVIDER_ERROR'
     )

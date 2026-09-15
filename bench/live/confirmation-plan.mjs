@@ -10,7 +10,9 @@ const pilot = [];
 async function scan(path) {
   for (const entry of await readdir(path, { withFileTypes: true })) {
     const next = join(path, entry.name);
-    if (entry.isDirectory()) await scan(next);
+    if (entry.isDirectory()) {
+      if (!/^(confirmation-|harness-smoke-)/.test(entry.name)) await scan(next);
+    }
     else if (entry.name === 'results.json') {
       let rows;
       try {
@@ -76,7 +78,10 @@ if (pairs > 210)
   throw Error(
     'Planning variance requires more than the predeclared 210-pair resource ceiling; revise before confirmation'
   );
-let state = 0x9152026;
+const scheduleSeed = Number(process.env.STUDY_SEED ?? 0x9152026);
+if (!Number.isInteger(scheduleSeed) || scheduleSeed <= 0 || scheduleSeed > 0xffffffff)
+  throw Error('STUDY_SEED must be a positive uint32');
+let state = scheduleSeed;
 const random = () => {
   state ^= state << 13;
   state ^= state >>> 17;
@@ -119,6 +124,7 @@ if (new Set(schedule.map((p) => p.caseSha256)).size !== schedule.length)
   throw Error('Duplicate generated case');
 const plan = {
   version: 1,
+  scheduleSeed,
   created: new Date().toISOString(),
   productCommit: '62c0b678',
   caseSuite: 'heldout-v1',
