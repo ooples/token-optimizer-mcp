@@ -67,6 +67,27 @@ records completed tool names so a cache result cannot be inferred from a run
 that never used the cache. Use `ARMS` to select a comparison and choose a
 repetition count divisible by its arm count for balanced screening.
 
+`full-files` keeps proxy compression enabled and uses the opt-in `files` MCP
+profile: `smart_read`, `smart_write`, `smart_edit`, `smart_glob`, `smart_grep`,
+`get_cached`, and `expand`. Compare it with `full` to measure the effect of a
+smaller advertised tool catalog. The default server profile remains `core`.
+File-only runs do not measure wiki, audit, or session-management functionality.
+
+## Rate-card cost scenarios
+
+After auditing a campaign, run `node bench/live/codex-cost.mjs CAMPAIGN` to write
+`cost-scenario.json`. It weights **uncached input = input minus cached input**,
+cached input, and output separately and checks their ledger totals. Invalid,
+missing, duplicate, or failed runs cannot produce campaign cost comparisons.
+
+The bundled scenario uses the published Codex Enterprise standard rates for
+GPT-6 Astra, verified on 2026-09-15: USD 10 / 1 / 50 per million uncached-input /
+cached-input / output tokens. See the [official rate card](https://help.openai.com/en/articles/20001415).
+It assumes standard speed and no regional or contract adjustments. These are
+rate-card estimates, not measured account charges; subscription plans, credits,
+discounts, and proxy compute costs are outside the calculation. Do not apply
+this scenario to another model or treat it as an API cache-write pricing model.
+
 New runs keep task files in `workspace/` and captures outside it, so ordinary
 repository discovery does not return benchmark logs. `provenance.json` records
 client/competitor versions and relevant source/build hashes at startup.
@@ -85,6 +106,13 @@ identify it before replacement and distinguish it from the newly disabled route.
 2,000-token output budget, then allows free tool choice. The audit requires a
 truncation marker in the captured first output. This is an explicit adversarial
 exposure test, separate from natural workflow measurements.
+
+`READ_MODE=mcp` is a separate refresh-only cache diagnostic for MCP-enabled
+arms. It asks for `smart_read` before the external replacement and again after
+`node refresh.mjs`. Both the runner and auditor require successful calls on the
+actual route file on each side and a reported cached diff afterward. Missing
+events, skipped calls, or a full reread cannot be reported as a cache pass.
+This controlled diagnostic is not a natural tool-selection result.
 
 The runner uses per-invocation Codex configuration, isolated task directories,
 and loopback proxy ports. It does not edit the user's Codex configuration. It

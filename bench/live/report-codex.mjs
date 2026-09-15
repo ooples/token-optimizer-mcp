@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { fixture } from './codex-fixtures.mjs';
 import { readEvidence } from './codex-output.mjs';
+import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
 import {
   workflow,
   workflowTasks,
@@ -103,6 +104,10 @@ for (const row of results) {
       .split(/\r?\n/)
       .filter(Boolean)
       .map(JSON.parse);
+    if (manifest.readMode === 'mcp') {
+      read = mcpRefreshEvidence(events, join(work, 'routes.json'));
+      if (!read.passed) verdict = 'INVALID_MCP';
+    }
     clientErrors = [
       ...new Set(
         events
@@ -111,7 +116,9 @@ for (const row of results) {
           .filter(Boolean)
       ),
     ];
-  } catch {}
+  } catch {
+    if (manifest.readMode === 'mcp') verdict = 'INVALID_MCP';
+  }
   if (
     row.exit !== 0 &&
     clientErrors.some((message) => /model is at capacity/i.test(message))
@@ -187,7 +194,7 @@ const comparison = failures.length
   ? []
   : manifest.tasks.flatMap((task) =>
       manifest.arms
-        .filter((arm) => ['proxy', 'mcp', 'full'].includes(arm))
+        .filter((arm) => ['proxy', 'mcp', 'full', 'full-files'].includes(arm))
         .map((candidate) => {
           const ours = aggregates.find(
             (a) => a.task === task && a.arm === candidate
@@ -198,9 +205,16 @@ const comparison = failures.length
           const control = aggregates.find(
             (a) => a.task === task && a.arm === 'control'
           );
+          const full = aggregates.find(
+            (a) => a.task === task && a.arm === 'full'
+          );
           return {
             task,
             candidate,
+            inputReductionVsFull:
+              candidate === 'full-files' && full?.meanInput && ours?.meanInput
+                ? 1 - ours.meanInput / full.meanInput
+                : null,
             inputReductionVsHeadroom:
               ours?.meanInput && theirs?.meanInput
                 ? 1 - ours.meanInput / theirs.meanInput

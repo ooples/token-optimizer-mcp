@@ -1875,9 +1875,9 @@ The PowerShell hooks have been optimized to reduce overhead from 50-70ms to <10m
 
 Control hook behavior with these environment variables:
 
-The MCP server exposes an 18-tool core catalog by default so tool schemas do not
+The MCP server exposes a 19-tool core catalog by default so tool schemas do not
 consume a large share of the model context. Set
-`TOKEN_OPTIMIZER_TOOL_PROFILE=full` before starting the server to expose all 103
+`TOKEN_OPTIMIZER_TOOL_PROFILE=full` before starting the server to expose all 104
 specialized tools. `TOKEN_OPTIMIZER_TOOL_PROFILE=core` is the explicit form of
 the default. Live graph capture uses
 `TOKEN_OPTIMIZER_TOOL_PROFILE=continuity`, which exposes only capture and query.
@@ -1887,6 +1887,13 @@ attestation. The native-token audit measures 480 startup tokens for continuity,
 consumers normally receive zero MCP tools: host pre-action delivery adds only
 the selected capsule through the client lifecycle channel. Other enabled MCP
 servers add their own schemas independently.
+
+For file-focused work, opt into `TOKEN_OPTIMIZER_TOOL_PROFILE=files` to advertise
+seven tools: `smart_read`, `smart_write`, `smart_edit`, `smart_glob`, `smart_grep`,
+`get_cached`, and `expand`. This profile retains file and cache retrieval while
+omitting wiki, audit, and session tools. It works alongside the compression
+proxy; see the [live comparison runner](bench/live/README.md) for the `full-files`
+configuration and measured tradeoffs.
 
 The current hardened cross-CLI smoke does not qualify. In the final
 Codex-to-Claude adversarial pair, both successors were correct and the runtime

@@ -8,104 +8,146 @@ import { fixture } from '../../../bench/live/codex-fixtures.mjs';
 import { workflow } from '../../../bench/live/codex-workflows.mjs';
 
 const run = promisify(execFile);
-test.each(['truncated', 'complete', 'missing'])(
-  'adversarial report checks initial exposure: %s',
-  async (mode) => {
-    const directory = await mkdtemp(join(tmpdir(), 'codex-exposure-'));
-    const artifacts = join(directory, 'refresh-1-proxy'),
-      work = join(artifacts, 'workspace');
-    await mkdir(work, { recursive: true });
-    const f = workflow('refresh', 7);
-    for (const [name, content] of Object.entries(f.files))
-      await writeFile(join(work, name), content);
+test.each([
+  'truncated',
+  'complete',
+  'missing',
+  'mcp-valid',
+  'mcp-skipped',
+  'mcp-missing',
+  'mcp-no-diff',
+])('adversarial report checks initial exposure: %s', async (mode) => {
+  const directory = await mkdtemp(join(tmpdir(), 'codex-exposure-'));
+  const artifacts = join(directory, 'refresh-1-proxy'),
+    work = join(artifacts, 'workspace');
+  await mkdir(work, { recursive: true });
+  const f = workflow('refresh', 7);
+  for (const [name, content] of Object.entries(f.files))
+    await writeFile(join(work, name), content);
+  await writeFile(
+    join(work, 'before.json'),
+    JSON.stringify({
+      disabledCount: 1,
+      disabledRoutes: [`route-${f.previous}`],
+    })
+  );
+  await run(process.execPath, ['refresh.mjs'], { cwd: work });
+  await writeFile(
+    join(work, 'answer.json'),
+    JSON.stringify({
+      disabledRoute: `route-${f.marker}`,
+      baseLimit: 101,
+      effectiveLimit: 7,
+    })
+  );
+  await writeFile(
+    join(directory, 'manifest.json'),
+    JSON.stringify({
+      tasks: ['refresh'],
+      arms: ['proxy'],
+      reps: 1,
+      readMode: mode.startsWith('mcp-') ? 'mcp' : 'truncated',
+    })
+  );
+  await writeFile(
+    join(directory, 'results.json'),
+    JSON.stringify([
+      {
+        task: 'refresh',
+        arm: 'proxy',
+        rep: 1,
+        seed: 7,
+        artifactLayout: 2,
+        exit: 0,
+        verdict: 'PASS',
+        seconds: 1,
+        requests: 1,
+        usage: { input: 100, cached: 80, output: 5 },
+        ledgerUsage: [
+          {
+            status: 200,
+            usage: {
+              input_tokens: 100,
+              cached_input_tokens: 80,
+              output_tokens: 5,
+            },
+          },
+        ],
+      },
+    ])
+  );
+  if (mode !== 'missing')
     await writeFile(
-      join(work, 'before.json'),
+      join(artifacts, 'requests.jsonl'),
       JSON.stringify({
-        disabledCount: 1,
-        disabledRoutes: [`route-${f.previous}`],
-      })
-    );
-    await run(process.execPath, ['refresh.mjs'], { cwd: work });
-    await writeFile(
-      join(work, 'answer.json'),
-      JSON.stringify({
-        disabledRoute: `route-${f.marker}`,
-        baseLimit: 101,
-        effectiveLimit: 7,
-      })
-    );
-    await writeFile(
-      join(directory, 'manifest.json'),
-      JSON.stringify({
-        tasks: ['refresh'],
-        arms: ['proxy'],
-        reps: 1,
-        readMode: 'truncated',
-      })
-    );
-    await writeFile(
-      join(directory, 'results.json'),
-      JSON.stringify([
-        {
-          task: 'refresh',
-          arm: 'proxy',
-          rep: 1,
-          seed: 7,
-          artifactLayout: 2,
-          exit: 0,
-          verdict: 'PASS',
-          seconds: 1,
-          requests: 1,
-          usage: { input: 100, cached: 80, output: 5 },
-          ledgerUsage: [
+        path: '/backend-api/codex/responses',
+        body: JSON.stringify({
+          input: [
             {
-              status: 200,
-              usage: {
-                input_tokens: 100,
-                cached_input_tokens: 80,
-                output_tokens: 5,
-              },
+              type: 'custom_tool_call_output',
+              output:
+                mode === 'complete'
+                  ? f.files['routes.json']
+                  : 'Warning: truncated output\n' +
+                    f.files['routes.json'].slice(0, 100) +
+                    '…500 tokens truncated…',
+            },
+          ],
+        }),
+      }) + '\n'
+    );
+  if (mode.startsWith('mcp-') && mode !== 'mcp-missing') {
+    const read = (diff) => ({
+      type: 'item.completed',
+      item: {
+        type: 'mcp_tool_call',
+        server: 'token_optimizer',
+        tool: 'smart_read',
+        arguments: { path: join(work, 'routes.json') },
+        status: 'completed',
+        result: {
+          content: [
+            {
+              text: JSON.stringify({
+                metadata: { fromCache: diff, isDiff: diff },
+              }),
             },
           ],
         },
-      ])
+      },
+    });
+    const refresh = {
+      type: 'item.completed',
+      item: {
+        type: 'command_execution',
+        command: 'node refresh.mjs',
+        exit_code: 0,
+      },
+    };
+    const events =
+      mode === 'mcp-skipped'
+        ? [refresh]
+        : [read(false), refresh, read(mode !== 'mcp-no-diff')];
+    await writeFile(
+      join(artifacts, 'agent.stdout'),
+      events.map((e) => JSON.stringify(e)).join('\n') + '\n'
     );
-    if (mode !== 'missing')
-      await writeFile(
-        join(artifacts, 'requests.jsonl'),
-        JSON.stringify({
-          path: '/backend-api/codex/responses',
-          body: JSON.stringify({
-            input: [
-              {
-                type: 'custom_tool_call_output',
-                output:
-                  mode === 'complete'
-                    ? f.files['routes.json']
-                    : 'Warning: truncated output\n' +
-                      f.files['routes.json'].slice(0, 100) +
-                      '…500 tokens truncated…',
-              },
-            ],
-          }),
-        }) + '\n'
-      );
-    let code = 0;
-    try {
-      await run(process.execPath, [
-        resolve('bench/live/report-codex.mjs'),
-        directory,
-      ]);
-    } catch (error) {
-      code = error.code;
-    }
-    const summary = JSON.parse(
-      await readFile(join(directory, 'summary.json'), 'utf8')
-    );
-    expect(code).toBe(mode === 'truncated' ? 0 : 1);
-    expect(summary.valid).toBe(mode === 'truncated');
   }
-);
+  let code = 0;
+  try {
+    await run(process.execPath, [
+      resolve('bench/live/report-codex.mjs'),
+      directory,
+    ]);
+  } catch (error) {
+    code = error.code;
+  }
+  const summary = JSON.parse(
+    await readFile(join(directory, 'summary.json'), 'utf8')
+  );
+  expect(code).toBe(['truncated', 'mcp-valid'].includes(mode) ? 0 : 1);
+  expect(summary.valid).toBe(['truncated', 'mcp-valid'].includes(mode));
+});
 
 test.each([
   'valid',

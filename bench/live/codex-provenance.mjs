@@ -26,6 +26,7 @@ export async function provenance(root, codex, python, proxyBin) {
     ].map((name) => join(root, name)),
     'bench/live/codex.mjs',
     'bench/live/codex-workflows.mjs',
+    'bench/live/codex-mcp-evidence.mjs',
     'bench/live/report-codex.mjs',
     ...[
       'cli.js',

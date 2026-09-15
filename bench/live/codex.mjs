@@ -22,6 +22,7 @@ import {
 } from './codex-workflows.mjs';
 
 import { provenance } from './codex-provenance.mjs';
+import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const arms = (process.env.ARMS || 'control,proxy,headroom').split(',');
@@ -33,15 +34,22 @@ if (!Number.isInteger(seedOffset) || seedOffset < 0)
 const tasks = (process.env.TASKS || 'logs,json,code').split(',');
 const readMode = process.env.READ_MODE || 'natural';
 if (
-  !['natural', 'truncated'].includes(readMode) ||
-  (readMode === 'truncated' && tasks.some((t) => t !== 'refresh'))
+  !['natural', 'truncated', 'mcp'].includes(readMode) ||
+  (readMode !== 'natural' && tasks.some((t) => t !== 'refresh')) ||
+  (readMode === 'mcp' &&
+    arms.some((a) => !['mcp', 'full', 'full-files'].includes(a)))
 )
-  throw Error('READ_MODE=truncated requires only refresh tasks');
+  throw Error(
+    'Invalid READ_MODE: truncated/mcp require refresh; mcp requires MCP-enabled arms'
+  );
 
 if (
   !Number.isInteger(reps) ||
   reps < 1 ||
-  arms.some((a) => !['control', 'proxy', 'headroom', 'mcp', 'full'].includes(a))
+  arms.some(
+    (a) =>
+      !['control', 'proxy', 'headroom', 'mcp', 'full', 'full-files'].includes(a)
+  )
 )
   throw Error('Invalid REPS or ARMS');
 if (new Set(arms).size !== arms.length || new Set(tasks).size !== tasks.length)
@@ -259,7 +267,11 @@ try {
             upstream = `http://127.0.0.1:${headroomPort}`;
           }
           env.TOKEN_OPTIMIZER_PROXY = '1';
-          env.TOKEN_OPTIMIZER_PROXY_NULL = ['proxy', 'full'].includes(arm)
+          env.TOKEN_OPTIMIZER_PROXY_NULL = [
+            'proxy',
+            'full',
+            'full-files',
+          ].includes(arm)
             ? '0'
             : '1';
           env.TOKEN_OPTIMIZER_PROXY_ACCOUNTING = join(
@@ -313,11 +325,13 @@ try {
             natural
               ? (readMode === 'truncated'
                   ? 'First read routes.json using one shell command, setting the tool output budget to 2000 tokens. Do not filter or parse this first read. This intentionally tests a truncated initial view; use subsequent tools to complete the task. '
-                  : '') + f.prompt
+                  : readMode === 'mcp'
+                    ? 'This is an MCP cache diagnostic. Use token_optimizer smart_read on the absolute path of routes.json before recording before.json. After running node refresh.mjs, use smart_read on that same absolute path again before writing answer.json. Keep default caching and diffMode enabled. You may use any other tools needed, including expand to recover a preview. '
+                    : '') + f.prompt
               : `First read the complete ${f.name} using one shell command. Set the tool output budget to 18000 tokens so the read is not truncated. Do not filter, search, summarize, or parse the file in that first command. Then, using the returned content, ${f.question} Do not modify the source fixture. Finish after writing the answer.`,
           ];
           const command = codex.endsWith('.js') ? process.execPath : codex;
-          if (['mcp', 'full'].includes(arm)) {
+          if (['mcp', 'full', 'full-files'].includes(arm)) {
             args.splice(
               args.length - 1,
               0,
@@ -330,7 +344,7 @@ try {
               '-c',
               'mcp_servers.token_optimizer.tool_timeout_sec=60',
               '-c',
-              'mcp_servers.token_optimizer.env.TOKEN_OPTIMIZER_TOOL_PROFILE="core"',
+              `mcp_servers.token_optimizer.env.TOKEN_OPTIMIZER_TOOL_PROFILE="${arm === 'full-files' ? 'files' : 'core'}"`,
               '-c',
               'mcp_servers.token_optimizer.env.TOKEN_OPTIMIZER_EXPERIMENT_ARM="full"'
             );
@@ -437,6 +451,13 @@ try {
             })),
             answer,
           };
+          if (readMode === 'mcp') {
+            row.mcpEvidence = mcpRefreshEvidence(
+              events,
+              join(work, 'routes.json')
+            );
+            if (!row.mcpEvidence.passed) row.verdict = 'INVALID_MCP';
+          }
         } catch (error) {
           row.error = String(error);
         } finally {

@@ -112,3 +112,61 @@ campaigns, 45 of 46 attempts passed; the remaining attempt was the retained
 provider capacity error before any tool call. These are development results,
 not proof of universal wins. Raw captures for this last campaign remain at
 `C:/Users/yolan/AppData/Local/Temp/codex-ab-Ge6Nld/run-Ontqw6`.
+
+## Fresh natural refresh: nine runs, all passed
+
+`fresh-refresh/` uses seeds 8-10 with pre-existing disabled routes and natural
+tool selection. Every arm occupies every position once. The proxy build stayed
+fixed across all nine attempts; provider totals matched Codex's usage.
+
+| Configuration | Mean total input | Mean uncached input | Mean requests | Mean agent seconds |
+| --- | ---: | ---: | ---: | ---: |
+| Control | 112,563.7 | 22,409.0 | 5.33 | 31.5 |
+| Our proxy | 90,866.7 | 10,141.3 | 6.33 | 42.5 |
+| HeadRoom | 116,422.3 | 9,457.0 | 8.67 | 68.3 |
+
+Our proxy's mean input is 22.0% below HeadRoom and 19.3% below control. It still
+uses more requests and takes longer than control. Two proxy runs incurred a
+PowerShell quoting error in generated `node -e` commands, then recovered. The
+earlier seed-4 loss also included a quoting error; attributing its entire extra
+request count to compression would be incorrect. No attempts were removed.
+
+This is a fresh balanced development screen, not statistical confirmation.
+Raw captures remain at
+`C:/Users/yolan/AppData/Local/Temp/codex-ab-zZjKVm/run-EgVFuW`.
+
+## Explicit cost scenario
+
+Each campaign's `cost-scenario.json` applies the published Codex Enterprise
+standard GPT-6 Astra rates to independently audited usage: USD 10 / 1 / 50 per
+million uncached-input / cached-input / output tokens. The [official rate card](https://help.openai.com/en/articles/20001415)
+was checked on 2026-09-15. These estimates assume standard speed, no regional
+adjustments, and no contract discount; they do not establish actual account
+charges or include proxy compute. Cached input is subtracted from total input
+before applying the uncached rate.
+
+| Campaign / workflow | Estimated proxy reduction vs HeadRoom |
+| --- | ---: |
+| Baseline bugfix | 17.0% |
+| Baseline refactor | 15.3% |
+| Baseline refresh | 31.0% |
+| Seed-4 iteration refresh | 9.0% |
+| Adversarial truncated refresh | 45.3% |
+| Fresh natural refresh | 10.5% |
+
+The seed-4 iteration loses on total input but wins in this rate-card scenario.
+The adversarial proxy still costs an estimated 39.9% more than control, and the
+baseline refactor costs 20.3% more than control. The incomplete campaign retains
+its failure and has no cost comparisons. Shared caches and small samples limit
+all these estimates; they do not establish wins on every task or billing plan.
+
+## Natural tool-profile comparison: four passes, cache not exercised
+
+`profile-natural/` compares proxy plus the default core MCP catalog (`full`)
+with proxy plus the seven-tool file catalog (`full-files`) on seeds 11-12,
+with each configuration occupying each position once. All four answers passed,
+but no run called an MCP tool. Mean total input was 89,910 versus 91,780.5
+(file profile 2.1% higher); estimated token cost was 21.1% lower for the file
+profile because of the observed cache mix. This does not demonstrate savings
+from smaller MCP schemas or correct MCP cache use. A separate controlled cache
+diagnostic is necessary. Both configurations keep the proxy enabled.

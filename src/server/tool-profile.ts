@@ -25,6 +25,17 @@ export const CORE_TOOL_NAMES = [
   'fleet_audit',
 ] as const;
 
+/** Opt-in profile for file work; retain both preview and cache recovery. */
+export const FILE_TOOL_NAMES = [
+  'smart_read',
+  'smart_write',
+  'smart_edit',
+  'smart_glob',
+  'smart_grep',
+  'get_cached',
+  'expand',
+] as const;
+
 export const COGNITIVE_TOOL_NAMES = [
   'context_page',
   'context_receipt_verify',
@@ -45,6 +56,7 @@ export type ToolProfile =
   | 'continuity'
   | 'cognitive'
   | 'core'
+  | 'files'
   | 'full';
 export type ExperimentArm = 'baseline' | 'optimizer' | 'retrieval' | 'full';
 
@@ -73,13 +85,14 @@ export function resolveToolProfile(
     profile === 'continuity' ||
     profile === 'cognitive' ||
     profile === 'core' ||
+    profile === 'files' ||
     profile === 'full'
   )
     return profile;
 
   throw new Error(
     `Invalid TOKEN_OPTIMIZER_TOOL_PROFILE=${JSON.stringify(value)}. ` +
-      'Expected "attestation", "continuity", "cognitive", "core" (the default), or "full".'
+      'Expected "attestation", "continuity", "cognitive", "files", "core" (the default), or "full".'
   );
 }
 
@@ -98,6 +111,7 @@ export function selectToolDefinitions<T extends { name: string }>(
   arm = resolveExperimentArm()
 ): T[] {
   const core = new Set<string>(CORE_TOOL_NAMES);
+  const files = new Set<string>(FILE_TOOL_NAMES);
   const cognitive = new Set<string>(COGNITIVE_TOOL_NAMES);
   const continuity = new Set<string>(CONTINUITY_TOOL_NAMES);
   const attestation = new Set<string>(ATTESTATION_TOOL_NAMES);
@@ -111,7 +125,9 @@ export function selectToolDefinitions<T extends { name: string }>(
               ? continuity.has(tool.name)
               : profile === 'cognitive'
                 ? cognitive.has(tool.name)
-                : core.has(tool.name)
+                : profile === 'files'
+                  ? files.has(tool.name)
+                  : core.has(tool.name)
         );
   const selectedNames = new Set(selected.map((tool) => tool.name));
   const missing =
@@ -121,9 +137,11 @@ export function selectToolDefinitions<T extends { name: string }>(
         ? CONTINUITY_TOOL_NAMES.filter((name) => !selectedNames.has(name))
         : profile === 'core'
           ? CORE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
-          : profile === 'cognitive'
-            ? COGNITIVE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
-            : [];
+          : profile === 'files'
+            ? FILE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
+            : profile === 'cognitive'
+              ? COGNITIVE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
+              : [];
 
   if (missing.length) {
     throw new Error(

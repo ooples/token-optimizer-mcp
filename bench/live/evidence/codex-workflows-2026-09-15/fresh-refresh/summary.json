@@ -1,0 +1,56 @@
+{
+  "model": "gpt-6-astra",
+  "balanced": true,
+  "valid": true,
+  "failures": [],
+  "aggregates": [
+    {
+      "task": "refresh",
+      "arm": "control",
+      "passed": 3,
+      "expected": 3,
+      "measured": 3,
+      "meanInput": 112563.66666666667,
+      "meanCached": 90154.66666666667,
+      "meanUncached": 22409,
+      "meanOutput": 433.6666666666667,
+      "meanSeconds": 32.53333333333333,
+      "meanAgentSeconds": 31.53333333333333
+    },
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "passed": 3,
+      "expected": 3,
+      "measured": 3,
+      "meanInput": 90866.66666666667,
+      "meanCached": 80725.33333333333,
+      "meanUncached": 10141.333333333334,
+      "meanOutput": 684.6666666666666,
+      "meanSeconds": 43.46666666666666,
+      "meanAgentSeconds": 42.46666666666667
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "passed": 3,
+      "expected": 3,
+      "measured": 3,
+      "meanInput": 116422.33333333333,
+      "meanCached": 106965.33333333333,
+      "meanUncached": 9457,
+      "meanOutput": 806.6666666666666,
+      "meanSeconds": 82.93333333333334,
+      "meanAgentSeconds": 68.3
+    }
+  ],
+  "comparison": [
+    {
+      "task": "refresh",
+      "candidate": "proxy",
+      "inputReductionVsHeadroom": 0.21950828449295234,
+      "inputReductionVsControl": 0.19275313822399764
+    }
+  ],
+  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+}
