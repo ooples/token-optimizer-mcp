@@ -205,3 +205,9 @@ lower mean compression time and 54% fewer sampled allocation bytes. All six
 captured requests produced byte-identical old/new compressed bodies in a
 separate check. These are local processing results, not a competitor CPU or
 allocation comparison and not proof of end-to-end latency gains.
+
+[The cached-build live follow-up](output-cache-live/README.md) passed 4/4.
+Mean agent time tied HeadRoom and input was 0.9% lower, but the cost scenario
+was 47.8% higher and requests increased. Replayed prior input items stayed
+stable across all append transitions; the provider cache-miss cause remains
+unproven. This loss remains part of the evidence.
