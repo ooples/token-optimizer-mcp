@@ -262,6 +262,34 @@ describe('the server answers over stdio at all', () => {
   });
 });
 
+describe('smart_read over the wire', () => {
+  it('returns a compact cache result on an identical repeat and a diff after an external edit', async () => {
+    const path = join(fixtures, 'repeated-read.txt');
+    const content = Array.from(
+      { length: 500 },
+      (_, i) => `row ${i}: immutable fixture payload`
+    ).join('\n');
+    writeFileSync(path, content);
+    const first = await call('tools/call', {
+      name: 'smart_read',
+      arguments: { path },
+    });
+    const second = await callTool('smart_read', { path });
+    expect(second.metadata.fromCache).toBe(true);
+    expect(second.content).toContain('No changes');
+    expect(JSON.stringify(second).length).toBeLessThan(
+      first.content[0].text.length
+    );
+    writeFileSync(path, content.replace('row 250:', 'CHANGED 250:'));
+    const changed = await callTool('smart_read', { path });
+    expect(changed.metadata.isDiff).toBe(true);
+    expect(changed.content).toContain('CHANGED 250:');
+    const repeated = await callTool('smart_read', { path });
+    expect(repeated.content).toContain('No changes');
+    expect(repeated.content).not.toContain('CHANGED 250:');
+  });
+});
+
 describe('smart_grep over the wire', () => {
   it('delivers per-file counts, which a Map could not', async () => {
     // THE REGRESSION THIS FILE EXISTS FOR. `counts` was a Map and arrived as {}.

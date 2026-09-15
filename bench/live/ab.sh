@@ -14,7 +14,7 @@
 #   - a fixture built to match an assumption about the wire cannot falsify that
 #     assumption, and one here did not.
 #
-# THREE DEFECTS THIS HARNESS HAD, all of which produced confident wrong answers
+# DEFECTS THIS HARNESS HAD, all of which produced confident wrong answers
 # before they were found. They are fixed below and called out because each is
 # easy to reintroduce:
 #
@@ -34,7 +34,8 @@
 #      cached tokens at its fourth request having written 1,192, a cache no
 #      request in its own ledger created. Its headline win was partly a position
 #      in a list. Arms are rotated now, so over N reps each arm holds each
-#      position exactly once and position cancels out of the mean.
+#      position exactly once. This balances position, but cannot guarantee
+#      that shared provider-cache effects disappear.
 #   5. CONTROL HAD NO LEDGER, because it ran with no proxy -- so the one arm
 #      every other arm is measured against was the only arm with no measurement,
 #      and every cost claim was really proxy-versus-proxy. Control now runs
@@ -163,6 +164,7 @@ run_arm() { # arm rep
   for _ in $(seq 1 15); do alive "$port" && { up=0; break; }; sleep 2; done
   if [ "$up" != "0" ]; then
     kill "$pid" 2>/dev/null
+    [ -n "$hrpid" ] && kill "$hrpid" 2>/dev/null
     printf '%-11s rep%-2s %-5s  proxy never came up -- see %s\n' \
       "$arm" "$rep" "SKIP" "$OUT/$arm-$rep.proxy.err"
     echo "$arm,$rep,$POSITION,SKIP,0,," >> "$OUT/results.csv"
@@ -193,7 +195,9 @@ run_arm() { # arm rep
         w+=u.cache_creation_input_tokens||0; r+=u.cache_read_input_tokens||0;
       }
       // Weighted the way the provider bills: write 1.25x, read 0.1x.
-      process.stdout.write(Math.round(i + w*1.25 + r*0.1) + ' ' + o);
+      // A limit/auth failure can leave an empty ledger or records with no
+      // usage. Missing measurement must not lower the arm's mean to zero.
+      if(i+w+r+o>0) process.stdout.write(Math.round(i + w*1.25 + r*0.1) + ' ' + o);
     " "$ledger" 2>/dev/null)"
   fi
 
@@ -211,7 +215,7 @@ for rep in $(seq 1 "$REPS"); do
   # competitor arm running last read 37,655 cached tokens it never wrote.
   #
   # Rotation rather than a shuffle: over N reps each arm holds each position
-  # exactly once, so position cancels out of the mean by construction. A
+  # exactly once, balancing position without proving cache isolation. A
   # seeded shuffle put one arm last in two runs of three, which is the bias
   # this exists to remove.
   local_n=${#list[@]}
@@ -245,7 +249,8 @@ node -e "
     const wi = v.wiN ? Math.round(v.wi/v.wiN) : null;
     console.log('  '+arm.padEnd(12)+'passed '+v.pass+'/'+v.n+
       '  mean '+Math.round(v.secs/v.n)+'s'+
-      (wi!==null ? '  weighted-input '+wi+'  output '+Math.round(v.out/v.wiN) : '  (no ledger)'));
+      (wi!==null ? '  weighted-input '+wi+'  output '+Math.round(v.out/v.wiN) : '  (no usage)')+
+      '  measured '+v.wiN+'/'+v.n);
   }
 " "$OUT/results.csv"
 echo

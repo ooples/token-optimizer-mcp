@@ -36,6 +36,7 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
+import { booleanFacts } from './json-facts.js';
 import { needleRows, shapeRepresentatives } from './needles.js';
 import { compressNestedStrings } from './nested.js';
 import { activeRanker } from './ranking.js';
@@ -337,7 +338,8 @@ export function compressJson(
         `${count(dropped, 'more row')}, ${shapeOf(sample)}` +
           (odd.size
             ? `; all ${count(odd.size, 'row')} that differ are kept above`
-            : ''),
+            : '') +
+          booleanFacts(parsed as unknown[]),
         recoverAt
       ) +
       ']';

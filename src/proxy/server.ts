@@ -57,6 +57,7 @@ import {
 } from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import { captureDir, captureRequest } from './capture.js';
+import { compressResponses } from './responses.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
 import {
@@ -420,13 +421,6 @@ export function compressBody(
     };
   }
 
-  // CAPTURED BEFORE ANY DECISION, and before the size floor, because the corpus
-  // must be what ARRIVED rather than what we chose to act on. Recording only
-  // the requests we compressed would build a corpus selected by the very thing
-  // under test.
-  const capture = captureDir();
-  if (capture) captureRequest(capture, '/v1/messages', body);
-
   if (before < MIN_BYTES) return unchanged('below the size floor');
 
   let parsed: ProviderRequest;
@@ -436,6 +430,20 @@ export function compressBody(
     // Not a JSON provider request -- a streaming upload, a form, something
     // else entirely. Forward it untouched.
     return unchanged('body is not JSON');
+  }
+  if (!parsed || typeof parsed !== 'object')
+    return unchanged('not a request object');
+  if (Array.isArray(parsed.input)) {
+    try {
+      return compressResponses(
+        body,
+        parsed as unknown as Record<string, unknown>,
+        spill,
+        tuning
+      );
+    } catch {
+      return unchanged('Responses compression failed');
+    }
   }
   if (!Array.isArray(parsed.messages)) return unchanged('no messages array');
 
@@ -981,12 +989,18 @@ function forward(
           typeof encoding === 'string' ? encoding : undefined
         );
       }
+      // Codex closes after its terminal SSE event, even if the provider keeps
+      // the stream open. Cancel that upstream stream so its usage is settled.
+      res.once('close', () => {
+        if (!upstreamRes.complete) upstreamRes.destroy();
+      });
       // Piped, not buffered: an SSE stream must arrive as it is produced, or
       // the agent sits waiting for a response that has already started.
       upstreamRes.pipe(res);
     }
   );
 
+  res.once('close', () => upstreamReq.destroy());
   upstreamReq.on('error', (error) => {
     if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
     res.end(`token-optimizer proxy: upstream request failed: ${error.message}`);
@@ -1146,6 +1160,8 @@ export async function startProxy(
         res.writeHead(400).end();
         return;
       }
+      const capture = captureDir();
+      if (capture) void captureRequest(capture, path, body);
 
       const { body: next, summary } = compressBody(
         body,

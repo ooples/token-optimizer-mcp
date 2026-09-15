@@ -1,0 +1,101 @@
+{
+  "model": "gpt-6-astra",
+  "balanced": false,
+  "valid": true,
+  "failures": [],
+  "aggregates": [
+    {
+      "task": "bugfix",
+      "arm": "control",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 96443,
+      "meanCached": 71552,
+      "meanUncached": 24891,
+      "meanOutput": 880,
+      "meanSeconds": 51.7,
+      "meanAgentSeconds": 50.4
+    },
+    {
+      "task": "bugfix",
+      "arm": "proxy",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 96661,
+      "meanCached": 85120,
+      "meanUncached": 11541,
+      "meanOutput": 896,
+      "meanSeconds": 44.3,
+      "meanAgentSeconds": 43.2
+    },
+    {
+      "task": "bugfix",
+      "arm": "headroom",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 146323,
+      "meanCached": 136704,
+      "meanUncached": 9619,
+      "meanOutput": 1354,
+      "meanSeconds": 95.7,
+      "meanAgentSeconds": 78.8
+    },
+    {
+      "task": "refresh",
+      "arm": "control",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 151887,
+      "meanCached": 136320,
+      "meanUncached": 15567,
+      "meanOutput": 496,
+      "meanSeconds": 37.7,
+      "meanAgentSeconds": 36.8
+    },
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 105305,
+      "meanCached": 97408,
+      "meanUncached": 7897,
+      "meanOutput": 627,
+      "meanSeconds": 38.8,
+      "meanAgentSeconds": 37.9
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 59559,
+      "meanCached": 43136,
+      "meanUncached": 16423,
+      "meanOutput": 417,
+      "meanSeconds": 45.5,
+      "meanAgentSeconds": 34.5
+    }
+  ],
+  "comparison": [
+    {
+      "task": "bugfix",
+      "candidate": "proxy",
+      "inputReductionVsHeadroom": 0.3393998209440757,
+      "inputReductionVsControl": -0.0022604025175492204
+    },
+    {
+      "task": "refresh",
+      "candidate": "proxy",
+      "inputReductionVsHeadroom": -0.768078711865545,
+      "inputReductionVsControl": 0.30668852502189126
+    }
+  ],
+  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+}

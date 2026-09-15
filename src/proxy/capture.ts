@@ -26,8 +26,12 @@
  * you would treat the transcript it came from.
  */
 
-import { appendFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { appendFile, mkdir } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+
+// Serialize writes per destination so concurrent requests cannot interleave
+// JSONL records. Settled queues are released, including after a failed write.
+const pending = new Map<string, Promise<boolean>>();
 
 /** Where to write captures, or null when capture is off. */
 export function captureDir(
@@ -59,18 +63,25 @@ export function captureRequest(
   dir: string,
   path: string,
   body: Buffer
-): boolean {
-  try {
-    mkdirSync(dir, { recursive: true });
-    appendFileSync(
-      join(dir, 'requests.jsonl'),
-      `${JSON.stringify({ at: Date.now(), path, body: body.toString('utf8') })}\n`,
-      'utf8'
-    );
-    return true;
-  } catch {
-    return false;
-  }
+): Promise<boolean> {
+  const destination = resolve(dir);
+  const line = `${JSON.stringify({ at: Date.now(), path, body: body.toString('utf8') })}\n`;
+  const write = (pending.get(destination) ?? Promise.resolve(true)).then(
+    async () => {
+      try {
+        await mkdir(destination, { recursive: true });
+        await appendFile(join(destination, 'requests.jsonl'), line, 'utf8');
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  );
+  pending.set(destination, write);
+  void write.then(() => {
+    if (pending.get(destination) === write) pending.delete(destination);
+  });
+  return write;
 }
 
 /** The line printed at startup when capture is on. Never omitted. */

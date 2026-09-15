@@ -469,26 +469,61 @@ schema, against no proxy at all:
 | 10    | 1.000x            | **0.953x**           | 4 of 4     |
 | 20    | 0.999x            | **0.915x**           | 4 of 4     |
 
-Why the gap: conversation history is ~65% of a live request and the part that
-grows every turn, and roughly half of it is model reasoning carried in signed
-blocks. This project REMOVES those, an operation tested against the live API and
-accepted. A design that rewrites blocks instead has to leave signed content
-alone -- the constraint our own engines observe, and the one our reimplementation
-of their design is held to here. Whether their shipped product handles signed
-content differently we have not tested, so read this column as a result about
-the design as published, not about their binary.
+The replay uses stored transcripts, which discard reasoning text while retaining
+signatures. Its savings therefore do not establish that useful reasoning survives
+compression. It also uses our reimplementation of the competitor's design;
+these are offline estimates, not results from their shipped proxy.
 
-**What is still not measured: whether the model does the job as well.** Every
-figure above is transmission cost with behaviour held fixed. A transform that
-saves money by deleting something the model needed looks like a win here and
-fails a task benchmark. That measurement is pre-registered in
-`docs/superpowers/specs/2026-09-14-quality-preregistration.md` and has not been
-run, so nothing here should be read as an end-to-end result.
+**Live comparison against HeadRoom's shipped proxy.** The balanced four-arm run
+recorded in commit `f712b4ec` used `bench/live/ab.sh`, rotated each arm through
+every position, and re-ran pytest independently after each task:
+
+| arm | mean weighted input tokens | tests passed |
+| --- | ---: | ---: |
+| uncompressed control | 134,706 | 4/4 |
+| Token Optimizer, previous 1,500-character deferral floor | 100,818 | 4/4 |
+| Token Optimizer, zero floor (now the default) | 49,053 | 4/4 |
+| HeadRoom shipped proxy | 48,626 | 4/4 |
+
+Weighted input is `input + 1.25 * cache_creation + 0.1 * cache_read`; it excludes
+output cost. Both zero-floor Token Optimizer and HeadRoom reduced that measure
+by about 64% versus control. Token Optimizer used about 0.9% more than HeadRoom.
+This small arithmetic repair task does not establish superiority across tasks,
+compression quality, or total cost. Rotation balances run position, but does
+not guarantee that shared provider-cache effects disappear.
+
+The subsequent Claude Code default-versus-aggressive confirmation hit Claude's
+weekly usage limit and is incomplete. Its missing usage cannot count as a win.
+Codex validation runs independently through the Responses API.
+
+**Live Codex comparison (2026-09-15).** Local Codex CLI 0.154.0, `gpt-6-astra`,
+and installed HeadRoom 0.37.0 completed a balanced 27-run campaign. All three
+arms passed all nine tasks; every initial read was complete, and all provider
+ledger totals matched Codex's reported usage.
+
+| workload | mean input, ours | mean input, HeadRoom | reduction vs HeadRoom |
+| --- | ---: | ---: | ---: |
+| JSON outlier lookup | 39,318 | 44,043 | 10.7% |
+| code search | 44,427 | 82,697 | 46.3% |
+| log diagnosis | 39,203 | 84,308 | 53.5% |
+
+These counts include cached input and extra retrieval turns; they are not raw
+compression percentages or dollar costs. Output tokens did not improve on every
+workload. See the [Codex evidence and limitations](bench/live/evidence/codex-2026-09-15/README.md)
+and [reproduction instructions](bench/live/README.md). These three synthetic tasks
+do not establish superiority across all workloads.
+
+A separate **27-run natural-workflow development screen** passed all runs and
+measured 35.5%, 43.5%, and 16.6% less total input than installed HeadRoom for retry
+bug fixes, multi-file refactors, and configuration refreshes. These are small
+synthetic repositories with natural tool selection. Uncached input and latency
+have separate results; see the [workflow evidence and limitations](bench/live/evidence/codex-workflows-2026-09-15/README.md).
+
 
 Off by default. `TOKEN_OPTIMIZER_PROXY=1` turns it on, it binds loopback only,
-nothing is logged, and `doctor` reports whether your client is actually routed
-through it -- the silent failure being a proxy that is running while the agent
-talks past it.
+and `doctor` reports whether your client is actually routed through it.
+Request-body capture is opt-in via `TOKEN_OPTIMIZER_PROXY_CAPTURE`; when enabled,
+it writes plaintext request content to the named directory.
 
 Your provider key is forwarded in the request headers and is never read, stored
 or written by the proxy. That is a narrower claim than "nothing sensitive is

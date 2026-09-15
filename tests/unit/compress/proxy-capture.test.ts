@@ -45,14 +45,14 @@ describe('capture is off unless a path is named', () => {
 });
 
 describe('what it writes', () => {
-  test('one JSON line per request, carrying the body verbatim', () => {
+  test('one JSON line per request, carrying the body verbatim', async () => {
     // Verbatim matters: the corpus exists to measure what compression would
     // remove, so anything normalised on the way in is a measurement of the
     // normalisation instead.
     const body = Buffer.from(
       JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] })
     );
-    expect(captureRequest(dir, '/v1/messages', body)).toBe(true);
+    expect(await captureRequest(dir, '/v1/messages', body)).toBe(true);
 
     const lines = readFileSync(join(dir, 'requests.jsonl'), 'utf8')
       .trim()
@@ -64,26 +64,26 @@ describe('what it writes', () => {
     expect(typeof row.at).toBe('number');
   });
 
-  test('appends rather than overwriting', () => {
-    captureRequest(dir, '/v1/messages', Buffer.from('{"a":1}'));
-    captureRequest(dir, '/v1/messages', Buffer.from('{"b":2}'));
+  test('appends rather than overwriting', async () => {
+    await captureRequest(dir, '/v1/messages', Buffer.from('{"a":1}'));
+    await captureRequest(dir, '/v1/messages', Buffer.from('{"b":2}'));
     const lines = readFileSync(join(dir, 'requests.jsonl'), 'utf8')
       .trim()
       .split('\n');
     expect(lines).toHaveLength(2);
   });
 
-  test('creates the directory rather than requiring one', () => {
+  test('creates the directory rather than requiring one', async () => {
     const nested = join(dir, 'deep', 'corpus');
-    expect(captureRequest(nested, '/v1/messages', Buffer.from('{}'))).toBe(
-      true
-    );
+    expect(
+      await captureRequest(nested, '/v1/messages', Buffer.from('{}'))
+    ).toBe(true);
     expect(existsSync(join(nested, 'requests.jsonl'))).toBe(true);
   });
 });
 
 describe('it never fails the request it is observing', () => {
-  test('an unwritable destination returns false rather than throwing', () => {
+  test('an unwritable destination returns false rather than throwing', async () => {
     // FAIL SILENT, like every optional path in this proxy. The user is waiting
     // on a response; a full disk must not become their problem.
     //
@@ -95,9 +95,27 @@ describe('it never fails the request it is observing', () => {
     // `no-stray-control-characters` exists to catch, and it caught this one.
     const nul = String.fromCharCode(0);
     expect(
-      captureRequest(`bad${nul}dir`, '/v1/messages', Buffer.from('{}'))
+      await captureRequest(`bad${nul}dir`, '/v1/messages', Buffer.from('{}'))
     ).toBe(false);
   });
+});
+
+test('concurrent large captures remain complete JSON lines in arrival order', async () => {
+  const bodies = Array.from(
+    { length: 12 },
+    (_, i) => `${i}:${'x'.repeat(128 * 1024)}`
+  );
+  expect(
+    await Promise.all(
+      bodies.map((body) =>
+        captureRequest(dir, '/v1/messages', Buffer.from(body))
+      )
+    )
+  ).toEqual(bodies.map(() => true));
+  const rows = readFileSync(join(dir, 'requests.jsonl'), 'utf8')
+    .trim()
+    .split('\n');
+  expect(rows.map((row) => JSON.parse(row).body)).toEqual(bodies);
 });
 
 describe('it announces itself', () => {

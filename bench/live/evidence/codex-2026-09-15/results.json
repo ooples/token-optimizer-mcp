@@ -1,0 +1,1565 @@
+[
+  {
+    "task": "json",
+    "arm": "control",
+    "rep": 1,
+    "position": 1,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 60937,
+      "cached": 36480,
+      "output": 154
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 268130,
+    "afterBytes": 268130,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12865,
+          "output_tokens": 62,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 23990,
+          "output_tokens": 68,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 24082,
+          "output_tokens": 24,
+          "cached_input_tokens": 23808
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-0173",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 18.4
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 39319,
+      "cached": 25600,
+      "output": 155
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 268247,
+    "afterBytes": 190887,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12868,
+          "output_tokens": 64,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13167,
+          "output_tokens": 60,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13284,
+          "output_tokens": 31,
+          "cached_input_tokens": 12928
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-0173",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 14.8
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 3,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 44044,
+      "cached": 27904,
+      "output": 153
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 268284,
+    "afterBytes": 268284,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12785,
+          "output_tokens": 66,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15571,
+          "output_tokens": 60,
+          "cached_input_tokens": 12544
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15688,
+          "output_tokens": 27,
+          "cached_input_tokens": 15360
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-0173",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 26.3
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 2,
+    "position": 1,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 39316,
+      "cached": 34816,
+      "output": 155
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 268249,
+    "afterBytes": 190889,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12868,
+          "output_tokens": 64,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13165,
+          "output_tokens": 60,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13283,
+          "output_tokens": 31,
+          "cached_input_tokens": 12928
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-0173",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 15.2
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 2,
+    "position": 2,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 44052,
+      "cached": 27904,
+      "output": 146
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 268301,
+    "afterBytes": 268301,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12785,
+          "output_tokens": 71,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15576,
+          "output_tokens": 59,
+          "cached_input_tokens": 12544
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15691,
+          "output_tokens": 16,
+          "cached_input_tokens": 15360
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-0173",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 28.3
+  },
+  {
+    "task": "json",
+    "arm": "control",
+    "rep": 2,
+    "position": 3,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 60960,
+      "cached": 45696,
+      "output": 144
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 268246,
+    "afterBytes": 268246,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12865,
+          "output_tokens": 62,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 23990,
+          "output_tokens": 59,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 24105,
+          "output_tokens": 23,
+          "cached_input_tokens": 23808
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-0173",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 21
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 3,
+    "position": 1,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 44034,
+      "cached": 27904,
+      "output": 144
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 268256,
+    "afterBytes": 268256,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12785,
+          "output_tokens": 62,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15566,
+          "output_tokens": 60,
+          "cached_input_tokens": 12544
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15683,
+          "output_tokens": 22,
+          "cached_input_tokens": 15360
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-0173",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 28.1
+  },
+  {
+    "task": "json",
+    "arm": "control",
+    "rep": 3,
+    "position": 2,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 60969,
+      "cached": 45696,
+      "output": 148
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 268263,
+    "afterBytes": 268263,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12865,
+          "output_tokens": 64,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 23994,
+          "output_tokens": 60,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 24110,
+          "output_tokens": 24,
+          "cached_input_tokens": 23808
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-0173",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 22.7
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 3,
+    "position": 3,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 39320,
+      "cached": 25600,
+      "output": 159
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 268229,
+    "afterBytes": 190869,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12868,
+          "output_tokens": 62,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13167,
+          "output_tokens": 60,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13285,
+          "output_tokens": 37,
+          "cached_input_tokens": 12928
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-0173",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 16.1
+  },
+  {
+    "task": "code",
+    "arm": "control",
+    "rep": 1,
+    "position": 1,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 49171,
+      "cached": 36352,
+      "output": 160
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 224449,
+    "afterBytes": 224449,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12869,
+          "output_tokens": 63,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18091,
+          "output_tokens": 64,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18211,
+          "output_tokens": 33,
+          "cached_input_tokens": 17920
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/checkout.ts",
+      "line": 174,
+      "constant": "PAYMENT_RETRY_LIMIT",
+      "value": 7
+    },
+    "seconds": 14.9
+  },
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 44398,
+      "cached": 37376,
+      "output": 159
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 224442,
+    "afterBytes": 210906,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12872,
+          "output_tokens": 63,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15702,
+          "output_tokens": 65,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15824,
+          "output_tokens": 31,
+          "cached_input_tokens": 15488
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/checkout.ts",
+      "line": 174,
+      "constant": "PAYMENT_RETRY_LIMIT",
+      "value": 7
+    },
+    "seconds": 25.8
+  },
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 3,
+    "verdict": "INVALID_READ",
+    "read": {
+      "complete": true,
+      "truncated": true,
+      "requests": 5
+    },
+    "exit": 0,
+    "usage": {
+      "input": 73073,
+      "cached": 38912,
+      "output": 313
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 554029,
+    "afterBytes": 554029,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12789,
+          "output_tokens": 63,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12925,
+          "output_tokens": 59,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13635,
+          "output_tokens": 97,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16802,
+          "output_tokens": 65,
+          "cached_input_tokens": 13440
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16922,
+          "output_tokens": 29,
+          "cached_input_tokens": 12800
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/checkout.ts",
+      "line": 174,
+      "constant": "PAYMENT_RETRY_LIMIT",
+      "value": 7
+    },
+    "seconds": 37.1
+  },
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 2,
+    "position": 1,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 44445,
+      "cached": 28160,
+      "output": 163
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 224584,
+    "afterBytes": 211048,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12885,
+          "output_tokens": 67,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15720,
+          "output_tokens": 64,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15840,
+          "output_tokens": 32,
+          "cached_input_tokens": 15488
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/checkout.ts",
+      "line": 174,
+      "constant": "PAYMENT_RETRY_LIMIT",
+      "value": 7
+    },
+    "seconds": 20.2
+  },
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 2,
+    "position": 2,
+    "verdict": "INVALID_READ",
+    "read": {
+      "complete": true,
+      "truncated": true,
+      "requests": 5
+    },
+    "exit": 0,
+    "usage": {
+      "input": 99035,
+      "cached": 72832,
+      "output": 287
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 551765,
+    "afterBytes": 551765,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12789,
+          "output_tokens": 64,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12928,
+          "output_tokens": 55,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22330,
+          "output_tokens": 74,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 25434,
+          "output_tokens": 64,
+          "cached_input_tokens": 22144
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 25554,
+          "output_tokens": 30,
+          "cached_input_tokens": 25216
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/checkout.ts",
+      "line": 174,
+      "constant": "PAYMENT_RETRY_LIMIT",
+      "value": 7
+    },
+    "seconds": 37.9
+  },
+  {
+    "task": "code",
+    "arm": "control",
+    "rep": 2,
+    "position": 3,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 49177,
+      "cached": 27136,
+      "output": 162
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 224461,
+    "afterBytes": 224461,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12869,
+          "output_tokens": 65,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18094,
+          "output_tokens": 64,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18214,
+          "output_tokens": 33,
+          "cached_input_tokens": 17920
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/checkout.ts",
+      "line": 174,
+      "constant": "PAYMENT_RETRY_LIMIT",
+      "value": 7
+    },
+    "seconds": 15.4
+  },
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 3,
+    "position": 1,
+    "verdict": "INVALID_READ",
+    "read": {
+      "complete": true,
+      "truncated": true,
+      "requests": 5
+    },
+    "exit": 0,
+    "usage": {
+      "input": 75982,
+      "cached": 66176,
+      "output": 308
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 570303,
+    "afterBytes": 570303,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12789,
+          "output_tokens": 65,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12929,
+          "output_tokens": 57,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13637,
+          "output_tokens": 91,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18253,
+          "output_tokens": 65,
+          "cached_input_tokens": 13440
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18374,
+          "output_tokens": 30,
+          "cached_input_tokens": 18048
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/checkout.ts",
+      "line": 174,
+      "constant": "PAYMENT_RETRY_LIMIT",
+      "value": 7
+    },
+    "seconds": 42.4
+  },
+  {
+    "task": "code",
+    "arm": "control",
+    "rep": 3,
+    "position": 2,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 49210,
+      "cached": 39808,
+      "output": 164
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 224571,
+    "afterBytes": 224571,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12882,
+          "output_tokens": 63,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18103,
+          "output_tokens": 65,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18225,
+          "output_tokens": 36,
+          "cached_input_tokens": 17920
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/checkout.ts",
+      "line": 174,
+      "constant": "PAYMENT_RETRY_LIMIT",
+      "value": 7
+    },
+    "seconds": 17.4
+  },
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 3,
+    "position": 3,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 44437,
+      "cached": 28160,
+      "output": 158
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 224558,
+    "afterBytes": 211022,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12885,
+          "output_tokens": 64,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15716,
+          "output_tokens": 64,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15836,
+          "output_tokens": 30,
+          "cached_input_tokens": 15488
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/checkout.ts",
+      "line": 174,
+      "constant": "PAYMENT_RETRY_LIMIT",
+      "value": 7
+    },
+    "seconds": 13
+  },
+  {
+    "task": "logs",
+    "arm": "control",
+    "rep": 1,
+    "position": 1,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 51298,
+      "cached": 18944,
+      "output": 167
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 225982,
+    "afterBytes": 225982,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12865,
+          "output_tokens": 67,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 19155,
+          "output_tokens": 66,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 19278,
+          "output_tokens": 34,
+          "cached_input_tokens": 18944
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-0173",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-7"
+    },
+    "seconds": 17.1
+  },
+  {
+    "task": "logs",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 39204,
+      "cached": 25600,
+      "output": 168
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 225963,
+    "afterBytes": 190063,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12868,
+          "output_tokens": 67,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13106,
+          "output_tokens": 67,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13230,
+          "output_tokens": 34,
+          "cached_input_tokens": 12928
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-0173",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-7"
+    },
+    "seconds": 21.3
+  },
+  {
+    "task": "logs",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 3,
+    "verdict": "INVALID_READ",
+    "read": {
+      "complete": true,
+      "truncated": true,
+      "requests": 5
+    },
+    "exit": 0,
+    "usage": {
+      "input": 92381,
+      "cached": 56576,
+      "output": 298
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 522772,
+    "afterBytes": 522772,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12798,
+          "output_tokens": 65,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12938,
+          "output_tokens": 57,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22079,
+          "output_tokens": 88,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22222,
+          "output_tokens": 65,
+          "cached_input_tokens": 21888
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22344,
+          "output_tokens": 23,
+          "cached_input_tokens": 22016
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-0173",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-7"
+    },
+    "seconds": 45.6
+  },
+  {
+    "task": "logs",
+    "arm": "proxy",
+    "rep": 2,
+    "position": 1,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 39205,
+      "cached": 22144,
+      "output": 168
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 225963,
+    "afterBytes": 190063,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12868,
+          "output_tokens": 67,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13107,
+          "output_tokens": 67,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13230,
+          "output_tokens": 34,
+          "cached_input_tokens": 12928
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-0173",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-7"
+    },
+    "seconds": 16.9
+  },
+  {
+    "task": "logs",
+    "arm": "headroom",
+    "rep": 2,
+    "position": 2,
+    "verdict": "INVALID_READ",
+    "read": {
+      "complete": true,
+      "truncated": true,
+      "requests": 5
+    },
+    "exit": 0,
+    "usage": {
+      "input": 92409,
+      "cached": 69248,
+      "output": 278
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 557710,
+    "afterBytes": 557710,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12785,
+          "output_tokens": 62,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12922,
+          "output_tokens": 57,
+          "cached_input_tokens": 12544
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22063,
+          "output_tokens": 69,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22258,
+          "output_tokens": 66,
+          "cached_input_tokens": 21888
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22381,
+          "output_tokens": 24,
+          "cached_input_tokens": 22016
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-0173",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-7"
+    },
+    "seconds": 35.4
+  },
+  {
+    "task": "logs",
+    "arm": "control",
+    "rep": 2,
+    "position": 3,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 51293,
+      "cached": 31616,
+      "output": 163
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 225961,
+    "afterBytes": 225961,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12865,
+          "output_tokens": 65,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 19153,
+          "output_tokens": 64,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 19275,
+          "output_tokens": 34,
+          "cached_input_tokens": 18944
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-0173",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-7"
+    },
+    "seconds": 13.9
+  },
+  {
+    "task": "logs",
+    "arm": "headroom",
+    "rep": 3,
+    "position": 1,
+    "verdict": "INVALID_READ",
+    "read": {
+      "complete": true,
+      "truncated": true,
+      "requests": 5
+    },
+    "exit": 0,
+    "usage": {
+      "input": 68134,
+      "cached": 62208,
+      "output": 299
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 558617,
+    "afterBytes": 558617,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12785,
+          "output_tokens": 65,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12927,
+          "output_tokens": 51,
+          "cached_input_tokens": 12544
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13629,
+          "output_tokens": 85,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14336,
+          "output_tokens": 64,
+          "cached_input_tokens": 13440
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14457,
+          "output_tokens": 34,
+          "cached_input_tokens": 14208
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-0173",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-7"
+    },
+    "seconds": 38.5
+  },
+  {
+    "task": "logs",
+    "arm": "control",
+    "rep": 3,
+    "position": 2,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 51293,
+      "cached": 31616,
+      "output": 166
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 225967,
+    "afterBytes": 225967,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12865,
+          "output_tokens": 65,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 19153,
+          "output_tokens": 64,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 19275,
+          "output_tokens": 37,
+          "cached_input_tokens": 18944
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-0173",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-7"
+    },
+    "seconds": 15.9
+  },
+  {
+    "task": "logs",
+    "arm": "proxy",
+    "rep": 3,
+    "position": 3,
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "exit": 0,
+    "usage": {
+      "input": 39201,
+      "cached": 34816,
+      "output": 168
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 225963,
+    "afterBytes": 190063,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12868,
+          "output_tokens": 67,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13105,
+          "output_tokens": 67,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13228,
+          "output_tokens": 34,
+          "cached_input_tokens": 12928
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-0173",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-7"
+    },
+    "seconds": 16.7
+  }
+]

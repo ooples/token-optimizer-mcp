@@ -31,6 +31,11 @@
 import { compressCode, looksLikeCode, looksLikeDiff } from './code.js';
 import { compressJson, looksLikeJson } from './json.js';
 import { compressLog, looksLikeLog } from './log.js';
+import { compressTap, looksLikeTap } from './tap.js';
+import {
+  compressJsonFragments,
+  looksLikeJsonFragments,
+} from './json-fragments.js';
 import { compressProse, looksLikeProse } from './prose.js';
 import { compressSearchResults, looksLikeSearchResults } from './search.js';
 import { engineFor, registerEngine, runEngine } from './registry.js';
@@ -95,8 +100,14 @@ registerEngine({
 registerEngine({
   name: 'log',
   priority: 40,
-  claims: (text) => looksLikeLog(text),
-  compress: compressLog,
+  claims: (text) =>
+    looksLikeJsonFragments(text) || looksLikeTap(text) || looksLikeLog(text),
+  compress: (text, ctx) =>
+    looksLikeJsonFragments(text)
+      ? compressJsonFragments(text)
+      : looksLikeTap(text)
+        ? compressTap(text)
+        : compressLog(text, ctx),
 });
 
 registerEngine({
