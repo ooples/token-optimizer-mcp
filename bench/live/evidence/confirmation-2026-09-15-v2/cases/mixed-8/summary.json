@@ -1,0 +1,44 @@
+{
+  "model": "gpt-6-astra",
+  "balanced": false,
+  "valid": true,
+  "failures": [],
+  "aggregates": [
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 82410,
+      "meanCached": 76416,
+      "meanUncached": 5994,
+      "meanOutput": 684,
+      "meanSeconds": 40.2,
+      "meanAgentSeconds": 39.3
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 167233,
+      "meanCached": 140928,
+      "meanUncached": 26305,
+      "meanOutput": 1023,
+      "meanSeconds": 68.5,
+      "meanAgentSeconds": 57.7
+    }
+  ],
+  "comparison": [
+    {
+      "task": "refresh",
+      "candidate": "proxy",
+      "inputReductionVsFull": null,
+      "inputReductionVsHeadroom": 0.5072144851793605,
+      "inputReductionVsControl": null
+    }
+  ],
+  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+}

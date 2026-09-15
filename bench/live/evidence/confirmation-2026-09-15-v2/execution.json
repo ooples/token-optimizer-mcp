@@ -387,6 +387,101 @@
       "id": "json-10",
       "family": "json",
       "started": "2026-09-15T23:43:33.821Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\json-10\\run-MPXWPp",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:44:22.739Z"
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "started": "2026-09-15T23:44:24.729Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\mixed-8\\run-hCM4Dy",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:46:14.220Z"
+    },
+    {
+      "id": "json-9",
+      "family": "json",
+      "started": "2026-09-15T23:46:16.143Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\json-9\\run-PUPDb7",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:47:07.946Z"
+    },
+    {
+      "id": "code-3",
+      "family": "code",
+      "started": "2026-09-15T23:47:09.886Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\code-3\\run-zQXuu0",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:48:03.668Z"
+    },
+    {
+      "id": "mixed-5",
+      "family": "mixed",
+      "started": "2026-09-15T23:48:05.586Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\mixed-5\\run-2RfUF4",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T23:49:50.949Z"
+    },
+    {
+      "id": "refactor-10",
+      "family": "refactor",
+      "started": "2026-09-15T23:49:52.841Z",
       "status": "running"
     }
   ],
