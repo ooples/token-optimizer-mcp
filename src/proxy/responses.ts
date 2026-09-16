@@ -1,5 +1,6 @@
 /** Responses API tool outputs, including Codex custom tools.
- * Keep instructions, tool definitions, call IDs, and encrypted reasoning intact.
+ * Keep instructions, call IDs, and encrypted reasoning intact. Tool definitions
+ * are untouched unless the explicit tool-code whitespace experiment is enabled.
  * Compression is a stable function of each output, so appending a turn does not
  * rewrite the already-compressed prefix based on a newer user query.
  */

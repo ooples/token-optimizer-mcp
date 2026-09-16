@@ -1,0 +1,44 @@
+{
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-tool-code-2026-09-16\\json\\run-XxFGZx",
+  "scope": "Development cases, no confidence-backed confirmation claim.",
+  "pairs": [
+    {
+      "task": "json",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.174782,
+          "agentSeconds": 15,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.134388,
+          "agentSeconds": 15.4,
+          "requests": 3
+        }
+      },
+      "classification": "cost-loss"
+    },
+    {
+      "task": "json",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.175042,
+          "agentSeconds": 19,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.138932,
+          "agentSeconds": 16.5,
+          "requests": 3
+        }
+      },
+      "classification": "joint-loss"
+    }
+  ]
+}

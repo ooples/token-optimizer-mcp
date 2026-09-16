@@ -1,0 +1,44 @@
+{
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-tool-code-2026-09-16\\nullable\\run-TsDLQb",
+  "scope": "Development cases, no confidence-backed confirmation claim.",
+  "pairs": [
+    {
+      "task": "nullable",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.173484,
+          "agentSeconds": 12.5,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.120798,
+          "agentSeconds": 18.8,
+          "requests": 3
+        }
+      },
+      "classification": "cost-loss"
+    },
+    {
+      "task": "nullable",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.173054,
+          "agentSeconds": 15.5,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.115502,
+          "agentSeconds": 16.2,
+          "requests": 3
+        }
+      },
+      "classification": "cost-loss"
+    }
+  ]
+}

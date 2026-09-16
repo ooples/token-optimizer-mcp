@@ -1,0 +1,24 @@
+{
+  "model": "gpt-6-astra",
+  "arms": [
+    "proxy",
+    "headroom"
+  ],
+  "reps": 2,
+  "tasks": [
+    "nullable"
+  ],
+  "balanced": true,
+  "seedOffset": 2494523014,
+  "readMode": "natural",
+  "mcpDiscovery": "bounded",
+  "caseSuite": "adversarial-v1",
+  "toolCodeExperiment": true,
+  "hostMemoryPolicy": {
+    "platform": "win32",
+    "minimumCommitReserveBytes": 2147483648,
+    "minimumAvailablePhysicalBytes": 536870912,
+    "maximumSampleAgeMs": 5000
+  },
+  "started": "2026-09-16T16:31:02.522Z"
+}
