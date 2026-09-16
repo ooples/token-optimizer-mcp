@@ -201,9 +201,20 @@ test('Codex disconnect after terminal SSE settles the ledger and closes upstream
       cached_input_tokens: 80,
       output_tokens: 5,
     });
-    const capture = JSON.parse(
-      (await readFile(join(dir, 'requests.jsonl'), 'utf8')).trim()
-    );
+    // An existing ledger does not imply the independent async capture append
+    // has finished. Node 26 CI observed the file between creation and writing.
+    let captured = '';
+    for (let i = 0; i < 200; i++) {
+      try {
+        captured = await readFile(join(dir, 'requests.jsonl'), 'utf8');
+        if (captured.endsWith('\n')) break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(captured.endsWith('\n')).toBe(true);
+    const capture = JSON.parse(captured.trim());
     expect(capture.path).toBe(path);
     expect(capture.body).toBe('{"input":[]}');
   } finally {

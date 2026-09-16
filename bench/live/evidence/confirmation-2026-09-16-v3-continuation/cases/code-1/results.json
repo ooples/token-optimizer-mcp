@@ -1,0 +1,164 @@
+[
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 33155875,
+    "verdict": "PASS",
+    "agentSeconds": 29.8,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 74530,
+      "cached": 56320,
+      "output": 335
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 577975,
+    "afterBytes": 577975,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12899,
+          "output_tokens": 73,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13045,
+          "output_tokens": 51,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13747,
+          "output_tokens": 105,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 17348,
+          "output_tokens": 87,
+          "cached_input_tokens": 13568
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 17491,
+          "output_tokens": 19,
+          "cached_input_tokens": 17152
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-febda6e6.ts",
+      "line": 183,
+      "constant": "RETRY_LIMIT_FEBDA6E6",
+      "value": 19
+    },
+    "seconds": 40.9
+  },
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 33155875,
+    "verdict": "PASS",
+    "agentSeconds": 19,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 45325,
+      "cached": 28672,
+      "output": 207
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 233295,
+    "afterBytes": 214489,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12982,
+          "output_tokens": 77,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16099,
+          "output_tokens": 87,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16244,
+          "output_tokens": 43,
+          "cached_input_tokens": 15872
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-febda6e6.ts",
+      "line": 183,
+      "constant": "RETRY_LIMIT_FEBDA6E6",
+      "value": 19
+    },
+    "seconds": 19.9
+  }
+]
