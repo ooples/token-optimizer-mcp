@@ -1,0 +1,162 @@
+[
+  {
+    "task": "logs",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 932489495,
+    "verdict": "PASS",
+    "agentSeconds": 25.8,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 76272,
+      "cached": 39168,
+      "output": 334
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 580615,
+    "afterBytes": 580615,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12923,
+          "output_tokens": 75,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13073,
+          "output_tokens": 50,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13678,
+          "output_tokens": 109,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18245,
+          "output_tokens": 79,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18353,
+          "output_tokens": 21,
+          "cached_input_tokens": 13440
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-550457ee",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-12"
+    },
+    "seconds": 38.1
+  },
+  {
+    "task": "logs",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 932489495,
+    "verdict": "PASS",
+    "agentSeconds": 13.9,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 47710,
+      "cached": 39296,
+      "output": 194
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 234326,
+    "afterBytes": 204364,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13006,
+          "output_tokens": 80,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 17284,
+          "output_tokens": 81,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 17420,
+          "output_tokens": 33,
+          "cached_input_tokens": 17152
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-550457ee",
+      "code": "E_POOL_EXHAUSTED",
+      "worker": "worker-12"
+    },
+    "seconds": 14.8
+  }
+]

@@ -1,0 +1,164 @@
+[
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 846664398,
+    "verdict": "PASS",
+    "agentSeconds": 25.1,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "file_change",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 100027,
+      "cached": 82560,
+      "output": 319
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 589673,
+    "afterBytes": 589673,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12923,
+          "output_tokens": 77,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13075,
+          "output_tokens": 55,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22083,
+          "output_tokens": 92,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 25923,
+          "output_tokens": 76,
+          "cached_input_tokens": 21888
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 26023,
+          "output_tokens": 19,
+          "cached_input_tokens": 25728
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-fb861d50.ts",
+      "line": 13,
+      "constant": "RETRY_LIMIT_FB861D50",
+      "value": 27
+    },
+    "seconds": 37.2
+  },
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 846664398,
+    "verdict": "PASS",
+    "agentSeconds": 16.6,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 46094,
+      "cached": 29056,
+      "output": 205
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 238544,
+    "afterBytes": 217476,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13006,
+          "output_tokens": 81,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16473,
+          "output_tokens": 84,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16615,
+          "output_tokens": 40,
+          "cached_input_tokens": 16256
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-fb861d50.ts",
+      "line": 13,
+      "constant": "RETRY_LIMIT_FB861D50",
+      "value": 27
+    },
+    "seconds": 17.5
+  }
+]

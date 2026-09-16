@@ -1007,6 +1007,206 @@
       "id": "code-4",
       "family": "code",
       "started": "2026-09-16T03:21:08.401Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-p3bCox\\code-4\\run-C5E0sX",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T03:22:05.368Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-7",
+      "family": "refresh",
+      "started": "2026-09-16T03:22:06.731Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-p3bCox\\refresh-7\\run-McoP2p",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T03:23:52.979Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-5",
+      "family": "logs",
+      "started": "2026-09-16T03:23:54.368Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-p3bCox\\logs-5\\run-8xvKxG",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T03:24:48.422Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-3",
+      "family": "code",
+      "started": "2026-09-16T03:24:49.702Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-p3bCox\\code-3\\run-UUaaaI",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T03:25:46.523Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-4",
+      "family": "json",
+      "started": "2026-09-16T03:25:47.893Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-p3bCox\\json-4\\run-3k0IdQ",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T03:26:31.570Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-5",
+      "family": "mixed",
+      "started": "2026-09-16T03:26:32.956Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-p3bCox\\mixed-5\\run-nftG4k",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T03:28:26.803Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-4",
+      "family": "bugfix",
+      "started": "2026-09-16T03:28:28.183Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-p3bCox\\bugfix-4\\run-rlLV3v",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T03:30:33.578Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-9",
+      "family": "code",
+      "started": "2026-09-16T03:30:34.900Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-p3bCox\\code-9\\run-exX2xb",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T03:31:30.523Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "started": "2026-09-16T03:31:31.935Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-p3bCox\\mixed-8\\run-JgbeyI",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T03:33:37.806Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-10",
+      "family": "logs",
+      "started": "2026-09-16T03:33:39.156Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-p3bCox\\logs-10\\run-lkutiL",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T03:34:33.044Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-6",
+      "family": "refresh",
+      "started": "2026-09-16T03:34:34.239Z",
       "status": "running"
     }
   ],
