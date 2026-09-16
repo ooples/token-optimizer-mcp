@@ -1,0 +1,50 @@
+{
+  "scope": "Development validation of the outer-envelope truncation fix found in refresh-2. Two balanced pairs, fixed before calls, no retries. Includes the original seed and one fresh neighboring seed. Original 13-pair sweep remains separate.",
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-outer-envelope-live\\run-XdZJ8N",
+  "valid": true,
+  "arms": {
+    "proxy": {
+      "passes": 2,
+      "outerTruncated": true,
+      "input": 204594,
+      "output": 1656,
+      "requests": 14,
+      "agentSeconds": 95.8,
+      "estimatedUsd": 0.551652
+    },
+    "headroom": {
+      "passes": 2,
+      "outerTruncated": true,
+      "input": 243251,
+      "output": 1643,
+      "requests": 15,
+      "agentSeconds": 91.1,
+      "estimatedUsd": 0.8396520000000001
+    }
+  },
+  "pairs": [
+    {
+      "seed": 139520376,
+      "proxyEstimatedUsd": 0.341764,
+      "headroomEstimatedUsd": 0.347856
+    },
+    {
+      "seed": 139520377,
+      "proxyEstimatedUsd": 0.209888,
+      "headroomEstimatedUsd": 0.491796
+    }
+  ],
+  "compressedOuterFragments": [
+    {
+      "seed": 139520376,
+      "beforeChars": 8101,
+      "afterChars": 2521
+    },
+    {
+      "seed": 139520377,
+      "beforeChars": 8101,
+      "afterChars": 2490
+    }
+  ],
+  "estimatedCostReduction": 0.34299924254333936
+}

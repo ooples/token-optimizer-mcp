@@ -529,6 +529,17 @@ our estimated token cost was 50.1% lower, input 44.8% lower, and agent time 51.1
 lower. This is a small development follow-up, separate from the broader study.
 See the [captured bodies, reconstruction checks, and live evidence](bench/live/evidence/search-columns-2026-09-16/README.md).
 
+**Cost-loss follow-up (2026-09-16).** We investigated all 13 losing pairs and
+implemented exact ID-prefix factoring plus support for records inside truncated
+shell envelopes. A fixed follow-up of those 13 cases passed all 26 attempts;
+12 pairs favored our proxy, with 33.4% lower total estimated cost. The remaining
+loss exposed the outer-envelope bug. After fixing it, two balanced controlled
+pairs both favored our proxy: all four attempts passed, estimated cost was 34.3%
+lower, and input was 15.9% lower. These development runs retain every original
+loss; cache and model variation also affect results. See the [case-by-case audit,
+fixes, exact replay, and live evidence](bench/live/evidence/cost-losses-2026-09-16/README.md).
+
+
 **Local proxy performance (2026-09-16).** Against installed HeadRoom 0.37.0,
 2,160 completed local-upstream requests covered repeated and unique logs, JSON,
 and code-search output in three rotated arm orders. Our mean latency and process
