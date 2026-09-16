@@ -1,0 +1,142 @@
+[
+  {
+    "task": "numeric",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2843447769,
+    "verdict": "PASS",
+    "agentSeconds": 16.5,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 45576,
+      "cached": 38016,
+      "output": 179
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 245776,
+    "afterBytes": 245776,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12970,
+          "output_tokens": 77,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16238,
+          "output_tokens": 74,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16368,
+          "output_tokens": 28,
+          "cached_input_tokens": 16000
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-31da38bd-99",
+      "maximum": 718,
+      "minimum": -7
+    },
+    "seconds": 27.9
+  },
+  {
+    "task": "numeric",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2843447769,
+    "verdict": "PASS",
+    "agentSeconds": 16.9,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 43645,
+      "cached": 37376,
+      "output": 178
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 245729,
+    "afterBytes": 205817,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13053,
+          "output_tokens": 74,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15231,
+          "output_tokens": 74,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15361,
+          "output_tokens": 30,
+          "cached_input_tokens": 15104
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-31da38bd-99",
+      "maximum": 718,
+      "minimum": -7
+    },
+    "seconds": 17.8
+  }
+]

@@ -1,0 +1,142 @@
+[
+  {
+    "task": "numeric",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2512349486,
+    "verdict": "PASS",
+    "agentSeconds": 16.2,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 43646,
+      "cached": 37376,
+      "output": 183
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 245749,
+    "afterBytes": 205837,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13050,
+          "output_tokens": 77,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15232,
+          "output_tokens": 74,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15364,
+          "output_tokens": 32,
+          "cached_input_tokens": 15104
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-79bed562-171",
+      "maximum": 690,
+      "minimum": -7
+    },
+    "seconds": 17.1
+  },
+  {
+    "task": "numeric",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2512349486,
+    "verdict": "PASS",
+    "agentSeconds": 15.2,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 45079,
+      "cached": 28672,
+      "output": 181
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 245770,
+    "afterBytes": 245770,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12967,
+          "output_tokens": 76,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15992,
+          "output_tokens": 73,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16120,
+          "output_tokens": 32,
+          "cached_input_tokens": 15872
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-79bed562-171",
+      "maximum": 690,
+      "minimum": -7
+    },
+    "seconds": 26.5
+  }
+]
