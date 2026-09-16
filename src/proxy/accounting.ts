@@ -87,6 +87,9 @@ export interface CompressionFacts {
   readonly reason?: string;
   readonly anchorReason?: string;
   readonly elisions?: number;
+  /** References actually forwarded by the Responses deduplicator. */
+  readonly dedupReferences?: number;
+
   readonly deferredTools?: number;
   readonly deferredToolChars?: number;
   /**

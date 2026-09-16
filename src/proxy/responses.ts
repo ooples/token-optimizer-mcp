@@ -6,7 +6,12 @@
  */
 import { cachedOutput } from './output-cache.js';
 import { compactToolDefinitions } from './tool-code.js';
-import { ResponseDedup, responseEnvelope } from './response-dedup.js';
+import {
+  ResponseDedup,
+  responseEnvelope,
+  responseJsonEnvelope,
+  replaceJsonText,
+} from './response-dedup.js';
 import { tokenBenefit } from './token-gate.js';
 import { classify } from '../compress/router.js';
 import type { Tuning } from '../compress/options.js';
@@ -23,6 +28,7 @@ export function compressResponses(
   tuning?: Tuning
 ): { body: Buffer; summary: CompressionFacts } {
   let elisions = 0;
+  let dedupReferences = 0;
   let definitionsChanged = false;
   const compactDefinitions =
     process.env.TOKEN_OPTIMIZER_PROXY_TOOL_CODE === '1';
@@ -77,8 +83,24 @@ export function compressResponses(
       ].includes(String(item.type))
     )
       return item;
-    const transform = (text: string, at: string): string => {
+    const transform = (text: string, at: string, depth = 0): string => {
       if (text.length < 512) return text;
+      const shellOutput = depth < 2 ? responseJsonEnvelope(text) : undefined;
+      if (shellOutput !== undefined) {
+        const priorElisions = elisions;
+        const priorReferences = dedupReferences;
+        const inner = transform(
+          shellOutput,
+          `${at} JSON field "output"`,
+          depth + 1
+        );
+        const candidate =
+          inner === shellOutput ? text : replaceJsonText(text, 'output', inner);
+        if (tokenBenefit(text, candidate)) return candidate;
+        elisions = priorElisions;
+        dedupReferences = priorReferences;
+        return text;
+      }
       const { header, body: content } = responseEnvelope(text);
       const id = typeof item.call_id === 'string' ? item.call_id : item.id;
       if (
@@ -93,6 +115,7 @@ export function compressResponses(
       );
       if (reference !== content && tokenBenefit(text, header + reference)) {
         elisions++;
+        dedupReferences++;
         return header + reference;
       }
       const result = cachedOutput(text, spill, tuning);
@@ -110,7 +133,8 @@ export function compressResponses(
           if (!object(shell)) return text;
           let changed = false;
           const priorElisions = elisions;
-          const nextShell = { ...shell };
+          const priorReferences = dedupReferences;
+          let nextShell = text;
           for (const key of ['stdout', 'stderr', 'output']) {
             const value = shell[key];
             if (typeof value !== 'string' || value.length < 512) continue;
@@ -119,13 +143,18 @@ export function compressResponses(
               `${at} JSON field ${JSON.stringify(key)}`
             );
             if (candidate !== value) {
-              nextShell[key] = candidate;
+              nextShell = replaceJsonText(
+                nextShell,
+                key as 'stdout' | 'stderr' | 'output',
+                candidate
+              );
               changed = true;
             }
           }
-          const candidate = changed ? JSON.stringify(nextShell) : text;
+          const candidate = changed ? nextShell : text;
           if (!tokenBenefit(text, candidate)) {
             elisions = priorElisions;
+            dedupReferences = priorReferences;
             return text;
           }
           return candidate;
@@ -175,6 +204,7 @@ export function compressResponses(
       afterBytes: accepted ? encoded.length : body.length,
       compressed: accepted,
       elisions: accepted ? elisions : 0,
+      dedupReferences: accepted ? dedupReferences : 0,
       reason: accepted ? undefined : 'no compressible Responses tool output',
       messagesChars: JSON.stringify(input).length,
       messageCount: input.length,

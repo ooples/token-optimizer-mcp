@@ -1,0 +1,64 @@
+{
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\headroom-gap-probe-tRq4sN",
+  "kind": "offline synthetic route probe; no model tasks, no provider charges, bytes not tokens",
+  "cases": [
+    {
+      "name": "repeat-1",
+      "inputBytes": 11422,
+      "oursBytes": 2066,
+      "headroomBytes": 4356
+    },
+    {
+      "name": "repeat-2",
+      "inputBytes": 22716,
+      "oursBytes": 2186,
+      "headroomBytes": 4461
+    },
+    {
+      "name": "repeat-3",
+      "inputBytes": 34010,
+      "oursBytes": 2306,
+      "headroomBytes": 4566
+    },
+    {
+      "name": "small",
+      "inputBytes": 802,
+      "oursBytes": 802,
+      "headroomBytes": 802
+    },
+    {
+      "name": "small-nine-rows",
+      "inputBytes": 1111,
+      "oursBytes": 733,
+      "headroomBytes": 689
+    },
+    {
+      "name": "output-text",
+      "inputBytes": 11454,
+      "oursBytes": 2098,
+      "headroomBytes": 4388
+    },
+    {
+      "name": "local-shell-array",
+      "inputBytes": 11425,
+      "oursBytes": 11425,
+      "headroomBytes": 4359
+    },
+    {
+      "name": "local-shell",
+      "inputBytes": 13892,
+      "oursBytes": 2951,
+      "headroomBytes": 4506
+    },
+    {
+      "name": "apply-patch",
+      "inputBytes": 11443,
+      "oursBytes": 2087,
+      "headroomBytes": 4377
+    }
+  ],
+  "prefixStability": {
+    "ours": true,
+    "headroom": true
+  }
+}

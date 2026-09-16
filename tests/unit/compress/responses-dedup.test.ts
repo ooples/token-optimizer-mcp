@@ -75,6 +75,43 @@ test('unrecognized headers and changed error details are not stripped', () => {
   expect(result[1].output).not.toContain('Repeated observation');
 });
 
+test('real Codex JSON shell envelopes retain metadata while duplicate output folds', () => {
+  const envelope = (chunk: string, time: number) =>
+    JSON.stringify({
+      chunk_id: chunk,
+      wall_time_seconds: time,
+      exit_code: 1,
+      original_token_count: 5000,
+      output: text,
+    });
+  const first = output(
+    [{ type: 'input_text', text: envelope('aa', 0.1) }],
+    1,
+    'custom_tool_call_output'
+  );
+  const second = output(
+    [{ type: 'input_text', text: envelope('bb', 0.2) }],
+    2,
+    'custom_tool_call_output'
+  );
+  const result = run([first, second]);
+  const request = { input: [first, second] };
+  expect(
+    compressResponses(Buffer.from(JSON.stringify(request)), request, spill)
+      .summary.dedupReferences
+  ).toBe(1);
+  expect(result.slice(0, 1)).toEqual(run([first]));
+  const decoded = JSON.parse(result[1].output[0].text);
+  expect(decoded.output).toContain(
+    'input[0].output[0].text JSON field "output"'
+  );
+  expect(decoded.output).toContain('Repeated observation');
+  expect({ ...decoded, output: null }).toEqual({
+    ...JSON.parse(envelope('bb', 0.2)),
+    output: null,
+  });
+});
+
 test('output_text parts preserve annotations, image data, order, and unknown parts', () => {
   const image = { type: 'input_image', image_url: 'data:image/png;base64,abc' };
   const unknown = { type: 'future_text', text };
@@ -117,6 +154,15 @@ test('malformed and non-object local-shell envelopes pass through exactly', () =
     output('invalid:' + text, 2, 'local_shell_call_output'),
   ];
   expect(run(items)).toEqual(items);
+});
+
+test('local-shell metadata numbers preserve their original lexical precision', () => {
+  const raw = `{"stdout":${JSON.stringify(text)},"stderr":"","counter":9007199254740993123}`;
+  const result = run([
+    { type: 'local_shell_call_output', id: 'lc2', output: raw },
+  ])[0];
+  expect(result.output).toContain('"counter":9007199254740993123');
+  expect(result.output.length).toBeLessThan(raw.length);
 });
 
 test('patch output preserves failed status, call ID, and absent output', () => {
@@ -197,7 +243,7 @@ test('small lexical tables reconstruct escapes, nulls and oversized integers exa
   const compact = compressJsonArray(original, 3);
   expect(compact.text.length).toBeLessThan(original.length);
   const expanded = compact.text.replace(
-    /\[JSON array records; ALL \d+ records preserved\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: (\[[^\n]+\])\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
+    /\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: (\[[^\n]+\])\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
     (_all, encoded: string, data: string) => {
       const template = JSON.parse(encoded) as (string | number)[];
       return data

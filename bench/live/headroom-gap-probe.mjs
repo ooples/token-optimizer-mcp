@@ -59,6 +59,35 @@ const cases = [
     payload([{ ...item(large, 'apply_patch_call_output'), status: 'failed' }]),
   ],
 ];
+for (const n of [1, 2, 3]) {
+  cases.push([
+    `nested-repeat-${n}`,
+    payload(
+      Array.from({ length: n }, (_, i) =>
+        item(
+          [
+            {
+              type: 'input_text',
+              text: `Script completed\nWall time 0.${i} seconds\nOutput:\n`,
+            },
+            {
+              type: 'input_text',
+              text: JSON.stringify({
+                chunk_id: `chunk-${i}`,
+                wall_time_seconds: i / 10,
+                exit_code: 0,
+                original_token_count: 4000,
+                output: large,
+              }),
+            },
+          ],
+          'custom_tool_call_output',
+          i + 1
+        )
+      )
+    ),
+  ]);
+}
 let received;
 const upstream = createServer(async (req, res) => {
   const parts = [];

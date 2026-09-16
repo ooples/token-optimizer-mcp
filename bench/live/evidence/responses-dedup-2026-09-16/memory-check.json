@@ -1,0 +1,15 @@
+{
+  "scope": "Single constrained process, 300 repeated results, 100 warm requests. Old-space limit 32 MiB is not an RSS limit. Snapshot is not peak memory.",
+  "productCommit": "90f42537",
+  "beforeBytes": 3496101,
+  "afterBytes": 37867,
+  "coldMs": 246.6692,
+  "warmMeanMs": 13.95342,
+  "snapshot": {
+    "rss": 91824128,
+    "heapTotal": 19279872,
+    "heapUsed": 10264728,
+    "external": 41350597,
+    "arrayBuffers": 9175601
+  }
+}

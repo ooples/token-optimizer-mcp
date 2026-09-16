@@ -124,13 +124,14 @@ export function compressJsonArray(
     found = records(text, true);
   }
   if (found.length !== parsed.length) return unchanged(text);
-  return compressRecords(text, found, true);
+  return compressRecords(text, found, true, minimumRows < 32);
 }
 
 function compressRecords(
   text: string,
   found: RecordParts[],
-  complete: boolean
+  complete: boolean,
+  shortHeader = false
 ): CompressionResult {
   const elisions: Elision[] = [];
   let result = '',
@@ -195,10 +196,12 @@ function compressRecords(
       });
       template.push(literal);
       const compact =
-        (complete
-          ? `[JSON array records; ALL ${found.length} records preserved. `
-          : '[JSON fragment records; missing records remain unknown. ') +
-        'Join template parts, replacing numeric slots with verbatim text fragments from each row. Template: ' +
+        (shortHeader
+          ? `[All ${found.length} JSON records; join template strings and row[integer] verbatim. Template: `
+          : (complete
+              ? `[JSON array records; ALL ${found.length} records preserved. `
+              : '[JSON fragment records; missing records remain unknown. ') +
+            'Join template parts, replacing numeric slots with verbatim text fragments from each row. Template: ') +
         JSON.stringify(template) +
         ']\n' +
         group
