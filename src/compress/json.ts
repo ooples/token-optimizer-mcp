@@ -36,7 +36,11 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
-import { booleanFacts, rareBooleanRows, rareStringGroups } from './json-facts.js';
+import {
+  booleanFacts,
+  rareBooleanRows,
+  rareStringGroups,
+} from './json-facts.js';
 import { needleRows, shapeRepresentatives } from './needles.js';
 import { compressNestedStrings } from './nested.js';
 import { activeRanker } from './ranking.js';
@@ -341,7 +345,8 @@ export function compressJson(
           (odd.size
             ? `; all ${count(odd.size, 'row')} that differ are kept above`
             : '') +
-          booleanFacts(parsed as unknown[]) + categories.facts,
+          booleanFacts(parsed as unknown[]) +
+          categories.facts,
         recoverAt
       ) +
       ']';

@@ -1,0 +1,321 @@
+{
+  "scope": "Descriptive totals over fully measured pairs only. Failed/incomplete attempts remain in analysis.json; no confidence interval or superiority claim.",
+  "excludedPairs": [
+    "bugfix-10: Provider error or missing ledger"
+  ],
+  "all": {
+    "pairs": 69,
+    "arms": {
+      "proxy": {
+        "estimatedUsd": 15.567342,
+        "input": 4413196,
+        "cached": 3386752,
+        "output": 38323,
+        "requests": 298,
+        "agentSeconds": 2235.6000000000004,
+        "seconds": 2306.099999999999,
+        "firstRequestColdSensitivityUsd": 18.572909999999997,
+        "allInputUncachedSensitivityUsd": 46.04811
+      },
+      "headroom": {
+        "estimatedUsd": 21.595102,
+        "input": 7913115,
+        "cached": 6668672,
+        "output": 49640,
+        "requests": 477,
+        "agentSeconds": 3274.800000000001,
+        "seconds": 4089.399999999999,
+        "firstRequestColdSensitivityUsd": 25.272286,
+        "allInputUncachedSensitivityUsd": 81.61315
+      }
+    },
+    "reductions": {
+      "estimatedUsd": 0.2791262574263368,
+      "input": 0.44229345839154366,
+      "cached": 0.49213996429873896,
+      "output": 0.22798146655922646,
+      "requests": 0.3752620545073375,
+      "agentSeconds": 0.317332356174423,
+      "seconds": 0.43607864234362026,
+      "firstRequestColdSensitivityUsd": 0.26508785156989767,
+      "allInputUncachedSensitivityUsd": 0.4357758522983123
+    },
+    "proxyCostWins": 56
+  },
+  "families": {
+    "bugfix": {
+      "pairs": 9,
+      "arms": {
+        "proxy": {
+          "estimatedUsd": 2.810328,
+          "input": 702391,
+          "cached": 514048,
+          "output": 8257,
+          "requests": 47,
+          "agentSeconds": 433,
+          "seconds": 443.70000000000005,
+          "firstRequestColdSensitivityUsd": 3.0246,
+          "allInputUncachedSensitivityUsd": 7.43676
+        },
+        "headroom": {
+          "estimatedUsd": 3.679958,
+          "input": 1383463,
+          "cached": 1182208,
+          "output": 9704,
+          "requests": 81,
+          "agentSeconds": 594.4999999999999,
+          "seconds": 702.5999999999999,
+          "firstRequestColdSensitivityUsd": 4.223702,
+          "allInputUncachedSensitivityUsd": 14.31983
+        }
+      },
+      "reductions": {
+        "estimatedUsd": 0.23631519707561877,
+        "input": 0.49229505957152453,
+        "cached": 0.5651797314854916,
+        "output": 0.1491137675185491,
+        "requests": 0.41975308641975306,
+        "agentSeconds": 0.2716568544995793,
+        "seconds": 0.3684884713919725,
+        "firstRequestColdSensitivityUsd": 0.28389834320697815,
+        "allInputUncachedSensitivityUsd": 0.48066701909170706
+      },
+      "proxyCostWins": 7
+    },
+    "code": {
+      "pairs": 10,
+      "arms": {
+        "proxy": {
+          "estimatedUsd": 1.7562440000000001,
+          "input": 454055,
+          "cached": 320384,
+          "output": 1983,
+          "requests": 30,
+          "agentSeconds": 169,
+          "seconds": 178.29999999999998,
+          "firstRequestColdSensitivityUsd": 2.26082,
+          "allInputUncachedSensitivityUsd": 4.6397
+        },
+        "headroom": {
+          "estimatedUsd": 2.422538,
+          "input": 816625,
+          "cached": 656768,
+          "output": 3344,
+          "requests": 50,
+          "agentSeconds": 276.09999999999997,
+          "seconds": 393.5,
+          "firstRequestColdSensitivityUsd": 3.003146,
+          "allInputUncachedSensitivityUsd": 8.33345
+        }
+      },
+      "reductions": {
+        "estimatedUsd": 0.2750396485008697,
+        "input": 0.44398591764885964,
+        "cached": 0.5121808614305203,
+        "output": 0.4069976076555024,
+        "requests": 0.4,
+        "agentSeconds": 0.38790293371966666,
+        "seconds": 0.546886912325286,
+        "firstRequestColdSensitivityUsd": 0.24718278765001778,
+        "allInputUncachedSensitivityUsd": 0.4432437945868757
+      },
+      "proxyCostWins": 9
+    },
+    "json": {
+      "pairs": 10,
+      "arms": {
+        "proxy": {
+          "estimatedUsd": 1.249464,
+          "input": 400422,
+          "cached": 317184,
+          "output": 1998,
+          "requests": 30,
+          "agentSeconds": 158.1,
+          "seconds": 167.99999999999997,
+          "firstRequestColdSensitivityUsd": 1.7540400000000003,
+          "allInputUncachedSensitivityUsd": 4.10412
+        },
+        "headroom": {
+          "estimatedUsd": 1.724574,
+          "input": 487966,
+          "cached": 360704,
+          "output": 1825,
+          "requests": 30,
+          "agentSeconds": 158.70000000000002,
+          "seconds": 274.3,
+          "firstRequestColdSensitivityUsd": 2.3881259999999997,
+          "allInputUncachedSensitivityUsd": 4.97091
+        }
+      },
+      "reductions": {
+        "estimatedUsd": 0.27549412202665713,
+        "input": 0.17940594221728567,
+        "cached": 0.12065294535131299,
+        "output": -0.09479452054794524,
+        "requests": 0,
+        "agentSeconds": 0.003780718336484079,
+        "seconds": 0.3875318993802408,
+        "firstRequestColdSensitivityUsd": 0.26551614110813226,
+        "allInputUncachedSensitivityUsd": 0.17437249920034759
+      },
+      "proxyCostWins": 7
+    },
+    "logs": {
+      "pairs": 10,
+      "arms": {
+        "proxy": {
+          "estimatedUsd": 1.7081080000000002,
+          "input": 474860,
+          "cached": 348288,
+          "output": 1882,
+          "requests": 30,
+          "agentSeconds": 154.60000000000002,
+          "seconds": 164.3,
+          "firstRequestColdSensitivityUsd": 2.2587639999999998,
+          "allInputUncachedSensitivityUsd": 4.8427
+        },
+        "headroom": {
+          "estimatedUsd": 2.539112,
+          "input": 810312,
+          "cached": 637312,
+          "output": 3436,
+          "requests": 50,
+          "agentSeconds": 273.7,
+          "seconds": 393.8,
+          "firstRequestColdSensitivityUsd": 3.11972,
+          "allInputUncachedSensitivityUsd": 8.27492
+        }
+      },
+      "reductions": {
+        "estimatedUsd": 0.3272813487549977,
+        "input": 0.41397881309915197,
+        "cached": 0.4535047198232577,
+        "output": 0.4522700814901047,
+        "requests": 0.4,
+        "agentSeconds": 0.4351479722323711,
+        "seconds": 0.5827831386490604,
+        "firstRequestColdSensitivityUsd": 0.2759722026335698,
+        "allInputUncachedSensitivityUsd": 0.4147737984173865
+      },
+      "proxyCostWins": 9
+    },
+    "mixed": {
+      "pairs": 10,
+      "arms": {
+        "proxy": {
+          "estimatedUsd": 2.6116219999999997,
+          "input": 844861,
+          "cached": 687232,
+          "output": 6962,
+          "requests": 61,
+          "agentSeconds": 454.80000000000007,
+          "seconds": 464.30000000000007,
+          "firstRequestColdSensitivityUsd": 3.0781819999999995,
+          "allInputUncachedSensitivityUsd": 8.79671
+        },
+        "headroom": {
+          "estimatedUsd": 3.301154,
+          "input": 1507287,
+          "cached": 1357824,
+          "output": 8974,
+          "requests": 92,
+          "agentSeconds": 608.6999999999999,
+          "seconds": 724.3,
+          "firstRequestColdSensitivityUsd": 3.890978,
+          "allInputUncachedSensitivityUsd": 15.52157
+        }
+      },
+      "reductions": {
+        "estimatedUsd": 0.2088760475882071,
+        "input": 0.43948232818302024,
+        "cached": 0.49387254901960786,
+        "output": 0.2242032538444395,
+        "requests": 0.3369565217391305,
+        "agentSeconds": 0.25283390832922603,
+        "seconds": 0.35896727875189827,
+        "firstRequestColdSensitivityUsd": 0.2088924686801109,
+        "allInputUncachedSensitivityUsd": 0.43325900665976447
+      },
+      "proxyCostWins": 7
+    },
+    "refactor": {
+      "pairs": 10,
+      "arms": {
+        "proxy": {
+          "estimatedUsd": 2.362126,
+          "input": 552624,
+          "cached": 407296,
+          "output": 10031,
+          "requests": 40,
+          "agentSeconds": 444.4,
+          "seconds": 456.00000000000006,
+          "firstRequestColdSensitivityUsd": 2.622478,
+          "allInputUncachedSensitivityUsd": 6.02779
+        },
+        "headroom": {
+          "estimatedUsd": 4.327514,
+          "input": 1561601,
+          "cached": 1334144,
+          "output": 14376,
+          "requests": 93,
+          "agentSeconds": 760,
+          "seconds": 878.0000000000001,
+          "firstRequestColdSensitivityUsd": 4.75145,
+          "allInputUncachedSensitivityUsd": 16.33481
+        }
+      },
+      "reductions": {
+        "estimatedUsd": 0.45416098018400397,
+        "input": 0.64611702989432,
+        "cached": 0.6947136141226135,
+        "output": 0.30223984418475236,
+        "requests": 0.5698924731182795,
+        "agentSeconds": 0.4152631578947369,
+        "seconds": 0.48063781321184507,
+        "firstRequestColdSensitivityUsd": 0.4480678529711982,
+        "allInputUncachedSensitivityUsd": 0.6309849946219148
+      },
+      "proxyCostWins": 10
+    },
+    "refresh": {
+      "pairs": 10,
+      "arms": {
+        "proxy": {
+          "estimatedUsd": 3.0694500000000002,
+          "input": 983983,
+          "cached": 792320,
+          "output": 7210,
+          "requests": 60,
+          "agentSeconds": 421.7,
+          "seconds": 431.5,
+          "firstRequestColdSensitivityUsd": 3.5740260000000004,
+          "allInputUncachedSensitivityUsd": 10.20033
+        },
+        "headroom": {
+          "estimatedUsd": 3.6002520000000002,
+          "input": 1345861,
+          "cached": 1139712,
+          "output": 7981,
+          "requests": 81,
+          "agentSeconds": 603.1,
+          "seconds": 722.9,
+          "firstRequestColdSensitivityUsd": 3.8951640000000007,
+          "allInputUncachedSensitivityUsd": 13.85766
+        }
+      },
+      "reductions": {
+        "estimatedUsd": 0.14743467957242995,
+        "input": 0.268882150534119,
+        "cached": 0.304806828391734,
+        "output": 0.09660443553439424,
+        "requests": 0.2592592592592593,
+        "agentSeconds": 0.30077930691427623,
+        "seconds": 0.4030986305159773,
+        "firstRequestColdSensitivityUsd": 0.08244530910636894,
+        "allInputUncachedSensitivityUsd": 0.263921181498175
+      },
+      "proxyCostWins": 7
+    }
+  },
+  "sensitivity": "Frozen 10/1/50 USD per million token scenario. Uncached sensitivities hold observed model behavior fixed; not controlled cold-cache experiments."
+}

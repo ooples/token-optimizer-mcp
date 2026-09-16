@@ -1,0 +1,38 @@
+{
+  "reconstructedProxyBodies": 48,
+  "fresh": {
+    "cases": 8,
+    "arms": {
+      "proxy": {
+        "forwardedBytes": 6370.375,
+        "estimatedO200kTokens": 1977.875,
+        "milliseconds": 6.958837499999916
+      },
+      "headroom": {
+        "forwardedBytes": 11877.25,
+        "estimatedO200kTokens": 3456,
+        "milliseconds": 374.6330624999998
+      }
+    },
+    "reductions": {
+      "forwardedBytes": 0.46364899282241256,
+      "estimatedO200kTokens": 0.4276982060185185,
+      "milliseconds": 0.9814249242884164
+    },
+    "byteWins": 8
+  },
+  "originalLosingInputs": {
+    "cases": 40,
+    "oldProxyMeanBytes": 11208,
+    "archivedHeadroomMeanBytes": 10600.3,
+    "newProxyMeanBytes": 6620,
+    "reductionVersusArchivedHeadroom": 0.37548937294227513,
+    "reductionVersusOldProxy": 0.4093504639543183
+  },
+  "limitations": [
+    "Local upstream; no model-quality or billed-cost inference.",
+    "o200k_base measures serialized request-body token estimates, not observed model usage.",
+    "Eight fresh cases, two opposite arm orders, no inferential interval.",
+    "Original-input replay compares new proxy bytes with archived comparator bytes; not a concurrent latency comparison."
+  ]
+}

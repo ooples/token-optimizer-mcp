@@ -1014,7 +1014,8 @@ function forward(
         path: requestPath(req.url) ?? '/',
         status: 0,
         ...facts,
-        transportError: (error as NodeJS.ErrnoException).code ?? 'UPSTREAM_ERROR',
+        transportError:
+          (error as NodeJS.ErrnoException).code ?? 'UPSTREAM_ERROR',
         usage: {},
       });
     }

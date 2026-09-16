@@ -1,0 +1,206 @@
+[
+  {
+    "task": "bugfix",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "workflow",
+    "artifactLayout": 2,
+    "seed": 540989732,
+    "verdict": "FAIL",
+    "agentSeconds": 14.1,
+    "read": {
+      "notApplicable": true
+    },
+    "validation": {
+      "passed": false,
+      "failures": [
+        "node:internal/modules/run_main:122\r\n    triggerUncaughtException(\r\n    ^\r\n\r\nAssertionError [ERR_ASSERTION]: {\"status\":429,\"attempt\":1}\r\n\r\nnull !== 137\r\n\r\n    at file:///C:/Users/yolan/source/repos/token-optimizer-mcp/[eval1]:11:16 {\r\n  generatedMessage: false,\r\n  code: 'ERR_ASSERTION',\r\n  actual: null,\r\n  expected: 137,\r\n  operator: 'strictEqual'\r\n}\r\n\r\nNode.js v22.15.0\r\n"
+      ]
+    },
+    "exit": 1,
+    "clientErrors": [
+      "unexpected status 503 Service Unavailable: upstream connect error or disconnect/reset before headers. retried and the latest reset reason: connection timeout, url: http://127.0.0.1:58283/backend-api/codex/responses, cf-ray: a3bce2307f844b49-BOS"
+    ],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": null,
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 192829,
+    "afterBytes": 192829,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12942,
+          "output_tokens": 83,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13173,
+          "output_tokens": 53,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 503,
+        "usage": {}
+      }
+    ],
+    "seconds": 15.1
+  },
+  {
+    "task": "bugfix",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "workflow",
+    "artifactLayout": 2,
+    "seed": 540989732,
+    "verdict": "PASS",
+    "agentSeconds": 61.8,
+    "read": {
+      "notApplicable": true
+    },
+    "validation": {
+      "passed": true,
+      "failures": []
+    },
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "type": "file_change",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 165831,
+      "cached": 148864,
+      "output": 1107
+    },
+    "requests": 8,
+    "compressedRequests": 0,
+    "beforeBytes": 819206,
+    "afterBytes": 819206,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12859,
+          "output_tokens": 92,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13023,
+          "output_tokens": 51,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22027,
+          "output_tokens": 35,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22111,
+          "output_tokens": 83,
+          "cached_input_tokens": 21888
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22629,
+          "output_tokens": 43,
+          "cached_input_tokens": 21888
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 23983,
+          "output_tokens": 386,
+          "cached_input_tokens": 22400
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 24393,
+          "output_tokens": 338,
+          "cached_input_tokens": 23808
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 24806,
+          "output_tokens": 79,
+          "cached_input_tokens": 24192
+        }
+      }
+    ],
+    "seconds": 72.9
+  }
+]

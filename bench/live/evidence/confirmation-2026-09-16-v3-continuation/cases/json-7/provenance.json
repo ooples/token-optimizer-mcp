@@ -1,0 +1,30 @@
+{
+  "capturedAt": "2026-09-16T03:47:38.645Z",
+  "node": "v22.15.0",
+  "codex": "codex-cli 0.154.0",
+  "headroom": "0.37.0",
+  "gitHead": "a03f5853248c171edce198143f593dc786eba9bb",
+  "proxyBin": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\cli.js",
+  "sha256": {
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\index.js": "6a49f1c1ced0ae092da9b7c23ec61c1cc1694dc7e8652ed9da7c317d81e304d2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\server\\tool-profile.js": "586f6e42c89ae9893af85f461c8d751bba9c54e6d67ab6db8f6bd6e14d15e2a4",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\tools\\file-operations\\smart-read.js": "60da85f59440fb857c4c2a837bb3b28fc776c4ae48578d034bbbbe674576f194",
+    "bench/live/codex.mjs": "aa9831dae09cb4961ace5840be939056bd71ee381ae3880a858d662efe57edca",
+    "bench/live/codex-workflows.mjs": "0a593f25ce3bc132e78a298e86e9b90508939b3e9b1e810e0b05a8e481024f31",
+    "bench/live/heldout-cases.mjs": "7cf5df655d577cd30d27048bff80c553f3df73e8910e6a075112ed9ccea5c983",
+    "bench/live/codex-mcp-evidence.mjs": "1fec76a27d7e8e45259a2133dc5866c21e59bcf7c5a25ba81fbeb2145050acee",
+    "bench/live/report-codex.mjs": "3d24aaceac4b554065f141de5eecfb99cd2acc235465cb2fa320b21d6bbe35f2",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\cli.js": "53a4ad2ee11775705dadefc5b3b05e3792adab64801286537e9d2a962238549e",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\server.js": "851020449a33e69dcc8d4d6582db0e69f89163724360b6edfc5d47e3f94d0aa0",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\responses.js": "e267989ed11e4ae248ad6a6f0e2243b320e5816ea1f164b857aee5dd1045dda9",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\output-cache.js": "6fccfeea99f0ba497a0a3ab05b6545f2a615dc1763fe237e5be8b32e9fb83113",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\accounting.js": "1be2326a2449290a13c3c0cf1c2506e71c05107df9c4222c98a86de139e15bf1",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\capture.js": "d2912dbebd594cde64707a865a8f6a9ca5bb973f4de7b394ccfbcfb78e238316",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\router.js": "ff49c5207512d940840cc84812e0ec42e9705159fafe9efd37b3fcfedd296ff5",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\tap.js": "fd32dfd41265b57d151588ce3586fa0ea2b09f4b4eabead005f60ee1c8ff2fce",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\json-fragments.js": "f86ffa1d276639477705f5bebf979aedfe856d3a35cb22e51f1bd00aed76f0d6",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\json-sections.js": "05a2cda96106c0dc3791702e8feb77d10e28c13a22763b60c062c692d46a2292",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\json.js": "72ef662cea9f840623cc6090ad9c173a8703fce803ca32562c6fc9da810fb780",
+    "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\compress\\json-facts.js": "3ca265e39b0117ceea8532184225e11a79e438032cab7900dee4a3e1b78af50b"
+  }
+}

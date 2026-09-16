@@ -512,6 +512,16 @@ our arm; one measured pair still cost more. These are development results, not
 confirmation of the new build or an all-workload win. See the
 [complete screen and exclusions](bench/live/evidence/json-categories-2026-09-16/README.md).
 
+**Current amended Codex study.** The next fixed 70-pair schedule completed:
+our proxy passed 69/70 and HeadRoom 70/70. Our remaining attempt hit an upstream
+503 with unknown usage, so strict superiority was not established. Across the
+69 fully measured pairs only, estimated cost was 27.9% lower, input 44.2% lower,
+and agent time 31.7% lower. Every family's mean cost favored our proxy, including
+JSON at 27.5% lower, but 13 individual pairs still cost more. The run includes a
+disclosed repair to a between-case file-hashing failure; the original product and
+schedule stayed fixed. See the [full results, amendment, and retained failure](bench/live/evidence/confirmation-2026-09-16-v3-continuation/README.md).
+Subsequent declaration-row compression is separate development work.
+
 **Local proxy performance (2026-09-16).** Against installed HeadRoom 0.37.0,
 2,160 completed local-upstream requests covered repeated and unique logs, JSON,
 and code-search output in three rotated arm orders. Our mean latency and process

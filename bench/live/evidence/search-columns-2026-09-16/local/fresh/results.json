@@ -1,0 +1,154 @@
+{
+  "complete": true,
+  "localUpstreamOnly": true,
+  "headroomOverrides": [
+    "--no-rate-limit"
+  ],
+  "tokenizer": "o200k_base estimate, not observed model usage",
+  "rows": [
+    {
+      "round": 0,
+      "arm": "proxy",
+      "seed": 1900000201,
+      "milliseconds": 13.36360000000002,
+      "rawBytes": 17551,
+      "forwardedBytes": 6047,
+      "estimatedO200kTokens": 1874
+    },
+    {
+      "round": 0,
+      "arm": "proxy",
+      "seed": 1900000202,
+      "milliseconds": 6.554399999999987,
+      "rawBytes": 18700,
+      "forwardedBytes": 6417,
+      "estimatedO200kTokens": 1994
+    },
+    {
+      "round": 0,
+      "arm": "proxy",
+      "seed": 1900000203,
+      "milliseconds": 5.95900000000006,
+      "rawBytes": 17307,
+      "forwardedBytes": 5967,
+      "estimatedO200kTokens": 1859
+    },
+    {
+      "round": 0,
+      "arm": "proxy",
+      "seed": 1900000204,
+      "milliseconds": 6.24369999999999,
+      "rawBytes": 22269,
+      "forwardedBytes": 7567,
+      "estimatedO200kTokens": 2351
+    },
+    {
+      "round": 0,
+      "arm": "headroom",
+      "seed": 1900000201,
+      "milliseconds": 1424.348399999999,
+      "rawBytes": 17551,
+      "forwardedBytes": 11238,
+      "estimatedO200kTokens": 3269
+    },
+    {
+      "round": 0,
+      "arm": "headroom",
+      "seed": 1900000202,
+      "milliseconds": 30.928200000000288,
+      "rawBytes": 18700,
+      "forwardedBytes": 11969,
+      "estimatedO200kTokens": 3484
+    },
+    {
+      "round": 0,
+      "arm": "headroom",
+      "seed": 1900000203,
+      "milliseconds": 31.004500000000917,
+      "rawBytes": 17307,
+      "forwardedBytes": 11082,
+      "estimatedO200kTokens": 3234
+    },
+    {
+      "round": 0,
+      "arm": "headroom",
+      "seed": 1900000204,
+      "milliseconds": 30.559800000000905,
+      "rawBytes": 22269,
+      "forwardedBytes": 14240,
+      "estimatedO200kTokens": 4136
+    },
+    {
+      "round": 1,
+      "arm": "headroom",
+      "seed": 1900000205,
+      "milliseconds": 1396.775999999998,
+      "rawBytes": 18095,
+      "forwardedBytes": 11584,
+      "estimatedO200kTokens": 3368
+    },
+    {
+      "round": 1,
+      "arm": "headroom",
+      "seed": 1900000206,
+      "milliseconds": 30.494599999998172,
+      "rawBytes": 18820,
+      "forwardedBytes": 12045,
+      "estimatedO200kTokens": 3506
+    },
+    {
+      "round": 1,
+      "arm": "headroom",
+      "seed": 1900000207,
+      "milliseconds": 26.05840000000171,
+      "rawBytes": 17611,
+      "forwardedBytes": 11276,
+      "estimatedO200kTokens": 3283
+    },
+    {
+      "round": 1,
+      "arm": "headroom",
+      "seed": 1900000208,
+      "milliseconds": 26.894599999999627,
+      "rawBytes": 18095,
+      "forwardedBytes": 11584,
+      "estimatedO200kTokens": 3368
+    },
+    {
+      "round": 1,
+      "arm": "proxy",
+      "seed": 1900000205,
+      "milliseconds": 8.686600000000908,
+      "rawBytes": 18095,
+      "forwardedBytes": 6222,
+      "estimatedO200kTokens": 1928
+    },
+    {
+      "round": 1,
+      "arm": "proxy",
+      "seed": 1900000206,
+      "milliseconds": 5.450600000000122,
+      "rawBytes": 18820,
+      "forwardedBytes": 6455,
+      "estimatedO200kTokens": 2006
+    },
+    {
+      "round": 1,
+      "arm": "proxy",
+      "seed": 1900000207,
+      "milliseconds": 4.927999999999884,
+      "rawBytes": 17611,
+      "forwardedBytes": 6066,
+      "estimatedO200kTokens": 1883
+    },
+    {
+      "round": 1,
+      "arm": "proxy",
+      "seed": 1900000208,
+      "milliseconds": 4.4847999999983585,
+      "rawBytes": 18095,
+      "forwardedBytes": 6222,
+      "estimatedO200kTokens": 1928
+    }
+  ]
+}
