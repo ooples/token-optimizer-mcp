@@ -40,6 +40,13 @@ export function responseEnvelope(text: string): {
     : { header: '', body: text };
 }
 
+type ShellEnvelope = {
+  output: string;
+  field?: { start: number; end: number } | null;
+};
+const shellEnvelopes = new Map<string, ShellEnvelope>();
+let shellBytes = 0;
+
 /** Patch just one JSON string value, preserving every other lexical byte. An
  * ambiguous duplicate/nested key is deliberately ineligible. JSON parsing is
  * used for validation, never to reserialize large integers or unknown metadata.
@@ -49,15 +56,23 @@ export function replaceJsonText(
   key: 'output' | 'stdout' | 'stderr',
   value: string
 ): string {
-  const field = new RegExp(`"${key}"\\s*:\\s*("(?:\\\\.|[^"\\\\])*")`, 'g');
-  const matches = [...text.matchAll(field)];
-  if (matches.length !== 1) return text;
-  const match = matches[0];
-  const start = match.index! + match[0].length - match[1].length;
+  const envelope = key === 'output' ? shellEnvelopes.get(text) : undefined;
+  let position = envelope?.field;
+  if (position === undefined) {
+    const field = new RegExp(`"${key}"\\s*:\\s*("(?:\\\\.|[^"\\\\])*")`, 'g');
+    const match = field.exec(text);
+    position = null;
+    if (match && !field.exec(text)) {
+      const start = match.index + match[0].length - match[1].length;
+      position = { start, end: start + match[1].length };
+    }
+    if (envelope) envelope.field = position;
+  }
+  if (!position) return text;
   return (
-    text.slice(0, start) +
+    text.slice(0, position.start) +
     JSON.stringify(value) +
-    text.slice(start + match[1].length)
+    text.slice(position.end)
   );
 }
 
@@ -65,6 +80,8 @@ export function replaceJsonText(
  * changing chunk ID and wall time. Preserve that envelope on every observation.
  */
 export function responseJsonEnvelope(text: string): string | undefined {
+  const hit = shellEnvelopes.get(text);
+  if (hit) return hit.output;
   if (
     !text.startsWith('{') ||
     !text.includes('"chunk_id"') ||
@@ -81,8 +98,26 @@ export function responseJsonEnvelope(text: string): string | undefined {
       typeof record.wall_time_seconds === 'number' &&
       (typeof record.exit_code === 'number' || record.exit_code === null) &&
       typeof record.output === 'string'
-    )
+    ) {
+      // Exact text keys keep changing status/metadata distinct. Account for both
+      // UTF-16 strings and cap entries; historical turns need no repeated parse
+      // or regex scan, and oversized observations are never retained.
+      const bytes = 2 * (text.length + record.output.length);
+      if (bytes <= 1024 * 1024) {
+        while (
+          shellEnvelopes.size >= 128 ||
+          shellBytes + bytes > 2 * 1024 * 1024
+        ) {
+          const oldest = shellEnvelopes.keys().next().value!;
+          shellBytes -=
+            2 * (oldest.length + shellEnvelopes.get(oldest)!.output.length);
+          shellEnvelopes.delete(oldest);
+        }
+        shellEnvelopes.set(text, { output: record.output });
+        shellBytes += bytes;
+      }
       return record.output;
+    }
   } catch {
     /* Not a known shell envelope. */
   }

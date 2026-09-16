@@ -1,7 +1,9 @@
 ﻿import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { compressResponses } from '../../dist/proxy/responses.js';
+const { compressResponses } = await import(
+  process.env.RESPONSES_MODULE || '../../dist/proxy/responses.js'
+);
 const raw = process.argv[2];
 const requests = [];
 for (const name of (await readdir(raw)).filter((x) => x.endsWith('-proxy'))) {

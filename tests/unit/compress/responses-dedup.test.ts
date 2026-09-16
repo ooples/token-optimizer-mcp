@@ -2,6 +2,28 @@ import { expect, test } from '@jest/globals';
 import { compressResponses } from '../../../src/proxy/responses.js';
 import { tokenBenefit } from '../../../src/proxy/token-gate.js';
 import { compressJsonArray } from '../../../src/compress/json-fragments.js';
+import {
+  responseJsonEnvelope,
+  replaceJsonText,
+} from '../../../src/proxy/response-dedup.js';
+
+test('cached shell field offsets preserve metadata and reject ambiguous fields', () => {
+  const raw =
+    '{"chunk_id":"a","wall_time_seconds":0.1,"exit_code":0,"output":"old","big":9007199254740993}';
+  expect(responseJsonEnvelope(raw)).toBe('old');
+  for (const value of ['one', 'two\\n"quoted"']) {
+    expect(replaceJsonText(raw, 'output', value)).toBe(
+      raw.replace('"old"', JSON.stringify(value))
+    );
+  }
+  const changed = raw.replace('"exit_code":0', '"exit_code":1');
+  expect(responseJsonEnvelope(changed)).toBe('old');
+  expect(replaceJsonText(changed, 'output', 'new')).toContain('"exit_code":1');
+  const ambiguous = raw.replace('"big":', '"nested":{"output":"other"},"big":');
+  expect(responseJsonEnvelope(ambiguous)).toBe('old');
+  expect(replaceJsonText(ambiguous, 'output', 'new')).toBe(ambiguous);
+  expect(replaceJsonText(ambiguous, 'output', 'again')).toBe(ambiguous);
+});
 
 const rows = Array.from({ length: 80 }, (_, id) => ({
   id,

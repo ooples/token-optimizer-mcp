@@ -9,6 +9,23 @@ const decisions = new Map<
 >();
 let retainedBytes = 0;
 let decisionCount = 0;
+const counts = new Map<string, number>();
+let countBytes = 0;
+
+function count(text: string): number {
+  const hit = counts.get(text);
+  if (hit !== undefined) return hit;
+  const value = encoder!.encode(text, [], []).length;
+  const bytes = text.length * 2;
+  while (counts.size >= 128 || countBytes + bytes > 1024 * 1024) {
+    const oldest = counts.keys().next().value!;
+    countBytes -= oldest.length * 2;
+    counts.delete(oldest);
+  }
+  counts.set(text, value);
+  countBytes += bytes;
+  return value;
+}
 
 /** o200k_base is a local estimate, NOT a claim about an unknown model's billing
  * tokenizer. Require a margin, count only changed bounded units, and memoize the
@@ -34,8 +51,10 @@ export function tokenBenefit(before: string, after: string): boolean {
         require('tiktoken') as typeof import('tiktoken')
       ).get_encoding('o200k_base');
       // Treat special-token-looking tool content as ordinary text.
-      const a = encoder.encode(before, [], []).length;
-      const b = encoder.encode(after, [], []).length;
+      // A later reference has a different candidate but the same source. Reuse
+      // individual counts as well as final decisions, without retaining buffers.
+      const a = count(before);
+      const b = count(after);
       accepted = b <= a * 0.9 && a - b >= 8;
     } catch {
       // Forwarding must not depend on tokenizer availability.

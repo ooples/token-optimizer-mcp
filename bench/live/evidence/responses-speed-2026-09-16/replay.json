@@ -1,0 +1,334 @@
+{
+  "baseline": "5d749774",
+  "order": "before/after, after/before, before/after, after/before",
+  "results": [
+    {
+      "arm": "before",
+      "rep": 0,
+      "scope": "Local replay, twelve warm passes of ten captured requests; not competitor performance or allocated-byte totals.",
+      "requestCount": 10,
+      "coldMs": 376.8235,
+      "warmMs": [
+        11.664700000000039,
+        9.733799999999974,
+        11.778800000000047,
+        9.790300000000002,
+        13.898000000000025,
+        9.453300000000013,
+        11.133599999999888,
+        9.740199999999959,
+        11.012500000000045,
+        9.396299999999997,
+        9.662199999999984,
+        11.759500000000003
+      ],
+      "warmMeanMs": 10.751933333333332,
+      "outputSha256": [
+        "085746243bd205f32cea0596871f8e1621c5e207bc624d57ff92a8adaf9804f9",
+        "5f995f2d210bd033275300f8c900943a19abaf376f6a5eb3629bc01924ca72cd",
+        "964299b00af44c7034e689803c55a4e766cc1b23d0207a017e77976952452b7b",
+        "f6c0315767cad8d033a173e58beb687bc3752b923ab17e649fce4372509c01b9",
+        "2ec41683685c49304eb15eb9db5cf70ae5fa6d49708befde80b48caf64504e54",
+        "c88f8c9e772cea4bd859cf2a95950c00bd169274b8a9b3db6736a2fe9dc7a9a4",
+        "f74a1935864134664210ebac58b2c98b76127fb5f98485b6254b4653da970957",
+        "a19fb598b2351cb60aa4e7fa559120b92b36fbda3f2eb4ee818ed82007321fc7",
+        "79e7d286a1357afdbc4ee359e62cf2d851efc06192f810cec1a2d6f0ec48f47e",
+        "abddf3be35e0d19c01b27f3d8a12d58c3b6cfcf261f1a5320cb24c738750ee00"
+      ],
+      "memory": {
+        "rss": 102105088,
+        "heapTotal": 34009088,
+        "heapUsed": 16585848,
+        "external": 35084600,
+        "arrayBuffers": 2617862
+      }
+    },
+    {
+      "arm": "after",
+      "rep": 0,
+      "scope": "Local replay, twelve warm passes of ten captured requests; not competitor performance or allocated-byte totals.",
+      "requestCount": 10,
+      "coldMs": 369.6281,
+      "warmMs": [
+        10.64149999999995,
+        8.33789999999999,
+        9.45270000000005,
+        8.541499999999928,
+        10.417699999999968,
+        8.102300000000014,
+        9.543299999999931,
+        8.542800000000057,
+        9.902699999999982,
+        9.075799999999958,
+        8.547799999999938,
+        10.614599999999996
+      ],
+      "warmMeanMs": 9.31004999999998,
+      "outputSha256": [
+        "085746243bd205f32cea0596871f8e1621c5e207bc624d57ff92a8adaf9804f9",
+        "5f995f2d210bd033275300f8c900943a19abaf376f6a5eb3629bc01924ca72cd",
+        "964299b00af44c7034e689803c55a4e766cc1b23d0207a017e77976952452b7b",
+        "f6c0315767cad8d033a173e58beb687bc3752b923ab17e649fce4372509c01b9",
+        "2ec41683685c49304eb15eb9db5cf70ae5fa6d49708befde80b48caf64504e54",
+        "c88f8c9e772cea4bd859cf2a95950c00bd169274b8a9b3db6736a2fe9dc7a9a4",
+        "f74a1935864134664210ebac58b2c98b76127fb5f98485b6254b4653da970957",
+        "a19fb598b2351cb60aa4e7fa559120b92b36fbda3f2eb4ee818ed82007321fc7",
+        "79e7d286a1357afdbc4ee359e62cf2d851efc06192f810cec1a2d6f0ec48f47e",
+        "abddf3be35e0d19c01b27f3d8a12d58c3b6cfcf261f1a5320cb24c738750ee00"
+      ],
+      "memory": {
+        "rss": 100835328,
+        "heapTotal": 33484800,
+        "heapUsed": 15285680,
+        "external": 35142280,
+        "arrayBuffers": 2675542
+      }
+    },
+    {
+      "arm": "before",
+      "rep": 1,
+      "scope": "Local replay, twelve warm passes of ten captured requests; not competitor performance or allocated-byte totals.",
+      "requestCount": 10,
+      "coldMs": 377.38239999999996,
+      "warmMs": [
+        12.46690000000001,
+        10.350000000000023,
+        11.502700000000004,
+        9.598700000000008,
+        11.741200000000049,
+        9.78920000000005,
+        11.544700000000034,
+        10.023899999999912,
+        11.460100000000011,
+        9.9375,
+        9.759300000000053,
+        11.907699999999977
+      ],
+      "warmMeanMs": 10.840158333333344,
+      "outputSha256": [
+        "085746243bd205f32cea0596871f8e1621c5e207bc624d57ff92a8adaf9804f9",
+        "5f995f2d210bd033275300f8c900943a19abaf376f6a5eb3629bc01924ca72cd",
+        "964299b00af44c7034e689803c55a4e766cc1b23d0207a017e77976952452b7b",
+        "f6c0315767cad8d033a173e58beb687bc3752b923ab17e649fce4372509c01b9",
+        "2ec41683685c49304eb15eb9db5cf70ae5fa6d49708befde80b48caf64504e54",
+        "c88f8c9e772cea4bd859cf2a95950c00bd169274b8a9b3db6736a2fe9dc7a9a4",
+        "f74a1935864134664210ebac58b2c98b76127fb5f98485b6254b4653da970957",
+        "a19fb598b2351cb60aa4e7fa559120b92b36fbda3f2eb4ee818ed82007321fc7",
+        "79e7d286a1357afdbc4ee359e62cf2d851efc06192f810cec1a2d6f0ec48f47e",
+        "abddf3be35e0d19c01b27f3d8a12d58c3b6cfcf261f1a5320cb24c738750ee00"
+      ],
+      "memory": {
+        "rss": 101720064,
+        "heapTotal": 33746944,
+        "heapUsed": 16518440,
+        "external": 35142280,
+        "arrayBuffers": 2675542
+      }
+    },
+    {
+      "arm": "after",
+      "rep": 1,
+      "scope": "Local replay, twelve warm passes of ten captured requests; not competitor performance or allocated-byte totals.",
+      "requestCount": 10,
+      "coldMs": 362.8409,
+      "warmMs": [
+        10.795500000000061,
+        8.215800000000058,
+        10.108799999999974,
+        8.174499999999966,
+        11.37769999999989,
+        8.49860000000001,
+        9.926600000000008,
+        8.278500000000008,
+        10.030899999999974,
+        8.41599999999994,
+        8.288900000000012,
+        10.239500000000021
+      ],
+      "warmMeanMs": 9.362608333333327,
+      "outputSha256": [
+        "085746243bd205f32cea0596871f8e1621c5e207bc624d57ff92a8adaf9804f9",
+        "5f995f2d210bd033275300f8c900943a19abaf376f6a5eb3629bc01924ca72cd",
+        "964299b00af44c7034e689803c55a4e766cc1b23d0207a017e77976952452b7b",
+        "f6c0315767cad8d033a173e58beb687bc3752b923ab17e649fce4372509c01b9",
+        "2ec41683685c49304eb15eb9db5cf70ae5fa6d49708befde80b48caf64504e54",
+        "c88f8c9e772cea4bd859cf2a95950c00bd169274b8a9b3db6736a2fe9dc7a9a4",
+        "f74a1935864134664210ebac58b2c98b76127fb5f98485b6254b4653da970957",
+        "a19fb598b2351cb60aa4e7fa559120b92b36fbda3f2eb4ee818ed82007321fc7",
+        "79e7d286a1357afdbc4ee359e62cf2d851efc06192f810cec1a2d6f0ec48f47e",
+        "abddf3be35e0d19c01b27f3d8a12d58c3b6cfcf261f1a5320cb24c738750ee00"
+      ],
+      "memory": {
+        "rss": 100646912,
+        "heapTotal": 33222656,
+        "heapUsed": 15285248,
+        "external": 35142280,
+        "arrayBuffers": 2675542
+      }
+    },
+    {
+      "arm": "before",
+      "rep": 2,
+      "scope": "Local replay, twelve warm passes of ten captured requests; not competitor performance or allocated-byte totals.",
+      "requestCount": 10,
+      "coldMs": 376.9841,
+      "warmMs": [
+        11.856499999999983,
+        9.405700000000024,
+        11.682800000000043,
+        10.095299999999952,
+        11.22359999999992,
+        9.523300000000063,
+        11.362799999999993,
+        9.974999999999909,
+        10.97950000000003,
+        10.508699999999976,
+        9.60979999999995,
+        11.441800000000057
+      ],
+      "warmMeanMs": 10.638733333333326,
+      "outputSha256": [
+        "085746243bd205f32cea0596871f8e1621c5e207bc624d57ff92a8adaf9804f9",
+        "5f995f2d210bd033275300f8c900943a19abaf376f6a5eb3629bc01924ca72cd",
+        "964299b00af44c7034e689803c55a4e766cc1b23d0207a017e77976952452b7b",
+        "f6c0315767cad8d033a173e58beb687bc3752b923ab17e649fce4372509c01b9",
+        "2ec41683685c49304eb15eb9db5cf70ae5fa6d49708befde80b48caf64504e54",
+        "c88f8c9e772cea4bd859cf2a95950c00bd169274b8a9b3db6736a2fe9dc7a9a4",
+        "f74a1935864134664210ebac58b2c98b76127fb5f98485b6254b4653da970957",
+        "a19fb598b2351cb60aa4e7fa559120b92b36fbda3f2eb4ee818ed82007321fc7",
+        "79e7d286a1357afdbc4ee359e62cf2d851efc06192f810cec1a2d6f0ec48f47e",
+        "abddf3be35e0d19c01b27f3d8a12d58c3b6cfcf261f1a5320cb24c738750ee00"
+      ],
+      "memory": {
+        "rss": 102547456,
+        "heapTotal": 33886208,
+        "heapUsed": 16650400,
+        "external": 35142280,
+        "arrayBuffers": 2675542
+      }
+    },
+    {
+      "arm": "after",
+      "rep": 2,
+      "scope": "Local replay, twelve warm passes of ten captured requests; not competitor performance or allocated-byte totals.",
+      "requestCount": 10,
+      "coldMs": 354.68809999999996,
+      "warmMs": [
+        9.756000000000029,
+        7.855699999999956,
+        10.29400000000004,
+        7.588899999999967,
+        9.325500000000034,
+        8.348600000000033,
+        10.034299999999917,
+        7.765599999999949,
+        9.475599999999986,
+        7.866300000000024,
+        8.054200000000037,
+        9.619000000000028
+      ],
+      "warmMeanMs": 8.831975,
+      "outputSha256": [
+        "085746243bd205f32cea0596871f8e1621c5e207bc624d57ff92a8adaf9804f9",
+        "5f995f2d210bd033275300f8c900943a19abaf376f6a5eb3629bc01924ca72cd",
+        "964299b00af44c7034e689803c55a4e766cc1b23d0207a017e77976952452b7b",
+        "f6c0315767cad8d033a173e58beb687bc3752b923ab17e649fce4372509c01b9",
+        "2ec41683685c49304eb15eb9db5cf70ae5fa6d49708befde80b48caf64504e54",
+        "c88f8c9e772cea4bd859cf2a95950c00bd169274b8a9b3db6736a2fe9dc7a9a4",
+        "f74a1935864134664210ebac58b2c98b76127fb5f98485b6254b4653da970957",
+        "a19fb598b2351cb60aa4e7fa559120b92b36fbda3f2eb4ee818ed82007321fc7",
+        "79e7d286a1357afdbc4ee359e62cf2d851efc06192f810cec1a2d6f0ec48f47e",
+        "abddf3be35e0d19c01b27f3d8a12d58c3b6cfcf261f1a5320cb24c738750ee00"
+      ],
+      "memory": {
+        "rss": 100683776,
+        "heapTotal": 33222656,
+        "heapUsed": 15354664,
+        "external": 35084600,
+        "arrayBuffers": 2617862
+      }
+    },
+    {
+      "arm": "before",
+      "rep": 3,
+      "scope": "Local replay, twelve warm passes of ten captured requests; not competitor performance or allocated-byte totals.",
+      "requestCount": 10,
+      "coldMs": 391.73120000000006,
+      "warmMs": [
+        12.461199999999963,
+        10.10329999999999,
+        11.420600000000036,
+        10.486600000000067,
+        11.517399999999952,
+        9.941599999999994,
+        13.01010000000008,
+        10.812800000000038,
+        11.393400000000042,
+        10.408199999999965,
+        10.676500000000033,
+        11.648799999999937
+      ],
+      "warmMeanMs": 11.156708333333341,
+      "outputSha256": [
+        "085746243bd205f32cea0596871f8e1621c5e207bc624d57ff92a8adaf9804f9",
+        "5f995f2d210bd033275300f8c900943a19abaf376f6a5eb3629bc01924ca72cd",
+        "964299b00af44c7034e689803c55a4e766cc1b23d0207a017e77976952452b7b",
+        "f6c0315767cad8d033a173e58beb687bc3752b923ab17e649fce4372509c01b9",
+        "2ec41683685c49304eb15eb9db5cf70ae5fa6d49708befde80b48caf64504e54",
+        "c88f8c9e772cea4bd859cf2a95950c00bd169274b8a9b3db6736a2fe9dc7a9a4",
+        "f74a1935864134664210ebac58b2c98b76127fb5f98485b6254b4653da970957",
+        "a19fb598b2351cb60aa4e7fa559120b92b36fbda3f2eb4ee818ed82007321fc7",
+        "79e7d286a1357afdbc4ee359e62cf2d851efc06192f810cec1a2d6f0ec48f47e",
+        "abddf3be35e0d19c01b27f3d8a12d58c3b6cfcf261f1a5320cb24c738750ee00"
+      ],
+      "memory": {
+        "rss": 101552128,
+        "heapTotal": 33746944,
+        "heapUsed": 16569984,
+        "external": 35084600,
+        "arrayBuffers": 2617862
+      }
+    },
+    {
+      "arm": "after",
+      "rep": 3,
+      "scope": "Local replay, twelve warm passes of ten captured requests; not competitor performance or allocated-byte totals.",
+      "requestCount": 10,
+      "coldMs": 356.1113,
+      "warmMs": [
+        10.487300000000005,
+        8.702799999999968,
+        10.98660000000001,
+        8.324200000000019,
+        9.718899999999962,
+        7.938200000000052,
+        9.624099999999999,
+        8.18590000000006,
+        10.006000000000085,
+        9.525800000000004,
+        8.165200000000027,
+        10.132200000000012
+      ],
+      "warmMeanMs": 9.31643333333335,
+      "outputSha256": [
+        "085746243bd205f32cea0596871f8e1621c5e207bc624d57ff92a8adaf9804f9",
+        "5f995f2d210bd033275300f8c900943a19abaf376f6a5eb3629bc01924ca72cd",
+        "964299b00af44c7034e689803c55a4e766cc1b23d0207a017e77976952452b7b",
+        "f6c0315767cad8d033a173e58beb687bc3752b923ab17e649fce4372509c01b9",
+        "2ec41683685c49304eb15eb9db5cf70ae5fa6d49708befde80b48caf64504e54",
+        "c88f8c9e772cea4bd859cf2a95950c00bd169274b8a9b3db6736a2fe9dc7a9a4",
+        "f74a1935864134664210ebac58b2c98b76127fb5f98485b6254b4653da970957",
+        "a19fb598b2351cb60aa4e7fa559120b92b36fbda3f2eb4ee818ed82007321fc7",
+        "79e7d286a1357afdbc4ee359e62cf2d851efc06192f810cec1a2d6f0ec48f47e",
+        "abddf3be35e0d19c01b27f3d8a12d58c3b6cfcf261f1a5320cb24c738750ee00"
+      ],
+      "memory": {
+        "rss": 100642816,
+        "heapTotal": 33222656,
+        "heapUsed": 15285848,
+        "external": 35142280,
+        "arrayBuffers": 2675542
+      }
+    }
+  ]
+}
