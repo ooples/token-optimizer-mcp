@@ -1,0 +1,518 @@
+{
+  "kind": "Two balanced development pairs; combined core MCP and proxy via benchmark harness, not managed launcher; no seeded graph",
+  "local": "C:/Users/yolan/AppData/Local/Temp/token-optimizer-release7-3768c78758/defaults-competition/run-DFQBQS",
+  "manifest": {
+    "model": "gpt-6-astra",
+    "arms": [
+      "full",
+      "headroom"
+    ],
+    "reps": 2,
+    "tasks": [
+      "json"
+    ],
+    "balanced": true,
+    "seedOffset": 1900000401,
+    "readMode": "natural",
+    "mcpDiscovery": "bounded",
+    "caseSuite": "heldout-v1",
+    "repeatReads": 1,
+    "toolCodeExperiment": false,
+    "hostMemoryPolicy": {
+      "platform": "win32",
+      "minimumCommitReserveBytes": 2147483648,
+      "minimumAvailablePhysicalBytes": 536870912,
+      "maximumSampleAgeMs": 5000
+    },
+    "started": "2026-09-16T23:17:48.746Z"
+  },
+  "provenance": {
+    "capturedAt": "2026-09-16T23:17:48.743Z",
+    "node": "v22.15.0",
+    "codex": "codex-cli 0.154.0",
+    "headroom": "0.37.0",
+    "gitHead": "7c00ad842a4d0431daca4191a5ed11a89443f406",
+    "proxyBin": "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\cli.js",
+    "sha256": {
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\server\\index.js": "6a49f1c1ced0ae092da9b7c23ec61c1cc1694dc7e8652ed9da7c317d81e304d2",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\server\\tool-profile.js": "586f6e42c89ae9893af85f461c8d751bba9c54e6d67ab6db8f6bd6e14d15e2a4",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\tools\\file-operations\\smart-read.js": "60da85f59440fb857c4c2a837bb3b28fc776c4ae48578d034bbbbe674576f194",
+      "bench/live/codex.mjs": "9d9e901f92edf56b8162b30f1cab05d7250bef4b3f9b50d04427aeb466c4aea9",
+      "bench/live/codex-workflows.mjs": "c89588f61a3c5d4163b856fa1e579d3595c7de47dafea6e0209dfb846e871647",
+      "bench/live/heldout-cases.mjs": "a62891a83b9429e5bd99607565a52736f75f9f547179cd0b3b05331834f73b42",
+      "bench/live/adversarial-cases.mjs": "469512a33a5dd89b4d15640bbd9414addecf2525b205cb909dfdf14e581ca102",
+      "bench/live/codex-mcp-evidence.mjs": "c7cdc0b34066f5b20b934c013b17f56a3186d33bf5f28d822b6f8c7dd3831cbe",
+      "bench/live/report-codex.mjs": "b5a1699034cadaf60199338c8249154bb1362765322e7c1a4cc5763e60254f0d",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\cli.js": "0b249ab44d71f791a0241fd07368caa40beb84d8dc82558220aab079d65fb45b",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\server.js": "4981823c65e04562508d3d154e3f02fa0e20955fef89cab34704b1cde20b5c85",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\responses.js": "12638fdf23ead3cdd8301371d21ec1282c7367ff68ec53cf322b68ecb2306940",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\response-dedup.js": "ef2256d6f5df3c93feda250aac1efc3f5d840b372c970d312308dbb136ef660f",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\token-gate.js": "d0d9486f32348056d87d1eef694aab0458e442940372eb34b3f3c474457a540b",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\tool-code.js": "ab8d88a714f03357c4a4d30a21ced48d6bad8f93b890fefb0f82a158d65c51fd",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\output-cache.js": "781856b61be1be7fa99f50025b54fbd7b490d0332c111d38885d47e5e1bf4e3c",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\accounting.js": "1be2326a2449290a13c3c0cf1c2506e71c05107df9c4222c98a86de139e15bf1",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\capture.js": "c9d8dfd8ea218ff933e2ba47e4fba62173d22d5c12e723dcf271d426ddd0783c",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\router.js": "2777b931bd2c27baa613076b7cf2185059d99a257c95e9738a445ecb3ba5c15b",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\tap.js": "fd32dfd41265b57d151588ce3586fa0ea2b09f4b4eabead005f60ee1c8ff2fce",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\json-fragments.js": "c9f3b4f710c4bda5e6c0c87e28fdf1e84783541b02c48bbce9494bd63d7dd5da",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\json-sections.js": "e8e684babd3534db0899dfcff97856f2cec4cc2d1c07359d2d482eae0dd25d11",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\json.js": "458335c36885f9549008c93f6e0e8145ef783595ac7513c6b43187aec3a60da6",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\json-facts.js": "ac3fa443e3e1e4c48e93382cb1093ef508b10254501df9fc109a59928a1c85b3"
+    }
+  },
+  "summary": {
+    "model": "gpt-6-astra",
+    "balanced": true,
+    "valid": true,
+    "failures": [],
+    "aggregates": [
+      {
+        "task": "json",
+        "arm": "full",
+        "passed": 2,
+        "expected": 2,
+        "measured": 2,
+        "meanInput": 40521.5,
+        "meanCached": 26368,
+        "meanUncached": 14153.5,
+        "meanOutput": 174,
+        "meanSeconds": 19.35,
+        "meanAgentSeconds": 18.35
+      },
+      {
+        "task": "json",
+        "arm": "headroom",
+        "passed": 2,
+        "expected": 2,
+        "measured": 2,
+        "meanInput": 49465,
+        "meanCached": 30848,
+        "meanUncached": 18617,
+        "meanOutput": 186.5,
+        "meanSeconds": 44,
+        "meanAgentSeconds": 15.75
+      }
+    ],
+    "comparison": [
+      {
+        "task": "json",
+        "candidate": "full",
+        "inputReductionVsFull": null,
+        "inputReductionVsHeadroom": 0.18080460931972098,
+        "inputReductionVsControl": null
+      }
+    ],
+    "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+  },
+  "cost": {
+    "scenario": {
+      "model": "gpt-6-astra",
+      "label": "Codex Enterprise standard rate-card scenario; not actual billed cost",
+      "verifiedOn": "2026-09-15",
+      "source": "https://help.openai.com/en/articles/20001415",
+      "usdPerMillion": {
+        "uncached": 10,
+        "cached": 1,
+        "output": 50
+      },
+      "assumptions": [
+        "All runs use standard speed with no regional or contract adjustments.",
+        "Codex Astra has no cache-write charge or long-context multiplier.",
+        "Subscription charges, credits, proxy compute, and account discounts are not measured."
+      ]
+    },
+    "valid": true,
+    "failures": [],
+    "measured": [
+      {
+        "task": "json",
+        "arm": "full",
+        "rep": 1,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.176818
+      },
+      {
+        "task": "json",
+        "arm": "headroom",
+        "rep": 1,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.226048
+      },
+      {
+        "task": "json",
+        "arm": "headroom",
+        "rep": 2,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.226638
+      },
+      {
+        "task": "json",
+        "arm": "full",
+        "rep": 2,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.176388
+      }
+    ],
+    "aggregates": [
+      {
+        "task": "json",
+        "arm": "full",
+        "meanEstimatedUsd": 0.176603
+      },
+      {
+        "task": "json",
+        "arm": "headroom",
+        "meanEstimatedUsd": 0.22634300000000002
+      }
+    ],
+    "comparisons": [
+      {
+        "task": "json",
+        "candidate": "full",
+        "against": "headroom",
+        "estimatedUsdDelta": -0.049740000000000006,
+        "reductionPercent": 21.97549736461919
+      }
+    ]
+  },
+  "validation": [
+    {
+      "task": "json",
+      "arm": "full",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "clientErrors": []
+    },
+    {
+      "task": "json",
+      "arm": "headroom",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "clientErrors": []
+    },
+    {
+      "task": "json",
+      "arm": "headroom",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "clientErrors": []
+    },
+    {
+      "task": "json",
+      "arm": "full",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "clientErrors": []
+    }
+  ],
+  "results": [
+    {
+      "task": "json",
+      "arm": "full",
+      "rep": 1,
+      "position": 1,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000402,
+      "verdict": "PASS",
+      "agentSeconds": 17.4,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 40528,
+        "cached": 26368,
+        "output": 177
+      },
+      "requests": 3,
+      "compressedRequests": 2,
+      "beforeBytes": 300977,
+      "afterBytes": 196745,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13142,
+            "output_tokens": 78,
+            "cached_input_tokens": 0
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13632,
+            "output_tokens": 65,
+            "cached_input_tokens": 12928
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13754,
+            "output_tokens": 34,
+            "cached_input_tokens": 13440
+          }
+        }
+      ],
+      "answer": {
+        "id": "record-6ca6ce66-256",
+        "status": "failed",
+        "reason": "lease_expired"
+      },
+      "seconds": 18.4
+    },
+    {
+      "task": "json",
+      "arm": "headroom",
+      "rep": 1,
+      "position": 2,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000402,
+      "verdict": "PASS",
+      "agentSeconds": 15.7,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 49433,
+        "cached": 30848,
+        "output": 187
+      },
+      "requests": 3,
+      "compressedRequests": 0,
+      "beforeBytes": 299696,
+      "afterBytes": 299696,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 12967,
+            "output_tokens": 78,
+            "cached_input_tokens": 0
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 18166,
+            "output_tokens": 77,
+            "cached_input_tokens": 12800
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 18300,
+            "output_tokens": 32,
+            "cached_input_tokens": 18048
+          }
+        }
+      ],
+      "answer": {
+        "id": "record-6ca6ce66-256",
+        "status": "failed",
+        "reason": "lease_expired"
+      },
+      "seconds": 59.6
+    },
+    {
+      "task": "json",
+      "arm": "headroom",
+      "rep": 2,
+      "position": 1,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000403,
+      "verdict": "PASS",
+      "agentSeconds": 15.8,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 49497,
+        "cached": 30848,
+        "output": 186
+      },
+      "requests": 3,
+      "compressedRequests": 0,
+      "beforeBytes": 300464,
+      "afterBytes": 300464,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 12967,
+            "output_tokens": 77,
+            "cached_input_tokens": 0
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 18199,
+            "output_tokens": 77,
+            "cached_input_tokens": 12800
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 18331,
+            "output_tokens": 32,
+            "cached_input_tokens": 18048
+          }
+        }
+      ],
+      "answer": {
+        "id": "record-7eb923d6-115",
+        "status": "failed",
+        "reason": "checksum_mismatch"
+      },
+      "seconds": 28.4
+    },
+    {
+      "task": "json",
+      "arm": "full",
+      "rep": 2,
+      "position": 2,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000403,
+      "verdict": "PASS",
+      "agentSeconds": 19.3,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 40515,
+        "cached": 26368,
+        "output": 171
+      },
+      "requests": 3,
+      "compressedRequests": 2,
+      "beforeBytes": 301719,
+      "afterBytes": 196729,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13142,
+            "output_tokens": 74,
+            "cached_input_tokens": 0
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13626,
+            "output_tokens": 65,
+            "cached_input_tokens": 12928
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13747,
+            "output_tokens": 32,
+            "cached_input_tokens": 13440
+          }
+        }
+      ],
+      "answer": {
+        "id": "record-7eb923d6-115",
+        "status": "failed",
+        "reason": "checksum_mismatch"
+      },
+      "seconds": 20.3
+    }
+  ]
+}

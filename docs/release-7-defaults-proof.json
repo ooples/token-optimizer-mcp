@@ -1,7 +1,7 @@
 {
   "date": "2026-09-16",
   "packageVersion": "7.0.0",
-  "tarballSha256": "e2ceb0c1ff53708701b2146bd10a0230dabb192ac83a412f6d6515e30f8d2bb3",
+  "tarballSha256": "c755b7e79874f390e19d518cb2e36d519c0d74530f26997f923c4c3487726a8f",
   "installation": "npm tarball into a fresh directory; installer activates an isolated PowerShell profile",
   "launch": "normal codex command resolved through the installed profile; existing account; --ignore-user-config",
   "defaults": {

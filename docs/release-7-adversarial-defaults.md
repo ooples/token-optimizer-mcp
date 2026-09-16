@@ -25,6 +25,48 @@ Codex profile-file and override syntax were checked against the installed
 
 ## Additional guardrails
 
+### Follow-up review
+
+- Replaced the premature "proxy active" banner with listener startup followed by
+  evidence from observed model requests. Telemetry does not establish model
+  routing. Exit summaries separate compression and graph injection; zero-model
+  sessions explicitly remain unverified, including potential managed-policy
+  overrides. These observations do not certify provider success or billed savings.
+- Extended worktree isolation to Claude's `--worktree=NAME` and `-w NAME` forms.
+  A seeded-graph regression proves the launching project's finding reaches a
+  normal session and is absent from client-selected worktree sessions.
+- Preserve Claude's first-party MCP tool search when routing through loopback.
+  Its [environment reference](https://code.claude.com/docs/en/env-vars) documents
+  that non-first-party base URLs otherwise disable native deferral. Explicit
+  settings and third-party gateways retain their existing choices. A real HTTP
+  proxy test preserves deferred tool definitions, tool references, beta headers,
+  and response content. Account-backed Claude validation remains pending.
+
+The three affected suites passed 58 checks. Changed-file lint passed. The real
+Claude binary completed the synthetic local-server task, with one model request
+observed separately from its telemetry request.
+
+### Combined configuration comparison
+
+[Audited receipt](release-7-combined-comparison.json): two balanced JSON pairs,
+fresh seeds 1900000402–1900000403, installed HeadRoom 0.37.0 versus core MCP plus
+the proxy. All four attempts passed independent answer, exposure, and provider
+usage checks. This uses the existing benchmark harness, not the managed launcher;
+the fresh fixture projects had no seeded graph findings.
+
+| Mean per task | Core MCP + proxy | HeadRoom |
+| --- | ---: | ---: |
+| Input tokens | 40,521.5 | 49,465 |
+| Agent time, seconds | 18.35 | 15.75 |
+| Total time including proxy startup, seconds | 19.35 | 44.00 |
+
+Estimated token cost was 22.0% lower under the existing frozen 10/1/50 rate-card
+scenario; these are not invoices. Agent time was 16.5% worse despite lower total
+time. Both pairs lost on agent speed, so this is a remaining optimization target,
+not evidence of across-the-board superiority. Two development pairs provide no
+high-confidence production-wide claim. Raw captures remain at the local evidence
+path recorded in the receipt.
+
 - Local/remote Codex and alternate Claude cloud-provider modes retain native
   routing with an explicit notice. They are not counted as optimized traffic.
 - Unknown pre-login/keyring authentication retains native routing; the launcher

@@ -17,6 +17,7 @@ import TOML from '@iarna/toml';
 import { startProxy, proxyEnabled } from '../dist/proxy/server.js';
 import { captureDir, captureNotice } from '../dist/proxy/capture.js';
 import { claudeRoute } from './claude-routing.mjs';
+import { sessionRouting } from './session-routing.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const off = (value) => /^(0|false|no|off)$/i.test(value?.trim() || '');
@@ -178,6 +179,7 @@ export async function runClient(
   childEnv.TOKEN_OPTIMIZER_CLIENT =
     client === 'claude' ? 'claude-code' : client;
   let proxy;
+  let routing;
   let settingsDirectory;
   let settingsPath;
   let child;
@@ -253,22 +255,29 @@ export async function runClient(
           throw new Error(
             'Provider base URLs with credentials, query parameters, or fragments cannot be routed without changing their semantics.'
           );
-        const selectsWorktree =
-          client === 'codex' && switches.includes('--worktree');
+        const selectsWorktree = switches.some(
+          (arg) =>
+            arg === '--worktree' ||
+            arg.startsWith('--worktree=') ||
+            (client === 'claude' && arg.startsWith('-w'))
+        );
+        routing = sessionRouting(client);
         proxy = await startProxy({
           upstream: upstream.origin,
           projectRoot,
           knowledge: !selectsWorktree,
+          onSummary: routing.observe,
         });
         if (selectsWorktree)
           process.stderr.write(
-            '[token-optimizer] Compression active; graph injection awaits the client-selected worktree and is disabled for this session.\n'
+            '[token-optimizer] Graph injection is disabled for this session because the client selects its worktree after launch.\n'
           );
         if (captureDir(env))
           process.stderr.write(`${captureNotice(captureDir(env))}\n`);
         const base = `http://127.0.0.1:${proxy.port}${upstream.pathname.replace(/\/$/, '')}${upstream.search}`;
         if (client === 'claude') {
           childEnv.ANTHROPIC_BASE_URL = base;
+          if (claude.preserveToolSearch) childEnv.ENABLE_TOOL_SEARCH = 'true';
           // File-based env entries override shell exports in Claude. A private,
           // per-invocation overlay preserves explicit CLI settings and changes
           // only the transport URL. Never put settings/credentials in argv.
@@ -320,7 +329,7 @@ export async function runClient(
           forwarded = [...forwarded, ...overrides];
         }
         process.stderr.write(
-          `[token-optimizer] ${client}: session proxy active; project ${projectRoot}\n`
+          `[token-optimizer] ${client}: session proxy listening; awaiting model traffic; project ${projectRoot}\n`
         );
       }
     }
@@ -394,6 +403,7 @@ export async function runClient(
       );
       proxy.server.closeAllConnections?.();
       await closed;
+      routing.finish();
     }
     if (settingsPath && existsSync(settingsPath)) unlinkSync(settingsPath);
     if (settingsDirectory) rmdirSync(settingsDirectory);

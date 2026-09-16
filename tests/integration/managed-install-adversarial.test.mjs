@@ -19,6 +19,30 @@ function fixture(fn) {
   }
 }
 describe('managed installation adversarial review', () => {
+  it('preserves first-party Claude tool search without overriding explicit choices', () =>
+    fixture((dir) => {
+      const args = ['--setting-sources', ''];
+      expect(claudeRoute(args, {}, dir).preserveToolSearch).toBe(true);
+      expect(
+        claudeRoute(args, { ENABLE_TOOL_SEARCH: 'false' }, dir)
+          .preserveToolSearch
+      ).toBe(false);
+      expect(
+        claudeRoute(
+          args,
+          { ANTHROPIC_BASE_URL: 'https://gateway.example' },
+          dir
+        ).preserveToolSearch
+      ).toBe(false);
+      expect(
+        claudeRoute(
+          [...args, '--settings', '{"env":{"ENABLE_TOOL_SEARCH":"auto:5"}}'],
+          {},
+          dir
+        ).preserveToolSearch
+      ).toBe(false);
+    }));
+
   it('does not create a higher-priority Bash login profile', () =>
     fixture((dir) => {
       fs.writeFileSync(join(dir, '.profile'), 'export KEEP_THIS=value');

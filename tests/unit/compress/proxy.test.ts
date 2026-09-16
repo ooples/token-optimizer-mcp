@@ -99,6 +99,63 @@ function upstream(
   });
 }
 
+it('forwards Anthropic tool-search references and beta headers unchanged', async () => {
+  const reference = { type: 'tool_reference', tool_name: 'mcp__wiki_query' };
+  const response = JSON.stringify({ content: [reference] });
+  const provider = await upstream(() => ({ body: response }));
+  const proxy = await startProxy({ upstream: provider.url, knowledge: false });
+  servers.push(proxy.server);
+  const payload = {
+    tools: [
+      { type: 'tool_search_tool_regex_20251119', name: 'tool_search' },
+      {
+        name: 'mcp__wiki_query',
+        description: 'Query knowledge',
+        defer_loading: true,
+        input_schema: { type: 'object' },
+      },
+    ],
+    messages: [
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'search-1',
+            name: 'tool_search',
+            input: { pattern: 'wiki' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'search-1',
+            content: [reference],
+          },
+        ],
+      },
+    ],
+  };
+  const reply = await fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'anthropic-beta': 'advanced-tool-use-2025-11-20',
+    },
+    body: JSON.stringify(payload),
+  });
+  expect(await reply.text()).toBe(response);
+  const sent = JSON.parse(provider.seen.body!);
+  expect(sent.messages).toEqual(payload.messages);
+  expect(sent.tools).toEqual(payload.tools);
+  expect(provider.seen.headers?.['anthropic-beta']).toBe(
+    'advanced-tool-use-2025-11-20'
+  );
+});
+
 describe('proxyEnabled', () => {
   it('is on by default with an explicit opt-out', () => {
     expect(proxyEnabled({})).toBe(true);
