@@ -1,0 +1,158 @@
+[
+  {
+    "task": "entropy",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2673174794,
+    "verdict": "PASS",
+    "agentSeconds": 18.5,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 46542,
+      "cached": 38656,
+      "output": 185
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 204528,
+    "afterBytes": 204528,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13040,
+          "output_tokens": 73,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16676,
+          "output_tokens": 93,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16826,
+          "output_tokens": 19,
+          "cached_input_tokens": 16512
+        }
+      }
+    ],
+    "answer": {
+      "digest": "864fd7cf193fe923fb9bde05e19c12ae6e1fa383d81cad8241626de3ab24b68f"
+    },
+    "seconds": 19.5
+  },
+  {
+    "task": "entropy",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2673174794,
+    "verdict": "PASS",
+    "agentSeconds": 31.6,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "file_change",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 99636,
+      "cached": 73088,
+      "output": 349
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 488619,
+    "afterBytes": 488619,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12957,
+          "output_tokens": 73,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13102,
+          "output_tokens": 70,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 22125,
+          "output_tokens": 117,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 25679,
+          "output_tokens": 70,
+          "cached_input_tokens": 21888
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 25773,
+          "output_tokens": 19,
+          "cached_input_tokens": 25472
+        }
+      }
+    ],
+    "answer": {
+      "digest": "864fd7cf193fe923fb9bde05e19c12ae6e1fa383d81cad8241626de3ab24b68f"
+    },
+    "seconds": 43
+  }
+]

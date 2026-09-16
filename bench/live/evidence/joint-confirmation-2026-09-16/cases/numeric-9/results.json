@@ -1,0 +1,142 @@
+[
+  {
+    "task": "numeric",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2413607152,
+    "verdict": "PASS",
+    "agentSeconds": 14,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 43652,
+      "cached": 37376,
+      "output": 178
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 245739,
+    "afterBytes": 205827,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13056,
+          "output_tokens": 76,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15234,
+          "output_tokens": 73,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15362,
+          "output_tokens": 29,
+          "cached_input_tokens": 15104
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-10bea226-66",
+      "maximum": 690,
+      "minimum": -7
+    },
+    "seconds": 14.9
+  },
+  {
+    "task": "numeric",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2413607152,
+    "verdict": "PASS",
+    "agentSeconds": 15.7,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 45103,
+      "cached": 28672,
+      "output": 178
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 245771,
+    "afterBytes": 245771,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12973,
+          "output_tokens": 77,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16000,
+          "output_tokens": 74,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16130,
+          "output_tokens": 27,
+          "cached_input_tokens": 15872
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-10bea226-66",
+      "maximum": 690,
+      "minimum": -7
+    },
+    "seconds": 26.6
+  }
+]
