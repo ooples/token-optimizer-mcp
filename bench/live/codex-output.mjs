@@ -1,4 +1,40 @@
 /** Inspect the bytes Codex actually sent, including nested code-mode output. */
+export function outerEnvelopeTruncated(captures) {
+  for (const row of captures) {
+    if (!row.path?.endsWith('/responses')) continue;
+    let body;
+    try {
+      body = JSON.parse(row.body);
+    } catch {
+      continue;
+    }
+    for (const item of body.input || []) {
+      if (
+        !['function_call_output', 'custom_tool_call_output'].includes(item.type)
+      )
+        continue;
+      const texts =
+        typeof item.output === 'string'
+          ? [item.output]
+          : Array.isArray(item.output)
+            ? item.output
+                .filter((part) => part.type === 'input_text')
+                .map((part) => part.text)
+            : [];
+      return texts.some(
+        (text) =>
+          typeof text === 'string' &&
+          /^Warning: truncated output\b/.test(text) &&
+          /\d+ tokens truncated/.test(text) &&
+          /Total output lines: 1\b/.test(text) &&
+          text.includes('"chunk_id":') &&
+          text.includes('"output":')
+      );
+    }
+  }
+  return false;
+}
+
 export function readEvidence(captures, fixture) {
   const expected = fixture.replace(/\r\n/g, '\n');
   let complete = false,

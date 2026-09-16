@@ -3,7 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { fixture as developmentFixture } from './codex-fixtures.mjs';
-import { readEvidence } from './codex-output.mjs';
+import { readEvidence, outerEnvelopeTruncated } from './codex-output.mjs';
 import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
 import {
   workflow as developmentWorkflow,
@@ -70,7 +70,7 @@ for (const row of results) {
       );
       verdict = row.exit === 0 && validation.passed ? 'PASS' : 'FAIL';
       read = { notApplicable: true };
-      if (manifest.readMode === 'truncated') {
+      if (['truncated', 'outer-truncated'].includes(manifest.readMode)) {
         const captures = (
           await readFile(join(artifacts, 'requests.jsonl'), 'utf8')
         )
@@ -83,6 +83,10 @@ for (const row of results) {
           workflow(row.task, row.seed ?? row.rep).files['routes.json']
         );
         if (!read.truncated) verdict = 'INVALID_READ';
+        if (manifest.readMode === 'outer-truncated') {
+          read.outerTruncated = outerEnvelopeTruncated(captures);
+          if (!read.outerTruncated) verdict = 'INVALID_READ';
+        }
       }
     } else {
       const captures = (

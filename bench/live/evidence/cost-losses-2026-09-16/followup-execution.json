@@ -1,0 +1,93 @@
+[
+  {
+    "id": "logs-1",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555122132-logs-1\\run-RczK3r",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "mixed-4",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555202340-mixed-4\\run-agqhLg",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "json-10",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555296180-json-10\\run-BeIKhS",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "json-9",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555336333-json-9\\run-yqcdlG",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "json-8",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555378684-json-8\\run-npAVe5",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "mixed-9",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555417376-mixed-9\\run-VIxgig",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "refresh-2",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555532878-refresh-2\\run-LTq4iU",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "code-7",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555645861-code-7\\run-VcpjDA",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "bugfix-9",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555709657-bugfix-9\\run-RDIMOq",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "refresh-1",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555830365-refresh-1\\run-DpDEGC",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "bugfix-2",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555920283-bugfix-2\\run-nWDRcS",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "mixed-3",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789556070830-mixed-3\\run-gfJvfX",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  },
+  {
+    "id": "refresh-3",
+    "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789556172608-refresh-3\\run-B8CTvj",
+    "exit": 0,
+    "auditExit": 0,
+    "costExit": 0
+  }
+]

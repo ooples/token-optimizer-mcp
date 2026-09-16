@@ -13,7 +13,7 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@iarna/toml';
-import { readEvidence } from './codex-output.mjs';
+import { readEvidence, outerEnvelopeTruncated } from './codex-output.mjs';
 import { fixture as developmentFixture } from './codex-fixtures.mjs';
 import {
   workflow as developmentWorkflow,
@@ -49,11 +49,14 @@ if (!Number.isInteger(seedOffset) || seedOffset < 0)
 
 const tasks = (process.env.TASKS || 'logs,json,code').split(',');
 const readMode = process.env.READ_MODE || 'natural';
+const truncatedRead = ['truncated', 'outer-truncated'].includes(readMode);
 const mcpDiscovery = process.env.MCP_DISCOVERY || 'bounded';
 if (!['bounded', 'legacy'].includes(mcpDiscovery))
   throw Error('Invalid MCP_DISCOVERY');
 if (
-  !['natural', 'truncated', 'mcp', 'mixed'].includes(readMode) ||
+  !['natural', 'truncated', 'outer-truncated', 'mcp', 'mixed'].includes(
+    readMode
+  ) ||
   (readMode !== 'natural' && tasks.some((t) => t !== 'refresh')) ||
   (readMode === 'mcp' &&
     arms.some((a) => !['mcp', 'full', 'full-files'].includes(a)))
@@ -252,7 +255,7 @@ try {
           rep: rep + 1,
           position: position + 1,
           kind: natural
-            ? readMode === 'truncated'
+            ? truncatedRead
               ? 'workflow-truncated-read'
               : 'workflow'
             : 'controlled-read',
@@ -344,13 +347,15 @@ try {
             '-c',
             'model_providers.bench.stream_max_retries=0',
             natural
-              ? (readMode === 'truncated'
-                  ? 'First read routes.json using one shell command, setting the tool output budget to 2000 tokens. Do not filter or parse this first read. This intentionally tests a truncated initial view; use subsequent tools to complete the task. '
-                  : readMode === 'mcp'
-                    ? 'This is an MCP cache diagnostic. Use token_optimizer smart_read on the absolute path of routes.json before recording before.json. After running node refresh.mjs, use smart_read on that same absolute path again before writing answer.json. Keep default caching and diffMode enabled. You may use any other tools needed, including expand to recover a preview. '
-                    : readMode === 'mixed'
-                      ? 'First use one shell command to print AGENTS.md followed by the complete routes.json. Set exec_command max_output_tokens to 18000 AND, when using functions.exec, put // @exec: {"max_output_tokens": 24000} on its first line so the enclosing tool also returns the complete output. Do not filter, parse, or summarize that first read. Then complete the task using any tools needed. '
-                      : '') + f.prompt
+              ? (readMode === 'outer-truncated'
+                  ? 'First read routes.json through functions.exec with // @exec: {"max_output_tokens": 2000} as the first line of its code. Inside it call tools.exec_command with max_output_tokens: 18000 to print the entire file, and print the returned object with text(result). This deliberately truncates the enclosing serialized shell result. Do not filter or parse this first read. Use subsequent tools as needed to complete the task. '
+                  : readMode === 'truncated'
+                    ? 'First read routes.json using one shell command, setting the tool output budget to 2000 tokens. Do not filter or parse this first read. This intentionally tests a truncated initial view; use subsequent tools to complete the task. '
+                    : readMode === 'mcp'
+                      ? 'This is an MCP cache diagnostic. Use token_optimizer smart_read on the absolute path of routes.json before recording before.json. After running node refresh.mjs, use smart_read on that same absolute path again before writing answer.json. Keep default caching and diffMode enabled. You may use any other tools needed, including expand to recover a preview. '
+                      : readMode === 'mixed'
+                        ? 'First use one shell command to print AGENTS.md followed by the complete routes.json. Set exec_command max_output_tokens to 18000 AND, when using functions.exec, put // @exec: {"max_output_tokens": 24000} on its first line so the enclosing tool also returns the complete output. Do not filter, parse, or summarize that first read. Then complete the task using any tools needed. '
+                        : '') + f.prompt
               : `First read the complete ${f.name} using one shell command. Set exec_command max_output_tokens to 18000 AND, when using functions.exec, put // @exec: {"max_output_tokens": 24000} on its first line so the enclosing tool also returns the complete output. Do not filter, search, summarize, or parse the file in that first command. Then, using the returned content, ${f.question} Do not modify the source fixture. Finish after writing the answer.`,
           ];
           const command = codex.endsWith('.js') ? process.execPath : codex;
@@ -424,19 +429,26 @@ try {
             natural ||
             (await readFile(join(work, f.name), 'utf8')) === f.content;
           const read =
-            natural && readMode !== 'truncated'
+            natural && !truncatedRead
               ? { notApplicable: true }
               : readEvidence(
                   await jsonl(join(artifacts, 'requests.jsonl')),
                   natural ? f.files['routes.json'] : f.content
                 );
+          if (readMode === 'outer-truncated')
+            read.outerTruncated = outerEnvelopeTruncated(
+              await jsonl(join(artifacts, 'requests.jsonl'))
+            );
           row = {
             ...row,
             read,
             validation,
             verdict:
               (!natural && (!read.complete || read.truncated)) ||
-              (natural && readMode === 'truncated' && !read.truncated)
+              (natural && truncatedRead && !read.truncated) ||
+              (natural &&
+                readMode === 'outer-truncated' &&
+                !read.outerTruncated)
                 ? 'INVALID_READ'
                 : status.code === 0 && correct && unchanged
                   ? 'PASS'

@@ -139,3 +139,18 @@ test('factors long ID prefixes while retaining every exact value and categorical
   expect(out.text).toContain('false');
   expect(expand(out.text)).toBe(input);
 });
+
+test('compresses complete escaped records inside an outer truncated shell envelope', () => {
+  const inner = fixture('\r\n').replaceAll(
+    'route-',
+    'route-long-shared-prefix-'
+  );
+  const serialized = JSON.stringify({ output: inner, exit_code: 0 });
+  const input =
+    'Warning: truncated output (original token count: 10000)\nTotal output lines: 1\n\n' +
+    serialized.replace('broken', 'broken\n...2000 tokens truncated...\n');
+  const out = compressJsonFragments(input);
+  expect(out.text.length).toBeLessThan(input.length * 0.65);
+  expect(expand(out.text)).toBe(input);
+  expect(out.text).toContain('2000 tokens truncated');
+});

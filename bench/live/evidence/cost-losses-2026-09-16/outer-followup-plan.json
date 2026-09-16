@@ -1,0 +1,20 @@
+{
+  "scope": "Development validation of the outer-envelope truncation fix found in refresh-2. Two balanced pairs, fixed before calls, no retries. Includes the original seed and one fresh neighboring seed. Original 13-pair sweep remains separate.",
+  "model": "gpt-6-astra",
+  "arms": [
+    "proxy",
+    "headroom"
+  ],
+  "reps": 2,
+  "tasks": [
+    "refresh"
+  ],
+  "seedOffset": 139520375,
+  "caseSuite": "heldout-v1",
+  "readMode": "outer-truncated",
+  "required": [
+    "Both arms must actually receive an outer-truncated initial shell envelope",
+    "Independent refresh workflow validation",
+    "Complete provider usage and retained failures"
+  ]
+}

@@ -1,5 +1,8 @@
 import { expect, test } from '@jest/globals';
-import { readEvidence } from '../../../bench/live/codex-output.mjs';
+import {
+  readEvidence,
+  outerEnvelopeTruncated,
+} from '../../../bench/live/codex-output.mjs';
 
 const fixture = 'first\nneedle\nlast';
 const capture = (output) => [
@@ -61,4 +64,20 @@ test('missing capture cannot certify a read', () => {
     truncated: false,
     requests: 0,
   });
+});
+
+test('outer truncation requires the initial serialized shell envelope, not any later warning', () => {
+  const outer =
+    'Warning: truncated output\nTotal output lines: 1\n\n{"chunk_id":"x","output":"[...1000 tokens truncated...]"}';
+  expect(
+    outerEnvelopeTruncated(capture([{ type: 'input_text', text: outer }]))
+  ).toBe(true);
+  expect(
+    outerEnvelopeTruncated(
+      capture('Warning: truncated output\n1000 tokens truncated\n[]')
+    )
+  ).toBe(false);
+  expect(outerEnvelopeTruncated([...capture(fixture), ...capture(outer)])).toBe(
+    false
+  );
 });

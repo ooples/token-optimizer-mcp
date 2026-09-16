@@ -62,7 +62,11 @@ for (const pair of analysis.pairs) {
         fragmentAfter += out.text.length;
       }
       let nested;
-      try { nested = JSON.parse(value); } catch { return; }
+      try {
+        nested = JSON.parse(value);
+      } catch {
+        return;
+      }
       inspect(nested, depth + 1);
     } else if (Array.isArray(value))
       value.forEach((v) => inspect(v, depth + 1));

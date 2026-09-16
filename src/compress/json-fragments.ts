@@ -8,7 +8,7 @@ export function looksLikeJsonFragments(text: string): boolean {
   return (
     /^Warning: truncated output\b/.test(text) &&
     /\d+ tokens truncated/.test(text) &&
-    /(?:^|\\n)\s*\[(?:\s*$|\\(?:r\\)?n)/m.test(text)
+    /(?:^|\\n)[ \t]+\{(?:\r?\n|\\(?:r\\)?n)/m.test(text)
   );
 }
 
@@ -30,6 +30,8 @@ function records(text: string): RecordParts[] {
     /(?:^|(?<=\\n))([ \t]+)\{(?:\r?\n|\\(?:r\\)?n)[\s\S]*?(?:^|(?<=\\n))\1\},?(?:\r?\n|\\(?:r\\)?n|$)/gm;
   for (const match of text.matchAll(object)) {
     const raw = match[0];
+    let source = raw;
+    let encode = (value: string): string => value;
     let parsed: Record<string, unknown>;
     try {
       const structural = raw.replace(
@@ -39,7 +41,19 @@ function records(text: string): RecordParts[] {
       );
       parsed = JSON.parse(structural.trim().replace(/,$/, ''));
     } catch {
-      continue;
+      // The enclosing tool can truncate a serialized shell envelope itself.
+      // It is then invalid JSON, but complete escaped records on either side
+      // of the gap still have exact content. Decode only one complete record,
+      // require canonical round-trip encoding, and keep its original encoding
+      // in every template fragment. Never repair or parse across the gap.
+      try {
+        source = JSON.parse(`"${raw}"`) as string;
+        encode = (value: string): string => JSON.stringify(value).slice(1, -1);
+        if (encode(source) !== raw) continue;
+        parsed = JSON.parse(source.trim().replace(/,$/, ''));
+      } catch {
+        continue;
+      }
     }
     if (
       !parsed ||
@@ -52,15 +66,15 @@ function records(text: string): RecordParts[] {
     const chunks: string[] = [],
       values: string[] = [];
     let cursor = 0;
-    for (const value of raw.matchAll(field)) {
+    for (const value of source.matchAll(field)) {
       const start = value.index! + value[0].length - value[1].length;
-      chunks.push(raw.slice(cursor, start));
-      values.push(value[1]);
+      chunks.push(encode(source.slice(cursor, start)));
+      values.push(encode(value[1]));
       cursor = start + value[1].length;
     }
     if (!values.length || values.length !== Object.keys(parsed).length)
       continue;
-    chunks.push(raw.slice(cursor));
+    chunks.push(encode(source.slice(cursor)));
     result.push({
       start: match.index!,
       end: match.index! + raw.length,
@@ -123,7 +137,10 @@ export function compressJsonFragments(text: string): CompressionResult {
           }
           // Keep booleans, numbers and short categorical strings explicit.
           // Only substantial shared string prefixes justify another template.
-          if (!value.startsWith('"') || start < 8) {
+          if (
+            (!value.startsWith('"') && !value.startsWith('\\"')) ||
+            start < 8
+          ) {
             start = 0;
             suffix = 0;
           }

@@ -1,0 +1,478 @@
+{
+  "scope": "Development follow-up of all 13 original losses, with opposite arm order. One attempt per arm per case, no retries or selective replacement. Not independent confirmation.",
+  "planned": 13,
+  "complete": 13,
+  "proxyCostWins": 12,
+  "proxyCostLosses": 1,
+  "costTies": 0,
+  "totals": {
+    "proxy": {
+      "pass": 13,
+      "estimatedUsdCompletePairs": 2.9725480000000006,
+      "inputCompletePairs": 1011978
+    },
+    "headroom": {
+      "pass": 13,
+      "estimatedUsdCompletePairs": 4.464508,
+      "inputCompletePairs": 1545277
+    }
+  },
+  "costReductionCompletePairs": 0.33418240038991964,
+  "cases": [
+    {
+      "id": "logs-1",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 47146,
+            "cached": 29696,
+            "output": 186
+          },
+          "requests": 3,
+          "agentSeconds": 14.3,
+          "estimatedUsd": 0.213496,
+          "firstRequestCached": 0
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 79876,
+            "cached": 59136,
+            "output": 322
+          },
+          "requests": 5,
+          "agentSeconds": 22.4,
+          "estimatedUsd": 0.282636,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.148188,
+      "costDifferenceUsd": -0.06914000000000001,
+      "proxyCostWin": true
+    },
+    {
+      "id": "mixed-4",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 68677,
+            "cached": 62976,
+            "output": 549
+          },
+          "requests": 5,
+          "agentSeconds": 28.9,
+          "estimatedUsd": 0.147436,
+          "firstRequestCached": 9344
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 122062,
+            "cached": 104192,
+            "output": 769
+          },
+          "requests": 8,
+          "agentSeconds": 51.8,
+          "estimatedUsd": 0.321342,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.155984,
+      "costDifferenceUsd": -0.173906,
+      "proxyCostWin": true
+    },
+    {
+      "id": "json-10",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 40168,
+            "cached": 31360,
+            "output": 173
+          },
+          "requests": 3,
+          "agentSeconds": 12.2,
+          "estimatedUsd": 0.12809,
+          "firstRequestCached": 5120
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 49127,
+            "cached": 30592,
+            "output": 186
+          },
+          "requests": 3,
+          "agentSeconds": 14.8,
+          "estimatedUsd": 0.225242,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.03407199999999999,
+      "costDifferenceUsd": -0.09715199999999999,
+      "proxyCostWin": true
+    },
+    {
+      "id": "json-9",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 40190,
+            "cached": 26240,
+            "output": 173
+          },
+          "requests": 3,
+          "agentSeconds": 14.6,
+          "estimatedUsd": 0.17439,
+          "firstRequestCached": 0
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 50108,
+            "cached": 31104,
+            "output": 183
+          },
+          "requests": 3,
+          "agentSeconds": 14.6,
+          "estimatedUsd": 0.230294,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.02767,
+      "costDifferenceUsd": -0.05590400000000001,
+      "proxyCostWin": true
+    },
+    {
+      "id": "json-8",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 40196,
+            "cached": 31360,
+            "output": 190
+          },
+          "requests": 3,
+          "agentSeconds": 12.4,
+          "estimatedUsd": 0.12922,
+          "firstRequestCached": 5120
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 48292,
+            "cached": 17408,
+            "output": 184
+          },
+          "requests": 3,
+          "agentSeconds": 13.1,
+          "estimatedUsd": 0.335448,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.03980600000000001,
+      "costDifferenceUsd": -0.20622800000000002,
+      "proxyCostWin": true
+    },
+    {
+      "id": "mixed-9",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 82508,
+            "cached": 76544,
+            "output": 663
+          },
+          "requests": 6,
+          "agentSeconds": 36.6,
+          "estimatedUsd": 0.169334,
+          "firstRequestCached": 9344
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 230849,
+            "cached": 201600,
+            "output": 985
+          },
+          "requests": 10,
+          "agentSeconds": 65.8,
+          "estimatedUsd": 0.54334,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.08463000000000004,
+      "costDifferenceUsd": -0.37400600000000006,
+      "proxyCostWin": true
+    },
+    {
+      "id": "refresh-2",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 189623,
+            "cached": 158336,
+            "output": 744
+          },
+          "requests": 7,
+          "agentSeconds": 43.8,
+          "estimatedUsd": 0.508406,
+          "firstRequestCached": 0
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 124046,
+            "cached": 108032,
+            "output": 784
+          },
+          "requests": 9,
+          "agentSeconds": 56.8,
+          "estimatedUsd": 0.307372,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.03409200000000001,
+      "costDifferenceUsd": 0.20103400000000005,
+      "proxyCostWin": false
+    },
+    {
+      "id": "code-7",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 44854,
+            "cached": 33664,
+            "output": 181
+          },
+          "requests": 3,
+          "agentSeconds": 14.5,
+          "estimatedUsd": 0.154614,
+          "firstRequestCached": 5120
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 80891,
+            "cached": 65920,
+            "output": 507
+          },
+          "requests": 6,
+          "agentSeconds": 36.9,
+          "estimatedUsd": 0.24098,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.104136,
+      "costDifferenceUsd": -0.086366,
+      "proxyCostWin": true
+    },
+    {
+      "id": "bugfix-9",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 94242,
+            "cached": 74624,
+            "output": 903
+          },
+          "requests": 6,
+          "agentSeconds": 42.6,
+          "estimatedUsd": 0.315954,
+          "firstRequestCached": 0
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 137331,
+            "cached": 113792,
+            "output": 1312
+          },
+          "requests": 9,
+          "agentSeconds": 64.7,
+          "estimatedUsd": 0.414782,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.08700199999999997,
+      "costDifferenceUsd": -0.09882799999999997,
+      "proxyCostWin": true
+    },
+    {
+      "id": "refresh-1",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 110058,
+            "cached": 98688,
+            "output": 603
+          },
+          "requests": 6,
+          "agentSeconds": 31.4,
+          "estimatedUsd": 0.242538,
+          "firstRequestCached": 9344
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 122265,
+            "cached": 106624,
+            "output": 812
+          },
+          "requests": 9,
+          "agentSeconds": 46.3,
+          "estimatedUsd": 0.303634,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.05563999999999997,
+      "costDifferenceUsd": -0.06109600000000001,
+      "proxyCostWin": true
+    },
+    {
+      "id": "bugfix-2",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 73430,
+            "cached": 55296,
+            "output": 921
+          },
+          "requests": 5,
+          "agentSeconds": 65.8,
+          "estimatedUsd": 0.282686,
+          "firstRequestCached": 0
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 125992,
+            "cached": 107776,
+            "output": 1237
+          },
+          "requests": 9,
+          "agentSeconds": 71.2,
+          "estimatedUsd": 0.351786,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.06242200000000003,
+      "costDifferenceUsd": -0.0691,
+      "proxyCostWin": true
+    },
+    {
+      "id": "mixed-3",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 82687,
+            "cached": 67328,
+            "output": 630
+          },
+          "requests": 6,
+          "agentSeconds": 34.1,
+          "estimatedUsd": 0.252418,
+          "firstRequestCached": 0
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 239130,
+            "cached": 209024,
+            "output": 1028
+          },
+          "requests": 10,
+          "agentSeconds": 55.2,
+          "estimatedUsd": 0.561484,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.06881399999999999,
+      "costDifferenceUsd": -0.309066,
+      "proxyCostWin": true
+    },
+    {
+      "id": "refresh-3",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 98199,
+            "cached": 84736,
+            "output": 692
+          },
+          "requests": 6,
+          "agentSeconds": 46,
+          "estimatedUsd": 0.253966,
+          "firstRequestCached": 5120
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "auditedPass": true,
+          "usage": {
+            "input": 135308,
+            "cached": 115968,
+            "output": 736
+          },
+          "requests": 8,
+          "agentSeconds": 46.1,
+          "estimatedUsd": 0.346168,
+          "firstRequestCached": 0
+        }
+      },
+      "complete": true,
+      "originalCostDifferenceUsd": 0.14461199999999996,
+      "costDifferenceUsd": -0.09220199999999995,
+      "proxyCostWin": true
+    }
+  ]
+}
