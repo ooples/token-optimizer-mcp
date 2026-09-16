@@ -5,9 +5,10 @@ const require = createRequire(import.meta.url);
 let encoder: Tiktoken | undefined;
 const decisions = new Map<
   string,
-  { after: string; accepted: boolean; bytes: number }
+  Map<string, { accepted: boolean; bytes: number }>
 >();
 let retainedBytes = 0;
+let decisionCount = 0;
 
 /** o200k_base is a local estimate, NOT a claim about an unknown model's billing
  * tokenizer. Require a margin, count only changed bounded units, and memoize the
@@ -16,8 +17,10 @@ let retainedBytes = 0;
  */
 export function tokenBenefit(before: string, after: string): boolean {
   if (after === before) return false;
-  const hit = decisions.get(before);
-  if (hit?.after === after) return hit.accepted;
+  // A full encoding and its later reference are different candidates for the
+  // same original. Keep both decisions so every turn doesn't recount both.
+  const hit = decisions.get(before)?.get(after);
+  if (hit) return hit.accepted;
   if (
     Buffer.byteLength(after) >= Buffer.byteLength(before) ||
     Buffer.byteLength(JSON.stringify(after)) >=
@@ -40,17 +43,22 @@ export function tokenBenefit(before: string, after: string): boolean {
   }
   const bytes = 2 * (before.length + after.length);
   if (bytes <= 1024 * 1024) {
-    const previous = decisions.get(before);
-    if (previous) {
-      retainedBytes -= previous.bytes;
-      decisions.delete(before);
-    }
-    while (decisions.size >= 128 || retainedBytes + bytes > 2 * 1024 * 1024) {
+    while (decisionCount >= 128 || retainedBytes + bytes > 2 * 1024 * 1024) {
       const first = decisions.keys().next().value!;
-      retainedBytes -= decisions.get(first)!.bytes;
-      decisions.delete(first);
+      const candidates = decisions.get(first)!;
+      const oldest = candidates.keys().next().value!;
+      retainedBytes -= candidates.get(oldest)!.bytes;
+      candidates.delete(oldest);
+      decisionCount--;
+      if (!candidates.size) decisions.delete(first);
     }
-    decisions.set(before, { after, accepted, bytes });
+    let candidates = decisions.get(before);
+    if (!candidates) {
+      candidates = new Map();
+      decisions.set(before, candidates);
+    }
+    candidates.set(after, { accepted, bytes });
+    decisionCount++;
     retainedBytes += bytes;
   }
   return accepted;

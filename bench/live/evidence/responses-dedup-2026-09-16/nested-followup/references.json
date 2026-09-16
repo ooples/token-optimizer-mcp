@@ -1,0 +1,54 @@
+{
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-nested-2026-09-16\\repeat\\run-REvpwx",
+  "scope": "Counters on actually forwarded live requests, not inferred from local replay.",
+  "attempts": [
+    {
+      "attempt": "json-1-proxy",
+      "referencesPerRequest": [
+        0,
+        0,
+        1,
+        2,
+        2
+      ],
+      "statusPerRequest": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "transformMsPerRequest": [
+        1.1993999999999687,
+        261.8627999999999,
+        36.64639999999963,
+        54.24960000000283,
+        33.684299999997165
+      ]
+    },
+    {
+      "attempt": "json-2-proxy",
+      "referencesPerRequest": [
+        0,
+        0,
+        1,
+        2,
+        2
+      ],
+      "statusPerRequest": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "transformMsPerRequest": [
+        1.358600000000024,
+        245.17460000000028,
+        35.23689999999988,
+        48.290899999999965,
+        32.30609999999797
+      ]
+    }
+  ]
+}

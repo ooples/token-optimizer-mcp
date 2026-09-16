@@ -1,8 +1,8 @@
 /** Responses API tool outputs, including Codex custom tools.
  * Keep instructions, call IDs, and encrypted reasoning intact. Tool definitions
  * are untouched unless the explicit tool-code whitespace experiment is enabled.
- * Compression is a stable function of each output, so appending a turn does not
- * rewrite the already-compressed prefix based on a newer user query.
+ * Encode observations in order, referencing only earlier copies in this request.
+ * Appending a turn never rewrites the prefix based on later content or queries.
  */
 import { cachedOutput } from './output-cache.js';
 import { compactToolDefinitions } from './tool-code.js';
