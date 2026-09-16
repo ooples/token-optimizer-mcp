@@ -122,7 +122,7 @@ function deviationOf(
 function anomalousRows(
   rows: readonly unknown[],
   maxPerDeviation: number
-): Set<number> {
+): { selected: Set<number>; all: number[] } {
   const frequency = new Map<string, number>();
   let objects = 0;
 
@@ -133,7 +133,7 @@ function anomalousRows(
       frequency.set(key, (frequency.get(key) ?? 0) + 1);
     }
   }
-  if (!objects) return new Set();
+  if (!objects) return { selected: new Set(), all: [] };
 
   const common = new Set(
     [...frequency.entries()]
@@ -163,7 +163,9 @@ function anomalousRows(
     // than an arbitrary slice -- the same bias the head-of-array rule uses.
     for (const index of indices.slice(0, maxPerDeviation)) odd.add(index);
   }
-  return odd;
+  // Keep the full population for claims about completeness, independently of
+  // the capped representatives selected for compression.
+  return { selected: odd, all: [...byDeviation.values()].flat() };
 }
 
 /**
@@ -250,7 +252,10 @@ export function compressJson(
     // elided, 25.7% against their 60.0%) and keeps nothing when every row is
     // shaped alike (their agentic-conversation, 0 flagged, 45 of 48 rows
     // elided, every needle destroyed at 99.6%).
-    const odd = anomalousRows(stripped, tuning.keepRows);
+    const { selected: odd, all: differing } = anomalousRows(
+      stripped,
+      tuning.keepRows
+    );
     const keep = rareBooleanRows(stripped);
     const hasRareBooleans = keep.size > 0;
     const extrema = numericExtrema(stripped);
@@ -318,8 +323,8 @@ export function compressJson(
       ',' +
       inlineMarker(
         `${count(dropped, 'more row')}, ${shapeOf(sample)}` +
-          (odd.size && [...odd].every((i) => keep.has(i))
-            ? `; all ${count(odd.size, 'row')} that differ are kept above`
+          (differing.length && differing.every((i) => keep.has(i))
+            ? `; all ${count(differing.length, 'row')} that differ are kept above`
             : '') +
           booleanFacts(parsed as unknown[]) +
           nullFacts(parsed as unknown[]) +
