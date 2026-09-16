@@ -159,9 +159,14 @@ try {
     await save();
     if (audit.length === 2 && audit.every((r) => r.verdict === 'INVALID_READ'))
       throw Error('Both arms failed initial exposure audit; stop incomplete for measurement review');
-    consecutiveInfrastructureFailures = audit.some(
-      (r) => r.verdict === 'PROVIDER_ERROR'
-    )
+    // The Codex auditor can retain a transport-level turn.failed as FAIL.
+    // Recognize its client errors as infrastructure rather than relying only
+    // on the verdict label (the completed v2 study exposed an upstream 503).
+    state.infrastructureFailure = audit.some(
+      (r) => r.verdict === 'PROVIDER_ERROR' || r.clientErrors?.length > 0
+    );
+    await save();
+    consecutiveInfrastructureFailures = state.infrastructureFailure
       ? consecutiveInfrastructureFailures + 1
       : 0;
     if (consecutiveInfrastructureFailures >= 3)
