@@ -3,6 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { fixture as developmentFixture } from './codex-fixtures.mjs';
+import { adversarialFixture } from './adversarial-cases.mjs';
 import { readEvidence, outerEnvelopeTruncated } from './codex-output.mjs';
 import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
 import {
@@ -24,15 +25,23 @@ const results = JSON.parse(
   await readFile(join(directory, 'results.json'), 'utf8')
 );
 if (
-  !['development', 'heldout-v1'].includes(manifest.caseSuite ?? 'development')
+  !['development', 'heldout-v1', 'adversarial-v1'].includes(
+    manifest.caseSuite ?? 'development'
+  )
 )
   throw Error('Unknown case suite');
 const fixture =
-  manifest.caseSuite === 'heldout-v1' ? heldoutFixture : developmentFixture;
+  manifest.caseSuite === 'adversarial-v1'
+    ? adversarialFixture
+    : manifest.caseSuite === 'heldout-v1'
+      ? heldoutFixture
+      : developmentFixture;
 const workflow =
-  manifest.caseSuite === 'heldout-v1' ? heldoutWorkflow : developmentWorkflow;
+  manifest.caseSuite && manifest.caseSuite !== 'development'
+    ? heldoutWorkflow
+    : developmentWorkflow;
 const validateWorkflow =
-  manifest.caseSuite === 'heldout-v1'
+  manifest.caseSuite && manifest.caseSuite !== 'development'
     ? validateHeldoutWorkflow
     : validateDevelopmentWorkflow;
 const failures = [];

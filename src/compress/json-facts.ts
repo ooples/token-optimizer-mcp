@@ -1,6 +1,37 @@
 /** Exact, bounded facts computed from a complete array, never sampled rows.
  * They let an agent answer boolean-count questions without reading an elided tail.
  */
+export function nullFacts(rows: readonly unknown[]): string {
+  const keys = new Set<string>();
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    for (const [key, value] of Object.entries(row))
+      if (value === null && key.length <= 80 && keys.size < 8) keys.add(key);
+  }
+  const facts: Record<
+    string,
+    { null: number; missing: number; other: number }
+  > = Object.create(null);
+  for (const key of keys) {
+    const counts = { null: 0, missing: 0, other: 0 };
+    for (const row of rows) {
+      if (
+        !row ||
+        typeof row !== 'object' ||
+        Array.isArray(row) ||
+        !Object.hasOwn(row, key)
+      )
+        counts.missing++;
+      else if ((row as Record<string, unknown>)[key] === null) counts.null++;
+      else counts.other++;
+    }
+    facts[key] = counts;
+  }
+  return keys.size
+    ? `; exact null counts over all ${rows.length} rows: ${JSON.stringify(facts)}`
+    : '';
+}
+
 export function booleanFacts(rows: readonly unknown[]): string {
   const keys = new Set<string>();
   for (const row of rows) {

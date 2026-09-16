@@ -114,6 +114,12 @@ export interface CompressionFacts {
 
 /** One line of the ledger: what we sent, and what it was billed as. */
 export interface AccountingRecord extends CompressionFacts {
+  /** Monotonic durations. Upstream includes transport and provider processing. */
+  readonly timing?: {
+    readonly transformMs: number;
+    readonly upstreamHeadersMs?: number;
+    readonly upstreamMs: number;
+  };
   readonly ts: string;
   readonly path: string;
   readonly status: number;

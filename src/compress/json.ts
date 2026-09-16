@@ -7,9 +7,8 @@
  *
  * WHAT IS DROPPED, AND WHETHER IT CAN COME BACK:
  *
- *   whitespace          lossless -- re-serialising restores it exactly
- *   nulls               lossless -- absent and null are the same to a reader,
- *                       and the key list is recoverable from the surviving rows
+ *   whitespace          preserves parsed values; original formatting is not retained
+ *   nulls               retained -- absent and null are distinct
  *   long array tails    LOSSY -- spilled to a path, or the count is stated so
  *                       the model knows what it is not seeing
  *
@@ -36,8 +35,10 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
+import { numericExtrema } from './json-numeric.js';
 import {
   booleanFacts,
+  nullFacts,
   rareBooleanRows,
   rareStringGroups,
 } from './json-facts.js';
@@ -55,35 +56,6 @@ export function looksLikeJson(text: string): boolean {
   const first = trimmed[0];
   const last = trimmed[trimmed.length - 1];
   return (first === '{' && last === '}') || (first === '[' && last === ']');
-}
-
-/** Strips null-valued keys, recursively. Absent and null read the same. */
-function dropNulls(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(dropNulls);
-  if (value && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (v === null) continue;
-      out[k] = dropNulls(v);
-    }
-    return out;
-  }
-  return value;
-}
-
-/** Counts nulls before they are dropped, so the marker can be honest. */
-function countNulls(value: unknown): number {
-  if (Array.isArray(value))
-    return value.reduce<number>((n, v) => n + countNulls(v), 0);
-  if (value && typeof value === 'object') {
-    let n = 0;
-    for (const v of Object.values(value as Record<string, unknown>)) {
-      if (v === null) n += 1;
-      else n += countNulls(v);
-    }
-    return n;
-  }
-  return 0;
 }
 
 /** A one-line description of a row's shape, for the elision marker. */
@@ -246,20 +218,8 @@ export function compressJson(
 
   const elisions: Elision[] = [...nestedElisions];
 
-  const nulls = countNulls(parsed);
-  const stripped = nulls ? dropNulls(parsed) : parsed;
-  if (nulls) {
-    // Lossless: absent and null read the same, and the surviving rows carry
-    // the key list.
-    elisions.push({
-      removed: count(nulls, 'null field'),
-      recoverAt: null,
-      // This ELISION is lossless on its own terms whatever happened elsewhere:
-      // an absent key and a null key read the same. Per-elision flags describe
-      // their own transform; the document-level claim is the engine's return.
-      lossless: true,
-    });
-  }
+  // Null and absent are different values. Preserve nulls in visible and recovery data.
+  const stripped = parsed;
 
   const minified = JSON.stringify(stripped);
   // Whitespace is recorded only when there actually was some to remove.
@@ -291,6 +251,8 @@ export function compressJson(
     // elided, every needle destroyed at 99.6%).
     const odd = anomalousRows(stripped, tuning.keepRows);
     const keep = rareBooleanRows(stripped);
+    const extrema = numericExtrema(stripped);
+    for (const i of extrema.keep) keep.add(i);
     const categories = rareStringGroups(parsed as unknown[]);
     for (const i of categories.keep) keep.add(i);
     // 1. Content that a reader would come back for -- identifiers, failure
@@ -346,7 +308,9 @@ export function compressJson(
             ? `; all ${count(odd.size, 'row')} that differ are kept above`
             : '') +
           booleanFacts(parsed as unknown[]) +
-          categories.facts,
+          nullFacts(parsed as unknown[]) +
+          categories.facts +
+          extrema.facts,
         recoverAt
       ) +
       ']';

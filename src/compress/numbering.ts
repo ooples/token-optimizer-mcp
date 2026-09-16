@@ -73,6 +73,9 @@ export interface Numbering {
  * and this package has a standing rule about which of those to prefer.
  */
 export function readNumbering(text: string): Numbering | null {
+  // Every numbered line requires a literal tab. Most JSON/log outputs have
+  // none: reject those without allocating an array and a match per line.
+  if (!text.includes('\t')) return null;
   const lines = text.split('\n');
   if (lines.length < MIN_LINES) return null;
 

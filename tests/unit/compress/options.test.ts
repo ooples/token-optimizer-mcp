@@ -79,9 +79,9 @@ describe('resolveTuning', () => {
     expect(presetFromEnv({ TOKEN_OPTIMIZER_COMPRESSION: 'lossless' })).toBe(
       'lossless'
     );
-    expect(presetFromEnv({ TOKEN_OPTIMIZER_COMPRESSION: '  Aggressive ' })).toBe(
-      'aggressive'
-    );
+    expect(
+      presetFromEnv({ TOKEN_OPTIMIZER_COMPRESSION: '  Aggressive ' })
+    ).toBe('aggressive');
     expect(presetFromEnv({})).toBe('balanced');
     expect(presetFromEnv({ TOKEN_OPTIMIZER_COMPRESSION: 'nonsense' })).toBe(
       'balanced'
@@ -147,13 +147,8 @@ describe('lossless is lossless, not merely smaller', () => {
   });
 
   it('still compresses, using only what it can fully describe', () => {
-    // The point is not that it does nothing. Whitespace and null keys are
-    // removed and the output re-serialises to the same document.
-    const pretty = JSON.stringify(
-      { a: 1, b: null, rows: [1, 2, 3] },
-      null,
-      2
-    );
+    // Whitespace is removed while null-valued keys remain in the document.
+    const pretty = JSON.stringify({ a: 1, b: null, rows: [1, 2, 3] }, null, 2);
     const out = compressJson(pretty, { spill, tuning });
     expect(out.text.length).toBeLessThan(pretty.length);
     expect(out.lossless).toBe(true);

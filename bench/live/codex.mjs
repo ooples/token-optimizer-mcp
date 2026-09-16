@@ -26,19 +26,24 @@ import {
   validateHeldoutWorkflow,
 } from './heldout-cases.mjs';
 
+import { adversarialFixture, adversarialTasks } from './adversarial-cases.mjs';
 import { provenance } from './codex-provenance.mjs';
 import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const caseSuite = process.env.CASE_SUITE || 'development';
-if (!['development', 'heldout-v1'].includes(caseSuite))
+if (!['development', 'heldout-v1', 'adversarial-v1'].includes(caseSuite))
   throw Error('Unknown CASE_SUITE');
 const fixture =
-  caseSuite === 'heldout-v1' ? heldoutFixture : developmentFixture;
+  caseSuite === 'adversarial-v1'
+    ? adversarialFixture
+    : caseSuite === 'heldout-v1'
+      ? heldoutFixture
+      : developmentFixture;
 const workflow =
-  caseSuite === 'heldout-v1' ? heldoutWorkflow : developmentWorkflow;
+  caseSuite !== 'development' ? heldoutWorkflow : developmentWorkflow;
 const validateWorkflow =
-  caseSuite === 'heldout-v1'
+  caseSuite !== 'development'
     ? validateHeldoutWorkflow
     : validateDevelopmentWorkflow;
 const arms = (process.env.ARMS || 'control,proxy,headroom').split(',');
@@ -76,7 +81,18 @@ if (
   throw Error('Invalid REPS or ARMS');
 if (new Set(arms).size !== arms.length || new Set(tasks).size !== tasks.length)
   throw Error('Duplicate arms or tasks');
-if (tasks.some((t) => !['logs', 'json', 'code', ...workflowTasks].includes(t)))
+if (
+  tasks.some(
+    (t) =>
+      ![
+        'logs',
+        'json',
+        'code',
+        ...(caseSuite === 'adversarial-v1' ? adversarialTasks : []),
+        ...workflowTasks,
+      ].includes(t)
+  )
+)
   throw Error('Unknown task');
 const out = process.env.OUT
   ? resolve(process.env.OUT)

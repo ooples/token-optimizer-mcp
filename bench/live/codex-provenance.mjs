@@ -27,6 +27,7 @@ export async function provenance(root, codex, python, proxyBin) {
     'bench/live/codex.mjs',
     'bench/live/codex-workflows.mjs',
     'bench/live/heldout-cases.mjs',
+    'bench/live/adversarial-cases.mjs',
     'bench/live/codex-mcp-evidence.mjs',
     'bench/live/report-codex.mjs',
     ...[

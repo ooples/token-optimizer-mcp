@@ -1,13 +1,26 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressJson, looksLikeJson } from '../../../src/compress/json.js';
 import { compressLog, looksLikeLog } from '../../../src/compress/log.js';
-import { compressCode, looksLikeCode, looksLikeDiff } from '../../../src/compress/code.js';
-import { compressProse, looksLikeProse, score } from '../../../src/compress/prose.js';
+import {
+  compressCode,
+  looksLikeCode,
+  looksLikeDiff,
+} from '../../../src/compress/code.js';
+import {
+  compressProse,
+  looksLikeProse,
+  score,
+} from '../../../src/compress/prose.js';
 import {
   compressSearchResults,
   looksLikeSearchResults,
 } from '../../../src/compress/search.js';
-import { count, inlineMarker, marker, span } from '../../../src/compress/annotate.js';
+import {
+  count,
+  inlineMarker,
+  marker,
+  span,
+} from '../../../src/compress/annotate.js';
 import { unchanged } from '../../../src/compress/types.js';
 
 /**
@@ -46,10 +59,12 @@ describe('annotate', () => {
   });
 
   it('states the recovery path when there is one, and omits it when there is not', () => {
-    expect(marker({ removed: 'body, 4 lines', recoverAt: 'src/x.ts:1-4' })).toBe(
-      '[... body, 4 lines -> src/x.ts:1-4]'
+    expect(
+      marker({ removed: 'body, 4 lines', recoverAt: 'src/x.ts:1-4' })
+    ).toBe('[... body, 4 lines -> src/x.ts:1-4]');
+    expect(inlineMarker('37 duplicate lines', null)).toBe(
+      '[... 37 duplicate lines]'
     );
-    expect(inlineMarker('37 duplicate lines', null)).toBe('[... 37 duplicate lines]');
   });
 
   it('never emits an angle-bracket sigil, which reads as a protocol to satisfy', () => {
@@ -81,10 +96,18 @@ describe('json', () => {
     expect(compressJson(broken).text).toBe(broken);
   });
 
-  it('strips whitespace and nulls losslessly', () => {
-    const text = JSON.stringify({ a: 1, b: null, c: { d: null, e: 2 } }, null, 2);
+  it('strips whitespace while preserving null and absent distinctions', () => {
+    const text = JSON.stringify(
+      { a: 1, b: null, c: { d: null, e: 2 } },
+      null,
+      2
+    );
     const out = compressJson(text);
-    expect(JSON.parse(out.text)).toEqual({ a: 1, c: { e: 2 } });
+    expect(JSON.parse(out.text)).toEqual({
+      a: 1,
+      b: null,
+      c: { d: null, e: 2 },
+    });
     expect(out.lossless).toBe(true);
   });
 
@@ -92,7 +115,9 @@ describe('json', () => {
     const out = compressJson(JSON.stringify(rows(60)), recordingSpill());
     expect(out.text.length).toBeLessThan(2000);
     expect(out.text).toContain('more row');
-    expect(out.elisions.some((e) => /repeating row/.test(e.removed))).toBe(true);
+    expect(out.elisions.some((e) => /repeating row/.test(e.removed))).toBe(
+      true
+    );
   });
 
   // PRESERVATION.
@@ -101,7 +126,11 @@ describe('json', () => {
     // payload and destroyed both planted records -- the two rows anybody would
     // have been searching for.
     const all = rows(60) as Array<Record<string, unknown>>;
-    all[47] = { ...all[47], uuid: '9f1c2b3a-7d4e-4a1b-9c6f-abcdefabcdef', is_needle: true };
+    all[47] = {
+      ...all[47],
+      uuid: '9f1c2b3a-7d4e-4a1b-9c6f-abcdefabcdef',
+      is_needle: true,
+    };
     all[23] = { ...all[23], error: 'Permission denied', status: 'failed' };
 
     const out = compressJson(JSON.stringify(all), recordingSpill());
@@ -145,13 +174,18 @@ describe('log', () => {
     `2026-09-09T18:${String(i % 60).padStart(2, '0')}:00Z ${text}`;
 
   it('recognises timestamped or levelled output', () => {
-    const text = Array.from({ length: 10 }, (_, i) => stamped(i, 'INFO doing work')).join('\n');
+    const text = Array.from({ length: 10 }, (_, i) =>
+      stamped(i, 'INFO doing work')
+    ).join('\n');
     expect(looksLikeLog(text)).toBe(true);
     expect(looksLikeLog('just\ntwo lines')).toBe(false);
   });
 
   it('folds an adjacent run into one line and a count', () => {
-    const text = Array.from({ length: 9 }, () => 'INFO compiled module successfully').join('\n');
+    const text = Array.from(
+      { length: 9 },
+      () => 'INFO compiled module successfully'
+    ).join('\n');
     const out = compressLog(text);
     expect(out.text).toContain('8 more times');
     expect(out.lossless).toBe(true);
@@ -187,7 +221,9 @@ describe('log', () => {
     const folded = /(\d+) occurrences/.exec(out.text);
     const standalone = out.text
       .split('\n')
-      .filter((l) => l.includes('AssertionError') && !l.includes('occurrences')).length;
+      .filter(
+        (l) => l.includes('AssertionError') && !l.includes('occurrences')
+      ).length;
     expect((folded ? Number(folded[1]) : 0) + standalone).toBe(8);
     // Not a summary: the distinct values survive verbatim.
     expect(out.text).toContain('7');
@@ -198,8 +234,12 @@ describe('log', () => {
     // Shapes differ once the words differ, so distinct failures stay distinct
     // even though both are load-bearing and both repeat.
     const lines = [
-      ...Array.from({ length: 5 }, (_, i) => stamped(i, `ERROR timeout after ${i}s`)),
-      ...Array.from({ length: 5 }, (_, i) => stamped(i, `ERROR permission denied for user${i}`)),
+      ...Array.from({ length: 5 }, (_, i) =>
+        stamped(i, `ERROR timeout after ${i}s`)
+      ),
+      ...Array.from({ length: 5 }, (_, i) =>
+        stamped(i, `ERROR permission denied for user${i}`)
+      ),
     ];
     const out = compressLog(lines.join('\n'));
     expect(out.text).toContain('timeout after');
@@ -210,7 +250,10 @@ describe('log', () => {
     // The digits sit inside identifiers, which is why a \b-anchored grouper
     // found 0 templates over 108 candidates.
     const lines = Array.from({ length: 12 }, (_, i) =>
-      stamped(i, `ERROR AssertionError at src/mod${1000 + i}.ts:${200 + i}: expected ${i}`)
+      stamped(
+        i,
+        `ERROR AssertionError at src/mod${1000 + i}.ts:${200 + i}: expected ${i}`
+      )
     );
     const out = compressLog(lines.join('\n'));
     expect(out.text.length).toBeLessThan(lines.join('\n').length);
@@ -260,9 +303,16 @@ describe('code', () => {
 
   // PRESERVATION.
   it('never elides a diff, whose hunks are the entire content', () => {
-    const diff = ['diff --git a/x.ts b/x.ts', '@@ -1,6 +1,6 @@', '-a', '-b', '-c', '+d', '+e', '+f'].join(
-      '\n'
-    );
+    const diff = [
+      'diff --git a/x.ts b/x.ts',
+      '@@ -1,6 +1,6 @@',
+      '-a',
+      '-b',
+      '-c',
+      '+d',
+      '+e',
+      '+f',
+    ].join('\n');
     expect(compressCode(diff, { sourcePath: 'x.ts' }).text).toBe(diff);
   });
 
@@ -270,12 +320,16 @@ describe('code', () => {
   it('keeps signatures, imports and the declaration line', () => {
     const out = compressCode(ts, { sourcePath: 'src/w.ts' });
     expect(out.text).toContain("import { readFileSync } from 'node:fs';");
-    expect(out.text).toContain('export function widen(input: string, limit: number): string {');
+    expect(out.text).toContain(
+      'export function widen(input: string, limit: number): string {'
+    );
   });
 
   it('replaces the body with a marker naming the line range', () => {
     const out = compressCode(ts, { sourcePath: 'src/w.ts' });
-    expect(out.text).toMatch(/\[\.\.\. body, \d+ lines -> src\/w\.ts:\d+-\d+\]/);
+    expect(out.text).toMatch(
+      /\[\.\.\. body, \d+ lines -> src\/w\.ts:\d+-\d+\]/
+    );
     expect(out.text.length).toBeLessThan(ts.length);
   });
 
@@ -306,7 +360,10 @@ describe('code', () => {
       '\twrite(w, body)',
       '}',
     ].join('\n');
-    const out = compressCode(unparseable, { sourcePath: 'srv.go', language: 'go' });
+    const out = compressCode(unparseable, {
+      sourcePath: 'srv.go',
+      language: 'go',
+    });
     expect(out.text.length).toBeLessThan(unparseable.length);
   });
 
@@ -350,8 +407,16 @@ describe('prose', () => {
 
   // PRESERVATION.
   it('ranks a sentence carrying an error above pure filler', () => {
-    const critical = score('The error surfaces at src/layer.ts:40 with exit code 1.', 3, 8);
-    const filler = score('It is worth noting that this is generally considered good practice.', 3, 8);
+    const critical = score(
+      'The error surfaces at src/layer.ts:40 with exit code 1.',
+      3,
+      8
+    );
+    const filler = score(
+      'It is worth noting that this is generally considered good practice.',
+      3,
+      8
+    );
     expect(critical).toBeGreaterThan(filler);
   });
 
@@ -421,7 +486,11 @@ describe('search', () => {
   // PRESERVATION.
   it('keeps every content line: the header replaces prefixes, not content', () => {
     const out = compressSearchResults(hits);
-    for (const fragment of ['export function alpha()', 'return 1;', 'export function beta()']) {
+    for (const fragment of [
+      'export function alpha()',
+      'return 1;',
+      'export function beta()',
+    ]) {
       expect(out.text).toContain(fragment);
     }
   });

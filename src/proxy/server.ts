@@ -866,7 +866,8 @@ function forward(
   req: IncomingMessage,
   res: ServerResponse,
   body: Buffer,
-  facts?: CompressionFacts
+  facts?: CompressionFacts,
+  transformMs = 0
 ): void {
   const path = requestPath(req.url);
   if (path === null) {
@@ -918,6 +919,8 @@ function forward(
       req.headers['anthropic-beta']
     );
 
+  const upstreamStarted = performance.now();
+  let upstreamHeadersMs: number | undefined;
   let receivedResponse = false;
   const upstreamReq = send(
     {
@@ -930,6 +933,7 @@ function forward(
     },
     (upstreamRes) => {
       receivedResponse = true;
+      upstreamHeadersMs = performance.now() - upstreamStarted;
       // HOP-BY-HOP HEADERS ARE STRIPPED IN BOTH DIRECTIONS, and doing it in
       // only one was a real defect rather than an untidiness.
       //
@@ -985,6 +989,11 @@ function forward(
               path: requestPath(req.url) ?? '/',
               status: upstreamRes.statusCode || 0,
               ...facts,
+              timing: {
+                transformMs,
+                upstreamHeadersMs,
+                upstreamMs: performance.now() - upstreamStarted,
+              },
               usage,
             });
           },
@@ -1014,6 +1023,11 @@ function forward(
         path: requestPath(req.url) ?? '/',
         status: 0,
         ...facts,
+        timing: {
+          transformMs,
+          upstreamHeadersMs,
+          upstreamMs: performance.now() - upstreamStarted,
+        },
         transportError:
           (error as NodeJS.ErrnoException).code ?? 'UPSTREAM_ERROR',
         usage: {},
@@ -1180,6 +1194,7 @@ export async function startProxy(
       const capture = captureDir();
       if (capture) void captureRequest(capture, path, body);
 
+      const transformStarted = performance.now();
       const { body: next, summary } = compressBody(
         body,
         spill,
@@ -1197,7 +1212,14 @@ export async function startProxy(
       // knowledge block read its own effect as zero. The summary IS the
       // compression facts -- every field of it belongs in the ledger, and a
       // field added to one should never need remembering in the other.
-      forward(upstream, req, res, next, summary);
+      forward(
+        upstream,
+        req,
+        res,
+        next,
+        summary,
+        performance.now() - transformStarted
+      );
     })();
   });
 

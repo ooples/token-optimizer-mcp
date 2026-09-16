@@ -63,6 +63,14 @@ test('connection resets, HTTP failures and success each retain exactly one ledge
     expect(records[0].usage).toEqual({});
     expect(records[1].usage).toEqual({});
     expect(records[2].usage.input_tokens).toBe(100);
+    for (const record of records) {
+      expect(record.timing.transformMs).toBeGreaterThanOrEqual(0);
+      expect(record.timing.upstreamMs).toBeGreaterThanOrEqual(0);
+    }
+    expect(records[0].timing.upstreamHeadersMs).toBeUndefined();
+    expect(records[2].timing.upstreamMs).toBeGreaterThanOrEqual(
+      records[2].timing.upstreamHeadersMs
+    );
   } finally {
     if (proxy) await close(proxy.server);
     await close(upstream);
