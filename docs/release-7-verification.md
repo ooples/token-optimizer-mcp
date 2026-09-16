@@ -16,7 +16,10 @@ truncate the target on ENOSPC. Edits now write and flush a private temporary fil
 in the target directory before replacing the original. Failed writes/replacements
 preserve the original even with backups disabled. The asynchronous implementation
 follows symlink targets and preserves permission bits. Fault-injection tests cover
-a partial write followed by ENOSPC and a denied rename.
+a partial write followed by ENOSPC and a denied rename. Commits are serialized
+per target, and stale edits are rejected so overlapping asynchronous edits do
+not silently overwrite each other. A separate test preserves an external change
+made while the temporary file is being written.
 
 ## Artifact and environment
 
@@ -26,7 +29,7 @@ using the release workflow's version stamping, build, and checksum generation:
 
 `ooples-token-optimizer-mcp-7.0.0.tgz`
 
-SHA-256: `0b174425e392c04855096404259c2f7272e743243c31939873e62c8f883d7e47`
+SHA-256: `c65d64907d1860c20ff8a8ffec9d9ce082e61f111ccf0d705d51eb4af4140ff0`
 
 This identifies the tested local artifact, not a future CI artifact. The report
 was added afterward. Registry provenance remains a post-publication check.
@@ -49,6 +52,8 @@ was added afterward. Registry provenance remains a post-publication check.
   After the fix: 6 affected suites, 48 tests passed; 2 POSIX-specific tests skipped
   on Windows. These cover failure preservation, edit semantics, cache handoff,
   line endings, and the production MCP stdio contract.
+  The subsequent concurrency guards passed all five storage-failure/concurrency
+  cases locally and the focused release job on Linux, including POSIX tests.
 - Final build and lint passed (zero lint errors; 541 existing warnings).
 - All 1,844 checksum-listed files matched the built source. After npm installation,
   three executable scripts had only the expected CRLF-to-LF shebang normalization;
@@ -63,8 +68,8 @@ state and existing account authentication.
 
 | Client | Version | Result |
 | --- | --- | --- |
-| Codex | 0.154.0 | Passed direct MCP on the packaging fix; passed the final shipping artifact through the compression proxy (43.518 s), with provider HTTP 200 and usage accounting. |
-| OpenCode | 1.17.12 | Passed the packaging fix and final shipping artifact; final run 54.776 s, eight MCP calls, zero MCP errors. |
+| Codex | 0.154.0 | Passed direct MCP on the packaging fix; passed the final shipping artifact through the compression proxy (57.160 s), with provider HTTP 200 and usage accounting. |
+| OpenCode | 1.17.12 | Passed the packaging fix and final shipping artifact; final run 55.952 s, eight MCP calls, zero MCP errors. |
 | Claude Code | 2.1.272 | MCP initialized as 7.0.0; live model task pending because the weekly account quota is exhausted. |
 | Copilot | 0.0.367 | MCP initialized as 7.0.0; live model task pending because the monthly account quota is exhausted (402). |
 | Gemini | 0.28.0 | MCP initialized as 7.0.0; live model task pending because the account/client combination is rejected as ineligible. |
@@ -91,6 +96,17 @@ unused worktrees were removed to recover space. OpenCode then passed, preserving
 all fixture lines. The complete suite rerun passed. Following the safe-edit fix,
 a fresh package install and new Codex/proxy and OpenCode runs also passed.
 
-Ship readiness remains conditional on the pending live gates. Cross-platform
-permission/symlink tests still need a POSIX runner. This verification does not
-establish that the release has no bugs.
+The new release CI job runs focused checks on Linux and Windows. The moving
+Windows runner's VS 18 installation was not recognized by its bundled node-gyp
+during better-sqlite3 installation. Windows verification therefore uses the
+VS 2022 runner. A native compiler toolchain is needed when SQLite builds from
+source; this is not evidence of installation on a machine without build tools.
+
+[CI run 35151419912](https://github.com/ooples/token-optimizer-mcp/actions/runs/35151419912)
+verified code commit `ca684f6b`: six suites passed on each OS, with 52 tests
+passing on Linux and 50 passing plus two POSIX-only skips on Windows. Both jobs
+also passed clean dependency installation, generated-artifact checks, build,
+and the npm package contents gate. Subsequent commits only update this evidence.
+
+Ship readiness remains conditional on the pending live gates. This verification
+does not establish that the release has no bugs.

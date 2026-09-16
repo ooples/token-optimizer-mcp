@@ -1,7 +1,7 @@
 {
   "date": "2026-09-16",
   "candidateBase": "8d2c42ac16e6f81688eb044fbcdd96462fd47d11",
-  "shippingTarballSha256": "0b174425e392c04855096404259c2f7272e743243c31939873e62c8f883d7e47",
+  "shippingTarballSha256": "c65d64907d1860c20ff8a8ffec9d9ce082e61f111ccf0d705d51eb4af4140ff0",
   "runs": [
     {
       "artifact": "packaging fix, before version stamping",
@@ -110,7 +110,7 @@
       "artifact": "final shipping artifact",
       "client": "codex-proxy",
       "exitCode": 0,
-      "seconds": 43.518,
+      "seconds": 57.16,
       "server": {
         "name": "token-optimizer-mcp",
         "version": "7.0.0"
@@ -135,7 +135,7 @@
       "artifact": "final shipping artifact",
       "client": "opencode",
       "exitCode": 0,
-      "seconds": 54.776,
+      "seconds": 55.952,
       "server": {
         "name": "token-optimizer-mcp",
         "version": "7.0.0"
