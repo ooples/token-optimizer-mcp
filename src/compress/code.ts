@@ -483,5 +483,10 @@ export function compressCode(
     out.push(lines[i]);
   }
 
-  return { text: out.join('\n'), elisions, lossless: false };
+  return {
+    text: out.join('\n'),
+    elisions,
+    lossless: false,
+    insertedLines: [...markerAt.values()],
+  };
 }

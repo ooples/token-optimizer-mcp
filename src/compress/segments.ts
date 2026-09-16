@@ -1,30 +1,13 @@
 /**
- * Folding repeated segments inside one block of text, losslessly.
+ * Fold exact repeated sections while retaining every distinct section.
  *
- * THE UNIT IS THE THING. Every workload this package compresses well is won the
- * same way -- find the repeating unit, keep what is distinct, fold what is not.
- * A JSON array hands us that unit for free, which is why row-shaped payloads
- * reach 96-99%. A document does not, so the same redundancy sat untouched:
- * HeadRoom's rag-conversation fixture is one 162,250-character string holding
- * 1,154 markdown sections, of which only 115 are distinct and 1,039 are EXACT
- * duplicates. We removed 0.5% of it and they removed 0.1%, because neither of us
- * looks for a repeating unit inside a string.
- *
- * LOSSLESS, AND THAT IS WHY IT RUNS FIRST. Every distinct segment stays in the
- * request; only byte-identical repeats are folded, and the copy they are
- * identical to is still present above them. Nothing is elided, nothing is
- * spilled, nothing needs reading back -- so there is no turn to pay for and no
- * needle to lose. Measured on that fixture: 162,250 to 25,086, 84.5%, with all
- * 21 configuration identifiers retained and not one distinct source line
- * missing.
- *
- * It is deliberately NOT a near-duplicate matcher. Two sections differing by one
- * value are two facts, and folding them would be the data loss this engine
- * exists to avoid -- the failure that a 97.4% "win" on this same document turned
- * out to be, having destroyed 16 of 21 configuration keys.
+ * This preserves distinct facts but loses repetition order and separators.
+ * Consequently it is lossy: a source path or spill is required, and the result
+ * carries recovery metadata. Near-duplicates remain distinct.
  */
 
 import type { CompressionResult, EngineContext } from './types.js';
+import { spillFor, unchanged } from './types.js';
 
 /**
  * Segment boundaries, most structured first.
@@ -86,7 +69,7 @@ export function looksRepetitive(text: string): boolean {
  */
 export function foldRepeatedSegments(
   text: string,
-  _ctx: EngineContext = {}
+  ctx: EngineContext = {}
 ): CompressionResult {
   const parts = segment(text);
   if (parts.length < MIN_SEGMENTS)
@@ -105,7 +88,9 @@ export function foldRepeatedSegments(
   }
   if (!folded) return { text, elisions: [], lossless: true };
 
-  const note = `\n[... ${folded} repeated sections folded; each is byte-identical to one above]`;
+  const recoverAt = ctx.sourcePath || spillFor(ctx, text, 'sections.txt');
+  if (!recoverAt) return unchanged(text);
+  const note = `\n[... ${folded} repeated sections folded; each is byte-identical to one above; original order and separators: ${recoverAt}]`;
   const out = `${kept.join('\n')}${note}`;
   // NEVER GROW. Folding a handful of short segments can cost more than the note
   // saves, and a compressor that returns something larger than it was given is
@@ -115,7 +100,14 @@ export function foldRepeatedSegments(
 
   return {
     text: out,
-    elisions: [],
+    elisions: [
+      {
+        removed: `${folded} repeated sections and their positions`,
+        recoverAt,
+        lossless: false,
+      },
+    ],
+    insertedLines: [note.slice(1)],
     // NOT LOSSLESS, and claiming otherwise was wrong in a way that matters.
     // The note records HOW MANY sections were folded, never WHICH one stood at
     // each removed position -- so `A B A C A` and `A A B C A` produce an

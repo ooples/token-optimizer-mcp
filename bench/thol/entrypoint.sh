@@ -510,7 +510,18 @@ case "$MODE" in
     fi
     start_proxies
     log "Campaign: $THOL_CAMPAIGN"
-    python3 runner.py run "$@"
+    : "${THOL_ARM_ORDER_FILE:?campaign requires a precommitted arm order plan}"
+    if [ -d /results ] && [ -w /results ]; then
+      order_hash="$(sha256sum "$THOL_ARM_ORDER_FILE" | cut -d ' ' -f 1)"
+      campaign_hash="$(printf '%s' "$THOL_CAMPAIGN" | sha256sum | cut -d ' ' -f 1)"
+      order_pin="/results/arm-order-campaign-$campaign_hash.json"
+      if [ -f "$order_pin" ] && ! cmp -s "$THOL_ARM_ORDER_FILE" "$order_pin"; then
+        die "Arm order changed for this campaign; use a separate results volume"
+      fi
+      cp "$THOL_ARM_ORDER_FILE" "$order_pin"
+      cp "$THOL_ARM_ORDER_FILE" "/results/arm-order-$order_hash.json"
+    fi
+    python3 /home/bench/scripts/ordered_campaign.py runner.py run "$@"
     log "Building leaderboard"
     python3 leaderboard.py || true
     if [ -d /results ] && [ -w /results ]; then

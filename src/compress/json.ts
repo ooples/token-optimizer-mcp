@@ -318,7 +318,7 @@ export function compressJson(
       ',' +
       inlineMarker(
         `${count(dropped, 'more row')}, ${shapeOf(sample)}` +
-          (odd.size
+          (odd.size && [...odd].every((i) => keep.has(i))
             ? `; all ${count(odd.size, 'row')} that differ are kept above`
             : '') +
           booleanFacts(parsed as unknown[]) +

@@ -83,6 +83,17 @@ import { STRATEGIES } from '../../dist/compress/strategy.js';
 import { anchorStore } from '../../dist/compress/anchor.js';
 import { substituteHistory } from '../../dist/compress/history.js';
 
+function replaySpill() {
+  // Simulated content-addressed sink: offline replay never retrieves files.
+  return (content, hint) =>
+    '.token-optimizer/spill/' +
+    createHash('sha256').update(content).digest('hex') +
+    '-' +
+    hint;
+}
+const directSpill = replaySpill();
+const anchoredSpill = replaySpill();
+
 const CACHE_WRITE = 1.25;
 const CACHE_READ = 0.1;
 
@@ -291,7 +302,10 @@ const ARMS = {
   },
 
   'v4-substitute': (messages) => {
-    const out = STRATEGIES['v4-substitute']({ messages }, {});
+    const out = STRATEGIES['v4-substitute'](
+      { messages },
+      { spill: directSpill }
+    );
     return out.request.messages ?? messages;
   },
 
@@ -332,7 +346,9 @@ function anchoredArm(pre) {
 const ANCHORED = {
   'v1-frontier +anchors': anchoredArm(null),
   'v4-substitute +anchors': anchoredArm(
-    (messages) => STRATEGIES['v4-substitute']({ messages }, {}).request.messages
+    (messages) =>
+      STRATEGIES['v4-substitute']({ messages }, { spill: anchoredSpill })
+        .request.messages
   ),
 };
 
@@ -374,7 +390,9 @@ const FIXED_PREFIX_TOKENS =
 
 const paths = process.argv.slice(2);
 if (!paths.length) {
-  console.error('usage: node bench/compression/session-replay.mjs <transcript.jsonl> [...]');
+  console.error(
+    'usage: node bench/compression/session-replay.mjs <transcript.jsonl> [...]'
+  );
   process.exit(2);
 }
 
@@ -390,7 +408,9 @@ for (const path of paths) {
   }
 
   console.log(`\n${'='.repeat(78)}`);
-  console.log(`${path.split(/[\\/]/).pop()}  --  ${messages.length} messages, ${cuts.length} turns`);
+  console.log(
+    `${path.split(/[\\/]/).pop()}  --  ${messages.length} messages, ${cuts.length} turns`
+  );
   console.log(
     '  arm                          cache read     cache write     effective    vs control'
   );
@@ -417,7 +437,9 @@ for (const path of paths) {
 
 console.log(`\n${'='.repeat(78)}`);
 console.log('across every session replayed');
-console.log('  arm                          effective    vs control    cheaper on');
+console.log(
+  '  arm                          effective    vs control    cheaper on'
+);
 for (const [name, t] of totals) {
   if (!t.n) continue;
   console.log(

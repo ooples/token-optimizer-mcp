@@ -185,14 +185,9 @@ export function compressBlock(
   if (numbering) {
     const inner = compressBlock(numbering.stripped, ctx);
     if (inner.text === numbering.stripped) return unchanged(text);
-    // The engine's own elision count is its marker budget: it may add one line
-    // per elision and no more. Anything further means it rewrote a line it was
-    // supposed to keep, and `restore` then declines rather than emitting
-    // partially numbered output.
-    return {
-      ...inner,
-      text: numbering.restore(inner.text, inner.elisions.length),
-    };
+    // Only exact inserted markers may be unnumbered; rewrites fail closed.
+    const restored = numbering.restore(inner.text, inner.insertedLines);
+    return restored === null ? unchanged(text) : { ...inner, text: restored };
   }
   const engine = engineFor(text, ctx);
   if (!engine) return unchanged(text);

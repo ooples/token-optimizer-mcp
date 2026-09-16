@@ -56,13 +56,10 @@ export interface Numbering {
   /**
    * Puts the original numbers back on the lines that survived.
    *
-   * `markerBudget` is how many lines the engine was ENTITLED to invent: one per
-   * elision it reported. Everything else it emits should be a line it kept
-   * verbatim, because that is the assumption line-matching rests on. Passing
-   * the real count is what lets this tell an added marker apart from a rewritten
-   * line; omitting it assumes none and is the strictest reading.
+   * Exact inserted marker lines are the only unmatched lines permitted.
+   * Returns null when retained content was rewritten or reordered.
    */
-  restore(compressed: string, markerBudget?: number): string;
+  restore(compressed: string, insertedLines?: readonly string[]): string | null;
 }
 
 /**
@@ -88,7 +85,10 @@ export function readNumbering(text: string): Numbering | null {
 
   return {
     stripped: bare.join('\n'),
-    restore(compressed: string, markerBudget = 0): string {
+    restore(
+      compressed: string,
+      insertedLines: readonly string[] = []
+    ): string | null {
       // The engines remove whole lines and insert markers; they never rewrite a
       // line they keep. So walking the two in step and advancing only on a
       // match re-attaches each surviving line's ORIGINAL number, while an
@@ -99,7 +99,9 @@ export function readNumbering(text: string): Numbering | null {
       // the cursor backwards and renumber the rest of the file.
       const out: string[] = [];
       let next = 0;
-      let unmatched = 0;
+      const markers = new Map<string, number>();
+      for (const marker of insertedLines)
+        markers.set(marker, (markers.get(marker) ?? 0) + 1);
       const lines = compressed.split('\n');
       for (const line of lines) {
         let found = -1;
@@ -114,31 +116,15 @@ export function readNumbering(text: string): Numbering | null {
           // or -- the case that breaks this -- a line it rewrote.
           // `compressJson` minifies a numbered, pretty-printed document into
           // one new line, which matches nothing here.
-          unmatched += 1;
+          const available = markers.get(line) ?? 0;
+          if (!available) return null;
+          markers.set(line, available - 1);
           out.push(line);
           continue;
         }
         out.push(`${labels[found]}${line}`);
         next = found + 1;
       }
-
-      // FAIL CLOSED WHEN THE ASSUMPTION IS VIOLATED. This restores numbers by
-      // matching whole lines, which assumes engines only ever REMOVE lines. An
-      // engine that REWRITES one leaves it unmatched, and it is then emitted
-      // with no number while the lines around it keep theirs -- silently
-      // breaking the line addressing the numbers exist to provide, in output
-      // that still reads as fully numbered.
-      //
-      // THE BUDGET IS THE DISCRIMINATOR, and a line-count threshold was not.
-      // An engine is entitled to invent exactly one line per elision it
-      // reported: that is its marker. Any unmatched line beyond that budget is
-      // a retained line it rewrote -- `compressJson` minifying a document into
-      // one line, or `log.ts` replacing a kept log line with a rendered
-      // template. Counting those against the elisions the engine itself
-      // declared distinguishes the two cases exactly, where "more than half
-      // survived" merely made the failure rarer and left it silent when a
-      // handful of lines were rewritten.
-      if (unmatched > markerBudget) return compressed;
 
       return out.join('\n');
     },

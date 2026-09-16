@@ -54,6 +54,8 @@ export interface Elision {
 
 /** What an engine hands back. */
 export interface CompressionResult {
+  /** Exact standalone marker lines inserted by the engine, including duplicates. */
+  readonly insertedLines?: readonly string[];
   /** The replacement text. */
   readonly text: string;
   /** Everything removed, in the order it was removed. */
