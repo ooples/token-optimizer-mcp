@@ -101,12 +101,12 @@ z₀.₂₀ = 0.842.
 
 | effect | p | discordant pairs `d` |
 | --- | --- | --- |
-| ψ = 2.0 (substitution diverges twice as often) | 0.667 | **~35** |
-| ψ = 1.5 | 0.600 | **~110** |
+| ψ = 2.0 (substitution diverges twice as often) | 0.667 | **~54** |
+| ψ = 1.5 | 0.600 | **~153** |
 
 Total turns follow from the discordance rate the pilot measures:
-`turns = d / discordance_rate`. At a 10% discordance rate, ψ = 2.0 needs ~350
-turns; at 25%, ~140.
+`turns = d / discordance_rate`. At a 10% discordance rate, ψ = 2.0 needs ~540
+turns; at 25%, ~216.
 
 **The pilot's job is to measure that rate.** It is a pilot and not a verdict:
 its own discordant pairs are too few to test with, and no decision is read from
@@ -159,8 +159,17 @@ Built now, held. Specified here so it cannot be designed around a result.
   `TOKEN_OPTIMIZER_PROXY_SUBSTITUTE=1` and its own port. `run-campaign.sh`
   defaults to `control,token-optimizer-mcp,token-optimizer-mcp-off`, which are
   different arms entirely; `ARMS` must be passed explicitly.
-- **Randomised arm order.** THOL runs control → mcp → proxy in fixed order,
-  which is a systematic confound.
+- **Precommitted counterbalanced arm order.** Before any run, create an order
+  file with `python bench/thol/ordered_campaign.py plan order.json ARMS REPS`
+  and commit it with the final sample size. `ARMS` is the explicit comma-separated
+  list above. The cyclic schedule reverses direction after each complete block;
+  three arms cover all six permutations in six repetitions. Report imbalance
+  when the final repetition count is not a complete block. Set `ARM_ORDER_FILE`
+  to that file: the campaign requires it, validates every repetition against the
+  selected arms, and records its SHA-256 and contents beside the results.
+  Resume retains the original repetition IDs and order; changing the schedule
+  requires a separate results volume. Historical fixed-order results remain
+  confounded and are not relabelled as counterbalanced.
 - **Reps derived from measured variance**, not chosen. The last campaign's
   cache_read ratios spanned 0.47–2.38 at n=1; the rep count comes from that
   spread and the effect size sought, computed before the run.

@@ -33,6 +33,9 @@ IMAGE="${IMAGE:-thol-rig:local}"
 CAMPAIGN="${THOL_CAMPAIGN:-2.1.251 (Claude Code)}"
 REPS="${REPS:-3}"
 ARMS="${ARMS:-control,token-optimizer-mcp,token-optimizer-mcp-off}"
+: "${ARM_ORDER_FILE:?set ARM_ORDER_FILE to a precommitted per-repetition order plan}"
+[ -f "$ARM_ORDER_FILE" ] || { echo "Missing arm order plan: $ARM_ORDER_FILE" >&2; exit 1; }
+ARM_ORDER_FILE="$(cd "$(dirname "$ARM_ORDER_FILE")" && pwd)/$(basename "$ARM_ORDER_FILE")"
 HOST_CREDS="${HOST_CREDS:-$HOME/.claude/.credentials.json}"
 
 # THE RESULTS VOLUME IS A KNOB because the knowledge arm needs two passes and
@@ -131,6 +134,8 @@ for i in "${!SEGMENTS[@]}"; do
     -v "$RIG_DIR/auth:/auth:ro" \
     -v "$RESULTS_VOLUME:/results" \
     -v "$PROXY_GRAPH_DIR:/proxy-graph" \
+    -v "$ARM_ORDER_FILE:/arm-order.json:ro" \
+    -e THOL_ARM_ORDER_FILE=/arm-order.json \
     -e THOL_CAMPAIGN="$CAMPAIGN" \
     -e TOKEN_OPTIMIZER_PROXY_NULL="${TOKEN_OPTIMIZER_PROXY_NULL:-}" \
     -e TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS="${TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS:-}" \

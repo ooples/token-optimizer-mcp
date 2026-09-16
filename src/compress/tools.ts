@@ -62,17 +62,8 @@ function forcedToolName(request: ProviderRequest): string | null {
 }
 
 /**
- * Tools that are never deferred, identified structurally rather than by name.
- *
- * An MCP tool is named `mcp__<server>__<tool>`; a client's own built-ins are
- * plain names like `Read` or `Bash`. That distinction is the signal, and using
- * it means this does not rot the next time a client renames or adds a built-in,
- * which a hardcoded list certainly would.
- *
- * The built-ins are the agent's core loop and are reached for constantly, so
- * deferring them guarantees the discovery round trip this is trying to avoid.
- * The long tail of MCP tools is where both the bytes and the safety are: 26 of
- * 31 tools in a measured session, 76,501 characters.
+ * Keep definitions whose character count is at or below the configured floor.
+ * Size, rather than tool name or origin, determines whether deferral pays.
  */
 function isCheapToKeep(chars: number, floor: number): boolean {
   return chars <= floor;

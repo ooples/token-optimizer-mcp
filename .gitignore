@@ -133,3 +133,6 @@ reports/mutation/
 
 # debug-loop harness recovery copy, written only while a run is in flight
 bench/debug-loop/.source-recovery
+
+# Local Python benchmark bytecode
+bench/thol/__pycache__/

@@ -478,12 +478,12 @@ of their design is held to here. Whether their shipped product handles signed
 content differently we have not tested, so read this column as a result about
 the design as published, not about their binary.
 
-**What is still not measured: whether the model does the job as well.** Every
-figure above is transmission cost with behaviour held fixed. A transform that
-saves money by deleting something the model needed looks like a win here and
-fails a task benchmark. That measurement is pre-registered in
-`docs/superpowers/specs/2026-09-14-quality-preregistration.md` and has not been
-run, so nothing here should be read as an end-to-end result.
+**Quality evidence has two scopes.** The completed THOL campaign reported above
+measured end-to-end task scores. The offline transmission figures in this section
+hold model behaviour fixed and cannot establish task quality. The separate
+reasoning-substitution evaluation in
+`docs/superpowers/specs/2026-09-14-quality-preregistration.md` remains pending;
+the completed THOL results do not validate that unrun protocol.
 
 Off by default. `TOKEN_OPTIMIZER_PROXY=1` turns it on, it binds loopback only,
 nothing is logged, and `doctor` reports whether your client is actually routed

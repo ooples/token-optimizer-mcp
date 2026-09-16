@@ -116,7 +116,7 @@ export function compressNestedStrings(
     if (Array.isArray(node)) return node.map(walk);
 
     if (node && typeof node === 'object') {
-      const out: Record<string, unknown> = {};
+      const out = Object.create(null) as Record<string, unknown>;
       for (const [key, item] of Object.entries(
         node as Record<string, unknown>
       )) {
