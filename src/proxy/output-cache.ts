@@ -1,4 +1,5 @@
 import { compressBlock } from '../compress/router.js';
+import { compressJsonArray } from '../compress/json-fragments.js';
 import type { Tuning } from '../compress/options.js';
 import type { CompressionResult } from '../compress/types.js';
 
@@ -43,7 +44,7 @@ export function cachedOutput(
     cache.bytes -= hit.bytes;
   }
   const spills: Entry['spills'] = [];
-  const result = compressBlock(text, {
+  let result = compressBlock(text, {
     tuning,
     spill: (content, hint) => {
       const path = spill(content, hint);
@@ -51,6 +52,16 @@ export function cachedOutput(
       return path;
     },
   });
+  // Small complete arrays can use the same exact lexical record template as
+  // large tables, without batching across turns or creating recovery reads.
+  if (
+    text.length >= 512 &&
+    text.length < 1024 &&
+    text.trimStart().startsWith('[')
+  ) {
+    const exact = compressJsonArray(text, 3);
+    if (exact.text.length < result.text.length) result = exact;
+  }
   // UTF-16 upper bound for retained strings; entry count also bounds overhead.
   const bytes =
     2 *

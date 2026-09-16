@@ -40,9 +40,24 @@ const cases = [
     ]),
   ],
   ['small', payload([item(small)])],
+  ['small-nine-rows', payload([item(JSON.stringify(rows.slice(0, 9)))])],
   ['output-text', payload([item([{ type: 'output_text', text: large }])])],
-  ['local-shell', payload([item(large, 'local_shell_call_output')])],
-  ['apply-patch', payload([item(large, 'apply_patch_call_output')])],
+  ['local-shell-array', payload([item(large, 'local_shell_call_output')])],
+  [
+    'local-shell',
+    payload([
+      {
+        type: 'local_shell_call_output',
+        id: 'lc1',
+        status: 'completed',
+        output: JSON.stringify({ stdout: large, stderr: '', exit_code: 0 }),
+      },
+    ]),
+  ],
+  [
+    'apply-patch',
+    payload([{ ...item(large, 'apply_patch_call_output'), status: 'failed' }]),
+  ],
 ];
 let received;
 const upstream = createServer(async (req, res) => {

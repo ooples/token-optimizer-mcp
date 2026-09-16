@@ -34,6 +34,8 @@ export async function provenance(root, codex, python, proxyBin) {
       'cli.js',
       'server.js',
       'responses.js',
+      'response-dedup.js',
+      'token-gate.js',
       'tool-code.js',
       'output-cache.js',
       'accounting.js',

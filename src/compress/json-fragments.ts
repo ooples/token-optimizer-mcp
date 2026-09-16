@@ -19,15 +19,16 @@ interface RecordParts {
   values: string[];
   shape: string;
 }
-function records(text: string): RecordParts[] {
+function records(text: string, compact = false): RecordParts[] {
   const result: RecordParts[] = [];
   // An interrupted object may match through the truncation marker. JSON.parse
   // rejects it; the original bytes stay in the gap between valid records.
   // Shell envelopes can render structural newlines as literal backslash-n
   // while leaving quotes unescaped. Keep those bytes in the template rather
   // than unescaping the document (which would corrupt escapes inside values).
-  const object =
-    /(?:^|(?<=\\n))([ \t]+)\{(?:\r?\n|\\(?:r\\)?n)[\s\S]*?(?:^|(?<=\\n))\1\},?(?:\r?\n|\\(?:r\\)?n|$)/gm;
+  const object = compact
+    ? /\{(?:"(?:\\.|[^"\\])*"|[^{}"])*\}\s*,?\s*/g
+    : /(?:^|(?<=\\n))([ \t]+)\{(?:\r?\n|\\(?:r\\)?n)[\s\S]*?(?:^|(?<=\\n))\1\},?(?:\r?\n|\\(?:r\\)?n|$)/gm;
   for (const match of text.matchAll(object)) {
     const raw = match[0];
     let source = raw;
@@ -93,15 +94,35 @@ export function compressJsonFragments(text: string): CompressionResult {
 }
 
 /** Exact full-array encoding, admitted only when every record was recognized. */
-export function compressJsonArray(text: string): CompressionResult {
+export function compressJsonArray(
+  text: string,
+  minimumRows = 32
+): CompressionResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
     return unchanged(text);
   }
-  if (!Array.isArray(parsed) || parsed.length < 32) return unchanged(text);
-  const found = records(text);
+  if (!Array.isArray(parsed) || parsed.length < minimumRows)
+    return unchanged(text);
+  let found = records(text);
+  // Compact small arrays have no indented record boundaries. Use the lexical
+  // flat-object scanner only after validating the entire array and every row.
+  // This keeps original numeric and string spellings, including large integers.
+  if (
+    minimumRows < 32 &&
+    found.length !== parsed.length &&
+    parsed.every(
+      (row: unknown) =>
+        row !== null &&
+        typeof row === 'object' &&
+        !Array.isArray(row) &&
+        Object.values(row).every((v) => v === null || typeof v !== 'object')
+    )
+  ) {
+    found = records(text, true);
+  }
   if (found.length !== parsed.length) return unchanged(text);
   return compressRecords(text, found, true);
 }

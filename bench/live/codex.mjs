@@ -32,6 +32,9 @@ import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
 import { monitorHostMemory, memoryPolicy } from './host-memory.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const repeatReads = Number(process.env.REPEAT_READS || 1);
+if (![1, 3].includes(repeatReads)) throw Error('REPEAT_READS must be 1 or 3');
+
 const caseSuite = process.env.CASE_SUITE || 'development';
 if (!['development', 'heldout-v1', 'adversarial-v1'].includes(caseSuite))
   throw Error('Unknown CASE_SUITE');
@@ -237,6 +240,8 @@ await writeFile(
       readMode,
       mcpDiscovery,
       caseSuite,
+      repeatReads,
+
       toolCodeExperiment: process.env.TOOL_CODE === '1',
       hostMemoryPolicy: process.platform === 'win32' ? memoryPolicy : null,
       started: new Date().toISOString(),
@@ -392,6 +397,11 @@ try {
                         : '') + f.prompt
               : `First read the complete ${f.name} using one shell command. Set exec_command max_output_tokens to 18000 AND, when using functions.exec, put // @exec: {"max_output_tokens": 24000} on its first line so the enclosing tool also returns the complete output. Do not filter, search, summarize, or parse the file in that first command. Then, using the returned content, ${f.question} Do not modify the source fixture. Finish after writing the answer.`,
           ];
+          if (!natural && repeatReads === 3) {
+            args[args.length - 1] +=
+              ` This is an explicit repeated-read diagnostic: before writing the answer, read the complete ${f.name} three times total in three separate tool calls, waiting for each result before the next. Do not combine reads in a loop or one tool call. The file stays unchanged.`;
+          }
+
           const command = codex.endsWith('.js') ? process.execPath : codex;
           if (['mcp', 'full', 'full-files'].includes(arm)) {
             args.splice(

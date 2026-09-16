@@ -6,6 +6,9 @@
  */
 import { cachedOutput } from './output-cache.js';
 import { compactToolDefinitions } from './tool-code.js';
+import { ResponseDedup, responseEnvelope } from './response-dedup.js';
+import { tokenBenefit } from './token-gate.js';
+import { classify } from '../compress/router.js';
 import type { Tuning } from '../compress/options.js';
 import type { CompressionFacts } from './accounting.js';
 
@@ -24,7 +27,34 @@ export function compressResponses(
   const compactDefinitions =
     process.env.TOKEN_OPTIMIZER_PROXY_TOOL_CODE === '1';
   const input = request.input as unknown[];
-  const next = input.map((item) => {
+  const dedup = new ResponseDedup();
+  const readCalls = new Map<string, boolean>();
+  const next = input.map((item, itemIndex) => {
+    if (
+      object(item) &&
+      ['function_call', 'custom_tool_call', 'local_shell_call'].includes(
+        String(item.type)
+      )
+    ) {
+      const id = typeof item.call_id === 'string' ? item.call_id : item.id;
+      if (typeof id === 'string' && id.length <= 256) {
+        const name = String(item.name ?? '');
+        const args =
+          typeof item.arguments === 'string'
+            ? item.arguments
+            : typeof item.input === 'string'
+              ? item.input
+              : '';
+        const read =
+          /(?:^|[._])(?:read|read_file|smart_read)$/i.test(name) ||
+          /\b(?:Get-Content|cat|sed|head|tail|type)\b/i.test(
+            args.slice(0, 16384)
+          );
+        if (readCalls.size >= 512)
+          readCalls.delete(readCalls.keys().next().value!);
+        readCalls.set(id, read);
+      }
+    }
     if (
       compactDefinitions &&
       object(item) &&
@@ -39,20 +69,74 @@ export function compressResponses(
     }
     if (
       !object(item) ||
-      !['function_call_output', 'custom_tool_call_output'].includes(
-        String(item.type)
-      )
+      ![
+        'function_call_output',
+        'custom_tool_call_output',
+        'local_shell_call_output',
+        'apply_patch_call_output',
+      ].includes(String(item.type))
     )
       return item;
-    const compress = (text: string): string => {
-      if (text.length < 1024) return text;
+    const transform = (text: string, at: string): string => {
+      if (text.length < 512) return text;
+      const { header, body: content } = responseEnvelope(text);
+      const id = typeof item.call_id === 'string' ? item.call_id : item.id;
+      if (
+        typeof id === 'string' &&
+        readCalls.get(id) &&
+        classify(content) === 'code'
+      )
+        return text;
+      const reference = dedup.replace(
+        content,
+        header ? `${at} (body after transport header)` : at
+      );
+      if (reference !== content && tokenBenefit(text, header + reference)) {
+        elisions++;
+        return header + reference;
+      }
       const result = cachedOutput(text, spill, tuning);
-      if (result.text === text) return text;
-      elisions += result.elisions.length;
+      if (!tokenBenefit(text, result.text)) return text;
+      elisions += Math.max(1, result.elisions.length);
       return result.text;
     };
+    const compress = (text: string, at: string): string => {
+      if (text.length < 512) return text;
+      // Keep JSON local-shell envelopes valid. Their structured status and
+      // output fields must not become an unparseable table or prose reference.
+      if (item.type === 'local_shell_call_output') {
+        try {
+          const shell: unknown = JSON.parse(text);
+          if (!object(shell)) return text;
+          let changed = false;
+          const priorElisions = elisions;
+          const nextShell = { ...shell };
+          for (const key of ['stdout', 'stderr', 'output']) {
+            const value = shell[key];
+            if (typeof value !== 'string' || value.length < 512) continue;
+            const candidate = transform(
+              value,
+              `${at} JSON field ${JSON.stringify(key)}`
+            );
+            if (candidate !== value) {
+              nextShell[key] = candidate;
+              changed = true;
+            }
+          }
+          const candidate = changed ? JSON.stringify(nextShell) : text;
+          if (!tokenBenefit(text, candidate)) {
+            elisions = priorElisions;
+            return text;
+          }
+          return candidate;
+        } catch {
+          return text;
+        }
+      }
+      return transform(text, at);
+    };
     if (typeof item.output === 'string') {
-      const output = compress(item.output);
+      const output = compress(item.output, `input[${itemIndex}].output`);
       return output === item.output ? item : { ...item, output };
     }
     // Multimodal output keeps every non-text part, with all original metadata.
@@ -62,10 +146,13 @@ export function compressResponses(
         const part: unknown = item.output[i];
         if (
           object(part) &&
-          part.type === 'input_text' &&
+          (part.type === 'input_text' || part.type === 'output_text') &&
           typeof part.text === 'string'
         ) {
-          const text = compress(part.text);
+          const text = compress(
+            part.text,
+            `input[${itemIndex}].output[${i}].text`
+          );
           if (text !== part.text) {
             output ??= item.output.slice();
             output[i] = { ...part, text };
