@@ -1,0 +1,12 @@
+# Keep source, tests, benchmark scripts, protocols, and evidence summaries in
+# review. Raw run records remain committed for auditing; generated hook copies
+# are verified by the Generated Artifacts In Sync CI check.
+reviews:
+  path_filters:
+    - "!bench/live/evidence/**/*.json"
+    - "!bench/live/evidence/**/*.jsonl"
+    - "!bench/live/evidence/**/*.txt"
+    - "!integrations/**/lib/doctor.mjs"
+    - "!integrations/**/lib/wiki.mjs"
+    - "!plugin/hooks/lib/doctor.mjs"
+    - "!plugin/hooks/lib/wiki.mjs"
