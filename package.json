@@ -31,7 +31,22 @@
     "evals/ucr/**/*",
     "integrations/**/*",
     "plugin/**/*",
-    "scripts/**/*"
+    "scripts/**/*",
+    "!**/logs/**",
+    "!**/*.log",
+    "!**/.cache/**",
+    "!**/.token-optimizer/**",
+    "!**/*.db",
+    "!**/*.db-*",
+    "!**/*.sqlite",
+    "!**/*.sqlite-*",
+    "!**/*.sqlite3",
+    "!**/*.sqlite3-*",
+    "!**/*.tmp",
+    "!**/*.temp",
+    "!**/.token-optimizer-edit-*.lock",
+    "!**/.env",
+    "!**/.env.*"
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.cjs",

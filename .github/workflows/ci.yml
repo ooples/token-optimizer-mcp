@@ -47,6 +47,8 @@ jobs:
           tests/unit/file-operations/read-diffs-against-the-write.test.ts
           tests/unit/file-operations/smart-edit-reports-the-write.test.ts
           tests/integration/mcp-stdio-contract.test.ts
+          tests/integration/edit-process-lock.test.mjs
+          tests/integration/package-runtime-exclusions.test.mjs
 
   lint-and-format:
     name: Lint and Format Check

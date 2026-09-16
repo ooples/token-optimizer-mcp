@@ -10,8 +10,8 @@ import {
   writeFile,
 } from 'fs/promises';
 import type { FileHandle } from 'fs/promises';
-import { randomUUID } from 'crypto';
-import { dirname, join } from 'path';
+import { createHash, randomUUID } from 'crypto';
+import { basename, dirname, join } from 'path';
 
 const pending = new Map<string, Promise<void>>();
 
@@ -44,7 +44,57 @@ async function commit(
   encoding: BufferEncoding,
   expected: string
 ): Promise<void> {
+  // Unlike the in-process queue, exclusive creation coordinates separate MCP
+  // servers. Never steal an existing lock: a paused owner may still commit.
+  // A crashed owner leaves a visible, fail-closed lock for explicit recovery.
+  const name =
+    process.platform === 'win32'
+      ? basename(target).toLowerCase()
+      : basename(target);
+  const key = createHash('sha256').update(name).digest('hex');
+  const lockPath = join(dirname(target), `.token-optimizer-edit-${key}.lock`);
+  let lock: FileHandle;
+  try {
+    lock = await open(lockPath, 'wx', 0o600);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new Error(
+        `Another edit holds ${lockPath}. Retry after it finishes. If its owner has stopped, inspect and remove the abandoned lock before retrying.`
+      );
+    }
+    throw error;
+  }
+  try {
+    await lock.writeFile(
+      JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })
+    );
+    await commitLocked(target, content, encoding, expected);
+  } finally {
+    try {
+      await lock.close();
+    } catch {
+      /* retain the commit outcome */
+    }
+    try {
+      await unlink(lockPath);
+    } catch {
+      /* leave a fail-closed lock */
+    }
+  }
+}
+
+async function commitLocked(
+  target: string,
+  content: string,
+  encoding: BufferEncoding,
+  expected: string
+): Promise<void> {
   const verify = async () => {
+    if ((await stat(target)).nlink > 1) {
+      throw new Error(
+        'Cannot safely replace a hard-linked file. No edit was made; unlink the extra names or use a tool that explicitly supports shared-inode edits.'
+      );
+    }
     if ((await readFile(target, encoding)) !== expected) {
       throw new Error(
         'File changed while preparing the edit; read it again before retrying.'

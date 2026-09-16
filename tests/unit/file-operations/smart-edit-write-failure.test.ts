@@ -108,6 +108,16 @@ describe('smart_edit preserves the original on storage failure', () => {
         .filter((name) => name.startsWith('.token-optimizer-edit-'))
     ).toEqual([]);
   });
+  it('rejects hard-linked targets without changing either name', async () => {
+    const alias = join(root, 'alias.txt');
+    fs.linkSync(file, alias);
+    const result = await edit();
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('hard-linked');
+    expect(fs.readFileSync(alias, 'utf8')).toBe(original);
+    expect(fs.statSync(file).ino).toBe(fs.statSync(alias).ino);
+    expectOriginal();
+  });
   it('rejects a stale concurrent edit instead of overwriting the first commit', async () => {
     const results = await Promise.all([edit(), edit()]);
     expect(results.filter((result) => result.success)).toHaveLength(1);
