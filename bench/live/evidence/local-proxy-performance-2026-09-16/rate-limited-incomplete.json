@@ -1,0 +1,1601 @@
+{
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\local-proxy-performance-pCP89P",
+  "repetitions": 40,
+  "records": [
+    {
+      "round": 0,
+      "position": 0,
+      "arm": "proxy",
+      "task": "logs",
+      "mode": "repeated",
+      "startupMs": 264.6772,
+      "processCpuMs": 78.125,
+      "before": {
+        "privateBytes": 61476864,
+        "workingSetBytes": 53399552,
+        "cpuMs": 296.875,
+        "processIds": [
+          35140
+        ]
+      },
+      "after": {
+        "privateBytes": 67727360,
+        "workingSetBytes": 56414208,
+        "cpuMs": 375,
+        "processIds": [
+          35140
+        ]
+      },
+      "samples": [
+        {
+          "milliseconds": 5.992500000000064,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 4.760099999999966,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 5.614100000000008,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 5.364900000000034,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 4.171000000000049,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.5469000000000506,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.0816999999999553,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.356399999999894,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.6123999999999796,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.02780000000007,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.866800000000012,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.8659000000000106,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 4.048900000000003,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.7200000000000273,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.475500000000011,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.4891000000000076,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.7427999999999884,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.4628000000000156,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.5733000000000175,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.2308000000000447,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.502899999999954,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.5057999999999083,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.351399999999785,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.7262000000000626,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.5037999999999556,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.2771999999999935,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.9826000000000477,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.0338000000001557,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.5251999999998134,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.3051000000000386,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.8035999999999603,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.2525000000000546,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.9846000000000004,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.1322999999999865,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.6653000000001157,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.422399999999925,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.475500000000011,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 2.91579999999999,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.3934999999999036,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        },
+        {
+          "milliseconds": 3.110099999999875,
+          "sentBytes": 22196,
+          "forwardedBytes": 7176
+        }
+      ]
+    },
+    {
+      "round": 0,
+      "position": 0,
+      "arm": "proxy",
+      "task": "logs",
+      "mode": "unique",
+      "startupMs": 264.6772,
+      "processCpuMs": 156.25,
+      "before": {
+        "privateBytes": 67141632,
+        "workingSetBytes": 57667584,
+        "cpuMs": 390.625,
+        "processIds": [
+          35140
+        ]
+      },
+      "after": {
+        "privateBytes": 68366336,
+        "workingSetBytes": 59682816,
+        "cpuMs": 546.875,
+        "processIds": [
+          35140
+        ]
+      },
+      "samples": [
+        {
+          "milliseconds": 6.044399999999769,
+          "sentBytes": 18916,
+          "forwardedBytes": 6225
+        },
+        {
+          "milliseconds": 5.036399999999958,
+          "sentBytes": 20068,
+          "forwardedBytes": 6560
+        },
+        {
+          "milliseconds": 4.900200000000041,
+          "sentBytes": 18080,
+          "forwardedBytes": 5983
+        },
+        {
+          "milliseconds": 5.816100000000006,
+          "sentBytes": 22569,
+          "forwardedBytes": 7279
+        },
+        {
+          "milliseconds": 4.978399999999965,
+          "sentBytes": 19073,
+          "forwardedBytes": 6267
+        },
+        {
+          "milliseconds": 5.110400000000027,
+          "sentBytes": 18757,
+          "forwardedBytes": 6174
+        },
+        {
+          "milliseconds": 4.575199999999768,
+          "sentBytes": 18453,
+          "forwardedBytes": 6086
+        },
+        {
+          "milliseconds": 5.450199999999768,
+          "sentBytes": 24711,
+          "forwardedBytes": 7905
+        },
+        {
+          "milliseconds": 4.776899999999841,
+          "sentBytes": 21429,
+          "forwardedBytes": 6949
+        },
+        {
+          "milliseconds": 3.905199999999695,
+          "sentBytes": 17472,
+          "forwardedBytes": 5807
+        },
+        {
+          "milliseconds": 4.696300000000065,
+          "sentBytes": 22653,
+          "forwardedBytes": 7309
+        },
+        {
+          "milliseconds": 4.222999999999956,
+          "sentBytes": 19993,
+          "forwardedBytes": 6539
+        },
+        {
+          "milliseconds": 4.9146999999998116,
+          "sentBytes": 20373,
+          "forwardedBytes": 6649
+        },
+        {
+          "milliseconds": 4.484300000000076,
+          "sentBytes": 23032,
+          "forwardedBytes": 7418
+        },
+        {
+          "milliseconds": 4.2239000000004125,
+          "sentBytes": 17769,
+          "forwardedBytes": 5888
+        },
+        {
+          "milliseconds": 3.796799999999621,
+          "sentBytes": 17389,
+          "forwardedBytes": 5778
+        },
+        {
+          "milliseconds": 3.0942000000000007,
+          "sentBytes": 21582,
+          "forwardedBytes": 6994
+        },
+        {
+          "milliseconds": 3.8294999999998254,
+          "sentBytes": 20220,
+          "forwardedBytes": 6604
+        },
+        {
+          "milliseconds": 4.353100000000268,
+          "sentBytes": 20600,
+          "forwardedBytes": 6714
+        },
+        {
+          "milliseconds": 4.169699999999921,
+          "sentBytes": 20822,
+          "forwardedBytes": 6774
+        },
+        {
+          "milliseconds": 3.4436000000000604,
+          "sentBytes": 19226,
+          "forwardedBytes": 6312
+        },
+        {
+          "milliseconds": 4.509399999999914,
+          "sentBytes": 24261,
+          "forwardedBytes": 7779
+        },
+        {
+          "milliseconds": 5.233299999999872,
+          "sentBytes": 21809,
+          "forwardedBytes": 7059
+        },
+        {
+          "milliseconds": 4.490699999999833,
+          "sentBytes": 17472,
+          "forwardedBytes": 5807
+        },
+        {
+          "milliseconds": 3.9028000000002976,
+          "sentBytes": 19074,
+          "forwardedBytes": 6268
+        },
+        {
+          "milliseconds": 4.240100000000439,
+          "sentBytes": 21969,
+          "forwardedBytes": 7111
+        },
+        {
+          "milliseconds": 4.202800000000025,
+          "sentBytes": 20069,
+          "forwardedBytes": 6561
+        },
+        {
+          "milliseconds": 4.17470000000003,
+          "sentBytes": 19683,
+          "forwardedBytes": 6445
+        },
+        {
+          "milliseconds": 4.371999999999844,
+          "sentBytes": 20144,
+          "forwardedBytes": 6582
+        },
+        {
+          "milliseconds": 4.566899999999805,
+          "sentBytes": 22653,
+          "forwardedBytes": 7309
+        },
+        {
+          "milliseconds": 5.181100000000242,
+          "sentBytes": 21057,
+          "forwardedBytes": 6847
+        },
+        {
+          "milliseconds": 4.444600000000264,
+          "sentBytes": 17388,
+          "forwardedBytes": 5777
+        },
+        {
+          "milliseconds": 4.168899999999667,
+          "sentBytes": 17313,
+          "forwardedBytes": 5756
+        },
+        {
+          "milliseconds": 3.7961999999997715,
+          "sentBytes": 23950,
+          "forwardedBytes": 7683
+        },
+        {
+          "milliseconds": 3.7891999999997097,
+          "sentBytes": 17314,
+          "forwardedBytes": 5757
+        },
+        {
+          "milliseconds": 3.773699999999735,
+          "sentBytes": 21505,
+          "forwardedBytes": 6971
+        },
+        {
+          "milliseconds": 4.025200000000041,
+          "sentBytes": 20518,
+          "forwardedBytes": 6686
+        },
+        {
+          "milliseconds": 4.550200000000132,
+          "sentBytes": 22874,
+          "forwardedBytes": 7368
+        },
+        {
+          "milliseconds": 4.510499999999865,
+          "sentBytes": 20144,
+          "forwardedBytes": 6582
+        },
+        {
+          "milliseconds": 3.219000000000051,
+          "sentBytes": 21056,
+          "forwardedBytes": 6846
+        }
+      ]
+    },
+    {
+      "round": 0,
+      "position": 0,
+      "arm": "proxy",
+      "task": "json",
+      "mode": "repeated",
+      "startupMs": 264.6772,
+      "processCpuMs": 140.625,
+      "before": {
+        "privateBytes": 69259264,
+        "workingSetBytes": 60010496,
+        "cpuMs": 578.125,
+        "processIds": [
+          35140
+        ]
+      },
+      "after": {
+        "privateBytes": 69808128,
+        "workingSetBytes": 60956672,
+        "cpuMs": 718.75,
+        "processIds": [
+          35140
+        ]
+      },
+      "samples": [
+        {
+          "milliseconds": 5.302299999999377,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.4012000000002445,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.692300000000614,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 5.413700000000063,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.214299999999639,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.988400000000183,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.184700000000703,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.347999999999956,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.957300000000032,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.5621000000001,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.180500000000393,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.6920999999993,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.386400000000322,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.323999999999614,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.8797999999997046,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.6994999999997162,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.840400000000045,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.476800000000367,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.545000000000073,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.6851999999998952,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.4061000000001513,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.8858999999993102,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.310500000000502,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 5.105999999999767,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.980800000000272,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.002400000000307,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.251100000000406,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.1358000000000175,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.30829999999969,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.645300000000134,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.398599999999533,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.9341000000003987,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.938299999999799,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.65900000000056,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.89679999999953,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.9539000000004307,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 3.699800000000323,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.795700000000579,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 5.168800000000374,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 4.7552999999998065,
+          "sentBytes": 46060,
+          "forwardedBytes": 1519
+        }
+      ]
+    },
+    {
+      "round": 0,
+      "position": 0,
+      "arm": "proxy",
+      "task": "json",
+      "mode": "unique",
+      "startupMs": 264.6772,
+      "processCpuMs": 203.125,
+      "before": {
+        "privateBytes": 69644288,
+        "workingSetBytes": 60919808,
+        "cpuMs": 750,
+        "processIds": [
+          35140
+        ]
+      },
+      "after": {
+        "privateBytes": 81072128,
+        "workingSetBytes": 71983104,
+        "cpuMs": 953.125,
+        "processIds": [
+          35140
+        ]
+      },
+      "samples": [
+        {
+          "milliseconds": 7.592200000000048,
+          "sentBytes": 46507,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 5.582900000000336,
+          "sentBytes": 39948,
+          "forwardedBytes": 1513
+        },
+        {
+          "milliseconds": 6.72190000000046,
+          "sentBytes": 43373,
+          "forwardedBytes": 1507
+        },
+        {
+          "milliseconds": 8.935099999999693,
+          "sentBytes": 38461,
+          "forwardedBytes": 1519
+        },
+        {
+          "milliseconds": 6.649800000000141,
+          "sentBytes": 38907,
+          "forwardedBytes": 1515
+        },
+        {
+          "milliseconds": 7.943000000000211,
+          "sentBytes": 45311,
+          "forwardedBytes": 1512
+        },
+        {
+          "milliseconds": 6.626199999999699,
+          "sentBytes": 43225,
+          "forwardedBytes": 1512
+        },
+        {
+          "milliseconds": 5.939900000000307,
+          "sentBytes": 46503,
+          "forwardedBytes": 1511
+        },
+        {
+          "milliseconds": 6.609199999999873,
+          "sentBytes": 42926,
+          "forwardedBytes": 1510
+        },
+        {
+          "milliseconds": 6.4135000000005675,
+          "sentBytes": 33241,
+          "forwardedBytes": 1509
+        },
+        {
+          "milliseconds": 7.759100000000217,
+          "sentBytes": 45609,
+          "forwardedBytes": 1512
+        },
+        {
+          "milliseconds": 7.305699999999888,
+          "sentBytes": 33539,
+          "forwardedBytes": 1510
+        },
+        {
+          "milliseconds": 5.396200000000135,
+          "sentBytes": 35179,
+          "forwardedBytes": 1510
+        },
+        {
+          "milliseconds": 5.767100000000028,
+          "sentBytes": 36669,
+          "forwardedBytes": 1509
+        },
+        {
+          "milliseconds": 6.473399999999856,
+          "sentBytes": 46800,
+          "forwardedBytes": 1510
+        },
+        {
+          "milliseconds": 5.210299999999734,
+          "sentBytes": 37562,
+          "forwardedBytes": 1507
+        },
+        {
+          "milliseconds": 5.738900000000285,
+          "sentBytes": 40097,
+          "forwardedBytes": 1513
+        },
+        {
+          "milliseconds": 6.112800000000789,
+          "sentBytes": 37566,
+          "forwardedBytes": 1515
+        },
+        {
+          "milliseconds": 5.892499999999927,
+          "sentBytes": 39057,
+          "forwardedBytes": 1518
+        },
+        {
+          "milliseconds": 5.892899999999827,
+          "sentBytes": 38907,
+          "forwardedBytes": 1518
+        },
+        {
+          "milliseconds": 6.709700000000339,
+          "sentBytes": 37861,
+          "forwardedBytes": 1509
+        },
+        {
+          "milliseconds": 5.273699999999735,
+          "sentBytes": 36524,
+          "forwardedBytes": 1516
+        },
+        {
+          "milliseconds": 5.6413000000002285,
+          "sentBytes": 39499,
+          "forwardedBytes": 1510
+        },
+        {
+          "milliseconds": 5.159599999999955,
+          "sentBytes": 39350,
+          "forwardedBytes": 1508
+        },
+        {
+          "milliseconds": 5.935800000000199,
+          "sentBytes": 47545,
+          "forwardedBytes": 1510
+        },
+        {
+          "milliseconds": 5.723100000000159,
+          "sentBytes": 33394,
+          "forwardedBytes": 1518
+        },
+        {
+          "milliseconds": 7.2125999999998385,
+          "sentBytes": 47993,
+          "forwardedBytes": 1512
+        },
+        {
+          "milliseconds": 5.433500000000095,
+          "sentBytes": 38158,
+          "forwardedBytes": 1510
+        },
+        {
+          "milliseconds": 5.625199999999495,
+          "sentBytes": 45610,
+          "forwardedBytes": 1513
+        },
+        {
+          "milliseconds": 5.495300000000498,
+          "sentBytes": 40840,
+          "forwardedBytes": 1507
+        },
+        {
+          "milliseconds": 5.527699999999641,
+          "sentBytes": 33541,
+          "forwardedBytes": 1513
+        },
+        {
+          "milliseconds": 6.278800000000047,
+          "sentBytes": 34437,
+          "forwardedBytes": 1518
+        },
+        {
+          "milliseconds": 5.734099999999671,
+          "sentBytes": 40841,
+          "forwardedBytes": 1511
+        },
+        {
+          "milliseconds": 6.080599999999322,
+          "sentBytes": 36225,
+          "forwardedBytes": 1518
+        },
+        {
+          "milliseconds": 8.279899999999543,
+          "sentBytes": 45016,
+          "forwardedBytes": 1518
+        },
+        {
+          "milliseconds": 6.632400000000416,
+          "sentBytes": 46059,
+          "forwardedBytes": 1518
+        },
+        {
+          "milliseconds": 6.648799999999937,
+          "sentBytes": 40097,
+          "forwardedBytes": 1510
+        },
+        {
+          "milliseconds": 6.3518999999996595,
+          "sentBytes": 44271,
+          "forwardedBytes": 1412
+        },
+        {
+          "milliseconds": 5.719600000000355,
+          "sentBytes": 45908,
+          "forwardedBytes": 1513
+        },
+        {
+          "milliseconds": 5.625100000000202,
+          "sentBytes": 44566,
+          "forwardedBytes": 1512
+        }
+      ]
+    },
+    {
+      "round": 0,
+      "position": 0,
+      "arm": "proxy",
+      "task": "code",
+      "mode": "repeated",
+      "startupMs": 264.6772,
+      "processCpuMs": 62.5,
+      "before": {
+        "privateBytes": 81207296,
+        "workingSetBytes": 72138752,
+        "cpuMs": 953.125,
+        "processIds": [
+          35140
+        ]
+      },
+      "after": {
+        "privateBytes": 82075648,
+        "workingSetBytes": 72876032,
+        "cpuMs": 1015.625,
+        "processIds": [
+          35140
+        ]
+      },
+      "samples": [
+        {
+          "milliseconds": 2.927599999999984,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.3580000000001746,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.8455999999996493,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.4912999999996828,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.063799999999901,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.4127000000007683,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.826600000000326,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 3.056399999999485,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 3.355899999999565,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 3.4273999999995794,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.682499999999891,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.033599999999751,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.6353999999992084,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 3.168499999999767,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.790899999999965,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.7218000000002576,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.7013999999999214,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.6854000000002998,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.5281000000004497,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 1.9426999999996042,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.0592999999998938,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.3127999999996973,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.5672999999997046,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.3343000000004395,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 3.460399999999936,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 4.115400000000591,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.8085999999993874,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.1643000000003667,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.4338000000007014,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.1345000000001164,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.3275000000003274,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.21100000000024,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.223099999999249,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.7262000000000626,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 3.5100000000002183,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.996100000000297,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.88799999999992,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.0979999999999563,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 1.9351999999998952,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 2.634900000000016,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        }
+      ]
+    },
+    {
+      "round": 0,
+      "position": 0,
+      "arm": "proxy",
+      "task": "code",
+      "mode": "unique",
+      "startupMs": 264.6772,
+      "processCpuMs": 46.875,
+      "before": {
+        "privateBytes": 82227200,
+        "workingSetBytes": 73121792,
+        "cpuMs": 1015.625,
+        "processIds": [
+          35140
+        ]
+      },
+      "after": {
+        "privateBytes": 82292736,
+        "workingSetBytes": 73375744,
+        "cpuMs": 1062.5,
+        "processIds": [
+          35140
+        ]
+      },
+      "samples": [
+        {
+          "milliseconds": 3.654900000001362,
+          "sentBytes": 19253,
+          "forwardedBytes": 11174
+        },
+        {
+          "milliseconds": 3.723500000000058,
+          "sentBytes": 19313,
+          "forwardedBytes": 11208
+        },
+        {
+          "milliseconds": 4.2520999999997,
+          "sentBytes": 17741,
+          "forwardedBytes": 10312
+        },
+        {
+          "milliseconds": 3.048500000000786,
+          "sentBytes": 22094,
+          "forwardedBytes": 12793
+        },
+        {
+          "milliseconds": 3.697599999999511,
+          "sentBytes": 19313,
+          "forwardedBytes": 11208
+        },
+        {
+          "milliseconds": 2.9050999999999476,
+          "sentBytes": 18344,
+          "forwardedBytes": 10655
+        },
+        {
+          "milliseconds": 2.8545000000012806,
+          "sentBytes": 17620,
+          "forwardedBytes": 10243
+        },
+        {
+          "milliseconds": 3.4118000000016764,
+          "sentBytes": 18709,
+          "forwardedBytes": 10864
+        },
+        {
+          "milliseconds": 3.4843000000000757,
+          "sentBytes": 20282,
+          "forwardedBytes": 11761
+        },
+        {
+          "milliseconds": 3.5927000000010594,
+          "sentBytes": 17257,
+          "forwardedBytes": 10036
+        },
+        {
+          "milliseconds": 3.349900000001071,
+          "sentBytes": 20342,
+          "forwardedBytes": 11795
+        },
+        {
+          "milliseconds": 2.971800000001167,
+          "sentBytes": 19495,
+          "forwardedBytes": 11312
+        },
+        {
+          "milliseconds": 2.8364999999994325,
+          "sentBytes": 20341,
+          "forwardedBytes": 11794
+        },
+        {
+          "milliseconds": 2.7413000000015018,
+          "sentBytes": 19676,
+          "forwardedBytes": 11415
+        },
+        {
+          "milliseconds": 2.7691000000013446,
+          "sentBytes": 20826,
+          "forwardedBytes": 12071
+        },
+        {
+          "milliseconds": 3.4138999999995576,
+          "sentBytes": 21732,
+          "forwardedBytes": 12587
+        },
+        {
+          "milliseconds": 3.669799999999668,
+          "sentBytes": 20885,
+          "forwardedBytes": 12104
+        },
+        {
+          "milliseconds": 3.527199999998629,
+          "sentBytes": 17195,
+          "forwardedBytes": 10000
+        },
+        {
+          "milliseconds": 2.9574999999986176,
+          "sentBytes": 16469,
+          "forwardedBytes": 9586
+        },
+        {
+          "milliseconds": 4.0231000000003405,
+          "sentBytes": 16712,
+          "forwardedBytes": 9725
+        },
+        {
+          "milliseconds": 5.104999999999563,
+          "sentBytes": 18164,
+          "forwardedBytes": 10553
+        },
+        {
+          "milliseconds": 3.455500000000029,
+          "sentBytes": 20584,
+          "forwardedBytes": 11933
+        },
+        {
+          "milliseconds": 3.0173000000013417,
+          "sentBytes": 21551,
+          "forwardedBytes": 12484
+        },
+        {
+          "milliseconds": 4.1362000000008265,
+          "sentBytes": 17496,
+          "forwardedBytes": 10171
+        },
+        {
+          "milliseconds": 4.047899999999572,
+          "sentBytes": 19979,
+          "forwardedBytes": 11588
+        },
+        {
+          "milliseconds": 3.7991000000001804,
+          "sentBytes": 19916,
+          "forwardedBytes": 11551
+        },
+        {
+          "milliseconds": 4.362100000000282,
+          "sentBytes": 17980,
+          "forwardedBytes": 10447
+        },
+        {
+          "milliseconds": 3.992899999999281,
+          "sentBytes": 20583,
+          "forwardedBytes": 11932
+        },
+        {
+          "milliseconds": 3.3369000000002416,
+          "sentBytes": 18285,
+          "forwardedBytes": 10622
+        },
+        {
+          "milliseconds": 3.3068999999995867,
+          "sentBytes": 21068,
+          "forwardedBytes": 12209
+        },
+        {
+          "milliseconds": 4.662999999998647,
+          "sentBytes": 22156,
+          "forwardedBytes": 12829
+        },
+        {
+          "milliseconds": 4.190699999999197,
+          "sentBytes": 17922,
+          "forwardedBytes": 10415
+        },
+        {
+          "milliseconds": 3.113600000000588,
+          "sentBytes": 22158,
+          "forwardedBytes": 12831
+        },
+        {
+          "milliseconds": 3.011800000000221,
+          "sentBytes": 21492,
+          "forwardedBytes": 12451
+        },
+        {
+          "milliseconds": 4.253600000000006,
+          "sentBytes": 16589,
+          "forwardedBytes": 9654
+        },
+        {
+          "milliseconds": 3.9377999999996973,
+          "sentBytes": 17135,
+          "forwardedBytes": 9966
+        },
+        {
+          "milliseconds": 3.3726999999998952,
+          "sentBytes": 17076,
+          "forwardedBytes": 9933
+        },
+        {
+          "milliseconds": 2.8858000000000175,
+          "sentBytes": 21492,
+          "forwardedBytes": 12451
+        },
+        {
+          "milliseconds": 4.039999999999054,
+          "sentBytes": 20402,
+          "forwardedBytes": 11829
+        },
+        {
+          "milliseconds": 4.024900000000343,
+          "sentBytes": 16893,
+          "forwardedBytes": 9828
+        }
+      ]
+    },
+    {
+      "round": 0,
+      "position": 1,
+      "arm": "headroom",
+      "task": "logs",
+      "mode": "repeated",
+      "startupMs": 40138.1648,
+      "processCpuMs": 1140.625,
+      "before": {
+        "privateBytes": 1094062080,
+        "workingSetBytes": 623554560,
+        "cpuMs": 18906.25,
+        "processIds": [
+          2172
+        ]
+      },
+      "after": {
+        "privateBytes": 1167220736,
+        "workingSetBytes": 696414208,
+        "cpuMs": 20046.875,
+        "processIds": [
+          2172
+        ]
+      },
+      "samples": [
+        {
+          "milliseconds": 42.50800000000163,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 19.416799999999057,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 16.627000000000407,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 18.92670000000362,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 15.634300000005169,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 17.362300000000687,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 18.49199999999837,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 17.015700000003562,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 13.538399999997637,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 15.022499999999127,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 14.891799999997602,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 14.836599999995087,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 14.568599999998696,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 16.191099999996368,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 17.648800000002666,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 15.407599999998638,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 13.24539999999979,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 11.403699999995297,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 13.165099999998347,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 17.233200000002398,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 12.273400000005495,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 12.023999999997613,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 12.342100000001665,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 12.003600000003644,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 11.66990000000078,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 13.259900000004563,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 13.254800000002433,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 12.486400000001595,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 14.397499999999127,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 12.953499999995984,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 11.929200000005949,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 14.343000000000757,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 13.648400000005495,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 14.422599999998056,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 12.955000000001746,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 11.953999999997905,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 13.757400000002235,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 15.039899999996123,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 12.280899999997928,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        },
+        {
+          "milliseconds": 12.755299999997078,
+          "sentBytes": 22196,
+          "forwardedBytes": 18207
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Local Responses forwarding only; no model or task-quality inference.",
+    "Memory is sampled process footprint, not allocation volume.",
+    "Repeated and unique outputs are separate; process warmup is excluded from timed samples.",
+    "Three rotated orders; Python and Node include their respective runtime costs."
+  ]
+}

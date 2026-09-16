@@ -1,0 +1,339 @@
+{
+  "complete": true,
+  "requests": 2160,
+  "headroomOverrides": [
+    "--no-rate-limit",
+    "local --openai-api-url"
+  ],
+  "cases": [
+    {
+      "task": "logs",
+      "mode": "repeated",
+      "arms": {
+        "proxy": {
+          "requests": 120,
+          "meanMs": 3.0285208333347233,
+          "medianMs": 2.899199999985285,
+          "p95Ms": 4.7642000000000735,
+          "processCpuMsPerRequest": 2.0833333333333335,
+          "meanSentBytes": 22196,
+          "meanForwardedBytes": 7176,
+          "sampledPeakPrivateBytes": 67977216,
+          "roundMeanMs": [
+            3.326712500000002,
+            2.4288774999964517,
+            3.329972500007716
+          ]
+        },
+        "headroom": {
+          "requests": 120,
+          "meanMs": 22.82509250000306,
+          "medianMs": 15.359699999997247,
+          "p95Ms": 49.563500000000204,
+          "processCpuMsPerRequest": 40.234375,
+          "meanSentBytes": 22196,
+          "meanForwardedBytes": 18207,
+          "sampledPeakPrivateBytes": 1214853120,
+          "roundMeanMs": [
+            23.076190000000132,
+            23.035575000003156,
+            22.36351250000589
+          ]
+        },
+        "control": {
+          "requests": 120,
+          "meanMs": 2.7027833333355376,
+          "medianMs": 2.5253999999840744,
+          "p95Ms": 3.7318000000086613,
+          "processCpuMsPerRequest": 1.3020833333333333,
+          "meanSentBytes": 22196,
+          "meanForwardedBytes": 22196,
+          "sampledPeakPrivateBytes": 67379200,
+          "roundMeanMs": [
+            2.8402799999996207,
+            2.648737500005518,
+            2.619332500001474
+          ]
+        }
+      },
+      "latencyReductionPercent": 86.73161638519397,
+      "cpuReductionPercent": 94.8220064724919
+    },
+    {
+      "task": "logs",
+      "mode": "unique",
+      "arms": {
+        "proxy": {
+          "requests": 120,
+          "meanMs": 3.9920474999998117,
+          "medianMs": 3.9772000000002663,
+          "p95Ms": 5.1283000000003085,
+          "processCpuMsPerRequest": 3.515625,
+          "meanSentBytes": 20336,
+          "meanForwardedBytes": 6635.2,
+          "sampledPeakPrivateBytes": 69664768,
+          "roundMeanMs": [
+            4.464115000000049,
+            3.585004999994999,
+            3.9270225000043864
+          ]
+        },
+        "headroom": {
+          "requests": 120,
+          "meanMs": 20.570856666666167,
+          "medianMs": 20.241000000038184,
+          "p95Ms": 23.72320000000036,
+          "processCpuMsPerRequest": 40.234375,
+          "meanSentBytes": 20336,
+          "meanForwardedBytes": 16688.6,
+          "sampledPeakPrivateBytes": 1250783232,
+          "roundMeanMs": [
+            20.228559999999835,
+            20.126557499998306,
+            21.357452500000363
+          ]
+        },
+        "control": {
+          "requests": 120,
+          "meanMs": 2.4310491666690117,
+          "medianMs": 2.3095999999786727,
+          "p95Ms": 3.263600000005681,
+          "processCpuMsPerRequest": 1.6927083333333333,
+          "meanSentBytes": 20336,
+          "meanForwardedBytes": 20336,
+          "sampledPeakPrivateBytes": 67670016,
+          "roundMeanMs": [
+            2.435347500001808,
+            2.2920925000042187,
+            2.5657075000010083
+          ]
+        }
+      },
+      "latencyReductionPercent": 80.59367402783626,
+      "cpuReductionPercent": 91.2621359223301
+    },
+    {
+      "task": "json",
+      "mode": "repeated",
+      "arms": {
+        "proxy": {
+          "requests": 120,
+          "meanMs": 3.7728933333387356,
+          "medianMs": 3.7483000000001994,
+          "p95Ms": 4.702199999999721,
+          "processCpuMsPerRequest": 2.4739583333333335,
+          "meanSentBytes": 46060,
+          "meanForwardedBytes": 1519,
+          "sampledPeakPrivateBytes": 70868992,
+          "roundMeanMs": [
+            3.944320000000039,
+            3.479495000006864,
+            3.894865000009304
+          ]
+        },
+        "headroom": {
+          "requests": 120,
+          "meanMs": 17.9536191666674,
+          "medianMs": 16.563500000047497,
+          "p95Ms": 27.479600000020582,
+          "processCpuMsPerRequest": 36.067708333333336,
+          "meanSentBytes": 46060,
+          "meanForwardedBytes": 11439,
+          "sampledPeakPrivateBytes": 1319284736,
+          "roundMeanMs": [
+            16.974474999999984,
+            19.99369750000333,
+            16.89268499999889
+          ]
+        },
+        "control": {
+          "requests": 120,
+          "meanMs": 2.7862358333329516,
+          "medianMs": 2.61099999997532,
+          "p95Ms": 3.99299999998766,
+          "processCpuMsPerRequest": 2.2135416666666665,
+          "meanSentBytes": 46060,
+          "meanForwardedBytes": 46060,
+          "sampledPeakPrivateBytes": 68136960,
+          "roundMeanMs": [
+            2.7569324999989475,
+            2.5508800000025076,
+            3.050894999997399
+          ]
+        }
+      },
+      "latencyReductionPercent": 78.9853327158489,
+      "cpuReductionPercent": 93.14079422382672
+    },
+    {
+      "task": "json",
+      "mode": "unique",
+      "arms": {
+        "proxy": {
+          "requests": 120,
+          "meanMs": 5.77530833332919,
+          "medianMs": 5.530499999993481,
+          "p95Ms": 8.067500000004657,
+          "processCpuMsPerRequest": 6.640625,
+          "meanSentBytes": 40678.05,
+          "meanForwardedBytes": 1510.125,
+          "sampledPeakPrivateBytes": 80596992,
+          "roundMeanMs": [
+            5.705815000000098,
+            5.732362499997544,
+            5.887747499989928
+          ]
+        },
+        "headroom": {
+          "requests": 120,
+          "meanMs": 54.59690833334128,
+          "medianMs": 53.13410000002477,
+          "p95Ms": 66.64320000004955,
+          "processCpuMsPerRequest": 71.875,
+          "meanSentBytes": 40678.05,
+          "meanForwardedBytes": 10136.35,
+          "sampledPeakPrivateBytes": 1932025856,
+          "roundMeanMs": [
+            55.3437049999995,
+            55.755392500013116,
+            52.691627500011236
+          ]
+        },
+        "control": {
+          "requests": 120,
+          "meanMs": 2.818260833335565,
+          "medianMs": 2.629399999976158,
+          "p95Ms": 4.175699999992503,
+          "processCpuMsPerRequest": 1.8229166666666667,
+          "meanSentBytes": 40678.05,
+          "meanForwardedBytes": 40678.05,
+          "sampledPeakPrivateBytes": 69271552,
+          "roundMeanMs": [
+            2.7085374999987835,
+            2.44820250000339,
+            3.2980425000045215
+          ]
+        }
+      },
+      "latencyReductionPercent": 89.42191323715977,
+      "cpuReductionPercent": 90.76086956521739
+    },
+    {
+      "task": "code",
+      "mode": "repeated",
+      "arms": {
+        "proxy": {
+          "requests": 120,
+          "meanMs": 2.4160183333294145,
+          "medianMs": 2.326199999999517,
+          "p95Ms": 3.199999999999818,
+          "processCpuMsPerRequest": 1.5625,
+          "meanSentBytes": 16712,
+          "meanForwardedBytes": 9725,
+          "sampledPeakPrivateBytes": 82927616,
+          "roundMeanMs": [
+            2.551672499999995,
+            2.276817499999015,
+            2.419564999989234
+          ]
+        },
+        "headroom": {
+          "requests": 120,
+          "meanMs": 14.934453333332689,
+          "medianMs": 11.703099999998813,
+          "p95Ms": 21.358200000002398,
+          "processCpuMsPerRequest": 19.401041666666668,
+          "meanSentBytes": 16712,
+          "meanForwardedBytes": 10179.666666666666,
+          "sampledPeakPrivateBytes": 1999126528,
+          "roundMeanMs": [
+            15.276469999999971,
+            10.469554999998945,
+            19.05733499999915
+          ]
+        },
+        "control": {
+          "requests": 120,
+          "meanMs": 2.3848200000007638,
+          "medianMs": 2.1644999999552965,
+          "p95Ms": 3.5821999999461696,
+          "processCpuMsPerRequest": 2.34375,
+          "meanSentBytes": 16712,
+          "meanForwardedBytes": 16712,
+          "sampledPeakPrivateBytes": 69337088,
+          "roundMeanMs": [
+            2.3359150000018416,
+            2.0457549999977345,
+            2.772790000002715
+          ]
+        }
+      },
+      "latencyReductionPercent": 83.82251911466338,
+      "cpuReductionPercent": 91.94630872483222
+    },
+    {
+      "task": "code",
+      "mode": "unique",
+      "arms": {
+        "proxy": {
+          "requests": 120,
+          "meanMs": 3.065768333329349,
+          "medianMs": 2.9086000000006607,
+          "p95Ms": 4.485599999999977,
+          "processCpuMsPerRequest": 2.0833333333333335,
+          "meanSentBytes": 19313,
+          "meanForwardedBytes": 11208,
+          "sampledPeakPrivateBytes": 83898368,
+          "roundMeanMs": [
+            3.667905000000246,
+            2.720517499995185,
+            2.8088824999926145
+          ]
+        },
+        "headroom": {
+          "requests": 120,
+          "meanMs": 4578.325289166665,
+          "medianMs": 4293.814300000027,
+          "p95Ms": 6361.271000000008,
+          "processCpuMsPerRequest": 23833.59375,
+          "meanSentBytes": 19313,
+          "meanForwardedBytes": 10600.3,
+          "sampledPeakPrivateBytes": 2002698240,
+          "roundMeanMs": [
+            4629.828207500001,
+            5054.210415000001,
+            4050.9372449999937
+          ]
+        },
+        "control": {
+          "requests": 120,
+          "meanMs": 2.3848074999999276,
+          "medianMs": 2.302100000088103,
+          "p95Ms": 3.1552000000083353,
+          "processCpuMsPerRequest": 1.3020833333333333,
+          "meanSentBytes": 19313,
+          "meanForwardedBytes": 19313,
+          "sampledPeakPrivateBytes": 68435968,
+          "roundMeanMs": [
+            2.315567500003817,
+            2.301054999993357,
+            2.5378000000026075
+          ]
+        }
+      },
+      "latencyReductionPercent": 99.93303734139242,
+      "cpuReductionPercent": 99.9912588367697
+    }
+  ],
+  "memoryFootprint": {
+    "proxy": 83898368,
+    "headroom": 2002698240,
+    "control": 69337088
+  },
+  "limitations": [
+    "Local Responses forwarding only; no model or task-quality inference.",
+    "Memory is sampled process footprint, not allocation volume.",
+    "Repeated and unique outputs are separate; process warmup is excluded from timed samples.",
+    "Three rotated orders; Python and Node include their respective runtime costs."
+  ]
+}
