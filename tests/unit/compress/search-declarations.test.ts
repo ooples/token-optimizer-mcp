@@ -113,7 +113,10 @@ describe('exact declaration rows in search output', () => {
   });
 
   it('preserves mixed endings and noncanonical or unsafe line numbers verbatim', () => {
-    const mixed = fixture().replace('\n', '\r\n');
+    // Construct exactly one CRLF boundary followed by LF boundaries. This is
+    // deliberately mixed input, not an incomplete newline-normalization step.
+    const [first, ...rest] = fixture().split('\n');
+    const mixed = `${first}\r\n${rest.join('\n')}`;
     expect(compressSearchResults(mixed).text).toBe(mixed);
     for (const number of ['0001', '9007199254740993']) {
       const input = Array.from(
