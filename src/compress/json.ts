@@ -36,7 +36,7 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
-import { booleanFacts, rareBooleanRows } from './json-facts.js';
+import { booleanFacts, rareBooleanRows, rareStringGroups } from './json-facts.js';
 import { needleRows, shapeRepresentatives } from './needles.js';
 import { compressNestedStrings } from './nested.js';
 import { activeRanker } from './ranking.js';
@@ -287,6 +287,8 @@ export function compressJson(
     // elided, every needle destroyed at 99.6%).
     const odd = anomalousRows(stripped, tuning.keepRows);
     const keep = rareBooleanRows(stripped);
+    const categories = rareStringGroups(parsed as unknown[]);
+    for (const i of categories.keep) keep.add(i);
     // 1. Content that a reader would come back for -- identifiers, failure
     //    vocabulary -- which structure cannot see. Bounded, so an array made
     //    of needles does not simply disable compression.
@@ -339,7 +341,7 @@ export function compressJson(
           (odd.size
             ? `; all ${count(odd.size, 'row')} that differ are kept above`
             : '') +
-          booleanFacts(parsed as unknown[]),
+          booleanFacts(parsed as unknown[]) + categories.facts,
         recoverAt
       ) +
       ']';
