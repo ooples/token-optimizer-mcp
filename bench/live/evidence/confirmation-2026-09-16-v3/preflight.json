@@ -1,0 +1,22 @@
+{
+  "productSourceCommit": "9a151eccaeb5d609bba82beed22b08e5b7c5241c",
+  "build": "passed",
+  "targetedLint": "passed",
+  "generatorLookupKeys": 30,
+  "generatorGoodAndBadWorkflowCases": 40,
+  "statisticalChecks": "BCa matches SciPy; success, failed quality, missing evidence and independent partial-ledger accounting passed",
+  "fullSuite": {
+    "initialSuitesPassed": 301,
+    "initialSuitesFailed": 4,
+    "initialTestsPassed": 4328,
+    "initialTestsFailed": 43,
+    "skipped": 9,
+    "fixes": [
+      "Select installed Git Bash instead of nonfunctional WSL launcher in Windows shell tests",
+      "Give ranking fixtures distinct distractors so rare-category retention cannot answer them without the ranker"
+    ],
+    "affectedSuitesPassedOnRerun": 4,
+    "cumulativeTestsPassed": 4371,
+    "note": "Full suite plus targeted reruns; not a second full-suite run. Production code was not weakened to satisfy outdated fixture assumptions."
+  }
+}

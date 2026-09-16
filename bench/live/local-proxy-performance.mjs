@@ -14,6 +14,7 @@ const raw = await mkdtemp(join(tmpdir(), 'local-proxy-performance-'));
 const repetitions = 40;
 const arms = ['proxy', 'headroom', 'control'];
 const records = [];
+let failure = null;
 let receivedBytes = 0;
 const upstream = createServer((req, res) => {
   let bytes = 0;
@@ -97,6 +98,7 @@ try {
               String(port),
               '--openai-api-url',
               base,
+              '--no-rate-limit',
             ]
           : ['dist/proxy/cli.js', '--port', String(port), '--upstream', base];
       const start = performance.now();
@@ -210,6 +212,9 @@ try {
       await stop(child);
     }
   }
+} catch (error) {
+  failure = String(error);
+  throw error;
 } finally {
   for (const child of active) await stop(child);
   upstream.closeAllConnections();
@@ -219,6 +224,9 @@ try {
     JSON.stringify(
       {
         raw,
+        complete: failure === null,
+        failure,
+        headroomOverrides: ['--no-rate-limit', 'local --openai-api-url'],
         repetitions,
         records,
         limitations: [
