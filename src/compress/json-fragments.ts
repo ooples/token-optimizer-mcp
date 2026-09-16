@@ -8,7 +8,7 @@ export function looksLikeJsonFragments(text: string): boolean {
   return (
     /^Warning: truncated output\b/.test(text) &&
     /\d+ tokens truncated/.test(text) &&
-    /^\s*\[\s*$/m.test(text)
+    /(?:^|\\n)\s*\[(?:\s*$|\\(?:r\\)?n)/m.test(text)
   );
 }
 
@@ -23,12 +23,21 @@ function records(text: string): RecordParts[] {
   const result: RecordParts[] = [];
   // An interrupted object may match through the truncation marker. JSON.parse
   // rejects it; the original bytes stay in the gap between valid records.
-  const object = /^([ \t]+)\{\r?\n[\s\S]*?^\1\},?(?:\r?\n|$)/gm;
+  // Shell envelopes can render structural newlines as literal backslash-n
+  // while leaving quotes unescaped. Keep those bytes in the template rather
+  // than unescaping the document (which would corrupt escapes inside values).
+  const object =
+    /(?:^|(?<=\\n))([ \t]+)\{(?:\r?\n|\\(?:r\\)?n)[\s\S]*?(?:^|(?<=\\n))\1\},?(?:\r?\n|\\(?:r\\)?n|$)/gm;
   for (const match of text.matchAll(object)) {
     const raw = match[0];
     let parsed: Record<string, unknown>;
     try {
-      parsed = JSON.parse(raw.trim().replace(/,$/, ''));
+      const structural = raw.replace(
+        /("(?:\\.|[^"\\])*")|\\r\\n|\\n/g,
+        (token, quoted: string | undefined) =>
+          quoted ?? (token === '\\n' ? '\n' : '\r\n')
+      );
+      parsed = JSON.parse(structural.trim().replace(/,$/, ''));
     } catch {
       continue;
     }
@@ -85,23 +94,58 @@ export function compressJsonFragments(text: string): CompressionResult {
         group.some((row) => row.values[col] !== value)
       );
       const template: (string | number)[] = [],
-        columns: number[] = [];
+        columns: { col: number; start: number; end: number }[] = [];
       let literal = first.chunks[0];
       first.values.forEach((value, col) => {
         if (varying[col]) {
-          template.push(literal, columns.length);
-          columns.push(col);
-          literal = '';
+          // Factor shared lexical prefixes/suffixes as well as field names.
+          // IDs often differ only in their final digits; retaining the full
+          // escaped ID in every row needlessly repeats it across every turn.
+          let start = value.length,
+            suffix = value.length;
+          for (const row of group) {
+            const other = row.values[col];
+            let n = 0;
+            while (n < start && n < other.length && value[n] === other[n]) n++;
+            start = n;
+          }
+          for (const row of group) {
+            const other = row.values[col];
+            let n = 0;
+            while (
+              n < suffix &&
+              n < value.length - start &&
+              n < other.length - start &&
+              value[value.length - n - 1] === other[other.length - n - 1]
+            )
+              n++;
+            suffix = n;
+          }
+          // Keep booleans, numbers and short categorical strings explicit.
+          // Only substantial shared string prefixes justify another template.
+          if (!value.startsWith('"') || start < 8) {
+            start = 0;
+            suffix = 0;
+          }
+          template.push(literal + value.slice(0, start), columns.length);
+          columns.push({ col, start, end: suffix });
+          literal = suffix ? value.slice(-suffix) : '';
         } else literal += value;
         literal += first.chunks[col + 1];
       });
       template.push(literal);
       const compact =
-        '[JSON fragment records; missing records remain unknown. Join template parts, replacing numeric slots with raw JSON lexemes from each row. Template: ' +
+        '[JSON fragment records; missing records remain unknown. Join template parts, replacing numeric slots with verbatim text fragments from each row. Template: ' +
         JSON.stringify(template) +
         ']\n' +
         group
-          .map((row) => JSON.stringify(columns.map((col) => row.values[col])))
+          .map((row) =>
+            JSON.stringify(
+              columns.map(({ col, start, end }) =>
+                row.values[col].slice(start, end ? -end : undefined)
+              )
+            )
+          )
           .join('\n') +
         '\n[/JSON fragment records]\n';
       if (compact.length < stop - first.start) {

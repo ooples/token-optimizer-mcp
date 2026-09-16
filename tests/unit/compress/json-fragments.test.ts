@@ -4,7 +4,7 @@ import { compressResponses } from '../../../src/proxy/responses.js';
 
 function expand(text: string): string {
   return text.replace(
-    /\[JSON fragment records; missing records remain unknown\. Join template parts, replacing numeric slots with raw JSON lexemes from each row\. Template: (\[[^\n]+\])\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
+    /\[JSON fragment records; missing records remain unknown\. Join template parts, replacing numeric slots with (?:raw JSON lexemes|verbatim text fragments) from each row\. Template: (\[[^\n]+\])\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
     (_all, encoded: string, rows: string) => {
       const template = JSON.parse(encoded) as (number | string)[];
       return rows
@@ -58,7 +58,7 @@ function fixture(nl = '\n'): string {
     nl
   );
 }
-test.each(['\n', '\r\n'])(
+test.each(['\n', '\r\n', '\\n', '\\r\\n'])(
   'truncated JSON preserves all visible bytes, gap, and rare values %j',
   (nl) => {
     const input = fixture(nl),
@@ -120,4 +120,22 @@ test('lexical numeric and escaped-string values reconstruct exactly', () => {
     .replace('"limit": 100', '"limit": -0.00e+0')
     .replace('"extra": null', '"extra": "\\u0061\\\\b"');
   expect(expand(compressJsonFragments(input).text)).toBe(input);
+});
+
+test('escaped structural newlines never decode escapes inside string values', () => {
+  const input = fixture('\\r\\n').replaceAll(
+    '"region": "east"',
+    '"region": "east\\nwest\\r\\n\\\\n"'
+  );
+  const out = compressJsonFragments(input);
+  expect(out.text.length).toBeLessThan(input.length * 0.8);
+  expect(expand(out.text)).toBe(input);
+});
+
+test('factors long ID prefixes while retaining every exact value and categorical fact', () => {
+  const input = fixture().replaceAll('route-', 'route-long-shared-prefix-');
+  const out = compressJsonFragments(input);
+  expect(out.text.match(/route-long-shared-prefix-/g)?.length).toBe(2);
+  expect(out.text).toContain('false');
+  expect(expand(out.text)).toBe(input);
 });
