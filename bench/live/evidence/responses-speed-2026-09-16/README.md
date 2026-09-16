@@ -32,7 +32,7 @@ Build, changed-file ESLint, and 23 focused Responses regressions passed. The new
 
 These are local implementation improvements, not proof of beating HeadRoom on model latency. The earlier largest speed loss contained a 50.7-second upstream response; its cause is not identifiable from aggregate timing. A twelve-request local transport probe reused one upstream connection, ruling out the proposed per-request handshake explanation for that probe.
 
-The fixed live schedule is in [PROTOCOL.md](PROTOCOL.md). All eight scheduled attempts passed; three of four speed wins and three of four estimated-cost wins. Totals were 135.2 versus 166.5 agent seconds (18.8% lower) and ${p.knownEstimatedUsd.toFixed(6)} versus ${h.knownEstimatedUsd.toFixed(6)} (46.3% lower). See [all outcomes and timing](summary.json).
+The fixed live schedule is in [PROTOCOL.md](PROTOCOL.md). All eight scheduled attempts passed; three of four speed wins and three of four estimated-cost wins. Totals were 135.2 versus 166.5 agent seconds (18.8% lower) and $0.703922 versus $1.310704 (46.3% lower). See [all outcomes and timing](summary.json).
 
 | Pair | Ours / HeadRoom seconds | Ours / HeadRoom estimated USD | Result |
 | --- | ---: | ---: | --- |
