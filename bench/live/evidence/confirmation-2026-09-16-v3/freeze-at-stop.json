@@ -1,0 +1,20 @@
+{
+  "verifiedAt": "2026-09-16T02:27:26.325674+00:00",
+  "method": "Independent Python SHA-256 with 64 KiB streaming blocks",
+  "files": 800,
+  "changed": [],
+  "largestFiles": [
+    [
+      298169136,
+      "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe"
+    ],
+    [
+      84456080,
+      "C:\\Program Files\\nodejs\\node.exe"
+    ],
+    [
+      72496432,
+      "C:\\Users\\yolan\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex-code-mode-host.exe"
+    ]
+  ]
+}

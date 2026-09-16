@@ -1,4 +1,5 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
@@ -16,10 +17,12 @@ export async function treeFiles(root, accept = () => true) {
 }
 export async function hashes(paths) {
   const result = {};
-  for (const path of paths)
-    result[path] = createHash('sha256')
-      .update(await readFile(path))
-      .digest('hex');
+  for (const path of paths) {
+    const hash = createHash('sha256');
+    for await (const chunk of createReadStream(path, { highWaterMark: 65536 }))
+      hash.update(chunk);
+    result[path] = hash.digest('hex');
+  }
   return result;
 }
 export async function verifyFreeze(freeze) {
@@ -54,6 +57,15 @@ if (
     join(study, 'PROTOCOL.md'),
     process.execPath,
   ];
+  for (const name of ['continuation.json', 'AMENDMENT.md']) {
+    const path = join(study, name);
+    try {
+      await readFile(path);
+      files.push(path);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
   const dependencies = JSON.parse(
     execFileSync(
       process.env.PYTHON || 'python',

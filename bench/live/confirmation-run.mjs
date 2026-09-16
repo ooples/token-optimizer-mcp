@@ -11,17 +11,20 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { verifyFreeze } from './confirmation-freeze.mjs';
+import { continuationPrefix } from './confirmation-continuation.mjs';
 
 const study = resolve(process.argv[2]);
 const plan = JSON.parse(await readFile(join(study, 'plan.json'), 'utf8'));
 const freeze = JSON.parse(await readFile(join(study, 'freeze.json'), 'utf8'));
 await verifyFreeze(freeze);
+const prefix = await continuationPrefix(study, plan, freeze);
 const raw = await mkdtemp(join(tmpdir(), 'codex-confirmation-'));
 const journal = {
   started: new Date().toISOString(),
   raw,
   plannedPairs: plan.pairs,
-  pairs: [],
+  pairs: prefix.pairs,
+  continuation: prefix.continuation,
   status: 'running',
 };
 await writeFile(
@@ -63,13 +66,21 @@ async function command(args, env, log, onLine = () => {}) {
   return code;
 }
 let consecutiveInfrastructureFailures = 0;
+for (const pair of journal.pairs)
+  consecutiveInfrastructureFailures = pair.infrastructureFailure
+    ? consecutiveInfrastructureFailures + 1
+    : 0;
 try {
-  for (const item of plan.schedule) {
+  if (consecutiveInfrastructureFailures >= 3)
+    throw Error('Cannot resume an infrastructure-failure stop');
+  for (const item of plan.schedule.slice(journal.pairs.length)) {
     await verifyFreeze(freeze);
-    const stop = await readFile(join(study, 'STOP.json'), 'utf8').catch((error) => {
-      if (error.code === 'ENOENT') return null;
-      throw error;
-    });
+    const stop = await readFile(join(study, 'STOP.json'), 'utf8').catch(
+      (error) => {
+        if (error.code === 'ENOENT') return null;
+        throw error;
+      }
+    );
     if (stop !== null) throw Error(`Operator checkpoint stop: ${stop}`);
     const caseRaw = join(raw, item.id),
       archived = join(study, 'cases', item.id);
@@ -158,7 +169,9 @@ try {
     await verifyFreeze(freeze);
     await save();
     if (audit.length === 2 && audit.every((r) => r.verdict === 'INVALID_READ'))
-      throw Error('Both arms failed initial exposure audit; stop incomplete for measurement review');
+      throw Error(
+        'Both arms failed initial exposure audit; stop incomplete for measurement review'
+      );
     // The Codex auditor can retain a transport-level turn.failed as FAIL.
     // Recognize its client errors as infrastructure rather than relying only
     // on the verdict label (the completed v2 study exposed an upstream 503).

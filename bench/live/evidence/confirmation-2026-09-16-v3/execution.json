@@ -227,8 +227,222 @@
       "id": "bugfix-1",
       "family": "bugfix",
       "started": "2026-09-16T02:08:30.632Z",
-      "status": "running"
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\bugfix-1\\run-NuDzjW",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:10:46.554Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-2",
+      "family": "code",
+      "started": "2026-09-16T02:10:49.081Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\code-2\\run-pXxbHX",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:11:46.664Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-2",
+      "family": "json",
+      "started": "2026-09-16T02:11:48.790Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\json-2\\run-1fRjcC",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:12:33.136Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-1",
+      "family": "refactor",
+      "started": "2026-09-16T02:12:35.385Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\refactor-1\\run-n4khwf",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:15:02.923Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-4",
+      "family": "mixed",
+      "started": "2026-09-16T02:15:05.114Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\mixed-4\\run-Opotlz",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:16:55.492Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-8",
+      "family": "logs",
+      "started": "2026-09-16T02:16:57.628Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\logs-8\\run-k3iFaa",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:17:55.719Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-5",
+      "family": "refactor",
+      "started": "2026-09-16T02:17:57.998Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\refactor-5\\run-Xm11PI",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:20:02.814Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-10",
+      "family": "json",
+      "started": "2026-09-16T02:20:05.057Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\json-10\\run-mhgo1q",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:20:51.142Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-6",
+      "family": "code",
+      "started": "2026-09-16T02:20:53.166Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\code-6\\run-XjVrIj",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:21:46.770Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-8",
+      "family": "refresh",
+      "started": "2026-09-16T02:21:50.573Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\refresh-8\\run-QSV3Vg",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:23:58.626Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-9",
+      "family": "json",
+      "started": "2026-09-16T02:24:01.165Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-Vo6L6B\\json-9\\run-rK502a",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T02:24:48.175Z"
     }
   ],
-  "status": "running"
+  "status": "incomplete",
+  "error": "RangeError: Array buffer allocation failed"
 }

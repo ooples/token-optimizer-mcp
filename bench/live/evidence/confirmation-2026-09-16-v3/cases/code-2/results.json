@@ -1,0 +1,164 @@
+[
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 113744461,
+    "verdict": "PASS",
+    "agentSeconds": 16.5,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 45455,
+      "cached": 38144,
+      "output": 202
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 234298,
+    "afterBytes": 215028,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12981,
+          "output_tokens": 76,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16166,
+          "output_tokens": 85,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16308,
+          "output_tokens": 41,
+          "cached_input_tokens": 16000
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-f4900de0.ts",
+      "line": 32,
+      "constant": "RETRY_LIMIT_F4900DE0",
+      "value": 15
+    },
+    "seconds": 17.4
+  },
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 113744461,
+    "verdict": "PASS",
+    "agentSeconds": 27.9,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 81060,
+      "cached": 68864,
+      "output": 324
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 599149,
+    "afterBytes": 599149,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12898,
+          "output_tokens": 76,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13047,
+          "output_tokens": 53,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13751,
+          "output_tokens": 91,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 20611,
+          "output_tokens": 85,
+          "cached_input_tokens": 13568
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 20753,
+          "output_tokens": 19,
+          "cached_input_tokens": 20480
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-f4900de0.ts",
+      "line": 32,
+      "constant": "RETRY_LIMIT_F4900DE0",
+      "value": 15
+    },
+    "seconds": 39.2
+  }
+]
