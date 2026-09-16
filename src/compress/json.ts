@@ -36,6 +36,7 @@
 
 import { count, inlineMarker } from './annotate.js';
 import { numericExtrema } from './json-numeric.js';
+import { compressJsonArray } from './json-fragments.js';
 import {
   booleanFacts,
   nullFacts,
@@ -251,9 +252,22 @@ export function compressJson(
     // elided, every needle destroyed at 99.6%).
     const odd = anomalousRows(stripped, tuning.keepRows);
     const keep = rareBooleanRows(stripped);
+    const hasRareBooleans = keep.size > 0;
     const extrema = numericExtrema(stripped);
     for (const i of extrema.keep) keep.add(i);
     const categories = rareStringGroups(parsed as unknown[]);
+    // Numeric tables have no rare categorical population to summarize. Keeping
+    // every record in an exact compact form avoids forcing verification reads
+    // for aggregate queries. Prefer it only when it materially beats minification.
+    if (
+      extrema.keep.size &&
+      !hasRareBooleans &&
+      !categories.keep.size &&
+      !nestedElisions.length
+    ) {
+      const exact = compressJsonArray(text);
+      if (exact.text.length < minified.length * 0.7) return exact;
+    }
     for (const i of categories.keep) keep.add(i);
     // 1. Content that a reader would come back for -- identifiers, failure
     //    vocabulary -- which structure cannot see. Bounded, so an array made

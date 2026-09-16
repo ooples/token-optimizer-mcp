@@ -42,12 +42,15 @@ export function adversarialFixture(task, seed) {
         'Find the maximum and minimum numeric latency over ALL rows. Write answer.json containing id of the maximum row, maximum, and minimum. Do not infer extrema from a partial sample.',
     };
   }
-  const rows = Array.from({ length: 160 }, (_, i) => ({
+  const rowCount = 140 + (parseInt(tag.slice(0, 2), 16) % 81);
+  const nullPeriod = 2 + (parseInt(tag.slice(2, 4), 16) % 3);
+  const missingPeriod = 7 + (parseInt(tag.slice(4, 6), 16) % 11);
+  const rows = Array.from({ length: rowCount }, (_, i) => ({
     id: `item-${tag}-${i}`,
-    value: i % 3 ? null : 'ready',
+    value: i % nullPeriod ? null : 'ready',
     nested: { explicit: null },
   }));
-  for (let i = 0; i < rows.length; i += 11) delete rows[i].value;
+  for (let i = 0; i < rows.length; i += missingPeriod) delete rows[i].value;
   return {
     name: 'nullable.json',
     content: JSON.stringify(rows, null, 2),

@@ -1,0 +1,16 @@
+{
+  "requests": 3,
+  "rounds": 500,
+  "calls": 1500,
+  "meanMs": 0.861111666666666,
+  "p50Ms": 0.6580999999998767,
+  "p95Ms": 2.270999999999958,
+  "cpuMicros": {
+    "user": 1219000,
+    "system": 172000
+  },
+  "heapDeltaBytes": 371456,
+  "checksum": 96774500,
+  "sampledAllocationBytes": 644979520,
+  "note": "Heap delta is retained heap plus GC timing, not total allocated bytes; use the allocation profile. Disk I/O and network excluded."
+}

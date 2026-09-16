@@ -89,8 +89,29 @@ function records(text: string): RecordParts[] {
 
 export function compressJsonFragments(text: string): CompressionResult {
   if (!looksLikeJsonFragments(text)) return unchanged(text);
-  const found = records(text),
-    elisions: Elision[] = [];
+  return compressRecords(text, records(text), false);
+}
+
+/** Exact full-array encoding, admitted only when every record was recognized. */
+export function compressJsonArray(text: string): CompressionResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return unchanged(text);
+  }
+  if (!Array.isArray(parsed) || parsed.length < 32) return unchanged(text);
+  const found = records(text);
+  if (found.length !== parsed.length) return unchanged(text);
+  return compressRecords(text, found, true);
+}
+
+function compressRecords(
+  text: string,
+  found: RecordParts[],
+  complete: boolean
+): CompressionResult {
+  const elisions: Elision[] = [];
   let result = '',
     cursor = 0;
   for (let i = 0; i < found.length; ) {
@@ -153,7 +174,10 @@ export function compressJsonFragments(text: string): CompressionResult {
       });
       template.push(literal);
       const compact =
-        '[JSON fragment records; missing records remain unknown. Join template parts, replacing numeric slots with verbatim text fragments from each row. Template: ' +
+        (complete
+          ? `[JSON array records; ALL ${found.length} records preserved. `
+          : '[JSON fragment records; missing records remain unknown. ') +
+        'Join template parts, replacing numeric slots with verbatim text fragments from each row. Template: ' +
         JSON.stringify(template) +
         ']\n' +
         group
@@ -170,7 +194,7 @@ export function compressJsonFragments(text: string): CompressionResult {
         result += text.slice(cursor, first.start) + compact;
         cursor = stop;
         elisions.push({
-          removed: `${group.length} complete records within truncated JSON represented by exact template and rows`,
+          removed: `${group.length} complete records${complete ? '' : ' within truncated JSON'} represented by exact template and rows`,
           recoverAt: null,
           lossless: true,
         });

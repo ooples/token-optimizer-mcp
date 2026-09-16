@@ -34,20 +34,29 @@ export function compressResponses(
       elisions += result.elisions.length;
       return result.text;
     };
-    if (typeof item.output === 'string')
-      return { ...item, output: compress(item.output) };
+    if (typeof item.output === 'string') {
+      const output = compress(item.output);
+      return output === item.output ? item : { ...item, output };
+    }
     // Multimodal output keeps every non-text part, with all original metadata.
-    if (Array.isArray(item.output))
-      return {
-        ...item,
-        output: item.output.map((part) =>
+    if (Array.isArray(item.output)) {
+      let output: unknown[] | undefined;
+      for (let i = 0; i < item.output.length; i++) {
+        const part: unknown = item.output[i];
+        if (
           object(part) &&
           part.type === 'input_text' &&
           typeof part.text === 'string'
-            ? { ...part, text: compress(part.text) }
-            : part
-        ),
-      };
+        ) {
+          const text = compress(part.text);
+          if (text !== part.text) {
+            output ??= item.output.slice();
+            output[i] = { ...part, text };
+          }
+        }
+      }
+      return output ? { ...item, output } : item;
+    }
     return item;
   });
   const encoded = elisions

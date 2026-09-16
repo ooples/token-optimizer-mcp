@@ -104,7 +104,12 @@ try {
         'json',
         'code',
       ]) {
-        for (const mode of ['repeated', 'unique', 'append']) {
+        for (const mode of [
+          'repeated',
+          'unique',
+          'append',
+          'changing-prefix',
+        ]) {
           for (const concurrency of [1, 8]) {
             let priorOutput;
             const fixture = adversarialFixture(task, 810001);
@@ -118,7 +123,14 @@ try {
                 stream: false,
                 prompt_cache_key: 'adversarial-local-stable',
                 input: [
-                  { role: 'user', content: f.question },
+                  {
+                    role: 'user',
+                    content:
+                      f.question +
+                      (mode === 'changing-prefix'
+                        ? ` Request revision ${i}.`
+                        : ''),
+                  },
                   {
                     type: 'function_call',
                     name: 'read_file',
@@ -156,26 +168,24 @@ try {
               const result = await r.json();
               const ms = performance.now() - start;
               assert.equal(r.status, 200);
-              assert.equal(
-                result.forwarded.prompt_cache_key,
-                'adversarial-local-stable'
-              );
+              const cacheKeyPreserved =
+                result.forwarded.prompt_cache_key ===
+                'adversarial-local-stable';
               const output = result.forwarded.input[2].output;
               if (arm === 'proxy' && ['tiny', 'entropy'].includes(task))
                 assert.equal(output, JSON.parse(body).input[2].output);
-              if (mode === 'append') {
+              let stableOutput = true;
+              if (mode === 'append' || mode === 'changing-prefix') {
                 if (priorOutput !== undefined)
-                  assert.equal(
-                    output,
-                    priorOutput,
-                    `${arm}: old output changed after append`
-                  );
+                  stableOutput = output === priorOutput;
                 priorOutput = output;
               }
               return {
                 ms,
                 sentBytes: Buffer.byteLength(body),
                 forwardedBytes: result.bytes,
+                cacheKeyPreserved,
+                stableOutput,
               };
             };
             // Warm process/output caches equally; unique measurements use fresh content after this seed.
@@ -212,6 +222,7 @@ try {
         raw,
         error,
         records,
+        expectedGroups: 192,
         scope:
           'Local static upstream. Latency and wire bytes; no provider cost or model-quality inference. HeadRoom rate limiter disabled equally for all workloads.',
       },

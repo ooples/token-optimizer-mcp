@@ -1,0 +1,143 @@
+{
+  "model": "gpt-6-astra",
+  "balanced": true,
+  "valid": true,
+  "failures": [],
+  "aggregates": [
+    {
+      "task": "tiny",
+      "arm": "proxy",
+      "passed": 2,
+      "expected": 2,
+      "measured": 2,
+      "meanInput": 39423,
+      "meanCached": 30400,
+      "meanUncached": 9023,
+      "meanOutput": 162.5,
+      "meanSeconds": 16.7,
+      "meanAgentSeconds": 15.85
+    },
+    {
+      "task": "tiny",
+      "arm": "headroom",
+      "passed": 2,
+      "expected": 2,
+      "measured": 2,
+      "meanInput": 39171.5,
+      "meanCached": 30336,
+      "meanUncached": 8835.5,
+      "meanOutput": 161,
+      "meanSeconds": 24.95,
+      "meanAgentSeconds": 13.55
+    },
+    {
+      "task": "entropy",
+      "arm": "proxy",
+      "passed": 2,
+      "expected": 2,
+      "measured": 2,
+      "meanInput": 46408.5,
+      "meanCached": 33856,
+      "meanUncached": 12552.5,
+      "meanOutput": 184.5,
+      "meanSeconds": 18.5,
+      "meanAgentSeconds": 17.6
+    },
+    {
+      "task": "entropy",
+      "arm": "headroom",
+      "passed": 2,
+      "expected": 2,
+      "measured": 2,
+      "meanInput": 86318,
+      "meanCached": 69376,
+      "meanUncached": 16942,
+      "meanOutput": 359.5,
+      "meanSeconds": 38.1,
+      "meanAgentSeconds": 26.55
+    },
+    {
+      "task": "numeric",
+      "arm": "proxy",
+      "passed": 2,
+      "expected": 2,
+      "measured": 2,
+      "meanInput": 56897,
+      "meanCached": 37056,
+      "meanUncached": 19841,
+      "meanOutput": 464.5,
+      "meanSeconds": 48.849999999999994,
+      "meanAgentSeconds": 47.95
+    },
+    {
+      "task": "numeric",
+      "arm": "headroom",
+      "passed": 2,
+      "expected": 2,
+      "measured": 2,
+      "meanInput": 45755.5,
+      "meanCached": 25536,
+      "meanUncached": 20219.5,
+      "meanOutput": 183,
+      "meanSeconds": 26.95,
+      "meanAgentSeconds": 15.700000000000001
+    },
+    {
+      "task": "nullable",
+      "arm": "proxy",
+      "passed": 2,
+      "expected": 2,
+      "measured": 2,
+      "meanInput": 39945.5,
+      "meanCached": 30656,
+      "meanUncached": 9289.5,
+      "meanOutput": 169,
+      "meanSeconds": 33.7,
+      "meanAgentSeconds": 32.800000000000004
+    },
+    {
+      "task": "nullable",
+      "arm": "headroom",
+      "passed": 2,
+      "expected": 2,
+      "measured": 2,
+      "meanInput": 43083,
+      "meanCached": 32192,
+      "meanUncached": 10891,
+      "meanOutput": 279,
+      "meanSeconds": 30.2,
+      "meanAgentSeconds": 18.9
+    }
+  ],
+  "comparison": [
+    {
+      "task": "tiny",
+      "candidate": "proxy",
+      "inputReductionVsFull": null,
+      "inputReductionVsHeadroom": -0.006420484280663219,
+      "inputReductionVsControl": null
+    },
+    {
+      "task": "entropy",
+      "candidate": "proxy",
+      "inputReductionVsFull": null,
+      "inputReductionVsHeadroom": 0.462354317755277,
+      "inputReductionVsControl": null
+    },
+    {
+      "task": "numeric",
+      "candidate": "proxy",
+      "inputReductionVsFull": null,
+      "inputReductionVsHeadroom": -0.24350078132683506,
+      "inputReductionVsControl": null
+    },
+    {
+      "task": "nullable",
+      "candidate": "proxy",
+      "inputReductionVsFull": null,
+      "inputReductionVsHeadroom": 0.07282454796555482,
+      "inputReductionVsControl": null
+    }
+  ],
+  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+}

@@ -1,0 +1,1259 @@
+{
+  "scope": "Local static upstream. Latency and wire bytes; no provider cost or model-quality inference. HeadRoom rate limiter disabled equally for all workloads.",
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\adversarial-local-hPa6tf",
+  "complete": true,
+  "requests": 3840,
+  "groups": [
+    {
+      "task": "tiny",
+      "mode": "repeated",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 2.510562499999679,
+          "p95Ms": 4.346199999999953,
+          "meanBytes": 353,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 7.34602999999961,
+          "p95Ms": 10.608299999999872,
+          "meanBytes": 353,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "tiny",
+      "mode": "repeated",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 8.981287500000494,
+          "p95Ms": 15.60820000000001,
+          "meanBytes": 353,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 40.286245000000235,
+          "p95Ms": 56.834100000000035,
+          "meanBytes": 353,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "tiny",
+      "mode": "unique",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 1.8001450000002848,
+          "p95Ms": 2.324099999999987,
+          "meanBytes": 353,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 7.844060000000172,
+          "p95Ms": 8.794199999996636,
+          "meanBytes": 353,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "tiny",
+      "mode": "unique",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 6.031344999999956,
+          "p95Ms": 7.358699999997043,
+          "meanBytes": 353,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 41.403222500000176,
+          "p95Ms": 55.77100000000064,
+          "meanBytes": 353,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "tiny",
+      "mode": "append",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 1.828580000000332,
+          "p95Ms": 2.4361999999999853,
+          "meanBytes": 773.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 8.184462500000517,
+          "p95Ms": 9.567899999994552,
+          "meanBytes": 773.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "tiny",
+      "mode": "append",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 5.786249999999905,
+          "p95Ms": 7.320599999999104,
+          "meanBytes": 773.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 39.861470000000374,
+          "p95Ms": 47.90910000000076,
+          "meanBytes": 773.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "tiny",
+      "mode": "changing-prefix",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 1.782909999999569,
+          "p95Ms": 2.4235999999946216,
+          "meanBytes": 373.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 7.450429999999597,
+          "p95Ms": 8.93579999999929,
+          "meanBytes": 373.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "tiny",
+      "mode": "changing-prefix",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 5.456459999999529,
+          "p95Ms": 7.508300000000077,
+          "meanBytes": 373.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 39.77441249999988,
+          "p95Ms": 53.41769999999815,
+          "meanBytes": 373.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "entropy",
+      "mode": "repeated",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 2.2177650000002442,
+          "p95Ms": 3.0935000000026776,
+          "meanBytes": 6308,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 12.227277499999218,
+          "p95Ms": 17.59200000000419,
+          "meanBytes": 6308,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "entropy",
+      "mode": "repeated",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 7.38078499999987,
+          "p95Ms": 11.2274000000034,
+          "meanBytes": 6308,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 59.81142750000022,
+          "p95Ms": 79.14100000000326,
+          "meanBytes": 6308,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "entropy",
+      "mode": "unique",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 2.2760975000002532,
+          "p95Ms": 2.919399999999996,
+          "meanBytes": 6308,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 16.025797499999772,
+          "p95Ms": 19.412499999998545,
+          "meanBytes": 6308,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "entropy",
+      "mode": "unique",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 7.188679999999897,
+          "p95Ms": 8.818200000001525,
+          "meanBytes": 6308,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 58.89860999999937,
+          "p95Ms": 68.55849999999919,
+          "meanBytes": 6308,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "entropy",
+      "mode": "append",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 2.1456925000000866,
+          "p95Ms": 3.5120000000024447,
+          "meanBytes": 6728.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 10.36596499999996,
+          "p95Ms": 11.886999999998807,
+          "meanBytes": 6728.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "entropy",
+      "mode": "append",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 6.8140624999999915,
+          "p95Ms": 8.870100000000093,
+          "meanBytes": 6728.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 65.99734749999979,
+          "p95Ms": 86.85800000000017,
+          "meanBytes": 6728.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "entropy",
+      "mode": "changing-prefix",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 1.7906325000001402,
+          "p95Ms": 2.158100000000559,
+          "meanBytes": 6328.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 11.25334249999969,
+          "p95Ms": 15.019599999999627,
+          "meanBytes": 6328.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "entropy",
+      "mode": "changing-prefix",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 5.884277499999522,
+          "p95Ms": 7.074400000000082,
+          "meanBytes": 6328.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 60.641435000000094,
+          "p95Ms": 79.51840000000084,
+          "meanBytes": 6328.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": false,
+      "wireBytesTie": true
+    },
+    {
+      "task": "numeric",
+      "mode": "repeated",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 1.9957824999998848,
+          "p95Ms": 2.5249999999999773,
+          "meanBytes": 5029,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 16.724595000000136,
+          "p95Ms": 18.899600000000646,
+          "meanBytes": 6612,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "numeric",
+      "mode": "repeated",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 7.805087499999663,
+          "p95Ms": 12.125299999999697,
+          "meanBytes": 5029,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 86.80367499999984,
+          "p95Ms": 107.48240000000078,
+          "meanBytes": 6612,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "numeric",
+      "mode": "unique",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 4.770717499999728,
+          "p95Ms": 6.183100000002014,
+          "meanBytes": 5029,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 47.643512499999815,
+          "p95Ms": 70.77779999999984,
+          "meanBytes": 6612,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "numeric",
+      "mode": "unique",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 7.599019999999984,
+          "p95Ms": 11.410299999995914,
+          "meanBytes": 5029,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 97.71708000000035,
+          "p95Ms": 138.26740000000427,
+          "meanBytes": 6612,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "numeric",
+      "mode": "append",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 2.319482500000629,
+          "p95Ms": 3.018299999999954,
+          "meanBytes": 5449.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 17.541617500000484,
+          "p95Ms": 23.242600000001403,
+          "meanBytes": 7032.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "numeric",
+      "mode": "append",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 7.168927500000535,
+          "p95Ms": 10.055000000000064,
+          "meanBytes": 5449.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 91.89382500000056,
+          "p95Ms": 123.1053000000029,
+          "meanBytes": 7032.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "numeric",
+      "mode": "changing-prefix",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 2.1070450000005847,
+          "p95Ms": 2.50959999999759,
+          "meanBytes": 5049.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 18.079234999999972,
+          "p95Ms": 31.906999999999243,
+          "meanBytes": 6632.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "numeric",
+      "mode": "changing-prefix",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 7.050840000000295,
+          "p95Ms": 9.896299999999883,
+          "meanBytes": 5049.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 85.8786449999997,
+          "p95Ms": 112.12359999999899,
+          "meanBytes": 6632.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "nullable",
+      "mode": "repeated",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 3.0096499999994935,
+          "p95Ms": 3.625500000001921,
+          "meanBytes": 1147,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 19.227087499999378,
+          "p95Ms": 29.077399999998306,
+          "meanBytes": 4455,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "nullable",
+      "mode": "repeated",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 12.551837499999607,
+          "p95Ms": 15.651399999995192,
+          "meanBytes": 1147,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 78.61268500000014,
+          "p95Ms": 94.79290000000037,
+          "meanBytes": 4455,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "nullable",
+      "mode": "unique",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 4.368812499999336,
+          "p95Ms": 5.499000000003434,
+          "meanBytes": 1144.9,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 36.22236249999996,
+          "p95Ms": 42.8778999999995,
+          "meanBytes": 4506.9,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "nullable",
+      "mode": "unique",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 13.678804999999908,
+          "p95Ms": 16.681799999998475,
+          "meanBytes": 1144.9,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 83.4045250000001,
+          "p95Ms": 110.64600000000064,
+          "meanBytes": 4506.9,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "nullable",
+      "mode": "append",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 3.0693774999999732,
+          "p95Ms": 3.997100000000046,
+          "meanBytes": 1567.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 15.683205000000726,
+          "p95Ms": 19.385800000000017,
+          "meanBytes": 4875.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "nullable",
+      "mode": "append",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 13.411917499999765,
+          "p95Ms": 15.562300000005052,
+          "meanBytes": 1567.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 81.96840249999968,
+          "p95Ms": 107.07559999999648,
+          "meanBytes": 4875.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "nullable",
+      "mode": "changing-prefix",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 3.04083749999985,
+          "p95Ms": 3.6540999999999713,
+          "meanBytes": 1167.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 14.225657500000398,
+          "p95Ms": 15.533100000000559,
+          "meanBytes": 4475.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "nullable",
+      "mode": "changing-prefix",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 12.766272500000293,
+          "p95Ms": 15.357799999997951,
+          "meanBytes": 1167.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 80.37978249999988,
+          "p95Ms": 96.80099999999948,
+          "meanBytes": 4475.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "json",
+      "mode": "repeated",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 3.293990000000349,
+          "p95Ms": 3.940699999999879,
+          "meanBytes": 1681,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 15.551047500000276,
+          "p95Ms": 18.616799999996147,
+          "meanBytes": 9442,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "json",
+      "mode": "repeated",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 15.668950000000052,
+          "p95Ms": 18.525500000000193,
+          "meanBytes": 1681,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 90.5689150000002,
+          "p95Ms": 121.3885999999984,
+          "meanBytes": 9442,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "json",
+      "mode": "unique",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 4.997504999999438,
+          "p95Ms": 5.935999999994237,
+          "meanBytes": 1674.85,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 50.74437249999992,
+          "p95Ms": 58.79239999999845,
+          "meanBytes": 10050.7,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "json",
+      "mode": "unique",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 16.320212499999723,
+          "p95Ms": 22.033099999999877,
+          "meanBytes": 1674.85,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 204.9173050000003,
+          "p95Ms": 473.7635999999984,
+          "meanBytes": 10050.7,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "json",
+      "mode": "append",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 3.3764050000002612,
+          "p95Ms": 3.8047999999980675,
+          "meanBytes": 2101.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 27.991305000000374,
+          "p95Ms": 68.199099999998,
+          "meanBytes": 9862.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "json",
+      "mode": "append",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 17.89751999999994,
+          "p95Ms": 21.705199999996694,
+          "meanBytes": 2101.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 125.42114500000025,
+          "p95Ms": 333.9438999999984,
+          "meanBytes": 9862.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "json",
+      "mode": "changing-prefix",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 3.364257499999792,
+          "p95Ms": 3.7764000000001943,
+          "meanBytes": 1701.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 25.071464999999442,
+          "p95Ms": 28.501000000000204,
+          "meanBytes": 9462.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "json",
+      "mode": "changing-prefix",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 16.35125750000028,
+          "p95Ms": 19.04970000000003,
+          "meanBytes": 1701.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 105.77892749999955,
+          "p95Ms": 138.4415999999983,
+          "meanBytes": 9462.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "code",
+      "mode": "repeated",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 2.197042500000157,
+          "p95Ms": 2.942700000000059,
+          "meanBytes": 7206,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 17.38881749999964,
+          "p95Ms": 19.126000000000204,
+          "meanBytes": 13499,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "code",
+      "mode": "repeated",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 9.218050000000028,
+          "p95Ms": 11.374100000000908,
+          "meanBytes": 7206,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 106.71922000000022,
+          "p95Ms": 133.17719999999827,
+          "meanBytes": 13499,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "code",
+      "mode": "unique",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 3.0453450000004865,
+          "p95Ms": 3.861299999996845,
+          "meanBytes": 6593.45,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 26.319247499999346,
+          "p95Ms": 41.15200000000186,
+          "meanBytes": 12289.85,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "code",
+      "mode": "unique",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 6.590399999999818,
+          "p95Ms": 8.499299999999948,
+          "meanBytes": 6593.45,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 110.91231000000008,
+          "p95Ms": 160.17179999999644,
+          "meanBytes": 12289.85,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "code",
+      "mode": "append",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 1.883375000000035,
+          "p95Ms": 2.5194000000001324,
+          "meanBytes": 7626.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 18.787702500000524,
+          "p95Ms": 37.72030000000086,
+          "meanBytes": 13919.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "code",
+      "mode": "append",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 6.131735000000413,
+          "p95Ms": 7.328800000002957,
+          "meanBytes": 7626.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 87.96300249999986,
+          "p95Ms": 118.33469999999943,
+          "meanBytes": 13919.25,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "code",
+      "mode": "changing-prefix",
+      "concurrency": 1,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 1.7823725000002242,
+          "p95Ms": 2.262799999996787,
+          "meanBytes": 7226.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 15.423500000000331,
+          "p95Ms": 24.27509999999893,
+          "meanBytes": 13519.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    },
+    {
+      "task": "code",
+      "mode": "changing-prefix",
+      "concurrency": 8,
+      "arms": {
+        "proxy": {
+          "samples": 40,
+          "meanMs": 9.375655000000041,
+          "p95Ms": 13.296199999999772,
+          "meanBytes": 7226.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        },
+        "headroom": {
+          "samples": 40,
+          "meanMs": 113.7335849999995,
+          "p95Ms": 151.23189999999886,
+          "meanBytes": 13519.5,
+          "cacheKeyChanges": 0,
+          "outputChanges": 0
+        }
+      },
+      "latencyWin": true,
+      "wireBytesWin": true,
+      "wireBytesTie": false
+    }
+  ],
+  "latencyWins": 48,
+  "byteWins": 32,
+  "byteTies": 16
+}

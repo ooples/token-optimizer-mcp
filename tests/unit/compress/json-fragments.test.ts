@@ -1,5 +1,8 @@
 import { test, expect } from '@jest/globals';
-import { compressJsonFragments } from '../../../src/compress/json-fragments.js';
+import {
+  compressJsonFragments,
+  compressJsonArray,
+} from '../../../src/compress/json-fragments.js';
 import { compressResponses } from '../../../src/proxy/responses.js';
 
 function expand(text: string): string {
@@ -58,6 +61,41 @@ function fixture(nl = '\n'): string {
     nl
   );
 }
+
+test.each(['\n', '\r\n'])(
+  'complete numeric arrays reconstruct every original byte %j',
+  (nl) => {
+    const input = JSON.stringify(
+      Array.from({ length: 120 }, (_, i) => ({
+        id: `sensor-shared-prefix-${i}`,
+        value: i === 77 ? 912 : i % 13,
+        explicit: null,
+      })),
+      null,
+      2
+    )
+      .split('\n')
+      .join(nl);
+    const out = compressJsonArray(input);
+    expect(out.text).toContain('ALL 120 records preserved');
+    expect(out.text.length).toBeLessThan(input.length * 0.5);
+    const normalized = out.text.replace(
+      /\[JSON array records; ALL \d+ records preserved\./g,
+      '[JSON fragment records; missing records remain unknown.'
+    );
+    expect(expand(normalized)).toBe(input);
+  }
+);
+
+test('incomplete and nested arrays cannot claim complete flat-record encoding', () => {
+  const nested = JSON.stringify(
+    Array.from({ length: 40 }, (_, i) => ({ i, nested: { i } })),
+    null,
+    2
+  );
+  expect(compressJsonArray(nested).text).toBe(nested);
+  expect(compressJsonArray(fixture()).text).toBe(fixture());
+});
 test.each(['\n', '\r\n', '\\n', '\\r\\n'])(
   'truncated JSON preserves all visible bytes, gap, and rare values %j',
   (nl) => {

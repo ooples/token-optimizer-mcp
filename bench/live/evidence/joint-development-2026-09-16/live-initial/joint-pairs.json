@@ -1,0 +1,158 @@
+{
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-joint-development\\run-T4zIcB",
+  "scope": "Development cases, no confidence-backed confirmation claim.",
+  "pairs": [
+    {
+      "task": "tiny",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.086542,
+          "agentSeconds": 16,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.168178,
+          "agentSeconds": 13.1,
+          "requests": 3
+        }
+      },
+      "classification": "speed-loss"
+    },
+    {
+      "task": "tiny",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.170968,
+          "agentSeconds": 15.7,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.085304,
+          "agentSeconds": 14,
+          "requests": 3
+        }
+      },
+      "classification": "joint-loss"
+    },
+    {
+      "task": "entropy",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.126498,
+          "agentSeconds": 15.9,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.26117,
+          "agentSeconds": 24.3,
+          "requests": 5
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "task": "entropy",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.210714,
+          "agentSeconds": 19.3,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.252372,
+          "agentSeconds": 28.8,
+          "requests": 5
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "task": "numeric",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.18667,
+          "agentSeconds": 65.2,
+          "requests": 4
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.34897,
+          "agentSeconds": 13.3,
+          "requests": 3
+        }
+      },
+      "classification": "speed-loss"
+    },
+    {
+      "task": "numeric",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.330712,
+          "agentSeconds": 30.7,
+          "requests": 4
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.124792,
+          "agentSeconds": 18.1,
+          "requests": 3
+        }
+      },
+      "classification": "joint-loss"
+    },
+    {
+      "task": "nullable",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.173994,
+          "agentSeconds": 12.9,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.112286,
+          "agentSeconds": 21.3,
+          "requests": 3
+        }
+      },
+      "classification": "cost-loss"
+    },
+    {
+      "task": "nullable",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.090008,
+          "agentSeconds": 52.7,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.197818,
+          "agentSeconds": 16.5,
+          "requests": 3
+        }
+      },
+      "classification": "speed-loss"
+    }
+  ]
+}

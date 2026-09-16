@@ -113,16 +113,29 @@ export function compressNestedStrings(
       return result.text;
     }
 
-    if (Array.isArray(node)) return node.map(walk);
+    if (Array.isArray(node)) {
+      let out: unknown[] | undefined;
+      for (let i = 0; i < node.length; i++) {
+        const next = walk(node[i]);
+        if (next !== node[i]) {
+          out ??= node.slice();
+          out[i] = next;
+        }
+      }
+      return out ?? node;
+    }
 
     if (node && typeof node === 'object') {
-      const out: Record<string, unknown> = {};
-      for (const [key, item] of Object.entries(
-        node as Record<string, unknown>
-      )) {
-        out[key] = walk(item);
+      const original = node as Record<string, unknown>;
+      let out: Record<string, unknown> | undefined;
+      for (const key of Object.keys(original)) {
+        const next = walk(original[key]);
+        if (next !== original[key]) {
+          out ??= { ...original };
+          out[key] = next;
+        }
       }
-      return out;
+      return out ?? node;
     }
 
     return node;

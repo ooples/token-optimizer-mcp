@@ -5,7 +5,7 @@ const raw = resolve(process.argv[2]),
 const data = JSON.parse(await readFile(join(raw, 'results.json'), 'utf8'));
 const groups = [];
 for (const task of [...new Set(data.records.map((r) => r.task))])
-  for (const mode of ['repeated', 'unique', 'append'])
+  for (const mode of [...new Set(data.records.map((r) => r.mode))])
     for (const concurrency of [1, 8]) {
       const arms = {};
       for (const arm of ['proxy', 'headroom']) {
@@ -29,6 +29,9 @@ for (const task of [...new Set(data.records.map((r) => r.task))])
               Math.min(times.length - 1, Math.ceil(times.length * 0.95) - 1)
             ] ?? null,
           meanBytes: mean('forwardedBytes'),
+          cacheKeyChanges: samples.filter((s) => s.cacheKeyPreserved === false)
+            .length,
+          outputChanges: samples.filter((s) => s.stableOutput === false).length,
         };
       }
       groups.push({
@@ -44,7 +47,7 @@ for (const task of [...new Set(data.records.map((r) => r.task))])
 const summary = {
   scope: data.scope,
   raw,
-  complete: !data.error && data.records.length === 144,
+  complete: !data.error && data.records.length === (data.expectedGroups ?? 144),
   requests: data.records.reduce((n, r) => n + r.samples.length, 0),
   groups,
   latencyWins: groups.filter((g) => g.latencyWin).length,

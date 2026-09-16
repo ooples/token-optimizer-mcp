@@ -1,0 +1,5 @@
+{
+  "calls": 3,
+  "identicalResults": true,
+  "scope": "Nullable-array captured conversation. Numeric-array representation changes are intentionally excluded from this allocation-only equivalence check."
+}
