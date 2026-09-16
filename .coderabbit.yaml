@@ -2,6 +2,10 @@
 # review. Raw run records remain committed for auditing; generated hook copies
 # are verified by the Generated Artifacts In Sync CI check.
 reviews:
+  auto_review:
+    # Review the #385 -> #386 stack before retargeting #386 to master.
+    base_branches:
+      - "fix/agentic-fixtures"
   path_filters:
     - "!bench/live/evidence/**/*.json"
     - "!bench/live/evidence/**/*.jsonl"
