@@ -1,0 +1,238 @@
+[
+  {
+    "task": "refactor",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "workflow",
+    "artifactLayout": 2,
+    "seed": 104390099,
+    "verdict": "PASS",
+    "agentSeconds": 67.2,
+    "read": {
+      "notApplicable": true
+    },
+    "validation": {
+      "passed": true,
+      "failures": []
+    },
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "type": "file_change",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 129175,
+      "cached": 120576,
+      "output": 1410
+    },
+    "requests": 9,
+    "compressedRequests": 0,
+    "beforeBytes": 882593,
+    "afterBytes": 882593,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12862,
+          "output_tokens": 81,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13014,
+          "output_tokens": 52,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13211,
+          "output_tokens": 46,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13908,
+          "output_tokens": 91,
+          "cached_input_tokens": 13056
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14366,
+          "output_tokens": 68,
+          "cached_input_tokens": 13696
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14578,
+          "output_tokens": 57,
+          "cached_input_tokens": 14208
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15098,
+          "output_tokens": 659,
+          "cached_input_tokens": 14336
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15781,
+          "output_tokens": 285,
+          "cached_input_tokens": 14976
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16357,
+          "output_tokens": 71,
+          "cached_input_tokens": 15616
+        }
+      }
+    ],
+    "seconds": 79.7
+  },
+  {
+    "task": "refactor",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "workflow",
+    "artifactLayout": 2,
+    "seed": 104390099,
+    "verdict": "PASS",
+    "agentSeconds": 50.5,
+    "read": {
+      "notApplicable": true
+    },
+    "validation": {
+      "passed": true,
+      "failures": []
+    },
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "type": "file_change",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "failed"
+      }
+    ],
+    "usage": {
+      "input": 55330,
+      "cached": 44928,
+      "output": 1033
+    },
+    "requests": 4,
+    "compressedRequests": 0,
+    "beforeBytes": 267631,
+    "afterBytes": 267631,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12945,
+          "output_tokens": 65,
+          "cached_input_tokens": 5120
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13185,
+          "output_tokens": 106,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14122,
+          "output_tokens": 788,
+          "cached_input_tokens": 13056
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15078,
+          "output_tokens": 74,
+          "cached_input_tokens": 13952
+        }
+      }
+    ],
+    "seconds": 51.6
+  }
+]
