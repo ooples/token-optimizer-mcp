@@ -16,6 +16,7 @@ the findings below demonstrate why those green checks were insufficient.
 | High | Claude settings-file environment could override the proxy's shell environment and bypass routing. | Resolve user/project/local/explicit settings precedence and create a private invocation overlay containing the loopback URL. Preserve explicit settings and remove the overlay on exit. A real Claude binary passed against a synthetic local upstream. |
 | Medium | Creating `.bash_profile` could suppress an existing `.bash_login` or `.profile`. | Select the existing Bash login profile in Bash's precedence order. |
 | Medium | Percent-encoded installed paths silently disabled graph loading. | Convert module URLs using `fileURLToPath`; test an installed layout with spaces and Unicode. Use the same explicit wiki-directory resolver as MCP and hooks. |
+| Medium | New Responses tasks sharing an initial AGENTS message reused an older task's knowledge block. | Identify the complete user setup before the first assistant/tool turn; regression checks fresh findings on a new task and unchanged knowledge on continuation turns. |
 
 Claude's environment precedence was checked against its
 [official reference](https://code.claude.com/docs/en/env-vars#precedence).
@@ -39,6 +40,12 @@ Five targeted suites passed locally, 58 tests total, covering installation failu
 safety, routing, graph loading, Responses prefix stability and existing proxy
 contracts. Build, changed-file lint and the npm contents gate passed. New
 adversarial suites are included in the Linux/Windows release CI matrix.
+
+[Hardening CI run 35158419184](https://github.com/ooples/token-optimizer-mcp/actions/runs/35158419184)
+passed all 15 suites at `b163a357`: 137 tests on Linux and 135 tests plus two
+POSIX-only skips on Windows. The subsequent conversation-key regression passed
+locally, and the repacked installation passed the current-account Codex task
+again with the same 278-character block on all nine Responses requests.
 
 The real Claude binary check used synthetic credentials and a local streaming
 response stub. It proves settings-based routing and protocol compatibility; it

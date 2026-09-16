@@ -23,8 +23,21 @@ export function withResponsesKnowledge(
   )
     return result;
   const input = request.input as Record<string, unknown>[];
-  const opening = input.find((item) => item && item.role === 'user');
-  if (!opening) return result;
+  // Codex may put identical AGENTS/environment messages before the actual task.
+  // Keying only on the first user item conflates new tasks after /clear and
+  // prevents refreshed findings from being selected. All user setup before
+  // the first assistant/tool turn is stable as later turns are appended.
+  const historyItem = (item: Record<string, unknown>): boolean =>
+    !!item &&
+    (item.role === 'assistant' ||
+      (typeof item.type === 'string' &&
+        !['message', 'additional_tools'].includes(item.type)));
+  const opening: Record<string, unknown>[] = [];
+  for (const item of input) {
+    if (historyItem(item)) break;
+    if (item?.role === 'user') opening.push(item);
+  }
+  if (!opening.length) return result;
   const context = `${request.instructions ?? ''}\n${JSON.stringify(opening)}`;
   const key = createHash('sha256').update(context).digest('hex');
   let cache = blocks.get(anchors);
@@ -37,13 +50,7 @@ export function withResponsesKnowledge(
     // CLI setup can contain many user/developer messages before the first
     // inference. Assistant/tool/reasoning history, not envelope count, signals
     // that this proxy joined an established conversation.
-    const hasHistory = input.some(
-      (item) =>
-        item &&
-        (item.role === 'assistant' ||
-          (typeof item.type === 'string' &&
-            !['message', 'additional_tools'].includes(item.type)))
-    );
+    const hasHistory = input.some(historyItem);
     const block = !hasHistory
       ? knowledgeBlock(findings, context, tuning?.knowledgeBudgetChars, {
           sharedGraph,

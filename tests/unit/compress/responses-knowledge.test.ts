@@ -19,6 +19,39 @@ describe('Responses project knowledge', () => {
   };
   const spill = () => '/unused';
 
+  it('separates new tasks sharing the same initial AGENTS message', () => {
+    const store = anchorStore();
+    const setup = {
+      role: 'user',
+      content: 'Identical AGENTS and environment setup',
+    };
+    const encode = (task: string) =>
+      Buffer.from(
+        JSON.stringify({ input: [setup, { role: 'user', content: task }] })
+      );
+    const first = compressBody(encode('First task'), spill, store, findings);
+    const fresh = [
+      { ...findings[0], claim: 'New verified project conclusion BETA.' },
+    ];
+    const second = compressBody(encode('Second task'), spill, store, fresh);
+    expect(JSON.parse(first.body.toString()).instructions).toContain('ALPHA');
+    expect(JSON.parse(second.body.toString()).instructions).toContain('BETA');
+    const later = Buffer.from(
+      JSON.stringify({
+        input: [
+          setup,
+          { role: 'user', content: 'First task' },
+          { role: 'assistant', content: 'done' },
+          { role: 'user', content: 'Follow-up' },
+        ],
+      })
+    );
+    expect(
+      JSON.parse(compressBody(later, spill, store, fresh).body.toString())
+        .instructions
+    ).toBe(JSON.parse(first.body.toString()).instructions);
+  });
+
   it('accepts many CLI setup messages but never joins existing assistant history', () => {
     const input = [
       {
