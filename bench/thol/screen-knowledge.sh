@@ -38,6 +38,13 @@ RIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # short task. The $5.01/run web-research outlier is deliberately not here.
 TASKS="${TASKS:-code-bugfix-py,code-refactor-split-py,log-needle-zh,code-iterate-tests}"
 REPS="${REPS:-1}"
+# The warm-up and measured pass select different arms, so they need distinct
+# precommitted plans. Check these before touching the graph or staging auth.
+: "${WARMUP_ARM_ORDER_FILE:?set a plan for token-optimizer-proxy-knowledge}"
+: "${MEASURED_ARM_ORDER_FILE:?set a plan for control,token-optimizer-proxy,token-optimizer-proxy-knowledge}"
+[ -f "$WARMUP_ARM_ORDER_FILE" ] && [ -f "$MEASURED_ARM_ORDER_FILE" ] || {
+  echo "Both knowledge-screen arm order files must exist" >&2; exit 1;
+}
 WARMUP_VOLUME="${WARMUP_VOLUME:-thol-knowledge-warmup}"
 MEASURED_VOLUME="${MEASURED_VOLUME:-thol-knowledge-screen}"
 DEFAULT_GRAPH_DIR="$RIG_DIR/thol/proxy-graph"
@@ -94,6 +101,7 @@ log "PASS 1 of 2 -- warm-up. These runs are NOT results; they fill the graph."
 RESULTS_VOLUME="$WARMUP_VOLUME" \
 PROXY_GRAPH_DIR="$PROXY_GRAPH_DIR" \
 ARMS="token-optimizer-proxy-knowledge" \
+ARM_ORDER_FILE="$WARMUP_ARM_ORDER_FILE" \
 REPS="$REPS" \
 SEG_1="$TASKS" SEGMENTS_MAX=1 \
   bash "$RIG_DIR/thol/run-campaign.sh" "$@"
@@ -145,6 +153,7 @@ log "PASS 2 of 2 -- measured. Knowledge arm now starts against a warm graph."
 RESULTS_VOLUME="$MEASURED_VOLUME" \
 PROXY_GRAPH_DIR="$PROXY_GRAPH_DIR" \
 ARMS="control,token-optimizer-proxy,token-optimizer-proxy-knowledge" \
+ARM_ORDER_FILE="$MEASURED_ARM_ORDER_FILE" \
 REPS="$REPS" \
 SEG_1="$TASKS" SEGMENTS_MAX=1 \
   bash "$RIG_DIR/thol/run-campaign.sh" "$@"
