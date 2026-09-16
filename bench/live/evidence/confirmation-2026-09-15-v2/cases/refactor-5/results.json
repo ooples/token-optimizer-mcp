@@ -1,0 +1,129 @@
+[
+  {
+    "task": "refactor",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "workflow",
+    "artifactLayout": 2,
+    "seed": 284187160,
+    "verdict": "FAIL",
+    "agentSeconds": 1.2,
+    "read": {
+      "notApplicable": true
+    },
+    "validation": {
+      "passed": false,
+      "failures": [
+        "node:internal/modules/run_main:122\r\n    triggerUncaughtException(\r\n    ^\r\n\r\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\r\n\r\ntrue !== false\r\n\r\n    at file:///C:/Users/yolan/source/repos/token-optimizer-mcp/[eval1]:3:14 {\r\n  generatedMessage: true,\r\n  code: 'ERR_ASSERTION',\r\n  actual: true,\r\n  expected: false,\r\n  operator: 'strictEqual'\r\n}\r\n\r\nNode.js v22.15.0\r\n",
+        "Old API remains: src/money.mjs",
+        "Old API remains: src/invoice.mjs",
+        "Old API remains: src/quote.mjs",
+        "Old API remains: src/index.mjs"
+      ]
+    },
+    "exit": 1,
+    "clientErrors": [
+      "unexpected status 503 Service Unavailable: upstream connect error or disconnect/reset before headers. reset reason: connection termination, url: http://127.0.0.1:64117/backend-api/codex/responses, cf-ray: a3bbcfc53d194f7f-BOS"
+    ],
+    "completedTools": [],
+    "usage": null,
+    "requests": 1,
+    "compressedRequests": 0,
+    "beforeBytes": 62556,
+    "afterBytes": 62556,
+    "ledgerUsage": [
+      {
+        "status": 503,
+        "usage": {}
+      }
+    ],
+    "seconds": 12.7
+  },
+  {
+    "task": "refactor",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "workflow",
+    "artifactLayout": 2,
+    "seed": 284187160,
+    "verdict": "PASS",
+    "agentSeconds": 42.3,
+    "read": {
+      "notApplicable": true
+    },
+    "validation": {
+      "passed": true,
+      "failures": []
+    },
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "type": "file_change",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "failed"
+      }
+    ],
+    "usage": {
+      "input": 55259,
+      "cached": 48896,
+      "output": 1008
+    },
+    "requests": 4,
+    "compressedRequests": 0,
+    "beforeBytes": 267056,
+    "afterBytes": 267056,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12907,
+          "output_tokens": 81,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13163,
+          "output_tokens": 120,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14135,
+          "output_tokens": 748,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15054,
+          "output_tokens": 59,
+          "cached_input_tokens": 13952
+        }
+      }
+    ],
+    "seconds": 43.5
+  }
+]

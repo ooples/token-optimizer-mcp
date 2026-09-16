@@ -1,0 +1,16 @@
+{
+    "sha256":  {
+                   "dist/proxy/accounting.js":  "1be2326a2449290a13c3c0cf1c2506e71c05107df9c4222c98a86de139e15bf1",
+                   "dist/proxy/responses.js":  "dfb7cc0d1a1acad67256a2f28c73cc8629202cdcd54fc39cf21b123e30855428",
+                   "dist/proxy/server.js":  "ae189030b37ce1bf6e525e97ee332d5f50b3d66805e43d3d984c59ce5d1eefca",
+                   "dist/compress/router.js":  "5c7095a920afbd01d916146c4bcb3fdba6488866b51ea6ce4e9482e49b9a5787",
+                   "dist/proxy/cli.js":  "53a4ad2ee11775705dadefc5b3b05e3792adab64801286537e9d2a962238549e",
+                   "dist/proxy/capture.js":  "d2912dbebd594cde64707a865a8f6a9ca5bb973f4de7b394ccfbcfb78e238316"
+               },
+    "model":  "gpt-6-astra",
+    "capturedAt":  "2026-09-15T19:49:35.9694532Z",
+    "node":  "v22.15.0",
+    "note":  "Build hashes captured during the development screen. The dist build has remained unchanged throughout. Runner source was subsequently hardened; this campaign uses the initial artifact layout.",
+    "headroom":  "0.37.0",
+    "codex":  "0.154.0"
+}

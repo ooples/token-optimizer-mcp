@@ -1,0 +1,22 @@
+[
+  {
+    "arm": "control",
+    "preExistingDisabledRouteVisible": false,
+    "initialOutputTruncated": true
+  },
+  {
+    "arm": "proxy",
+    "preExistingDisabledRouteVisible": false,
+    "initialOutputTruncated": true
+  },
+  {
+    "arm": "headroom",
+    "preExistingDisabledRouteVisible": false,
+    "initialOutputTruncated": true
+  },
+  {
+    "arm": "full",
+    "preExistingDisabledRouteVisible": false,
+    "initialOutputTruncated": true
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "model": "gpt-6-astra",
+  "arms": [
+    "proxy",
+    "headroom"
+  ],
+  "reps": 2,
+  "tasks": [
+    "refresh"
+  ],
+  "balanced": true,
+  "seedOffset": 31,
+  "readMode": "natural",
+  "mcpDiscovery": "bounded",
+  "started": "2026-09-15T21:59:29.335Z"
+}

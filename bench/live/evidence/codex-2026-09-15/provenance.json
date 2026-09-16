@@ -1,0 +1,15 @@
+{
+  "node": "v22.15.0",
+  "codex": "0.154.0",
+  "headroom": "0.37.0",
+  "gitHead": "f712b4ec80240a0a004f5eadefbbdf2b8196d5bc",
+  "transport": "HTTP Responses API; Codex ChatGPT authentication; gpt-6-astra",
+  "sha256": {
+    "dist/proxy/server.js": "ae189030b37ce1bf6e525e97ee332d5f50b3d66805e43d3d984c59ce5d1eefca",
+    "dist/proxy/responses.js": "dfb7cc0d1a1acad67256a2f28c73cc8629202cdcd54fc39cf21b123e30855428",
+    "dist/proxy/accounting.js": "1be2326a2449290a13c3c0cf1c2506e71c05107df9c4222c98a86de139e15bf1",
+    "dist/proxy/capture.js": "d2912dbebd594cde64707a865a8f6a9ca5bb973f4de7b394ccfbcfb78e238316",
+    "bench/live/codex.mjs": "1440c6061e3fe7a659d6e775f6529036e5d45147948ef08ff651bf54f64f5305",
+    "bench/live/codex-output.mjs": "3137a66abf09ef75a8b0bfd9bccf3e44067127cbbd3ac698b73e36beedb94739"
+  }
+}

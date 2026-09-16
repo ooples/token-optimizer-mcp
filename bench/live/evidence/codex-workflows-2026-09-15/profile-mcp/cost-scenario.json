@@ -1,0 +1,75 @@
+{
+  "scenario": {
+    "model": "gpt-6-astra",
+    "label": "Codex Enterprise standard rate-card scenario; not actual billed cost",
+    "verifiedOn": "2026-09-15",
+    "source": "https://help.openai.com/en/articles/20001415",
+    "usdPerMillion": {
+      "uncached": 10,
+      "cached": 1,
+      "output": 50
+    },
+    "assumptions": [
+      "All runs use standard speed with no regional or contract adjustments.",
+      "Codex Astra has no cache-write charge or long-context multiplier.",
+      "Subscription charges, credits, proxy compute, and account discounts are not measured."
+    ]
+  },
+  "valid": true,
+  "failures": [],
+  "measured": [
+    {
+      "task": "refresh",
+      "arm": "full",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.40274
+    },
+    {
+      "task": "refresh",
+      "arm": "full-files",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.672936
+    },
+    {
+      "task": "refresh",
+      "arm": "full-files",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.574642
+    },
+    {
+      "task": "refresh",
+      "arm": "full",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.379982
+    }
+  ],
+  "aggregates": [
+    {
+      "task": "refresh",
+      "arm": "full",
+      "meanEstimatedUsd": 0.39136099999999996
+    },
+    {
+      "task": "refresh",
+      "arm": "full-files",
+      "meanEstimatedUsd": 0.6237889999999999
+    }
+  ],
+  "comparisons": [
+    {
+      "task": "refresh",
+      "candidate": "full-files",
+      "against": "full",
+      "estimatedUsdDelta": 0.23242799999999997,
+      "reductionPercent": -59.38966836245818
+    }
+  ]
+}

@@ -1,0 +1,164 @@
+[
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 345514723,
+    "verdict": "PASS",
+    "agentSeconds": 23.8,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 81846,
+      "cached": 66560,
+      "output": 360
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 483757,
+    "afterBytes": 483757,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12896,
+          "output_tokens": 73,
+          "cached_input_tokens": 5120
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13046,
+          "output_tokens": 58,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16596,
+          "output_tokens": 98,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 19581,
+          "output_tokens": 88,
+          "cached_input_tokens": 16384
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 19727,
+          "output_tokens": 43,
+          "cached_input_tokens": 19456
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-786dd8c0.ts",
+      "line": 81,
+      "constant": "RETRY_LIMIT_786DD8C0",
+      "value": 2
+    },
+    "seconds": 34.4
+  },
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 345514723,
+    "verdict": "PASS",
+    "agentSeconds": 17.8,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 44433,
+      "cached": 28288,
+      "output": 183
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 226822,
+    "afterBytes": 210974,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12992,
+          "output_tokens": 77,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15649,
+          "output_tokens": 87,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15792,
+          "output_tokens": 19,
+          "cached_input_tokens": 15488
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-786dd8c0.ts",
+      "line": 81,
+      "constant": "RETRY_LIMIT_786DD8C0",
+      "value": 2
+    },
+    "seconds": 18.7
+  }
+]

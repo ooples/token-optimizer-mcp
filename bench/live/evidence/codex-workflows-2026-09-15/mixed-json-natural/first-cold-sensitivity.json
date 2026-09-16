@@ -1,0 +1,42 @@
+{
+  "kind": "Counterfactual fixed-trace sensitivity; not measured cold-start billing",
+  "assumptions": [
+    "Both arms first requests charged fully uncached; subsequent usage and model choices held fixed.",
+    "Does not normalize later cache misses or prove the change caused the observed savings."
+  ],
+  "records": [
+    {
+      "arm": "proxy",
+      "rep": 1,
+      "initialCached": 9216,
+      "observedEstimatedUsd": 0.167234,
+      "firstRequestColdEstimatedUsd": 0.250178
+    },
+    {
+      "arm": "headroom",
+      "rep": 1,
+      "initialCached": 0,
+      "observedEstimatedUsd": 0.28214,
+      "firstRequestColdEstimatedUsd": 0.28214
+    },
+    {
+      "arm": "headroom",
+      "rep": 2,
+      "initialCached": 0,
+      "observedEstimatedUsd": 0.242852,
+      "firstRequestColdEstimatedUsd": 0.242852
+    },
+    {
+      "arm": "proxy",
+      "rep": 2,
+      "initialCached": 9216,
+      "observedEstimatedUsd": 0.167216,
+      "firstRequestColdEstimatedUsd": 0.25016
+    }
+  ],
+  "means": {
+    "proxy": 0.250169,
+    "headroom": 0.262496
+  },
+  "reductionPercent": 4.696071559185677
+}

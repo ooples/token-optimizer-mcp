@@ -1,0 +1,37 @@
+{
+  "kind": "local CPU and V8 allocation-sampling replay, not a competitor benchmark",
+  "capture": "codex-ab-ID9f37/run-TarvEu/refresh-1-proxy/requests.jsonl",
+  "baselineResponsesSource": "e4550423:src/proxy/responses.ts",
+  "rounds": 200,
+  "requestsPerRound": 6,
+  "calls": 1200,
+  "scope": "new proxy spill identity each round, stable within its six requests",
+  "samplingIntervalBytes": 32768,
+  "includeCollectedObjects": true,
+  "separateByteEquivalenceCheck": { "requests": 6, "allEqual": true },
+  "baseline": {
+    "meanMs": 1.7119847499999985,
+    "p50Ms": 1.8158000000000811,
+    "p95Ms": 2.8589999999999236,
+    "cpuUserMicros": 1953000,
+    "cpuSystemMicros": 266000,
+    "sampledAllocationBytes": 1149391200,
+    "outputLengthChecksum": 78841800
+  },
+  "cached": {
+    "meanMs": 0.891205749999999,
+    "p50Ms": 0.6773000000000593,
+    "p95Ms": 2.0574000000000012,
+    "cpuUserMicros": 1047000,
+    "cpuSystemMicros": 109000,
+    "sampledAllocationBytes": 524893440,
+    "outputLengthChecksum": 78841800
+  },
+  "limitations": [
+    "One local replay pair; no confidence interval or competitor CPU/allocation trace.",
+    "Disk spill writes, network, request parsing and provider inference are excluded.",
+    "Sampled allocated bytes are estimates, not exact totals or retained heap.",
+    "Equal length checksums alone do not prove equal content; separate byte-equivalence and protocol checks are required.",
+    "The cache trades bounded retained memory for less repeated work: 8 MiB string budget and 128 entries per proxy."
+  ]
+}

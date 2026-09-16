@@ -1,0 +1,26 @@
+[
+  {
+    "task": "refactor",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "FAIL",
+    "verdict": "FAIL",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": [
+      "unexpected status 503 Service Unavailable: upstream connect error or disconnect/reset before headers. reset reason: connection termination, url: http://127.0.0.1:64117/backend-api/codex/responses, cf-ray: a3bbcfc53d194f7f-BOS"
+    ]
+  },
+  {
+    "task": "refactor",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  }
+]

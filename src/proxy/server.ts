@@ -47,6 +47,7 @@ import {
   deferTools,
   withAdvancedToolUse,
   DEFAULT_KEEP_RELEVANT,
+  SMALL_TOOL_CHARS,
 } from '../compress/tools.js';
 import {
   accountingPath,
@@ -55,6 +56,8 @@ import {
   type CompressionFacts,
 } from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
+import { captureDir, captureRequest } from './capture.js';
+import { compressResponses } from './responses.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
 import {
@@ -428,6 +431,20 @@ export function compressBody(
     // else entirely. Forward it untouched.
     return unchanged('body is not JSON');
   }
+  if (!parsed || typeof parsed !== 'object')
+    return unchanged('not a request object');
+  if (Array.isArray(parsed.input)) {
+    try {
+      return compressResponses(
+        body,
+        parsed as unknown as Record<string, unknown>,
+        spill,
+        tuning
+      );
+    } catch {
+      return unchanged('Responses compression failed');
+    }
+  }
   if (!Array.isArray(parsed.messages)) return unchanged('no messages array');
 
   // TOOL DEFERRAL IS ITS OWN CAPABILITY, and deliberately not folded into the
@@ -467,6 +484,7 @@ export function compressBody(
         // the prefix every turn. See taskIn for the measurement.
         query: taskIn(parsed),
         keepRelevant: keepToolsFromEnv(),
+        smallToolChars: smallToolCharsFromEnv(),
       });
       parsed = out.request;
       deferred = out.deferredCount;
@@ -757,6 +775,34 @@ export function keepToolsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
 }
 
 /**
+ * Below how many characters a tool definition is exempt from deferral.
+ *
+ * A DIAL BECAUSE THE DEFAULT IS A PER-TOOL ANSWER TO A PER-REQUEST QUESTION.
+ * `SMALL_TOOL_CHARS` exempts anything under 1,500 characters, reasoning that
+ * deferring a small definition risks a discovery round trip worth more than it
+ * saves. Each individual judgement is defensible and the aggregate is not:
+ * measured on captured wire traffic, 88 of 115 real tools fall under the floor
+ * and together hold about 55KB that is never deferred. Tools are 66.9% of a
+ * real request, so that is the largest single region this proxy declines to
+ * touch.
+ *
+ * For comparison on the same traffic, a competitor's proxy defers 107 of those
+ * 115 definitions where we defer 25.
+ *
+ * Zero defers every deferrable definition, which is the aggressive end and is
+ * exactly what the comparison is for.
+ */
+export function smallToolCharsFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const raw = env.TOKEN_OPTIMIZER_PROXY_SMALL_TOOL_CHARS;
+  if (raw === undefined || raw.trim() === '') return SMALL_TOOL_CHARS;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return SMALL_TOOL_CHARS;
+  return n;
+}
+
+/**
  * Is it safe to send credentials to this upstream?
  *
  * CREDENTIALS DO NOT GO OVER CLEARTEXT. Every request through here carries
@@ -943,12 +989,18 @@ function forward(
           typeof encoding === 'string' ? encoding : undefined
         );
       }
+      // Codex closes after its terminal SSE event, even if the provider keeps
+      // the stream open. Cancel that upstream stream so its usage is settled.
+      res.once('close', () => {
+        if (!upstreamRes.complete) upstreamRes.destroy();
+      });
       // Piped, not buffered: an SSE stream must arrive as it is produced, or
       // the agent sits waiting for a response that has already started.
       upstreamRes.pipe(res);
     }
   );
 
+  res.once('close', () => upstreamReq.destroy());
   upstreamReq.on('error', (error) => {
     if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
     res.end(`token-optimizer proxy: upstream request failed: ${error.message}`);
@@ -1108,6 +1160,8 @@ export async function startProxy(
         res.writeHead(400).end();
         return;
       }
+      const capture = captureDir();
+      if (capture) void captureRequest(capture, path, body);
 
       const { body: next, summary } = compressBody(
         body,

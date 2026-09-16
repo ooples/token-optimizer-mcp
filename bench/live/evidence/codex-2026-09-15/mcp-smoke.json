@@ -1,0 +1,63 @@
+{
+  "code": 0,
+  "verified": true,
+  "calls": [
+    {
+      "tool": "smart_read",
+      "status": "completed",
+      "error": null
+    },
+    {
+      "tool": "smart_read",
+      "status": "completed",
+      "error": null
+    },
+    {
+      "tool": "smart_edit",
+      "status": "completed",
+      "error": null
+    },
+    {
+      "tool": "smart_read",
+      "status": "completed",
+      "error": null
+    }
+  ],
+  "work": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-mcp-verification-cD4uMk",
+  "reads": [
+    {
+      "arguments": {
+        "path": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-mcp-verification-cD4uMk\\smoke.txt"
+      },
+      "responseCharacters": 4619,
+      "fromCache": false,
+      "isDiff": false,
+      "noChanges": false
+    },
+    {
+      "arguments": {
+        "path": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-mcp-verification-cD4uMk\\smoke.txt"
+      },
+      "responseCharacters": 509,
+      "fromCache": true,
+      "isDiff": true,
+      "noChanges": true
+    },
+    {
+      "arguments": {
+        "path": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-mcp-verification-cD4uMk\\smoke.txt",
+        "enableCache": false,
+        "diffMode": false,
+        "chunkSize": 200
+      },
+      "responseCharacters": 782,
+      "fromCache": false,
+      "isDiff": false,
+      "noChanges": false
+    }
+  ],
+  "sha256": {
+    "dist/server/index.js": "4a25120b8076c52e7bd345b0b1c65bf07587eefca057f71329703a994649ce5c",
+    "dist/tools/file-operations/smart-read.js": "60da85f59440fb857c4c2a837bb3b28fc776c4ae48578d034bbbbe674576f194"
+  }
+}

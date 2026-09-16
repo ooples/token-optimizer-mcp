@@ -1,0 +1,103 @@
+[
+  {
+    "task": "bugfix",
+    "arm": "control",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "bugfix",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "FAIL",
+    "verdict": "PROVIDER_ERROR",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": [
+      "Selected model is at capacity. Please try a different model."
+    ]
+  },
+  {
+    "task": "bugfix",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refactor",
+    "arm": "control",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refactor",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refactor",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "control",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  }
+]
