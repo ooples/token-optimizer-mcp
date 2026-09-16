@@ -495,6 +495,23 @@ not guarantee that shared provider-cache effects disappear.
 The subsequent Claude Code default-versus-aggressive confirmation hit Claude's
 weekly usage limit and is incomplete. Its missing usage cannot count as a win.
 Codex validation runs independently through the Responses API.
+**Expanded local Codex confirmation.** A preregistered seven-family study ran
+70 pairs / 140 attempts against installed HeadRoom 0.37.0. Our frozen proxy
+passed 70/70; HeadRoom passed 69/70 with one upstream HTTP 503 and missing usage.
+The complete-ledger gate therefore failed: **superiority was not established**.
+Across the 69 fully measured pairs only, descriptive totals were 25.7% lower
+estimated cost, 38.9% lower input, and 30.0% lower agent time for our proxy.
+JSON remained a loss (35.1% higher estimated cost). See the
+[protocol, all attempts, and limitations](bench/live/evidence/confirmation-2026-09-15-v2/README.md).
+
+A subsequent rare-string-group fix targets that JSON loss. In three fully measured
+fresh pairs, input fell 17.7%, estimated cost 13.4%, and agent time 13.6% versus
+HeadRoom, with three requests each. A fourth pair had a retained upstream 503 on
+our arm; one measured pair still cost more. These are development results, not
+confirmation of the new build or an all-workload win. See the
+[complete screen and exclusions](bench/live/evidence/json-categories-2026-09-16/README.md).
+
+
 
 **Live Codex comparison (2026-09-15).** Local Codex CLI 0.154.0, `gpt-6-astra`,
 and installed HeadRoom 0.37.0 completed a balanced 27-run campaign. All three

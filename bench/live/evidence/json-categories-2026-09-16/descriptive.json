@@ -1,0 +1,49 @@
+{
+  "scope": "Descriptive three fully measured pairs only; not confirmation and not the full campaign cost",
+  "plannedPairs": 4,
+  "measuredPairs": 3,
+  "excludedPairs": [
+    1
+  ],
+  "attempts": 8,
+  "proxyPasses": 3,
+  "headroomPasses": 4,
+  "missingCostAttempt": "proxy rep 1: upstream 503 after initial read; partial provider ledger retained, total cost unknown",
+  "arms": {
+    "proxy": {
+      "estimatedUsd": 0.5963579999999999,
+      "input": 119775,
+      "requests": 9,
+      "agentSeconds": 56.6,
+      "coldFirstSensitivityUsd": 0.642438
+    },
+    "headroom": {
+      "estimatedUsd": 0.6882820000000001,
+      "input": 145476,
+      "requests": 9,
+      "agentSeconds": 65.5,
+      "coldFirstSensitivityUsd": 0.7804420000000001
+    }
+  },
+  "reductionsPercent": {
+    "estimatedUsd": 13.355572279966655,
+    "input": 17.66683164233276,
+    "requests": 0,
+    "agentSeconds": 13.587786259541978,
+    "coldFirstSensitivityUsd": 17.682800259340237
+  },
+  "pairCostRatios": [
+    {
+      "rep": 2,
+      "ratio": 0.7750641981072781
+    },
+    {
+      "rep": 3,
+      "ratio": 1.0268363568180754
+    },
+    {
+      "rep": 4,
+      "ratio": 0.842642520432733
+    }
+  ]
+}
