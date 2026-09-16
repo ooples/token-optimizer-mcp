@@ -1,0 +1,38 @@
+{
+  "scope": "Post-run validator regression on a copy of the original failed campaign; no provider calls or substitutions.",
+  "verifiedAt": "2026-09-16T15:31:02.521Z",
+  "temporary": "C:\\Users\\yolan\\AppData\\Local\\Temp\\client-failure-audit-uaGCtY",
+  "originalValidationSha256": "e85577ff720671d24019ac5ff4189d87523d688d5d0567cca8f250cacddcbafc",
+  "originalPreserved": true,
+  "reportExit": 1,
+  "audit": [
+    {
+      "task": "nullable",
+      "arm": "proxy",
+      "rep": 1,
+      "recordedVerdict": "INVALID_READ",
+      "verdict": "CLIENT_ERROR",
+      "read": {
+        "complete": false,
+        "truncated": false,
+        "requests": 1
+      },
+      "clientErrors": [
+        "Client allocation failure (process exit 3221226505); provider usage may be unknown"
+      ]
+    },
+    {
+      "task": "nullable",
+      "arm": "headroom",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "clientErrors": []
+    }
+  ]
+}

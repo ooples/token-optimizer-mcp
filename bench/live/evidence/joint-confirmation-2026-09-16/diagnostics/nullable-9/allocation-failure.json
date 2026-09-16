@@ -1,0 +1,19 @@
+{
+  "observed": "2026-09-16T14:46:56.256Z",
+  "case": "nullable-9",
+  "started": "2026-09-16T14:43:18.605Z",
+  "finished": "2026-09-16T14:44:14.016Z",
+  "proxyClientExit": 3221226505,
+  "proxyLedgerResponseRequests": 0,
+  "proxyResponseRequestsCaptured": 1,
+  "unknownCharge": true,
+  "findings": [
+    "Codex stderr: memory allocation of 904704 bytes failed.",
+    "Node proxy stderr: Committing semi space failed; heap approximately 12 MB at final collection.",
+    "Captured initial request had no compressible tool output: 63212 bytes remained 63212 bytes.",
+    "Post-failure host sample: committed bytes 31604203520; commit limit 36126572544; 87 percent committed; 3755 available MB. This is not a sample at failure time.",
+    "No contemporaneous Windows resource-exhaustion event was returned by the read-only event query.",
+    "No large accumulating benchmark process was observed in the subsequent process snapshot."
+  ],
+  "interpretation": "Both processes failed to allocate memory. Host pressure is consistent with the observations but a peak-memory cause is not established. Preserve the failed attempt and unknown provider usage; do not substitute a retry."
+}

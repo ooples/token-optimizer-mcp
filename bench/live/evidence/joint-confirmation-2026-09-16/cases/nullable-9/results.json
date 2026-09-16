@@ -1,0 +1,98 @@
+[
+  {
+    "task": "nullable",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2494523014,
+    "verdict": "INVALID_READ",
+    "agentSeconds": 18.1,
+    "read": {
+      "complete": false,
+      "truncated": false,
+      "requests": 1
+    },
+    "validation": null,
+    "exit": 3221226505,
+    "clientErrors": [],
+    "completedTools": [],
+    "usage": null,
+    "requests": 0,
+    "compressedRequests": 0,
+    "beforeBytes": 0,
+    "afterBytes": 0,
+    "ledgerUsage": [],
+    "seconds": 19.2
+  },
+  {
+    "task": "nullable",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2494523014,
+    "verdict": "PASS",
+    "agentSeconds": 15.7,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 42649,
+      "cached": 36608,
+      "output": 280
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 240475,
+    "afterBytes": 240475,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12984,
+          "output_tokens": 76,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14712,
+          "output_tokens": 184,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14953,
+          "output_tokens": 20,
+          "cached_input_tokens": 14592
+        }
+      }
+    ],
+    "answer": {
+      "nulls": 105,
+      "missing": 18
+    },
+    "seconds": 35
+  }
+]

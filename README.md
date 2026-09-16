@@ -496,7 +496,20 @@ The subsequent Claude Code default-versus-aggressive confirmation hit Claude's
 weekly usage limit and is incomplete. Its missing usage cannot count as a win.
 Codex validation runs independently through the Responses API.
 
-**Expanded local Codex confirmation.** A preregistered seven-family study ran
+**Latest Codex joint confirmation (2026-09-16).** The frozen twelve-family study
+completed 120 pairs against installed HeadRoom 0.37.0. Our proxy passed 119/120
+attempts; HeadRoom passed 120/120. One local allocation crash left unknown usage.
+There were **77 strict joint wins** (passing, cheaper, and faster), 20 cost-only
+losses, 12 speed-only losses, nine losses on both measures, one equal-time pair
+that cost more, and the failed attempt. Across the **119 fully measured pairs
+only**, estimated token cost was 26.9% lower and agent time 30.1% lower. JSON
+agent time was 5.6% higher. Only logs and refactoring met the simultaneous
+per-family criteria; the complete-study superiority gate failed. These results
+do not establish that every task is cheaper or faster. The measured build
+preserves explicit nulls, retains complete numeric tables, and avoids copying
+unchanged payloads. See the [full results, every loss, and retained crash](bench/live/evidence/joint-confirmation-2026-09-16/README.md).
+
+**Earlier expanded local Codex confirmation.** A preregistered seven-family study ran
 70 pairs / 140 attempts against installed HeadRoom 0.37.0. Our frozen proxy
 passed 70/70; HeadRoom passed 69/70 with one upstream HTTP 503 and missing usage.
 The complete-ledger gate therefore failed: **superiority was not established**.

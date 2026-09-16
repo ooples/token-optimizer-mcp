@@ -6,6 +6,7 @@ import { fixture as developmentFixture } from './codex-fixtures.mjs';
 import { adversarialFixture } from './adversarial-cases.mjs';
 import { readEvidence, outerEnvelopeTruncated } from './codex-output.mjs';
 import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
+import { clientAllocationFailure } from './client-failure.mjs';
 import {
   workflow as developmentWorkflow,
   workflowTasks,
@@ -168,6 +169,17 @@ for (const row of results) {
   } catch {
     if (manifest.readMode === 'mcp') verdict = 'INVALID_MCP';
     if (manifest.readMode === 'mixed') verdict = 'INVALID_READ';
+  }
+  const allocationFailure = clientAllocationFailure(
+    row.exit,
+    await readFile(join(artifacts, 'agent.stderr'), 'utf8').catch((error) => {
+      if (error.code === 'ENOENT') return '';
+      throw error;
+    })
+  );
+  if (allocationFailure) {
+    clientErrors.push(allocationFailure);
+    verdict = 'CLIENT_ERROR';
   }
   if (
     row.exit !== 0 &&

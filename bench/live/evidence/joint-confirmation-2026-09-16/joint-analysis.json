@@ -1,0 +1,224 @@
+{
+  "complete": true,
+  "simultaneousConfidence": 0.95,
+  "families": {
+    "logs": {
+      "planned": 10,
+      "jointWins": 10,
+      "jointWinProbabilityLower": 0.5179248516917698,
+      "cost": {
+        "geometricRatio": 0.6110701189260282,
+        "upperRatio": 0.8746311800552549,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 0.50810099371226,
+        "upperRatio": 0.7793817870138698,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": true
+    },
+    "json": {
+      "planned": 10,
+      "jointWins": 2,
+      "jointWinProbabilityLower": 0.005639758038833884,
+      "cost": {
+        "geometricRatio": 0.6603043957954791,
+        "upperRatio": 1.2567090699537216,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 1.05569283982709,
+        "upperRatio": 1.217207498290035,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": false
+    },
+    "code": {
+      "planned": 10,
+      "jointWins": 8,
+      "jointWinProbabilityLower": 0.2944736275157069,
+      "cost": {
+        "geometricRatio": 0.6576466834977501,
+        "upperRatio": 1.2771240198340696,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 0.5295500105866495,
+        "upperRatio": 0.6412760294047228,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": false
+    },
+    "bugfix": {
+      "planned": 10,
+      "jointWins": 8,
+      "jointWinProbabilityLower": 0.2944736275157069,
+      "cost": {
+        "geometricRatio": 0.7162685825381029,
+        "upperRatio": 1.0707564864340693,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 0.6426396091851926,
+        "upperRatio": 0.7923788140908815,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": false
+    },
+    "refactor": {
+      "planned": 10,
+      "jointWins": 10,
+      "jointWinProbabilityLower": 0.5179248516917698,
+      "cost": {
+        "geometricRatio": 0.5801887733196637,
+        "upperRatio": 0.9178555918256921,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 0.5885211915602758,
+        "upperRatio": 0.763126015705112,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": true
+    },
+    "refresh": {
+      "planned": 10,
+      "jointWins": 3,
+      "jointWinProbabilityLower": 0.023578131585348844,
+      "cost": {
+        "geometricRatio": 0.873472126424698,
+        "upperRatio": 1.6078796376983,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 0.9445599750804552,
+        "upperRatio": 1.2439846414534332,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": false
+    },
+    "mixed": {
+      "planned": 10,
+      "jointWins": 8,
+      "jointWinProbabilityLower": 0.2944736275157069,
+      "cost": {
+        "geometricRatio": 0.6759517311248602,
+        "upperRatio": 1.135241766332654,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 0.6250047874706672,
+        "upperRatio": 0.8911308828237158,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": false
+    },
+    "outer": {
+      "planned": 10,
+      "jointWins": 4,
+      "jointWinProbabilityLower": 0.0541797721000117,
+      "cost": {
+        "geometricRatio": 0.9012726296490184,
+        "upperRatio": 1.5326440791033296,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 0.9228646767964723,
+        "upperRatio": 1.1605177136267255,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": false
+    },
+    "tiny": {
+      "planned": 10,
+      "jointWins": 3,
+      "jointWinProbabilityLower": 0.023578131585348844,
+      "cost": {
+        "geometricRatio": 0.8780983242865102,
+        "upperRatio": 1.752013849625548,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 0.9820831755023772,
+        "upperRatio": 1.2867431337531792,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": false
+    },
+    "entropy": {
+      "planned": 10,
+      "jointWins": 9,
+      "jointWinProbabilityLower": 0.39115276313655367,
+      "cost": {
+        "geometricRatio": 0.7711447513460419,
+        "upperRatio": 1.2075929180256109,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 0.5940589312779789,
+        "upperRatio": 0.8023659464279319,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": false
+    },
+    "numeric": {
+      "planned": 10,
+      "jointWins": 5,
+      "jointWinProbabilityLower": 0.0964858967179183,
+      "cost": {
+        "geometricRatio": 0.7585795009464205,
+        "upperRatio": 1.316630483610968,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "speed": {
+        "geometricRatio": 0.9296477431468833,
+        "upperRatio": 1.1078439264020488,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": false
+    },
+    "nullable": {
+      "planned": 10,
+      "jointWins": 7,
+      "jointWinProbabilityLower": 0.21553617945231415,
+      "cost": {
+        "upperRatio": null,
+        "reason": "Incomplete or nonpositive measurement"
+      },
+      "speed": {
+        "geometricRatio": 0.8139882625927414,
+        "upperRatio": 1.1220114622104218,
+        "alpha": 0.001388888888888889,
+        "degenerate": false
+      },
+      "qualified": false
+    }
+  },
+  "everyObservedTaskJointWin": false,
+  "allFamiliesQualified": false,
+  "universalSuperiorityEstablished": false,
+  "scope": "Family mean bounds and sampled joint-win probability; no finite suite establishes every future task or execution. Inference assumes independent pairs and approximate normality of log ratios. Failures are never removed to qualify a family."
+}
