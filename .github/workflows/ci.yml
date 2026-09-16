@@ -17,6 +17,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-verification:
+    name: Release verification (${{ matrix.os }})
+    if: startsWith(github.head_ref, 'release-please')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run sync:hooks:check
+      - run: npm run build
+      - run: npm run verify:package-contents
+      - name: Verify edit safety and production MCP contracts
+        run: >-
+          npm test -- --runInBand
+          tests/unit/file-operations/smart-edit-write-failure.test.ts
+          tests/unit/file-operations/smart-edit-patterns.test.ts
+          tests/unit/file-operations/smart-edit-line-endings.test.ts
+          tests/unit/file-operations/read-diffs-against-the-write.test.ts
+          tests/unit/file-operations/smart-edit-reports-the-write.test.ts
+          tests/integration/mcp-stdio-contract.test.ts
+
   lint-and-format:
     name: Lint and Format Check
     runs-on: ubuntu-latest

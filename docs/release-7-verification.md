@@ -1,7 +1,7 @@
 # Version 7 release verification
 
 Date: 2026-09-16. Release PR: #345. Candidate base:
-`8d2c42ac16e6f81688eb044fbcdd96462fd47d11`, plus the packaging fix in this change.
+`8d2c42ac16e6f81688eb044fbcdd96462fd47d11`, plus the packaging and safe-edit fixes.
 
 ## Finding and fix
 
@@ -11,6 +11,13 @@ included. `npm run verify:package-contents` checks the actual npm pack file list
 for 20 required CLI entrypoints and client assets. The publishing workflow runs
 this gate after building and before publication.
 
+The disk-full investigation also exposed direct writes in `smart_edit` that could
+truncate the target on ENOSPC. Edits now write and flush a private temporary file
+in the target directory before replacing the original. Failed writes/replacements
+preserve the original even with backups disabled. The asynchronous implementation
+follows symlink targets and preserves permission bits. Fault-injection tests cover
+a partial write followed by ENOSPC and a denied rename.
+
 ## Artifact and environment
 
 Verification used Windows, Node 22.15.0, npm 11.4.2, and new temporary installation
@@ -19,7 +26,7 @@ using the release workflow's version stamping, build, and checksum generation:
 
 `ooples-token-optimizer-mcp-7.0.0.tgz`
 
-SHA-256: `2af5cf2f3421fde8aa7951b263aec48354f431567e4451538df37587d8d2f72f`
+SHA-256: `0b174425e392c04855096404259c2f7272e743243c31939873e62c8f883d7e47`
 
 This identifies the tested local artifact, not a future CI artifact. The report
 was added afterward. Registry provenance remains a post-publication check.
@@ -38,7 +45,12 @@ was added afterward. Registry provenance remains a post-publication check.
 - Production dependency audit: zero reported vulnerabilities.
 - Forty focused integration tests passed across client certification, hooks,
   MCP stdio contracts, and tool profiles.
-- All 1,840 checksum-listed files matched the built source. After npm installation,
+- Full suite before the safe-edit fix: 315 suites, 4,438 tests passed; 10 skipped.
+  After the fix: 6 affected suites, 48 tests passed; 2 POSIX-specific tests skipped
+  on Windows. These cover failure preservation, edit semantics, cache handoff,
+  line endings, and the production MCP stdio contract.
+- Final build and lint passed (zero lint errors; 541 existing warnings).
+- All 1,844 checksum-listed files matched the built source. After npm installation,
   three executable scripts had only the expected CRLF-to-LF shebang normalization;
   the remaining content matched exactly. Checksums are a separate release asset.
 
@@ -51,8 +63,8 @@ state and existing account authentication.
 
 | Client | Version | Result |
 | --- | --- | --- |
-| Codex | 0.154.0 | Passed direct MCP on the fixed package; passed the shipping artifact through the compression proxy (51.883 s), with provider HTTP 200 and usage accounting. |
-| OpenCode | 1.17.12 | Passed the fixed package and shipping artifact; final run 56.069 s, seven MCP calls, zero MCP errors. |
+| Codex | 0.154.0 | Passed direct MCP on the packaging fix; passed the final shipping artifact through the compression proxy (43.518 s), with provider HTTP 200 and usage accounting. |
+| OpenCode | 1.17.12 | Passed the packaging fix and final shipping artifact; final run 54.776 s, eight MCP calls, zero MCP errors. |
 | Claude Code | 2.1.272 | MCP initialized as 7.0.0; live model task pending because the weekly account quota is exhausted. |
 | Copilot | 0.0.367 | MCP initialized as 7.0.0; live model task pending because the monthly account quota is exhausted (402). |
 | Gemini | 0.28.0 | MCP initialized as 7.0.0; live model task pending because the account/client combination is rejected as ineligible. |
@@ -61,6 +73,8 @@ state and existing account authentication.
 The user chose to retain current accounts and leave the three blocked live gates
 pending. These task timings are smoke-test observations, not competitor benchmarks
 or evidence of universal cost/speed superiority.
+See [the structured live evidence](release-7-live-proof.json) for six successful
+runs, cache-hit assertions, full-file comparisons, and final proxy accounting.
 
 ## Corrections and remaining gates
 
@@ -73,8 +87,10 @@ Codex startup timeout. Those host configuration findings are distinct from the
 isolated version 7 installation, which passed all doctor checks.
 
 A disk-full event interrupted the full suite and a shipping OpenCode run. An
-unused worktree was removed to recover space. OpenCode then passed, preserving
-all fixture lines. The complete suite rerun is pending final results.
+unused worktrees were removed to recover space. OpenCode then passed, preserving
+all fixture lines. The complete suite rerun passed. Following the safe-edit fix,
+a fresh package install and new Codex/proxy and OpenCode runs also passed.
 
-Ship readiness remains conditional on the pending live gates and completion of
-the full suite. This verification does not establish that the release has no bugs.
+Ship readiness remains conditional on the pending live gates. Cross-platform
+permission/symlink tests still need a POSIX runner. This verification does not
+establish that the release has no bugs.

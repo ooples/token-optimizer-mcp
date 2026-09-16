@@ -1,0 +1,175 @@
+{
+  "date": "2026-09-16",
+  "candidateBase": "8d2c42ac16e6f81688eb044fbcdd96462fd47d11",
+  "shippingTarballSha256": "0b174425e392c04855096404259c2f7272e743243c31939873e62c8f883d7e47",
+  "runs": [
+    {
+      "artifact": "packaging fix, before version stamping",
+      "client": "codex",
+      "exitCode": 0,
+      "seconds": 34.872,
+      "server": {
+        "name": "token-optimizer-mcp",
+        "version": "7.0.0"
+      },
+      "toolCalls": [
+        "smart_read",
+        "smart_read",
+        "smart_grep",
+        "smart_edit",
+        "smart_read",
+        "smart_write"
+      ],
+      "toolErrors": 0,
+      "cachedRead": true,
+      "all800LinesVerified": true,
+      "result": {
+        "marker": "release7-codex-7319",
+        "state": "ready"
+      }
+    },
+    {
+      "artifact": "packaging fix, before version stamping",
+      "client": "opencode",
+      "exitCode": 0,
+      "seconds": 50.704,
+      "server": {
+        "name": "token-optimizer-mcp",
+        "version": "7.0.0"
+      },
+      "toolCalls": [
+        "smart_read",
+        "smart_read",
+        "smart_grep",
+        "smart_grep",
+        "smart_grep",
+        "smart_edit",
+        "smart_read",
+        "smart_write"
+      ],
+      "toolErrors": 0,
+      "cachedRead": true,
+      "all800LinesVerified": true,
+      "result": {
+        "marker": "release7-opencode-7319",
+        "state": "ready"
+      }
+    },
+    {
+      "artifact": "packaging fix, stamped",
+      "client": "codex-proxy",
+      "exitCode": 0,
+      "seconds": 51.883,
+      "server": {
+        "name": "token-optimizer-mcp",
+        "version": "7.0.0"
+      },
+      "toolCalls": [
+        "smart_read",
+        "smart_read",
+        "smart_grep",
+        "smart_edit",
+        "smart_read",
+        "smart_write"
+      ],
+      "toolErrors": 0,
+      "cachedRead": true,
+      "all800LinesVerified": true,
+      "result": {
+        "marker": "release7-codex-proxy-7319",
+        "state": "ready"
+      }
+    },
+    {
+      "artifact": "packaging fix, stamped",
+      "client": "opencode",
+      "exitCode": 0,
+      "seconds": 56.069,
+      "server": {
+        "name": "token-optimizer-mcp",
+        "version": "7.0.0"
+      },
+      "toolCalls": [
+        "smart_read",
+        "smart_read",
+        "smart_grep",
+        "smart_grep",
+        "smart_edit",
+        "smart_read",
+        "smart_write"
+      ],
+      "toolErrors": 0,
+      "cachedRead": true,
+      "all800LinesVerified": true,
+      "result": {
+        "marker": "release7-opencode-7319",
+        "state": "ready"
+      }
+    },
+    {
+      "artifact": "final shipping artifact",
+      "client": "codex-proxy",
+      "exitCode": 0,
+      "seconds": 43.518,
+      "server": {
+        "name": "token-optimizer-mcp",
+        "version": "7.0.0"
+      },
+      "toolCalls": [
+        "smart_read",
+        "smart_read",
+        "smart_grep",
+        "smart_edit",
+        "smart_read",
+        "smart_write"
+      ],
+      "toolErrors": 0,
+      "cachedRead": true,
+      "all800LinesVerified": true,
+      "result": {
+        "marker": "release7-codex-proxy-7319",
+        "state": "ready"
+      }
+    },
+    {
+      "artifact": "final shipping artifact",
+      "client": "opencode",
+      "exitCode": 0,
+      "seconds": 54.776,
+      "server": {
+        "name": "token-optimizer-mcp",
+        "version": "7.0.0"
+      },
+      "toolCalls": [
+        "smart_read",
+        "smart_read",
+        "smart_grep",
+        "smart_grep",
+        "smart_grep",
+        "smart_edit",
+        "smart_read",
+        "smart_write"
+      ],
+      "toolErrors": 0,
+      "cachedRead": true,
+      "all800LinesVerified": true,
+      "result": {
+        "marker": "release7-opencode-7319",
+        "state": "ready"
+      }
+    }
+  ],
+  "proxy": {
+    "requests": 10,
+    "statuses": [
+      200
+    ],
+    "compressedRequests": 3,
+    "requestsWithUsage": 10
+  },
+  "pendingLiveClients": {
+    "claude": "weekly account quota exhausted",
+    "copilot": "monthly account quota exhausted",
+    "gemini": "account/client ineligible"
+  }
+}
