@@ -25,6 +25,14 @@ The initial nullable generator had fixed counts across seeds. The subsequent gen
 
 `local-before-null-facts/`: 2,880 measured requests, 36 groups, two reversed arm orders. Proxy mean latency was lower in all 36 groups; forwarded bytes were smaller in 24 and tied in 12 tiny/opaque groups. Actual installed HeadRoom 0.37.0, with its rate limiter disabled for local throughput measurement. Warmup is excluded. These are local transport/byte measurements, not provider costs or task-quality evidence. This preliminary build predates the complete-array and copy-on-write changes.
 
+## Complete-array follow-up and final local results
+
+`numeric-followup/` records product `74f20dd3`: four balanced pairs, two original seeds plus two neighboring fresh seeds, no retries. All eight tasks passed; all four proxy attempts completed in three requests without a recovery read. All four cost comparisons favored proxy (34.5% lower aggregate estimated cost); three were joint cost-and-speed wins. The first pair was slower (15.6 vs 14.3 seconds). This small follow-up does not erase earlier losses or independently establish broad superiority.
+
+`local-final/` contains 3,840 measured requests across 48 groups, including changing-prefix traffic and concurrency one/eight. Proxy mean latency was lower in all 48; forwarded bytes were smaller in 32 and tied in 16. Both arms preserved cache keys and previously transformed output in every measured repeated-prefix check.
+
+`sharing/` verifies identical full Responses results on three captured nullable requests. Across 500 fresh-cache rounds (1,500 calls), mean internal time was 0.886 vs 0.861 ms and sampled allocation was 681,463,024 vs 644,979,520 bytes (5.4% lower). This is one before/after runtime profile, excludes network/disk, and is not a competitor allocation comparison.
+
 ## Release claim
 
 These are development data used to improve the product. Fresh confirmation must freeze the final compiled product and all measurement code before calls. Provider caching is observed, not forcibly cold. Recorded rate-card estimates are not invoices or full deployment costs. Family averages, individual wins and uncertainty are reported separately.

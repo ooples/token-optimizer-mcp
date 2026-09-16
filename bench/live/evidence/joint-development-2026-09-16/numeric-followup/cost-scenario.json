@@ -1,0 +1,107 @@
+{
+  "scenario": {
+    "model": "gpt-6-astra",
+    "label": "Codex Enterprise standard rate-card scenario; not actual billed cost",
+    "verifiedOn": "2026-09-15",
+    "source": "https://help.openai.com/en/articles/20001415",
+    "usdPerMillion": {
+      "uncached": 10,
+      "cached": 1,
+      "output": 50
+    },
+    "assumptions": [
+      "All runs use standard speed with no regional or contract adjustments.",
+      "Codex Astra has no cache-write charge or long-context multiplier.",
+      "Subscription charges, credits, proxy compute, and account discounts are not measured."
+    ]
+  },
+  "valid": true,
+  "failures": [],
+  "measured": [
+    {
+      "task": "numeric",
+      "arm": "headroom",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.183562
+    },
+    {
+      "task": "numeric",
+      "arm": "proxy",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.110098
+    },
+    {
+      "task": "numeric",
+      "arm": "proxy",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.110198
+    },
+    {
+      "task": "numeric",
+      "arm": "headroom",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.207466
+    },
+    {
+      "task": "numeric",
+      "arm": "headroom",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.20484
+    },
+    {
+      "task": "numeric",
+      "arm": "proxy",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.109968
+    },
+    {
+      "task": "numeric",
+      "arm": "proxy",
+      "rep": 4,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.194364
+    },
+    {
+      "task": "numeric",
+      "arm": "headroom",
+      "rep": 4,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.2054
+    }
+  ],
+  "aggregates": [
+    {
+      "task": "numeric",
+      "arm": "headroom",
+      "meanEstimatedUsd": 0.20031700000000002
+    },
+    {
+      "task": "numeric",
+      "arm": "proxy",
+      "meanEstimatedUsd": 0.131157
+    }
+  ],
+  "comparisons": [
+    {
+      "task": "numeric",
+      "candidate": "proxy",
+      "against": "headroom",
+      "estimatedUsdDelta": -0.06916000000000003,
+      "reductionPercent": 34.52527743526511
+    }
+  ]
+}
