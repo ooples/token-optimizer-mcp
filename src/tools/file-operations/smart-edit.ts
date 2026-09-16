@@ -380,7 +380,7 @@ export class SmartEditTool {
         : false;
 
       // Commit only after a complete write; ENOSPC must not truncate the original.
-      await replaceFile(filePath, editedContent, opts.encoding);
+      await replaceFile(filePath, editedContent, opts.encoding, originalContent);
       // Tell the search tools the tree moved, so no cached grep or glob
       // result can describe a state that no longer exists.
       bumpFsGeneration();

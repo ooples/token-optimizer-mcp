@@ -2,6 +2,7 @@ import {
   access,
   constants,
   open,
+  readFile,
   realpath,
   rename,
   stat,
@@ -12,14 +13,45 @@ import type { FileHandle } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { dirname, join } from 'path';
 
+const pending = new Map<string, Promise<void>>();
+
 /** Keep the original intact if writing, flushing, or replacing the edit fails. */
 export async function replaceFile(
   path: string,
   content: string,
-  encoding: BufferEncoding
+  encoding: BufferEncoding,
+  expected: string
 ): Promise<void> {
   // Follow a symlink as a normal write would; do not replace the link itself.
   const target = await realpath(path);
+  // Async writes must not allow two edits based on the same old content to
+  // silently overwrite each other. A stale edit fails and can be re-read.
+  const prior = pending.get(target) ?? Promise.resolve();
+  const operation = prior
+    .catch(() => {})
+    .then(() => commit(target, content, encoding, expected));
+  pending.set(target, operation);
+  try {
+    await operation;
+  } finally {
+    if (pending.get(target) === operation) pending.delete(target);
+  }
+}
+
+async function commit(
+  target: string,
+  content: string,
+  encoding: BufferEncoding,
+  expected: string
+): Promise<void> {
+  const verify = async () => {
+    if ((await readFile(target, encoding)) !== expected) {
+      throw new Error(
+        'File changed while preparing the edit; read it again before retrying.'
+      );
+    }
+  };
+  await verify();
   await access(target, constants.W_OK);
   const mode = (await stat(target)).mode & 0o777;
   const temporary = join(
@@ -36,6 +68,7 @@ export async function replaceFile(
     await handle.sync();
     await handle.close();
     handle = undefined;
+    await verify();
     await rename(temporary, target);
   } finally {
     if (handle) {

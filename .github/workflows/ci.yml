@@ -25,7 +25,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # node-gyp in the locked dependency tree recognizes VS 2022; the
+        # moving Windows image currently carries unsupported VS 18.
+        os: [ubuntu-latest, windows-2022]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

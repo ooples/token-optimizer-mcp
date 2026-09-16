@@ -108,6 +108,24 @@ describe('smart_edit preserves the original on storage failure', () => {
         .filter((name) => name.startsWith('.token-optimizer-edit-'))
     ).toEqual([]);
   });
+  it('rejects a stale concurrent edit instead of overwriting the first commit', async () => {
+    const results = await Promise.all([edit(), edit()]);
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect(results.find((result) => !result.success)?.error).toContain(
+      'File changed'
+    );
+    expect(fs.readFileSync(file, 'utf8')).toBe(
+      original.replace('pending', 'ready')
+    );
+  });
+  it('preserves an external change made while writing the temporary file', async () => {
+    asyncWrite.mockImplementationOnce(async (target, content, options) => {
+      await fsp.writeFile(target, content, options);
+      fs.writeFileSync(file, 'changed by another writer');
+    });
+    expect((await edit()).success).toBe(false);
+    expect(fs.readFileSync(file, 'utf8')).toBe('changed by another writer');
+  });
   (process.platform === 'win32' ? it.skip : it)(
     'preserves executable permissions',
     async () => {
