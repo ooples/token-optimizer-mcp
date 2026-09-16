@@ -17,9 +17,22 @@ in the target directory before replacing the original. Failed writes/replacement
 preserve the original even with backups disabled. The asynchronous implementation
 follows symlink targets and preserves permission bits. Fault-injection tests cover
 a partial write followed by ENOSPC and a denied rename. Commits are serialized
-per target, and stale edits are rejected so overlapping asynchronous edits do
-not silently overwrite each other. A separate test preserves an external change
-made while the temporary file is being written.
+per target within one server, and an exclusive filesystem lock prevents two
+separate `smart_edit` servers from committing over each other. Stale edits are
+rejected. Hard-linked targets are rejected without modifying either filename.
+A separate test preserves an external change made while the temporary file is
+being written. Arbitrary external editors do not participate in our lock protocol.
+
+The adversarial review also found `hooks/logs/dispatcher.log` in the earlier local
+tarball. The npm file allowlist now explicitly excludes runtime logs, databases
+and journals, temporary files, edit locks, local state/cache directories, and
+environment files. The package gate rejects these artifacts if any get through.
+
+Locks are released after success or failure. If a server is killed mid-edit, its
+lock is deliberately not stolen: the next edit reports the lock path and recovery
+instructions. The lock contains the owner's PID and start timestamp. Confirm that
+owner has stopped before removing an abandoned lock; age alone is not sufficient.
+This preserves the original file rather than risking a paused writer resuming.
 
 ## Artifact and environment
 
@@ -29,7 +42,7 @@ using the release workflow's version stamping, build, and checksum generation:
 
 `ooples-token-optimizer-mcp-7.0.0.tgz`
 
-SHA-256: `c65d64907d1860c20ff8a8ffec9d9ce082e61f111ccf0d705d51eb4af4140ff0`
+SHA-256: `ec07f3df0dd3f0a7e122e14d00b96c58200bd02046fe3da3e74420d2c2fa4da8`
 
 This identifies the tested local artifact, not a future CI artifact. The report
 was added afterward. Registry provenance remains a post-publication check.
@@ -55,6 +68,13 @@ was added afterward. Registry provenance remains a post-publication check.
   The subsequent concurrency guards passed all five storage-failure/concurrency
   cases locally and the focused release job on Linux, including POSIX tests.
 - Final build and lint passed (zero lint errors; 541 existing warnings).
+- Adversarial-review fixes: 44 focused tests passed locally; two POSIX-specific
+  cases skipped on Windows. The cross-process exclusion and killed-owner tests
+  also passed against the freshly installed tarball. Its hard-link probe rejected
+  the edit, preserved both names and their shared inode, and left no lock/temp
+  file. The 1,990-file tarball contains no runtime artifacts, including the log
+  discovered in the previous artifact. A package regression checks exclusions
+  against synthetic runtime data placed inside allowed directories.
 - All 1,844 checksum-listed files matched the built source. After npm installation,
   three executable scripts had only the expected CRLF-to-LF shebang normalization;
   the remaining content matched exactly. Checksums are a separate release asset.
@@ -68,8 +88,8 @@ state and existing account authentication.
 
 | Client | Version | Result |
 | --- | --- | --- |
-| Codex | 0.154.0 | Passed direct MCP on the packaging fix; passed the final shipping artifact through the compression proxy (57.160 s), with provider HTTP 200 and usage accounting. |
-| OpenCode | 1.17.12 | Passed the packaging fix and final shipping artifact; final run 55.952 s, eight MCP calls, zero MCP errors. |
+| Codex | 0.154.0 | Passed direct MCP on the packaging fix; passed the final shipping artifact through the compression proxy (119.927 s), with provider HTTP 200 and usage accounting. |
+| OpenCode | 1.17.12 | Passed the packaging fix and final shipping artifact; final run 56.545 s, seven MCP calls, zero MCP errors. |
 | Claude Code | 2.1.272 | MCP initialized as 7.0.0; live model task pending because the weekly account quota is exhausted. |
 | Copilot | 0.0.367 | MCP initialized as 7.0.0; live model task pending because the monthly account quota is exhausted (402). |
 | Gemini | 0.28.0 | MCP initialized as 7.0.0; live model task pending because the account/client combination is rejected as ineligible. |
@@ -91,8 +111,8 @@ The host doctor detected an existing Claude plugin at version 6 and a missing
 Codex startup timeout. Those host configuration findings are distinct from the
 isolated version 7 installation, which passed all doctor checks.
 
-A disk-full event interrupted the full suite and a shipping OpenCode run. An
-unused worktrees were removed to recover space. OpenCode then passed, preserving
+A disk-full event interrupted the full suite and a shipping OpenCode run.
+Unused worktrees were removed to recover space. OpenCode then passed, preserving
 all fixture lines. The complete suite rerun passed. Following the safe-edit fix,
 a fresh package install and new Codex/proxy and OpenCode runs also passed.
 
@@ -106,7 +126,16 @@ source; this is not evidence of installation on a machine without build tools.
 verified code commit `ca684f6b`: six suites passed on each OS, with 52 tests
 passing on Linux and 50 passing plus two POSIX-only skips on Windows. Both jobs
 also passed clean dependency installation, generated-artifact checks, build,
-and the npm package contents gate. Subsequent commits only update this evidence.
+and the npm package contents gate. The later adversarial-review fixes are recorded
+separately below.
+
+[Adversarial-fix CI run 35153105825](https://github.com/ooples/token-optimizer-mcp/actions/runs/35153105825)
+verified code commit `b15b331e`: all eight suites passed on Linux (56 tests) and
+Windows (54 tests, two POSIX-only skips). This adds actual child-process lock
+contention, killed-owner behavior, hard-link rejection, and npm runtime-artifact
+exclusions to the prior checks. The final tarball above was freshly installed;
+the process-lock probes, hard-link probe, doctor, all 16 client/adapter checks,
+and live Codex/proxy and OpenCode tasks passed against that installation.
 
 Ship readiness remains conditional on the pending live gates. This verification
 does not establish that the release has no bugs.

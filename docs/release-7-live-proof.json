@@ -1,7 +1,7 @@
 {
   "date": "2026-09-16",
   "candidateBase": "8d2c42ac16e6f81688eb044fbcdd96462fd47d11",
-  "shippingTarballSha256": "c65d64907d1860c20ff8a8ffec9d9ce082e61f111ccf0d705d51eb4af4140ff0",
+  "shippingTarballSha256": "ec07f3df0dd3f0a7e122e14d00b96c58200bd02046fe3da3e74420d2c2fa4da8",
   "runs": [
     {
       "artifact": "packaging fix, before version stamping",
@@ -110,7 +110,7 @@
       "artifact": "final shipping artifact",
       "client": "codex-proxy",
       "exitCode": 0,
-      "seconds": 57.16,
+      "seconds": 119.927,
       "server": {
         "name": "token-optimizer-mcp",
         "version": "7.0.0"
@@ -135,7 +135,7 @@
       "artifact": "final shipping artifact",
       "client": "opencode",
       "exitCode": 0,
-      "seconds": 55.952,
+      "seconds": 56.545,
       "server": {
         "name": "token-optimizer-mcp",
         "version": "7.0.0"
@@ -143,7 +143,6 @@
       "toolCalls": [
         "smart_read",
         "smart_read",
-        "smart_grep",
         "smart_grep",
         "smart_grep",
         "smart_edit",
@@ -166,6 +165,16 @@
     ],
     "compressedRequests": 3,
     "requestsWithUsage": 10
+  },
+  "adversarialFixes": {
+    "codeCommit": "b15b331e",
+    "ciRun": "https://github.com/ooples/token-optimizer-mcp/actions/runs/35153105825",
+    "linux": { "suitesPassed": 8, "testsPassed": 56 },
+    "windows": { "suitesPassed": 8, "testsPassed": 54, "posixTestsSkipped": 2 },
+    "installedProcessLockProbesPassed": 2,
+    "installedHardlinkProbe": "rejected; both names and shared inode preserved; no lock/temp left",
+    "runtimeArtifactsInTarball": 0,
+    "packageFiles": 1990
   },
   "pendingLiveClients": {
     "claude": "weekly account quota exhausted",
