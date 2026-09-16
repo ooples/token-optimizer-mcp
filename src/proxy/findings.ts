@@ -17,15 +17,9 @@
  * on compressing.
  */
 
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import type { Finding } from '../compress/knowledge.js';
 import { sharedGraphFor } from './graph-scope.js';
-
-/** Where a project keeps its graph, matching `hooks-core/wiki.mjs#wikiDir`. */
-function graphDir(root: string): string {
-  return join(root, '.token-optimizer', 'wiki');
-}
 
 /**
  * Findings plus whether the graph they came from is shared across projects.
@@ -54,8 +48,6 @@ export async function loadFindings(root: string): Promise<Finding[]> {
  * makes a finding written today reach tomorrow without a restart.
  */
 export async function loadFindingsFrom(root: string): Promise<LoadedFindings> {
-  const dir = graphDir(root);
-
   // NO EXISTENCE CHECKS, and not merely to satisfy `n/no-sync`. Every one of
   // them was a second way to say what the catch below already says, and each
   // added a window between the check and the use in which the answer could
@@ -66,18 +58,16 @@ export async function loadFindingsFrom(root: string): Promise<LoadedFindings> {
   try {
     const here = new URL('.', import.meta.url);
     const moduleUrl = (name: string): string =>
-      pathToFileURL(
-        new URL(`../../hooks-core/${name}`, here).pathname.replace(
-          /^\/([A-Za-z]:)/,
-          '$1'
-        )
-      ).href;
+      pathToFileURL(fileURLToPath(new URL(`../../hooks-core/${name}`, here)))
+        .href;
 
     const [wikiMod, curateMod] = await Promise.all([
       import(moduleUrl('wiki.mjs')),
       import(moduleUrl('curate.mjs')),
     ]);
 
+    // Use the same resolver as MCP/hooks, including an explicit wiki directory.
+    const dir = wikiMod.wikiDir(root) as string;
     const graph = wikiMod.load(dir);
     const active = curateMod.activeFindings(graph) as Record<string, unknown>[];
     const findings = active

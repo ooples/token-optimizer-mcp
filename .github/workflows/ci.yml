@@ -50,6 +50,8 @@ jobs:
           tests/integration/edit-process-lock.test.mjs
           tests/integration/package-runtime-exclusions.test.mjs
           tests/integration/managed-clients.test.mjs
+          tests/integration/managed-install-adversarial.test.mjs
+          tests/integration/proxy-install-path.test.mjs
           tests/unit/compress/proxy.test.ts
           tests/unit/compress/proxy-cli.test.ts
           tests/unit/compress/responses-knowledge.test.ts

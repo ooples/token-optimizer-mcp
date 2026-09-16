@@ -158,6 +158,8 @@ export interface ProxyOptions {
    * rest of this package resolves a project from.
    */
   readonly projectRoot?: string;
+  /** Disable graph injection when a client chooses its working tree after launch. */
+  readonly knowledge?: boolean;
   /** Named starting point for the dials. Defaults to the environment's. */
   readonly preset?: PresetName | string;
   /** Expert overrides, layered over the preset. */
@@ -1097,7 +1099,8 @@ export async function startProxy(
   );
   // Read at startup, then refreshed in the background -- see the block below,
   // which owns the reasoning about why the refresh cannot be synchronous.
-  const knowledgeOn = knowledgeEnabled(process.env);
+  const knowledgeOn =
+    options.knowledge !== false && knowledgeEnabled(process.env);
   const graphRoot = options.projectRoot || process.cwd();
   const loaded = knowledgeOn
     ? await loadFindingsFrom(graphRoot)

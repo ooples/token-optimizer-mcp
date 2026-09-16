@@ -7,6 +7,10 @@ Date: 2026-09-16. Release PR: #345. Candidate base:
 
 ### Default activation follow-up
 
+The subsequent [adversarial review](release-7-adversarial-defaults.md) found and
+fixed profile corruption/ownership hazards, provider-selection mismatches,
+Claude settings precedence, and graph loading from encoded installation paths.
+
 The installer now activates managed `claude` and `codex` commands in supported
 shell profiles. A new shell loads the activation; each session starts and owns a
 loopback proxy, registers the packaged MCP server, and closes its proxy on exit.

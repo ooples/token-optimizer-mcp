@@ -1,7 +1,7 @@
 {
   "date": "2026-09-16",
   "packageVersion": "7.0.0",
-  "tarballSha256": "576aa7e424de4b7f8584b162ecd8be3ad988b227661276dd8a345cc4cc94dbeb",
+  "tarballSha256": "f41f6364fcbb1e6759f5eaf0edfb6874f6e91844bf0fbdcaca0760a9de2e3e0c",
   "installation": "npm tarball into a fresh directory; installer activates an isolated PowerShell profile",
   "launch": "normal codex command resolved through the installed profile; existing account; --ignore-user-config",
   "defaults": {
@@ -34,5 +34,14 @@
     "Gemini live model task: existing account/client rejected",
     "Managed automatic routing for clients other than Claude Code and Codex"
   ],
-  "sourceFollowups": "Custom Codex -c profile selection and capture notification hardened after this live tarball; custom routing regression test passed."
+  "adversarialReview": "All production fixes in release-7-adversarial-defaults.md are included in this installed tarball.",
+  "claudeLocalProtocol": {
+    "realCli": true,
+    "syntheticLocalUpstream": true,
+    "settingsBasedProvider": true,
+    "proxyRequests": 2,
+    "all200": true,
+    "expectedReply": true,
+    "modelAccountGatePassed": false
+  }
 }
