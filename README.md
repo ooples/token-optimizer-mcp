@@ -520,7 +520,14 @@ and agent time 31.7% lower. Every family's mean cost favored our proxy, includin
 JSON at 27.5% lower, but 13 individual pairs still cost more. The run includes a
 disclosed repair to a between-case file-hashing failure; the original product and
 schedule stayed fixed. See the [full results, amendment, and retained failure](bench/live/evidence/confirmation-2026-09-16-v3-continuation/README.md).
-Subsequent declaration-row compression is separate development work.
+
+**Exact search rows, subsequent development.** Factoring shared declaration syntax
+while preserving every identifier and value closed the code-size gap: 37.5% fewer
+bytes than archived HeadRoom on the original 40 losing inputs. Eight fresh local
+cases also sent fewer bytes. Four balanced live pairs all passed their audits;
+our estimated token cost was 50.1% lower, input 44.8% lower, and agent time 51.1%
+lower. This is a small development follow-up, separate from the broader study.
+See the [captured bodies, reconstruction checks, and live evidence](bench/live/evidence/search-columns-2026-09-16/README.md).
 
 **Local proxy performance (2026-09-16).** Against installed HeadRoom 0.37.0,
 2,160 completed local-upstream requests covered repeated and unique logs, JSON,

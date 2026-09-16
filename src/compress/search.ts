@@ -98,6 +98,7 @@ function declarationRows(lines: readonly { text: string }[]): {
   let template: string[] | undefined;
   const rows: string[] = [];
   let originalLength = 0;
+  let rowLength = 0;
   for (const line of lines) {
     const match = pattern.exec(line.text);
     if (!match) return null;
@@ -105,13 +106,15 @@ function declarationRows(lines: readonly { text: string }[]): {
     if (!template) template = parts;
     else if (parts.some((part, index) => part !== template![index]))
       return null;
-    rows.push(`${match[2]}\t${match[4]}`);
+    const row = `${match[2]}\t${match[4]}`;
+    rows.push(row);
+    rowLength += row.length + 1;
     originalLength += line.text.length + 1;
   }
   const note =
     ` [exact declaration rows: name<TAB>rhs; concatenate template ${JSON.stringify(template)}` +
     ' around the two fields; source line = range start + zero-based row index]';
-  if (note.length + rows.join('\n').length >= originalLength * 0.8) return null;
+  if (note.length + rowLength - 1 >= originalLength * 0.8) return null;
   return { note, rows };
 }
 
@@ -210,11 +213,11 @@ export function compressSearchResults(
       const declarations = declarationRows(buffer);
       if (declarations) {
         out.push(`${path}:${range}${marks}${declarations.note}`);
-        out.push(...declarations.rows);
+        for (const row of declarations.rows) out.push(row);
         factoredDeclarations = true;
       } else {
         out.push(`${path}:${range}${marks}`);
-        out.push(...buffer.map((line) => line.text));
+        for (const line of buffer) out.push(line.text);
       }
     }
     path = null;

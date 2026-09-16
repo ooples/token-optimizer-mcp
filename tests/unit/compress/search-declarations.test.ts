@@ -124,6 +124,18 @@ describe('exact declaration rows in search output', () => {
     }
   });
 
+  it('handles large result sets without spreading rows into a call argument list', () => {
+    const input = Array.from(
+      { length: 130000 },
+      (_, index) =>
+        `src/large.ts:${index + 1}:export const VALUE_${index} = ${index};`
+    ).join('\n');
+    const result = compressSearchResults(input);
+    expect(result.text).toContain('[exact declaration rows:');
+    expect(result.text.split('\n')).toHaveLength(130001);
+    expect(result.text.endsWith('VALUE_129999\t129999')).toBe(true);
+  });
+
   it('does not mistake timestamps for source paths', () => {
     expect(
       looksLikeSearchResults(

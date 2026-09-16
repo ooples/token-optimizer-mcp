@@ -3,6 +3,11 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 const study = resolve(process.argv[2]);
+const plan = JSON.parse(await readFile(join(study, 'plan.json'), 'utf8'));
+const rates = plan.scenario.usdPerMillion;
+for (const name of ['uncached', 'cached', 'output'])
+  if (!Number.isFinite(rates[name]) || rates[name] < 0)
+    throw Error(`Invalid recorded rate: ${name}`);
 const analysis = JSON.parse(
   await readFile(join(study, 'analysis.json'), 'utf8')
 );
@@ -26,7 +31,8 @@ function summarize(pairs) {
       ])
     );
     arms[arm].allInputUncachedSensitivityUsd =
-      (arms[arm].input * 10 + arms[arm].output * 50) / 1e6;
+      (arms[arm].input * rates.uncached + arms[arm].output * rates.output) /
+      1e6;
   }
   return {
     pairs: pairs.length,
@@ -56,7 +62,8 @@ const result = {
       ])
   ),
   sensitivity:
-    'Frozen 10/1/50 USD per million token scenario. Uncached sensitivities hold observed model behavior fixed; not controlled cold-cache experiments.',
+    'Recorded rate-card scenario. Uncached sensitivities hold observed model behavior fixed; not controlled cold-cache experiments.',
+  scenario: plan.scenario,
 };
 await writeFile(
   join(study, 'descriptive.json'),
