@@ -1,7 +1,9 @@
 /** Diagnostic exposure check, separate from final artifact correctness. */
 export function mcpRefreshEvidence(events, routesPath) {
   const normalize = (p) => String(p).replaceAll('\\', '/');
-  let refreshed = false,
+  let attempts = 0,
+    successes = 0,
+    refreshed = false,
     beforeReads = 0,
     afterReads = 0,
     cachedDiffs = 0;
@@ -10,10 +12,14 @@ export function mcpRefreshEvidence(events, routesPath) {
     const item = event.item;
     if (
       item?.type === 'command_execution' &&
-      item.exit_code === 0 &&
       /\bnode(?:\.exe)?\s+["']?refresh\.mjs\b/.test(item.command || '')
-    )
-      refreshed = true;
+    ) {
+      attempts++;
+      if (item.exit_code === 0) {
+        successes++;
+        refreshed = true;
+      }
+    }
     if (
       item?.type !== 'mcp_tool_call' ||
       item.server !== 'token_optimizer' ||
@@ -40,9 +46,16 @@ export function mcpRefreshEvidence(events, routesPath) {
     }
   }
   return {
+    attempts,
+    successes,
     beforeReads,
     afterReads,
     cachedDiffs,
-    passed: beforeReads > 0 && afterReads > 0 && cachedDiffs > 0,
+    passed:
+      attempts === 1 &&
+      successes === 1 &&
+      beforeReads > 0 &&
+      afterReads > 0 &&
+      cachedDiffs > 0,
   };
 }

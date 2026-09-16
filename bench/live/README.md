@@ -5,6 +5,11 @@ the locally installed Codex CLI with its existing ChatGPT authentication and
 the model selected in the user's configuration. A Claude usage limit does not
 prevent running the Codex benchmark.
 
+`local-proxy-performance.mjs` requires Windows: it samples process-tree CPU and
+private memory through PowerShell/CIM. It rejects other hosts before starting
+servers or sending warmup requests. This restriction applies to that benchmark,
+not to the proxy itself.
+
 Build first, then run:
 
 ```sh

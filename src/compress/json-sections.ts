@@ -10,19 +10,13 @@ export function looksLikeJsonSections(text: string): boolean {
   // Truncated shell output belongs to the exact fragment codec, which must
   // preserve the explicit gap instead of trying to parse a whole document.
   return (
-    !/^Warning: truncated output\b/.test(text) && /^[\[{][ \t]*\r?$/m.test(text)
+    !/^Warning: truncated output\b/.test(text) &&
+    !jsonSections(text).next().done
   );
 }
 
-export function compressJsonSections(
-  text: string,
-  ctx: EngineContext = {}
-): CompressionResult {
+function* jsonSections(text: string) {
   const start = /^[\[{][ \t]*\r?$/gm;
-  let result = '',
-    cursor = 0,
-    lossless = true;
-  const elisions: Elision[] = [];
   for (let match; (match = start.exec(text)); ) {
     const stack: string[] = [];
     let quoted = false,
@@ -60,9 +54,22 @@ export function compressJsonSections(
     } catch {
       continue;
     }
+    yield { index: match.index, end, candidate };
+  }
+}
+
+export function compressJsonSections(
+  text: string,
+  ctx: EngineContext = {}
+): CompressionResult {
+  let result = '',
+    cursor = 0,
+    lossless = true;
+  const elisions: Elision[] = [];
+  for (const { index, end, candidate } of jsonSections(text)) {
     const compressed = compressJson(candidate, ctx);
     if (compressed.text.length >= candidate.length) continue;
-    result += text.slice(cursor, match.index) + compressed.text;
+    result += text.slice(cursor, index) + compressed.text;
     cursor = end;
     elisions.push(...compressed.elisions);
     lossless &&= compressed.lossless;

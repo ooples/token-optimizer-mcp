@@ -9,6 +9,10 @@ import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { heldoutFixture } from './heldout-cases.mjs';
 
+if (process.platform !== 'win32')
+  throw Error(
+    'This process-tree benchmark requires Windows (PowerShell/CIM sampling).'
+  );
 const root = resolve('.');
 const raw = await mkdtemp(join(tmpdir(), 'local-proxy-performance-'));
 const repetitions = 40;

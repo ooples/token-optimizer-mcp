@@ -1,3 +1,4 @@
+import { reduction } from './report-validation.mjs';
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -69,12 +70,15 @@ const metrics = [
   'allInputUncachedSensitivityUsd',
 ];
 const reductions = Object.fromEntries(
-  metrics.map((key) => [key, 1 - arms.proxy[key] / arms.headroom[key]])
+  metrics.map((key) => [key, reduction(arms.proxy[key], arms.headroom[key])])
 );
 assert.ok(
-  Math.abs(
-    reductions.estimatedUsd * 100 - costs.comparisons[0].reductionPercent
-  ) < 1e-9
+  reductions.estimatedUsd === null
+    ? costs.comparisons[0].reductionPercent === null
+    : costs.comparisons[0].reductionPercent !== null &&
+        Math.abs(
+          reductions.estimatedUsd * 100 - costs.comparisons[0].reductionPercent
+        ) < 1e-9
 );
 let byteIdentical = 0;
 for (const group of ['fresh', 'replay']) {

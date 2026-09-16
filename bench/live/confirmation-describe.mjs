@@ -1,3 +1,4 @@
+import { reduction } from './report-validation.mjs';
 /** Descriptive complete-pair summaries; never repairs a failed inference gate. */
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -40,7 +41,7 @@ function summarize(pairs) {
     reductions: Object.fromEntries(
       [...fields, 'allInputUncachedSensitivityUsd'].map((key) => [
         key,
-        1 - arms.proxy[key] / arms.headroom[key],
+        reduction(arms.proxy[key], arms.headroom[key]),
       ])
     ),
     proxyCostWins: pairs.filter(

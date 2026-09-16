@@ -781,21 +781,14 @@ export function deferToolsEnabled(
 
 /**
  * Below how many characters a tool definition is exempt from deferral.
+ * The previous default exempted definitions below 1,500 characters to avoid
+ * discovery round trips. Captured traffic showed that 88 of 115 real tools
+ * fell under that floor, leaving about 55 KB undeferred; tool definitions were
+ * 66.9% of the request. That aggregate cost motivated removing the default floor.
  *
- * A DIAL BECAUSE THE DEFAULT IS A PER-TOOL ANSWER TO A PER-REQUEST QUESTION.
- * `SMALL_TOOL_CHARS` exempts anything under 1,500 characters, reasoning that
- * deferring a small definition risks a discovery round trip worth more than it
- * saves. Each individual judgement is defensible and the aggregate is not:
- * measured on captured wire traffic, 88 of 115 real tools fall under the floor
- * and together hold about 55KB that is never deferred. Tools are 66.9% of a
- * real request, so that is the largest single region this proxy declines to
- * touch.
- *
- * For comparison on the same traffic, a competitor's proxy defers 107 of those
- * 115 definitions where we defer 25.
- *
- * Zero defers every deferrable definition, which is the aggressive end and is
- * exactly what the comparison is for.
+ * `SMALL_TOOL_CHARS` is now zero: every eligible definition may be deferred.
+ * TOKEN_OPTIMIZER_PROXY_SMALL_TOOL_CHARS can restore a positive exemption for
+ * workloads where discovery round trips cost more than the saved definition.
  */
 export function smallToolCharsFromEnv(
   env: NodeJS.ProcessEnv = process.env

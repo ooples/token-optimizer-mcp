@@ -1,3 +1,4 @@
+import { matchAudits } from './report-validation.mjs';
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -19,6 +20,7 @@ assert.equal(
 );
 assert.equal(results.length, 4);
 assert.equal(audit.length, 4);
+matchAudits(results, audit);
 const rates = costs.scenario.usdPerMillion;
 const cost = (u) =>
   ((u.input - u.cached) * rates.uncached +

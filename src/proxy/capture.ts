@@ -108,9 +108,14 @@ export function captureRequest(
     async () => {
       await acquireWriter();
       try {
-        await mkdir(destination, { recursive: true });
-        const file = await open(join(destination, 'requests.jsonl'), 'a');
+        await mkdir(destination, { recursive: true, mode: 0o700 });
+        const file = await open(
+          join(destination, 'requests.jsonl'),
+          'a',
+          0o600
+        );
         try {
+          if (process.platform !== 'win32') await file.chmod(0o600);
           const prefix = `${JSON.stringify({ at, path }).slice(0, -1)},"body":"`;
           const decoder = new StringDecoder('utf8');
           if (!snapshot.length) await file.writeFile(prefix + '"}\n');

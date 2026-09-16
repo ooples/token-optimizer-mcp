@@ -97,36 +97,42 @@ export async function validateWorkflow(task, work, seed = 1, suppliedFixture) {
       failures.push(`Protected file changed: ${name}`);
   }
   if (task === 'refresh') {
-    const parse = async (name) =>
-      JSON.parse(
-        (await readFile(join(work, name), 'utf8')).replace(/^\uFEFF/, '')
-      );
-    const before = await parse('before.json');
-    const after = await parse('answer.json');
-    if (
-      before.disabledCount !== f.beforeDisabled ||
-      after.disabledRoute !== (f.route ?? `route-${f.marker}`) ||
-      after.baseLimit !== (f.baseLimit ?? 101) ||
-      after.effectiveLimit !== (f.effectiveLimit ?? 7)
-    )
-      failures.push('Stale or incorrect configuration answer');
-    if (
-      seed >= 7 &&
-      JSON.stringify(
-        Array.isArray(before.disabledRoutes)
-          ? [...before.disabledRoutes].sort()
-          : null
-      ) !== JSON.stringify([...(f.beforeIds ?? [`route-${f.previous}`])].sort())
-    )
-      failures.push('Missed pre-existing disabled route');
-    if ((await readFile(join(work, 'routes.json'), 'utf8')) !== f.final)
-      failures.push('Unexpected final routes');
-    const override = await parse('override.json');
-    if (
-      override.route !== (f.route ?? `route-${f.marker}`) ||
-      override.limit !== (f.effectiveLimit ?? 7)
-    )
-      failures.push('Unexpected override');
+    try {
+      const parse = async (name) =>
+        JSON.parse(
+          (await readFile(join(work, name), 'utf8')).replace(/^\uFEFF/, '')
+        );
+      const before = await parse('before.json');
+      const after = await parse('answer.json');
+      if (
+        before.disabledCount !== f.beforeDisabled ||
+        after.disabledRoute !== (f.route ?? `route-${f.marker}`) ||
+        after.baseLimit !== (f.baseLimit ?? 101) ||
+        after.effectiveLimit !== (f.effectiveLimit ?? 7)
+      )
+        failures.push('Stale or incorrect configuration answer');
+      if (
+        seed >= 7 &&
+        JSON.stringify(
+          Array.isArray(before.disabledRoutes)
+            ? [...before.disabledRoutes].sort()
+            : null
+        ) !==
+          JSON.stringify([...(f.beforeIds ?? [`route-${f.previous}`])].sort())
+      )
+        failures.push('Missed pre-existing disabled route');
+      if ((await readFile(join(work, 'routes.json'), 'utf8')) !== f.final)
+        failures.push('Unexpected final routes');
+      const override = await parse('override.json');
+      if (
+        override.route !== (f.route ?? `route-${f.marker}`) ||
+        override.limit !== (f.effectiveLimit ?? 7)
+      )
+        failures.push('Unexpected override');
+    } catch {
+      failures.push('Missing or invalid refresh artifact');
+      return { passed: false, failures };
+    }
   } else {
     const moduleUrl = pathToFileURL(
       join(work, task === 'bugfix' ? 'src/client.mjs' : 'src/index.mjs')

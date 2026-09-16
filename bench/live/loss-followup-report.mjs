@@ -2,9 +2,18 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { matchAudits, reduction } from './report-validation.mjs';
 const evidence = resolve(process.argv[2]);
 const read = async (name) =>
   JSON.parse(await readFile(join(evidence, name), 'utf8'));
+const optional = async (name) => {
+  try {
+    return await read(name);
+  } catch (error) {
+    if (error.code === 'ENOENT' || error instanceof SyntaxError) return null;
+    throw error;
+  }
+};
 const plan = await read('followup-plan.json');
 const execution = await read('followup-execution.json');
 assert.equal(execution.length, plan.cases.length);
@@ -19,23 +28,40 @@ const cases = [];
 for (const expected of plan.cases) {
   const done = execution.find((x) => x.id === expected.id);
   assert.ok(done);
-  const rows = await read(`cases/${expected.id}/results.json`);
-  const validation = await read(`cases/${expected.id}/validation.json`);
-  const auditedCosts = await read(`cases/${expected.id}/cost-scenario.json`);
-  assert.equal(rows.length, 2);
-  assert.ok(rows.every((row) => row.seed === expected.seedOffset + 1));
+  const rows = await optional(`cases/${expected.id}/results.json`);
+  const validation = await optional(`cases/${expected.id}/validation.json`);
+  const auditedCosts = await optional(
+    `cases/${expected.id}/cost-scenario.json`
+  );
+  let audited = [],
+    artifactsValid = false;
+  try {
+    audited = matchAudits(rows, validation);
+    artifactsValid =
+      rows.length === 2 &&
+      rows.every((r) => r.seed === expected.seedOffset + 1) &&
+      ['proxy', 'headroom'].every(
+        (arm) => rows.filter((r) => r.arm === arm).length === 1
+      );
+  } catch {
+    /* Incomplete attempts remain in the report with unknown costs. */
+  }
   const arms = {};
   for (const arm of ['proxy', 'headroom']) {
-    const row = rows.find((r) => r.arm === arm);
-    assert.ok(row);
-    const valid = validation.find((r) => r.arm === arm)?.verdict === 'PASS';
+    const row =
+      (Array.isArray(rows) ? rows : []).find((r) => r.arm === arm) ?? {};
+    const valid =
+      artifactsValid && audited.find((r) => r.arm === arm)?.verdict === 'PASS';
     arms[arm] = {
-      verdict: row.verdict,
+      verdict: row.verdict ?? 'INCOMPLETE',
       auditedPass: valid,
       usage: row.usage,
       requests: row.requests,
       agentSeconds: row.agentSeconds,
-      estimatedUsd: auditedCosts.valid ? cost(row.usage) : null,
+      estimatedUsd:
+        artifactsValid && auditedCosts?.valid && row.usage
+          ? cost(row.usage)
+          : null,
       firstRequestCached:
         row.ledgerUsage?.[0]?.usage?.cached_input_tokens ?? null,
     };
@@ -45,13 +71,20 @@ for (const expected of plan.cases) {
     done.exit === 0 &&
     done.auditExit === 0 &&
     done.costExit === 0 &&
-    auditedCosts.valid &&
-    Object.values(arms).every((x) => x.auditedPass);
+    Boolean(done.raw) &&
+    artifactsValid &&
+    auditedCosts?.valid === true &&
+    Object.values(arms).every(
+      (x) => x.auditedPass && Number.isFinite(x.estimatedUsd)
+    );
   cases.push({
     id: expected.id,
     arms,
     complete,
     originalCostDifferenceUsd: original.costDifferenceUsd,
+    incompleteReason: complete
+      ? null
+      : 'Missing, invalid, or failed attempt artifacts',
     costDifferenceUsd: complete
       ? arms.proxy.estimatedUsd - arms.headroom.estimatedUsd
       : null,
@@ -86,10 +119,10 @@ const report = {
     .length,
   costTies: cases.filter((x) => x.complete && x.costDifferenceUsd === 0).length,
   totals,
-  costReductionCompletePairs:
-    1 -
-    totals.proxy.estimatedUsdCompletePairs /
-      totals.headroom.estimatedUsdCompletePairs,
+  costReductionCompletePairs: reduction(
+    totals.proxy.estimatedUsdCompletePairs,
+    totals.headroom.estimatedUsdCompletePairs
+  ),
   cases,
 };
 await writeFile(

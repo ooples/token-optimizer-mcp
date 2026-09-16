@@ -35,7 +35,7 @@ These are development results on previously observed cases. Provider cache hits 
 
 The follow-up refresh-2 attempt sent an outer-truncated serialized shell result. Its 40,105-byte text was not recognized by the previous compressor. The additional fix in `510d570a` reduces that exact result to **10,200 bytes** and **3,731 estimated o200k_base tokens vs 15,631** (76.1% fewer). An independent decoder reconstructs every original byte, including the gap. Across the seven captured requests, the same history item is reused six times; replay removes 36,120 transmitted bytes from each of those requests. This replay estimates wire tokens; it is not observed provider usage.
 
-The earlier prefix change alone reduced the three original refresh fragments by another 41?42% relative to their previous compressed representation. Compare `loss-audit.json` with `after-prefix/loss-audit.json`; both replays use identical fixed recovery paths. Comparing either replay directly to original live byte totals also includes recovery-path length differences.
+The earlier prefix change alone reduced the three original refresh fragments by another 41–42% relative to their previous compressed representation. Compare `loss-audit.json` with `after-prefix/loss-audit.json`; both replays use identical fixed recovery paths. Comparing either replay directly to original live byte totals also includes recovery-path length differences.
 
 ## Controlled live validation of the additional fix
 
@@ -57,7 +57,7 @@ The actual outer fragments in these fresh captures fell from 8,101 characters ea
 
 V8 CPU/allocation profiling found that every valid escaped record first caused a failed JSON parse and an exception allocation. The final implementation chooses the decoder from the first property quote, keeping canonical round-trip validation and malformed-record rejection intact. No output format changes.
 
-A replay of seven captured requests over 200 fresh-cache rounds (1,400 calls) measured mean time **2.645 ? 1.437 ms**, p95 **12.963 ? 3.918 ms**, and sampled allocation **913,448,128 ? 764,762,056 bytes**: 45.7%, 69.8%, and 16.3% reductions respectively. Total process CPU fell 43.8%. This is one internal before/after profiling comparison with 32 KiB sampling, excluding network/disk; it is not a HeadRoom allocation or live agent-time comparison.
+A replay of seven captured requests over 200 fresh-cache rounds (1,400 calls) measured mean time **2.645 to 1.437 ms**, p95 **12.963 to 3.918 ms**, and sampled allocation **913,448,128 to 764,762,056 bytes**: 45.7%, 69.8%, and 16.3% reductions respectively. Total process CPU fell 43.8%. This is one internal before/after profiling comparison with 32 KiB sampling, excluding network/disk; it is not a HeadRoom allocation or live agent-time comparison.
 
 The codec result and metadata match `510d570a` exactly on **69 unique large strings across 28 captured proxy conversations**, including all original losses, the complete follow-up, and both outer-truncation pairs. `fastpath/` retains summaries, allocation profiles, and the equivalence report. The focused fragment regressions and build passed after this change.
 

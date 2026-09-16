@@ -4,7 +4,7 @@ import { Readable } from 'node:stream';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { zstdCompressSync } from 'node:zlib';
+import * as zlib from 'node:zlib';
 import { compressBody, startProxy } from '../../../src/proxy/server.js';
 import { scanUsage, tapUsage } from '../../../src/proxy/accounting.js';
 import type { RequestUsage } from '../../../src/proxy/accounting.js';
@@ -126,25 +126,31 @@ test('Responses cache reads remain a subset of input, distinct from Anthropic cl
   expect(usage.cache_read_input_tokens).toBeUndefined();
 });
 
-test('zstd-compressed Responses usage is decoded without consuming the response', async () => {
-  const bytes = zstdCompressSync(
-    Buffer.from(
-      'data: {"type":"response.completed","response":{"usage":{"input_tokens":100,"input_tokens_details":{"cached_tokens":80},"output_tokens":5}}}\n\n'
-    )
-  );
-  const stream = Readable.from([bytes.subarray(0, 8), bytes.subarray(8)]);
-  const chunks: Buffer[] = [];
-  const seen = new Promise<RequestUsage>((resolve) =>
-    tapUsage(stream, resolve, 'zstd')
-  );
-  stream.on('data', (chunk) => chunks.push(chunk));
-  expect(await seen).toEqual({
-    input_tokens: 100,
-    cached_input_tokens: 80,
-    output_tokens: 5,
-  });
-  expect(Buffer.concat(chunks)).toEqual(bytes);
-});
+(typeof zlib.zstdCompressSync === 'function' &&
+  typeof zlib.createZstdDecompress === 'function'
+  ? test
+  : test.skip)(
+  'zstd-compressed Responses usage is decoded without consuming the response',
+  async () => {
+    const bytes = zlib.zstdCompressSync(
+      Buffer.from(
+        'data: {"type":"response.completed","response":{"usage":{"input_tokens":100,"input_tokens_details":{"cached_tokens":80},"output_tokens":5}}}\n\n'
+      )
+    );
+    const stream = Readable.from([bytes.subarray(0, 8), bytes.subarray(8)]);
+    const chunks: Buffer[] = [];
+    const seen = new Promise<RequestUsage>((resolve) =>
+      tapUsage(stream, resolve, 'zstd')
+    );
+    stream.on('data', (chunk) => chunks.push(chunk));
+    expect(await seen).toEqual({
+      input_tokens: 100,
+      cached_input_tokens: 80,
+      output_tokens: 5,
+    });
+    expect(Buffer.concat(chunks)).toEqual(bytes);
+  }
+);
 
 test('Codex disconnect after terminal SSE settles the ledger and closes upstream', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'responses-proxy-'));

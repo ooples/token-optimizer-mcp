@@ -1,4 +1,4 @@
-# Responses speed follow-up — 2026-09-16
+# Responses speed follow-up â€” 2026-09-16
 
 Fixed development schedule before provider calls:
 - Actual installed HeadRoom 0.37.0 versus our proxy, Codex local, default model and reasoning.

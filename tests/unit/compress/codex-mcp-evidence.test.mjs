@@ -26,6 +26,21 @@ const refresh = {
     exit_code: 0,
   },
 };
+test('repeated refreshes are invalid, including failed then successful attempts', () => {
+  for (const exit_code of [0, 1]) {
+    const evidence = mcpRefreshEvidence(
+      [
+        read(),
+        { ...refresh, item: { ...refresh.item, exit_code } },
+        refresh,
+        read(true),
+      ],
+      path
+    );
+    expect(evidence.attempts).toBe(2);
+    expect(evidence.passed).toBe(false);
+  }
+});
 test('requires real reads on both sides of refresh and a cached diff', () => {
   expect(mcpRefreshEvidence([read(), refresh, read(true)], path).passed).toBe(
     true

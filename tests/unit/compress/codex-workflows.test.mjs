@@ -18,6 +18,16 @@ async function setup(task, seed = 1) {
   }
   return { work, f };
 }
+test('missing and malformed refresh artifacts produce deterministic failures', async () => {
+  const { work } = await setup('refresh');
+  for (const text of [undefined, '{invalid', 'null']) {
+    if (text !== undefined) await writeFile(join(work, 'before.json'), text);
+    expect(await validateWorkflow('refresh', work)).toEqual({
+      passed: false,
+      failures: ['Missing or invalid refresh artifact'],
+    });
+  }
+});
 test.each([1, 4])(
   'bugfix oracle rejects incomplete fixes for seed %s',
   async (seed) => {

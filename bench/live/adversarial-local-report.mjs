@@ -1,3 +1,4 @@
+import { groupMatrix } from './report-validation.mjs';
 import { readFile, mkdir, writeFile, copyFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 const raw = resolve(process.argv[2]),
@@ -47,7 +48,19 @@ for (const task of [...new Set(data.records.map((r) => r.task))])
 const summary = {
   scope: data.scope,
   raw,
-  complete: !data.error && data.records.length === (data.expectedGroups ?? 144),
+  complete:
+    !data.error &&
+    groupMatrix(
+      data.records,
+      {
+        round: [0, 1],
+        arm: ['proxy', 'headroom'],
+        task: ['tiny', 'entropy', 'numeric', 'nullable', 'json', 'code'],
+        mode: ['repeated', 'unique', 'append', 'changing-prefix'],
+        concurrency: [1, 8],
+      },
+      20
+    ),
   requests: data.records.reduce((n, r) => n + r.samples.length, 0),
   groups,
   latencyWins: groups.filter((g) => g.latencyWin).length,

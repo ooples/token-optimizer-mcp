@@ -30,13 +30,16 @@ export function memoryReady(sample, now = Date.now()) {
   );
 }
 
-export async function monitorHostMemory(directory) {
-  if (process.platform !== 'win32')
+export async function monitorHostMemory(
+  directory,
+  { platform = process.platform, spawnProcess = spawn } = {}
+) {
+  if (platform !== 'win32')
     return { assertReady: async () => {}, stop: async () => {} };
   const log = createWriteStream(join(directory, 'host-memory.jsonl'), {
     flags: 'wx',
   });
-  const child = spawn(
+  const child = spawnProcess(
     'powershell.exe',
     [
       '-NoProfile',
@@ -56,7 +59,12 @@ export async function monitorHostMemory(directory) {
     fault = error;
   });
   child.stderr.on('data', (data) => {
-    fault = Error(String(data));
+    log.write(
+      JSON.stringify({
+        diagnostic: String(data),
+        at: new Date().toISOString(),
+      }) + '\n'
+    );
   });
   const closed = new Promise((resolve) =>
     child.once('close', () => {
@@ -69,8 +77,13 @@ export async function monitorHostMemory(directory) {
     try {
       sample = JSON.parse(line);
       log.write(JSON.stringify(sample) + '\n');
-    } catch (error) {
-      fault = error;
+    } catch {
+      log.write(
+        JSON.stringify({
+          diagnostic: 'Invalid telemetry line',
+          at: new Date().toISOString(),
+        }) + '\n'
+      );
     }
   });
   const stop = async () => {

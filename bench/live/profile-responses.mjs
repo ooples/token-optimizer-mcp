@@ -20,7 +20,9 @@ const requests = records
   .map((r) => ({ body: Buffer.from(r.body), request: JSON.parse(r.body) }))
   .filter((r) => Array.isArray(r.request.input));
 if (!requests.length) throw Error('No Responses requests');
-const times = [];
+const times = [],
+  firstRound = [],
+  warm = [];
 const session = new Session();
 session.connect();
 await session.post('HeapProfiler.startSampling', {
@@ -37,11 +39,14 @@ for (let round = 0; round < rounds; round++) {
   for (const { body, request } of requests) {
     const start = performance.now();
     const result = compressResponses(body, request, spill);
-    times.push(performance.now() - start);
+    const elapsed = performance.now() - start;
+    times.push(elapsed);
+    (round === 0 ? firstRound : warm).push(elapsed);
     checksum += result.body.length;
   }
 }
 times.sort((a, b) => a - b);
+warm.sort((a, b) => a - b);
 const { profile } = await session.post('HeapProfiler.stopSampling');
 session.disconnect();
 if (process.env.ALLOCATION_PROFILE)
@@ -52,6 +57,13 @@ console.log(
       requests: requests.length,
       rounds,
       calls: times.length,
+      firstRoundMeanMs:
+        firstRound.reduce((a, b) => a + b, 0) / firstRound.length,
+      warmMeanMs: warm.length
+        ? warm.reduce((a, b) => a + b, 0) / warm.length
+        : null,
+      warmP50Ms: warm[Math.floor(warm.length * 0.5)] ?? null,
+      warmP95Ms: warm[Math.floor(warm.length * 0.95)] ?? null,
       meanMs: times.reduce((a, b) => a + b, 0) / times.length,
       p50Ms: times[Math.floor(times.length * 0.5)],
       p95Ms: times[Math.floor(times.length * 0.95)],
@@ -62,7 +74,7 @@ console.log(
         (sum, sample) => sum + sample.size,
         0
       ),
-      note: 'Heap delta is retained heap plus GC timing, not total allocated bytes; use the allocation profile. Disk I/O and network excluded.',
+      note: 'First round is first-pass, not fully cold: duplicate inputs can populate caches within it. Later rounds reuse module-level caches; combined statistics are not cold-path latency. Heap delta is retained heap plus GC timing, not total allocated bytes; use the allocation profile. Disk I/O and network excluded.',
     },
     null,
     2

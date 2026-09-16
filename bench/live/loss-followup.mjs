@@ -31,12 +31,12 @@ await writeFile(
   { flag: 'wx' }
 );
 const run = (script, args, env = {}) =>
-  new Promise((done, reject) => {
+  new Promise((done) => {
     const child = spawn(process.execPath, [script, ...args], {
       stdio: 'inherit',
       env: { ...process.env, ...env },
     });
-    child.on('error', reject);
+    child.on('error', () => done(null));
     child.on('exit', (code) => done(code));
   });
 const execution = [];
@@ -53,11 +53,17 @@ for (const item of cases) {
     READ_MODE: item.readMode,
     CODEX_BENCH_MODEL: item.model,
   });
-  const dirs = (await readdir(out)).filter((name) => name.startsWith('run-'));
-  if (dirs.length !== 1) throw Error('Expected exactly one retained campaign');
-  const raw = join(out, dirs[0]);
-  const auditExit = await run('bench/live/report-codex.mjs', [raw]);
-  const costExit = await run('bench/live/codex-cost.mjs', [raw]);
+  const dirs = (
+    await readdir(out, { withFileTypes: true }).catch((error) => {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    })
+  ).filter((entry) => entry.isDirectory() && entry.name.startsWith('run-'));
+  const raw = dirs.length === 1 ? join(out, dirs[0].name) : null;
+  const auditExit = raw
+    ? await run('bench/live/report-codex.mjs', [raw])
+    : null;
+  const costExit = raw ? await run('bench/live/codex-cost.mjs', [raw]) : null;
   const target = join(evidence, 'cases', item.id);
   await mkdir(target, { recursive: true });
   for (const file of [
@@ -68,6 +74,7 @@ for (const item of cases) {
     'validation.json',
     'cost-scenario.json',
   ]) {
+    if (!raw) break;
     try {
       await writeFile(join(target, file), await readFile(join(raw, file)), {
         flag: 'wx',
@@ -76,7 +83,15 @@ for (const item of cases) {
       if (error.code !== 'ENOENT') throw error;
     }
   }
-  execution.push({ id: item.id, raw, exit, auditExit, costExit });
+  execution.push({
+    id: item.id,
+    raw,
+    exit,
+    auditExit,
+    costExit,
+    failure: raw ? null : 'Expected exactly one retained campaign',
+    outputDirectory: out,
+  });
   await writeFile(
     join(evidence, 'followup-execution.json'),
     JSON.stringify(execution, null, 2) + '\n'

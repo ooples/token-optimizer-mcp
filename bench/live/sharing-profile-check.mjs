@@ -10,6 +10,7 @@ const records = (await readFile(process.argv[3], 'utf8'))
   .split('\n')
   .map(JSON.parse)
   .filter((r) => r.path?.endsWith('/responses'));
+assert.ok(records.length > 0, 'No matching Responses captures');
 const spillBefore = () => '/profile-only/rows.json',
   spillAfter = () => '/profile-only/rows.json';
 for (const r of records) {

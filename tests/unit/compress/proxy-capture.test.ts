@@ -4,7 +4,14 @@
  * defensible rather than reckless.
  */
 
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  existsSync,
+  statSync,
+  chmodSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -18,6 +25,25 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'cap-'));
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+(process.platform === 'win32' ? test.skip : test)(
+  'capture restricts new directories and existing files before append',
+  async () => {
+    const destination = join(dir, 'private');
+    expect(
+      await captureRequest(destination, '/responses', Buffer.from('first'))
+    ).toBe(true);
+    const file = join(destination, 'requests.jsonl');
+    expect(statSync(destination).mode & 0o777).toBe(0o700);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    chmodSync(file, 0o644);
+    expect(
+      await captureRequest(destination, '/responses', Buffer.from('second'))
+    ).toBe(true);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(readFileSync(file, 'utf8').trim().split('\n')).toHaveLength(2);
+  }
+);
 
 describe('capture is off unless a path is named', () => {
   test('absent means off', () => {

@@ -28,6 +28,7 @@ const captures = (
   .split(/\r?\n/)
   .map(JSON.parse)
   .filter((row) => row.path.endsWith('/responses'));
+assert.ok(captures.length > 0, 'No matching Responses captures');
 const spill = () => '/diagnostic-only/original.txt';
 const replays = [],
   tokenInputs = [];

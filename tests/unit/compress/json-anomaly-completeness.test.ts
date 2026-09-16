@@ -1,5 +1,27 @@
 import { expect, test } from '@jest/globals';
 import { compressJson } from '../../../src/compress/json.js';
+test('unsafe integer lexemes survive with no parsed extrema', () => {
+  const text =
+    '[' +
+    Array.from(
+      { length: 50 },
+      (_, i) =>
+        `{"id":${i % 2 ? '9007199254740993' : '9007199254740992'},"description":"repeated text"}`
+    ).join(',') +
+    ']';
+  let spilled = '';
+  const result = compressJson(text, {
+    spill: (s) => {
+      spilled = s;
+      return '/rows.json';
+    },
+  });
+  expect(result.text).toContain('9007199254740993');
+  expect(result.text).toContain('9007199254740992');
+  expect(spilled).toBe('');
+  const nested = '{"data":' + text + '}';
+  expect(compressJson(nested).text).toBe(nested);
+});
 
 test('capped shape representatives do not claim the whole population survives', () => {
   const rows = Array.from({ length: 200 }, (_, i) => ({

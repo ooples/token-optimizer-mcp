@@ -1,3 +1,4 @@
+import { reduction, groupMatrix } from './report-validation.mjs';
 /** Describe all measured local requests; no independent-sample CI claims. */
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -5,10 +6,24 @@ const directory = resolve(process.argv[2]);
 const data = JSON.parse(
   await readFile(join(directory, 'results.json'), 'utf8')
 );
-if (!data.complete || data.records.length !== 54)
+if (
+  !data.complete ||
+  !groupMatrix(
+    data.records,
+    {
+      round: [0, 1, 2],
+      arm: ['proxy', 'headroom', 'control'],
+      task: ['logs', 'json', 'code'],
+      mode: ['repeated', 'unique'],
+    },
+    data.repetitions
+  )
+)
   throw Error('Incomplete local comparison');
 const seen = new Set();
 for (const record of data.records) {
+  if (!Number.isFinite(record.processCpuMs) || record.processCpuMs < 0)
+    throw Error('Invalid CPU sample');
   const id = [record.round, record.arm, record.task, record.mode].join(':');
   if (seen.has(id) || record.samples.length !== data.repetitions)
     throw Error('Invalid measured group');
@@ -62,12 +77,17 @@ for (const task of ['logs', 'json', 'code'])
       mode,
       arms,
       latencyReductionPercent:
-        100 * (1 - arms.proxy.meanMs / arms.headroom.meanMs),
+        reduction(arms.proxy.meanMs, arms.headroom.meanMs) === null
+          ? null
+          : 100 * reduction(arms.proxy.meanMs, arms.headroom.meanMs),
       cpuReductionPercent:
-        100 *
-        (1 -
-          arms.proxy.processCpuMsPerRequest /
-            arms.headroom.processCpuMsPerRequest),
+        arms.headroom.processCpuMsPerRequest === 0
+          ? null
+          : 100 *
+            reduction(
+              arms.proxy.processCpuMsPerRequest,
+              arms.headroom.processCpuMsPerRequest
+            ),
     });
   }
 const summary = {

@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { standardScenario } from './codex-cost.mjs';
 import { heldoutFixture, heldoutWorkflow } from './heldout-cases.mjs';
+import { auditedPilot } from './report-validation.mjs';
 const directory = resolve(process.argv[2]);
 const evidence = resolve('bench/live/evidence');
 const pilot = [];
@@ -21,6 +22,17 @@ async function scan(path) {
         continue;
       }
       if (!Array.isArray(rows)) continue;
+      try {
+        const validation = JSON.parse(
+          await readFile(join(path, 'validation.json'), 'utf8')
+        );
+        const summary = JSON.parse(
+          await readFile(join(path, 'summary.json'), 'utf8')
+        );
+        rows = auditedPilot(rows, validation, summary);
+      } catch {
+        continue;
+      }
       for (const ours of rows.filter(
         (r) => r.arm === 'proxy' && r.verdict === 'PASS'
       )) {
@@ -38,7 +50,12 @@ async function scan(path) {
                 r.usage.output * 50) /
               1e6
             : NaN;
-        if (cost(ours) > 0 && cost(theirs) > 0)
+        if (
+          Number.isFinite(cost(ours)) &&
+          Number.isFinite(cost(theirs)) &&
+          cost(ours) > 0 &&
+          cost(theirs) > 0
+        )
           pilot.push({
             file: next,
             task: ours.task,

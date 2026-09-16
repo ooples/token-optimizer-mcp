@@ -182,6 +182,25 @@ export function compressJson(
 ): CompressionResult {
   if (!looksLikeJson(text)) return unchanged(text);
 
+  // Parsing unsafe integers would round their original lexemes, including in
+  // recovery data. Use the lexical codec or preserve the original document.
+  // Ordinary integer literals need no token scan; exponents may still overflow.
+  if (/\d{16}|[eE][+-]?\d/.test(text)) {
+    const tokens = text.matchAll(
+      /"(?:\\.|[^"\\])*"|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/g
+    );
+    for (const [token] of tokens) {
+      if (token.startsWith('"')) continue;
+      const value = Number(token);
+      if (
+        !Number.isFinite(value) ||
+        (Number.isInteger(value) && !Number.isSafeInteger(value))
+      ) {
+        const exact = compressJsonArray(text);
+        return exact.text.length < text.length ? exact : unchanged(text);
+      }
+    }
+  }
   let parsed: unknown;
   let nestedElisions: readonly Elision[] = [];
   // Set when a nested string was compressed lossily. Every `lossless: !nestedLossy`

@@ -74,7 +74,11 @@ const report = {
   scope:
     'Post-run diagnosis of every non-winning scheduled pair. Original verdicts and unknown charges are preserved. Commands are observed agent actions, not proof that compression caused an action. Upstream time combines transport and provider work, plus the competitor proxy on that arm.',
   casesReviewed: cases.length,
-  costLossesIncludingTies: cases.filter((c) => c.costLoss).length,
+  costLossesIncludingTies: cases.filter(
+    (c) =>
+      !c.unknownCost &&
+      c.arms.proxy.estimatedUsd >= c.arms.headroom.estimatedUsd
+  ).length,
   smallerInputCostLosses: cases.filter((c) => c.smallerInputCostLoss).length,
   passingSpeedLosses: speedLosses.length,
   unknownCostAttempts: cases.reduce(

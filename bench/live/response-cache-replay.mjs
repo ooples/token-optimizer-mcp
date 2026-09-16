@@ -15,6 +15,7 @@ for (const name of (await readdir(raw)).filter((x) => x.endsWith('-proxy'))) {
     requests.push({ body: Buffer.from(r.body), request: JSON.parse(r.body) });
   }
 }
+if (!requests.length) throw Error('No matching Responses captures');
 const spill = () => '/tmp/perf-recovery.txt';
 const run = () =>
   requests.map(
@@ -32,7 +33,7 @@ for (let n = 0; n < 12; n++) {
 }
 const result = {
   scope:
-    'Local replay, twelve warm passes of ten captured requests; not competitor performance or allocated-byte totals.',
+    'Local replay, twelve warm passes of the reported requestCount captured requests; not competitor performance or allocated-byte totals.',
   requestCount: requests.length,
   coldMs,
   warmMs: samples,
