@@ -237,6 +237,7 @@ await writeFile(
       readMode,
       mcpDiscovery,
       caseSuite,
+      toolCodeExperiment: process.env.TOOL_CODE === '1',
       hostMemoryPolicy: process.platform === 'win32' ? memoryPolicy : null,
       started: new Date().toISOString(),
     },
@@ -311,6 +312,8 @@ try {
             upstream = `http://127.0.0.1:${headroomPort}`;
           }
           env.TOKEN_OPTIMIZER_PROXY = '1';
+          env.TOKEN_OPTIMIZER_PROXY_TOOL_CODE =
+            process.env.TOOL_CODE === '1' ? '1' : '0';
           env.TOKEN_OPTIMIZER_PROXY_NULL = [
             'proxy',
             'full',

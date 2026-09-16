@@ -4,6 +4,7 @@
  * rewrite the already-compressed prefix based on a newer user query.
  */
 import { cachedOutput } from './output-cache.js';
+import { compactToolDefinitions } from './tool-code.js';
 import type { Tuning } from '../compress/options.js';
 import type { CompressionFacts } from './accounting.js';
 
@@ -18,8 +19,23 @@ export function compressResponses(
   tuning?: Tuning
 ): { body: Buffer; summary: CompressionFacts } {
   let elisions = 0;
+  let definitionsChanged = false;
+  const compactDefinitions =
+    process.env.TOKEN_OPTIMIZER_PROXY_TOOL_CODE === '1';
   const input = request.input as unknown[];
   const next = input.map((item) => {
+    if (
+      compactDefinitions &&
+      object(item) &&
+      item.type === 'additional_tools'
+    ) {
+      const tools = compactToolDefinitions(item.tools);
+      if (tools !== item.tools) {
+        definitionsChanged = true;
+        return { ...item, tools };
+      }
+      return item;
+    }
     if (
       !object(item) ||
       !['function_call_output', 'custom_tool_call_output'].includes(
@@ -59,9 +75,10 @@ export function compressResponses(
     }
     return item;
   });
-  const encoded = elisions
-    ? Buffer.from(JSON.stringify({ ...request, input: next }))
-    : body;
+  const encoded =
+    elisions || definitionsChanged
+      ? Buffer.from(JSON.stringify({ ...request, input: next }))
+      : body;
   const accepted = encoded.length < body.length;
   return {
     body: accepted ? encoded : body,
