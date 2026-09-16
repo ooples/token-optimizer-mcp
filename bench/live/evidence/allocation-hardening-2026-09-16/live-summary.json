@@ -1,0 +1,112 @@
+{
+  "scope": "Post-fix development verification, 4 balanced pairs / 8 attempts. One seed deliberately repeats the original crash case. No replacements in the frozen 120-pair study and no new confidence-backed superiority claim.",
+  "qualityPasses": {
+    "proxy": 4,
+    "headroom": 4
+  },
+  "jointWins": 2,
+  "costLosses": 2,
+  "speedWins": 4,
+  "totals": {
+    "proxy": {
+      "estimatedUsd": 0.646138,
+      "agentSeconds": 60.3
+    },
+    "headroom": {
+      "estimatedUsd": 0.751738,
+      "agentSeconds": 73.69999999999999
+    }
+  },
+  "costReductionPercent": 14.047447381933598,
+  "agentTimeReductionPercent": 18.181818181818176,
+  "memory": {
+    "nullable": {
+      "samples": 92,
+      "minimumCommitReserveBytes": 4893487104,
+      "minimumAvailablePhysicalBytes": 3529568256
+    },
+    "json": {
+      "samples": 91,
+      "minimumCommitReserveBytes": 4767076352,
+      "minimumAvailablePhysicalBytes": 3367845888
+    }
+  },
+  "pairs": [
+    {
+      "task": "nullable",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.088506,
+          "agentSeconds": 13.2,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.192392,
+          "agentSeconds": 21.4,
+          "requests": 3
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "task": "nullable",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.208172,
+          "agentSeconds": 16.4,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.201922,
+          "agentSeconds": 16.5,
+          "requests": 3
+        }
+      },
+      "classification": "cost-loss"
+    },
+    {
+      "task": "json",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.1751,
+          "agentSeconds": 16.7,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.135378,
+          "agentSeconds": 18.4,
+          "requests": 3
+        }
+      },
+      "classification": "cost-loss"
+    },
+    {
+      "task": "json",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.17436,
+          "agentSeconds": 14,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.222046,
+          "agentSeconds": 17.4,
+          "requests": 3
+        }
+      },
+      "classification": "joint-win"
+    }
+  ]
+}

@@ -26,12 +26,30 @@
  * you would treat the transcript it came from.
  */
 
-import { appendFile, mkdir } from 'node:fs/promises';
+import { mkdir, open } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 
 // Serialize writes per destination so concurrent requests cannot interleave
 // JSONL records. Settled queues are released, including after a failed write.
 const pending = new Map<string, Promise<boolean>>();
+const MAX_PENDING_BYTES = 16 * 1024 * 1024;
+const MAX_PENDING_REQUESTS = 128;
+const CHUNK_BYTES = 64 * 1024;
+let pendingBytes = 0;
+let pendingRequests = 0;
+let writers = 0;
+const waitingWriters: (() => void)[] = [];
+async function acquireWriter(): Promise<void> {
+  if (writers >= 2)
+    await new Promise<void>((resolve) => waitingWriters.push(resolve));
+  else writers++;
+}
+function releaseWriter(): void {
+  const next = waitingWriters.shift();
+  if (next) next();
+  else writers--;
+}
 
 /** Where to write captures, or null when capture is off. */
 export function captureDir(
@@ -51,10 +69,12 @@ export function captureDir(
 /**
  * Appends one request body to the capture log.
  *
- * FAILS SILENT, like every other optional path in the proxy. A capture
+ * Returns false on failure; the server warns once without failing the request. A capture
  * directory that cannot be created, a disk that is full, a permissions error --
  * none of them is a reason to fail the request the user is waiting on. The
- * measurement is an optimisation on top of a working proxy.
+ * measurement is an optimisation on top of a working proxy. The global queue
+ * admits at most 128 requests / 16 MiB of snapshots and metadata; excess
+ * captures return false before copying the input.
  *
  * One JSON object per line: the request as it ARRIVED, before compression,
  * because the whole point is to measure what compression would remove from it.
@@ -65,15 +85,63 @@ export function captureRequest(
   body: Buffer
 ): Promise<boolean> {
   const destination = resolve(dir);
-  const line = `${JSON.stringify({ at: Date.now(), path, body: body.toString('utf8') })}\n`;
+  const reserved = body.length + 2 * (path.length + destination.length) + 128;
+  // Reserve before copying or encoding. Slow disks must not retain an unbounded
+  // number of expanded JSON strings, including across different destinations.
+  if (
+    reserved > MAX_PENDING_BYTES - pendingBytes ||
+    pendingRequests >= MAX_PENDING_REQUESTS
+  )
+    return Promise.resolve(false);
+  pendingBytes += reserved;
+  pendingRequests++;
+  const at = Date.now();
+  let snapshot: Buffer;
+  try {
+    snapshot = Buffer.from(body);
+  } catch {
+    pendingBytes -= reserved;
+    pendingRequests--;
+    return Promise.resolve(false);
+  }
   const write = (pending.get(destination) ?? Promise.resolve(true)).then(
     async () => {
+      await acquireWriter();
       try {
         await mkdir(destination, { recursive: true });
-        await appendFile(join(destination, 'requests.jsonl'), line, 'utf8');
+        const file = await open(join(destination, 'requests.jsonl'), 'a');
+        try {
+          const prefix = `${JSON.stringify({ at, path }).slice(0, -1)},"body":"`;
+          const decoder = new StringDecoder('utf8');
+          if (!snapshot.length) await file.writeFile(prefix + '"}\n');
+          // Bound transient UTF-16/escaped strings as well as the queued input.
+          // StringDecoder preserves characters split across UTF-8 chunk edges.
+          for (
+            let offset = 0;
+            offset < snapshot.length;
+            offset += CHUNK_BYTES
+          ) {
+            let text = decoder.write(
+              snapshot.subarray(offset, offset + CHUNK_BYTES)
+            );
+            const last = offset + CHUNK_BYTES >= snapshot.length;
+            if (last) text += decoder.end();
+            await file.writeFile(
+              (offset === 0 ? prefix : '') +
+                JSON.stringify(text).slice(1, -1) +
+                (last ? '"}\n' : '')
+            );
+          }
+        } finally {
+          await file.close();
+        }
         return true;
       } catch {
         return false;
+      } finally {
+        releaseWriter();
+        pendingBytes -= reserved;
+        pendingRequests--;
       }
     }
   );

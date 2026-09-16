@@ -181,6 +181,19 @@ for (const row of results) {
     clientErrors.push(allocationFailure);
     verdict = 'CLIENT_ERROR';
   }
+  const proxyErrors = await readFile(
+    join(artifacts, 'proxy.stderr'),
+    'utf8'
+  ).catch((error) => {
+    if (error.code === 'ENOENT') return '';
+    throw error;
+  });
+  if (proxyErrors.includes('token-optimizer proxy: capture incomplete (')) {
+    clientErrors.push(
+      'Proxy request capture was incomplete; exposure evidence is invalid'
+    );
+    verdict = 'INVALID_CAPTURE';
+  }
   if (
     row.exit !== 0 &&
     clientErrors.some((message) => /model is at capacity/i.test(message))

@@ -131,3 +131,32 @@ describe('it announces itself', () => {
     expect(notice).toContain('TOKEN_OPTIMIZER_PROXY_CAPTURE');
   });
 });
+
+test('streamed capture preserves chunk-edge Unicode, escapes, and the enqueue snapshot', async () => {
+  const text =
+    'a'.repeat(65535) + '🙂' + String.fromCharCode(0) + '\\"\n' + 'z';
+  const body = Buffer.from(text);
+  const write = captureRequest(dir, '/responses', body);
+  body.fill(120);
+  expect(await write).toBe(true);
+  expect(
+    JSON.parse(readFileSync(join(dir, 'requests.jsonl'), 'utf8')).body
+  ).toBe(text);
+});
+
+test('capture pressure is bounded across destinations and capacity returns after draining', async () => {
+  const body = Buffer.alloc(128 * 1024, 120);
+  const writes = Array.from({ length: 300 }, (_, i) =>
+    captureRequest(join(dir, String(i % 3)), '/responses', body)
+  );
+  const results = await Promise.all(writes);
+  expect(results.filter(Boolean).length).toBeGreaterThan(0);
+  expect(results.filter(Boolean).length).toBeLessThan(128);
+  expect(results.filter((v) => !v).length).toBeGreaterThan(0);
+  expect(
+    await captureRequest(dir, '/responses', Buffer.from('recovered'))
+  ).toBe(true);
+  expect(
+    JSON.parse(readFileSync(join(dir, 'requests.jsonl'), 'utf8')).body
+  ).toBe('recovered');
+});

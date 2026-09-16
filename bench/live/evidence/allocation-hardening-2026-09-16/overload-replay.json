@@ -1,0 +1,51 @@
+{
+  "scope": "Local replay of the original pre-tool request; no provider calls, model quality or cost inference. Child heap capped at 32 MiB; explicit GC only at diagnostic snapshots.",
+  "source": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-9\\run-Zi5nJw\\nullable-1-proxy\\requests.jsonl",
+  "mode": "overload",
+  "upstreamDelayMs": 0,
+  "bodyBytes": 63212,
+  "bodySha256": "ce8ee231951f2a6896b91bf1266b7dfb58bfa4c437784593f46840e9e9b69329",
+  "captureComplete": false,
+  "rejectedCaptures": 898,
+  "forwarded": 1344,
+  "changed": 0,
+  "captures": 446,
+  "concurrency": 8,
+  "heapLimitMiB": 32,
+  "snapshots": [
+    {
+      "completed": 64,
+      "rss": 60477440,
+      "heapTotal": 27836416,
+      "heapUsed": 9684360,
+      "external": 3759647,
+      "arrayBuffers": 67909
+    },
+    {
+      "completed": 704,
+      "rss": 71012352,
+      "heapTotal": 44613632,
+      "heapUsed": 8508952,
+      "external": 4009604,
+      "arrayBuffers": 67909
+    },
+    {
+      "completed": 1344,
+      "rss": 72818688,
+      "heapTotal": 44351488,
+      "heapUsed": 8648568,
+      "external": 3754396,
+      "arrayBuffers": 67909
+    }
+  ],
+  "peakSampled": {
+    "rss": 100302848,
+    "heapUsed": 15406776,
+    "external": 31382760,
+    "arrayBuffers": 27696873
+  },
+  "exit": {
+    "code": 0,
+    "signal": null
+  }
+}

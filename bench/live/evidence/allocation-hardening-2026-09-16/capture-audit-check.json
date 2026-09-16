@@ -1,0 +1,22 @@
+{
+  "source": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-memory-followup-2026-09-16\\nullable\\run-TE4l0k",
+  "temporary": "C:\\Users\\yolan\\AppData\\Local\\Temp\\capture-audit-check-822ZEE",
+  "originalPreserved": true,
+  "originalValidationSha256": "adb2e0a74bf2bdb7045b9ca2d17b8a8a5c32a0395adf831c541d7b5a03043d02",
+  "reportExit": 1,
+  "audit": {
+    "task": "nullable",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "INVALID_CAPTURE",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": [
+      "Proxy request capture was incomplete; exposure evidence is invalid"
+    ]
+  }
+}

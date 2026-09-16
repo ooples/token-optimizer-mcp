@@ -29,6 +29,7 @@ import {
 import { adversarialFixture, adversarialTasks } from './adversarial-cases.mjs';
 import { provenance } from './codex-provenance.mjs';
 import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
+import { monitorHostMemory, memoryPolicy } from './host-memory.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const caseSuite = process.env.CASE_SUITE || 'development';
@@ -236,17 +237,20 @@ await writeFile(
       readMode,
       mcpDiscovery,
       caseSuite,
+      hostMemoryPolicy: process.platform === 'win32' ? memoryPolicy : null,
       started: new Date().toISOString(),
     },
     null,
     2
   )
 );
+const memoryMonitor = await monitorHostMemory(campaign);
 try {
   for (const task of tasks)
     for (let rep = 0; rep < reps; rep++)
       for (let position = 0; position < arms.length; position++) {
         const arm = arms[(position + rep) % arms.length];
+        await memoryMonitor.assertReady({ task, rep: rep + 1, arm });
         const artifacts = join(campaign, `${task}-${rep + 1}-${arm}`);
         const work = join(artifacts, 'workspace');
         await mkdir(work, { recursive: true });
@@ -322,7 +326,18 @@ try {
           env.TOKEN_OPTIMIZER_PROXY_CAPTURE = artifacts;
           const proxy = launch(
             process.execPath,
-            [proxyBin, '--port', String(proxyPort), '--upstream', upstream],
+            [
+              '--report-on-fatalerror',
+              '--report-exclude-env',
+              '--report-exclude-network',
+              '--report-directory',
+              artifacts,
+              proxyBin,
+              '--port',
+              String(proxyPort),
+              '--upstream',
+              upstream,
+            ],
             work,
             env,
             join(artifacts, 'proxy')
@@ -527,5 +542,6 @@ try {
       }
 } finally {
   for (const child of [...active]) await stop(child);
+  await memoryMonitor.stop();
 }
 console.log('Evidence: ' + campaign);

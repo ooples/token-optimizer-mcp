@@ -1,0 +1,15 @@
+{
+  "scope": "Capture-only pressure: 2000 concurrent 128 KiB records, 32 MiB old-space limit. Baseline OOM, bounded implementation survives by rejecting excess optional capture. This is a separately reproduced failure, not proof of the original nullable-9 root cause.",
+  "baselineModule": ".codex/profile-before-joint/dist/proxy/capture.js",
+  "baselineModuleSha256": "d2912dbebd594cde64707a865a8f6a9ca5bb973f4de7b394ccfbcfb78e238316",
+  "baselineExit": 1,
+  "afterExit": 0,
+  "before": {
+    "stdout": "{\"dir\":\"C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\capture-pressure-iIPpFJ\",\"started\":\"2026-09-16T15:56:48.688Z\"}\r\n",
+    "stderr": "node : \r\nAt line:14 char:1\r\n+ node --max-old-space-size=32 .codex/capture-pressure.mjs > .codex/cap ...\r\n+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (:String) [], RemoteException\r\n    + FullyQualifiedErrorId : NativeCommandError\r\n \r\n<--- Last few GCs --->\r\nnce start of marking 3 ms) (average mu = 0.224, current m[11896:000001C06CCD3000]      183 ms: Mark-Compact (reduce) \r\n31.1 (34.9) -> 30.9 (34.8) MB, pooled: 0 MB, 2.77 / 0.00 ms  (+ 0.0 ms in 0 steps since start of marking, biggest step \r\n0.0 ms, walltime since start of marking 3 ms) (average mu = 0.214, current m[11896:000001C06CCD3000]      185 ms: \r\nMark-Compact 31.1 (34.9) -> 31.1 (35.9) MB, pooled: 0 MB, 1.70 / 0.00 ms  (average mu = 0.201, current mu = 0.178) \r\nallocation failure; scavenge might not succeed\r\n\r\n\r\n<--- JS stacktrace --->\r\n\r\nFATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory\r\n----- Native stack trace -----\r\n\r\n 1: 00007FF7CA10A2ED node::SetCppgcReference+17725\r\n 2: 00007FF7CA071EA8 v8::base::CPU::num_virtual_address_bits+92328\r\n 3: 00007FF7CABF2EE1 v8::Isolate::ReportExternalAllocationLimitReached+65\r\n 4: 00007FF7CABDFB66 v8::Function::Experimental_IsNopFunction+2870\r\n 5: 00007FF7CAA2CDC0 v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+31456\r\n 6: 00007FF7CAA26ABA v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+6106\r\n 7: 00007FF7CAA22155 v8::CpuProfileNode::GetScriptResourceNameStr+188453\r\n 8: 00007FF7CA3A54CD BIO_ssl_shutdown+189\r\n"
+  },
+  "after": {
+    "stdout": "{\"dir\":\"C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\capture-pressure-TzVMO2\",\"started\":\"2026-09-16T16:00:36.885Z\"}\r\n{\"accepted\":127,\"rejected\":1873,\"memory\":{\"rss\":60932096,\"heapTotal\":13684736,\"heapUsed\":5067088,\"external\":18654285,\"arrayBuffers\":16853874}}\r\n",
+    "stderr": ""
+  }
+}

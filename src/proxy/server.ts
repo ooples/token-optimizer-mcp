@@ -1142,6 +1142,7 @@ export async function startProxy(
   const guessing = upstreamIsDefault(options);
   const limit = bodyLimitFor(options);
 
+  let captureFailureWarned = false;
   const server = createServer((req, res) => {
     void (async () => {
       // VALIDATED BEFORE ANYTHING IS COMPRESSED, and the order is the fix. Compressing
@@ -1192,7 +1193,15 @@ export async function startProxy(
         return;
       }
       const capture = captureDir();
-      if (capture) void captureRequest(capture, path, body);
+      if (capture)
+        void captureRequest(capture, path, body).then((captured) => {
+          if (!captured && !captureFailureWarned) {
+            captureFailureWarned = true;
+            console.error(
+              'token-optimizer proxy: capture incomplete (write failed or memory queue full)'
+            );
+          }
+        });
 
       const transformStarted = performance.now();
       const { body: next, summary } = compressBody(

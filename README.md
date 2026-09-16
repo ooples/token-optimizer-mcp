@@ -591,6 +591,11 @@ Off by default. `TOKEN_OPTIMIZER_PROXY=1` turns it on, it binds loopback only,
 and `doctor` reports whether your client is actually routed through it.
 Request-body capture is opt-in via `TOKEN_OPTIMIZER_PROXY_CAPTURE`; when enabled,
 it writes plaintext request content to the named directory.
+Capture queues are bounded to 128 requests and 16 MiB of queued snapshots and
+metadata. Excess captures are rejected with a warning while requests continue;
+live audits reject incomplete capture evidence. See the
+[allocation hardening and follow-up results](bench/live/evidence/allocation-hardening-2026-09-16/README.md)
+for the reproduced OOM fix, constrained-memory replay, and remaining cost losses.
 
 Your provider key is forwarded in the request headers and is never read, stored
 or written by the proxy. That is a narrower claim than "nothing sensitive is
