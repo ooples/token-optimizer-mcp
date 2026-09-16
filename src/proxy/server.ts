@@ -918,6 +918,7 @@ function forward(
       req.headers['anthropic-beta']
     );
 
+  let receivedResponse = false;
   const upstreamReq = send(
     {
       protocol: target.protocol,
@@ -928,6 +929,7 @@ function forward(
       headers,
     },
     (upstreamRes) => {
+      receivedResponse = true;
       // HOP-BY-HOP HEADERS ARE STRIPPED IN BOTH DIRECTIONS, and doing it in
       // only one was a real defect rather than an untidiness.
       //
@@ -1002,6 +1004,20 @@ function forward(
 
   res.once('close', () => upstreamReq.destroy());
   upstreamReq.on('error', (error) => {
+    // A connection failure has no response stream for tapUsage to observe.
+    // Keep the attempted request in the ledger with unknown usage, never zero.
+    const ledger = facts ? accountingPath() : null;
+    if (!receivedResponse && ledger && facts) {
+      receivedResponse = true;
+      appendRecord(ledger, {
+        ts: new Date().toISOString(),
+        path: requestPath(req.url) ?? '/',
+        status: 0,
+        ...facts,
+        transportError: (error as NodeJS.ErrnoException).code ?? 'UPSTREAM_ERROR',
+        usage: {},
+      });
+    }
     if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
     res.end(`token-optimizer proxy: upstream request failed: ${error.message}`);
   });

@@ -46,10 +46,35 @@ def intervals(groups, resamples=20000, seed=9152026):
     return dict(zip(["geometricPairedCost", "equalFamilyDollarCost"], answer))
 
 
+def attempt_accounting(case, row, audit, rates):
+    """Preserve each arm independently; unknown usage is never zero cost."""
+    known = dict(input=0, cached=0, output=0)
+    unknown = []
+    ledger = row.get("ledgerUsage") or []
+    for index, entry in enumerate(ledger):
+        usage = entry.get("usage") or {}
+        fields = ["input_tokens", "cached_input_tokens", "output_tokens"]
+        valid = all(type(usage.get(k)) is int and usage[k] >= 0 for k in fields)
+        valid = valid and usage["cached_input_tokens"] <= usage["input_tokens"]
+        if not valid:
+            unknown.append({"request": index + 1, "status": entry.get("status")})
+            continue
+        for target, source in zip(known, fields):
+            known[target] += usage[source]
+    cost = ((known["input"]-known["cached"])*rates["uncached"]+known["cached"]*rates["cached"]+known["output"]*rates["output"])/1e6
+    errors = audit.get("clientErrors", row.get("clientErrors", []))
+    return {"case": case["id"], "family": case["family"], "arm": row["arm"],
+            "verdict": audit["verdict"], "infrastructureFailure": bool(errors or any(e.get("status") != 200 for e in ledger)),
+            "clientErrors": errors, "knownUsage": known, "knownEstimatedUsd": cost,
+            "unknownUsageRequests": unknown, "ledgerPresent": bool(ledger),
+            "costComplete": bool(ledger) and not unknown,
+            "totalEstimatedUsd": cost if ledger and not unknown else None}
+
+
 def analyze(study):
     plan = json.loads((study / "plan.json").read_text())
     execution = json.loads((study / "execution.json").read_text())
-    issues, pairs = [], []
+    issues, pairs, attempts = [], [], []
     if execution["status"] != "complete":
         issues.append("Execution is incomplete")
     if len(execution["pairs"]) != plan["pairs"]:
@@ -68,6 +93,12 @@ def analyze(study):
             if (manifest["model"] != plan["model"] or manifest["caseSuite"] != plan["caseSuite"] or manifest["readMode"] != case["readMode"] or manifest["arms"] != case["arms"] or manifest["seedOffset"] != case["seed"]-1 or manifest["tasks"] != [case["task"]] or manifest["reps"] != 1):
                 raise ValueError("Protocol mismatch")
             record = {"id": case["id"], "family": case["family"], "arms": {}}
+            # Validate identities and account for BOTH arms before attempting
+            # paired cost inference. One missing ledger cannot erase its peer.
+            for r in rows:
+                if r["seed"] != case["seed"] or r["task"] != case["task"] or r["rep"] != 1:
+                    raise ValueError("Case mismatch")
+            attempts.extend(attempt_accounting(case, r, next(a for a in audit if a["arm"] == r["arm"]), rates) for r in rows)
             for r in rows:
                 verdict = next(a["verdict"] for a in audit if a["arm"] == r["arm"])
                 if r["seed"] != case["seed"] or r["task"] != case["task"] or r["rep"] != 1:
@@ -92,17 +123,25 @@ def analyze(study):
             issues.append(f'{case["id"]}: {error}')
     groups = [np.array([[p["arms"]["proxy"]["estimatedUsd"], p["arms"]["headroom"]["estimatedUsd"]] for p in pairs if p["family"] == family]) for family in plan["families"]]
     complete = len(pairs) == plan["pairs"] and all(len(g) == plan["pairsPerFamily"] for g in groups)
-    passed = sum(p["arms"]["proxy"]["verdict"] == "PASS" for p in pairs)
-    quality_lower = 0.05**(1/len(pairs)) if pairs and passed == len(pairs) else None
+    passed = sum(a["arm"] == "proxy" and a["verdict"] == "PASS" for a in attempts)
+    quality_lower = 0.05**(1/plan["pairs"]) if passed == plan["pairs"] else None
     result = {"complete": complete and not issues, "issues": issues, "pairsMeasured": len(pairs), "pairsPlanned": plan["pairs"], "proxyPasses": passed, "headroomPasses": sum(p["arms"]["headroom"]["verdict"] == "PASS" for p in pairs), "zeroFailureOneSided95SuccessLowerBound": quality_lower, "pairs": pairs, "limitations": ["Generated synthetic cases held out from product tuning; not independent real-world repositories.", "Provider cache state is observed, not experimentally flushed. Fresh sessions may start warm.", "Intervals assume independent case pairs within the sampled workload distribution; shared provider state can introduce dependence.", "BCa intervals are approximate, and the study cannot establish superiority outside this model, rate scenario, or suite.", "First-request cold sensitivity holds model behavior and subsequent usage fixed; it is not a cold-session experiment."]}
+    result.update({"attempts": attempts, "headroomPasses": sum(a["arm"] == "headroom" and a["verdict"] == "PASS" for a in attempts),
+                   "attemptAccounting": {arm: {"attempts": sum(a["arm"] == arm for a in attempts),
+                                               "knownEstimatedUsd": sum(a["knownEstimatedUsd"] for a in attempts if a["arm"] == arm),
+                                               "unknownCostAttempts": sum(not a["costComplete"] for a in attempts if a["arm"] == arm),
+                                               "infrastructureFailures": sum(a["infrastructureFailure"] for a in attempts if a["arm"] == arm)} for arm in ["proxy", "headroom"]}})
     if complete and not issues:
         result["cost"] = intervals(groups, plan["bootstrap"]["resamples"], plan["bootstrap"]["seed"])
         cold = [np.array([[p["arms"]["proxy"]["firstRequestColdSensitivityUsd"],p["arms"]["headroom"]["firstRequestColdSensitivityUsd"]] for p in pairs if p["family"] == f]) for f in plan["families"]]
         result["firstRequestColdSensitivity"] = intervals(cold,plan["bootstrap"]["resamples"],plan["bootstrap"]["seed"])
+        uncached = [np.array([[(p["arms"][arm]["input"]*rates["uncached"]+p["arms"][arm]["output"]*rates["output"])/1e6 for arm in ["proxy", "headroom"]] for p in pairs if p["family"] == f]) for f in plan["families"]]
+        result["allInputUncachedSensitivity"] = intervals(uncached,plan["bootstrap"]["resamples"],plan["bootstrap"]["seed"])
+        result["limitations"].append("All-input-uncached sensitivity holds observed behavior fixed; it is not an observed cold-cache cohort.")
         result["familyResultsExploratory"] = {family: {"pairs":len(g),"ratios":estimate([g]).tolist(),"proxyPasses":sum(p["family"]==family and p["arms"]["proxy"]["verdict"]=="PASS" for p in pairs),"headroomPasses":sum(p["family"]==family and p["arms"]["headroom"]["verdict"]=="PASS" for p in pairs)} for family,g in zip(plan["families"],groups)}
     result["superiorityEstablished"] = bool(complete and not issues and quality_lower is not None and quality_lower >= plan["success"]["minimumOneSided95SuccessBound"] and all(not r["degenerate"] and r["ci95Ratio"][1] < plan["success"]["bothCostUpper95Below"] for r in result.get("cost",{}).values()) and "cost" in result)
     (study / "analysis.json").write_text(json.dumps(result,indent=2)+"\n")
-    print(json.dumps({k:v for k,v in result.items() if k not in ["pairs","limitations"]},indent=2))
+    print(json.dumps({k:v for k,v in result.items() if k not in ["pairs","attempts","limitations"]},indent=2))
     return result
 
 

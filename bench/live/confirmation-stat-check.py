@@ -34,6 +34,24 @@ with tempfile.TemporaryDirectory(prefix='confirmation-stat-check-') as name:
     (root/'execution.json').write_text(json.dumps({'status':'complete','pairs':plan['schedule']}))
     assert module.analyze(root)['superiorityEstablished']
     first=root/'cases'/'0-0'/'validation.json'
+    # Missing competitor cost must block inference without erasing our success.
+    result_file = root/'cases'/'0-0'/'results.json'
+    saved_rows = json.loads(result_file.read_text())
+    failed_rows = json.loads(result_file.read_text())
+    failed_rows[1]['ledgerUsage'].append({'status':503,'usage':{}})
+    failed_rows[1]['usage'] = None
+    failed_rows[1]['clientErrors'] = ['unexpected status 503']
+    result_file.write_text(json.dumps(failed_rows))
+    first.write_text(json.dumps([{'arm':'proxy','verdict':'PASS'},{'arm':'headroom','verdict':'FAIL','clientErrors':['unexpected status 503']}]))
+    incomplete = module.analyze(root)
+    assert not incomplete['superiorityEstablished']
+    assert incomplete['proxyPasses'] == 70 and incomplete['headroomPasses'] == 69
+    assert len(incomplete['attempts']) == 140 and incomplete['pairsMeasured'] == 69
+    failed = next(a for a in incomplete['attempts'] if a['case']=='0-0' and a['arm']=='headroom')
+    assert failed['knownEstimatedUsd'] > 0 and failed['totalEstimatedUsd'] is None
+    assert failed['unknownUsageRequests'] == [{'request':2,'status':503}]
+    assert incomplete['attemptAccounting']['headroom']['unknownCostAttempts'] == 1
+    result_file.write_text(json.dumps(saved_rows))
     first.write_text(json.dumps([{'arm':'proxy','verdict':'FAIL'},{'arm':'headroom','verdict':'PASS'}]))
     assert not module.analyze(root)['superiorityEstablished']
     first.unlink()

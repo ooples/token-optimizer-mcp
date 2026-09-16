@@ -117,6 +117,8 @@ export interface AccountingRecord extends CompressionFacts {
   readonly ts: string;
   readonly path: string;
   readonly status: number;
+  /** No HTTP response was received; usage remains unknown, not zero. */
+  readonly transportError?: string;
   readonly usage: RequestUsage;
 }
 

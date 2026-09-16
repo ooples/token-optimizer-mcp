@@ -2,6 +2,7 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { standardScenario } from './codex-cost.mjs';
 import { heldoutFixture, heldoutWorkflow } from './heldout-cases.mjs';
 const directory = resolve(process.argv[2]);
@@ -12,8 +13,7 @@ async function scan(path) {
     const next = join(path, entry.name);
     if (entry.isDirectory()) {
       if (!/^(confirmation-|harness-smoke-)/.test(entry.name)) await scan(next);
-    }
-    else if (entry.name === 'results.json') {
+    } else if (entry.name === 'results.json') {
       let rows;
       try {
         rows = JSON.parse(await readFile(next, 'utf8'));
@@ -79,7 +79,11 @@ if (pairs > 210)
     'Planning variance requires more than the predeclared 210-pair resource ceiling; revise before confirmation'
   );
 const scheduleSeed = Number(process.env.STUDY_SEED ?? 0x9152026);
-if (!Number.isInteger(scheduleSeed) || scheduleSeed <= 0 || scheduleSeed > 0xffffffff)
+if (
+  !Number.isInteger(scheduleSeed) ||
+  scheduleSeed <= 0 ||
+  scheduleSeed > 0xffffffff
+)
   throw Error('STUDY_SEED must be a positive uint32');
 let state = scheduleSeed;
 const random = () => {
@@ -126,7 +130,10 @@ const plan = {
   version: 1,
   scheduleSeed,
   created: new Date().toISOString(),
-  productCommit: '62c0b678',
+  productCommit: execFileSync('git', ['rev-parse', 'HEAD'], {
+    encoding: 'utf8',
+    windowsHide: true,
+  }).trim(),
   caseSuite: 'heldout-v1',
   model: 'gpt-6-astra',
   families,
