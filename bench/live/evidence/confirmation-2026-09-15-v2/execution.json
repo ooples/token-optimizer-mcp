@@ -1147,6 +1147,101 @@
       "id": "logs-10",
       "family": "logs",
       "started": "2026-09-16T00:39:47.160Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\logs-10\\run-vEcfQT",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T00:40:40.006Z"
+    },
+    {
+      "id": "logs-4",
+      "family": "logs",
+      "started": "2026-09-16T00:40:42.147Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\logs-4\\run-0iS3s0",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T00:41:36.423Z"
+    },
+    {
+      "id": "bugfix-3",
+      "family": "bugfix",
+      "started": "2026-09-16T00:41:38.526Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\bugfix-3\\run-JRiBcU",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T00:43:47.627Z"
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "started": "2026-09-16T00:43:49.693Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\bugfix-9\\run-0aRV3c",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T00:45:49.660Z"
+    },
+    {
+      "id": "mixed-10",
+      "family": "mixed",
+      "started": "2026-09-16T00:45:51.696Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-6UI8bp\\mixed-10\\run-gJ3yAe",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T00:47:36.361Z"
+    },
+    {
+      "id": "logs-8",
+      "family": "logs",
+      "started": "2026-09-16T00:47:38.378Z",
       "status": "running"
     }
   ],
