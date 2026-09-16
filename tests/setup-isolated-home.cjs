@@ -31,9 +31,38 @@
  * CommonJS on purpose -- Jest runs `setupFiles` before the ESM loader is in
  * play, so an `import` statement here fails to parse.
  */
-const { mkdtempSync } = require('node:fs');
-const { join } = require('node:path');
+const { mkdtempSync, existsSync } = require('node:fs');
+const { join, delimiter } = require('node:path');
 const { tmpdir } = require('node:os');
+
+// Windows' system32/bash.exe is a WSL launcher, not an installed Bash runtime.
+// Shell-contract tests need Git Bash when it is installed. Scope the PATH change
+// to test workers and their children; never edit the user's global environment.
+if (process.platform === 'win32') {
+  const candidates = [
+    process.env.ProgramFiles && join(process.env.ProgramFiles, 'Git', 'bin'),
+    process.env['ProgramFiles(x86)'] &&
+      join(process.env['ProgramFiles(x86)'], 'Git', 'bin'),
+    process.env.LOCALAPPDATA &&
+      join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'bin'),
+  ].filter(Boolean);
+  const gitBash = candidates.find((directory) =>
+    existsSync(join(directory, 'bash.exe'))
+  );
+  if (gitBash) {
+    process.env.TOKEN_OPTIMIZER_TEST_BASH = join(gitBash, 'bash.exe');
+    const key =
+      Object.keys(process.env).find((name) => name.toLowerCase() === 'path') ||
+      'PATH';
+    const entries = (process.env[key] || '').split(delimiter);
+    process.env[key] = [
+      gitBash,
+      ...entries.filter(
+        (entry) => entry.toLowerCase() !== gitBash.toLowerCase()
+      ),
+    ].join(delimiter);
+  }
+}
 
 if (!process.env.TOKEN_OPTIMIZER_BACKUP_DIR) {
   process.env.TOKEN_OPTIMIZER_BACKUP_DIR = mkdtempSync(

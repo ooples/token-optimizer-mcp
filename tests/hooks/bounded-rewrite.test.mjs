@@ -21,10 +21,12 @@ import {
   DEFAULT_BOUND_BYTES,
 } from '../../hooks-core/rewrite.mjs';
 
+const BASH = process.env.TOKEN_OPTIMIZER_TEST_BASH || 'bash';
+
 /** Runs a command through bash exactly as the client's Bash tool would. */
 function run(command, shellFlags = [], env = {}) {
   try {
-    const stdout = execFileSync('bash', [...shellFlags, '-c', command], {
+    const stdout = execFileSync(BASH, [...shellFlags, '-c', command], {
       encoding: 'utf8',
       timeout: 30_000,
       env: { ...process.env, ...env },
@@ -766,7 +768,7 @@ describe('a command that only STARTS by changing the shell', () => {
     const bounded = boundedRewrite(command);
     expect(bounded).not.toBeNull();
     expect(() =>
-      execFileSync('bash', ['-n', '-c', bounded.command], { stdio: 'pipe' })
+      execFileSync(BASH, ['-n', '-c', bounded.command], { stdio: 'pipe' })
     ).not.toThrow();
   });
 
