@@ -1,0 +1,295 @@
+{
+  "scope": "Descriptive complete-pair subset only; excludes unmeasured attempts, no confirmatory inference",
+  "excludedCases": [
+    "refactor-5"
+  ],
+  "superiorityEstablished": false,
+  "overall": {
+    "proxy": {
+      "runs": 69,
+      "passes": 69,
+      "requests": 310,
+      "input": 4880741,
+      "cached": 3826176,
+      "output": 39954,
+      "estimatedUsd": 16.369526000000004,
+      "agentSeconds": 2199.6,
+      "startupInclusiveSeconds": 2268.5,
+      "firstCached": 292992,
+      "firstZeroCacheRuns": 32
+    },
+    "headroom": {
+      "runs": 69,
+      "passes": 69,
+      "requests": 492,
+      "input": 7985122,
+      "cached": 6719232,
+      "output": 53345,
+      "estimatedUsd": 22.045381999999996,
+      "agentSeconds": 3142.7,
+      "startupInclusiveSeconds": 3930.2999999999997,
+      "firstCached": 276480,
+      "firstZeroCacheRuns": 31
+    },
+    "reductionsPercent": {
+      "estimatedUsd": 25.74623565153007,
+      "requests": 36.99186991869918,
+      "input": 38.877064119997165,
+      "output": 25.1026337988565,
+      "agentSeconds": 30.009227734113974,
+      "startupInclusiveSeconds": 42.28175966211231
+    }
+  },
+  "logs": {
+    "proxy": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 30,
+      "input": 476711,
+      "cached": 318976,
+      "output": 1866,
+      "estimatedUsd": 1.9896259999999997,
+      "agentSeconds": 153.8,
+      "startupInclusiveSeconds": 163.1,
+      "firstCached": 27776,
+      "firstZeroCacheRuns": 7
+    },
+    "headroom": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 56,
+      "input": 958678,
+      "cached": 733312,
+      "output": 3801,
+      "estimatedUsd": 3.1770219999999996,
+      "agentSeconds": 294,
+      "startupInclusiveSeconds": 407.7,
+      "firstCached": 24576,
+      "firstZeroCacheRuns": 6
+    },
+    "reductionsPercent": {
+      "estimatedUsd": 37.374497249310835,
+      "requests": 46.42857142857143,
+      "input": 50.27412749640652,
+      "output": 50.90765588003157,
+      "agentSeconds": 47.687074829931966,
+      "startupInclusiveSeconds": 59.995094432180515
+    }
+  },
+  "json": {
+    "proxy": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 40,
+      "input": 674804,
+      "cached": 523648,
+      "output": 4017,
+      "estimatedUsd": 2.236058,
+      "agentSeconds": 249.50000000000003,
+      "startupInclusiveSeconds": 258.8,
+      "firstCached": 60928,
+      "firstZeroCacheRuns": 3
+    },
+    "headroom": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 30,
+      "input": 490027,
+      "cached": 370816,
+      "output": 1847,
+      "estimatedUsd": 1.6552760000000002,
+      "agentSeconds": 135.2,
+      "startupInclusiveSeconds": 249.89999999999998,
+      "firstCached": 65536,
+      "firstZeroCacheRuns": 2
+    },
+    "reductionsPercent": {
+      "estimatedUsd": -35.08671665631591,
+      "requests": -33.33333333333333,
+      "input": -37.707514075755014,
+      "output": -117.48781808337844,
+      "agentSeconds": -84.54142011834323,
+      "startupInclusiveSeconds": -3.5614245698279534
+    }
+  },
+  "code": {
+    "proxy": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 30,
+      "input": 452749,
+      "cached": 301056,
+      "output": 1971,
+      "estimatedUsd": 1.9165360000000002,
+      "agentSeconds": 163,
+      "startupInclusiveSeconds": 172.30000000000004,
+      "firstCached": 43136,
+      "firstZeroCacheRuns": 4
+    },
+    "headroom": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 50,
+      "input": 801952,
+      "cached": 641408,
+      "output": 3504,
+      "estimatedUsd": 2.422048,
+      "agentSeconds": 271.3,
+      "startupInclusiveSeconds": 392.90000000000003,
+      "firstCached": 38912,
+      "firstZeroCacheRuns": 4
+    },
+    "reductionsPercent": {
+      "estimatedUsd": 20.87126266696614,
+      "requests": 40,
+      "input": 43.544127329316474,
+      "output": 43.75,
+      "agentSeconds": 39.91890895687431,
+      "startupInclusiveSeconds": 56.14660218885212
+    }
+  },
+  "bugfix": {
+    "proxy": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 54,
+      "input": 821577,
+      "cached": 651776,
+      "output": 9052,
+      "estimatedUsd": 2.802386,
+      "agentSeconds": 422.09999999999997,
+      "startupInclusiveSeconds": 433.5,
+      "firstCached": 38912,
+      "firstZeroCacheRuns": 4
+    },
+    "headroom": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 101,
+      "input": 1693235,
+      "cached": 1490432,
+      "output": 12687,
+      "estimatedUsd": 4.152812,
+      "agentSeconds": 699.2,
+      "startupInclusiveSeconds": 810.9,
+      "firstCached": 41984,
+      "firstZeroCacheRuns": 5
+    },
+    "reductionsPercent": {
+      "estimatedUsd": 32.51835142067592,
+      "requests": 46.53465346534653,
+      "input": 51.47885556346283,
+      "output": 28.651375423662017,
+      "agentSeconds": 39.63100686498857,
+      "startupInclusiveSeconds": 46.540880503144656
+    }
+  },
+  "refactor": {
+    "proxy": {
+      "runs": 9,
+      "passes": 9,
+      "requests": 36,
+      "input": 496632,
+      "cached": 389632,
+      "output": 9311,
+      "estimatedUsd": 1.9251819999999997,
+      "agentSeconds": 414.90000000000003,
+      "startupInclusiveSeconds": 425.1,
+      "firstCached": 47232,
+      "firstZeroCacheRuns": 3
+    },
+    "headroom": {
+      "runs": 9,
+      "passes": 9,
+      "requests": 83,
+      "input": 1392033,
+      "cached": 1209344,
+      "output": 13407,
+      "estimatedUsd": 3.7065839999999994,
+      "agentSeconds": 688.6,
+      "startupInclusiveSeconds": 790.9000000000001,
+      "firstCached": 43008,
+      "firstZeroCacheRuns": 3
+    },
+    "reductionsPercent": {
+      "estimatedUsd": 48.0604783272145,
+      "requests": 56.62650602409638,
+      "input": 64.32325957789794,
+      "output": 30.551204594614756,
+      "agentSeconds": 39.7473133894859,
+      "startupInclusiveSeconds": 46.25110633455557
+    }
+  },
+  "refresh": {
+    "proxy": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 64,
+      "input": 1190710,
+      "cached": 1005440,
+      "output": 7309,
+      "estimatedUsd": 3.2235899999999997,
+      "agentSeconds": 420.90000000000003,
+      "startupInclusiveSeconds": 430.1,
+      "firstCached": 27776,
+      "firstZeroCacheRuns": 7
+    },
+    "headroom": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 81,
+      "input": 1199008,
+      "cached": 993536,
+      "output": 9066,
+      "estimatedUsd": 3.5015560000000003,
+      "agentSeconds": 521.8,
+      "startupInclusiveSeconds": 633.3,
+      "firstCached": 15360,
+      "firstZeroCacheRuns": 7
+    },
+    "reductionsPercent": {
+      "estimatedUsd": 7.938356547774772,
+      "requests": 20.98765432098766,
+      "input": 0.6920721129467067,
+      "output": 19.38010147804986,
+      "agentSeconds": 19.336910693752387,
+      "startupInclusiveSeconds": 32.085899257855665
+    }
+  },
+  "mixed": {
+    "proxy": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 56,
+      "input": 767558,
+      "cached": 635648,
+      "output": 6428,
+      "estimatedUsd": 2.2761479999999996,
+      "agentSeconds": 375.4,
+      "startupInclusiveSeconds": 385.6000000000001,
+      "firstCached": 47232,
+      "firstZeroCacheRuns": 4
+    },
+    "headroom": {
+      "runs": 10,
+      "passes": 10,
+      "requests": 91,
+      "input": 1450189,
+      "cached": 1280384,
+      "output": 9033,
+      "estimatedUsd": 3.430084,
+      "agentSeconds": 532.6,
+      "startupInclusiveSeconds": 644.6999999999999,
+      "firstCached": 47104,
+      "firstZeroCacheRuns": 4
+    },
+    "reductionsPercent": {
+      "estimatedUsd": 33.641625103058715,
+      "requests": 38.46153846153846,
+      "input": 47.07186442594724,
+      "output": 28.838702535148897,
+      "agentSeconds": 29.515583927900867,
+      "startupInclusiveSeconds": 40.1892353032418
+    }
+  }
+}

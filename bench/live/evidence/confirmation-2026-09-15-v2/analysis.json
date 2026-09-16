@@ -1,0 +1,2505 @@
+{
+  "complete": false,
+  "issues": [
+    "refactor-5: Provider error or missing ledger"
+  ],
+  "pairsMeasured": 69,
+  "pairsPlanned": 70,
+  "proxyPasses": 69,
+  "headroomPasses": 69,
+  "zeroFailureOneSided95SuccessLowerBound": 0.9575125894514063,
+  "pairs": [
+    {
+      "id": "mixed-9",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.290552,
+          "firstRequestColdSensitivityUsd": 0.373496,
+          "input": 145646,
+          "cached": 134912,
+          "output": 966,
+          "firstInput": 12899,
+          "firstCached": 9216,
+          "continuationInput": 132747,
+          "continuationCached": 125696,
+          "requests": 9,
+          "agentSeconds": 52.8,
+          "seconds": 63.7
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.172222,
+          "firstRequestColdSensitivityUsd": 0.255166,
+          "input": 82201,
+          "cached": 76032,
+          "output": 690,
+          "firstInput": 12982,
+          "firstCached": 9216,
+          "continuationInput": 69219,
+          "continuationCached": 66816,
+          "requests": 6,
+          "agentSeconds": 33.5,
+          "seconds": 34.4
+        }
+      }
+    },
+    {
+      "id": "code-5",
+      "family": "code",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.217966,
+          "firstRequestColdSensitivityUsd": 0.217966,
+          "input": 67534,
+          "cached": 52736,
+          "output": 345,
+          "firstInput": 12842,
+          "firstCached": 0,
+          "continuationInput": 54692,
+          "continuationCached": 52736,
+          "requests": 5,
+          "agentSeconds": 25.5,
+          "seconds": 36.1
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.11927,
+          "firstRequestColdSensitivityUsd": 0.202214,
+          "input": 44891,
+          "cached": 37760,
+          "output": 204,
+          "firstInput": 12925,
+          "firstCached": 9216,
+          "continuationInput": 31966,
+          "continuationCached": 28544,
+          "requests": 3,
+          "agentSeconds": 12.3,
+          "seconds": 13.3
+        }
+      }
+    },
+    {
+      "id": "refactor-6",
+      "family": "refactor",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.75811,
+          "firstRequestColdSensitivityUsd": 0.75811,
+          "input": 213249,
+          "cached": 161920,
+          "output": 1658,
+          "firstInput": 12771,
+          "firstCached": 0,
+          "continuationInput": 200478,
+          "continuationCached": 161920,
+          "requests": 10,
+          "agentSeconds": 86.2,
+          "seconds": 97.5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.16591,
+          "firstRequestColdSensitivityUsd": 0.24885400000000002,
+          "input": 55062,
+          "cached": 48640,
+          "output": 1061,
+          "firstInput": 12854,
+          "firstCached": 9216,
+          "continuationInput": 42208,
+          "continuationCached": 39424,
+          "requests": 4,
+          "agentSeconds": 44.6,
+          "seconds": 45.7
+        }
+      }
+    },
+    {
+      "id": "refresh-2",
+      "family": "refresh",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.47588,
+          "firstRequestColdSensitivityUsd": 0.47588,
+          "input": 214564,
+          "cached": 195840,
+          "output": 1856,
+          "firstInput": 12816,
+          "firstCached": 0,
+          "continuationInput": 201748,
+          "continuationCached": 195840,
+          "requests": 15,
+          "agentSeconds": 96.9,
+          "seconds": 107.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.247674,
+          "firstRequestColdSensitivityUsd": 0.330618,
+          "input": 107708,
+          "cached": 96384,
+          "output": 761,
+          "firstInput": 12899,
+          "firstCached": 9216,
+          "continuationInput": 94809,
+          "continuationCached": 87168,
+          "requests": 6,
+          "agentSeconds": 40.1,
+          "seconds": 41
+        }
+      }
+    },
+    {
+      "id": "bugfix-2",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.28785,
+          "firstRequestColdSensitivityUsd": 0.370794,
+          "input": 141332,
+          "cached": 132480,
+          "output": 1337,
+          "firstInput": 12780,
+          "firstCached": 9216,
+          "continuationInput": 128552,
+          "continuationCached": 123264,
+          "requests": 10,
+          "agentSeconds": 70.1,
+          "seconds": 80.6
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.286396,
+          "firstRequestColdSensitivityUsd": 0.286396,
+          "input": 73911,
+          "cached": 55296,
+          "output": 899,
+          "firstInput": 12863,
+          "firstCached": 0,
+          "continuationInput": 61048,
+          "continuationCached": 55296,
+          "requests": 5,
+          "agentSeconds": 43.2,
+          "seconds": 44.3
+        }
+      }
+    },
+    {
+      "id": "refresh-7",
+      "family": "refresh",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.426812,
+          "firstRequestColdSensitivityUsd": 0.426812,
+          "input": 121305,
+          "cached": 92032,
+          "output": 841,
+          "firstInput": 12813,
+          "firstCached": 0,
+          "continuationInput": 108492,
+          "continuationCached": 92032,
+          "requests": 9,
+          "agentSeconds": 51.7,
+          "seconds": 62.3
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.464588,
+          "firstRequestColdSensitivityUsd": 0.464588,
+          "input": 158153,
+          "cached": 127488,
+          "output": 609,
+          "firstInput": 12896,
+          "firstCached": 0,
+          "continuationInput": 145257,
+          "continuationCached": 127488,
+          "requests": 6,
+          "agentSeconds": 35,
+          "seconds": 35.9
+        }
+      }
+    },
+    {
+      "id": "logs-6",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.213528,
+          "firstRequestColdSensitivityUsd": 0.213528,
+          "input": 47049,
+          "cached": 29568,
+          "output": 183,
+          "firstInput": 12924,
+          "firstCached": 0,
+          "continuationInput": 34125,
+          "continuationCached": 29568,
+          "requests": 3,
+          "agentSeconds": 15.3,
+          "seconds": 16.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.426342,
+          "firstRequestColdSensitivityUsd": 0.426342,
+          "input": 124181,
+          "cached": 93952,
+          "output": 602,
+          "firstInput": 12841,
+          "firstCached": 0,
+          "continuationInput": 111340,
+          "continuationCached": 93952,
+          "requests": 9,
+          "agentSeconds": 42.7,
+          "seconds": 53.7
+        }
+      }
+    },
+    {
+      "id": "mixed-2",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.27454,
+          "firstRequestColdSensitivityUsd": 0.357484,
+          "input": 139741,
+          "cached": 129280,
+          "output": 813,
+          "firstInput": 12899,
+          "firstCached": 9216,
+          "continuationInput": 126842,
+          "continuationCached": 120064,
+          "requests": 9,
+          "agentSeconds": 53.1,
+          "seconds": 65
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.233038,
+          "firstRequestColdSensitivityUsd": 0.233038,
+          "input": 68322,
+          "cached": 53248,
+          "output": 581,
+          "firstInput": 12982,
+          "firstCached": 0,
+          "continuationInput": 55340,
+          "continuationCached": 53248,
+          "requests": 5,
+          "agentSeconds": 32.1,
+          "seconds": 33
+        }
+      }
+    },
+    {
+      "id": "refactor-7",
+      "family": "refactor",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.424664,
+          "firstRequestColdSensitivityUsd": 0.507608,
+          "input": 191146,
+          "cached": 172544,
+          "output": 1322,
+          "firstInput": 12768,
+          "firstCached": 9216,
+          "continuationInput": 178378,
+          "continuationCached": 163328,
+          "requests": 9,
+          "agentSeconds": 79.3,
+          "seconds": 90.3
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.243234,
+          "firstRequestColdSensitivityUsd": 0.243234,
+          "input": 54925,
+          "cached": 39424,
+          "output": 976,
+          "firstInput": 12851,
+          "firstCached": 0,
+          "continuationInput": 42074,
+          "continuationCached": 39424,
+          "requests": 4,
+          "agentSeconds": 43.1,
+          "seconds": 44.2
+        }
+      }
+    },
+    {
+      "id": "bugfix-7",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.46513,
+          "firstRequestColdSensitivityUsd": 0.548074,
+          "input": 237892,
+          "cached": 220160,
+          "output": 1353,
+          "firstInput": 12774,
+          "firstCached": 9216,
+          "continuationInput": 225118,
+          "continuationCached": 210944,
+          "requests": 11,
+          "agentSeconds": 77.3,
+          "seconds": 88.9
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.20662,
+          "firstRequestColdSensitivityUsd": 0.289564,
+          "input": 74368,
+          "cached": 64640,
+          "output": 894,
+          "firstInput": 12857,
+          "firstCached": 9216,
+          "continuationInput": 61511,
+          "continuationCached": 55424,
+          "requests": 5,
+          "agentSeconds": 44.8,
+          "seconds": 46
+        }
+      }
+    },
+    {
+      "id": "logs-2",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.13863,
+          "firstRequestColdSensitivityUsd": 0.221574,
+          "input": 48645,
+          "cached": 39680,
+          "output": 186,
+          "firstInput": 12924,
+          "firstCached": 9216,
+          "continuationInput": 35721,
+          "continuationCached": 30464,
+          "requests": 3,
+          "agentSeconds": 18.4,
+          "seconds": 19.3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.29083,
+          "firstRequestColdSensitivityUsd": 0.29083,
+          "input": 81091,
+          "cached": 59520,
+          "output": 312,
+          "firstInput": 12841,
+          "firstCached": 0,
+          "continuationInput": 68250,
+          "continuationCached": 59520,
+          "requests": 5,
+          "agentSeconds": 30.3,
+          "seconds": 40.8
+        }
+      }
+    },
+    {
+      "id": "bugfix-6",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.285382,
+          "firstRequestColdSensitivityUsd": 0.36832600000000004,
+          "input": 143123,
+          "cached": 134272,
+          "output": 1252,
+          "firstInput": 12787,
+          "firstCached": 9216,
+          "continuationInput": 130336,
+          "continuationCached": 125056,
+          "requests": 10,
+          "agentSeconds": 63.9,
+          "seconds": 75.8
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.293496,
+          "firstRequestColdSensitivityUsd": 0.293496,
+          "input": 75157,
+          "cached": 55936,
+          "output": 907,
+          "firstInput": 12857,
+          "firstCached": 0,
+          "continuationInput": 62300,
+          "continuationCached": 55936,
+          "requests": 5,
+          "agentSeconds": 41.5,
+          "seconds": 42.6
+        }
+      }
+    },
+    {
+      "id": "refactor-2",
+      "family": "refactor",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.5696,
+          "firstRequestColdSensitivityUsd": 0.5696,
+          "input": 186763,
+          "cached": 152320,
+          "output": 1457,
+          "firstInput": 12768,
+          "firstCached": 0,
+          "continuationInput": 173995,
+          "continuationCached": 152320,
+          "requests": 11,
+          "agentSeconds": 76.8,
+          "seconds": 87.8
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.16595,
+          "firstRequestColdSensitivityUsd": 0.248894,
+          "input": 55021,
+          "cached": 48640,
+          "output": 1070,
+          "firstInput": 12851,
+          "firstCached": 9216,
+          "continuationInput": 42170,
+          "continuationCached": 39424,
+          "requests": 4,
+          "agentSeconds": 51.3,
+          "seconds": 52.4
+        }
+      }
+    },
+    {
+      "id": "json-4",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.200096,
+          "firstRequestColdSensitivityUsd": 0.200096,
+          "input": 53421,
+          "cached": 39296,
+          "output": 391,
+          "firstInput": 12921,
+          "firstCached": 0,
+          "continuationInput": 40500,
+          "continuationCached": 39296,
+          "requests": 4,
+          "agentSeconds": 24.8,
+          "seconds": 25.8
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.14159,
+          "firstRequestColdSensitivityUsd": 0.224534,
+          "input": 48931,
+          "cached": 39680,
+          "output": 188,
+          "firstInput": 12838,
+          "firstCached": 9216,
+          "continuationInput": 36093,
+          "continuationCached": 30464,
+          "requests": 3,
+          "agentSeconds": 14.3,
+          "seconds": 25.1
+        }
+      }
+    },
+    {
+      "id": "refactor-8",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.293216,
+          "firstRequestColdSensitivityUsd": 0.37616,
+          "input": 55126,
+          "cached": 34816,
+          "output": 1106,
+          "firstInput": 12854,
+          "firstCached": 9216,
+          "continuationInput": 42272,
+          "continuationCached": 25600,
+          "requests": 4,
+          "agentSeconds": 50.8,
+          "seconds": 52
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.258802,
+          "firstRequestColdSensitivityUsd": 0.341746,
+          "input": 110099,
+          "cached": 101632,
+          "output": 1450,
+          "firstInput": 12771,
+          "firstCached": 9216,
+          "continuationInput": 97328,
+          "continuationCached": 92416,
+          "requests": 8,
+          "agentSeconds": 71,
+          "seconds": 82
+        }
+      }
+    },
+    {
+      "id": "bugfix-1",
+      "family": "bugfix",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.204214,
+          "firstRequestColdSensitivityUsd": 0.287158,
+          "input": 73977,
+          "cached": 64384,
+          "output": 878,
+          "firstInput": 12873,
+          "firstCached": 9216,
+          "continuationInput": 61104,
+          "continuationCached": 55168,
+          "requests": 5,
+          "agentSeconds": 43.1,
+          "seconds": 44.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.618998,
+          "firstRequestColdSensitivityUsd": 0.618998,
+          "input": 186448,
+          "cached": 146048,
+          "output": 1379,
+          "firstInput": 12777,
+          "firstCached": 0,
+          "continuationInput": 173671,
+          "continuationCached": 146048,
+          "requests": 11,
+          "agentSeconds": 82.9,
+          "seconds": 93.9
+        }
+      }
+    },
+    {
+      "id": "mixed-1",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.241384,
+          "firstRequestColdSensitivityUsd": 0.324328,
+          "input": 127611,
+          "cached": 120064,
+          "output": 917,
+          "firstInput": 12893,
+          "firstCached": 9216,
+          "continuationInput": 114718,
+          "continuationCached": 110848,
+          "requests": 9,
+          "agentSeconds": 50.7,
+          "seconds": 61.6
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.267832,
+          "firstRequestColdSensitivityUsd": 0.35077600000000003,
+          "input": 68090,
+          "cached": 49152,
+          "output": 586,
+          "firstInput": 12976,
+          "firstCached": 9216,
+          "continuationInput": 55114,
+          "continuationCached": 39936,
+          "requests": 5,
+          "agentSeconds": 31.6,
+          "seconds": 32.5
+        }
+      }
+    },
+    {
+      "id": "refresh-3",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.336776,
+          "firstRequestColdSensitivityUsd": 0.336776,
+          "input": 111003,
+          "cached": 89856,
+          "output": 709,
+          "firstInput": 12896,
+          "firstCached": 0,
+          "continuationInput": 98107,
+          "continuationCached": 89856,
+          "requests": 6,
+          "agentSeconds": 41.2,
+          "seconds": 42.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.315132,
+          "firstRequestColdSensitivityUsd": 0.315132,
+          "input": 103970,
+          "cached": 84352,
+          "output": 692,
+          "firstInput": 12813,
+          "firstCached": 0,
+          "continuationInput": 91157,
+          "continuationCached": 84352,
+          "requests": 6,
+          "agentSeconds": 52.2,
+          "seconds": 62.7
+        }
+      }
+    },
+    {
+      "id": "logs-1",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.364368,
+          "firstRequestColdSensitivityUsd": 0.364368,
+          "input": 101042,
+          "cached": 73728,
+          "output": 350,
+          "firstInput": 12838,
+          "firstCached": 0,
+          "continuationInput": 88204,
+          "continuationCached": 73728,
+          "requests": 5,
+          "agentSeconds": 28.2,
+          "seconds": 38.8
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.130714,
+          "firstRequestColdSensitivityUsd": 0.21365800000000001,
+          "input": 47052,
+          "cached": 38784,
+          "output": 185,
+          "firstInput": 12934,
+          "firstCached": 9216,
+          "continuationInput": 34118,
+          "continuationCached": 29568,
+          "requests": 3,
+          "agentSeconds": 15,
+          "seconds": 15.9
+        }
+      }
+    },
+    {
+      "id": "refresh-4",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.246382,
+          "firstRequestColdSensitivityUsd": 0.329326,
+          "input": 109391,
+          "cached": 97792,
+          "output": 652,
+          "firstInput": 12896,
+          "firstCached": 9216,
+          "continuationInput": 96495,
+          "continuationCached": 88576,
+          "requests": 6,
+          "agentSeconds": 41,
+          "seconds": 41.9
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.297118,
+          "firstRequestColdSensitivityUsd": 0.297118,
+          "input": 108372,
+          "cached": 92928,
+          "output": 995,
+          "firstInput": 12813,
+          "firstCached": 0,
+          "continuationInput": 95559,
+          "continuationCached": 92928,
+          "requests": 8,
+          "agentSeconds": 49.6,
+          "seconds": 60.4
+        }
+      }
+    },
+    {
+      "id": "json-10",
+      "family": "json",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.138654,
+          "firstRequestColdSensitivityUsd": 0.22159800000000002,
+          "input": 48432,
+          "cached": 39424,
+          "output": 183,
+          "firstInput": 12838,
+          "firstCached": 9216,
+          "continuationInput": 35594,
+          "continuationCached": 30208,
+          "requests": 3,
+          "agentSeconds": 12.7,
+          "seconds": 23.5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.278228,
+          "firstRequestColdSensitivityUsd": 0.361172,
+          "input": 82266,
+          "cached": 62848,
+          "output": 424,
+          "firstInput": 12921,
+          "firstCached": 9216,
+          "continuationInput": 69345,
+          "continuationCached": 53632,
+          "requests": 4,
+          "agentSeconds": 23.8,
+          "seconds": 24.6
+        }
+      }
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.170556,
+          "firstRequestColdSensitivityUsd": 0.2535,
+          "input": 82410,
+          "cached": 76416,
+          "output": 684,
+          "firstInput": 12976,
+          "firstCached": 9216,
+          "continuationInput": 69434,
+          "continuationCached": 67200,
+          "requests": 6,
+          "agentSeconds": 39.3,
+          "seconds": 40.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.455128,
+          "firstRequestColdSensitivityUsd": 0.455128,
+          "input": 167233,
+          "cached": 140928,
+          "output": 1023,
+          "firstInput": 12893,
+          "firstCached": 0,
+          "continuationInput": 154340,
+          "continuationCached": 140928,
+          "requests": 10,
+          "agentSeconds": 57.7,
+          "seconds": 68.5
+        }
+      }
+    },
+    {
+      "id": "json-9",
+      "family": "json",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.139152,
+          "firstRequestColdSensitivityUsd": 0.22209600000000002,
+          "input": 48577,
+          "cached": 39552,
+          "output": 187,
+          "firstInput": 12838,
+          "firstCached": 9216,
+          "continuationInput": 35739,
+          "continuationCached": 30336,
+          "requests": 3,
+          "agentSeconds": 12.2,
+          "seconds": 22.8
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.141248,
+          "firstRequestColdSensitivityUsd": 0.224192,
+          "input": 67667,
+          "cached": 62208,
+          "output": 489,
+          "firstInput": 12921,
+          "firstCached": 9216,
+          "continuationInput": 54746,
+          "continuationCached": 52992,
+          "requests": 5,
+          "agentSeconds": 27.4,
+          "seconds": 28.3
+        }
+      }
+    },
+    {
+      "id": "code-3",
+      "family": "code",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.255864,
+          "firstRequestColdSensitivityUsd": 0.255864,
+          "input": 74239,
+          "cached": 56064,
+          "output": 361,
+          "firstInput": 12842,
+          "firstCached": 0,
+          "continuationInput": 61397,
+          "continuationCached": 56064,
+          "requests": 5,
+          "agentSeconds": 23.2,
+          "seconds": 33.5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.120586,
+          "firstRequestColdSensitivityUsd": 0.20353,
+          "input": 45363,
+          "cached": 38016,
+          "output": 182,
+          "firstInput": 12938,
+          "firstCached": 9216,
+          "continuationInput": 32425,
+          "continuationCached": 28800,
+          "requests": 3,
+          "agentSeconds": 18.7,
+          "seconds": 19.6
+        }
+      }
+    },
+    {
+      "id": "mixed-5",
+      "family": "mixed",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.356862,
+          "firstRequestColdSensitivityUsd": 0.356862,
+          "input": 68243,
+          "cached": 39552,
+          "output": 608,
+          "firstInput": 12979,
+          "firstCached": 0,
+          "continuationInput": 55264,
+          "continuationCached": 39552,
+          "requests": 5,
+          "agentSeconds": 37.8,
+          "seconds": 38.7
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.377978,
+          "firstRequestColdSensitivityUsd": 0.377978,
+          "input": 144841,
+          "cached": 123648,
+          "output": 848,
+          "firstInput": 12990,
+          "firstCached": 0,
+          "continuationInput": 131851,
+          "continuationCached": 123648,
+          "requests": 9,
+          "agentSeconds": 55.7,
+          "seconds": 65.9
+        }
+      }
+    },
+    {
+      "id": "refactor-10",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.250948,
+          "firstRequestColdSensitivityUsd": 0.250948,
+          "input": 55447,
+          "cached": 39808,
+          "output": 1095,
+          "firstInput": 12945,
+          "firstCached": 0,
+          "continuationInput": 42502,
+          "continuationCached": 39808,
+          "requests": 4,
+          "agentSeconds": 45,
+          "seconds": 46.1
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.399542,
+          "firstRequestColdSensitivityUsd": 0.445622,
+          "input": 171452,
+          "cached": 155392,
+          "output": 1671,
+          "firstInput": 12862,
+          "firstCached": 5120,
+          "continuationInput": 158590,
+          "continuationCached": 150272,
+          "requests": 10,
+          "agentSeconds": 84,
+          "seconds": 94.5
+        }
+      }
+    },
+    {
+      "id": "refresh-8",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.362608,
+          "firstRequestColdSensitivityUsd": 0.362608,
+          "input": 130171,
+          "cached": 108928,
+          "output": 825,
+          "firstInput": 12984,
+          "firstCached": 0,
+          "continuationInput": 117187,
+          "continuationCached": 108928,
+          "requests": 7,
+          "agentSeconds": 52.1,
+          "seconds": 53
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.345804,
+          "firstRequestColdSensitivityUsd": 0.345804,
+          "input": 94847,
+          "cached": 71424,
+          "output": 803,
+          "firstInput": 12901,
+          "firstCached": 0,
+          "continuationInput": 81946,
+          "continuationCached": 71424,
+          "requests": 7,
+          "agentSeconds": 40.4,
+          "seconds": 51.2
+        }
+      }
+    },
+    {
+      "id": "refresh-5",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.326196,
+          "firstRequestColdSensitivityUsd": 0.326196,
+          "input": 109173,
+          "cached": 88576,
+          "output": 633,
+          "firstInput": 12987,
+          "firstCached": 0,
+          "continuationInput": 96186,
+          "continuationCached": 88576,
+          "requests": 6,
+          "agentSeconds": 37.2,
+          "seconds": 38.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.333176,
+          "firstRequestColdSensitivityUsd": 0.333176,
+          "input": 134513,
+          "cached": 115456,
+          "output": 543,
+          "firstInput": 12904,
+          "firstCached": 0,
+          "continuationInput": 121609,
+          "continuationCached": 115456,
+          "requests": 8,
+          "agentSeconds": 33.8,
+          "seconds": 45.2
+        }
+      }
+    },
+    {
+      "id": "refresh-10",
+      "family": "refresh",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.258188,
+          "firstRequestColdSensitivityUsd": 0.304268,
+          "input": 96499,
+          "cached": 83328,
+          "output": 863,
+          "firstInput": 12907,
+          "firstCached": 5120,
+          "continuationInput": 83592,
+          "continuationCached": 78208,
+          "requests": 6,
+          "agentSeconds": 45.3,
+          "seconds": 56.1
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.254686,
+          "firstRequestColdSensitivityUsd": 0.254686,
+          "input": 82158,
+          "cached": 66816,
+          "output": 689,
+          "firstInput": 12990,
+          "firstCached": 0,
+          "continuationInput": 69168,
+          "continuationCached": 66816,
+          "requests": 6,
+          "agentSeconds": 36.9,
+          "seconds": 37.8
+        }
+      }
+    },
+    {
+      "id": "mixed-7",
+      "family": "mixed",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.207658,
+          "firstRequestColdSensitivityUsd": 0.253738,
+          "input": 82649,
+          "cached": 72448,
+          "output": 664,
+          "firstInput": 13070,
+          "firstCached": 5120,
+          "continuationInput": 69579,
+          "continuationCached": 67328,
+          "requests": 6,
+          "agentSeconds": 37.9,
+          "seconds": 39.8
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.272114,
+          "firstRequestColdSensitivityUsd": 0.31819400000000003,
+          "input": 127167,
+          "cached": 115584,
+          "output": 814,
+          "firstInput": 12987,
+          "firstCached": 5120,
+          "continuationInput": 114180,
+          "continuationCached": 110464,
+          "requests": 9,
+          "agentSeconds": 47,
+          "seconds": 60.9
+        }
+      }
+    },
+    {
+      "id": "json-7",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.133684,
+          "firstRequestColdSensitivityUsd": 0.179764,
+          "input": 39872,
+          "cached": 31104,
+          "output": 298,
+          "firstInput": 13015,
+          "firstCached": 5120,
+          "continuationInput": 26857,
+          "continuationCached": 25984,
+          "requests": 3,
+          "agentSeconds": 20.2,
+          "seconds": 21.1
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.21925,
+          "firstRequestColdSensitivityUsd": 0.21925,
+          "input": 48057,
+          "cached": 30080,
+          "output": 188,
+          "firstInput": 12932,
+          "firstCached": 0,
+          "continuationInput": 35125,
+          "continuationCached": 30080,
+          "requests": 3,
+          "agentSeconds": 14.4,
+          "seconds": 28.9
+        }
+      }
+    },
+    {
+      "id": "code-8",
+      "family": "code",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.270724,
+          "firstRequestColdSensitivityUsd": 0.35482,
+          "input": 46067,
+          "cached": 22144,
+          "output": 187,
+          "firstInput": 13020,
+          "firstCached": 9344,
+          "continuationInput": 33047,
+          "continuationCached": 12800,
+          "requests": 3,
+          "agentSeconds": 15.1,
+          "seconds": 16.1
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.135636,
+          "firstRequestColdSensitivityUsd": 0.21858,
+          "input": 67866,
+          "cached": 62336,
+          "output": 360,
+          "firstInput": 12937,
+          "firstCached": 9216,
+          "continuationInput": 54929,
+          "continuationCached": 53120,
+          "requests": 5,
+          "agentSeconds": 35.7,
+          "seconds": 50.3
+        }
+      }
+    },
+    {
+      "id": "logs-5",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.268208,
+          "firstRequestColdSensitivityUsd": 0.268208,
+          "input": 76305,
+          "cached": 57088,
+          "output": 379,
+          "firstInput": 12932,
+          "firstCached": 0,
+          "continuationInput": 63373,
+          "continuationCached": 57088,
+          "requests": 5,
+          "agentSeconds": 28.2,
+          "seconds": 44
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.225092,
+          "firstRequestColdSensitivityUsd": 0.225092,
+          "input": 49097,
+          "cached": 30592,
+          "output": 189,
+          "firstInput": 13028,
+          "firstCached": 0,
+          "continuationInput": 36069,
+          "continuationCached": 30592,
+          "requests": 3,
+          "agentSeconds": 14.8,
+          "seconds": 15.8
+        }
+      }
+    },
+    {
+      "id": "refresh-9",
+      "family": "refresh",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.22629,
+          "firstRequestColdSensitivityUsd": 0.27237,
+          "input": 94836,
+          "cached": 84480,
+          "output": 765,
+          "firstInput": 12904,
+          "firstCached": 5120,
+          "continuationInput": 81932,
+          "continuationCached": 79360,
+          "requests": 7,
+          "agentSeconds": 50.9,
+          "seconds": 64.2
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.329754,
+          "firstRequestColdSensitivityUsd": 0.329754,
+          "input": 118290,
+          "cached": 98944,
+          "output": 747,
+          "firstInput": 12987,
+          "firstCached": 0,
+          "continuationInput": 105303,
+          "continuationCached": 98944,
+          "requests": 7,
+          "agentSeconds": 46.1,
+          "seconds": 47
+        }
+      }
+    },
+    {
+      "id": "json-1",
+      "family": "json",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.130614,
+          "firstRequestColdSensitivityUsd": 0.21355800000000003,
+          "input": 47052,
+          "cached": 38784,
+          "output": 183,
+          "firstInput": 12938,
+          "firstCached": 9216,
+          "continuationInput": 34114,
+          "continuationCached": 29568,
+          "requests": 3,
+          "agentSeconds": 13.2,
+          "seconds": 24.6
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.121716,
+          "firstRequestColdSensitivityUsd": 0.205812,
+          "input": 53968,
+          "cached": 48896,
+          "output": 442,
+          "firstInput": 13021,
+          "firstCached": 9344,
+          "continuationInput": 40947,
+          "continuationCached": 39552,
+          "requests": 4,
+          "agentSeconds": 23.5,
+          "seconds": 24.4
+        }
+      }
+    },
+    {
+      "id": "code-4",
+      "family": "code",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.271824,
+          "firstRequestColdSensitivityUsd": 0.317904,
+          "input": 44925,
+          "cached": 20864,
+          "output": 207,
+          "firstInput": 13017,
+          "firstCached": 5120,
+          "continuationInput": 31908,
+          "continuationCached": 15744,
+          "requests": 3,
+          "agentSeconds": 18.9,
+          "seconds": 19.8
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.221342,
+          "firstRequestColdSensitivityUsd": 0.267422,
+          "input": 77799,
+          "cached": 63872,
+          "output": 364,
+          "firstInput": 12934,
+          "firstCached": 5120,
+          "continuationInput": 64865,
+          "continuationCached": 58752,
+          "requests": 5,
+          "agentSeconds": 26,
+          "seconds": 43.6
+        }
+      }
+    },
+    {
+      "id": "logs-7",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.35303,
+          "firstRequestColdSensitivityUsd": 0.39911,
+          "input": 79598,
+          "cached": 51200,
+          "output": 357,
+          "firstInput": 12932,
+          "firstCached": 5120,
+          "continuationInput": 66666,
+          "continuationCached": 46080,
+          "requests": 5,
+          "agentSeconds": 27.1,
+          "seconds": 38.2
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.285684,
+          "firstRequestColdSensitivityUsd": 0.285684,
+          "input": 47548,
+          "cached": 22144,
+          "output": 190,
+          "firstInput": 13015,
+          "firstCached": 0,
+          "continuationInput": 34533,
+          "continuationCached": 22144,
+          "requests": 3,
+          "agentSeconds": 15.5,
+          "seconds": 16.4
+        }
+      }
+    },
+    {
+      "id": "json-6",
+      "family": "json",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.14771,
+          "firstRequestColdSensitivityUsd": 0.23065400000000003,
+          "input": 50154,
+          "cached": 40320,
+          "output": 181,
+          "firstInput": 12932,
+          "firstCached": 9216,
+          "continuationInput": 37222,
+          "continuationCached": 31104,
+          "requests": 3,
+          "agentSeconds": 12.2,
+          "seconds": 23.2
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.119398,
+          "firstRequestColdSensitivityUsd": 0.203494,
+          "input": 53771,
+          "cached": 48768,
+          "output": 412,
+          "firstInput": 13015,
+          "firstCached": 9344,
+          "continuationInput": 40756,
+          "continuationCached": 39424,
+          "requests": 4,
+          "agentSeconds": 28.3,
+          "seconds": 29.3
+        }
+      }
+    },
+    {
+      "id": "json-5",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.261246,
+          "firstRequestColdSensitivityUsd": 0.345342,
+          "input": 79646,
+          "cached": 61696,
+          "output": 401,
+          "firstInput": 13015,
+          "firstCached": 9344,
+          "continuationInput": 66631,
+          "continuationCached": 52352,
+          "requests": 4,
+          "agentSeconds": 25.3,
+          "seconds": 26.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.17309,
+          "firstRequestColdSensitivityUsd": 0.21917,
+          "input": 48064,
+          "cached": 35200,
+          "output": 185,
+          "firstInput": 12945,
+          "firstCached": 5120,
+          "continuationInput": 35119,
+          "continuationCached": 30080,
+          "requests": 3,
+          "agentSeconds": 16.5,
+          "seconds": 27.6
+        }
+      }
+    },
+    {
+      "id": "refactor-1",
+      "family": "refactor",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.277066,
+          "firstRequestColdSensitivityUsd": 0.36001,
+          "input": 129175,
+          "cached": 120576,
+          "output": 1410,
+          "firstInput": 12862,
+          "firstCached": 9216,
+          "continuationInput": 116313,
+          "continuationCached": 111360,
+          "requests": 9,
+          "agentSeconds": 67.2,
+          "seconds": 79.7
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.200598,
+          "firstRequestColdSensitivityUsd": 0.246678,
+          "input": 55330,
+          "cached": 44928,
+          "output": 1033,
+          "firstInput": 12945,
+          "firstCached": 5120,
+          "continuationInput": 42385,
+          "continuationCached": 39808,
+          "requests": 4,
+          "agentSeconds": 50.5,
+          "seconds": 51.6
+        }
+      }
+    },
+    {
+      "id": "refactor-4",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.244068,
+          "firstRequestColdSensitivityUsd": 0.244068,
+          "input": 55374,
+          "cached": 39808,
+          "output": 972,
+          "firstInput": 12948,
+          "firstCached": 0,
+          "continuationInput": 42426,
+          "continuationCached": 39808,
+          "requests": 4,
+          "agentSeconds": 44.4,
+          "seconds": 45.6
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.368452,
+          "firstRequestColdSensitivityUsd": 0.414532,
+          "input": 148686,
+          "cached": 134912,
+          "output": 1916,
+          "firstInput": 12865,
+          "firstCached": 5120,
+          "continuationInput": 135821,
+          "continuationCached": 129792,
+          "requests": 10,
+          "agentSeconds": 92.5,
+          "seconds": 103.5
+        }
+      }
+    },
+    {
+      "id": "logs-9",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.226342,
+          "firstRequestColdSensitivityUsd": 0.226342,
+          "input": 49227,
+          "cached": 30592,
+          "output": 188,
+          "firstInput": 13034,
+          "firstCached": 0,
+          "continuationInput": 36193,
+          "continuationCached": 30592,
+          "requests": 3,
+          "agentSeconds": 12.7,
+          "seconds": 13.7
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.352274,
+          "firstRequestColdSensitivityUsd": 0.352274,
+          "input": 116302,
+          "cached": 92544,
+          "output": 443,
+          "firstInput": 12938,
+          "firstCached": 0,
+          "continuationInput": 103364,
+          "continuationCached": 92544,
+          "requests": 6,
+          "agentSeconds": 27.9,
+          "seconds": 38.9
+        }
+      }
+    },
+    {
+      "id": "mixed-3",
+      "family": "mixed",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.207806,
+          "firstRequestColdSensitivityUsd": 0.253886,
+          "input": 82824,
+          "cached": 72576,
+          "output": 655,
+          "firstInput": 13070,
+          "firstCached": 5120,
+          "continuationInput": 69754,
+          "continuationCached": 67456,
+          "requests": 6,
+          "agentSeconds": 38.3,
+          "seconds": 39.3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.337754,
+          "firstRequestColdSensitivityUsd": 0.337754,
+          "input": 122427,
+          "cached": 103424,
+          "output": 886,
+          "firstInput": 12987,
+          "firstCached": 0,
+          "continuationInput": 109440,
+          "continuationCached": 103424,
+          "requests": 8,
+          "agentSeconds": 53.8,
+          "seconds": 64.6
+        }
+      }
+    },
+    {
+      "id": "json-3",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.312406,
+          "firstRequestColdSensitivityUsd": 0.396502,
+          "input": 88594,
+          "cached": 66176,
+          "output": 441,
+          "firstInput": 13018,
+          "firstCached": 9344,
+          "continuationInput": 75576,
+          "continuationCached": 56832,
+          "requests": 4,
+          "agentSeconds": 31.5,
+          "seconds": 32.5
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.151652,
+          "firstRequestColdSensitivityUsd": 0.23459600000000003,
+          "input": 50994,
+          "cached": 40832,
+          "output": 184,
+          "firstInput": 12935,
+          "firstCached": 9216,
+          "continuationInput": 38059,
+          "continuationCached": 31616,
+          "requests": 3,
+          "agentSeconds": 12.6,
+          "seconds": 23.6
+        }
+      }
+    },
+    {
+      "id": "code-6",
+      "family": "code",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.208618,
+          "firstRequestColdSensitivityUsd": 0.208618,
+          "input": 45832,
+          "cached": 28928,
+          "output": 213,
+          "firstInput": 13017,
+          "firstCached": 0,
+          "continuationInput": 32815,
+          "continuationCached": 28928,
+          "requests": 3,
+          "agentSeconds": 21.6,
+          "seconds": 22.6
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.310002,
+          "firstRequestColdSensitivityUsd": 0.356082,
+          "input": 100093,
+          "cached": 78592,
+          "output": 328,
+          "firstInput": 12934,
+          "firstCached": 5120,
+          "continuationInput": 87159,
+          "continuationCached": 73472,
+          "requests": 5,
+          "agentSeconds": 29.5,
+          "seconds": 40.4
+        }
+      }
+    },
+    {
+      "id": "bugfix-8",
+      "family": "bugfix",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.24043,
+          "firstRequestColdSensitivityUsd": 0.28651,
+          "input": 74283,
+          "cached": 60800,
+          "output": 896,
+          "firstInput": 12951,
+          "firstCached": 5120,
+          "continuationInput": 61332,
+          "continuationCached": 55680,
+          "requests": 5,
+          "agentSeconds": 39.1,
+          "seconds": 40.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.363924,
+          "firstRequestColdSensitivityUsd": 0.41000400000000004,
+          "input": 169264,
+          "cached": 154624,
+          "output": 1258,
+          "firstInput": 12830,
+          "firstCached": 5120,
+          "continuationInput": 156434,
+          "continuationCached": 149504,
+          "requests": 11,
+          "agentSeconds": 68.9,
+          "seconds": 79.4
+        }
+      }
+    },
+    {
+      "id": "code-9",
+      "family": "code",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.23742,
+          "firstRequestColdSensitivityUsd": 0.2835,
+          "input": 81846,
+          "cached": 66560,
+          "output": 360,
+          "firstInput": 12896,
+          "firstCached": 5120,
+          "continuationInput": 68950,
+          "continuationCached": 61440,
+          "requests": 5,
+          "agentSeconds": 23.8,
+          "seconds": 34.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.198888,
+          "firstRequestColdSensitivityUsd": 0.198888,
+          "input": 44433,
+          "cached": 28288,
+          "output": 183,
+          "firstInput": 12992,
+          "firstCached": 0,
+          "continuationInput": 31441,
+          "continuationCached": 28288,
+          "requests": 3,
+          "agentSeconds": 17.8,
+          "seconds": 18.7
+        }
+      }
+    },
+    {
+      "id": "code-1",
+      "family": "code",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.247516,
+          "firstRequestColdSensitivityUsd": 0.293596,
+          "input": 81408,
+          "cached": 64896,
+          "output": 350,
+          "firstInput": 12898,
+          "firstCached": 5120,
+          "continuationInput": 68510,
+          "continuationCached": 59776,
+          "requests": 5,
+          "agentSeconds": 29.8,
+          "seconds": 44.1
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.204592,
+          "firstRequestColdSensitivityUsd": 0.204592,
+          "input": 45244,
+          "cached": 28672,
+          "output": 204,
+          "firstInput": 12981,
+          "firstCached": 0,
+          "continuationInput": 32263,
+          "continuationCached": 28672,
+          "requests": 3,
+          "agentSeconds": 13.3,
+          "seconds": 14.2
+        }
+      }
+    },
+    {
+      "id": "json-8",
+      "family": "json",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.190258,
+          "firstRequestColdSensitivityUsd": 0.23633800000000002,
+          "input": 51013,
+          "cached": 36608,
+          "output": 192,
+          "firstInput": 12900,
+          "firstCached": 5120,
+          "continuationInput": 38113,
+          "continuationCached": 31488,
+          "requests": 3,
+          "agentSeconds": 12.7,
+          "seconds": 25.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.303888,
+          "firstRequestColdSensitivityUsd": 0.303888,
+          "input": 72705,
+          "cached": 48768,
+          "output": 315,
+          "firstInput": 12983,
+          "firstCached": 0,
+          "continuationInput": 59722,
+          "continuationCached": 48768,
+          "requests": 4,
+          "agentSeconds": 20.3,
+          "seconds": 21.2
+        }
+      }
+    },
+    {
+      "id": "bugfix-10",
+      "family": "bugfix",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.324032,
+          "firstRequestColdSensitivityUsd": 0.324032,
+          "input": 96352,
+          "cached": 76032,
+          "output": 896,
+          "firstInput": 12919,
+          "firstCached": 0,
+          "continuationInput": 83433,
+          "continuationCached": 76032,
+          "requests": 6,
+          "agentSeconds": 40.2,
+          "seconds": 41.4
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.552544,
+          "firstRequestColdSensitivityUsd": 0.552544,
+          "input": 239014,
+          "cached": 210944,
+          "output": 1218,
+          "firstInput": 12836,
+          "firstCached": 0,
+          "continuationInput": 226178,
+          "continuationCached": 210944,
+          "requests": 11,
+          "agentSeconds": 69.5,
+          "seconds": 80.6
+        }
+      }
+    },
+    {
+      "id": "refactor-9",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.197552,
+          "firstRequestColdSensitivityUsd": 0.24363200000000002,
+          "input": 55115,
+          "cached": 44672,
+          "output": 969,
+          "firstInput": 12907,
+          "firstCached": 5120,
+          "continuationInput": 42208,
+          "continuationCached": 39552,
+          "requests": 4,
+          "agentSeconds": 40.1,
+          "seconds": 41.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.375332,
+          "firstRequestColdSensitivityUsd": 0.375332,
+          "input": 132038,
+          "cached": 111872,
+          "output": 1236,
+          "firstInput": 12837,
+          "firstCached": 0,
+          "continuationInput": 119201,
+          "continuationCached": 111872,
+          "requests": 8,
+          "agentSeconds": 67.6,
+          "seconds": 80.6
+        }
+      }
+    },
+    {
+      "id": "refresh-6",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.284744,
+          "firstRequestColdSensitivityUsd": 0.36884,
+          "input": 133098,
+          "cached": 120704,
+          "output": 802,
+          "firstInput": 12952,
+          "firstCached": 9344,
+          "continuationInput": 120146,
+          "continuationCached": 111360,
+          "requests": 7,
+          "agentSeconds": 42.7,
+          "seconds": 43.6
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.462058,
+          "firstRequestColdSensitivityUsd": 0.462058,
+          "input": 122436,
+          "cached": 89728,
+          "output": 905,
+          "firstInput": 12869,
+          "firstCached": 0,
+          "continuationInput": 109567,
+          "continuationCached": 89728,
+          "requests": 7,
+          "agentSeconds": 48.4,
+          "seconds": 60.4
+        }
+      }
+    },
+    {
+      "id": "refresh-1",
+      "family": "refresh",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.361098,
+          "firstRequestColdSensitivityUsd": 0.407178,
+          "input": 107666,
+          "cached": 83968,
+          "output": 803,
+          "firstInput": 12866,
+          "firstCached": 5120,
+          "continuationInput": 94800,
+          "continuationCached": 78848,
+          "requests": 8,
+          "agentSeconds": 52.6,
+          "seconds": 63.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.370182,
+          "firstRequestColdSensitivityUsd": 0.370182,
+          "input": 131565,
+          "cached": 109952,
+          "output": 882,
+          "firstInput": 12949,
+          "firstCached": 0,
+          "continuationInput": 118616,
+          "continuationCached": 109952,
+          "requests": 7,
+          "agentSeconds": 48.6,
+          "seconds": 49.5
+        }
+      }
+    },
+    {
+      "id": "mixed-4",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.526694,
+          "firstRequestColdSensitivityUsd": 0.526694,
+          "input": 159073,
+          "cached": 123904,
+          "output": 1022,
+          "firstInput": 12962,
+          "firstCached": 0,
+          "continuationInput": 146111,
+          "continuationCached": 123904,
+          "requests": 10,
+          "agentSeconds": 58.6,
+          "seconds": 69.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.234478,
+          "firstRequestColdSensitivityUsd": 0.234478,
+          "input": 68401,
+          "cached": 53248,
+          "output": 594,
+          "firstInput": 13032,
+          "firstCached": 0,
+          "continuationInput": 55369,
+          "continuationCached": 53248,
+          "requests": 5,
+          "agentSeconds": 41.8,
+          "seconds": 42.8
+        }
+      }
+    },
+    {
+      "id": "logs-3",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.291086,
+          "firstRequestColdSensitivityUsd": 0.291086,
+          "input": 81307,
+          "cached": 59776,
+          "output": 320,
+          "firstInput": 12894,
+          "firstCached": 0,
+          "continuationInput": 68413,
+          "continuationCached": 59776,
+          "requests": 5,
+          "agentSeconds": 22.3,
+          "seconds": 33.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.218162,
+          "firstRequestColdSensitivityUsd": 0.218162,
+          "input": 47828,
+          "cached": 29952,
+          "output": 189,
+          "firstInput": 12977,
+          "firstCached": 0,
+          "continuationInput": 34851,
+          "continuationCached": 29952,
+          "requests": 3,
+          "agentSeconds": 12.7,
+          "seconds": 13.7
+        }
+      }
+    },
+    {
+      "id": "json-2",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.364148,
+          "firstRequestColdSensitivityUsd": 0.364148,
+          "input": 82894,
+          "cached": 53888,
+          "output": 404,
+          "firstInput": 12980,
+          "firstCached": 0,
+          "continuationInput": 69914,
+          "continuationCached": 53888,
+          "requests": 4,
+          "agentSeconds": 24.4,
+          "seconds": 25.4
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.223306,
+          "firstRequestColdSensitivityUsd": 0.223306,
+          "input": 48753,
+          "cached": 30336,
+          "output": 176,
+          "firstInput": 12897,
+          "firstCached": 0,
+          "continuationInput": 35856,
+          "continuationCached": 30336,
+          "requests": 3,
+          "agentSeconds": 14.4,
+          "seconds": 25.2
+        }
+      }
+    },
+    {
+      "id": "code-7",
+      "family": "code",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.202704,
+          "firstRequestColdSensitivityUsd": 0.202704,
+          "input": 44950,
+          "cached": 28544,
+          "output": 202,
+          "firstInput": 12981,
+          "firstCached": 0,
+          "continuationInput": 31969,
+          "continuationCached": 28544,
+          "requests": 3,
+          "agentSeconds": 18.4,
+          "seconds": 19.3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.318908,
+          "firstRequestColdSensitivityUsd": 0.318908,
+          "input": 93110,
+          "cached": 69888,
+          "output": 336,
+          "firstInput": 12911,
+          "firstCached": 0,
+          "continuationInput": 80199,
+          "continuationCached": 69888,
+          "requests": 5,
+          "agentSeconds": 23.5,
+          "seconds": 34.3
+        }
+      }
+    },
+    {
+      "id": "code-10",
+      "family": "code",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.163086,
+          "firstRequestColdSensitivityUsd": 0.20916600000000002,
+          "input": 46027,
+          "cached": 34176,
+          "output": 208,
+          "firstInput": 12982,
+          "firstCached": 5120,
+          "continuationInput": 33045,
+          "continuationCached": 29056,
+          "requests": 3,
+          "agentSeconds": 14.4,
+          "seconds": 15.3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.305688,
+          "firstRequestColdSensitivityUsd": 0.305688,
+          "input": 83769,
+          "cached": 60928,
+          "output": 327,
+          "firstInput": 12899,
+          "firstCached": 0,
+          "continuationInput": 70870,
+          "continuationCached": 60928,
+          "requests": 5,
+          "agentSeconds": 30.6,
+          "seconds": 41.7
+        }
+      }
+    },
+    {
+      "id": "bugfix-4",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.407476,
+          "firstRequestColdSensitivityUsd": 0.407476,
+          "input": 161703,
+          "cached": 141056,
+          "output": 1199,
+          "firstInput": 12830,
+          "firstCached": 0,
+          "continuationInput": 148873,
+          "continuationCached": 141056,
+          "requests": 10,
+          "agentSeconds": 72.7,
+          "seconds": 83.8
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.368664,
+          "firstRequestColdSensitivityUsd": 0.414744,
+          "input": 75356,
+          "cached": 47744,
+          "output": 896,
+          "firstInput": 12913,
+          "firstCached": 5120,
+          "continuationInput": 62443,
+          "continuationCached": 42624,
+          "requests": 5,
+          "agentSeconds": 40.8,
+          "seconds": 41.9
+        }
+      }
+    },
+    {
+      "id": "logs-10",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.209898,
+          "firstRequestColdSensitivityUsd": 0.255978,
+          "input": 74826,
+          "cached": 61568,
+          "output": 315,
+          "firstInput": 12894,
+          "firstCached": 5120,
+          "continuationInput": 61932,
+          "continuationCached": 56448,
+          "requests": 5,
+          "agentSeconds": 23.7,
+          "seconds": 34.7
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.125346,
+          "firstRequestColdSensitivityUsd": 0.20944200000000002,
+          "input": 46445,
+          "cached": 38656,
+          "output": 176,
+          "firstInput": 12977,
+          "firstCached": 9344,
+          "continuationInput": 33468,
+          "continuationCached": 29312,
+          "requests": 3,
+          "agentSeconds": 16.4,
+          "seconds": 17.3
+        }
+      }
+    },
+    {
+      "id": "logs-4",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.210932,
+          "firstRequestColdSensitivityUsd": 0.210932,
+          "input": 46549,
+          "cached": 29312,
+          "output": 185,
+          "firstInput": 12986,
+          "firstCached": 0,
+          "continuationInput": 33563,
+          "continuationCached": 29312,
+          "requests": 3,
+          "agentSeconds": 17.7,
+          "seconds": 18.6
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.311444,
+          "firstRequestColdSensitivityUsd": 0.357524,
+          "input": 100112,
+          "cached": 78464,
+          "output": 330,
+          "firstInput": 12903,
+          "firstCached": 5120,
+          "continuationInput": 87209,
+          "continuationCached": 73344,
+          "requests": 5,
+          "agentSeconds": 23.7,
+          "seconds": 34.8
+        }
+      }
+    },
+    {
+      "id": "bugfix-3",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.4572,
+          "firstRequestColdSensitivityUsd": 0.4572,
+          "input": 172270,
+          "cached": 147200,
+          "output": 1186,
+          "firstInput": 12830,
+          "firstCached": 0,
+          "continuationInput": 159440,
+          "continuationCached": 147200,
+          "requests": 10,
+          "agentSeconds": 69,
+          "seconds": 80.3
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.266028,
+          "firstRequestColdSensitivityUsd": 0.312108,
+          "input": 91734,
+          "cached": 77568,
+          "output": 936,
+          "firstInput": 12913,
+          "firstCached": 5120,
+          "continuationInput": 78821,
+          "continuationCached": 72448,
+          "requests": 6,
+          "agentSeconds": 46.4,
+          "seconds": 47.6
+        }
+      }
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.348384,
+          "firstRequestColdSensitivityUsd": 0.348384,
+          "input": 94610,
+          "cached": 71424,
+          "output": 902,
+          "firstInput": 12932,
+          "firstCached": 0,
+          "continuationInput": 81678,
+          "continuationCached": 71424,
+          "requests": 6,
+          "agentSeconds": 40.1,
+          "seconds": 41.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.27781,
+          "firstRequestColdSensitivityUsd": 0.360754,
+          "input": 131728,
+          "cached": 122880,
+          "output": 1329,
+          "firstInput": 12836,
+          "firstCached": 9216,
+          "continuationInput": 118892,
+          "continuationCached": 113664,
+          "requests": 9,
+          "agentSeconds": 65.7,
+          "seconds": 77.4
+        }
+      }
+    },
+    {
+      "id": "mixed-10",
+      "family": "mixed",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.255106,
+          "firstRequestColdSensitivityUsd": 0.255106,
+          "input": 82220,
+          "cached": 66816,
+          "output": 685,
+          "firstInput": 13035,
+          "firstCached": 0,
+          "continuationInput": 69185,
+          "continuationCached": 66816,
+          "requests": 6,
+          "agentSeconds": 38.9,
+          "seconds": 39.8
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.422068,
+          "firstRequestColdSensitivityUsd": 0.468148,
+          "input": 189531,
+          "cached": 169088,
+          "output": 971,
+          "firstInput": 12965,
+          "firstCached": 5120,
+          "continuationInput": 176566,
+          "continuationCached": 163968,
+          "requests": 9,
+          "agentSeconds": 52.9,
+          "seconds": 64
+        }
+      }
+    },
+    {
+      "id": "logs-8",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.215196,
+          "firstRequestColdSensitivityUsd": 0.215196,
+          "input": 47271,
+          "cached": 29696,
+          "output": 195,
+          "firstInput": 12980,
+          "firstCached": 0,
+          "continuationInput": 34291,
+          "continuationCached": 29696,
+          "requests": 3,
+          "agentSeconds": 15.3,
+          "seconds": 16.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.309542,
+          "firstRequestColdSensitivityUsd": 0.392486,
+          "input": 123914,
+          "cached": 105472,
+          "output": 393,
+          "firstInput": 12897,
+          "firstCached": 9216,
+          "continuationInput": 111017,
+          "continuationCached": 96256,
+          "requests": 6,
+          "agentSeconds": 39.9,
+          "seconds": 50.4
+        }
+      }
+    },
+    {
+      "id": "bugfix-5",
+      "family": "bugfix",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.264122,
+          "firstRequestColdSensitivityUsd": 0.31020200000000003,
+          "input": 91829,
+          "cached": 77952,
+          "output": 948,
+          "firstInput": 12916,
+          "firstCached": 5120,
+          "continuationInput": 78913,
+          "continuationCached": 72832,
+          "requests": 6,
+          "agentSeconds": 42.9,
+          "seconds": 44.1
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.436498,
+          "firstRequestColdSensitivityUsd": 0.436498,
+          "input": 110461,
+          "cached": 80768,
+          "output": 1176,
+          "firstInput": 12833,
+          "firstCached": 0,
+          "continuationInput": 97628,
+          "continuationCached": 80768,
+          "requests": 8,
+          "agentSeconds": 59.2,
+          "seconds": 70.2
+        }
+      }
+    },
+    {
+      "id": "mixed-6",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.231872,
+          "firstRequestColdSensitivityUsd": 0.314816,
+          "input": 126919,
+          "cached": 119552,
+          "output": 773,
+          "firstInput": 12952,
+          "firstCached": 9216,
+          "continuationInput": 113967,
+          "continuationCached": 110336,
+          "requests": 9,
+          "agentSeconds": 50.3,
+          "seconds": 61.1
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.17059,
+          "firstRequestColdSensitivityUsd": 0.25468599999999997,
+          "input": 82198,
+          "cached": 76160,
+          "output": 681,
+          "firstInput": 13035,
+          "firstCached": 9344,
+          "continuationInput": 69163,
+          "continuationCached": 66816,
+          "requests": 6,
+          "agentSeconds": 44.2,
+          "seconds": 45.1
+        }
+      }
+    },
+    {
+      "id": "refactor-3",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.163706,
+          "firstRequestColdSensitivityUsd": 0.247802,
+          "input": 55232,
+          "cached": 48896,
+          "output": 1029,
+          "firstInput": 12910,
+          "firstCached": 9344,
+          "continuationInput": 42322,
+          "continuationCached": 39552,
+          "requests": 4,
+          "agentSeconds": 45.1,
+          "seconds": 46.3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.275016,
+          "firstRequestColdSensitivityUsd": 0.321096,
+          "input": 109425,
+          "cached": 98176,
+          "output": 1287,
+          "firstInput": 12827,
+          "firstCached": 5120,
+          "continuationInput": 96598,
+          "continuationCached": 93056,
+          "requests": 8,
+          "agentSeconds": 64,
+          "seconds": 75
+        }
+      }
+    },
+    {
+      "id": "code-2",
+      "family": "code",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.171706,
+          "firstRequestColdSensitivityUsd": 0.25465,
+          "input": 74288,
+          "cached": 65536,
+          "output": 373,
+          "firstInput": 12901,
+          "firstCached": 9216,
+          "continuationInput": 61387,
+          "continuationCached": 56320,
+          "requests": 5,
+          "agentSeconds": 23.7,
+          "seconds": 34.5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.156244,
+          "firstRequestColdSensitivityUsd": 0.202324,
+          "input": 45017,
+          "cached": 33664,
+          "output": 181,
+          "firstInput": 12984,
+          "firstCached": 5120,
+          "continuationInput": 32033,
+          "continuationCached": 28544,
+          "requests": 3,
+          "agentSeconds": 12.5,
+          "seconds": 13.4
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Generated synthetic cases held out from product tuning; not independent real-world repositories.",
+    "Provider cache state is observed, not experimentally flushed. Fresh sessions may start warm.",
+    "Intervals assume independent case pairs within the sampled workload distribution; shared provider state can introduce dependence.",
+    "BCa intervals are approximate, and the study cannot establish superiority outside this model, rate scenario, or suite.",
+    "First-request cold sensitivity holds model behavior and subsequent usage fixed; it is not a cold-session experiment."
+  ],
+  "superiorityEstablished": false
+}
