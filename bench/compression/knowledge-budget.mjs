@@ -218,7 +218,7 @@ for (const root of roots) {
     );
     // Two or more genuinely different arms can still answer something, even
     // though the full sweep as written would waste money on the rest.
-    if (usable.length > 2) anyDistinguishable = true;
+    if (usable.length >= 2) anyDistinguishable = true;
   } else {
     anyDistinguishable = true;
     console.log(

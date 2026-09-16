@@ -395,7 +395,7 @@ describe('hop-by-hop headers are stripped in BOTH directions', () => {
     // A DISTINCTIVE VALUE, because Node sets its own `Keep-Alive: timeout=5`
     // from server.keepAliveTimeout -- so absence cannot be asserted, only that
     // the UPSTREAM's value did not travel.
-    expect(response.headers.get('keep-alive')).not.toContain('99');
+    expect(response.headers.get('keep-alive') ?? '').not.toContain('99');
     // End-to-end headers still arrive -- the fix must not become a filter that
     // eats everything, which is HeadRoom's #3463 in a different guise.
     expect(response.headers.get('content-type')).toContain('application/json');

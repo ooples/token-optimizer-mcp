@@ -325,6 +325,7 @@ ENV TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS=999999999999
 # `bench/` as both context and script root; here the scripts live one level
 # deeper, under thol/.
 COPY --chown=bench:bench thol/entrypoint.sh /home/bench/scripts/entrypoint.sh
+COPY --chown=bench:bench thol/ordered_campaign.py /home/bench/scripts/ordered_campaign.py
 COPY --chown=bench:bench thol/manifests/ /home/bench/manifests/
 
 ENTRYPOINT ["/bin/bash", "/home/bench/scripts/entrypoint.sh"]

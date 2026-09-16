@@ -452,11 +452,7 @@ export function compressBody(
   // Set TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS=0 to turn it off.
   let deferred = 0;
   let deferredChars = 0;
-  if (
-    !/^(0|false|no|off)$/i.test(
-      process.env.TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS || ''
-    )
-  ) {
+  if (deferToolsEnabled()) {
     try {
       // The task text steers which non-core tools stay loaded, so the model
       // never has to search for one -- and a search costs a round trip plus a
@@ -754,6 +750,15 @@ export function keepToolsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 0) return DEFAULT_KEEP_RELEVANT;
   return n;
+}
+
+/** Deferral defaults on unless the environment explicitly disables it. */
+export function deferToolsEnabled(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  return !/^(0|false|no|off)$/i.test(
+    env.TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS || ''
+  );
 }
 
 /**

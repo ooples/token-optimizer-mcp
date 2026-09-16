@@ -36,4 +36,5 @@ USER bench
 
 COPY thol/pkg/provenance.json /opt/optimizer-provenance.json
 COPY --chown=bench:bench thol/entrypoint.sh /home/bench/scripts/entrypoint.sh
+COPY --chown=bench:bench thol/ordered_campaign.py /home/bench/scripts/ordered_campaign.py
 COPY --chown=bench:bench thol/manifests/ /home/bench/manifests/

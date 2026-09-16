@@ -11,6 +11,7 @@ import {
   requestPath,
   knowledgeEnabled,
   keepToolsFromEnv,
+  deferToolsEnabled,
 } from '../../../src/proxy/server.js';
 import { anchorStore } from '../../../src/compress/anchor.js';
 import { DEFAULT_KEEP_RELEVANT } from '../../../src/compress/tools.js';
@@ -754,11 +755,8 @@ describe('tool deferral defaults', () => {
   // ledger recorded deferral on 0 of 351 live requests -- a feature that works
   // and never runs is indistinguishable from one that does not work.
   //
-  // The predicate mirrors server.ts. Kept as a local copy on purpose: the
-  // export would have to be plumbed out of the request path to test directly,
-  // and the three cases below are what the shipped expression must satisfy.
-  const enabled = (v: string | undefined) =>
-    !/^(0|false|no|off)$/i.test(v || '');
+  const enabled = (value: string | undefined) =>
+    deferToolsEnabled({ TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS: value });
 
   it('is on when the variable is unset or empty', () => {
     expect(enabled(undefined)).toBe(true);

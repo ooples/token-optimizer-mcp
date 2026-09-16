@@ -599,18 +599,6 @@ function compactIfWasteful(dir) {
       if (f.kind === 'finding' && SNAPSHOT_DEPENDENT.has(f.type || 'finding')) needed.add(e.to);
     }
 
-    const carriers = [...snaps.entries()]
-      .map(([id, v]) => ({ id, at: v.at, size: v.snapshot.length }))
-      .sort((a, b) => b.at - a.at);
-
-    let spent = 0;
-    const budget = snapshotBudgetBytes();
-    const keep = new Map();
-    for (const c of carriers) {
-      if (!needed.has(c.id) && spent + c.size > budget) continue;
-      spent += c.size;
-      keep.set(c.id, snaps.get(c.id));
-    }
 
     // EDGES BEFORE NODES, matching putNodeWithEdges: a torn write can then only
     // lose a finding, never leave one anchored to nothing.
@@ -663,6 +651,20 @@ function compactIfWasteful(dir) {
         if (!nodes.has(meta.from) || !nodes.has(meta.to)) edges.delete(key);
       }
     }
+    // Budget only surviving nodes; evicted snapshots must not crowd out live ones.
+    const carriers = [...snaps.entries()]
+      .filter(([id]) => nodes.has(id))
+      .map(([id, v]) => ({ id, at: v.at, size: v.snapshot.length }))
+      .sort((a, b) => b.at - a.at);
+    let spent = 0;
+    const budget = snapshotBudgetBytes();
+    const keep = new Map();
+    for (const c of carriers) {
+      if (!needed.has(c.id) && spent + c.size > budget) continue;
+      spent += c.size;
+      keep.set(c.id, snaps.get(c.id));
+    }
+
 
     const out = [...edges.values(), ...nodes.values()].join('\n') + '\n';
     const tmp = path + '.compact';

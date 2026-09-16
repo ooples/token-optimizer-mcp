@@ -54,7 +54,8 @@ function realSources(root, budget) {
     }
     for (const name of entries) {
       if (total >= budget) return;
-      if (name === 'node_modules' || name === 'dist' || name.startsWith('.')) continue;
+      if (name === 'node_modules' || name === 'dist' || name.startsWith('.'))
+        continue;
       const full = join(dir, name);
       let stat;
       try {
@@ -75,7 +76,10 @@ function realSources(root, budget) {
   return out.join('\n\n');
 }
 
-const REPO = new URL('../..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+const REPO = new URL('../..', import.meta.url).pathname.replace(
+  /^\/([A-Za-z]:)/,
+  '$1'
+);
 
 /**
  * A grep-style search result over real source: matched lines with context.
@@ -101,7 +105,8 @@ function searchResults(root, pattern, budget) {
       return;
     }
     for (const name of entries) {
-      if (name === 'node_modules' || name === 'dist' || name.startsWith('.')) continue;
+      if (name === 'node_modules' || name === 'dist' || name.startsWith('.'))
+        continue;
       const full = join(dir, name);
       let stat;
       try {
@@ -110,7 +115,8 @@ function searchResults(root, pattern, budget) {
         continue;
       }
       if (stat.isDirectory()) walk(full);
-      else if (/\.(ts|mjs)$/.test(name) && !/\.d\.ts$/.test(name)) files.push(full);
+      else if (/\.(ts|mjs)$/.test(name) && !/\.d\.ts$/.test(name))
+        files.push(full);
     }
   };
   walk(root);
@@ -151,8 +157,24 @@ function rng(seed) {
 
 const pick = (r, list) => list[Math.floor(r() * list.length)];
 
-const VERBS = ['resolve', 'compute', 'validate', 'normalise', 'render', 'persist', 'collect'];
-const NOUNS = ['Session', 'Manifest', 'Payload', 'Anchor', 'Digest', 'Registry', 'Outcome'];
+const VERBS = [
+  'resolve',
+  'compute',
+  'validate',
+  'normalise',
+  'render',
+  'persist',
+  'collect',
+];
+const NOUNS = [
+  'Session',
+  'Manifest',
+  'Payload',
+  'Anchor',
+  'Digest',
+  'Registry',
+  'Outcome',
+];
 
 /** A TypeScript module with real signatures and real bodies. */
 function tsModule(r, functions) {
@@ -164,8 +186,12 @@ function tsModule(r, functions) {
   for (let i = 0; i < functions; i += 1) {
     const name = `${pick(r, VERBS)}${pick(r, NOUNS)}${i}`;
     const short = r() < 0.25;
-    parts.push(`/** ${name}: ${pick(r, VERBS)}s the ${pick(r, NOUNS).toLowerCase()}. */`);
-    parts.push(`export function ${name}(input: string, limit = ${Math.floor(r() * 900) + 10}): string {`);
+    parts.push(
+      `/** ${name}: ${pick(r, VERBS)}s the ${pick(r, NOUNS).toLowerCase()}. */`
+    );
+    parts.push(
+      `export function ${name}(input: string, limit = ${Math.floor(r() * 900) + 10}): string {`
+    );
     if (short) {
       parts.push('  return input.slice(0, limit);');
     } else {
@@ -173,7 +199,9 @@ function tsModule(r, functions) {
       parts.push('  const out: string[] = [];');
       parts.push('  for (const part of parts) {');
       parts.push('    if (out.join(" ").length + part.length > limit) break;');
-      parts.push(`    out.push(part.toLowerCase().replace(/[^a-z0-9]/g, "${i % 7}"));`);
+      parts.push(
+        `    out.push(part.toLowerCase().replace(/[^a-z0-9]/g, "${i % 7}"));`
+      );
       parts.push('  }');
       parts.push('  const joined = out.join(" ");');
       parts.push('  return joined.length ? joined : input.slice(0, limit);');
@@ -260,7 +288,12 @@ function structuredLog(r, n) {
     };
     if (error || critical) {
       entry.exception = {
-        type: pick(r, ['TimeoutError', 'ConnectionError', 'ValueError', 'RuntimeError']),
+        type: pick(r, [
+          'TimeoutError',
+          'ConnectionError',
+          'ValueError',
+          'RuntimeError',
+        ]),
         message,
         stacktrace: `Traceback (most recent call last):\n  File "app/handler.py", line ${100 + i}, in handle\n    return dispatch(request)\n  File "app/dispatch.py", line ${200 + i}, in dispatch`,
       };
@@ -279,11 +312,14 @@ function reqId(i) {
 
 function buildLog(r, lines) {
   const out = [];
-  const stamp = (i) => `2026-09-09T18:${String(10 + (i % 50)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}Z`;
+  const stamp = (i) =>
+    `2026-09-09T18:${String(10 + (i % 50)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}Z`;
   for (let i = 0; i < lines; i += 1) {
     const roll = r();
     if (roll < 0.55) {
-      out.push(`${stamp(i)} INFO  webpack: compiled module ${i % 9} successfully`);
+      out.push(
+        `${stamp(i)} INFO  webpack: compiled module ${i % 9} successfully`
+      );
     } else if (roll < 0.8) {
       // A correlation id on the line, because real logs carry them and a
       // fixture without one cannot exercise the identifier floor at all --
@@ -295,7 +331,9 @@ function buildLog(r, lines) {
       out.push(`${stamp(i)} WARN  peer dependency mismatch for lib-${i % 30}`);
     } else {
       // Unique and load-bearing. Folding these would be the defect.
-      out.push(`${stamp(i)} ERROR AssertionError at src/mod${i}.ts:${i % 400}: expected ${i} to equal ${i + 1}`);
+      out.push(
+        `${stamp(i)} ERROR AssertionError at src/mod${i}.ts:${i % 400}: expected ${i} to equal ${i + 1}`
+      );
     }
   }
   return out.join('\n');
@@ -387,7 +425,7 @@ function relevanceJson(r, rows, plant) {
   for (let i = 0; i < rows; i += 1) {
     items.push({
       id: `evt_${i}`,
-      level: "info",
+      level: 'info',
       message:
         plant && i === Math.floor(rows * 0.83)
           ? NEEDLE_RELEVANT
@@ -523,18 +561,28 @@ function browserSession() {
         role: 'user',
         content: [
           imageBlock(home),
-          { type: 'text', text: `Home page loaded. Accessibility tree:\n${tree(120)}`, cache_control: { type: 'ephemeral' } },
+          {
+            type: 'text',
+            text: `Home page loaded. Accessibility tree:\n${tree(120)}`,
+            cache_control: { type: 'ephemeral' },
+          },
         ],
       },
       {
         role: 'user',
         content: [
           imageBlock(detail),
-          { type: 'text', text: `Opened pricing. Accessibility tree:\n${tree(700)}` },
+          {
+            type: 'text',
+            text: `Opened pricing. Accessibility tree:\n${tree(700)}`,
+          },
           imageBlock(home),
           { type: 'text', text: 'Navigated back; same home page as before.' },
           imageBlock(detail),
-          { type: 'text', text: `And forward again to pricing. Console:\n${buildLog(r, 250)}` },
+          {
+            type: 'text',
+            text: `And forward again to pricing. Console:\n${buildLog(r, 250)}`,
+          },
         ],
       },
     ],
@@ -553,7 +601,9 @@ function request(system, cachedTurns, freshBlocks) {
           type: 'text',
           text,
           // The last cached turn carries the breakpoint.
-          ...(i === cachedTurns.length - 1 ? { cache_control: { type: 'ephemeral' } } : {}),
+          ...(i === cachedTurns.length - 1
+            ? { cache_control: { type: 'ephemeral' } }
+            : {}),
         },
       ],
     });
@@ -565,10 +615,154 @@ function request(system, cachedTurns, freshBlocks) {
   return { system, messages, tools: [] };
 }
 
+/**
+ * A request shaped like an AGENT LOOP rather than a chat.
+ *
+ * WHY THIS EXISTS. Every other fixture here is `text` blocks, which is what a
+ * conversation looks like and not what an agent's request looks like. A real
+ * one alternates: the assistant reasons (a SIGNED `thinking` block) and calls a
+ * tool, then the user turn carries the `tool_result` that came back. Measured
+ * on a real 27-turn session, that history is 52% thinking, 36% tool results and
+ * 3% assistant text -- so a corpus of pure text exercises 3% of the shape and
+ * silently reports any history-aware arm as doing nothing.
+ *
+ * The signature is real in FORM, not cryptographically valid: nothing here
+ * verifies it, and what the engines branch on is its presence.
+ *
+ * `turns` pairs of (assistant reasons + acts, user returns a result). The
+ * breakpoint sits on the last cached turn, exactly as a client places it.
+ */
+function agenticRequest(system, turns, freshBlocks) {
+  const messages = [];
+  for (const [i, turn] of turns.entries()) {
+    const last = i === turns.length - 1;
+    messages.push({
+      role: 'assistant',
+      content: [
+        {
+          type: 'thinking',
+          thinking: turn.thinking,
+          signature: `sig-${i}-${turn.thinking.length}`,
+        },
+        {
+          type: 'tool_use',
+          id: `tu_${i}`,
+          name: turn.tool,
+          input: turn.input,
+        },
+      ],
+    });
+    messages.push({
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: `tu_${i}`,
+          content: turn.result,
+          ...(last ? { cache_control: { type: 'ephemeral' } } : {}),
+        },
+      ],
+    });
+  }
+  messages.push({
+    role: 'user',
+    content: freshBlocks.map((text) => ({ type: 'text', text })),
+  });
+  return {
+    system,
+    messages,
+    tools: [
+      {
+        name: 'Read',
+        description:
+          'Read a file by absolute path, optionally selecting a line range.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            file_path: { type: 'string' },
+            offset: { type: 'integer', minimum: 1 },
+            limit: { type: 'integer', minimum: 1 },
+          },
+          required: ['file_path'],
+        },
+      },
+      {
+        name: 'Bash',
+        description:
+          'Execute a shell command and return stdout, stderr, and exit status.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            command: { type: 'string' },
+            timeout: { type: 'integer', minimum: 1 },
+            description: { type: 'string' },
+          },
+          required: ['command'],
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * Reasoning of the length a model actually produces.
+ *
+ * Deterministic from the seeded rng so two runs of the benchmark compare the
+ * same bytes. Deliberately prose rather than filler: the engines classify
+ * content, and a block of repeated words would be compressed by a path no real
+ * thinking block takes.
+ */
+function reasoning(r, lines) {
+  const out = [];
+  for (let i = 0; i < lines; i += 1) {
+    out.push(
+      `Considering option ${Math.floor(r() * 40) + 1}: the call site in module ` +
+        `${pick(r, ['auth', 'cache', 'router', 'ledger', 'wiki'])} reads the ` +
+        `${pick(r, ['config', 'header', 'token', 'manifest'])} before the guard ` +
+        `runs, so the ordering matters here and I should check the caller first.`
+    );
+  }
+  return out.join('\n');
+}
+
 /** The four workloads. */
 export function fixtures() {
   const r = rng(20260909);
   return [
+    {
+      // THE SHAPE THE PROXY ACTUALLY SEES, and the only fixture here that
+      // exercises a history-aware arm at all. Signed reasoning plus tool
+      // results, which together are ~88% of a real request's history.
+      name: 'agent-loop',
+      request: agenticRequest(
+        'You are a coding agent.',
+        Array.from({ length: 6 }, () => ({
+          thinking: reasoning(r, 12),
+          tool: 'Read',
+          input: {
+            file_path: `src/compress/module${Math.floor(r() * 9) + 1}.ts`,
+          },
+          result: searchJson(r, 60),
+        })),
+        ['Now fix the retry helper.']
+      ),
+    },
+    {
+      // The same shape over log output rather than structured rows, because
+      // the engines route those differently and an arm can win one and lose
+      // the other.
+      name: 'agent-loop-logs',
+      request: agenticRequest(
+        'You are an SRE agent.',
+        Array.from({ length: 5 }, () => ({
+          thinking: reasoning(r, 16),
+          tool: 'Bash',
+          input: { command: 'kubectl logs deploy/api --since=1h' },
+          result: structuredLog(r, 200),
+        })),
+        ['Which pod is failing?']
+      ),
+    },
     {
       name: 'code-search',
       theirs: { before: 17765, after: 1408 },
@@ -617,8 +811,11 @@ export function fixtures() {
       name: 'grep-output',
       theirs: null,
       request: request(
-          'You are a coding agent.',
-        [searchResults(join(REPO, 'hooks-core'), /function |=> \{/, 12_000), 'Reading hits.'],
+        'You are a coding agent.',
+        [
+          searchResults(join(REPO, 'hooks-core'), /function |=> \{/, 12_000),
+          'Reading hits.',
+        ],
         [searchResults(join(REPO, 'src', 'tools'), /function |=> \{/, 60_000)]
       ),
     },
@@ -648,21 +845,31 @@ export function fixtures() {
       name: 'repeated-reads',
       theirs: null,
       request: (() => {
-          const { file, tests } = repeatedReads(join(REPO, 'src', 'core'), 20_000);
-          return request(
-            'You are a coding agent.',
-            [file, 'Reading the cache engine.'],
-            [tests, file, 'Fixing the failing case.', tests, file]
-          );
-        })(),
+        const { file, tests } = repeatedReads(
+          join(REPO, 'src', 'core'),
+          20_000
+        );
+        return request(
+          'You are a coding agent.',
+          [file, 'Reading the cache engine.'],
+          [tests, file, 'Fixing the failing case.', tests, file]
+        );
+      })(),
     },
     {
       name: 'codebase-exploration',
       theirs: { before: 78502, after: 41254 },
       request: request(
         'You are exploring a codebase.',
-        [realSources(join(REPO, 'src', 'core'), 12_000), 'Mapping the module graph.'],
-        [realSources(join(REPO, 'src', 'server'), 45_000), buildLog(r, 400), designProse(r, 40)]
+        [
+          realSources(join(REPO, 'src', 'core'), 12_000),
+          'Mapping the module graph.',
+        ],
+        [
+          realSources(join(REPO, 'src', 'server'), 45_000),
+          buildLog(r, 400),
+          designProse(r, 40),
+        ]
       ),
     },
   ];
