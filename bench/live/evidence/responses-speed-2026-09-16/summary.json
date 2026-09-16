@@ -1,0 +1,155 @@
+{
+  "scope": "Fixed four-pair development schedule; all outcomes retained. Upstream includes network/provider and competitor proxy, not isolated model or competitor CPU.",
+  "totals": {
+    "proxy": {
+      "attempts": 4,
+      "passes": 4,
+      "knownEstimatedUsd": 0.7039219999999999,
+      "unknownCosts": 0,
+      "agentSeconds": 135.2
+    },
+    "headroom": {
+      "attempts": 4,
+      "passes": 4,
+      "knownEstimatedUsd": 1.3107039999999999,
+      "unknownCosts": 0,
+      "agentSeconds": 166.5
+    }
+  },
+  "costWins": 3,
+  "speedWins": 3,
+  "pairs": [
+    {
+      "group": "repeat",
+      "rep": 1,
+      "seed": 3141592301,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-speed-2026-09-16\\repeat\\run-QCBxmE",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.129386,
+          "agentSeconds": 25.2,
+          "startupInclusiveSeconds": 26.2,
+          "requests": 5,
+          "timing": {
+            "transformMs": 296.7845999999986,
+            "upstreamHeadersMs": 4230.496900000001,
+            "upstreamMs": 22584.4689
+          }
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.336684,
+          "agentSeconds": 27.1,
+          "startupInclusiveSeconds": 38,
+          "requests": 5,
+          "timing": {
+            "transformMs": 3.6651999999987765,
+            "upstreamHeadersMs": 5378.687600000001,
+            "upstreamMs": 24464.902300000005
+          }
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "group": "repeat",
+      "rep": 2,
+      "seed": 3141592302,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-speed-2026-09-16\\repeat\\run-QCBxmE",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.392092,
+          "agentSeconds": 26.5,
+          "startupInclusiveSeconds": 37.4,
+          "requests": 5,
+          "timing": {
+            "transformMs": 4.188999999999169,
+            "upstreamHeadersMs": 7391.2979000000005,
+            "upstreamMs": 24020.1874
+          }
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.129666,
+          "agentSeconds": 27.1,
+          "startupInclusiveSeconds": 28.1,
+          "requests": 5,
+          "timing": {
+            "transformMs": 317.13069999999607,
+            "upstreamHeadersMs": 7184.324499999996,
+            "upstreamMs": 24468.7943
+          }
+        }
+      },
+      "classification": "speed-loss"
+    },
+    {
+      "group": "refresh",
+      "rep": 1,
+      "seed": 1618034101,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-speed-2026-09-16\\refresh\\run-1Tq4dJ",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.23917,
+          "agentSeconds": 45.6,
+          "startupInclusiveSeconds": 46.6,
+          "requests": 7,
+          "timing": {
+            "transformMs": 312.36810000000196,
+            "upstreamHeadersMs": 6497.554100000002,
+            "upstreamMs": 40759.125799999994
+          }
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.235676,
+          "agentSeconds": 50.7,
+          "startupInclusiveSeconds": 86.7,
+          "requests": 7,
+          "timing": {
+            "transformMs": 4.605000000006839,
+            "upstreamHeadersMs": 15483.541500000003,
+            "upstreamMs": 46866.8092
+          }
+        }
+      },
+      "classification": "cost-loss"
+    },
+    {
+      "group": "refresh",
+      "rep": 2,
+      "seed": 1618034102,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-speed-2026-09-16\\refresh\\run-1Tq4dJ",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.346252,
+          "agentSeconds": 62.2,
+          "startupInclusiveSeconds": 74.8,
+          "requests": 11,
+          "timing": {
+            "transformMs": 8.07829999998819,
+            "upstreamHeadersMs": 11510.202700000005,
+            "upstreamMs": 58304.6627
+          }
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.2057,
+          "agentSeconds": 37.3,
+          "startupInclusiveSeconds": 38.2,
+          "requests": 6,
+          "timing": {
+            "transformMs": 324.2016999999953,
+            "upstreamHeadersMs": 9152.685399999998,
+            "upstreamMs": 33877.055199999995
+          }
+        }
+      },
+      "classification": "joint-win"
+    }
+  ]
+}
