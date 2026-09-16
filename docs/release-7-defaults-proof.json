@@ -1,0 +1,38 @@
+{
+  "date": "2026-09-16",
+  "packageVersion": "7.0.0",
+  "tarballSha256": "576aa7e424de4b7f8584b162ecd8be3ad988b227661276dd8a345cc4cc94dbeb",
+  "installation": "npm tarball into a fresh directory; installer activates an isolated PowerShell profile",
+  "launch": "normal codex command resolved through the installed profile; existing account; --ignore-user-config",
+  "defaults": {
+    "proxy": true,
+    "knowledge": true,
+    "toolProfile": "core",
+    "compression": "balanced"
+  },
+  "live": {
+    "exitCode": 0,
+    "correctMarker": true,
+    "editedFixture": true,
+    "wikiLookupBeforeWritingMarker": false,
+    "tools": [
+      "smart_read",
+      "smart_read",
+      "smart_edit",
+      "smart_read",
+      "smart_write",
+      "wiki_query"
+    ],
+    "responses": 9,
+    "allResponses200": true,
+    "injectedCharsPerResponse": 278
+  },
+  "scope": "This is installation, routing and graph delivery proof. It is not a cost or competitor benchmark.",
+  "pending": [
+    "Claude Code live model task: existing account weekly quota exhausted",
+    "Copilot live model task: existing account monthly quota exhausted",
+    "Gemini live model task: existing account/client rejected",
+    "Managed automatic routing for clients other than Claude Code and Codex"
+  ],
+  "sourceFollowups": "Custom Codex -c profile selection and capture notification hardened after this live tarball; custom routing regression test passed."
+}

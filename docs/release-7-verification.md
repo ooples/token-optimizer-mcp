@@ -5,6 +5,39 @@ Date: 2026-09-16. Release PR: #345. Candidate base:
 
 ## Finding and fix
 
+### Default activation follow-up
+
+The installer now activates managed `claude` and `codex` commands in supported
+shell profiles. A new shell loads the activation; each session starts and owns a
+loopback proxy, registers the packaged MCP server, and closes its proxy on exit.
+Explicit proxy, knowledge, MCP-registration and global opt-outs remain available.
+Uninstall removes the managed profile block while retaining unrelated settings.
+The core profile includes wiki tools; balanced compression, zero small-tool
+exemption and tool deferral remain the defaults. Knowledge injection is now on
+by default and reported separately from compression savings.
+
+[Default installation proof](release-7-defaults-proof.json) records a real Codex
+run through the installed PowerShell activation, with no proxy-enable or profile
+override. Nine Responses requests returned HTTP 200 and each carried the same
+278-character graph block. The task read twice, edited and verified a fixture,
+wrote the correct marker, and queried the wiki. No wiki lookup occurred before
+writing the marker. An earlier apparent pass was rejected because the model had
+retrieved the marker through `wiki_read`; auditing it exposed Codex's
+`additional_tools` setup item, now covered by the prefix-injection regression.
+
+Seven focused suites passed locally (88 tests), followed by the added real-shape
+regression and custom-profile regression. Build, changed-file lint, generated
+integration checks and the package gate passed (21 required assets). The CI
+release gate now includes managed-client, proxy, Responses knowledge and doctor
+coverage. Claude transport/auth preservation and proxy shutdown were checked
+against a local mock upstream; its real model task remains quota-blocked.
+
+Managed automatic routing currently covers Claude Code and Codex. Other clients
+retain their existing MCP/hooks integrations. This follow-up does not establish
+universal routing, net cost superiority, or completion of the previously pending
+account-dependent live gates. The receipt identifies the tested tarball and the
+small subsequent launcher changes covered by targeted tests.
+
 The first clean npm install failed Gemini certification: the npm allowlist
 omitted `gemini-extension.json` and its `GEMINI.md` context file. Both are now
 included. `npm run verify:package-contents` checks the actual npm pack file list

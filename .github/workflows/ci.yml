@@ -49,6 +49,11 @@ jobs:
           tests/integration/mcp-stdio-contract.test.ts
           tests/integration/edit-process-lock.test.mjs
           tests/integration/package-runtime-exclusions.test.mjs
+          tests/integration/managed-clients.test.mjs
+          tests/unit/compress/proxy.test.ts
+          tests/unit/compress/proxy-cli.test.ts
+          tests/unit/compress/responses-knowledge.test.ts
+          tests/unit/doctor-reports-proxy-state.test.ts
 
   lint-and-format:
     name: Lint and Format Check

@@ -98,6 +98,9 @@ try {
     stdio: 'inherit',
     cwd: packageRoot,
   });
+  execFileSync(process.execPath, [path.join(packageRoot, 'scripts', 'install-cli.mjs')], {
+    stdio: 'inherit', cwd: packageRoot,
+  });
 
   console.log('[token-optimizer-mcp] ✓ Hooks installed successfully!');
   console.log(

@@ -21,12 +21,16 @@ import { unwire, wiredEntries } from '../hooks-core/wire.mjs';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { activateShells } from './managed-shell.mjs';
 
 /** The settings file this machine actually uses. */
 const settingsPath = process.env.TOKEN_OPTIMIZER_SETTINGS
   || join(homedir(), '.claude', 'settings.json');
 
 const apply = process.argv.includes('--apply');
+for (const path of activateShells({ remove: true, apply })) {
+  console.log(`${apply ? 'Removed' : 'Would remove'} managed client activation from ${path}`);
+}
 const manifest = readManifest();
 
 if (!manifest) {

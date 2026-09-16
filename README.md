@@ -587,8 +587,19 @@ synthetic repositories with natural tool selection. Uncached input and latency
 have separate results; see the [workflow evidence and limitations](bench/live/evidence/codex-workflows-2026-09-15/README.md).
 
 
-Off by default. `TOKEN_OPTIMIZER_PROXY=1` turns it on, it binds loopback only,
-and `doctor` reports whether your client is actually routed through it.
+The proxy is enabled by default and binds loopback only. Run
+`token-optimizer-install` after installing the package: it installs Claude hooks
+and activates managed `claude`/`codex` commands in PowerShell, Bash, and Zsh.
+Open a new shell to activate them. Each managed session starts its own proxy,
+registers the packaged core MCP tools (including wiki), and shuts the proxy down
+on exit. `token-optimizer-run codex ...` or `token-optimizer-run claude ...` works
+without shell activation. Existing custom provider authentication stays in the
+client. Set `TOKEN_OPTIMIZER_PROXY=0` to disable routing, or
+`TOKEN_OPTIMIZER_MANAGED_CLIENTS=0` before installation to skip shell activation.
+`TOKEN_OPTIMIZER_MODE=off` disables optimization. npm lifecycle scripts may be
+blocked, so package installation alone is not proof that activation ran.
+Other integrations retain their MCP/hooks setup; automatic managed model routing
+currently covers Claude Code and Codex. `doctor` checks routing configuration.
 Request-body capture is opt-in via `TOKEN_OPTIMIZER_PROXY_CAPTURE`; when enabled,
 it writes plaintext request content to the named directory.
 Capture queues are bounded to 128 requests and 16 MiB of queued snapshots and
@@ -673,16 +684,16 @@ index chosen once from the opening task text, and a `PreToolUse` advisory that
 fires _after_ the model already decided to make the call it is advising about --
 so acting on it costs the very turn it was meant to save.
 
-With `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE=1` the findings go in the **cached
-prefix** instead: in front of the model before every decision, billed at 0.1x
-rather than 1.0x. On this repository 286 active findings select down to about
-489 tokens -- written once, then read at roughly 49 tokens a turn.
+Verified project findings enter the **cached prefix** by default, with a
+2,000-character budget. The proxy freezes the selected block for a conversation
+to preserve the cache; new sessions can select newly recorded findings. This
+includes the Codex Responses API path. Shared graphs exclude project-specific
+claims. Set `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE=0` to disable injection.
 
-It is off by default and reported separately (`injectedChars` in the proxy
-summary) because it is the one thing here that ADDS tokens. Its justification
-is turns, and turns are measured by THOL, which has not been run against it.
-Folding an unproven addition into a proven reduction would make the reduction
-untrue.
+Added knowledge is reported separately as `injectedChars`. It adds input tokens;
+net cost improvement requires measuring whether it prevents enough work.
+Earlier head-to-head results do not establish that the newly enabled combination
+wins every workload.
 
 ### Images
 

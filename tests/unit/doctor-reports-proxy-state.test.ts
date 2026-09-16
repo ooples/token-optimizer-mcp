@@ -21,11 +21,11 @@ describe('probeProxy', () => {
     expect(probeProxy({ TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_MODE: 'off' })).toEqual([]);
   });
 
-  it('passes when the proxy is off, and names what it would buy', () => {
-    const checks = probeProxy({});
+  it('passes when the proxy is explicitly disabled', () => {
+    const checks = probeProxy({ TOKEN_OPTIMIZER_PROXY: '0' });
     expect(checks).toHaveLength(1);
     expect(checks[0].pass).toBe(true);
-    expect(detailOf(checks)).toContain('TOKEN_OPTIMIZER_PROXY=1');
+    expect(detailOf(checks)).toContain('opts out');
   });
 
   it('FAILS when the proxy is on but the client was never pointed at it', () => {

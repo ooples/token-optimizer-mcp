@@ -100,8 +100,9 @@ function upstream(
 }
 
 describe('proxyEnabled', () => {
-  it('is off unless explicitly asked for', () => {
-    expect(proxyEnabled({})).toBe(false);
+  it('is on by default with an explicit opt-out', () => {
+    expect(proxyEnabled({})).toBe(true);
+    expect(proxyEnabled({ TOKEN_OPTIMIZER_PROXY: ' OFF ' })).toBe(false);
     expect(proxyEnabled({ TOKEN_OPTIMIZER_PROXY: '1' })).toBe(true);
     expect(proxyEnabled({ TOKEN_OPTIMIZER_PROXY: 'true' })).toBe(true);
   });
@@ -520,13 +521,13 @@ describe('how many tool definitions stay loaded', () => {
 });
 
 describe('the cached-knowledge block', () => {
-  it('is off unless explicitly asked for, separately from the proxy', () => {
-    // Compression removes tokens; this ADDS them, justified by turns rather
-    // than size -- and turns are the one thing this repository has not yet
-    // measured here. An unproven addition folded into a proven reduction
-    // would make the reduction untrue, so it has its own switch.
-    expect(knowledgeEnabled({})).toBe(false);
-    expect(knowledgeEnabled({ TOKEN_OPTIMIZER_PROXY: '1' })).toBe(false);
+  it('is on by default with an independent opt-out', () => {
+    expect(knowledgeEnabled({})).toBe(true);
+    expect(knowledgeEnabled({ TOKEN_OPTIMIZER_PROXY: '1' })).toBe(true);
+    expect(knowledgeEnabled({ TOKEN_OPTIMIZER_PROXY_KNOWLEDGE: '0' })).toBe(
+      false
+    );
+    expect(knowledgeEnabled({ TOKEN_OPTIMIZER_PROXY: '0' })).toBe(false);
     expect(knowledgeEnabled({ TOKEN_OPTIMIZER_PROXY_KNOWLEDGE: '1' })).toBe(
       true
     );
