@@ -1,0 +1,2088 @@
+{
+  "scope": "Execution checkpoint only; the full 120-pair schedule continues unchanged. No interim cost inference.",
+  "created": "2026-09-16T14:32:37.587Z",
+  "pairs": [
+    {
+      "id": "nullable-4",
+      "family": "nullable",
+      "started": "2026-09-16T12:37:16.839Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-4\\run-UN2X99",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:38:05.800Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-7",
+      "family": "bugfix",
+      "started": "2026-09-16T12:38:08.500Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-7\\run-kc6ZMc",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:40:09.199Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-4",
+      "family": "numeric",
+      "started": "2026-09-16T12:40:12.295Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-4\\run-cWrWdN",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:40:57.173Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-7",
+      "family": "entropy",
+      "started": "2026-09-16T12:40:59.524Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-7\\run-oTtYs4",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:42:02.894Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-3",
+      "family": "refactor",
+      "started": "2026-09-16T12:42:05.168Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-3\\run-Y2xOGW",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:44:50.052Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-3",
+      "family": "tiny",
+      "started": "2026-09-16T12:44:52.388Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-3\\run-lgqFp9",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:45:33.047Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-4",
+      "family": "bugfix",
+      "started": "2026-09-16T12:45:34.999Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-4\\run-IKgHN0",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:47:38.343Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-9",
+      "family": "outer",
+      "started": "2026-09-16T12:47:40.395Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-9\\run-3rR86N",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:49:22.916Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-7",
+      "family": "code",
+      "started": "2026-09-16T12:49:24.859Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-7\\run-dZpDuK",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:50:25.197Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-5",
+      "family": "refactor",
+      "started": "2026-09-16T12:50:27.146Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-5\\run-XmBxjX",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:53:03.793Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-9",
+      "family": "refresh",
+      "started": "2026-09-16T12:53:05.999Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-9\\run-DvdtNx",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:54:50.683Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-2",
+      "family": "bugfix",
+      "started": "2026-09-16T12:54:52.623Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-2\\run-LbHMWK",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:57:12.082Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-2",
+      "family": "tiny",
+      "started": "2026-09-16T12:57:14.036Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-2\\run-Z9xr6f",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:57:57.443Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-9",
+      "family": "numeric",
+      "started": "2026-09-16T12:57:59.397Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-9\\run-2z6zUM",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:58:41.693Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-5",
+      "family": "logs",
+      "started": "2026-09-16T12:58:43.570Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-5\\run-XCO1Xf",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:00:39.925Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-4",
+      "family": "logs",
+      "started": "2026-09-16T13:00:41.856Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-4\\run-vqZdy0",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:01:48.548Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-7",
+      "family": "mixed",
+      "started": "2026-09-16T13:01:50.455Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-7\\run-e8MvEF",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:05:15.256Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-3",
+      "family": "entropy",
+      "started": "2026-09-16T13:05:17.237Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-3\\run-PrnnJ1",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:06:25.180Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-7",
+      "family": "refresh",
+      "started": "2026-09-16T13:06:27.106Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-7\\run-f35MXp",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:08:17.720Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-2",
+      "family": "refresh",
+      "started": "2026-09-16T13:08:19.678Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-2\\run-xVyhGr",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:09:44.245Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-1",
+      "family": "entropy",
+      "started": "2026-09-16T13:09:47.176Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-1\\run-ybAQiY",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:10:44.276Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-2",
+      "family": "json",
+      "started": "2026-09-16T13:10:46.387Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-2\\run-ALYeDh",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:11:34.609Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-7",
+      "family": "refactor",
+      "started": "2026-09-16T13:11:37.268Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-7\\run-brlRQC",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:13:51.450Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-3",
+      "family": "logs",
+      "started": "2026-09-16T13:13:54.145Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-3\\run-3BnNHe",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:14:52.920Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-3",
+      "family": "mixed",
+      "started": "2026-09-16T13:14:55.153Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-3\\run-BsAgVC",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:16:54.101Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-10",
+      "family": "entropy",
+      "started": "2026-09-16T13:16:56.158Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-10\\run-xTGCvW",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:17:51.360Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-10",
+      "family": "code",
+      "started": "2026-09-16T13:17:53.563Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-10\\run-DNn0hP",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:19:10.892Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-8",
+      "family": "json",
+      "started": "2026-09-16T13:19:15.260Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-8\\run-dfIVHj",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:20:22.463Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-4",
+      "family": "mixed",
+      "started": "2026-09-16T13:20:24.488Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-4\\run-UqF6dH",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:22:15.107Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "started": "2026-09-16T13:22:17.577Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-8\\run-tgtIku",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:24:15.604Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-8",
+      "family": "outer",
+      "started": "2026-09-16T13:24:18.185Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-8\\run-Gql10X",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:26:05.280Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-2",
+      "family": "mixed",
+      "started": "2026-09-16T13:26:07.412Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-2\\run-6f4WXo",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:27:41.128Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-2",
+      "family": "entropy",
+      "started": "2026-09-16T13:27:43.116Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-2\\run-VWN2cx",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:28:39.391Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-7",
+      "family": "tiny",
+      "started": "2026-09-16T13:28:41.499Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-7\\run-8hQy6C",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:29:26.964Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-9",
+      "family": "mixed",
+      "started": "2026-09-16T13:29:29.287Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-9\\run-8q0vdh",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:31:11.920Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-9",
+      "family": "refactor",
+      "started": "2026-09-16T13:31:14.444Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-9\\run-E7uM7U",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:33:22.758Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-8",
+      "family": "nullable",
+      "started": "2026-09-16T13:33:25.315Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-8\\run-LM27eM",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:34:08.701Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-3",
+      "family": "code",
+      "started": "2026-09-16T13:34:10.813Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-3\\run-xSjmdF",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:35:06.454Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-9",
+      "family": "tiny",
+      "started": "2026-09-16T13:35:08.626Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-9\\run-cbGg8D",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:35:53.647Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-9",
+      "family": "logs",
+      "started": "2026-09-16T13:35:55.751Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-9\\run-bhv9MN",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:36:53.334Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-1",
+      "family": "json",
+      "started": "2026-09-16T13:36:55.438Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-1\\run-QSujwj",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:37:40.876Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-4",
+      "family": "refresh",
+      "started": "2026-09-16T13:37:43.266Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-4\\run-Sxm4Nz",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:39:27.802Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-10",
+      "family": "numeric",
+      "started": "2026-09-16T13:39:29.961Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-10\\run-uIZuxr",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:40:13.621Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-7",
+      "family": "numeric",
+      "started": "2026-09-16T13:40:15.773Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-7\\run-hCSbJM",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:41:01.453Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-8",
+      "family": "entropy",
+      "started": "2026-09-16T13:41:03.626Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-8\\run-Ek5pLv",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:42:03.359Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-4",
+      "family": "outer",
+      "started": "2026-09-16T13:42:05.468Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-4\\run-nEeNbl",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:44:02.994Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-2",
+      "family": "numeric",
+      "started": "2026-09-16T13:44:05.085Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-2\\run-JUTRFQ",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:44:50.466Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-1",
+      "family": "bugfix",
+      "started": "2026-09-16T13:44:52.665Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-1\\run-3Gcag8",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:46:59.852Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-9",
+      "family": "entropy",
+      "started": "2026-09-16T13:47:02.036Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-9\\run-vMcQXA",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:48:05.850Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-2",
+      "family": "code",
+      "started": "2026-09-16T13:48:07.976Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-2\\run-sD8Gv6",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:49:02.324Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-6",
+      "family": "nullable",
+      "started": "2026-09-16T13:49:04.280Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-6\\run-6vigiJ",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:49:50.692Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-2",
+      "family": "nullable",
+      "started": "2026-09-16T13:49:52.848Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-2\\run-kBJBjp",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:50:39.801Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-1",
+      "family": "mixed",
+      "started": "2026-09-16T13:50:41.995Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-1\\run-2eLmNA",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:52:19.670Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-7",
+      "family": "logs",
+      "started": "2026-09-16T13:52:21.730Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-7\\run-ctNxpJ",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:53:31.884Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-5",
+      "family": "bugfix",
+      "started": "2026-09-16T13:53:34.084Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-5\\run-b7Nz57",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:55:47.745Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-1",
+      "family": "numeric",
+      "started": "2026-09-16T13:55:49.958Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-1\\run-J30IEL",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:56:46.835Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-3",
+      "family": "outer",
+      "started": "2026-09-16T13:56:48.932Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-3\\run-lEIena",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:58:48.846Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-9",
+      "family": "code",
+      "started": "2026-09-16T13:58:51.039Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-9\\run-wPzuK1",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:59:44.046Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-6",
+      "family": "outer",
+      "started": "2026-09-16T13:59:46.124Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-6\\run-JviNOx",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:02:16.164Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-5",
+      "family": "mixed",
+      "started": "2026-09-16T14:02:18.519Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-5\\run-aP7ZLJ",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:04:23.812Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-5",
+      "family": "entropy",
+      "started": "2026-09-16T14:04:26.478Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-5\\run-I4EukK",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:05:28.391Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-8",
+      "family": "numeric",
+      "started": "2026-09-16T14:05:30.449Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-8\\run-5UGNhj",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:06:17.006Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-3",
+      "family": "nullable",
+      "started": "2026-09-16T14:06:19.079Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-3\\run-NBrjtN",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:07:13.407Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-1",
+      "family": "nullable",
+      "started": "2026-09-16T14:07:15.431Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-1\\run-Kqap6q",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:08:01.258Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-4",
+      "family": "tiny",
+      "started": "2026-09-16T14:08:03.415Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-4\\run-2o6qYf",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:08:47.825Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-10",
+      "family": "bugfix",
+      "started": "2026-09-16T14:08:49.983Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-10\\run-ET9QrA",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:11:12.742Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-6",
+      "family": "bugfix",
+      "started": "2026-09-16T14:11:14.911Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-6\\run-YcMCSf",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:13:12.751Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-5",
+      "family": "refresh",
+      "started": "2026-09-16T14:13:14.864Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-5\\run-g0R4mK",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:14:43.814Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-6",
+      "family": "refresh",
+      "started": "2026-09-16T14:14:45.820Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-6\\run-hvY3N9",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:16:38.597Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "started": "2026-09-16T14:16:40.763Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-9\\run-H5cr9N",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:18:57.801Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-10",
+      "family": "mixed",
+      "started": "2026-09-16T14:19:00.175Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-10\\run-7xOwhW",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:20:42.735Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-6",
+      "family": "code",
+      "started": "2026-09-16T14:20:45.040Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-6\\run-V9jnlo",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:21:41.987Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-1",
+      "family": "refactor",
+      "started": "2026-09-16T14:21:44.081Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-1\\run-3TZI3T",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:23:50.841Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-7",
+      "family": "outer",
+      "started": "2026-09-16T14:23:53.034Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-7\\run-u2wY4i",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:26:02.593Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-6",
+      "family": "entropy",
+      "started": "2026-09-16T14:26:04.834Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-6\\run-EU786A",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:27:01.003Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-5",
+      "family": "outer",
+      "started": "2026-09-16T14:27:03.169Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-5\\run-CsgfHy",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:28:41.807Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-4",
+      "family": "code",
+      "started": "2026-09-16T14:28:43.973Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-4\\run-vtoVp1",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:29:38.448Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-3",
+      "family": "numeric",
+      "started": "2026-09-16T14:29:40.630Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-3\\run-YDTm00",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:30:25.172Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-10",
+      "family": "nullable",
+      "started": "2026-09-16T14:30:27.292Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-10\\run-koAU3x",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:31:11.013Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-10",
+      "family": "tiny",
+      "started": "2026-09-16T14:31:13.148Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-10\\run-bGGUk7",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:32:01.663Z",
+      "infrastructureFailure": false
+    }
+  ],
+  "evidenceSha256": {
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-4\\manifest.json": "7f78050cf7d09a1cfaf196e0ec64d747344798232d09485faf102bc9d101eaab",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-4\\provenance.json": "8c7ff6c7badab3757d9f447b19bb2d2f97dcbf25629be0d75f97bc8633c3fe6b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-4\\results.json": "40cc14f52fb56b089b9142c8b171789db5bfc571870fc3bd399bfb6c4a2b5efa",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-4\\validation.json": "954588c5d3e5d1981dc406ba3d6913bc19024690533a8762abaf02a218ac1502",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-4\\summary.json": "767251e732dc04b25c7e8be6cbdc283497f8227bc45404518c1fbdb0d43843dd",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-4\\cost-scenario.json": "b3b88f2b9cab67f9e18b9360cdda61bab25e8a6bd43c3fb7f1a64d5d8dd98b6e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-7\\manifest.json": "c4980a56f8335d3464c15f09c0443d024168119293b571dfb14fea99a2871d11",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-7\\provenance.json": "e12e2e0157e71d021dfadb931fd0ef12fceb46b7560c518753bf87c868d80435",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-7\\results.json": "17c31a6882ce8f5bb5a0c2817d5196c1b5cc9db6af672c90feaa7d06d399b480",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-7\\validation.json": "aa8bbe5517601c22d1af83743a03c4e0a5b82abc252b35e0fd556711c42194ee",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-7\\summary.json": "2231c5c17e85fb1ee210189348909a21405bab02c9c538ec717990a76a2a9331",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-7\\cost-scenario.json": "c680beb40f342c7a57a5c236ea7223f58617c2fcb3f59cb58a26aab5e4bad9d7",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-4\\manifest.json": "c32f779cea1e3900405adea410da36e066f0d4f66d54406f510b003b8dc21b87",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-4\\provenance.json": "03b29ad32d49228d4ca145e0ce408f848e68d1573cba20827d00cd7df6d040fa",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-4\\results.json": "c9ef7c03080324dd44519bc179134776bd5602236e5f676679a76c45b5a51e81",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-4\\validation.json": "65e411ecfe50db3882e985e868f515ccad0a708520299aedf1c26e43f88a7523",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-4\\summary.json": "921092f62af726a1c51bf5df21fbced0e6ff5bffb1e0658480fca0e82e1cce57",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-4\\cost-scenario.json": "d1cd31da908336ba24240f7069814b70023c87773cb89dfe8dc6747e3284c339",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-7\\manifest.json": "a0b9f6013ccc71fd60510d8d738564c691bfd79b00c0cb9f3956e3e37bd94bb6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-7\\provenance.json": "31b3750edaccbf7dd96cb984231a750a585dd8b2bb3aaa87cd8d9949464becce",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-7\\results.json": "6f9e0e37c49028400243b9bf4e3285997e925ac73809da8af1d13a8a75bbdd0c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-7\\validation.json": "341a992778dca3055af2a40308a93e7895fe9372010dc280986c8fc4ec506b78",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-7\\summary.json": "9acc1872f0c7ed78736f15b4c8605672d48da0e10bbbea0f51e6cd129bbee705",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-7\\cost-scenario.json": "0d2dd8eddad4fafebdd096fe407d5178e6347113242d84108b081d5602d29923",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-3\\manifest.json": "04cd6a803c48834e7d7ed8976964a8f7abaa3ff33abc4bcdcc003605f70144ea",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-3\\provenance.json": "a376ea7ef476738250b276690da6365d961a6af8daf6565a846c278285ada954",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-3\\results.json": "b2725402060d702276269b9ade840a2020d83251b767d3174d5a245a78c7601a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-3\\validation.json": "305068446f3f0cf0febbc7a12f485686acc98131b0a2f05413a783ce7d6d4790",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-3\\summary.json": "e2b8ee5a4ca0d7b4d4349e3ed96cb37104f4a29913350e1054018373c3e3b403",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-3\\cost-scenario.json": "49e18dbf9a6749ae2bb62e3262a1f22b9ee6082154469b24fdeee957749ea55a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-3\\manifest.json": "c65df205762adf146a44a15be46e464f886c907bcfad944b911e8a97bda0b893",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-3\\provenance.json": "6e6ce5bb604637d8aea9bf48097ccb95e7c69dcbe8999b6a1ff1528aea839f17",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-3\\results.json": "8a50b741e25e0fc9e65606caeb6a5a0be943119fbb18feac2075a67ae31c8f11",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-3\\validation.json": "07ed6a846eea84b69de588a512a7256ab612be7a71066e40214efe0fb325f9bc",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-3\\summary.json": "7d4bd8b5ddd8384ac74cac6b6b4862153349c8f523a88261ac21557e87cd17e8",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-3\\cost-scenario.json": "36670d5a86d963c37288306b40b319b8b571841bb9d374dae37cf87485e49faf",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-4\\manifest.json": "66e0f22a0a283d2ab09755363f7b71a876873fcb87f88e5818317a643e6d7848",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-4\\provenance.json": "98e75c35e1440e6406e180479f0f1386831fd069c1ed6a4a54e8f21296e7dbd6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-4\\results.json": "8de66a0dd5a602b138f9f492c651849190b5ee4e00c7ac5cb2f642a7a8463453",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-4\\validation.json": "655878d0957fa8047687ffc6cbd53b6d51c4c921e4e485599f34865e6de80dc9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-4\\summary.json": "85da0a7298dd91fa6a65480f5eae22e93d064b08b31e2741fb296794add605c6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-4\\cost-scenario.json": "b4b471a5e890dd1a74ffcda44c5de509c382924e2cc16ed6547edfca0e38ec5c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-9\\manifest.json": "b792f1246e0a1833d41eae33e6afeb44e3c81fad15ff702723008ae07d61ff16",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-9\\provenance.json": "e11f1aa6236697fbadf814ba18f6f3a45b33a44142a6dbe4b04ab1eb715912a2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-9\\results.json": "16e7bc2467680de21e94b41eac1387858996c1462964d1486f81062ee450cae0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-9\\validation.json": "6485fdd3b7a73d33e76aa3a721a5e94659767f902188589cd1459634c993a92e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-9\\summary.json": "07f25385a3b02edd11018d21ba651ea7f0c26c43d53a0c1eff2af9a5911bfa4f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-9\\cost-scenario.json": "a5f21d47300c67b51cb5e32bfda34e266b96cae41d8286078e3b2ac92d21746c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-7\\manifest.json": "910b902688e5fede86a0a194e7c01803f81105d5e5328f31ee218b6212320239",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-7\\provenance.json": "7cbb214a531bb47397ec98c27554451756519802e31bf3c88cf3a88f56f8f243",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-7\\results.json": "a97670f2188f6515d0f4689c2d1f311e5c28ea7c119456073a02d7b5aa3bf03f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-7\\validation.json": "9f493ccd2bcd3dceb7069e9055ac27333c84ecb5ebf60ea05f06e8dc35385e2a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-7\\summary.json": "d6cb348da0a0dc473281b096b0108cb0cd1c5d845e490291ea5b4bf9f7b3052a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-7\\cost-scenario.json": "58e138c7a07b0b2b50b267697ffbdbc0dd5d186bf049664d7c0616b78edd3445",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-5\\manifest.json": "b9a26f49a31834705ba16eeef2fc2a919b0a2bae72c8961f34536f4029b50d19",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-5\\provenance.json": "b85793fab76115f96cf28ca65207bbd86b68464d83e5103dde1b0290d9588778",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-5\\results.json": "85a14ce937e01576857bbbf2b2c715b5453bc7471e2767325f8793b27bc6f223",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-5\\validation.json": "305068446f3f0cf0febbc7a12f485686acc98131b0a2f05413a783ce7d6d4790",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-5\\summary.json": "f3dc8ffa7bd0b006198d89aa0926524c9ca1ead6a61d7de1c4e306a1ce2bb8e7",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-5\\cost-scenario.json": "7ce8b9cd9b77335f146fead2f6fc993e303f35133ff038b7125b95383ef2f6df",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-9\\manifest.json": "511add1e438ce8b7f1df1d9a95ce09fb98ac5bab202d7035e92d3eab5f3ba83a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-9\\provenance.json": "36a11f1f3a3f283cbdaf2cd8f63e312ce1c400c4cfccd4cb5bd3f1d6f8478298",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-9\\results.json": "3fdd09f0e7e4082595d195bc17f229dcf2bf5fac998569fc16398f58125cfbef",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-9\\validation.json": "b7cef12cff744e258812ff7d087bb53b138fbbc1d1c891b9dd0419515d6d28b6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-9\\summary.json": "1b95d6d3e20c85876b7146df5bd598a853094dfec75ef57b5c7cf47ff8e5b621",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-9\\cost-scenario.json": "199c0906ca5cfbe67ca90554375e4fe01156ed32e216e92f70b5f6e3f2e2a3bb",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-2\\manifest.json": "25e76d578654c834b5459b083dc5b47a2b8de88fe2074734b3e1bc69d1f59bca",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-2\\provenance.json": "4f9a4cd64d8b91e5250ec71448eb7ed9a3b5feac212131820c4f1efff15b53d4",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-2\\results.json": "958f28146e1930701ab3206190740de5cbf62038c31e85b3971e124ee5945f38",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-2\\validation.json": "655878d0957fa8047687ffc6cbd53b6d51c4c921e4e485599f34865e6de80dc9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-2\\summary.json": "9d9ac69126bd27e1c874a2130145d44cc5d249be33fc7cb17ba03a9ce0f4fde1",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-2\\cost-scenario.json": "b239fd0af2b558384e6e5efa7388763c860b03d0d1c40ceb2837c799ad730eff",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-2\\manifest.json": "7d29c932cfcb213a8fdbd65c0ed0c4f87823c41c6ae71757bd4b50ab8c22510f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-2\\provenance.json": "5b975de16d3236c45df35d95bf7e2a3cfbef67b4384cce5ebffcb8343b3e7968",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-2\\results.json": "2719133483729c4e79aaad85310e89b5653342cacc20818187468c6f871ec301",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-2\\validation.json": "e11c37a2e4cef18ba38e6246d66d4010daaded72e125239fbc73b6cfabd57472",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-2\\summary.json": "0760730e0ca766c890894d94b9576281df39b332963f1c19c424cc1fcbec3e0d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-2\\cost-scenario.json": "33a0a3f3a61c5dc15137b25f550cf1bf4a34dfa60cef6a813f9f44773ef36ccc",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-9\\manifest.json": "65f7b9ae63b974957c615a2e563c646553982e3604bbe02f7e7290e6c0271f65",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-9\\provenance.json": "92d5255a86697d22da8c84b021aafce2b5763a4f98b382e0c805f476c50211e2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-9\\results.json": "b4529556008817784a5df53911d900ec06a945f057d110080b7c541689dbf571",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-9\\validation.json": "fe7203681b33a5fd596b8b0bd8263a863e0f26cf7cdc853da916fbfda63d6408",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-9\\summary.json": "ae53114aca41b09a4b9ceff7d86a63f4917d2a50c74b64c0ba5c4b7265b0fe46",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-9\\cost-scenario.json": "97ac11cbbed84aa167b801b77043b4054eec5f692d47555a8ee77d5510185ad9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-5\\manifest.json": "6743435d51bf3631376b43c041a6ea4c7ed67af4ea27ebdbd05fa199b6652cbd",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-5\\provenance.json": "ce5010312afbfd8360ed8a4c057e81e66b2499dd994bf709d6e61261acf3ae40",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-5\\results.json": "7cb58c6db33908bc58ec68e99e09c2be1e4e98dbab65f4f9db06113bf070cdc4",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-5\\validation.json": "a569c540f2d544a9f5532d3644ce7885cee120314ed517b2e39d9ab8270c0151",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-5\\summary.json": "5c691f4a7825bd92b888867483f2af25d5b15ff51b2215beadc36bcbb536fb3a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-5\\cost-scenario.json": "27259433b341158612970b04fef8c8d6d149646938de2f5fb28614f6a5dc2b4a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-4\\manifest.json": "47eb2bd8c43b45c3ef2f9f367b480ba5e7bd33938dee7e34d6938714499d461f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-4\\provenance.json": "1d144acc9e236eaf641c066c5c82d7979833ca5e7b41565a586871a6e43845ee",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-4\\results.json": "a23de08e27405838982af41fdf942ed7be089f3d6f7ef537b20632c5c708b8b0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-4\\validation.json": "cfc23685f8b7d5bf3a8e1c8111860778eadbf2afb1b439d13991edaff50cc83e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-4\\summary.json": "c967620472fcc48886e67ea644593ee55713db47130f894595a031759f6fa10e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-4\\cost-scenario.json": "ec50bfdc91ac77e7e5f87879396b76a9e21e9a6a0a2a65ff04ec3ba109cdcfdd",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-7\\manifest.json": "0f1102ede0b6c170681dde12feb7b9e7b43224e2cadc3cf4de962e79a4170eeb",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-7\\provenance.json": "eff501bc2813f13458aabfacba5baa340670d37efbb5b1659ba53573b86e7ca9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-7\\results.json": "f226f715f53335b0070525e72e65175e362b644f2b85bde85c64a0dfcdbb9261",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-7\\validation.json": "f707ba72abbb2fdf1b345c7c874832c2fc4e166be4aae8abb155b517d3fb5305",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-7\\summary.json": "e08bc5534cad29867bd8405a6bb4dc6e337f39617790ad0ca60675a88e0ae9b6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-7\\cost-scenario.json": "4da92f7f5b0b4c53f9ee2e791b66789bb3c9ef25b66f1486225b9a13d0acb708",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-3\\manifest.json": "405d0d556554ee2aa67013e9a064b157d887d0559e9ea6d39db84a2652649f10",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-3\\provenance.json": "44ef4702dc759d2998c1211e2613620f6459e91ca18c8c1bf88c30944e8784f2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-3\\results.json": "90912bf502389b74151fb5566fc70f6d0ebf5073583e30146002f29e15f20107",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-3\\validation.json": "341a992778dca3055af2a40308a93e7895fe9372010dc280986c8fc4ec506b78",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-3\\summary.json": "00149f8b4ae864b3454bf1b6e60e2201fbbc8a7c8fbacd74fe7e4b915ded951c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-3\\cost-scenario.json": "1ccffdfa5ad97b2e9bcc539743d6844f1b68f459111b475718ba423d63781538",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-7\\manifest.json": "10a58665a2ad9248865ea3dd151bceef71ef515f0e564a441c2bde49d5e58552",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-7\\provenance.json": "10a50ff6feaaa72aa1d322be9f967cb67b5357b6ce64bfaf220cb933aa0560a7",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-7\\results.json": "23704a821481acb50b22d4efc8f7d435065ebdc47351b18d46b5c64d14372366",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-7\\validation.json": "b7cef12cff744e258812ff7d087bb53b138fbbc1d1c891b9dd0419515d6d28b6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-7\\summary.json": "2f3ac64a80afe3b43f668f4714467a721927cf8cdf0fcc7094cad32dfaddabdb",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-7\\cost-scenario.json": "6136482d6de650b220fc8495c4082888c93a5b5208f8c96f9d56848c52c4e8a7",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-2\\manifest.json": "5ac1f04fafa5b68c520496d22cecc16583c2c255062e8b6e0befb5ef6cfc0b72",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-2\\provenance.json": "7e9afee688f4c4a40688cdf2408c3d18d58f7f9ee509900c5043c04d6833f50e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-2\\results.json": "0c1c2cae7bab4ca584c5bf9edfdc8337bb65542d4e0e8baf9648ca57081823bd",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-2\\validation.json": "b867acbb1307fec7b240c98db8f11776bb377d63f2a4e4f068d59f80d34015b4",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-2\\summary.json": "37fc8274cb2b55c088788ef9934fbfe96336d465417fda5f4a5798cba59462e7",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-2\\cost-scenario.json": "fa297bae5f868a5a358b1cb3d5d09ea4a3d6308b2812576a6d57dd35fd8a3171",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-1\\manifest.json": "990919482a1bcd4cae633d864854b609aeb524f1a61de80286287cfff49fa66a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-1\\provenance.json": "536f51598d4f9a4d723d075bbaacaf922854e725cb64712c7dbe576807c895a5",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-1\\results.json": "a94f010ea2f042829f4e3f2c3ce9d2bfa5145c342b91b30ba8aa5a71d6e8ad01",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-1\\validation.json": "341a992778dca3055af2a40308a93e7895fe9372010dc280986c8fc4ec506b78",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-1\\summary.json": "e0d2530891995a8d8a20ded9bee7b94f76c3a1340974cf68cc2e1043e6b7b87a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-1\\cost-scenario.json": "c84a1ab73b85be8c9ccf4f1a6ae9ef74253430f8d652c97903c5d495fad05db8",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-2\\manifest.json": "b021e5cef8209f8c05424a274b2f3d5a0f8461b04530a1187d6ce74a7aee6d14",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-2\\provenance.json": "7d0189996f96c6b12e7b9ec4c5cedf837ce2d9b7de244f417e9f250988ff2ad1",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-2\\results.json": "3b87531861bf9a5c677babf444ef079186f6f6d337caacf69e7e28aa47e1b718",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-2\\validation.json": "532fddea2bcb2e6c1604eb3f8cce319857afc508f4521a522b7f535c09656795",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-2\\summary.json": "df4c36165f31b86653e12b80e871631e19325431314e07be351e588f3337cf84",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-2\\cost-scenario.json": "2cadd39c725e0dc0962c15cf25536efaab1cf3da14406877de2878bf222a9fae",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-7\\manifest.json": "d39b04b0069139e83104332dd2ac3d3dd5a9a0d50d7f7dec1e0a43c9d4bf586f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-7\\provenance.json": "865b1a825f5c2de7a9c0f8d8dca77574526473bb5f678c1bde9f713244a5069b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-7\\results.json": "8f2029fd698fefdb54e32f14a1dacdf5a9d7a4e129eb9029cf81a6ad7f5251da",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-7\\validation.json": "305068446f3f0cf0febbc7a12f485686acc98131b0a2f05413a783ce7d6d4790",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-7\\summary.json": "4b5e0c77c1763abdd9fbdbeaa81f7482c7bc5a177175e4939039014ca6e195d1",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-7\\cost-scenario.json": "97acb9063f063b6ac49a5454287e459fefd26f8510e16031bfef9f49849f05e6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-3\\manifest.json": "0293bfaba4b84438976025a0a8993a0632fec5f1944634b71864f266e05b3762",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-3\\provenance.json": "efaeaf3dc318205ff70e4ed2b7ad49dbc19e06f730e84ece534d9d2f5a426099",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-3\\results.json": "47ad5f9bfc99688f169bbde8980c586d0807bcfe353fbee10c027b7bb64f2a2d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-3\\validation.json": "a569c540f2d544a9f5532d3644ce7885cee120314ed517b2e39d9ab8270c0151",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-3\\summary.json": "83df5697e4e523ef17539c010f033fad554dcae4e342e98d3ae39a6c751e27bf",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-3\\cost-scenario.json": "e08abf37d93504a2cbc337676307187b7aff62737fde302f16c42c465502589c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-3\\manifest.json": "3fc0625c6b163efce3f342056d88175e5d834d33d53b5ab14032eab336982829",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-3\\provenance.json": "eb6374a88a721189cefe94e1abf587e8f2faf0d1d83692e8a0e103faf0367181",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-3\\results.json": "31295d3af4662a9ae9019d0f1de85604ed97cf31d3fa59b7b3d60f5caed3b776",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-3\\validation.json": "f707ba72abbb2fdf1b345c7c874832c2fc4e166be4aae8abb155b517d3fb5305",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-3\\summary.json": "9ab8e5d37763514067c41787c710a9573dce80991c215f5ddb87f561e406d1c6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-3\\cost-scenario.json": "fcffe66e84d65dbc5d6fa1dfa9e7fe82701071f97446346ff392c3a319edb3b0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-10\\manifest.json": "caa4b02dfe4ca4f4c14b108e36dd7f4a9a63412654a38e5eaf0a6a2a4c0f4e47",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-10\\provenance.json": "dc0eef2ef83caa94baac5983d1b3d84af4fa5f2dfeb121b72e489e3b86f8c92f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-10\\results.json": "6303c7a198d886091ec0b8dbdf0829caf99415a086c87fbfa3cd8ee3eb1b53db",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-10\\validation.json": "80252440aa5d110b112388abb71ca2e841a78e39d1526bfd49c8438e33d3d382",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-10\\summary.json": "40530d534eb7339fc6dca45e89169e028e0af77d1f3f4414e382ed193a9d15d2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-10\\cost-scenario.json": "47d8e69711e06a5716ea6d0093aa9f77a8520fdd835b4aa54bbe35076e165507",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-10\\manifest.json": "24c0b2e449496fa62d95f4ab61a30d36c0b738d00570b9db46b186f8ad740d59",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-10\\provenance.json": "224a680112876b3c8b459538ed32fab5a5363da1bf703eb6eaf4377b2418725b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-10\\results.json": "040df5cc34e709d2a2f36a7ec2de9e1a81547917e86639a4a95c0bd817a74582",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-10\\validation.json": "0e6cad16fd3332f60c2cf22fe512c61843a42f09f31a8bc05a1f58ee53309c38",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-10\\summary.json": "37238464b2071652ecfbd1b51c919198250b48c356505c8633a12b16d0b0b660",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-10\\cost-scenario.json": "faf0068fe1a2a76ef0acf074b31c0125c553eb9b324a48d7a95f5867cf2ec1b3",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-8\\manifest.json": "1b4124e9c21141e99dcc355f90e5189a0dbceca03fce33fe1522888dcde87bb0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-8\\provenance.json": "cb6176368cb67ff483133140cd47d94e7c5655c0469925295c8935b50b2f5c77",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-8\\results.json": "8bd6cbefaa7384d093070f1795f757b9b09d2a0a36d74dd07210ee0524849585",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-8\\validation.json": "532fddea2bcb2e6c1604eb3f8cce319857afc508f4521a522b7f535c09656795",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-8\\summary.json": "2b5f1bc1ec022acf38357d21125bb85dd7507044346ec8b12366b78e8b79533c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-8\\cost-scenario.json": "1fb126fa333831b2a59b2153af6274662c818657ab436c61c4f3563769ae675f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-4\\manifest.json": "ec69ff759a699e3844760f9f15e61612937466fa8f388e8fc8ac686943dda908",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-4\\provenance.json": "f6696e3bad79a32abdd883c654fd0ca5a30cdb6e9a2d2cd0839c24aa32432f41",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-4\\results.json": "f58f53b3fa980869a29b16fc7d5904f0dac05105add2ed7b84ceb929950bd358",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-4\\validation.json": "840d38da91f8e55e1d31cdf707eca08faeb48feac9ce11ac12e6adb8cdb37394",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-4\\summary.json": "4a930c235c27389b7751e75c0055ff7865f58effc15bb91712dd363c00740f76",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-4\\cost-scenario.json": "5498f4c0a0e06b53b44c3333ad9cbaf2518a2af3077ded70bdcb1c18d59263cb",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-8\\manifest.json": "232884fc400e21584998a933fd80021ecaedb31514a9d4b9bb8c55495a3afebe",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-8\\provenance.json": "f0077df4c303486e6cf2f96c76422dc4d41e4e746ed35f560bb0736891cf15e4",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-8\\results.json": "471a7a95eb1f934816cc931e5b9950d9a0bc6d18fb3bd55f8d7ed0bffea171df",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-8\\validation.json": "840d38da91f8e55e1d31cdf707eca08faeb48feac9ce11ac12e6adb8cdb37394",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-8\\summary.json": "c2ad28f3045276b24cf7bb003ed972e9de2618afcc11fed5f17dc586f84b7839",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-8\\cost-scenario.json": "27de36a63783d069917efcf60d406b0f16aaed4cce297434182e81a1c3f12dc6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-8\\manifest.json": "7715b6b8620f609b8b2e998482ceb56fb95f86d0a3099b5870e84aba61c7f1b0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-8\\provenance.json": "3d6009afedaac31a20972da15ad7a562ce8d6004bd55d6403e80e57d6c6ab80c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-8\\results.json": "d63168f208d813f6e72d8eb4a0150f2a28eaf6511d3ab96e45fdb15a9316f887",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-8\\validation.json": "f17c28f1ec3e58d436e1b43c9ede3e69f76d1fe4ca290d0a3483e0d9391c6f93",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-8\\summary.json": "bd0f604e553343cf164f76ed468d5fffaf65461755e225bf8751851b016e7c64",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-8\\cost-scenario.json": "4954e74a080660187c8493219df0591175f3bec8f1c9683b8f9e70933cc9199c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-2\\manifest.json": "87351e81e4cee0283d83ee15ad7de94399469285f05ed5558cb8e3043f47a60f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-2\\provenance.json": "3e620cf93d65503f2fd0a186e891c2511acfd69ba3fcefdae200242cfdb167f6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-2\\results.json": "5c0eceb5c4a2d5018aa11134df9a3c21b406ac0f09bf952df58e693426fa8159",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-2\\validation.json": "840d38da91f8e55e1d31cdf707eca08faeb48feac9ce11ac12e6adb8cdb37394",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-2\\summary.json": "d2cc36eaf3eeb5f4e9031a54aedad6d49d6fe69d3c2f09b70eb307893327a783",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-2\\cost-scenario.json": "6266c9d10aee5a6d5e7a911b7ec58c7fee3c20e6eb7c89ee1db1aad85a61d75c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-2\\manifest.json": "d14aa3f6d70ecdde847f03bce2ce8bbbf6f8185a9156bc92b148765d403b7c3d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-2\\provenance.json": "689157816d38b6e1d5af480e65444f01ac92bf89c3c57642f3f1d96b525bd66d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-2\\results.json": "fbf51bb1898a633ec03dade2cfb4490f2be9c29a43c8c8cff16eb265f37c3b95",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-2\\validation.json": "3cefc1206aa4fa39a6b16ed9ad551d911ad1c4897dea3631023c8e647864377b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-2\\summary.json": "43d8612920aea503c1b2e76fd4450e58c02b5b8465ec054f94c2bd9533a57fe4",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-2\\cost-scenario.json": "55449c3fa5d5e4a41e61986a55e32ee21e6e76267c33ccec6467002443d79b32",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-7\\manifest.json": "b645c21171bc62eeec173d5540e5265858ebb92176665fd5c5c2f3cc9c94d22f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-7\\provenance.json": "d33e056e26aaf8608c14780596aa7a8b3cabcc393c2147e0d3830f9145c68364",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-7\\results.json": "4f48df776695af1e35757b75f3820748455c9d64805fac9277ba36294572a40b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-7\\validation.json": "07ed6a846eea84b69de588a512a7256ab612be7a71066e40214efe0fb325f9bc",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-7\\summary.json": "44680ee5789fa50c5128e6fbaed7fce2538e35258ea913b02c2dda77cb3d5a55",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-7\\cost-scenario.json": "d5b9e7df0f1451efe3b6656c9fdb0b93adb14e49196e96f4bd987bf78ed90c67",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-9\\manifest.json": "78cdcdc823037c035fc35245934ad1e163118413579597c5895132600e71c7a0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-9\\provenance.json": "17b3029298b511296b645917886ee1da579d5b852e1d49ed217f49e08e47443f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-9\\results.json": "df07c5a88154aebedcdd5bc5c5693f170b57cfde064f55390c334bdc5c780f97",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-9\\validation.json": "f707ba72abbb2fdf1b345c7c874832c2fc4e166be4aae8abb155b517d3fb5305",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-9\\summary.json": "8311912ecc126e7685253d146e8e11c731f804de90a94be48c0a8e12036ea5f2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-9\\cost-scenario.json": "515b4d0bea4d57ab744240dcbe99043f2de172d33d632d71e19c0c148f5f5e69",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-9\\manifest.json": "a532aeb7a973eb19cff566167072498f361d414b398081ec33c9f1faea035b7f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-9\\provenance.json": "7ecd0c85c9885dbbbdc680c53d9f6f6a8256467babc63229bc06a3ff36dd6d09",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-9\\results.json": "0465ddf6d2cb9be07712c9b9153223d87e75b1d8de1e7354600dadebc44b3289",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-9\\validation.json": "305068446f3f0cf0febbc7a12f485686acc98131b0a2f05413a783ce7d6d4790",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-9\\summary.json": "71a23b04ee8eeb6867437bbdcffa7252dabb2b036768b605aa897e241224344a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-9\\cost-scenario.json": "42d8f1793867f81058cf04cc2b2201e37ab071578d714212251e06eaf942ad26",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-8\\manifest.json": "636dbf86651cb736cf51dedcfe6fe2fa3ba339c24a069b7fe2618bf9c4f58a59",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-8\\provenance.json": "7a02b9c407f0232d96531fa12546a69304f8b9573c924583c7bb2cff339610e2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-8\\results.json": "0b8347b547626ab0c704e362264dc20b707e6da6a4eae26d99f7f4a76b6ba23b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-8\\validation.json": "954588c5d3e5d1981dc406ba3d6913bc19024690533a8762abaf02a218ac1502",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-8\\summary.json": "019950d3d24f466a6906f0f8d5a011ab7a83f36319b55b165fcb21a3beca79a8",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-8\\cost-scenario.json": "ef8fe72e2682c6e27257fa43451ef264a8d2b537931e7d2152c11a2b79e30729",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-3\\manifest.json": "6fc4c47ca94a36e49fc25e7905c1602f9b46bbf777adc1bb14fd78d84669bfed",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-3\\provenance.json": "7c34a4aa979355b56bf4eed5e0ec6ad0c398d9e852b02a021c04dc6d8360ac9c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-3\\results.json": "154bff00f2d515862de041a3edd9b235cf214a49e25a1c86e3d3413ee3b5e128",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-3\\validation.json": "a71a51287ebb0577b6cf77a4e82f94b1dbd775eb0445ffbf2936546daf04f0ca",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-3\\summary.json": "8785d5b7d440debbdff98e1c0c611ed8174388db974824e82d1a1c0b926af977",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-3\\cost-scenario.json": "f5aafb1e8f7d334440cb76985cf26d5b48df7c5c81c4b74a15511f0f41b11c39",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-9\\manifest.json": "e99205a60a7e0e9a7cad76153708320eeaff0307c20104c9bf0fdad255489af7",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-9\\provenance.json": "d559c82c465d84bf9897b3527d65e7f2592846df7b64c1220968c25e9a05da62",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-9\\results.json": "97bf9e4dc1750a32dc4c7f7f1dd4fa736b4f89f97df6743368f7ff09332c4594",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-9\\validation.json": "07ed6a846eea84b69de588a512a7256ab612be7a71066e40214efe0fb325f9bc",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-9\\summary.json": "1458c3d2903d4a74ce8e3c069ecfd2d198e6a4339eb566dc743596e027cbf77f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-9\\cost-scenario.json": "50046aa3c9afe1e75dc4c54010cce933cf3d91ce7e541f73b438e548a6ff6312",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-9\\manifest.json": "5b1e8d5cf9d2c321fc6b4993840d0db6aa62444b8d31b979917a45e4f3bc6c6e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-9\\provenance.json": "9e8a35f469435493c78244fd8a64afda7bb6e6c0fbbbe492258a3661c10488cb",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-9\\results.json": "e19f37319645fcbf84a1f59c164537146a335b7487c8ba281572e610b27b2586",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-9\\validation.json": "a569c540f2d544a9f5532d3644ce7885cee120314ed517b2e39d9ab8270c0151",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-9\\summary.json": "070f901d9d5f3107f3e24c0157df7970762f406215a0489493fa77b6ee5a0b70",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-9\\cost-scenario.json": "70d6da2937c4a18f1422d425d01ef38cd30739fb4af4a69597e0350a912dba4b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-1\\manifest.json": "092a2d19cb013503ffabb659c5b68e56f18f4a4c8c2918d231324e8326b7cb11",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-1\\provenance.json": "2df2028e0236b5f25790dffb881b878adc6b4c8e0b16d02575792e3a12460683",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-1\\results.json": "a2040a4c9fc3aff54a8b212a975278529ea8ad46a9515bdcba7552ab5e4d8986",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-1\\validation.json": "52a04c2fccfe6c74012982fdb5deab17eab4a038ccd741cf7470bbcb7f34717a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-1\\summary.json": "8afa26ae56cca12f9a8e6896a20a73c10c0b7ca3cc1002c0170ec6db1217c48b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\json-1\\cost-scenario.json": "9aaa77cae9f8fa77a8ee9523614f0fc7d3b6a1f1f86643494ee386706a7a89a5",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-4\\manifest.json": "0e89f4ba4100a06b34c1a6db1b4ab310e2e120e324df998927e988d87b95353c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-4\\provenance.json": "27e07ee460fc1ad7638d2fc6810a210335ebf8eaf05085790faa1a5759fe55fd",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-4\\results.json": "a890328c75844d6645a77a840d201095d6d2cb6f7ea62c69cf35778fa6cd0309",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-4\\validation.json": "b867acbb1307fec7b240c98db8f11776bb377d63f2a4e4f068d59f80d34015b4",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-4\\summary.json": "2530a0c11d959568a2327da3b1f78623ed9b308961c7d9c2079acda0451724d4",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-4\\cost-scenario.json": "d5117433be54498e60b2ab925c2aa45ecb745233df67919c6ce1dcee96b7ec08",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-10\\manifest.json": "3908c398661701b357c9fc2bb92d8a331d1555ff51a21c1a0788f5c5b3d33c86",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-10\\provenance.json": "4aeeeccec9d2c1efcd97dade50c9fe47498f4f846f65e2c711bcd83e409c73fc",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-10\\results.json": "151a801e75f316d02bb10d8dbd9dfd207c95bcce7819bcaf605298a4752d4fc3",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-10\\validation.json": "65e411ecfe50db3882e985e868f515ccad0a708520299aedf1c26e43f88a7523",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-10\\summary.json": "28ac22fde26472ea87baf4780d30c1001121a3b5b0d9aa5531a32d46a6a9244f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-10\\cost-scenario.json": "26bec16f995f92147bc9aa41822582a56788c7c4f8547ec02f10826c333c39a9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-7\\manifest.json": "a825f2e9dde7e3b6609c607fc7cdf6e1168a82e198045cb218d8f56c93979a71",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-7\\provenance.json": "74c35a6bfe43a48bc287b61041c0b5fac9fc86ce838756b212fc0f52baa89588",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-7\\results.json": "97e9ec651e7adfc28c2903fc88897410df2fc75f8d23ffae05ee7fc63e28ebe7",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-7\\validation.json": "fe7203681b33a5fd596b8b0bd8263a863e0f26cf7cdc853da916fbfda63d6408",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-7\\summary.json": "4c5b6c6be5ef6f3cb44b19e792ec4117a56d4a8dad637a4205af0bf200b39aed",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-7\\cost-scenario.json": "e1a8aa142b91e2f208b68c50b02a11391ca7a1f51cdc6ec7cd9a2036af69b026",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-8\\manifest.json": "59cfd6a00b2f26969ec52dcae8de510bf826c85f462d4effe0dbb8b42ea75cda",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-8\\provenance.json": "d951a202218c21a61e52adba393703d358a5de41a9270d0f845910d6fa16b859",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-8\\results.json": "f2df0dd9290cd5ab29b356f786fb218783462609ee228a34fb10ae4ed8b2492d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-8\\validation.json": "3cefc1206aa4fa39a6b16ed9ad551d911ad1c4897dea3631023c8e647864377b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-8\\summary.json": "78318248c2159d238766141e4c30588656ae4842c387f1c13cacb1bb17f38ed0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-8\\cost-scenario.json": "e9a817a8e44888e88db921d5c71b34b60479cb75cc21f3b5aab410851f811cbf",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-4\\manifest.json": "ee2355c6a749f6244dc0386852b7734f807bb6dde8901e57afd1af8725c0f11d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-4\\provenance.json": "23190d0fee314a0fc95f59090ac40380d4433fac62db0d33847c839876feb01f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-4\\results.json": "25d50df40260b40518925464277979e24754249aad7f3430a09c95c755f46e99",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-4\\validation.json": "f17c28f1ec3e58d436e1b43c9ede3e69f76d1fe4ca290d0a3483e0d9391c6f93",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-4\\summary.json": "5d4aa1905758c985e834f42b26878fa193a3c54816d3e297a4413e322b2dd64e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-4\\cost-scenario.json": "ad03b3e907605c83848420101e083bfe3c4fc02f8e10228f4ea2eaad2b1e3670",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-2\\manifest.json": "553a7fabe811439cde6965cc52e0368c635b5c22645026458730e98e680fca34",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-2\\provenance.json": "f844c92efc12db8733b0413525eb7a427e9669566fc64232ee9af27a88c4a72e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-2\\results.json": "920d117dc053af4558475207412a2570bd5fe77a285bda7a1fd73302dc67a580",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-2\\validation.json": "65e411ecfe50db3882e985e868f515ccad0a708520299aedf1c26e43f88a7523",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-2\\summary.json": "eb789bd70984b8c6f8dd68719d6e3b0c6b27aeca27697ba2e9d49d250da7c971",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-2\\cost-scenario.json": "c58a6e0e0630eaf9be05563de43ea70ded3496106e1f7bcfbf7029939a4cebe1",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-1\\manifest.json": "9a9bb322c3d055cae76bfa1ef54b3302c3149c242a9f9bb81310367a37f29779",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-1\\provenance.json": "95efb09c2c432abcf0655555ed15e0cf548f71463f8bac94a27c306c9028c972",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-1\\results.json": "533f01c2e85c0d5676d4808468786005a496e12b5e13dc0091ca2fa3b9dc9ee8",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-1\\validation.json": "aa8bbe5517601c22d1af83743a03c4e0a5b82abc252b35e0fd556711c42194ee",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-1\\summary.json": "134036d6a2c4e22c5377649281b8eb23d071bfaf65dceea26b94000a561cbd06",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-1\\cost-scenario.json": "f8a2bf195c03ada0c6d7b6ad75965dce7b26f15ee1a63fd85e7407af18d15e02",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-9\\manifest.json": "a6c009646a8fc5c6eebd4d7bc2bba617b532bfe48cd3cd26eb0a37cb68d74adf",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-9\\provenance.json": "4d9313c717b5e320dc61f686d5b20c0deaefcea8351af9d5223a38e6c7e10378",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-9\\results.json": "40c7a8ce146f948336e732752d2b00f21d6dbc9b2f95ceb37769dea2018e975b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-9\\validation.json": "341a992778dca3055af2a40308a93e7895fe9372010dc280986c8fc4ec506b78",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-9\\summary.json": "7a32f9694051d92bc59570df092a3298640d35f990d7c392e5d1f2e1f361eae4",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-9\\cost-scenario.json": "151bd0bcf14dd107decf50ae81e2e46107c36a25c3d1b5278f5f7297fe179c1b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-2\\manifest.json": "0d2645539ab9468aa0208e7088dc2f2e1bffa78bc1ecd5a5ef16f155f80561b2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-2\\provenance.json": "7b7c5b6fdb39d20375f0a9ad372c6b5723edcc093aaf0b7ba16c320f84d23278",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-2\\results.json": "fcbb68d0f9d4d091c9935568b34b468e1e7cb806ddb052711ae9ad3afbdde6ce",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-2\\validation.json": "0e6cad16fd3332f60c2cf22fe512c61843a42f09f31a8bc05a1f58ee53309c38",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-2\\summary.json": "615a2e6e464c84a68c4193032ce6c8dac5fdf706332c0a7e54c58e640c30d883",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-2\\cost-scenario.json": "b033aaae0287a43904d85498cbee8824b4d377a18909b43525ab0abfa6dbc27f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-6\\manifest.json": "27493cdc522b730a38baa3f4ae750e7d90d1ffd32bd7ef740451ea4cb586653b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-6\\provenance.json": "d941c5702505dbfcf914b4e59fab566b687dfd4c4d5340740acca07b4daaa928",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-6\\results.json": "b9e2fc761745f022ab1d7aeefecceaab333670f2232ae64e6cb02a1e4a09bc53",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-6\\validation.json": "954588c5d3e5d1981dc406ba3d6913bc19024690533a8762abaf02a218ac1502",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-6\\summary.json": "480ece7a9ebded130cd1e8c3973eca85a5edfc43232b8fd7973b7a5017f5ed1f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-6\\cost-scenario.json": "289fc580bbbc6e41352c017d0bc6bea8fa7e18cc2fc6a5a0d4fe5acf87893236",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-2\\manifest.json": "dc38ec3e83b94d93c594913208bb6fc86bb8d6ab5d50cdc484ad27b006f9d10e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-2\\provenance.json": "5a36968fa74bca7505462744c4be20521169ec9bcdad5b718ec81b1c2db6d1bc",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-2\\results.json": "7b4e9c7b2baa344ae76c14b04aa980d8ea292ad24b229f1761e25d645747e2bf",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-2\\validation.json": "954588c5d3e5d1981dc406ba3d6913bc19024690533a8762abaf02a218ac1502",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-2\\summary.json": "ada4b51c9c302770c7ebf216a1bd1204b8763c4df1d1555d7f882bffb1faa0ef",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-2\\cost-scenario.json": "f42450187db4438ee4f0a8fc9659dfa2d2bcf1dc995fbaa371ea850cefbb6cf2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-1\\manifest.json": "b7ea7c1e7bd58b767081a54071d07014fc412d0fda5c6fcdcf9c4e1ab967c66d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-1\\provenance.json": "96142fb11e358bf9d353318e82263c96d56142ab0a9be16631baa2c333ba581a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-1\\results.json": "b62c193a09583869fa3f4977ddccc301821f803793f9ec7d61c9b731361a9e61",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-1\\validation.json": "f707ba72abbb2fdf1b345c7c874832c2fc4e166be4aae8abb155b517d3fb5305",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-1\\summary.json": "2ac7db60f96e5ce4225d18db2683eebb475c3bac52584f314d7b695eca690a5c",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-1\\cost-scenario.json": "79aef30e027cf49a34410d490b48a657c6296f965f4b0a41d1b54363f30172ac",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-7\\manifest.json": "ae33d50ffa480ebe4abe6e427562c7bd9cd9c9994fbc83ee0c3c0a77d5991b14",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-7\\provenance.json": "02cbf44086bb357e39f7505d1ca5eef33c89b5f8453ce3bcd8b04995170634cb",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-7\\results.json": "d9463a031df3e1f5cf066edaf475be3f5a1ac96bebec5accb15321a53dc61e45",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-7\\validation.json": "a569c540f2d544a9f5532d3644ce7885cee120314ed517b2e39d9ab8270c0151",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-7\\summary.json": "f7daac6c0b3be7a4a9ffc4fa52aaea6f7bf92f24def54cbd02581a17fbff74f0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\logs-7\\cost-scenario.json": "4f1343fe4e6192a370fe886df26580a98404db0edaa55fc315d70156b7d6590b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-5\\manifest.json": "5a67c591c4cedd3b3a6b7ebbd5bfb9548c67e4fdb3ee29b2f3281cee82d43f49",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-5\\provenance.json": "2fb4d16e948523906f8307010c02a0bf38475b4c2bcef42a5ed2fd90c352f09a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-5\\results.json": "1d59b28a4b17e7e3931ccf6232be1f9a4bbf240de53cb3c5a2f6348972df8b5f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-5\\validation.json": "aa8bbe5517601c22d1af83743a03c4e0a5b82abc252b35e0fd556711c42194ee",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-5\\summary.json": "f96b7462e69f277449a993613ed12dfd1af71df2e80fad55c80811adbf70de1f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-5\\cost-scenario.json": "692f8007b8c7c00b9f0da1b3358a6e8e50a918de03f02b3c06ebb591810af10f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-1\\manifest.json": "e08f116caa73a07fdaff2dd07f1cd741bfc501cc26f94dbf43bb4540b8a537ab",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-1\\provenance.json": "8a21b41055a5f71e0969bf0bcb1348a08e123cea3f5792cf1e17244f91bead59",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-1\\results.json": "1576a2b27c94b1ccf20e8f0451ed266eb53fa380639099e0414b360404d29e79",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-1\\validation.json": "fe7203681b33a5fd596b8b0bd8263a863e0f26cf7cdc853da916fbfda63d6408",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-1\\summary.json": "000831294bae326dfe694edc09cb53b4205e1d8bc857ed8bc6358c00b11c540d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-1\\cost-scenario.json": "ecb483ebd0a803b638efc76ca227ac729c9564f27a85ee9421ca69ffb05f1f4e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-3\\manifest.json": "22b70d1b0568a2c8b2c8c1119a1a7db477868e9040591d19f794fce7cd96023d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-3\\provenance.json": "0c065b104fa2a5ea7a8e8ff7573dac427d252a049d068cecf0a680ddd320797e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-3\\results.json": "d5c8eff647eb0c43f5ded83967a6dc3ce6bacacb16b22598b86a12e27f3488e0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-3\\validation.json": "e107c9040eb45a38cc7b3f5fe1709d3b9a486f43a3b459795f1031a126f3f976",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-3\\summary.json": "e945bf382a38187ac72ed8439be70018106ff43f35b815ac087e3a03f8ffa105",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-3\\cost-scenario.json": "14719ace0ca7224862a6f41653974b13dbb9a5105659e1f596a2e26bfe0112dc",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-9\\manifest.json": "13b0f576d5a65c95c19f1ad94d9f8d81bef2a89d340d3613ff8eac3d4d4fd39e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-9\\provenance.json": "d4013175c4e5dab22636591ae176c365198bfa4f6479f157893a8a2ac4cba376",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-9\\results.json": "a52afc694667e89a5306431d2a81722bf9c47584d46c67277ecd5410b64b4437",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-9\\validation.json": "a71a51287ebb0577b6cf77a4e82f94b1dbd775eb0445ffbf2936546daf04f0ca",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-9\\summary.json": "700d7f72c50077aefcf9fc31b6cd07a3923cc1dffee035f02ba22cf9112be659",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-9\\cost-scenario.json": "5f92bcf61b55dd619072e53c83d07cd3ecda89b88d21ec5dc08876bcface5bb0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-6\\manifest.json": "b5034fc02af1ea3a662dcce9b43b1b011f71273f99e42bce2a0535adf78b4ebe",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-6\\provenance.json": "d2302b95faaefe5203950cd233f0ce01eeb80e5141602abaeb61fb6ea36bd2af",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-6\\results.json": "ee156d4bf306391aabd4b0d71c1c6a58a233c240d4ebc503a6bc28511177b8be",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-6\\validation.json": "362c79bd5d5b5847984462ec56f0d066a2b3604a1108e4152608edb9932e9ec9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-6\\summary.json": "1e3ae515f00cd2575ff9ce73e17ca3a5946175286f8ceda76deb6ccc077bb8ac",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-6\\cost-scenario.json": "57a4be6deda2b30301883cde71e526ecacc7011ed619c11dd40f47cf0f3f4198",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-5\\manifest.json": "49c88ee0977dd2b89ef20dbb119801e8da545e170fb77de33a6a3f23be69ef12",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-5\\provenance.json": "5d5b1971b28a15744b4a7f1259752124e8bb680232bea6282a79226c0ba527d6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-5\\results.json": "2f8ab02a1d874d12c83eb75ad431dc5ace6c9aef8601c07b1d436c7bf3990ef2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-5\\validation.json": "f707ba72abbb2fdf1b345c7c874832c2fc4e166be4aae8abb155b517d3fb5305",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-5\\summary.json": "edfb8fd2a71e5bdb459ffdb8626116865c0cf5f6d4403281cddb8efd9f6b0a9f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-5\\cost-scenario.json": "7b4ec1d7295513339c61bd3581f3eea54415afc3dc5f923da2d9d8b7d9a314e1",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-5\\manifest.json": "c4af2c893b6e6c7693f0c74d8108b30696cc7532bc80570898908333cf1645a5",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-5\\provenance.json": "7a0196665b89faa9d23c56bcb72755efa209e3bd731e66da7a55cb7ccdec14fd",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-5\\results.json": "aeec8e6b9976f0d78de397186c0f399f573bc904a806e5f2540e54dbe04d21ed",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-5\\validation.json": "341a992778dca3055af2a40308a93e7895fe9372010dc280986c8fc4ec506b78",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-5\\summary.json": "b0dd09d5db18a4110a293a2073e52a5b63766e99cdb5b9f6131918a1d35efebb",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-5\\cost-scenario.json": "9eef8101ff30f29c530dce5ed7cad7a47b660686b942638a83e481643d60f9ce",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-8\\manifest.json": "ce4f0a0e01e0442375f7fabefee11e9e02cb8bf75309b552de3db2fc849978ec",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-8\\provenance.json": "7774cf593311c26a5601f9a69b2378f0a702466afa73443ac646de35aa431017",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-8\\results.json": "87a9dda47a558094fd28e7a4156104e3c8069de3986727c007c373b270ccc999",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-8\\validation.json": "65e411ecfe50db3882e985e868f515ccad0a708520299aedf1c26e43f88a7523",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-8\\summary.json": "db83c8297b22ff4ccb07fb149560ef490c09a327fc1d93784276d29dc2782cb0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-8\\cost-scenario.json": "1fea172cc2adec08e91dd67846f05b23b24f02abbdbf3eeabe9e99f2eb37b470",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-3\\manifest.json": "864b131ab92b7da19270c59b4ef0e4724ff184dea31e2e173c1195d5b1385cec",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-3\\provenance.json": "87255a3d70f96f3dfc9c10c21843dfc6b81070c6f9d5ddf129d2bf5f6362adf3",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-3\\results.json": "dd4c088c5f81639e06edf01414048c83f9891550533a3e96356da58fd97491d0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-3\\validation.json": "b6bf4a076ea3074bc732525c2a3724adf3cb952788004b93f208426ba95363a5",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-3\\summary.json": "39ff74e4b89cbca5ad4840af359df7ec41937efb395ed5f3f04cb950df513f99",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-3\\cost-scenario.json": "f3db035723a8b62c18d9bfbae69bf0fc4094d8a020cdbee7c8519e25701b62a3",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-1\\manifest.json": "f8f014518826011ab7853c195ce998173a37d4805a5e2f128c3b1c0adf8f0547",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-1\\provenance.json": "c67cb2109f877382e0cd69b9c98b388618fd62f162123f22b453a30ea395591f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-1\\results.json": "5572f6a63b80906507fcdb5b88871e579811a6672ad7fb756cbf5aece0a801a1",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-1\\validation.json": "b6bf4a076ea3074bc732525c2a3724adf3cb952788004b93f208426ba95363a5",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-1\\summary.json": "052ec098432f1cd828d1fb100bae154ecf6a18ec3effd195293d00a8de3d6833",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-1\\cost-scenario.json": "cde7d21dda2caed35ed99b642ad18baff5ef640da1e45909f6b59e1fd4c0b173",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-4\\manifest.json": "6ab206423fddf703abf4f243c67ce38ea0746066dc15433167a1a55199f11330",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-4\\provenance.json": "2973d00a898efe063cae1060092015cd998403eca1d8cafb0f34011d132b673e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-4\\results.json": "7963824eb4baeb061506f17aaffc7a65517821bce88061477a4eec0557bfe37f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-4\\validation.json": "e11c37a2e4cef18ba38e6246d66d4010daaded72e125239fbc73b6cfabd57472",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-4\\summary.json": "bef666dc00aeb390cea2709b5927ae1e311ebf567396c568503b2e3537821da0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-4\\cost-scenario.json": "3c13e9b9b539b265facebce4d8d748baa93ba29ae064102f609ddd337e4a30d6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-10\\manifest.json": "bd730b3bb5c683b9039ac7f9cd5cd8b34ebef734ae5c0b64b5cf8a1b6f97f9c6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-10\\provenance.json": "3f7f3ee26bf3cead4964d985532284ba1f2951dcc3ad7d9b02dcbb51a2f3926a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-10\\results.json": "da788db2e9e2afa6547ae92b7f8fa797017b427b04c1b8b90a00b61967e1da7f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-10\\validation.json": "655878d0957fa8047687ffc6cbd53b6d51c4c921e4e485599f34865e6de80dc9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-10\\summary.json": "f4b5e0c6f9957841675fefdcef0dc25452643fb2d124ae2d5a7657b38efce031",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-10\\cost-scenario.json": "409f1b4e432895854e191fd1319ce19a200387cef085861ed0fa22c7129a1054",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-6\\manifest.json": "3025884c76084e975273af64bcb35ed105c37b2a91b73f0bc6aa5655edf73c87",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-6\\provenance.json": "81783a628303736e6c86c4b48f8a522b5e076eb34ae38cb43763045c0850592f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-6\\results.json": "03c1fc1cb8d04c5ce841e2e0ac4395d9affcabe61d06573fb7d7d0790818e317",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-6\\validation.json": "655878d0957fa8047687ffc6cbd53b6d51c4c921e4e485599f34865e6de80dc9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-6\\summary.json": "29354f03210e6ec3f2fe27d24934d194d17d32238258ef8923107b8b1f5cd95b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-6\\cost-scenario.json": "16a9910d2209effd2e4e3031b5f4d8728b74f7f7289835ec689a2c7bea3f2000",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-5\\manifest.json": "9e0315e097aa73341bbf20ad38c6e8b49514938fd734f7e5731357d7617b73d9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-5\\provenance.json": "45633d17fa76f76f7c3af810c08c52cee5ee0ce46ecaf7a09f0e71f0f117a831",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-5\\results.json": "b543231d58e5f39499eb52d891b7ae85b27bbee89e4f457534e5fee2a76ee040",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-5\\validation.json": "b7cef12cff744e258812ff7d087bb53b138fbbc1d1c891b9dd0419515d6d28b6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-5\\summary.json": "09c3d3b1298e3cfeff4c60e7c3c9daa313a76433f71fb229420c605d9a2d5938",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-5\\cost-scenario.json": "291263d5949f55f4d4e8c0c88be360ca3b55ff56d97cd52628120a2ba74cb659",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-6\\manifest.json": "8aba272e0094b82679f9a0a7a909d301a645ef209c8016f2d1c19ea7fa7f4471",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-6\\provenance.json": "1fd22007d8d72974bebe1b0f6e5b7a42643bb84fe5c93050b43823a9e7ac3cab",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-6\\results.json": "9d054c21470a9bb82ffb44eca849e69bf063b7f3638620c592f31a13505a3f30",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-6\\validation.json": "b867acbb1307fec7b240c98db8f11776bb377d63f2a4e4f068d59f80d34015b4",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-6\\summary.json": "96b89463b4a0b19e7ca6fef9e3190c75553aa3767d5c05df982af5a3f9c39cea",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refresh-6\\cost-scenario.json": "bcfe03233bf1649bb0970af58618898c4ee3af8204479ec681d879d73bfc3e60",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-9\\manifest.json": "922b892b47ac3a5a776440a569f32eb9dc2348295b04b9766d02bcb7629efb55",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-9\\provenance.json": "c96adb0efadfec66e88beef89c2ef413ce722e03cbd7fb48acf0fce456d4d130",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-9\\results.json": "a05613a672c98fb643c4490c674cd7ccb82c71cb332e570063c44afa66be4894",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-9\\validation.json": "aa8bbe5517601c22d1af83743a03c4e0a5b82abc252b35e0fd556711c42194ee",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-9\\summary.json": "f333c981d52f73d68f51bafe671077ddad5ec693ea3bd5e6548c55040f6536ab",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\bugfix-9\\cost-scenario.json": "55bb9feaba4127549a63cf666beed57ba9677f31f5cca6af6add2d9dcd988b5a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-10\\manifest.json": "37165d3bce0227a40e4425a9ceb99b67175511a866c4c058c21485aec83d012e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-10\\provenance.json": "8075f8536a620690e059aaf7544be84df2a2b5db718fa5d5c1e3f8f324020763",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-10\\results.json": "d072a0e90985bc4f3cad3ea36c4759f42bc2228438b2003a660002711dedbc23",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-10\\validation.json": "840d38da91f8e55e1d31cdf707eca08faeb48feac9ce11ac12e6adb8cdb37394",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-10\\summary.json": "3c89bc3bf240e81ff089e55cf10234e541c01bc900e00e5f19d2efbe5ec70b65",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\mixed-10\\cost-scenario.json": "b25780eda913b7b7e31f726b72517efaaf47e36b13c176c18bd54bcfd3779acb",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-6\\manifest.json": "1a4d8741029657129f66dd5660d7475fbe871b1757a78656bfb8d563d50fa43f",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-6\\provenance.json": "dd0f9521aa6c2dcfafc7313379bf24d6d1c966deab43a65ec4c0225bb6d69bc1",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-6\\results.json": "4f3701ac882a1725985878c2b8811980d3c3a35b2ec855253390b954bb2047e8",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-6\\validation.json": "0e6cad16fd3332f60c2cf22fe512c61843a42f09f31a8bc05a1f58ee53309c38",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-6\\summary.json": "ba0ea73f79ceb065df5da0100c5b82bfc85cee57b943718dc7ba4dd1ae6d8f49",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-6\\cost-scenario.json": "f4dfefcdb000b6d57999215b82ce0c3227ca285a62ab81bc2b1530869130a75b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-1\\manifest.json": "8da6585d9288e53e87cec9e4510a0062f87d515ad86beeeebebe74908225c310",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-1\\provenance.json": "a0795a8a88826a7d67a2a7e192a73b981d64925c7608c3102434189f0ae9d117",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-1\\results.json": "350b378576c6b07637fd1e54eaf15fdede7925a5bb2ab3f650535ed92f5c4fe5",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-1\\validation.json": "305068446f3f0cf0febbc7a12f485686acc98131b0a2f05413a783ce7d6d4790",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-1\\summary.json": "e23d7c8b54315551bf3ebcb3d6a67a5531c5dd4900ac246575e7798dd873aa41",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\refactor-1\\cost-scenario.json": "4bf0e8a46ec96188a194dc64d536d2a781cafdb1a0ebc1506465f93a99e7148a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-7\\manifest.json": "ebd7edb5d932aa7427c942488647cf24127850cd0d4a440de1b309a0470dedf8",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-7\\provenance.json": "4ee61183f32ea4bc2772131b98878f3d6c2e43c4d15d9697c796ee8abf73c232",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-7\\results.json": "98426f2be283f198b3afe9bff132254b04c432c684de1a802e10efba1db42cbf",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-7\\validation.json": "b61f9615e225f5412cb71a94dba534fceb6049ac7128d3bf08d5ba19586245f2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-7\\summary.json": "d40e07de80c07f0f34f6255682a89c0df2df1558f4823654fdaa4ed8aa6c541e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-7\\cost-scenario.json": "91d79b13fb693885fcc64520627c51e5ff1788076c95af3f56d6af403c2d51df",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-6\\manifest.json": "faa6a8a4793253558d4c16f06caa020e8c71d1cd62589dfb2169ebf0e073b6e2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-6\\provenance.json": "56bc72eb99d2d76c297e06795e69bc6741916931a6b562dfecfe38523f5d72ea",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-6\\results.json": "db7b03f48861554506f61e8153b7f7c25cb557f0aa3db7654ced892813e839f3",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-6\\validation.json": "3cefc1206aa4fa39a6b16ed9ad551d911ad1c4897dea3631023c8e647864377b",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-6\\summary.json": "6df8c480f0f88d8b29a4e6fb54cdd8da14d1db9126d1a89765182e5763cd4dbc",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\entropy-6\\cost-scenario.json": "8de5a45072ae4bfdd9f01fbbb71b61dba3a92232977fef1599370a299d8eb603",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-5\\manifest.json": "084577d110f4e0261a0e58816bfe57a64dbd95ab06be6b74fd7715827a99554a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-5\\provenance.json": "65480c5179a55e989375288363a102e3173907f57ac97f2e2c18b0d414842ce2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-5\\results.json": "c101e5bd43e04e804dfdf6005866460339456b9a67e45ff3f420b09b02ca56d9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-5\\validation.json": "96e199ce62e4e69b907c358b745d9d845383bc81a5864d9255021e0b6975f771",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-5\\summary.json": "e9b1fd0e80dd83f0488d34ff13a992c24959dc830e2a973fd2fce6f0199f6988",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\outer-5\\cost-scenario.json": "bba798f61db6c4179e4fa2ccbe436da8773b0b15f01338d89ea9a9f6842c0b10",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-4\\manifest.json": "50b9ea0c3338ee28dc15b8dace8c233ee95ec4ba1efa7d6af306de7daa497161",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-4\\provenance.json": "0b8532452de1137839ef8e970fe1f3a5a58f3685aecf05361a7f4e5ec72a2c4e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-4\\results.json": "1e098413ee511109186697ab837979463af2b9d650b2c9bf8430c98bd1611b0d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-4\\validation.json": "0e6cad16fd3332f60c2cf22fe512c61843a42f09f31a8bc05a1f58ee53309c38",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-4\\summary.json": "426ada087043cc7ece99eedffe47d922dbaaf41c147976d2b3d0fd8ad6bd90d0",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\code-4\\cost-scenario.json": "b8b092b0a4adf672c8fbc088b5f91c51d5ce4b6d96046942af58ad8f6b29d2d6",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-3\\manifest.json": "bb8337b4f312d23b48aee79917a2e3d18645354b21b92102d809d6519bcb2a9a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-3\\provenance.json": "6477586d14b7abad66907b09142807012edde74bbc59d06bcc4fea9b249572f9",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-3\\results.json": "9e21668d412971f8441b8ffa5fbeb04e20d80f18fcc778eec8929a7f30d8055e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-3\\validation.json": "fe7203681b33a5fd596b8b0bd8263a863e0f26cf7cdc853da916fbfda63d6408",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-3\\summary.json": "c260a04c8259dc114ac55128fd54d77d92bf7107483b54aa547573a27037f39a",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\numeric-3\\cost-scenario.json": "8b67466d522e9b6b6578f3ec5ccf793557df61639fe3e3e1ce12af5ddea1385d",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-10\\manifest.json": "ba14944e4d8d51e8c23707040610cd8697785375ed62df8e20950151105e98e5",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-10\\provenance.json": "28f2e0c1830d04fc230629770465c1230d987b913a652c9e40532fa1575c8a1e",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-10\\results.json": "c062feb1de815be9a35bd070edec4842e47b7288bac585cd7529b9d258f52d76",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-10\\validation.json": "954588c5d3e5d1981dc406ba3d6913bc19024690533a8762abaf02a218ac1502",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-10\\summary.json": "35ac1b3cf921e207b62f1149c1c616b5ec52ad16b99c3f0073940ce2f8d60dad",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\nullable-10\\cost-scenario.json": "6e3afea23bcd8517fba40e918f543ad8c15446957aca598abb4b300341cb6349",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-10\\manifest.json": "15c496a4740721eef38790cdfaed90392c30e1792bb34d0005edbf354a177742",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-10\\provenance.json": "4b04f664e69b1f24adf25e8bcbd931ba5e6b8e44a5c3c193d47cd8464407e081",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-10\\results.json": "ca2a74a581db10409ca42b59682661331461feb71a9a1feeb6ba99655c1cc532",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-10\\validation.json": "e11c37a2e4cef18ba38e6246d66d4010daaded72e125239fbc73b6cfabd57472",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-10\\summary.json": "0596d7139878bbf5a4242227646f15111d68276db20f0534727e7198e8195cd2",
+    "bench\\live\\evidence\\joint-confirmation-2026-09-16\\cases\\tiny-10\\cost-scenario.json": "db976b49b066fec34f44d0760a6dc17e6fa92bc0444352bb194a012c4b2c4a2d"
+  }
+}

@@ -49,7 +49,7 @@ import { unchanged } from './types.js';
 // dot-star can never reach the end anchor. Every line failed to parse and the
 // engine concluded the block was not search output at all: 815 lines, 0 hits.
 const HIT =
-  /^((?:[^\s:]*\/[^\s:]*|[^\s:]+\.[A-Za-z0-9]+)):(\d+)([:-])([^\r\n]*)\r?$/;
+  /^((?:[A-Za-z]:[\\/][^\s:]*|[^\s:]*[\\/][^\s:]*|[^\s:]+\.[A-Za-z0-9]+)):(\d+)([:-])([^\r\n]*)\r?$/;
 
 /** Below this the header costs more than the prefixes it replaces. */
 const MIN_HUNK_LINES = 2;
@@ -75,7 +75,47 @@ function parseHit(line: string): Hit | null {
   const m = HIT.exec(line);
   if (!m) return null;
   const [, path, num, sep, text] = m;
-  return { path, line: Number(num), matched: sep === ':', sep, text };
+  const number = Number(num);
+  // A range cannot preserve padded or imprecise numeric labels. Keep those
+  // records verbatim instead of silently changing a source location.
+  if (!Number.isSafeInteger(number) || String(number) !== num) return null;
+  return { path, line: number, matched: sep === ':', sep, text };
+}
+
+/** Exact columns for repeated declaration syntax. Identifiers and RHS text stay
+ * verbatim; the template contains only shared whitespace and syntax. A tab in a
+ * value declines the table, so its two columns are unambiguous. The conservative
+ * row/size floors amortize the format explanation without loading a tokenizer
+ * into the request path. This factors syntax, never selects relevant rows.
+ */
+function declarationRows(lines: readonly { text: string }[]): {
+  note: string;
+  rows: string[];
+} | null {
+  if (lines.length < 64) return null;
+  const pattern =
+    /^(\s*(?:export\s+)?(?:const|let|var)\s+)([A-Za-z_$][\w$]*)(\s*=\s*)([^\t\r\n]+?)(;\s*)$/;
+  let template: string[] | undefined;
+  const rows: string[] = [];
+  let originalLength = 0;
+  let rowLength = 0;
+  for (const line of lines) {
+    const match = pattern.exec(line.text);
+    if (!match) return null;
+    const parts = [match[1], match[3], match[5]];
+    if (!template) template = parts;
+    else if (parts.some((part, index) => part !== template![index]))
+      return null;
+    const row = `${match[2]}\t${match[4]}`;
+    rows.push(row);
+    rowLength += row.length + 1;
+    originalLength += line.text.length + 1;
+  }
+  const note =
+    ` [exact declaration rows: name<TAB>rhs; concatenate template ${JSON.stringify(template)}` +
+    ' around the two fields; source line = range start + zero-based row index]';
+  if (note.length + rowLength - 1 >= originalLength * 0.8) return null;
+  return { note, rows };
 }
 
 /**
@@ -133,8 +173,14 @@ export function compressSearchResults(
   text: string,
   _ctx: EngineContext = {}
 ): CompressionResult {
-  const lines = text.split('\n');
+  const newline = text.includes('\r\n') ? '\r\n' : '\n';
+  // A single hunk header cannot describe mixed line endings. Preserve such
+  // input verbatim; uniform LF/CRLF retains its original byte convention.
+  if (/\r(?!\n)/.test(text) || (newline === '\r\n' && /(?<!\r)\n/.test(text)))
+    return unchanged(text);
+  const lines = text.split(newline);
   const out: string[] = [];
+  let factoredDeclarations = false;
 
   let path: string | null = null;
   let start = 0;
@@ -164,8 +210,15 @@ export function compressSearchResults(
       // Which lines actually matched, so `-` context is still distinguishable
       // from a `:` hit without a prefix on every line.
       const marks = matchNote(matchedOffsets, start, previous);
-      out.push(`${path}:${range}${marks}`);
-      out.push(...buffer.map((line) => line.text));
+      const declarations = declarationRows(buffer);
+      if (declarations) {
+        out.push(`${path}:${range}${marks}${declarations.note}`);
+        for (const row of declarations.rows) out.push(row);
+        factoredDeclarations = true;
+      } else {
+        out.push(`${path}:${range}${marks}`);
+        for (const line of buffer) out.push(line.text);
+      }
     }
     path = null;
     buffer = [];
@@ -191,7 +244,7 @@ export function compressSearchResults(
   }
   flush();
 
-  const body = out.join('\n');
+  const body = out.join(newline);
   if (body.length >= text.length) return unchanged(text);
 
   return {
@@ -199,7 +252,13 @@ export function compressSearchResults(
     // Nothing was removed that the output does not fully describe: the path is
     // stated once and every line number is recoverable from the header.
     elisions: [
-      { removed: 'repeated path prefixes', recoverAt: null, lossless: true },
+      {
+        removed: factoredDeclarations
+          ? 'repeated path prefixes and exact declaration boilerplate'
+          : 'repeated path prefixes',
+        recoverAt: null,
+        lossless: true,
+      },
     ],
     lossless: true,
   };

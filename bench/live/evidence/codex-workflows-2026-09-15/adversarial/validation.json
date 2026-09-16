@@ -1,0 +1,54 @@
+[
+  {
+    "task": "refresh",
+    "arm": "control",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": false,
+      "truncated": true,
+      "requests": 7
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": false,
+      "truncated": true,
+      "requests": 7
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": false,
+      "truncated": true,
+      "requests": 8
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "full",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": false,
+      "truncated": true,
+      "requests": 9
+    },
+    "clientErrors": []
+  }
+]

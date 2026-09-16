@@ -1,0 +1,9 @@
+{
+  "raw": "C:/Users/yolan/AppData/Local/Temp/proxy-memory-replay-2026-09-16",
+  "scope": "First zero-delay upstream run. Proxy survived; harness incorrectly required complete captures under overload. Assertion failed and no result.json was written. Retained as a failed validation attempt, not substituted into a benchmark.",
+  "exit": 1,
+  "forwarded": 1344,
+  "changed": 0,
+  "captures": 423,
+  "memorySamples": null
+}

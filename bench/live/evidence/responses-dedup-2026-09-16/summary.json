@@ -1,0 +1,195 @@
+{
+  "scope": "Development comparison; all scheduled outcomes retained, no universal-superiority claim.",
+  "totals": {
+    "proxy": {
+      "attempts": 8,
+      "passes": 8,
+      "estimatedUsd": 1.1821760000000001,
+      "agentSeconds": 250.3,
+      "inputTokens": 481831,
+      "cachedTokens": 418176,
+      "requests": 34
+    },
+    "headroom": {
+      "attempts": 8,
+      "passes": 8,
+      "estimatedUsd": 2.0131099999999997,
+      "agentSeconds": 240.1,
+      "inputTokens": 674019,
+      "cachedTokens": 542720,
+      "requests": 37
+    }
+  },
+  "costWins": 8,
+  "speedWins": 3,
+  "pairs": [
+    {
+      "group": "json",
+      "rep": 1,
+      "seed": 3141592001,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-dedup-2026-09-16\\json\\run-ZKhRCB",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.211202,
+          "agentSeconds": 16.2,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.217542,
+          "agentSeconds": 19.6,
+          "requests": 3
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "group": "json",
+      "rep": 2,
+      "seed": 3141592002,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-dedup-2026-09-16\\json\\run-ZKhRCB",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.221726,
+          "agentSeconds": 15,
+          "requests": 3
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.090634,
+          "agentSeconds": 19.9,
+          "requests": 3
+        }
+      },
+      "classification": "speed-loss"
+    },
+    {
+      "group": "nullable",
+      "rep": 1,
+      "seed": 2494523015,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-dedup-2026-09-16\\nullable\\run-uZ30IK",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.088664,
+          "agentSeconds": 14.2,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.119578,
+          "agentSeconds": 15.8,
+          "requests": 3
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "group": "nullable",
+      "rep": 2,
+      "seed": 2494523016,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-dedup-2026-09-16\\nullable\\run-uZ30IK",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.147188,
+          "agentSeconds": 17.1,
+          "requests": 3
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.089506,
+          "agentSeconds": 17.4,
+          "requests": 3
+        }
+      },
+      "classification": "speed-loss"
+    },
+    {
+      "group": "refresh",
+      "rep": 1,
+      "seed": 1618034001,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-dedup-2026-09-16\\refresh\\run-Wpm9vU",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.217684,
+          "agentSeconds": 39.7,
+          "requests": 6
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.461578,
+          "agentSeconds": 75.3,
+          "requests": 9
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "group": "refresh",
+      "rep": 2,
+      "seed": 1618034002,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-dedup-2026-09-16\\refresh\\run-Wpm9vU",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.306662,
+          "agentSeconds": 51.9,
+          "requests": 6
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.167722,
+          "agentSeconds": 80.4,
+          "requests": 6
+        }
+      },
+      "classification": "speed-loss"
+    },
+    {
+      "group": "repeat",
+      "rep": 1,
+      "seed": 3141592101,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-dedup-2026-09-16\\repeat\\run-yqI6GZ",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.179132,
+          "agentSeconds": 37.7,
+          "requests": 5
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.285786,
+          "agentSeconds": 23.2,
+          "requests": 5
+        }
+      },
+      "classification": "speed-loss"
+    },
+    {
+      "group": "repeat",
+      "rep": 2,
+      "seed": 3141592102,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-dedup-2026-09-16\\repeat\\run-yqI6GZ",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.25305,
+          "agentSeconds": 22.2,
+          "requests": 5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.137632,
+          "agentSeconds": 24.8,
+          "requests": 5
+        }
+      },
+      "classification": "speed-loss"
+    }
+  ]
+}

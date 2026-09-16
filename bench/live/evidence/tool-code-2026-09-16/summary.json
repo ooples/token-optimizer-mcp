@@ -1,0 +1,129 @@
+{
+  "scope": "Fixed development experiment, off by default. All 4 scheduled pairs / 8 attempts retained. No baseline replacement or confirmation claim.",
+  "protocolCommit": "023b9770",
+  "runCommit": "a27fd59d",
+  "decision": "Do not promote: lower input did not translate into lower observed cost.",
+  "totals": {
+    "proxy": {
+      "qualityPasses": 4,
+      "estimatedUsd": 0.696362,
+      "agentSeconds": 62,
+      "inputTokens": 160014,
+      "cachedTokens": 104192,
+      "firstRequestCachedTokens": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "firstRequestInputTokens": [
+        13024,
+        13024,
+        13004,
+        13004
+      ]
+    },
+    "headroom": {
+      "qualityPasses": 4,
+      "estimatedUsd": 0.50962,
+      "agentSeconds": 66.9,
+      "inputTokens": 184051,
+      "cachedTokens": 152960,
+      "firstRequestCachedTokens": [
+        9216,
+        9216,
+        9216,
+        9216
+      ],
+      "firstRequestInputTokens": [
+        12984,
+        12984,
+        12964,
+        12964
+      ]
+    }
+  },
+  "costIncreasePercent": 36.64338134296143,
+  "timeReductionPercent": 7.324364723467869,
+  "inputReductionPercent": 13.059967074343525,
+  "costWins": 0,
+  "speedWins": 3,
+  "pairs": [
+    {
+      "task": "nullable",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.173484,
+          "agentSeconds": 12.5,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.120798,
+          "agentSeconds": 18.8,
+          "requests": 3
+        }
+      },
+      "classification": "cost-loss"
+    },
+    {
+      "task": "nullable",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.173054,
+          "agentSeconds": 15.5,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.115502,
+          "agentSeconds": 16.2,
+          "requests": 3
+        }
+      },
+      "classification": "cost-loss"
+    },
+    {
+      "task": "json",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.174782,
+          "agentSeconds": 15,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.134388,
+          "agentSeconds": 15.4,
+          "requests": 3
+        }
+      },
+      "classification": "cost-loss"
+    },
+    {
+      "task": "json",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.175042,
+          "agentSeconds": 19,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.138932,
+          "agentSeconds": 16.5,
+          "requests": 3
+        }
+      },
+      "classification": "joint-loss"
+    }
+  ]
+}

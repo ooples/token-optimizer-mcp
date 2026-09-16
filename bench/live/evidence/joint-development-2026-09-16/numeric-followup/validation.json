@@ -1,0 +1,106 @@
+[
+  {
+    "task": "numeric",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "numeric",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "numeric",
+    "arm": "proxy",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "numeric",
+    "arm": "headroom",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "numeric",
+    "arm": "headroom",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "numeric",
+    "arm": "proxy",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "numeric",
+    "arm": "proxy",
+    "rep": 4,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "numeric",
+    "arm": "headroom",
+    "rep": 4,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  }
+]

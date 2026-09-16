@@ -27,6 +27,7 @@
 import { appendFileSync } from 'node:fs';
 import type { Readable, Writable } from 'node:stream';
 import { createGunzip, createInflate, createBrotliDecompress } from 'node:zlib';
+import * as zlib from 'node:zlib';
 
 /** The token classes a provider bills separately. */
 export interface RequestUsage {
@@ -34,6 +35,8 @@ export interface RequestUsage {
   output_tokens?: number;
   cache_creation_input_tokens?: number;
   cache_read_input_tokens?: number;
+  /** Responses input_tokens includes this subset; do not add it a second time. */
+  cached_input_tokens?: number;
 }
 
 const USAGE_KEYS = [
@@ -41,6 +44,7 @@ const USAGE_KEYS = [
   'output_tokens',
   'cache_creation_input_tokens',
   'cache_read_input_tokens',
+  'cached_input_tokens',
 ] as const;
 
 /**
@@ -69,6 +73,12 @@ export function scanUsage(text: string, into: RequestUsage): void {
     while ((match = pattern.exec(text)) !== null) last = match[1];
     if (last !== undefined) into[key] = Number(last);
   }
+  // Responses reports cache reads inside input_tokens_details. Keep its native
+  // semantics separate from Anthropic's exclusive token classes.
+  const cached = /"cached_tokens"[ \t]*:[ \t]*(\d+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = cached.exec(text)) !== null)
+    into.cached_input_tokens = Number(match[1]);
 }
 
 /** What compression did to one request, as the summary already reports it. */
@@ -77,6 +87,9 @@ export interface CompressionFacts {
   readonly reason?: string;
   readonly anchorReason?: string;
   readonly elisions?: number;
+  /** References actually forwarded by the Responses deduplicator. */
+  readonly dedupReferences?: number;
+
   readonly deferredTools?: number;
   readonly deferredToolChars?: number;
   /**
@@ -104,9 +117,17 @@ export interface CompressionFacts {
 
 /** One line of the ledger: what we sent, and what it was billed as. */
 export interface AccountingRecord extends CompressionFacts {
+  /** Monotonic durations. Upstream includes transport and provider processing. */
+  readonly timing?: {
+    readonly transformMs: number;
+    readonly upstreamHeadersMs?: number;
+    readonly upstreamMs: number;
+  };
   readonly ts: string;
   readonly path: string;
   readonly status: number;
+  /** No HTTP response was received; usage remains unknown, not zero. */
+  readonly transportError?: string;
   readonly usage: RequestUsage;
 }
 
@@ -163,6 +184,7 @@ export function tapUsage(
   const usage: RequestUsage = {};
   let carry = '';
   let settled = false;
+  let settling = false;
 
   // DECODED BEFORE IT IS SCANNED, or the scan reads compressed bytes as text
   // and finds nothing. The first live run recorded 23 requests with correct
@@ -222,6 +244,8 @@ export function tapUsage(
   // With a decoder in play the trailing bytes only emerge once it is ended, so
   // the ledger waits for the decoder to flush rather than for the socket.
   const settle = (): void => {
+    if (settling) return;
+    settling = true;
     if (!decoder) {
       finish();
       return;
@@ -260,5 +284,7 @@ function decoderFor(contentEncoding?: string): (Writable & Readable) | null {
   if (encoding === 'gzip' || encoding === 'x-gzip') return createGunzip();
   if (encoding === 'deflate') return createInflate();
   if (encoding === 'br') return createBrotliDecompress();
+  if (encoding === 'zstd' && typeof zlib.createZstdDecompress === 'function')
+    return zlib.createZstdDecompress();
   return null;
 }

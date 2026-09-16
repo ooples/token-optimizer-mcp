@@ -1,0 +1,7 @@
+{
+  "binaryBytes": 298169136,
+  "repetitions": 6,
+  "sampledPeakArrayBufferBytes": 33747995,
+  "digestMatchesOriginalFreeze": true,
+  "note": "10 ms sampled array-buffer footprint under a 48 MiB V8 heap cap; not allocation volume."
+}

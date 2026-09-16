@@ -1,0 +1,54 @@
+[
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  }
+]

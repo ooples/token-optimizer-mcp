@@ -1,0 +1,142 @@
+[
+  {
+    "task": "numeric",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2638172039,
+    "verdict": "PASS",
+    "agentSeconds": 16.3,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 43646,
+      "cached": 31616,
+      "output": 182
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 245749,
+    "afterBytes": 205837,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13050,
+          "output_tokens": 77,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15232,
+          "output_tokens": 75,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15364,
+          "output_tokens": 30,
+          "cached_input_tokens": 12928
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-f246ca6d-162",
+      "maximum": 570,
+      "minimum": -7
+    },
+    "seconds": 17.2
+  },
+  {
+    "task": "numeric",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2638172039,
+    "verdict": "PASS",
+    "agentSeconds": 16.2,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 45567,
+      "cached": 28800,
+      "output": 181
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 245777,
+    "afterBytes": 245777,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12967,
+          "output_tokens": 77,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16235,
+          "output_tokens": 74,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16365,
+          "output_tokens": 30,
+          "cached_input_tokens": 16000
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-f246ca6d-162",
+      "maximum": 570,
+      "minimum": -7
+    },
+    "seconds": 27.6
+  }
+]

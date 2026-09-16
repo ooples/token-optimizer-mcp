@@ -1,0 +1,326 @@
+[
+  {
+    "task": "json",
+    "arm": "control",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "json",
+    "arm": "control",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "json",
+    "arm": "control",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "code",
+    "arm": "control",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "INVALID_READ",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    }
+  },
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 2,
+    "recordedVerdict": "INVALID_READ",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    }
+  },
+  {
+    "task": "code",
+    "arm": "control",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 3,
+    "recordedVerdict": "INVALID_READ",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    }
+  },
+  {
+    "task": "code",
+    "arm": "control",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "logs",
+    "arm": "control",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "logs",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "logs",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "INVALID_READ",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    }
+  },
+  {
+    "task": "logs",
+    "arm": "proxy",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "logs",
+    "arm": "headroom",
+    "rep": 2,
+    "recordedVerdict": "INVALID_READ",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    }
+  },
+  {
+    "task": "logs",
+    "arm": "control",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "logs",
+    "arm": "headroom",
+    "rep": 3,
+    "recordedVerdict": "INVALID_READ",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    }
+  },
+  {
+    "task": "logs",
+    "arm": "control",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  },
+  {
+    "task": "logs",
+    "arm": "proxy",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    }
+  }
+]

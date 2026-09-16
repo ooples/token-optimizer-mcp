@@ -324,7 +324,9 @@ export class SmartReadTool {
       const returnedTokens = this.tokenCounter.count(finalContent).tokens;
       tokensSaved = Math.max(0, originalTokens - returnedTokens);
     }
-    if (enableCache && !fromCache) {
+    // Advance the read base after an edit too. Leaving a cache hit pinned to
+    // its old bytes would return the same diff on every subsequent read.
+    if (enableCache && (!fromCache || ownCached !== rawContent)) {
       cacheSet(this.cache, cacheKey, rawContent);
     }
 

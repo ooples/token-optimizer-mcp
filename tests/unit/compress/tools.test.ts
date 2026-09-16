@@ -186,7 +186,10 @@ describe('small definitions are never deferred', () => {
           tool('DesignSync', 8000),
         ],
       }),
-      { keepRelevant: 0 }
+      // STATED, NOT INHERITED. This reads as the default because it once was
+      // one; the default is now 0 and the floor is what is under test, so it
+      // is named here rather than read back out of the constant.
+      { keepRelevant: 0, smallToolChars: 1500 }
     );
     const tools = (
       out.request as unknown as { tools: Record<string, unknown>[] }
@@ -201,6 +204,35 @@ describe('small definitions are never deferred', () => {
       true
     );
     expect(out.deferredCount).toBe(2);
+  });
+
+  it('defers every deferrable definition by default, small ones included', () => {
+    // WHAT ACTUALLY SHIPS, pinned so a change to SMALL_TOOL_CHARS fails here
+    // rather than quietly altering behaviour in the field.
+    //
+    // The exemption used to spare anything under 1,500 characters. Measured on
+    // a real capture that spared 88 of 115 definitions -- roughly 55KB left in
+    // the cached prefix, inside the region that is 66.9% of a request. Live,
+    // over sixteen runs with run-order position balanced, removing the
+    // exemption took weighted input from 100,818 to 49,053 with 4/4 passing.
+    const out = deferTools(
+      req({
+        tools: [
+          tool('Read', 200),
+          tool('Bash', 200),
+          tool('PowerShell', 9000),
+          tool('DesignSync', 8000),
+        ],
+      }),
+      { keepRelevant: 0 }
+    );
+    const tools = (
+      out.request as unknown as { tools: Record<string, unknown>[] }
+    ).tools;
+
+    for (const name of ['Read', 'Bash', 'PowerShell', 'DesignSync'])
+      expect(tools.find((t) => t.name === name)?.defer_loading).toBe(true);
+    expect(out.deferredCount).toBe(4);
   });
 
   it('keeps the tools the task looks like it needs, so nothing is searched for', () => {

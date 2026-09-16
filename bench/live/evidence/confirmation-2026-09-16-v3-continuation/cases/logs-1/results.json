@@ -1,0 +1,162 @@
+[
+  {
+    "task": "logs",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 978268664,
+    "verdict": "PASS",
+    "agentSeconds": 15.5,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 46925,
+      "cached": 21888,
+      "output": 193
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 230371,
+    "afterBytes": 203091,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12977,
+          "output_tokens": 80,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16907,
+          "output_tokens": 78,
+          "cached_input_tokens": 5120
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 17041,
+          "output_tokens": 35,
+          "cached_input_tokens": 16768
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-10f9b1d0",
+      "code": "E_TIMEOUT",
+      "worker": "worker-1"
+    },
+    "seconds": 16.5
+  },
+  {
+    "task": "logs",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 978268664,
+    "verdict": "PASS",
+    "agentSeconds": 28.5,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 67654,
+      "cached": 62080,
+      "output": 318
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 531512,
+    "afterBytes": 531512,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12894,
+          "output_tokens": 75,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13044,
+          "output_tokens": 49,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13667,
+          "output_tokens": 95,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13963,
+          "output_tokens": 66,
+          "cached_input_tokens": 13440
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14086,
+          "output_tokens": 33,
+          "cached_input_tokens": 13824
+        }
+      }
+    ],
+    "answer": {
+      "request": "req-10f9b1d0",
+      "code": "E_TIMEOUT",
+      "worker": "worker-1"
+    },
+    "seconds": 39.3
+  }
+]

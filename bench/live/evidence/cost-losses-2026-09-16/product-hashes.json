@@ -1,0 +1,11 @@
+{
+  "productCommit": "efd2779d",
+  "note": "Recorded during follow-up; product build unchanged since launch. Runner formatting finished before launch.",
+  "sha256": {
+    "dist/compress/json-fragments.js": "89839d58a40380911781ec1a8e9d8dca85fb30d286c3a322b27298379d715553",
+    "dist/proxy/responses.js": "e267989ed11e4ae248ad6a6f0e2243b320e5816ea1f164b857aee5dd1045dda9",
+    "dist/proxy/server.js": "851020449a33e69dcc8d4d6582db0e69f89163724360b6edfc5d47e3f94d0aa0",
+    "bench/live/codex.mjs": "aa9831dae09cb4961ace5840be939056bd71ee381ae3880a858d662efe57edca",
+    "bench/live/loss-followup.mjs": "037df9d67ae0d4fef84914577d9c6ae70d48d740db48dd1b8b8949a0e753bb69"
+  }
+}

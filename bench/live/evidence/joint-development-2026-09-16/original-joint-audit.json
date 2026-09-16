@@ -1,0 +1,3081 @@
+{
+  "scope": "All scheduled pairs; passing quality and strictly lower cost AND agent wall time required for a joint win. Cost components are arithmetic, not causal cache attribution.",
+  "counts": {
+    "joint-win": 51,
+    "joint-loss": 2,
+    "cost-loss": 11,
+    "speed-loss": 5,
+    "tie": 0,
+    "quality-failure": 1,
+    "unknown": 0
+  },
+  "families": {
+    "mixed": {
+      "joint-win": 6,
+      "joint-loss": 0,
+      "cost-loss": 3,
+      "speed-loss": 1,
+      "tie": 0,
+      "quality-failure": 0,
+      "unknown": 0
+    },
+    "refactor": {
+      "joint-win": 10,
+      "joint-loss": 0,
+      "cost-loss": 0,
+      "speed-loss": 0,
+      "tie": 0,
+      "quality-failure": 0,
+      "unknown": 0
+    },
+    "bugfix": {
+      "joint-win": 7,
+      "joint-loss": 0,
+      "cost-loss": 2,
+      "speed-loss": 0,
+      "tie": 0,
+      "quality-failure": 1,
+      "unknown": 0
+    },
+    "logs": {
+      "joint-win": 9,
+      "joint-loss": 0,
+      "cost-loss": 1,
+      "speed-loss": 0,
+      "tie": 0,
+      "quality-failure": 0,
+      "unknown": 0
+    },
+    "code": {
+      "joint-win": 9,
+      "joint-loss": 0,
+      "cost-loss": 1,
+      "speed-loss": 0,
+      "tie": 0,
+      "quality-failure": 0,
+      "unknown": 0
+    },
+    "json": {
+      "joint-win": 4,
+      "joint-loss": 1,
+      "cost-loss": 2,
+      "speed-loss": 3,
+      "tie": 0,
+      "quality-failure": 0,
+      "unknown": 0
+    },
+    "refresh": {
+      "joint-win": 6,
+      "joint-loss": 1,
+      "cost-loss": 2,
+      "speed-loss": 1,
+      "tie": 0,
+      "quality-failure": 0,
+      "unknown": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "mixed-7",
+      "family": "mixed",
+      "seed": 35884616,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.149892,
+          "agentSeconds": 32.4,
+          "startupInclusiveSeconds": 33.4,
+          "usage": {
+            "input": 68382,
+            "cached": 62592,
+            "output": 588
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.24474,
+          "agentSeconds": 51.9,
+          "startupInclusiveSeconds": 64.7,
+          "usage": {
+            "input": 109103,
+            "cached": 98560,
+            "output": 815
+          },
+          "requests": 8,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.40721,
+        "cacheDiscountUsd": 0.323712,
+        "outputUsd": -0.01135
+      }
+    },
+    {
+      "id": "refactor-9",
+      "family": "refactor",
+      "seed": 441249274,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.163744,
+          "agentSeconds": 48.8,
+          "startupInclusiveSeconds": 49.9,
+          "usage": {
+            "input": 55296,
+            "cached": 49024,
+            "output": 1040
+          },
+          "requests": 4,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.251714,
+          "agentSeconds": 52.1,
+          "startupInclusiveSeconds": 63.5,
+          "usage": {
+            "input": 113813,
+            "cached": 103424,
+            "output": 888
+          },
+          "requests": 7,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.58517,
+        "cacheDiscountUsd": 0.4896,
+        "outputUsd": 0.0076
+      }
+    },
+    {
+      "id": "bugfix-7",
+      "family": "bugfix",
+      "seed": 877162058,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.28159,
+          "agentSeconds": 42.8,
+          "startupInclusiveSeconds": 43.9,
+          "usage": {
+            "input": 73170,
+            "cached": 55040,
+            "output": 905
+          },
+          "requests": 5,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.398442,
+          "agentSeconds": 61.3,
+          "startupInclusiveSeconds": 72.7,
+          "usage": {
+            "input": 188807,
+            "cached": 171392,
+            "output": 1058
+          },
+          "requests": 9,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -1.15637,
+        "cacheDiscountUsd": 1.047168,
+        "outputUsd": -0.00765
+      }
+    },
+    {
+      "id": "mixed-6",
+      "family": "mixed",
+      "seed": 439770681,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.322474,
+          "agentSeconds": 46.1,
+          "startupInclusiveSeconds": 47,
+          "usage": {
+            "input": 82295,
+            "cached": 59264,
+            "output": 658
+          },
+          "requests": 6,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.407754,
+          "agentSeconds": 70.6,
+          "startupInclusiveSeconds": 81.7,
+          "usage": {
+            "input": 162600,
+            "cached": 140544,
+            "output": 933
+          },
+          "requests": 10,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.80305,
+        "cacheDiscountUsd": 0.73152,
+        "outputUsd": -0.01375
+      }
+    },
+    {
+      "id": "logs-1",
+      "family": "logs",
+      "seed": 978268664,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.281908,
+          "agentSeconds": 15.5,
+          "startupInclusiveSeconds": 16.5,
+          "usage": {
+            "input": 46925,
+            "cached": 21888,
+            "output": 193
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.13372,
+          "agentSeconds": 28.5,
+          "startupInclusiveSeconds": 39.3,
+          "usage": {
+            "input": 67654,
+            "cached": 62080,
+            "output": 318
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.20729,
+        "cacheDiscountUsd": 0.361728,
+        "outputUsd": -0.00625
+      }
+    },
+    {
+      "id": "mixed-1",
+      "family": "mixed",
+      "seed": 542328163,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.257174,
+          "agentSeconds": 49,
+          "startupInclusiveSeconds": 50,
+          "usage": {
+            "input": 82297,
+            "cached": 66944,
+            "output": 734
+          },
+          "requests": 6,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.40457,
+          "agentSeconds": 67.1,
+          "startupInclusiveSeconds": 78.2,
+          "usage": {
+            "input": 195679,
+            "cached": 177280,
+            "output": 866
+          },
+          "requests": 10,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -1.13382,
+        "cacheDiscountUsd": 0.993024,
+        "outputUsd": -0.0066
+      }
+    },
+    {
+      "id": "refactor-4",
+      "family": "refactor",
+      "seed": 683487178,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.197852,
+          "agentSeconds": 41.2,
+          "startupInclusiveSeconds": 42.4,
+          "usage": {
+            "input": 55160,
+            "cached": 44672,
+            "output": 966
+          },
+          "requests": 4,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.418908,
+          "agentSeconds": 74.7,
+          "startupInclusiveSeconds": 86.3,
+          "usage": {
+            "input": 130236,
+            "cached": 105728,
+            "output": 1362
+          },
+          "requests": 9,
+          "failedTools": 3,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.75076,
+        "cacheDiscountUsd": 0.549504,
+        "outputUsd": -0.0198
+      }
+    },
+    {
+      "id": "mixed-10",
+      "family": "mixed",
+      "seed": 149982985,
+      "classification": "speed-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.191972,
+          "agentSeconds": 78.5,
+          "startupInclusiveSeconds": 79.4,
+          "usage": {
+            "input": 97950,
+            "cached": 91392,
+            "output": 700
+          },
+          "requests": 7,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.473786,
+          "agentSeconds": 58.3,
+          "startupInclusiveSeconds": 69.3,
+          "usage": {
+            "input": 190426,
+            "cached": 164736,
+            "output": 1043
+          },
+          "requests": 9,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.92476,
+        "cacheDiscountUsd": 0.660096,
+        "outputUsd": -0.01715
+      }
+    },
+    {
+      "id": "code-5",
+      "family": "code",
+      "seed": 587234040,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.268774,
+          "agentSeconds": 18.7,
+          "startupInclusiveSeconds": 19.7,
+          "usage": {
+            "input": 45792,
+            "cached": 22144,
+            "output": 203
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.369946,
+          "agentSeconds": 23.4,
+          "startupInclusiveSeconds": 35,
+          "usage": {
+            "input": 74708,
+            "cached": 43776,
+            "output": 337
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.28916,
+        "cacheDiscountUsd": 0.194688,
+        "outputUsd": -0.0067
+      }
+    },
+    {
+      "id": "logs-2",
+      "family": "logs",
+      "seed": 418705370,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.16519,
+          "agentSeconds": 12.9,
+          "startupInclusiveSeconds": 13.8,
+          "usage": {
+            "input": 46673,
+            "cached": 34560,
+            "output": 190
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.16905,
+          "agentSeconds": 26.6,
+          "startupInclusiveSeconds": 38.5,
+          "usage": {
+            "input": 73346,
+            "cached": 64640,
+            "output": 347
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.26673,
+        "cacheDiscountUsd": 0.27072,
+        "outputUsd": -0.00785
+      }
+    },
+    {
+      "id": "logs-3",
+      "family": "logs",
+      "seed": 80859747,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.212458,
+          "agentSeconds": 17.9,
+          "startupInclusiveSeconds": 19,
+          "usage": {
+            "input": 46912,
+            "cached": 29568,
+            "output": 189
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.381994,
+          "agentSeconds": 30.7,
+          "startupInclusiveSeconds": 46.8,
+          "usage": {
+            "input": 75367,
+            "cached": 43264,
+            "output": 354
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.28455,
+        "cacheDiscountUsd": 0.123264,
+        "outputUsd": -0.00825
+      }
+    },
+    {
+      "id": "bugfix-1",
+      "family": "bugfix",
+      "seed": 566533727,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.309408,
+          "agentSeconds": 50.5,
+          "startupInclusiveSeconds": 51.7,
+          "usage": {
+            "input": 73663,
+            "cached": 52608,
+            "output": 925
+          },
+          "requests": 5,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.433776,
+          "agentSeconds": 68.6,
+          "startupInclusiveSeconds": 82.8,
+          "usage": {
+            "input": 172422,
+            "cached": 150016,
+            "output": 1194
+          },
+          "requests": 10,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.98759,
+        "cacheDiscountUsd": 0.876672,
+        "outputUsd": -0.01345
+      }
+    },
+    {
+      "id": "code-2",
+      "family": "code",
+      "seed": 113744461,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.121354,
+          "agentSeconds": 16.5,
+          "startupInclusiveSeconds": 17.4,
+          "usage": {
+            "input": 45455,
+            "cached": 38144,
+            "output": 202
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.207024,
+          "agentSeconds": 27.9,
+          "startupInclusiveSeconds": 39.2,
+          "usage": {
+            "input": 81060,
+            "cached": 68864,
+            "output": 324
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.35605,
+        "cacheDiscountUsd": 0.27648,
+        "outputUsd": -0.0061
+      }
+    },
+    {
+      "id": "json-2",
+      "family": "json",
+      "seed": 568003918,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.175802,
+          "agentSeconds": 13,
+          "startupInclusiveSeconds": 13.9,
+          "usage": {
+            "input": 40031,
+            "cached": 26112,
+            "output": 210
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.229056,
+          "agentSeconds": 18.3,
+          "startupInclusiveSeconds": 29.5,
+          "usage": {
+            "input": 49884,
+            "cached": 30976,
+            "output": 180
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.09853,
+        "cacheDiscountUsd": 0.043776,
+        "outputUsd": 0.0015
+      }
+    },
+    {
+      "id": "refactor-1",
+      "family": "refactor",
+      "seed": 496524024,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.244468,
+          "agentSeconds": 44.4,
+          "startupInclusiveSeconds": 45.5,
+          "usage": {
+            "input": 55254,
+            "cached": 39808,
+            "output": 1004
+          },
+          "requests": 4,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.713548,
+          "agentSeconds": 89.1,
+          "startupInclusiveSeconds": 100.7,
+          "usage": {
+            "input": 219203,
+            "cached": 174848,
+            "output": 1903
+          },
+          "requests": 10,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -1.63949,
+        "cacheDiscountUsd": 1.21536,
+        "outputUsd": -0.04495
+      }
+    },
+    {
+      "id": "mixed-4",
+      "family": "mixed",
+      "seed": 586027041,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.406308,
+          "agentSeconds": 42,
+          "startupInclusiveSeconds": 42.9,
+          "usage": {
+            "input": 98057,
+            "cached": 67968,
+            "output": 749
+          },
+          "requests": 7,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.250324,
+          "agentSeconds": 55.2,
+          "startupInclusiveSeconds": 66.5,
+          "usage": {
+            "input": 111249,
+            "cached": 100224,
+            "output": 797
+          },
+          "requests": 8,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.13192,
+        "cacheDiscountUsd": 0.290304,
+        "outputUsd": -0.0024
+      }
+    },
+    {
+      "id": "logs-8",
+      "family": "logs",
+      "seed": 372471358,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.132486,
+          "agentSeconds": 13.4,
+          "startupInclusiveSeconds": 14.4,
+          "usage": {
+            "input": 47705,
+            "cached": 39296,
+            "output": 182
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.182892,
+          "agentSeconds": 31.7,
+          "startupInclusiveSeconds": 42.9,
+          "usage": {
+            "input": 76353,
+            "cached": 66432,
+            "output": 345
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.28648,
+        "cacheDiscountUsd": 0.244224,
+        "outputUsd": -0.00815
+      }
+    },
+    {
+      "id": "refactor-5",
+      "family": "refactor",
+      "seed": 486444956,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.32787,
+          "agentSeconds": 47.7,
+          "startupInclusiveSeconds": 48.9,
+          "usage": {
+            "input": 55270,
+            "cached": 30720,
+            "output": 1033
+          },
+          "requests": 4,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.33288,
+          "agentSeconds": 62.8,
+          "startupInclusiveSeconds": 74.6,
+          "usage": {
+            "input": 113849,
+            "cached": 96640,
+            "output": 1283
+          },
+          "requests": 8,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.58579,
+        "cacheDiscountUsd": 0.59328,
+        "outputUsd": -0.0125
+      }
+    },
+    {
+      "id": "json-10",
+      "family": "json",
+      "seed": 955782253,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.175752,
+          "agentSeconds": 15.6,
+          "startupInclusiveSeconds": 16.5,
+          "usage": {
+            "input": 40021,
+            "cached": 26112,
+            "output": 211
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.14168,
+          "agentSeconds": 17.6,
+          "startupInclusiveSeconds": 28.7,
+          "usage": {
+            "input": 48945,
+            "cached": 39680,
+            "output": 187
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.08924,
+        "cacheDiscountUsd": 0.122112,
+        "outputUsd": 0.0012
+      }
+    },
+    {
+      "id": "code-6",
+      "family": "code",
+      "seed": 520856079,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.11872,
+          "agentSeconds": 15.3,
+          "startupInclusiveSeconds": 16.3,
+          "usage": {
+            "input": 44821,
+            "cached": 37760,
+            "output": 207
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.301,
+          "agentSeconds": 25.2,
+          "startupInclusiveSeconds": 36.4,
+          "usage": {
+            "input": 98687,
+            "cached": 78080,
+            "output": 337
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.53866,
+        "cacheDiscountUsd": 0.36288,
+        "outputUsd": -0.0065
+      }
+    },
+    {
+      "id": "refresh-8",
+      "family": "refresh",
+      "seed": 101983047,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.152826,
+          "agentSeconds": 39.7,
+          "startupInclusiveSeconds": 41,
+          "usage": {
+            "input": 67980,
+            "cached": 62336,
+            "output": 681
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.363516,
+          "agentSeconds": 73.9,
+          "startupInclusiveSeconds": 85,
+          "usage": {
+            "input": 177980,
+            "cached": 162176,
+            "output": 866
+          },
+          "requests": 9,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -1.1,
+        "cacheDiscountUsd": 0.89856,
+        "outputUsd": -0.00925
+      }
+    },
+    {
+      "id": "json-9",
+      "family": "json",
+      "seed": 472197432,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.174342,
+          "agentSeconds": 15.1,
+          "startupInclusiveSeconds": 16.3,
+          "usage": {
+            "input": 39990,
+            "cached": 26112,
+            "output": 189
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.146672,
+          "agentSeconds": 15.8,
+          "startupInclusiveSeconds": 29.7,
+          "usage": {
+            "input": 49905,
+            "cached": 40192,
+            "output": 187
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.09915,
+        "cacheDiscountUsd": 0.12672,
+        "outputUsd": 0.0001
+      }
+    },
+    {
+      "id": "refresh-10",
+      "family": "refresh",
+      "seed": 678370808,
+      "classification": "speed-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.258908,
+          "agentSeconds": 62,
+          "startupInclusiveSeconds": 62.9,
+          "usage": {
+            "input": 120468,
+            "cached": 110208,
+            "output": 922
+          },
+          "requests": 7,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.35968,
+          "agentSeconds": 50.7,
+          "startupInclusiveSeconds": 65.1,
+          "usage": {
+            "input": 139109,
+            "cached": 119040,
+            "output": 799
+          },
+          "requests": 8,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.18641,
+        "cacheDiscountUsd": 0.079488,
+        "outputUsd": 0.00615
+      }
+    },
+    {
+      "id": "json-8",
+      "family": "json",
+      "seed": 858929001,
+      "classification": "joint-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.175872,
+          "agentSeconds": 14.9,
+          "startupInclusiveSeconds": 15.8,
+          "usage": {
+            "input": 40023,
+            "cached": 26112,
+            "output": 213
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.136066,
+          "agentSeconds": 14,
+          "startupInclusiveSeconds": 25.2,
+          "usage": {
+            "input": 48098,
+            "cached": 39296,
+            "output": 175
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.08075,
+        "cacheDiscountUsd": 0.118656,
+        "outputUsd": 0.0019
+      }
+    },
+    {
+      "id": "refactor-2",
+      "family": "refactor",
+      "seed": 340327926,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.286164,
+          "agentSeconds": 40.1,
+          "startupInclusiveSeconds": 41.4,
+          "usage": {
+            "input": 55186,
+            "cached": 34944,
+            "output": 976
+          },
+          "requests": 4,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.388138,
+          "agentSeconds": 86.1,
+          "startupInclusiveSeconds": 98,
+          "usage": {
+            "input": 133121,
+            "cached": 113408,
+            "output": 1552
+          },
+          "requests": 9,
+          "failedTools": 3,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.77935,
+        "cacheDiscountUsd": 0.706176,
+        "outputUsd": -0.0288
+      }
+    },
+    {
+      "id": "code-1",
+      "family": "code",
+      "seed": 33155875,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.205552,
+          "agentSeconds": 19,
+          "startupInclusiveSeconds": 19.9,
+          "usage": {
+            "input": 45325,
+            "cached": 28672,
+            "output": 207
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.25517,
+          "agentSeconds": 29.8,
+          "startupInclusiveSeconds": 40.9,
+          "usage": {
+            "input": 74530,
+            "cached": 56320,
+            "output": 335
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.29205,
+        "cacheDiscountUsd": 0.248832,
+        "outputUsd": -0.0064
+      }
+    },
+    {
+      "id": "json-1",
+      "family": "json",
+      "seed": 722876816,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.091696,
+          "agentSeconds": 13.7,
+          "startupInclusiveSeconds": 14.7,
+          "usage": {
+            "input": 40005,
+            "cached": 35456,
+            "output": 215
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.223774,
+          "agentSeconds": 14.1,
+          "startupInclusiveSeconds": 25.4,
+          "usage": {
+            "input": 48885,
+            "cached": 30464,
+            "output": 182
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.0888,
+        "cacheDiscountUsd": -0.044928,
+        "outputUsd": 0.00165
+      }
+    },
+    {
+      "id": "mixed-9",
+      "family": "mixed",
+      "seed": 66846557,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.358918,
+          "agentSeconds": 45,
+          "startupInclusiveSeconds": 46,
+          "usage": {
+            "input": 97490,
+            "cached": 72448,
+            "output": 721
+          },
+          "requests": 7,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.274288,
+          "agentSeconds": 55.8,
+          "startupInclusiveSeconds": 67.2,
+          "usage": {
+            "input": 137993,
+            "cached": 127488,
+            "output": 835
+          },
+          "requests": 9,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.40503,
+        "cacheDiscountUsd": 0.49536,
+        "outputUsd": -0.0057
+      }
+    },
+    {
+      "id": "refactor-6",
+      "family": "refactor",
+      "seed": 300967068,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.246172,
+          "agentSeconds": 48.6,
+          "startupInclusiveSeconds": 49.8,
+          "usage": {
+            "input": 55209,
+            "cached": 39552,
+            "output": 1001
+          },
+          "requests": 4,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.47235,
+          "agentSeconds": 80.8,
+          "startupInclusiveSeconds": 96.1,
+          "usage": {
+            "input": 159156,
+            "cached": 131840,
+            "output": 1347
+          },
+          "requests": 11,
+          "failedTools": 5,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -1.03947,
+        "cacheDiscountUsd": 0.830592,
+        "outputUsd": -0.0173
+      }
+    },
+    {
+      "id": "refresh-2",
+      "family": "refresh",
+      "seed": 139520376,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.49764,
+          "agentSeconds": 38.9,
+          "startupInclusiveSeconds": 39.8,
+          "usage": {
+            "input": 109323,
+            "cached": 69760,
+            "output": 645
+          },
+          "requests": 6,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.463548,
+          "agentSeconds": 48.2,
+          "startupInclusiveSeconds": 64.3,
+          "usage": {
+            "input": 187988,
+            "cached": 162048,
+            "output": 842
+          },
+          "requests": 7,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.78665,
+        "cacheDiscountUsd": 0.830592,
+        "outputUsd": -0.00985
+      }
+    },
+    {
+      "id": "code-8",
+      "family": "code",
+      "seed": 212560053,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.199308,
+          "agentSeconds": 17.9,
+          "startupInclusiveSeconds": 18.8,
+          "usage": {
+            "input": 44435,
+            "cached": 28288,
+            "output": 191
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.277584,
+          "agentSeconds": 20.9,
+          "startupInclusiveSeconds": 35.1,
+          "usage": {
+            "input": 78960,
+            "cached": 58624,
+            "output": 312
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.34525,
+        "cacheDiscountUsd": 0.273024,
+        "outputUsd": -0.00605
+      }
+    },
+    {
+      "id": "bugfix-5",
+      "family": "bugfix",
+      "seed": 847607179,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.28526,
+          "agentSeconds": 41.3,
+          "startupInclusiveSeconds": 42.5,
+          "usage": {
+            "input": 74288,
+            "cached": 55680,
+            "output": 870
+          },
+          "requests": 5,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.529422,
+          "agentSeconds": 71.5,
+          "startupInclusiveSeconds": 83.1,
+          "usage": {
+            "input": 194899,
+            "cached": 164352,
+            "output": 1192
+          },
+          "requests": 9,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -1.20611,
+        "cacheDiscountUsd": 0.978048,
+        "outputUsd": -0.0161
+      }
+    },
+    {
+      "id": "refresh-9",
+      "family": "refresh",
+      "seed": 484636344,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.258454,
+          "agentSeconds": 40.3,
+          "startupInclusiveSeconds": 41.4,
+          "usage": {
+            "input": 82330,
+            "cached": 66944,
+            "output": 753
+          },
+          "requests": 6,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.430506,
+          "agentSeconds": 44.9,
+          "startupInclusiveSeconds": 55.7,
+          "usage": {
+            "input": 117556,
+            "cached": 86656,
+            "output": 697
+          },
+          "requests": 7,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.35226,
+        "cacheDiscountUsd": 0.177408,
+        "outputUsd": 0.0028
+      }
+    },
+    {
+      "id": "refresh-4",
+      "family": "refresh",
+      "seed": 623750609,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.252406,
+          "agentSeconds": 39.1,
+          "startupInclusiveSeconds": 40,
+          "usage": {
+            "input": 82130,
+            "cached": 66816,
+            "output": 649
+          },
+          "requests": 6,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.31429,
+          "agentSeconds": 62.3,
+          "startupInclusiveSeconds": 73.1,
+          "usage": {
+            "input": 123812,
+            "cached": 107520,
+            "output": 877
+          },
+          "requests": 9,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.41682,
+        "cacheDiscountUsd": 0.366336,
+        "outputUsd": -0.0114
+      }
+    },
+    {
+      "id": "json-3",
+      "family": "json",
+      "seed": 987199599,
+      "classification": "speed-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.090426,
+          "agentSeconds": 21.5,
+          "startupInclusiveSeconds": 22.4,
+          "usage": {
+            "input": 40043,
+            "cached": 35456,
+            "output": 182
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.133688,
+          "agentSeconds": 16.6,
+          "startupInclusiveSeconds": 27.7,
+          "usage": {
+            "input": 47700,
+            "cached": 39168,
+            "output": 184
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.07657,
+        "cacheDiscountUsd": 0.033408,
+        "outputUsd": -0.0001
+      }
+    },
+    {
+      "id": "code-7",
+      "family": "code",
+      "seed": 658803232,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.2402,
+          "agentSeconds": 17.4,
+          "startupInclusiveSeconds": 18.3,
+          "usage": {
+            "input": 46130,
+            "cached": 25600,
+            "output": 186
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.136064,
+          "agentSeconds": 43.9,
+          "startupInclusiveSeconds": 54.6,
+          "usage": {
+            "input": 68114,
+            "cached": 62464,
+            "output": 342
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.21984,
+        "cacheDiscountUsd": 0.331776,
+        "outputUsd": -0.0078
+      }
+    },
+    {
+      "id": "logs-9",
+      "family": "logs",
+      "seed": 340915507,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.13198,
+          "agentSeconds": 14.9,
+          "startupInclusiveSeconds": 15.8,
+          "usage": {
+            "input": 47359,
+            "cached": 39040,
+            "output": 195
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.285324,
+          "agentSeconds": 25.4,
+          "startupInclusiveSeconds": 36.2,
+          "usage": {
+            "input": 80235,
+            "cached": 59264,
+            "output": 327
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.32876,
+        "cacheDiscountUsd": 0.182016,
+        "outputUsd": -0.0066
+      }
+    },
+    {
+      "id": "refresh-5",
+      "family": "refresh",
+      "seed": 710493651,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.245678,
+          "agentSeconds": 38.8,
+          "startupInclusiveSeconds": 39.7,
+          "usage": {
+            "input": 109506,
+            "cached": 98048,
+            "output": 661
+          },
+          "requests": 6,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.305136,
+          "agentSeconds": 42.6,
+          "startupInclusiveSeconds": 53.1,
+          "usage": {
+            "input": 116818,
+            "cached": 98816,
+            "output": 526
+          },
+          "requests": 7,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.07312,
+        "cacheDiscountUsd": 0.006912,
+        "outputUsd": 0.00675
+      }
+    },
+    {
+      "id": "refactor-10",
+      "family": "refactor",
+      "seed": 341501972,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.245028,
+          "agentSeconds": 42.9,
+          "startupInclusiveSeconds": 44,
+          "usage": {
+            "input": 55325,
+            "cached": 39808,
+            "output": 1001
+          },
+          "requests": 4,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.539786,
+          "agentSeconds": 99.8,
+          "startupInclusiveSeconds": 110.6,
+          "usage": {
+            "input": 265929,
+            "cached": 246656,
+            "output": 2008
+          },
+          "requests": 12,
+          "failedTools": 5,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -2.10604,
+        "cacheDiscountUsd": 1.861632,
+        "outputUsd": -0.05035
+      }
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "seed": 946303580,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.403734,
+          "agentSeconds": 51.1,
+          "startupInclusiveSeconds": 52.2,
+          "usage": {
+            "input": 74260,
+            "cached": 42624,
+            "output": 895
+          },
+          "requests": 5,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.316732,
+          "agentSeconds": 61.9,
+          "startupInclusiveSeconds": 73.1,
+          "usage": {
+            "input": 156868,
+            "cached": 143872,
+            "output": 858
+          },
+          "requests": 9,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.82608,
+        "cacheDiscountUsd": 0.911232,
+        "outputUsd": 0.00185
+      }
+    },
+    {
+      "id": "bugfix-8",
+      "family": "bugfix",
+      "seed": 800696801,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.324378,
+          "agentSeconds": 45.9,
+          "startupInclusiveSeconds": 47,
+          "usage": {
+            "input": 75085,
+            "cached": 52608,
+            "output": 940
+          },
+          "requests": 5,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.497056,
+          "agentSeconds": 65.4,
+          "startupInclusiveSeconds": 76.5,
+          "usage": {
+            "input": 155358,
+            "cached": 123136,
+            "output": 1034
+          },
+          "requests": 9,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.80273,
+        "cacheDiscountUsd": 0.634752,
+        "outputUsd": -0.0047
+      }
+    },
+    {
+      "id": "bugfix-3",
+      "family": "bugfix",
+      "seed": 789059046,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.22941,
+          "agentSeconds": 49.3,
+          "startupInclusiveSeconds": 50.5,
+          "usage": {
+            "input": 72630,
+            "cached": 60160,
+            "output": 891
+          },
+          "requests": 5,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.334338,
+          "agentSeconds": 59.2,
+          "startupInclusiveSeconds": 70.2,
+          "usage": {
+            "input": 109328,
+            "cached": 89088,
+            "output": 857
+          },
+          "requests": 8,
+          "failedTools": 3,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.36698,
+        "cacheDiscountUsd": 0.260352,
+        "outputUsd": 0.0017
+      }
+    },
+    {
+      "id": "refactor-8",
+      "family": "refactor",
+      "seed": 358109890,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.247418,
+          "agentSeconds": 44.3,
+          "startupInclusiveSeconds": 45.5,
+          "usage": {
+            "input": 55359,
+            "cached": 39808,
+            "output": 1042
+          },
+          "requests": 4,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.285246,
+          "agentSeconds": 61.3,
+          "startupInclusiveSeconds": 72.6,
+          "usage": {
+            "input": 132565,
+            "cached": 121856,
+            "output": 1126
+          },
+          "requests": 8,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.77206,
+        "cacheDiscountUsd": 0.738432,
+        "outputUsd": -0.0042
+      }
+    },
+    {
+      "id": "refactor-7",
+      "family": "refactor",
+      "seed": 64396761,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.160852,
+          "agentSeconds": 46.4,
+          "startupInclusiveSeconds": 47.5,
+          "usage": {
+            "input": 55262,
+            "cached": 49152,
+            "output": 1012
+          },
+          "requests": 4,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.508226,
+          "agentSeconds": 77.1,
+          "startupInclusiveSeconds": 88.5,
+          "usage": {
+            "input": 142313,
+            "cached": 109056,
+            "output": 1332
+          },
+          "requests": 10,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.87051,
+        "cacheDiscountUsd": 0.539136,
+        "outputUsd": -0.016
+      }
+    },
+    {
+      "id": "mixed-2",
+      "family": "mixed",
+      "seed": 724790539,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.18293,
+          "agentSeconds": 34.3,
+          "startupInclusiveSeconds": 35.3,
+          "usage": {
+            "input": 68525,
+            "cached": 58880,
+            "output": 552
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.333332,
+          "agentSeconds": 67,
+          "startupInclusiveSeconds": 78.5,
+          "usage": {
+            "input": 170695,
+            "cached": 157952,
+            "output": 959
+          },
+          "requests": 10,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -1.0217,
+        "cacheDiscountUsd": 0.891648,
+        "outputUsd": -0.02035
+      }
+    },
+    {
+      "id": "bugfix-6",
+      "family": "bugfix",
+      "seed": 337593919,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.313842,
+          "agentSeconds": 55.8,
+          "startupInclusiveSeconds": 57.1,
+          "usage": {
+            "input": 94291,
+            "cached": 74752,
+            "output": 874
+          },
+          "requests": 6,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.328504,
+          "agentSeconds": 74.3,
+          "startupInclusiveSeconds": 86.8,
+          "usage": {
+            "input": 138825,
+            "cached": 124544,
+            "output": 1223
+          },
+          "requests": 10,
+          "failedTools": 3,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.44534,
+        "cacheDiscountUsd": 0.448128,
+        "outputUsd": -0.01745
+      }
+    },
+    {
+      "id": "logs-7",
+      "family": "logs",
+      "seed": 175519724,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.139556,
+          "agentSeconds": 17.6,
+          "startupInclusiveSeconds": 18.7,
+          "usage": {
+            "input": 48988,
+            "cached": 39936,
+            "output": 182
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.293734,
+          "agentSeconds": 24.4,
+          "startupInclusiveSeconds": 37.7,
+          "usage": {
+            "input": 103250,
+            "cached": 84224,
+            "output": 385
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.54262,
+        "cacheDiscountUsd": 0.398592,
+        "outputUsd": -0.01015
+      }
+    },
+    {
+      "id": "refresh-1",
+      "family": "refresh",
+      "seed": 403350086,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.315714,
+          "agentSeconds": 41,
+          "startupInclusiveSeconds": 42,
+          "usage": {
+            "input": 105165,
+            "cached": 85504,
+            "output": 672
+          },
+          "requests": 6,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.260074,
+          "agentSeconds": 51.4,
+          "startupInclusiveSeconds": 63.4,
+          "usage": {
+            "input": 121530,
+            "cached": 110464,
+            "output": 779
+          },
+          "requests": 9,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.16365,
+        "cacheDiscountUsd": 0.22464,
+        "outputUsd": -0.00535
+      }
+    },
+    {
+      "id": "bugfix-2",
+      "family": "bugfix",
+      "seed": 93950190,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.449562,
+          "agentSeconds": 51.5,
+          "startupInclusiveSeconds": 52.8,
+          "usage": {
+            "input": 89362,
+            "cached": 54912,
+            "output": 1003
+          },
+          "requests": 6,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.38714,
+          "agentSeconds": 67,
+          "startupInclusiveSeconds": 79.4,
+          "usage": {
+            "input": 151525,
+            "cached": 131840,
+            "output": 1169
+          },
+          "requests": 9,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.62163,
+        "cacheDiscountUsd": 0.692352,
+        "outputUsd": -0.0083
+      }
+    },
+    {
+      "id": "json-6",
+      "family": "json",
+      "seed": 620013553,
+      "classification": "speed-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.092076,
+          "agentSeconds": 20.4,
+          "startupInclusiveSeconds": 21.6,
+          "usage": {
+            "input": 40088,
+            "cached": 35456,
+            "output": 206
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.296546,
+          "agentSeconds": 14.9,
+          "startupInclusiveSeconds": 26.9,
+          "usage": {
+            "input": 48524,
+            "cached": 22016,
+            "output": 189
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.08436,
+        "cacheDiscountUsd": -0.12096,
+        "outputUsd": 0.00085
+      }
+    },
+    {
+      "id": "code-4",
+      "family": "code",
+      "seed": 473460093,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.12442,
+          "agentSeconds": 15.7,
+          "startupInclusiveSeconds": 16.7,
+          "usage": {
+            "input": 46067,
+            "cached": 38400,
+            "output": 187
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.130378,
+          "agentSeconds": 27.3,
+          "startupInclusiveSeconds": 39.3,
+          "usage": {
+            "input": 67535,
+            "cached": 62208,
+            "output": 298
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.21468,
+        "cacheDiscountUsd": 0.214272,
+        "outputUsd": -0.00555
+      }
+    },
+    {
+      "id": "refresh-7",
+      "family": "refresh",
+      "seed": 645716644,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.3844,
+          "agentSeconds": 40,
+          "startupInclusiveSeconds": 41,
+          "usage": {
+            "input": 128753,
+            "cached": 104320,
+            "output": 715
+          },
+          "requests": 7,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.49683,
+          "agentSeconds": 52.1,
+          "startupInclusiveSeconds": 64.4,
+          "usage": {
+            "input": 131152,
+            "cached": 95360,
+            "output": 871
+          },
+          "requests": 8,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.02399,
+        "cacheDiscountUsd": -0.08064,
+        "outputUsd": -0.0078
+      }
+    },
+    {
+      "id": "logs-5",
+      "family": "logs",
+      "seed": 724999358,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.242364,
+          "agentSeconds": 15.9,
+          "startupInclusiveSeconds": 16.8,
+          "usage": {
+            "input": 46692,
+            "cached": 25984,
+            "output": 186
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.277494,
+          "agentSeconds": 24.2,
+          "startupInclusiveSeconds": 36.3,
+          "usage": {
+            "input": 100709,
+            "cached": 82944,
+            "output": 338
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.54017,
+        "cacheDiscountUsd": 0.51264,
+        "outputUsd": -0.0076
+      }
+    },
+    {
+      "id": "code-3",
+      "family": "code",
+      "seed": 335770031,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.119974,
+          "agentSeconds": 14.8,
+          "startupInclusiveSeconds": 15.7,
+          "usage": {
+            "input": 45407,
+            "cached": 38144,
+            "output": 184
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.20537,
+          "agentSeconds": 27.7,
+          "startupInclusiveSeconds": 40.1,
+          "usage": {
+            "input": 74564,
+            "cached": 62080,
+            "output": 369
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.29157,
+        "cacheDiscountUsd": 0.215424,
+        "outputUsd": -0.00925
+      }
+    },
+    {
+      "id": "json-4",
+      "family": "json",
+      "seed": 806292253,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.092496,
+          "agentSeconds": 14.6,
+          "startupInclusiveSeconds": 15.6,
+          "usage": {
+            "input": 40105,
+            "cached": 35456,
+            "output": 211
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.134878,
+          "agentSeconds": 14.8,
+          "startupInclusiveSeconds": 27.1,
+          "usage": {
+            "input": 47809,
+            "cached": 39168,
+            "output": 186
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.07704,
+        "cacheDiscountUsd": 0.033408,
+        "outputUsd": 0.00125
+      }
+    },
+    {
+      "id": "mixed-5",
+      "family": "mixed",
+      "seed": 953185487,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.147908,
+          "agentSeconds": 40.6,
+          "startupInclusiveSeconds": 41.6,
+          "usage": {
+            "input": 68454,
+            "cached": 62848,
+            "output": 580
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.238502,
+          "agentSeconds": 59,
+          "startupInclusiveSeconds": 71.4,
+          "usage": {
+            "input": 127052,
+            "cached": 119552,
+            "output": 879
+          },
+          "requests": 9,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.58598,
+        "cacheDiscountUsd": 0.510336,
+        "outputUsd": -0.01495
+      }
+    },
+    {
+      "id": "bugfix-4",
+      "family": "bugfix",
+      "seed": 792050108,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.213144,
+          "agentSeconds": 44.8,
+          "startupInclusiveSeconds": 46,
+          "usage": {
+            "input": 75642,
+            "cached": 65664,
+            "output": 954
+          },
+          "requests": 5,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.454548,
+          "agentSeconds": 65.3,
+          "startupInclusiveSeconds": 78,
+          "usage": {
+            "input": 115431,
+            "cached": 83968,
+            "output": 1119
+          },
+          "requests": 8,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.39789,
+        "cacheDiscountUsd": 0.164736,
+        "outputUsd": -0.00825
+      }
+    },
+    {
+      "id": "code-9",
+      "family": "code",
+      "seed": 846664398,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.209686,
+          "agentSeconds": 16.6,
+          "startupInclusiveSeconds": 17.5,
+          "usage": {
+            "input": 46094,
+            "cached": 29056,
+            "output": 205
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.27318,
+          "agentSeconds": 25.1,
+          "startupInclusiveSeconds": 37.2,
+          "usage": {
+            "input": 100027,
+            "cached": 82560,
+            "output": 319
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.53933,
+        "cacheDiscountUsd": 0.481536,
+        "outputUsd": -0.0057
+      }
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "seed": 96655857,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.257814,
+          "agentSeconds": 38.6,
+          "startupInclusiveSeconds": 39.5,
+          "usage": {
+            "input": 82992,
+            "cached": 67584,
+            "output": 723
+          },
+          "requests": 6,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.40644,
+          "agentSeconds": 73.3,
+          "startupInclusiveSeconds": 85.4,
+          "usage": {
+            "input": 189216,
+            "cached": 170880,
+            "output": 1044
+          },
+          "requests": 11,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -1.06224,
+        "cacheDiscountUsd": 0.929664,
+        "outputUsd": -0.01605
+      }
+    },
+    {
+      "id": "logs-10",
+      "family": "logs",
+      "seed": 932489495,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.133136,
+          "agentSeconds": 13.9,
+          "startupInclusiveSeconds": 14.8,
+          "usage": {
+            "input": 47710,
+            "cached": 39296,
+            "output": 194
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.426908,
+          "agentSeconds": 25.8,
+          "startupInclusiveSeconds": 38.1,
+          "usage": {
+            "input": 76272,
+            "cached": 39168,
+            "output": 334
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.28562,
+        "cacheDiscountUsd": -0.001152,
+        "outputUsd": -0.007
+      }
+    },
+    {
+      "id": "refresh-6",
+      "family": "refresh",
+      "seed": 678598069,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.277316,
+          "agentSeconds": 36.3,
+          "startupInclusiveSeconds": 37.2,
+          "usage": {
+            "input": 68749,
+            "cached": 49536,
+            "output": 713
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.325176,
+          "agentSeconds": 133.4,
+          "startupInclusiveSeconds": 144.6,
+          "usage": {
+            "input": 135519,
+            "cached": 119296,
+            "output": 873
+          },
+          "requests": 10,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.6677,
+        "cacheDiscountUsd": 0.62784,
+        "outputUsd": -0.008
+      }
+    },
+    {
+      "id": "mixed-3",
+      "family": "mixed",
+      "seed": 509309393,
+      "classification": "cost-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.336232,
+          "agentSeconds": 48.3,
+          "startupInclusiveSeconds": 49.2,
+          "usage": {
+            "input": 98419,
+            "cached": 77312,
+            "output": 957
+          },
+          "requests": 7,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.267418,
+          "agentSeconds": 50.5,
+          "startupInclusiveSeconds": 61.4,
+          "usage": {
+            "input": 113274,
+            "cached": 100608,
+            "output": 803
+          },
+          "requests": 8,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.14855,
+        "cacheDiscountUsd": 0.209664,
+        "outputUsd": 0.0077
+      }
+    },
+    {
+      "id": "json-5",
+      "family": "json",
+      "seed": 464973747,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.091416,
+          "agentSeconds": 14.8,
+          "startupInclusiveSeconds": 15.7,
+          "usage": {
+            "input": 40077,
+            "cached": 35456,
+            "output": 195
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.142766,
+          "agentSeconds": 19.2,
+          "startupInclusiveSeconds": 29.8,
+          "usage": {
+            "input": 49324,
+            "cached": 39936,
+            "output": 179
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.09247,
+        "cacheDiscountUsd": 0.04032,
+        "outputUsd": 0.0008
+      }
+    },
+    {
+      "id": "refresh-3",
+      "family": "refresh",
+      "seed": 777719575,
+      "classification": "joint-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.426108,
+          "agentSeconds": 45.6,
+          "startupInclusiveSeconds": 46.5,
+          "usage": {
+            "input": 109579,
+            "cached": 78848,
+            "output": 799
+          },
+          "requests": 6,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.281496,
+          "agentSeconds": 43.6,
+          "startupInclusiveSeconds": 54.2,
+          "usage": {
+            "input": 94397,
+            "cached": 78336,
+            "output": 851
+          },
+          "requests": 7,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": 0.15182,
+        "cacheDiscountUsd": -0.004608,
+        "outputUsd": -0.0026
+      }
+    },
+    {
+      "id": "logs-6",
+      "family": "logs",
+      "seed": 518140609,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.135504,
+          "agentSeconds": 17.8,
+          "startupInclusiveSeconds": 18.8,
+          "usage": {
+            "input": 48107,
+            "cached": 39424,
+            "output": 185
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.203,
+          "agentSeconds": 25.5,
+          "startupInclusiveSeconds": 36.6,
+          "usage": {
+            "input": 80357,
+            "cached": 68480,
+            "output": 315
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.3225,
+        "cacheDiscountUsd": 0.261504,
+        "outputUsd": -0.0065
+      }
+    },
+    {
+      "id": "refactor-3",
+      "family": "refactor",
+      "seed": 550267425,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.242558,
+          "agentSeconds": 40,
+          "startupInclusiveSeconds": 41.1,
+          "usage": {
+            "input": 55303,
+            "cached": 39808,
+            "output": 956
+          },
+          "requests": 4,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.416718,
+          "agentSeconds": 76.2,
+          "startupInclusiveSeconds": 87.1,
+          "usage": {
+            "input": 151416,
+            "cached": 130688,
+            "output": 1575
+          },
+          "requests": 9,
+          "failedTools": 2,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.96113,
+        "cacheDiscountUsd": 0.81792,
+        "outputUsd": -0.03095
+      }
+    },
+    {
+      "id": "logs-4",
+      "family": "logs",
+      "seed": 425654112,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.133526,
+          "agentSeconds": 14.8,
+          "startupInclusiveSeconds": 15.7,
+          "usage": {
+            "input": 47789,
+            "cached": 39296,
+            "output": 186
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.184996,
+          "agentSeconds": 30.9,
+          "startupInclusiveSeconds": 41.4,
+          "usage": {
+            "input": 76769,
+            "cached": 66816,
+            "output": 373
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.2898,
+        "cacheDiscountUsd": 0.24768,
+        "outputUsd": -0.00935
+      }
+    },
+    {
+      "id": "bugfix-10",
+      "family": "bugfix",
+      "seed": 540989732,
+      "classification": "quality-failure",
+      "arms": {
+        "proxy": {
+          "verdict": "FAIL",
+          "estimatedUsd": null,
+          "agentSeconds": 14.1,
+          "startupInclusiveSeconds": 15.1,
+          "usage": null,
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.373884,
+          "agentSeconds": 61.8,
+          "startupInclusiveSeconds": 72.9,
+          "usage": {
+            "input": 165831,
+            "cached": 148864,
+            "output": 1107
+          },
+          "requests": 8,
+          "failedTools": 1,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": null
+    },
+    {
+      "id": "json-7",
+      "family": "json",
+      "seed": 84612777,
+      "classification": "speed-loss",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.089586,
+          "agentSeconds": 14.5,
+          "startupInclusiveSeconds": 15.5,
+          "usage": {
+            "input": 40039,
+            "cached": 35456,
+            "output": 166
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.139448,
+          "agentSeconds": 13.4,
+          "startupInclusiveSeconds": 24.3,
+          "usage": {
+            "input": 48892,
+            "cached": 39808,
+            "output": 176
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.08853,
+        "cacheDiscountUsd": 0.039168,
+        "outputUsd": -0.0005
+      }
+    },
+    {
+      "id": "code-10",
+      "family": "code",
+      "seed": 626882115,
+      "classification": "joint-win",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.148256,
+          "agentSeconds": 17.1,
+          "startupInclusiveSeconds": 18,
+          "usage": {
+            "input": 44529,
+            "cached": 34176,
+            "output": 211
+          },
+          "requests": 3,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.266822,
+          "agentSeconds": 24.9,
+          "startupInclusiveSeconds": 35.7,
+          "usage": {
+            "input": 98440,
+            "cached": 81792,
+            "output": 371
+          },
+          "requests": 5,
+          "failedTools": 0,
+          "timing": null,
+          "timingNote": "Older capture has no request timing; no causal speed attribution available."
+        }
+      },
+      "costComponents": {
+        "inputVolumeUsd": -0.53911,
+        "cacheDiscountUsd": 0.428544,
+        "outputUsd": -0.008
+      }
+    }
+  ]
+}

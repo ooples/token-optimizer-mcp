@@ -1,0 +1,58 @@
+[
+  {
+    "task": "refresh",
+    "arm": "full",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "beforeReads": 1,
+      "afterReads": 1,
+      "cachedDiffs": 1,
+      "passed": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "full-files",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "beforeReads": 1,
+      "afterReads": 1,
+      "cachedDiffs": 1,
+      "passed": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "full-files",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "beforeReads": 1,
+      "afterReads": 1,
+      "cachedDiffs": 1,
+      "passed": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "full",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "beforeReads": 1,
+      "afterReads": 1,
+      "cachedDiffs": 1,
+      "passed": true
+    },
+    "clientErrors": []
+  }
+]

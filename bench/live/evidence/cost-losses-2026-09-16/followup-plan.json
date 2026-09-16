@@ -1,0 +1,252 @@
+{
+  "scope": "Development follow-up of all 13 original losses, with opposite arm order. One attempt per arm per case, no retries or selective replacement. Not independent confirmation.",
+  "cases": [
+    {
+      "id": "logs-1",
+      "family": "logs",
+      "model": "gpt-6-astra",
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "reps": 1,
+      "tasks": [
+        "logs"
+      ],
+      "balanced": false,
+      "seedOffset": 978268663,
+      "readMode": "natural",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T01:57:34.355Z"
+    },
+    {
+      "id": "mixed-4",
+      "family": "mixed",
+      "model": "gpt-6-astra",
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "reps": 1,
+      "tasks": [
+        "refresh"
+      ],
+      "balanced": false,
+      "seedOffset": 586027040,
+      "readMode": "mixed",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T02:15:05.567Z"
+    },
+    {
+      "id": "json-10",
+      "family": "json",
+      "model": "gpt-6-astra",
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "reps": 1,
+      "tasks": [
+        "json"
+      ],
+      "balanced": false,
+      "seedOffset": 955782252,
+      "readMode": "natural",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T02:20:05.461Z"
+    },
+    {
+      "id": "json-9",
+      "family": "json",
+      "model": "gpt-6-astra",
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "reps": 1,
+      "tasks": [
+        "json"
+      ],
+      "balanced": false,
+      "seedOffset": 472197431,
+      "readMode": "natural",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T02:24:01.648Z"
+    },
+    {
+      "id": "json-8",
+      "family": "json",
+      "model": "gpt-6-astra",
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "reps": 1,
+      "tasks": [
+        "json"
+      ],
+      "balanced": false,
+      "seedOffset": 858929000,
+      "readMode": "natural",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T02:35:18.777Z"
+    },
+    {
+      "id": "mixed-9",
+      "family": "mixed",
+      "model": "gpt-6-astra",
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "reps": 1,
+      "tasks": [
+        "refresh"
+      ],
+      "balanced": false,
+      "seedOffset": 66846556,
+      "readMode": "mixed",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T02:40:10.101Z"
+    },
+    {
+      "id": "refresh-2",
+      "family": "refresh",
+      "model": "gpt-6-astra",
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "reps": 1,
+      "tasks": [
+        "refresh"
+      ],
+      "balanced": false,
+      "seedOffset": 139520375,
+      "readMode": "natural",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T02:44:36.804Z"
+    },
+    {
+      "id": "code-7",
+      "family": "code",
+      "model": "gpt-6-astra",
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "reps": 1,
+      "tasks": [
+        "code"
+      ],
+      "balanced": false,
+      "seedOffset": 658803231,
+      "readMode": "natural",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T02:53:54.588Z"
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "model": "gpt-6-astra",
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "reps": 1,
+      "tasks": [
+        "bugfix"
+      ],
+      "balanced": false,
+      "seedOffset": 946303579,
+      "readMode": "natural",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T03:00:15.359Z"
+    },
+    {
+      "id": "refresh-1",
+      "family": "refresh",
+      "model": "gpt-6-astra",
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "reps": 1,
+      "tasks": [
+        "refresh"
+      ],
+      "balanced": false,
+      "seedOffset": 403350085,
+      "readMode": "natural",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T03:16:15.010Z"
+    },
+    {
+      "id": "bugfix-2",
+      "family": "bugfix",
+      "model": "gpt-6-astra",
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "reps": 1,
+      "tasks": [
+        "bugfix"
+      ],
+      "balanced": false,
+      "seedOffset": 93950189,
+      "readMode": "natural",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T03:18:02.825Z"
+    },
+    {
+      "id": "mixed-3",
+      "family": "mixed",
+      "model": "gpt-6-astra",
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "reps": 1,
+      "tasks": [
+        "refresh"
+      ],
+      "balanced": false,
+      "seedOffset": 509309392,
+      "readMode": "mixed",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T03:37:38.401Z"
+    },
+    {
+      "id": "refresh-3",
+      "family": "refresh",
+      "model": "gpt-6-astra",
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "reps": 1,
+      "tasks": [
+        "refresh"
+      ],
+      "balanced": false,
+      "seedOffset": 777719574,
+      "readMode": "natural",
+      "mcpDiscovery": "bounded",
+      "caseSuite": "heldout-v1",
+      "started": "2026-09-16T03:40:18.432Z"
+    }
+  ]
+}

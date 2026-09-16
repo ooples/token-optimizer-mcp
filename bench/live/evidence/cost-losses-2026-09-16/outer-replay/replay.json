@@ -1,0 +1,59 @@
+{
+  "scope": "Replay of captured synthetic tool results; token counts are o200k_base estimates, not provider usage. Original live result remains retained.",
+  "capture": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-loss-followup-1789555532878-refresh-2\\run-LTq4iU\\refresh-1-proxy\\requests.jsonl",
+  "compiledSha256": "23948ce639ca8db60106168990a506f23e558075181c6be393e19c817e684dae",
+  "fragments": [
+    {
+      "index": 0,
+      "beforeBytes": 40105,
+      "afterBytes": 10200,
+      "beforeEstimatedTokens": 15631,
+      "afterEstimatedTokens": 3731,
+      "byteExactReconstruction": true
+    }
+  ],
+  "requests": [
+    {
+      "beforeBytes": 63049,
+      "afterBytes": 63049,
+      "beforeEstimatedTokens": 15045,
+      "afterEstimatedTokens": 15045
+    },
+    {
+      "beforeBytes": 115003,
+      "afterBytes": 78883,
+      "beforeEstimatedTokens": 37978,
+      "afterEstimatedTokens": 20658
+    },
+    {
+      "beforeBytes": 117134,
+      "afterBytes": 81014,
+      "beforeEstimatedTokens": 38562,
+      "afterEstimatedTokens": 21242
+    },
+    {
+      "beforeBytes": 118243,
+      "afterBytes": 82123,
+      "beforeEstimatedTokens": 38939,
+      "afterEstimatedTokens": 21619
+    },
+    {
+      "beforeBytes": 118923,
+      "afterBytes": 82803,
+      "beforeEstimatedTokens": 39171,
+      "afterEstimatedTokens": 21851
+    },
+    {
+      "beforeBytes": 120542,
+      "afterBytes": 84422,
+      "beforeEstimatedTokens": 39732,
+      "afterEstimatedTokens": 22412
+    },
+    {
+      "beforeBytes": 122171,
+      "afterBytes": 86051,
+      "beforeEstimatedTokens": 40240,
+      "afterEstimatedTokens": 22920
+    }
+  ]
+}

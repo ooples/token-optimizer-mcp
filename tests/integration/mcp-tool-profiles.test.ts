@@ -8,6 +8,7 @@ import {
   COGNITIVE_TOOL_NAMES,
   CONTINUITY_TOOL_NAMES,
   CORE_TOOL_NAMES,
+  FILE_TOOL_NAMES,
 } from '../../src/server/tool-profile.js';
 
 const ROOT = process.cwd();
@@ -205,6 +206,27 @@ afterAll(() => {
 });
 
 describe('MCP tool profiles over the real stdio transport', () => {
+  it('offers file tools and retrieval with a smaller opt-in schema', async () => {
+    const [files, core] = await Promise.all([
+      runServer('files', 'wiki_write'),
+      runServer('core'),
+    ]);
+    expect(files.status).toBe(0);
+    const tools = files.responses.find((message) => message.id === 2)?.result
+      ?.tools as ListedTool[];
+    expect(tools.map((tool) => tool.name).sort()).toEqual(
+      [...FILE_TOOL_NAMES].sort()
+    );
+    const coreTools = core.responses.find((message) => message.id === 2)?.result
+      ?.tools;
+    expect(JSON.stringify(tools).length).toBeLessThan(
+      JSON.stringify(coreTools).length
+    );
+    const denied = files.responses.find((message) => message.id === 3)?.result;
+    expect(denied?.isError).toBe(true);
+    expect(denied?.content?.[0]?.text).toContain('not available');
+  });
+
   it('ships the bounded core profile by default', async () => {
     expect(existsSync(SERVER)).toBe(true);
     const result = await runServer();
@@ -277,8 +299,9 @@ describe('MCP tool profiles over the real stdio transport', () => {
     expect(continuity.status).toBe(0);
     const tools = continuity.responses.find((message) => message.id === 2)
       ?.result?.tools as ListedTool[];
-    const cognitiveTools = cognitive.responses.find((message) => message.id === 2)
-      ?.result?.tools as ListedTool[];
+    const cognitiveTools = cognitive.responses.find(
+      (message) => message.id === 2
+    )?.result?.tools as ListedTool[];
     expect(tools.map((tool) => tool.name).sort()).toEqual(
       [...CONTINUITY_TOOL_NAMES].sort()
     );
@@ -292,9 +315,7 @@ describe('MCP tool profiles over the real stdio transport', () => {
     expect(result.status).toBe(0);
     const tools = result.responses.find((message) => message.id === 2)?.result
       ?.tools as ListedTool[];
-    expect(tools.map((tool) => tool.name)).toEqual([
-      ...ATTESTATION_TOOL_NAMES,
-    ]);
+    expect(tools.map((tool) => tool.name)).toEqual([...ATTESTATION_TOOL_NAMES]);
     expect(JSON.stringify(tools).length).toBeLessThan(600);
   });
 

@@ -1,0 +1,142 @@
+[
+  {
+    "task": "numeric",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2606609803,
+    "verdict": "PASS",
+    "agentSeconds": 15.3,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 45569,
+      "cached": 38016,
+      "output": 182
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 245778,
+    "afterBytes": 245778,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12967,
+          "output_tokens": 77,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16235,
+          "output_tokens": 75,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16367,
+          "output_tokens": 30,
+          "cached_input_tokens": 16000
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-f5617af9-165",
+      "maximum": 597,
+      "minimum": -7
+    },
+    "seconds": 26.8
+  },
+  {
+    "task": "numeric",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2606609803,
+    "verdict": "PASS",
+    "agentSeconds": 16.3,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 43646,
+      "cached": 28032,
+      "output": 182
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 245747,
+    "afterBytes": 205835,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13050,
+          "output_tokens": 77,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15231,
+          "output_tokens": 75,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15365,
+          "output_tokens": 30,
+          "cached_input_tokens": 15104
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-f5617af9-165",
+      "maximum": 597,
+      "minimum": -7
+    },
+    "seconds": 17.3
+  }
+]

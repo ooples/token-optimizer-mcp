@@ -1,0 +1,329 @@
+{
+  "scenario": {
+    "model": "gpt-6-astra",
+    "label": "Codex Enterprise standard rate-card scenario; not actual billed cost",
+    "verifiedOn": "2026-09-15",
+    "source": "https://help.openai.com/en/articles/20001415",
+    "usdPerMillion": {
+      "uncached": 10,
+      "cached": 1,
+      "output": 50
+    },
+    "assumptions": [
+      "All runs use standard speed with no regional or contract adjustments.",
+      "Codex Astra has no cache-write charge or long-context multiplier.",
+      "Subscription charges, credits, proxy compute, and account discounts are not measured."
+    ]
+  },
+  "valid": true,
+  "failures": [],
+  "measured": [
+    {
+      "task": "bugfix",
+      "arm": "control",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.321546
+    },
+    {
+      "task": "bugfix",
+      "arm": "proxy",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.295758
+    },
+    {
+      "task": "bugfix",
+      "arm": "headroom",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.273894
+    },
+    {
+      "task": "bugfix",
+      "arm": "proxy",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.286646
+    },
+    {
+      "task": "bugfix",
+      "arm": "headroom",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.357238
+    },
+    {
+      "task": "bugfix",
+      "arm": "control",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.300084
+    },
+    {
+      "task": "bugfix",
+      "arm": "headroom",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.370354
+    },
+    {
+      "task": "bugfix",
+      "arm": "control",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.340798
+    },
+    {
+      "task": "bugfix",
+      "arm": "proxy",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.248832
+    },
+    {
+      "task": "refactor",
+      "arm": "control",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.261738
+    },
+    {
+      "task": "refactor",
+      "arm": "proxy",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.281436
+    },
+    {
+      "task": "refactor",
+      "arm": "headroom",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.318388
+    },
+    {
+      "task": "refactor",
+      "arm": "proxy",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.284306
+    },
+    {
+      "task": "refactor",
+      "arm": "headroom",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.333068
+    },
+    {
+      "task": "refactor",
+      "arm": "control",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.232982
+    },
+    {
+      "task": "refactor",
+      "arm": "headroom",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.332672
+    },
+    {
+      "task": "refactor",
+      "arm": "control",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.198004
+    },
+    {
+      "task": "refactor",
+      "arm": "proxy",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.267768
+    },
+    {
+      "task": "refresh",
+      "arm": "control",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.365746
+    },
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.27918
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.289114
+    },
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.195462
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.436374
+    },
+    {
+      "task": "refresh",
+      "arm": "control",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.476806
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.247298
+    },
+    {
+      "task": "refresh",
+      "arm": "control",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.291728
+    },
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.197022
+    }
+  ],
+  "aggregates": [
+    {
+      "task": "bugfix",
+      "arm": "control",
+      "meanEstimatedUsd": 0.32080933333333334
+    },
+    {
+      "task": "bugfix",
+      "arm": "proxy",
+      "meanEstimatedUsd": 0.2770786666666667
+    },
+    {
+      "task": "bugfix",
+      "arm": "headroom",
+      "meanEstimatedUsd": 0.3338286666666667
+    },
+    {
+      "task": "refactor",
+      "arm": "control",
+      "meanEstimatedUsd": 0.23090800000000003
+    },
+    {
+      "task": "refactor",
+      "arm": "proxy",
+      "meanEstimatedUsd": 0.2778366666666667
+    },
+    {
+      "task": "refactor",
+      "arm": "headroom",
+      "meanEstimatedUsd": 0.3280426666666667
+    },
+    {
+      "task": "refresh",
+      "arm": "control",
+      "meanEstimatedUsd": 0.37809333333333334
+    },
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "meanEstimatedUsd": 0.223888
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "meanEstimatedUsd": 0.324262
+    }
+  ],
+  "comparisons": [
+    {
+      "task": "bugfix",
+      "candidate": "proxy",
+      "against": "control",
+      "estimatedUsdDelta": -0.04373066666666664,
+      "reductionPercent": 13.63135735868033
+    },
+    {
+      "task": "bugfix",
+      "candidate": "proxy",
+      "against": "headroom",
+      "estimatedUsdDelta": -0.05675000000000002,
+      "reductionPercent": 16.999738388754317
+    },
+    {
+      "task": "refactor",
+      "candidate": "proxy",
+      "against": "control",
+      "estimatedUsdDelta": 0.046928666666666646,
+      "reductionPercent": -20.323534336907613
+    },
+    {
+      "task": "refactor",
+      "candidate": "proxy",
+      "against": "headroom",
+      "estimatedUsdDelta": -0.05020600000000003,
+      "reductionPercent": 15.304716459647526
+    },
+    {
+      "task": "refresh",
+      "candidate": "proxy",
+      "against": "control",
+      "estimatedUsdDelta": -0.15420533333333333,
+      "reductionPercent": 40.78499136015799
+    },
+    {
+      "task": "refresh",
+      "candidate": "proxy",
+      "against": "headroom",
+      "estimatedUsdDelta": -0.10037399999999999,
+      "reductionPercent": 30.954598442000602
+    }
+  ]
+}

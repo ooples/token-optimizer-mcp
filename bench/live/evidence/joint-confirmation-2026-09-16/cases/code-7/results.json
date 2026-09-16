@@ -1,0 +1,176 @@
+[
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2175418325,
+    "verdict": "PASS",
+    "agentSeconds": 15.2,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 44075,
+      "cached": 33920,
+      "output": 186
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 232164,
+    "afterBytes": 207604,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13045,
+          "output_tokens": 77,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15444,
+          "output_tokens": 86,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15586,
+          "output_tokens": 23,
+          "cached_input_tokens": 15232
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-ec5df225.ts",
+      "line": 194,
+      "constant": "RETRY_LIMIT_EC5DF225",
+      "value": 9
+    },
+    "seconds": 16.1
+  },
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2175418325,
+    "verdict": "PASS",
+    "agentSeconds": 32.6,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 6
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 86571,
+      "cached": 55680,
+      "output": 508
+    },
+    "requests": 6,
+    "compressedRequests": 0,
+    "beforeBytes": 567913,
+    "afterBytes": 567913,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12962,
+          "output_tokens": 77,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13116,
+          "output_tokens": 59,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13199,
+          "output_tokens": 129,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13402,
+          "output_tokens": 114,
+          "cached_input_tokens": 13056
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16875,
+          "output_tokens": 86,
+          "cached_input_tokens": 13184
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 17017,
+          "output_tokens": 43,
+          "cached_input_tokens": 16640
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-ec5df225.ts",
+      "line": 194,
+      "constant": "RETRY_LIMIT_EC5DF225",
+      "value": 9
+    },
+    "seconds": 43.4
+  }
+]

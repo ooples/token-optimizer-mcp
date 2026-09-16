@@ -1,0 +1,2410 @@
+{
+  "started": "2026-09-16T12:37:15.561Z",
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7",
+  "plannedPairs": 120,
+  "pairs": [
+    {
+      "id": "nullable-4",
+      "family": "nullable",
+      "started": "2026-09-16T12:37:16.839Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-4\\run-UN2X99",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:38:05.800Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-7",
+      "family": "bugfix",
+      "started": "2026-09-16T12:38:08.500Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-7\\run-kc6ZMc",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:40:09.199Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-4",
+      "family": "numeric",
+      "started": "2026-09-16T12:40:12.295Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-4\\run-cWrWdN",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:40:57.173Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-7",
+      "family": "entropy",
+      "started": "2026-09-16T12:40:59.524Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-7\\run-oTtYs4",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:42:02.894Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-3",
+      "family": "refactor",
+      "started": "2026-09-16T12:42:05.168Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-3\\run-Y2xOGW",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:44:50.052Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-3",
+      "family": "tiny",
+      "started": "2026-09-16T12:44:52.388Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-3\\run-lgqFp9",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:45:33.047Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-4",
+      "family": "bugfix",
+      "started": "2026-09-16T12:45:34.999Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-4\\run-IKgHN0",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:47:38.343Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-9",
+      "family": "outer",
+      "started": "2026-09-16T12:47:40.395Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-9\\run-3rR86N",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:49:22.916Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-7",
+      "family": "code",
+      "started": "2026-09-16T12:49:24.859Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-7\\run-dZpDuK",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:50:25.197Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-5",
+      "family": "refactor",
+      "started": "2026-09-16T12:50:27.146Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-5\\run-XmBxjX",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:53:03.793Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-9",
+      "family": "refresh",
+      "started": "2026-09-16T12:53:05.999Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-9\\run-DvdtNx",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:54:50.683Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-2",
+      "family": "bugfix",
+      "started": "2026-09-16T12:54:52.623Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-2\\run-LbHMWK",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:57:12.082Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-2",
+      "family": "tiny",
+      "started": "2026-09-16T12:57:14.036Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-2\\run-Z9xr6f",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:57:57.443Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-9",
+      "family": "numeric",
+      "started": "2026-09-16T12:57:59.397Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-9\\run-2z6zUM",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T12:58:41.693Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-5",
+      "family": "logs",
+      "started": "2026-09-16T12:58:43.570Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-5\\run-XCO1Xf",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:00:39.925Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-4",
+      "family": "logs",
+      "started": "2026-09-16T13:00:41.856Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-4\\run-vqZdy0",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:01:48.548Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-7",
+      "family": "mixed",
+      "started": "2026-09-16T13:01:50.455Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-7\\run-e8MvEF",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:05:15.256Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-3",
+      "family": "entropy",
+      "started": "2026-09-16T13:05:17.237Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-3\\run-PrnnJ1",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:06:25.180Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-7",
+      "family": "refresh",
+      "started": "2026-09-16T13:06:27.106Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-7\\run-f35MXp",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:08:17.720Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-2",
+      "family": "refresh",
+      "started": "2026-09-16T13:08:19.678Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-2\\run-xVyhGr",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:09:44.245Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-1",
+      "family": "entropy",
+      "started": "2026-09-16T13:09:47.176Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-1\\run-ybAQiY",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:10:44.276Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-2",
+      "family": "json",
+      "started": "2026-09-16T13:10:46.387Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-2\\run-ALYeDh",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:11:34.609Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-7",
+      "family": "refactor",
+      "started": "2026-09-16T13:11:37.268Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-7\\run-brlRQC",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:13:51.450Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-3",
+      "family": "logs",
+      "started": "2026-09-16T13:13:54.145Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-3\\run-3BnNHe",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:14:52.920Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-3",
+      "family": "mixed",
+      "started": "2026-09-16T13:14:55.153Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-3\\run-BsAgVC",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:16:54.101Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-10",
+      "family": "entropy",
+      "started": "2026-09-16T13:16:56.158Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-10\\run-xTGCvW",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:17:51.360Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-10",
+      "family": "code",
+      "started": "2026-09-16T13:17:53.563Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-10\\run-DNn0hP",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:19:10.892Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-8",
+      "family": "json",
+      "started": "2026-09-16T13:19:15.260Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-8\\run-dfIVHj",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:20:22.463Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-4",
+      "family": "mixed",
+      "started": "2026-09-16T13:20:24.488Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-4\\run-UqF6dH",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:22:15.107Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "started": "2026-09-16T13:22:17.577Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-8\\run-tgtIku",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:24:15.604Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-8",
+      "family": "outer",
+      "started": "2026-09-16T13:24:18.185Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-8\\run-Gql10X",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:26:05.280Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-2",
+      "family": "mixed",
+      "started": "2026-09-16T13:26:07.412Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-2\\run-6f4WXo",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:27:41.128Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-2",
+      "family": "entropy",
+      "started": "2026-09-16T13:27:43.116Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-2\\run-VWN2cx",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:28:39.391Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-7",
+      "family": "tiny",
+      "started": "2026-09-16T13:28:41.499Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-7\\run-8hQy6C",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:29:26.964Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-9",
+      "family": "mixed",
+      "started": "2026-09-16T13:29:29.287Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-9\\run-8q0vdh",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:31:11.920Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-9",
+      "family": "refactor",
+      "started": "2026-09-16T13:31:14.444Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-9\\run-E7uM7U",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:33:22.758Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-8",
+      "family": "nullable",
+      "started": "2026-09-16T13:33:25.315Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-8\\run-LM27eM",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:34:08.701Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-3",
+      "family": "code",
+      "started": "2026-09-16T13:34:10.813Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-3\\run-xSjmdF",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:35:06.454Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-9",
+      "family": "tiny",
+      "started": "2026-09-16T13:35:08.626Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-9\\run-cbGg8D",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:35:53.647Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-9",
+      "family": "logs",
+      "started": "2026-09-16T13:35:55.751Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-9\\run-bhv9MN",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:36:53.334Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-1",
+      "family": "json",
+      "started": "2026-09-16T13:36:55.438Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-1\\run-QSujwj",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:37:40.876Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-4",
+      "family": "refresh",
+      "started": "2026-09-16T13:37:43.266Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-4\\run-Sxm4Nz",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:39:27.802Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-10",
+      "family": "numeric",
+      "started": "2026-09-16T13:39:29.961Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-10\\run-uIZuxr",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:40:13.621Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-7",
+      "family": "numeric",
+      "started": "2026-09-16T13:40:15.773Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-7\\run-hCSbJM",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:41:01.453Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-8",
+      "family": "entropy",
+      "started": "2026-09-16T13:41:03.626Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-8\\run-Ek5pLv",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:42:03.359Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-4",
+      "family": "outer",
+      "started": "2026-09-16T13:42:05.468Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-4\\run-nEeNbl",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:44:02.994Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-2",
+      "family": "numeric",
+      "started": "2026-09-16T13:44:05.085Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-2\\run-JUTRFQ",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:44:50.466Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-1",
+      "family": "bugfix",
+      "started": "2026-09-16T13:44:52.665Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-1\\run-3Gcag8",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:46:59.852Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-9",
+      "family": "entropy",
+      "started": "2026-09-16T13:47:02.036Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-9\\run-vMcQXA",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:48:05.850Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-2",
+      "family": "code",
+      "started": "2026-09-16T13:48:07.976Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-2\\run-sD8Gv6",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:49:02.324Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-6",
+      "family": "nullable",
+      "started": "2026-09-16T13:49:04.280Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-6\\run-6vigiJ",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:49:50.692Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-2",
+      "family": "nullable",
+      "started": "2026-09-16T13:49:52.848Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-2\\run-kBJBjp",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:50:39.801Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-1",
+      "family": "mixed",
+      "started": "2026-09-16T13:50:41.995Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-1\\run-2eLmNA",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:52:19.670Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-7",
+      "family": "logs",
+      "started": "2026-09-16T13:52:21.730Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-7\\run-ctNxpJ",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:53:31.884Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-5",
+      "family": "bugfix",
+      "started": "2026-09-16T13:53:34.084Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-5\\run-b7Nz57",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:55:47.745Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-1",
+      "family": "numeric",
+      "started": "2026-09-16T13:55:49.958Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-1\\run-J30IEL",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:56:46.835Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-3",
+      "family": "outer",
+      "started": "2026-09-16T13:56:48.932Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-3\\run-lEIena",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:58:48.846Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-9",
+      "family": "code",
+      "started": "2026-09-16T13:58:51.039Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-9\\run-wPzuK1",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T13:59:44.046Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-6",
+      "family": "outer",
+      "started": "2026-09-16T13:59:46.124Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-6\\run-JviNOx",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:02:16.164Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-5",
+      "family": "mixed",
+      "started": "2026-09-16T14:02:18.519Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-5\\run-aP7ZLJ",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:04:23.812Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-5",
+      "family": "entropy",
+      "started": "2026-09-16T14:04:26.478Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-5\\run-I4EukK",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:05:28.391Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-8",
+      "family": "numeric",
+      "started": "2026-09-16T14:05:30.449Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-8\\run-5UGNhj",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:06:17.006Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-3",
+      "family": "nullable",
+      "started": "2026-09-16T14:06:19.079Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-3\\run-NBrjtN",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:07:13.407Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-1",
+      "family": "nullable",
+      "started": "2026-09-16T14:07:15.431Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-1\\run-Kqap6q",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:08:01.258Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-4",
+      "family": "tiny",
+      "started": "2026-09-16T14:08:03.415Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-4\\run-2o6qYf",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:08:47.825Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-10",
+      "family": "bugfix",
+      "started": "2026-09-16T14:08:49.983Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-10\\run-ET9QrA",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:11:12.742Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-6",
+      "family": "bugfix",
+      "started": "2026-09-16T14:11:14.911Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-6\\run-YcMCSf",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:13:12.751Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-5",
+      "family": "refresh",
+      "started": "2026-09-16T14:13:14.864Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-5\\run-g0R4mK",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:14:43.814Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-6",
+      "family": "refresh",
+      "started": "2026-09-16T14:14:45.820Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-6\\run-hvY3N9",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:16:38.597Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "started": "2026-09-16T14:16:40.763Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-9\\run-H5cr9N",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:18:57.801Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-10",
+      "family": "mixed",
+      "started": "2026-09-16T14:19:00.175Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-10\\run-7xOwhW",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:20:42.735Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-6",
+      "family": "code",
+      "started": "2026-09-16T14:20:45.040Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-6\\run-V9jnlo",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:21:41.987Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-1",
+      "family": "refactor",
+      "started": "2026-09-16T14:21:44.081Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-1\\run-3TZI3T",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:23:50.841Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-7",
+      "family": "outer",
+      "started": "2026-09-16T14:23:53.034Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-7\\run-u2wY4i",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:26:02.593Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-6",
+      "family": "entropy",
+      "started": "2026-09-16T14:26:04.834Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-6\\run-EU786A",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:27:01.003Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-5",
+      "family": "outer",
+      "started": "2026-09-16T14:27:03.169Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-5\\run-CsgfHy",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:28:41.807Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-4",
+      "family": "code",
+      "started": "2026-09-16T14:28:43.973Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-4\\run-vtoVp1",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:29:38.448Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-3",
+      "family": "numeric",
+      "started": "2026-09-16T14:29:40.630Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-3\\run-YDTm00",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:30:25.172Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-10",
+      "family": "nullable",
+      "started": "2026-09-16T14:30:27.292Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-10\\run-koAU3x",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:31:11.013Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-10",
+      "family": "tiny",
+      "started": "2026-09-16T14:31:13.148Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-10\\run-bGGUk7",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:32:01.663Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-1",
+      "family": "outer",
+      "started": "2026-09-16T14:32:03.835Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-1\\run-yawzGr",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:33:52.700Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-3",
+      "family": "bugfix",
+      "started": "2026-09-16T14:33:55.396Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-3\\run-F5iidH",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:35:57.177Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-5",
+      "family": "tiny",
+      "started": "2026-09-16T14:36:01.042Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-5\\run-6spnOz",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:36:48.680Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-3",
+      "family": "refresh",
+      "started": "2026-09-16T14:36:51.621Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-3\\run-Q5Mlks",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:38:23.529Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "bugfix-8",
+      "family": "bugfix",
+      "started": "2026-09-16T14:38:26.277Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\bugfix-8\\run-JYSDn4",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:40:59.470Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-5",
+      "family": "nullable",
+      "started": "2026-09-16T14:41:02.768Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-5\\run-ExFcdN",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:42:06.605Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-7",
+      "family": "nullable",
+      "started": "2026-09-16T14:42:10.396Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-7\\run-8QWeeq",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:43:13.829Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "nullable-9",
+      "family": "nullable",
+      "started": "2026-09-16T14:43:18.605Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\nullable-9\\run-Zi5nJw",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "FAIL"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:44:14.016Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-8",
+      "family": "logs",
+      "started": "2026-09-16T14:44:17.032Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-8\\run-ca3Op0",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:45:16.502Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-2",
+      "family": "logs",
+      "started": "2026-09-16T14:45:19.035Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-2\\run-MZeWd2",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:46:15.095Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-10",
+      "family": "refactor",
+      "started": "2026-09-16T14:46:17.404Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-10\\run-RGv48u",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:48:49.497Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-1",
+      "family": "logs",
+      "started": "2026-09-16T14:48:51.481Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-1\\run-AJ5QtH",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:49:48.536Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-8",
+      "family": "code",
+      "started": "2026-09-16T14:49:50.696Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-8\\run-iwyjI9",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:50:50.524Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-2",
+      "family": "refactor",
+      "started": "2026-09-16T14:50:52.510Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-2\\run-4yHQBV",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:53:12.104Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-6",
+      "family": "refactor",
+      "started": "2026-09-16T14:53:14.548Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-6\\run-HffBto",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:55:15.236Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-1",
+      "family": "refresh",
+      "started": "2026-09-16T14:55:17.147Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-1\\run-MTmn4O",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:56:47.072Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-1",
+      "family": "code",
+      "started": "2026-09-16T14:56:48.972Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-1\\run-12DzaP",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T14:57:46.321Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-4",
+      "family": "refactor",
+      "started": "2026-09-16T14:57:48.222Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-4\\run-pepPMk",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:00:02.166Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-3",
+      "family": "json",
+      "started": "2026-09-16T15:00:04.089Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-3\\run-LuhgBm",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:00:54.811Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-6",
+      "family": "logs",
+      "started": "2026-09-16T15:00:56.696Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-6\\run-lcWbYl",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:01:56.950Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "entropy-4",
+      "family": "entropy",
+      "started": "2026-09-16T15:01:58.822Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\entropy-4\\run-FiPO1w",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:03:12.268Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "logs-10",
+      "family": "logs",
+      "started": "2026-09-16T15:03:14.168Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\logs-10\\run-MohIvB",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:04:11.369Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-7",
+      "family": "json",
+      "started": "2026-09-16T15:04:13.255Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-7\\run-QszxeP",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:04:57.491Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-6",
+      "family": "numeric",
+      "started": "2026-09-16T15:04:59.397Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-6\\run-YclRbL",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:05:42.558Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "code-5",
+      "family": "code",
+      "started": "2026-09-16T15:05:44.481Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\code-5\\run-UdX5jz",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:06:42.597Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-6",
+      "family": "tiny",
+      "started": "2026-09-16T15:06:44.613Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-6\\run-mh3or5",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:07:27.655Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-4",
+      "family": "json",
+      "started": "2026-09-16T15:07:29.602Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-4\\run-nMfl6S",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:08:12.852Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-5",
+      "family": "json",
+      "started": "2026-09-16T15:08:14.947Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-5\\run-pwl0O3",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:08:59.634Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-10",
+      "family": "outer",
+      "started": "2026-09-16T15:09:01.773Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-10\\run-kWZcZd",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:10:41.352Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-6",
+      "family": "json",
+      "started": "2026-09-16T15:10:43.176Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-6\\run-U3piaE",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:11:27.727Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "mixed-6",
+      "family": "mixed",
+      "started": "2026-09-16T15:11:29.538Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\mixed-6\\run-AVJWos",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:13:24.994Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refactor-8",
+      "family": "refactor",
+      "started": "2026-09-16T15:13:27.190Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refactor-8\\run-qHtMkt",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:15:46.703Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-10",
+      "family": "refresh",
+      "started": "2026-09-16T15:15:48.747Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-10\\run-1vT7DF",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:17:08.476Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "outer-2",
+      "family": "outer",
+      "started": "2026-09-16T15:17:10.562Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\outer-2\\run-Ta64uW",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:18:58.112Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-10",
+      "family": "json",
+      "started": "2026-09-16T15:19:00.145Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-10\\run-mPt1OW",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:19:47.614Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-8",
+      "family": "tiny",
+      "started": "2026-09-16T15:19:49.678Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-8\\run-h4grTy",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:20:32.158Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "json-9",
+      "family": "json",
+      "started": "2026-09-16T15:20:34.235Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\json-9\\run-FC7KgA",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:21:16.891Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "tiny-1",
+      "family": "tiny",
+      "started": "2026-09-16T15:21:18.981Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\tiny-1\\run-Ci2ulE",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:22:01.805Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "numeric-5",
+      "family": "numeric",
+      "started": "2026-09-16T15:22:03.831Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\numeric-5\\run-pmZ7Fq",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:22:47.270Z",
+      "infrastructureFailure": false
+    },
+    {
+      "id": "refresh-8",
+      "family": "refresh",
+      "started": "2026-09-16T15:22:49.379Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-hPlQi7\\refresh-8\\run-QOgYJF",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-16T15:24:31.747Z",
+      "infrastructureFailure": false
+    }
+  ],
+  "continuation": null,
+  "status": "complete",
+  "finished": "2026-09-16T15:24:32.792Z"
+}

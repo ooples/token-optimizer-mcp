@@ -1,0 +1,50 @@
+{
+  "liveProductCommit": "3faf2289",
+  "allAuditsPass": true,
+  "arms": {
+    "proxy": {
+      "attempts": 4,
+      "input": 175418,
+      "cached": 145792,
+      "output": 772,
+      "requests": 12,
+      "agentSeconds": 57.1,
+      "seconds": 60.8,
+      "estimatedUsd": 0.48065199999999997,
+      "firstRequestColdSensitivityUsd": 0.817036,
+      "allInputUncachedSensitivityUsd": 1.79278
+    },
+    "headroom": {
+      "attempts": 4,
+      "input": 317697,
+      "cached": 253696,
+      "output": 1403,
+      "requests": 20,
+      "agentSeconds": 116.70000000000002,
+      "seconds": 162,
+      "estimatedUsd": 0.9638559999999999,
+      "firstRequestColdSensitivityUsd": 1.129744,
+      "allInputUncachedSensitivityUsd": 3.24712
+    }
+  },
+  "reductions": {
+    "input": 0.44784495919067535,
+    "output": 0.4497505345687812,
+    "requests": 0.4,
+    "agentSeconds": 0.5107112253641817,
+    "seconds": 0.6246913580246913,
+    "estimatedUsd": 0.5013238492056904,
+    "firstRequestColdSensitivityUsd": 0.2767954510048295,
+    "allInputUncachedSensitivityUsd": 0.44788612678311857
+  },
+  "proxyCostWins": 4,
+  "allocationCleanup": {
+    "byteIdenticalCapturedOutputs": 48,
+    "currentSearchSha256": "a7cb9af589f4deca0839f660207b162fb8d6c4a7238473cbdd77aa25b62bd381"
+  },
+  "limitations": [
+    "Four balanced development pairs on controlled code-search lookups, not broad confirmation.",
+    "The first-request and all-input-uncached sensitivities keep observed behavior fixed; they are not measured cold-cache cohorts.",
+    "Provider/cache conditions and seeds differ from previous runs; no live causal before/after attribution."
+  ]
+}

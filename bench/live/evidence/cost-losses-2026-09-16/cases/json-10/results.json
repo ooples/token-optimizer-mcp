@@ -1,0 +1,142 @@
+[
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 955782253,
+    "verdict": "PASS",
+    "agentSeconds": 12.2,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 40168,
+      "cached": 31360,
+      "output": 173
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 296408,
+    "afterBytes": 194930,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13047,
+          "output_tokens": 77,
+          "cached_input_tokens": 5120
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13499,
+          "output_tokens": 65,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13622,
+          "output_tokens": 31,
+          "cached_input_tokens": 13312
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-372d79d4-69",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 13.1
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 955782253,
+    "verdict": "PASS",
+    "agentSeconds": 14.8,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 49127,
+      "cached": 30592,
+      "output": 186
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 296454,
+    "afterBytes": 296454,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12964,
+          "output_tokens": 74,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18014,
+          "output_tokens": 79,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18149,
+          "output_tokens": 33,
+          "cached_input_tokens": 17792
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-372d79d4-69",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 26.2
+  }
+]

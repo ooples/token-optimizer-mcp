@@ -1,0 +1,409 @@
+{
+  "complete": false,
+  "issues": [
+    "Execution is incomplete",
+    "Unexpected execution count",
+    "json-4/proxy: INVALID_READ",
+    "json-4/headroom: INVALID_READ",
+    "code-9: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-9\\\\results.json'",
+    "logs-6: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\logs-6\\\\results.json'",
+    "bugfix-7: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\bugfix-7\\\\results.json'",
+    "json-6: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\json-6\\\\results.json'",
+    "bugfix-6: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\bugfix-6\\\\results.json'",
+    "mixed-2: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\mixed-2\\\\results.json'",
+    "refactor-1: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refactor-1\\\\results.json'",
+    "json-1: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\json-1\\\\results.json'",
+    "json-7: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\json-7\\\\results.json'",
+    "code-7: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-7\\\\results.json'",
+    "refresh-3: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refresh-3\\\\results.json'",
+    "code-4: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-4\\\\results.json'",
+    "mixed-3: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\mixed-3\\\\results.json'",
+    "refresh-2: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refresh-2\\\\results.json'",
+    "mixed-10: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\mixed-10\\\\results.json'",
+    "mixed-1: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\mixed-1\\\\results.json'",
+    "refactor-6: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refactor-6\\\\results.json'",
+    "logs-1: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\logs-1\\\\results.json'",
+    "code-6: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-6\\\\results.json'",
+    "refactor-3: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refactor-3\\\\results.json'",
+    "logs-2: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\logs-2\\\\results.json'",
+    "refactor-4: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refactor-4\\\\results.json'",
+    "code-8: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-8\\\\results.json'",
+    "logs-5: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\logs-5\\\\results.json'",
+    "logs-9: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\logs-9\\\\results.json'",
+    "json-10: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\json-10\\\\results.json'",
+    "logs-4: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\logs-4\\\\results.json'",
+    "refresh-10: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refresh-10\\\\results.json'",
+    "bugfix-4: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\bugfix-4\\\\results.json'",
+    "code-1: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-1\\\\results.json'",
+    "refresh-1: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refresh-1\\\\results.json'",
+    "refresh-6: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refresh-6\\\\results.json'",
+    "refresh-9: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refresh-9\\\\results.json'",
+    "json-2: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\json-2\\\\results.json'",
+    "bugfix-2: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\bugfix-2\\\\results.json'",
+    "json-8: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\json-8\\\\results.json'",
+    "mixed-5: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\mixed-5\\\\results.json'",
+    "json-9: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\json-9\\\\results.json'",
+    "mixed-6: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\mixed-6\\\\results.json'",
+    "mixed-9: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\mixed-9\\\\results.json'",
+    "code-3: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-3\\\\results.json'",
+    "bugfix-10: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\bugfix-10\\\\results.json'",
+    "refactor-8: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refactor-8\\\\results.json'",
+    "refactor-10: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refactor-10\\\\results.json'",
+    "refresh-7: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refresh-7\\\\results.json'",
+    "refactor-2: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refactor-2\\\\results.json'",
+    "mixed-7: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\mixed-7\\\\results.json'",
+    "json-5: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\json-5\\\\results.json'",
+    "json-3: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\json-3\\\\results.json'",
+    "logs-3: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\logs-3\\\\results.json'",
+    "bugfix-3: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\bugfix-3\\\\results.json'",
+    "mixed-4: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\mixed-4\\\\results.json'",
+    "refresh-4: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refresh-4\\\\results.json'",
+    "refactor-7: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refactor-7\\\\results.json'",
+    "bugfix-8: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\bugfix-8\\\\results.json'",
+    "code-2: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-2\\\\results.json'",
+    "code-10: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-10\\\\results.json'",
+    "bugfix-5: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\bugfix-5\\\\results.json'",
+    "bugfix-1: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\bugfix-1\\\\results.json'",
+    "refresh-8: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\refresh-8\\\\results.json'",
+    "code-5: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-5\\\\results.json'"
+  ],
+  "pairsMeasured": 9,
+  "pairsPlanned": 70,
+  "proxyPasses": 8,
+  "headroomPasses": 8,
+  "zeroFailureOneSided95SuccessLowerBound": null,
+  "pairs": [
+    {
+      "id": "logs-8",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.359962,
+          "firstRequestColdSensitivityUsd": 0.359962,
+          "input": 100741,
+          "cached": 73472,
+          "output": 276,
+          "firstInput": 12810,
+          "firstCached": 0,
+          "continuationInput": 87931,
+          "continuationCached": 73472,
+          "requests": 5,
+          "agentSeconds": 21.8,
+          "seconds": 39.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.131832,
+          "firstRequestColdSensitivityUsd": 0.21477600000000002,
+          "input": 47409,
+          "cached": 38912,
+          "output": 159,
+          "firstInput": 12893,
+          "firstCached": 9216,
+          "continuationInput": 34516,
+          "continuationCached": 29696,
+          "requests": 3,
+          "agentSeconds": 12,
+          "seconds": 13
+        }
+      }
+    },
+    {
+      "id": "refresh-5",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.277146,
+          "firstRequestColdSensitivityUsd": 0.36009,
+          "input": 129518,
+          "cached": 117376,
+          "output": 767,
+          "firstInput": 12896,
+          "firstCached": 9216,
+          "continuationInput": 116622,
+          "continuationCached": 108160,
+          "requests": 7,
+          "agentSeconds": 39.5,
+          "seconds": 40.5
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.324546,
+          "firstRequestColdSensitivityUsd": 0.324546,
+          "input": 135211,
+          "cached": 119296,
+          "output": 922,
+          "firstInput": 12813,
+          "firstCached": 0,
+          "continuationInput": 122398,
+          "continuationCached": 119296,
+          "requests": 10,
+          "agentSeconds": 50.7,
+          "seconds": 61.5
+        }
+      }
+    },
+    {
+      "id": "logs-10",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.124772,
+          "firstRequestColdSensitivityUsd": 0.207716,
+          "input": 46137,
+          "cached": 38272,
+          "output": 157,
+          "firstInput": 12896,
+          "firstCached": 9216,
+          "continuationInput": 33241,
+          "continuationCached": 29056,
+          "requests": 3,
+          "agentSeconds": 14.3,
+          "seconds": 15.3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.171438,
+          "firstRequestColdSensitivityUsd": 0.254382,
+          "input": 74376,
+          "cached": 65408,
+          "output": 327,
+          "firstInput": 12813,
+          "firstCached": 9216,
+          "continuationInput": 61563,
+          "continuationCached": 56192,
+          "requests": 5,
+          "agentSeconds": 21.1,
+          "seconds": 34.3
+        }
+      }
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.340186,
+          "firstRequestColdSensitivityUsd": 0.340186,
+          "input": 138219,
+          "cached": 121856,
+          "output": 1094,
+          "firstInput": 12774,
+          "firstCached": 0,
+          "continuationInput": 125445,
+          "continuationCached": 121856,
+          "requests": 10,
+          "agentSeconds": 61.8,
+          "seconds": 79.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.204112,
+          "firstRequestColdSensitivityUsd": 0.287056,
+          "input": 74027,
+          "cached": 64512,
+          "output": 889,
+          "firstInput": 12857,
+          "firstCached": 9216,
+          "continuationInput": 61170,
+          "continuationCached": 55296,
+          "requests": 5,
+          "agentSeconds": 37.8,
+          "seconds": 39
+        }
+      }
+    },
+    {
+      "id": "refactor-9",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.16516,
+          "firstRequestColdSensitivityUsd": 0.248104,
+          "input": 55017,
+          "cached": 48640,
+          "output": 1055,
+          "firstInput": 12851,
+          "firstCached": 9216,
+          "continuationInput": 42166,
+          "continuationCached": 39424,
+          "requests": 4,
+          "agentSeconds": 41.6,
+          "seconds": 42.8
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.361438,
+          "firstRequestColdSensitivityUsd": 0.361438,
+          "input": 125445,
+          "cached": 106368,
+          "output": 1286,
+          "firstInput": 12768,
+          "firstCached": 0,
+          "continuationInput": 112677,
+          "continuationCached": 106368,
+          "requests": 8,
+          "agentSeconds": 64.8,
+          "seconds": 83
+        }
+      }
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.702456,
+          "firstRequestColdSensitivityUsd": 0.702456,
+          "input": 212406,
+          "cached": 163456,
+          "output": 990,
+          "firstInput": 12861,
+          "firstCached": 0,
+          "continuationInput": 199545,
+          "continuationCached": 163456,
+          "requests": 10,
+          "agentSeconds": 53.1,
+          "seconds": 65.8
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.167654,
+          "firstRequestColdSensitivityUsd": 0.250598,
+          "input": 81939,
+          "cached": 75904,
+          "output": 628,
+          "firstInput": 12944,
+          "firstCached": 9216,
+          "continuationInput": 68995,
+          "continuationCached": 66688,
+          "requests": 6,
+          "agentSeconds": 33.1,
+          "seconds": 34
+        }
+      }
+    },
+    {
+      "id": "logs-7",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.213586,
+          "firstRequestColdSensitivityUsd": 0.213586,
+          "input": 47340,
+          "cached": 29696,
+          "output": 149,
+          "firstInput": 12896,
+          "firstCached": 0,
+          "continuationInput": 34444,
+          "continuationCached": 29696,
+          "requests": 3,
+          "agentSeconds": 13.4,
+          "seconds": 14.3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.213924,
+          "firstRequestColdSensitivityUsd": 0.296868,
+          "input": 75539,
+          "cached": 61824,
+          "output": 299,
+          "firstInput": 12813,
+          "firstCached": 9216,
+          "continuationInput": 62726,
+          "continuationCached": 52608,
+          "requests": 5,
+          "agentSeconds": 22,
+          "seconds": 34.9
+        }
+      }
+    },
+    {
+      "id": "json-4",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "INVALID_READ",
+          "estimatedUsd": 0.284638,
+          "firstRequestColdSensitivityUsd": 0.367582,
+          "input": 96184,
+          "cached": 76928,
+          "output": 303,
+          "firstInput": 12893,
+          "firstCached": 9216,
+          "continuationInput": 83291,
+          "continuationCached": 67712,
+          "requests": 4,
+          "agentSeconds": 22.7,
+          "seconds": 23.7
+        },
+        "headroom": {
+          "verdict": "INVALID_READ",
+          "estimatedUsd": 0.370016,
+          "firstRequestColdSensitivityUsd": 0.370016,
+          "input": 102673,
+          "cached": 74496,
+          "output": 275,
+          "firstInput": 12810,
+          "firstCached": 0,
+          "continuationInput": 89863,
+          "continuationCached": 74496,
+          "requests": 5,
+          "agentSeconds": 23.2,
+          "seconds": 35.5
+        }
+      }
+    },
+    {
+      "id": "refactor-5",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.16243,
+          "firstRequestColdSensitivityUsd": 0.24537399999999998,
+          "input": 54964,
+          "cached": 48640,
+          "output": 1011,
+          "firstInput": 12857,
+          "firstCached": 9216,
+          "continuationInput": 42107,
+          "continuationCached": 39424,
+          "requests": 4,
+          "agentSeconds": 43.9,
+          "seconds": 45.1
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.48514,
+          "firstRequestColdSensitivityUsd": 0.48514,
+          "input": 185819,
+          "cached": 160000,
+          "output": 1339,
+          "firstInput": 12774,
+          "firstCached": 0,
+          "continuationInput": 173045,
+          "continuationCached": 160000,
+          "requests": 9,
+          "agentSeconds": 68.9,
+          "seconds": 80.2
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Generated synthetic cases held out from product tuning; not independent real-world repositories.",
+    "Provider cache state is observed, not experimentally flushed. Fresh sessions may start warm.",
+    "Intervals assume independent case pairs within the sampled workload distribution; shared provider state can introduce dependence.",
+    "BCa intervals are approximate, and the study cannot establish superiority outside this model, rate scenario, or suite.",
+    "First-request cold sensitivity holds model behavior and subsequent usage fixed; it is not a cold-session experiment."
+  ],
+  "superiorityEstablished": false
+}

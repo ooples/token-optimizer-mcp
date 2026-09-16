@@ -1,0 +1,164 @@
+[
+  {
+    "task": "code",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 335770031,
+    "verdict": "PASS",
+    "agentSeconds": 14.8,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 45407,
+      "cached": 38144,
+      "output": 184
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 233509,
+    "afterBytes": 214703,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13008,
+          "output_tokens": 78,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16127,
+          "output_tokens": 87,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16272,
+          "output_tokens": 19,
+          "cached_input_tokens": 16000
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-bc7950f4.ts",
+      "line": 209,
+      "constant": "RETRY_LIMIT_BC7950F4",
+      "value": 15
+    },
+    "seconds": 15.7
+  },
+  {
+    "task": "code",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 335770031,
+    "verdict": "PASS",
+    "agentSeconds": 27.7,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 5
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 74564,
+      "cached": 62080,
+      "output": 369
+    },
+    "requests": 5,
+    "compressedRequests": 0,
+    "beforeBytes": 578362,
+    "afterBytes": 578362,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12925,
+          "output_tokens": 78,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13077,
+          "output_tokens": 54,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13782,
+          "output_tokens": 106,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 17318,
+          "output_tokens": 88,
+          "cached_input_tokens": 13568
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 17462,
+          "output_tokens": 43,
+          "cached_input_tokens": 17152
+        }
+      }
+    ],
+    "answer": {
+      "file": "src/queue-bc7950f4.ts",
+      "line": 209,
+      "constant": "RETRY_LIMIT_BC7950F4",
+      "value": 15
+    },
+    "seconds": 40.1
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "task": "bugfix",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "FAIL",
+    "verdict": "FAIL",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": [
+      "unexpected status 503 Service Unavailable: upstream connect error or disconnect/reset before headers. retried and the latest reset reason: connection timeout, url: http://127.0.0.1:58283/backend-api/codex/responses, cf-ray: a3bce2307f844b49-BOS"
+    ]
+  },
+  {
+    "task": "bugfix",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  }
+]

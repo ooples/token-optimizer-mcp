@@ -1,0 +1,10 @@
+{
+  "unchanged": true,
+  "files": [
+    "dist/compress/json-fragments.js",
+    "dist/proxy/responses.js",
+    "dist/proxy/server.js",
+    "bench/live/codex.mjs",
+    "bench/live/loss-followup.mjs"
+  ]
+}

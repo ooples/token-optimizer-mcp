@@ -1,0 +1,86 @@
+{
+  "scope": "Local replay of captured inputs; placeholder recovery path; not captured forwarded wire bytes.",
+  "raw": "C:/Users/yolan/AppData/Local/Temp/codex-responses-dedup-2026-09-16/repeat/run-yqI6GZ",
+  "requests": [
+    {
+      "attempt": "json-1-proxy",
+      "request": 1,
+      "references": 0,
+      "historicalPrefixStable": true,
+      "beforeBytes": 63406,
+      "afterBytes": 63377
+    },
+    {
+      "attempt": "json-1-proxy",
+      "request": 2,
+      "references": 0,
+      "historicalPrefixStable": true,
+      "beforeBytes": 114261,
+      "afterBytes": 65829
+    },
+    {
+      "attempt": "json-1-proxy",
+      "request": 3,
+      "references": 0,
+      "historicalPrefixStable": true,
+      "beforeBytes": 164829,
+      "afterBytes": 67999
+    },
+    {
+      "attempt": "json-1-proxy",
+      "request": 4,
+      "references": 0,
+      "historicalPrefixStable": true,
+      "beforeBytes": 215397,
+      "afterBytes": 70169
+    },
+    {
+      "attempt": "json-1-proxy",
+      "request": 5,
+      "references": 0,
+      "historicalPrefixStable": true,
+      "beforeBytes": 216221,
+      "afterBytes": 70993
+    },
+    {
+      "attempt": "json-2-proxy",
+      "request": 1,
+      "references": 0,
+      "historicalPrefixStable": true,
+      "beforeBytes": 63406,
+      "afterBytes": 63377
+    },
+    {
+      "attempt": "json-2-proxy",
+      "request": 2,
+      "references": 0,
+      "historicalPrefixStable": true,
+      "beforeBytes": 106574,
+      "afterBytes": 65822
+    },
+    {
+      "attempt": "json-2-proxy",
+      "request": 3,
+      "references": 0,
+      "historicalPrefixStable": true,
+      "beforeBytes": 149464,
+      "afterBytes": 67994
+    },
+    {
+      "attempt": "json-2-proxy",
+      "request": 4,
+      "references": 0,
+      "historicalPrefixStable": true,
+      "beforeBytes": 192354,
+      "afterBytes": 70166
+    },
+    {
+      "attempt": "json-2-proxy",
+      "request": 5,
+      "references": 0,
+      "historicalPrefixStable": true,
+      "beforeBytes": 193179,
+      "afterBytes": 70991
+    }
+  ]
+}

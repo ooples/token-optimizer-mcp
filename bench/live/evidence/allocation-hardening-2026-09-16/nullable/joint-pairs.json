@@ -1,0 +1,44 @@
+{
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-memory-followup-2026-09-16\\nullable\\run-TE4l0k",
+  "scope": "Development cases, no confidence-backed confirmation claim.",
+  "pairs": [
+    {
+      "task": "nullable",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.088506,
+          "agentSeconds": 13.2,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.192392,
+          "agentSeconds": 21.4,
+          "requests": 3
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "task": "nullable",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.208172,
+          "agentSeconds": 16.4,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.201922,
+          "agentSeconds": 16.5,
+          "requests": 3
+        }
+      },
+      "classification": "cost-loss"
+    }
+  ]
+}

@@ -122,7 +122,8 @@ describe('relevance through the engines', () => {
    * Rows that are all the same shape, with one that answers a question.
    *
    * Shape-identical on purpose: `anomalousRows` cannot rescue this one, so
-   * survival is attributable to relevance and nothing else.
+   * survival is attributable to relevance and nothing else. Distinct titles
+   * also exclude the separate low-cardinality rare-category retention rule.
    */
   const rows = (): string =>
     JSON.stringify(
@@ -132,7 +133,7 @@ describe('relevance through the engines', () => {
         title:
           i === 47
             ? 'connection pool exhausted in the retry helper'
-            : 'A reasonably long result title for bulk',
+            : `A reasonably long result title for bulk ${i}`,
         metadata: { author: 'Someone', category: 'technical' },
       }))
     );

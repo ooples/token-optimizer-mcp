@@ -1,0 +1,58 @@
+{
+  "scope": "Observed rate-card arithmetic, not causal cache attribution. Local tokenizer replay is not billed provider usage.",
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-memory-followup-2026-09-16\\nullable\\run-TE4l0k",
+  "task": "nullable",
+  "rep": 2,
+  "seed": 2494523015,
+  "usage": {
+    "proxy": {
+      "input": 40082,
+      "cached": 22272,
+      "output": 156
+    },
+    "headroom": {
+      "input": 44086,
+      "cached": 28032,
+      "output": 267
+    }
+  },
+  "contributions": {
+    "inputAtUncachedRate": -0.04004,
+    "cacheDiscount": 0.05184,
+    "output": -0.00555
+  },
+  "estimatedUsdGap": 0.006249999999999998,
+  "cacheKeysPreserved": true,
+  "historicalItemsStable": true,
+  "replays": [
+    {
+      "baselineBytes": 63227,
+      "candidateBytes": 62938
+    },
+    {
+      "baselineBytes": 64874,
+      "candidateBytes": 64585
+    },
+    {
+      "baselineBytes": 65585,
+      "candidateBytes": 65296
+    }
+  ],
+  "additionalToolsTokenEstimate": {
+    "encoding": "o200k_base",
+    "requests": [
+      {
+        "baseline": 6213,
+        "candidate": 6073
+      },
+      {
+        "baseline": 6213,
+        "candidate": 6073
+      },
+      {
+        "baseline": 6213,
+        "candidate": 6073
+      }
+    ]
+  }
+}

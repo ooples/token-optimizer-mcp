@@ -88,8 +88,36 @@ function isCheapToKeep(chars: number, floor: number): boolean {
  * So size is the signal. A small definition is cheap to keep and keeping it
  * guarantees no discovery round trip for the tools an agent actually lives in;
  * a large one has to earn its place by looking relevant to the task.
+ *
+ * AND THEN MEASUREMENT OVERTURNED THE FLOOR ITSELF, which is why it is 0.
+ * The argument above is per-TOOL and the cost it trades against is per-REQUEST.
+ * At 1,500 characters, 88 of 115 definitions in a real capture were exempt --
+ * about 55KB held in the cached prefix, in the region that is 66.9% of a
+ * request. Every individual exemption looked cheap and the sum was the largest
+ * thing this proxy declined to touch.
+ *
+ * Live A/B, four arms, sixteen runs, each arm holding each position in the run
+ * order exactly once so prefix-cache carryover cancels. Weighted input is the
+ * provider's own usage at 1.25x for cache writes and 0.1x for reads; the
+ * verdict is pytest re-run afterwards, never the agent's own report:
+ *
+ *   control (recorded, uncompressed)   134,706   4/4 pass
+ *   floor 1500 (the old default)       100,818   4/4 pass   -25%
+ *   floor 0    (this default)           49,053   4/4 pass   -64%
+ *   HeadRoom's shipped proxy            48,626   4/4 pass   -64%
+ *
+ * The discovery round trips the floor existed to prevent did not appear. The
+ * floor-0 arm was the FASTEST of the four (32s mean against 36-38s) and emitted
+ * the fewest output tokens (1,024 against control's 1,337) -- the opposite of
+ * an agent hunting for tools it cannot see.
+ *
+ * WHAT THAT DOES NOT SHOW: sixteen runs of one small Python task. It says the
+ * exemption costs more than it saves there, not that discovery can never bite.
+ * A task needing several specialised tools at once is the shape that would, and
+ * is not covered. `TOKEN_OPTIMIZER_PROXY_SMALL_TOOL_CHARS` restores any floor,
+ * 1500 included.
  */
-export const SMALL_TOOL_CHARS = 1500;
+export const SMALL_TOOL_CHARS = 0;
 
 /** How many non-core tools to keep loaded when a task hints at what it needs. */
 export const DEFAULT_KEEP_RELEVANT = 5;

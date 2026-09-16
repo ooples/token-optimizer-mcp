@@ -1,0 +1,142 @@
+[
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 472197432,
+    "verdict": "PASS",
+    "agentSeconds": 15.8,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 49905,
+      "cached": 40192,
+      "output": 187
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 306074,
+    "afterBytes": 306074,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12897,
+          "output_tokens": 77,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18437,
+          "output_tokens": 78,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18571,
+          "output_tokens": 32,
+          "cached_input_tokens": 18304
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-83bf2c69-79",
+      "status": "failed",
+      "reason": "quota_exceeded"
+    },
+    "seconds": 29.7
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 472197432,
+    "verdict": "PASS",
+    "agentSeconds": 15.1,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 39990,
+      "cached": 26112,
+      "output": 189
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 306045,
+    "afterBytes": 194193,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12980,
+          "output_tokens": 77,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13438,
+          "output_tokens": 78,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13572,
+          "output_tokens": 34,
+          "cached_input_tokens": 13312
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-83bf2c69-79",
+      "status": "failed",
+      "reason": "quota_exceeded"
+    },
+    "seconds": 16.3
+  }
+]

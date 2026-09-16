@@ -1,0 +1,30 @@
+[
+  {
+    "task": "refresh",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": false,
+      "truncated": true,
+      "requests": 6,
+      "outerTruncated": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": false,
+      "truncated": true,
+      "requests": 9,
+      "outerTruncated": true
+    },
+    "clientErrors": []
+  }
+]

@@ -1,0 +1,1082 @@
+{
+  "version": 1,
+  "created": "2026-09-15T22:35:14.160Z",
+  "productCommit": "62c0b678",
+  "caseSuite": "heldout-v1",
+  "model": "gpt-6-astra",
+  "families": [
+    "logs",
+    "json",
+    "code",
+    "bugfix",
+    "refactor",
+    "refresh",
+    "mixed"
+  ],
+  "pairs": 70,
+  "runs": 140,
+  "pairsPerFamily": 10,
+  "pilot": {
+    "pairs": 29,
+    "residualSd": 0.3249830860803345,
+    "planningSd": 0.5,
+    "costPairs": 67,
+    "sourcePolicy": "All comparable passing proxy/HeadRoom development pairs available before confirmation; mixed builds, excluded from final inference.",
+    "records": [
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-2026-09-15\\results.json",
+        "task": "json",
+        "rep": 1,
+        "logRatio": -0.14400032562005174
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-2026-09-15\\results.json",
+        "task": "json",
+        "rep": 2,
+        "logRatio": -0.8092055851938088
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-2026-09-15\\results.json",
+        "task": "json",
+        "rep": 3,
+        "logRatio": -0.13997326386084755
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\adversarial\\results.json",
+        "task": "refresh",
+        "rep": 1,
+        "logRatio": -0.6037163108645945
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\baseline\\results.json",
+        "task": "bugfix",
+        "rep": 1,
+        "logRatio": 0.07680038214180011
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\baseline\\results.json",
+        "task": "bugfix",
+        "rep": 2,
+        "logRatio": -0.22015422136543855
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\baseline\\results.json",
+        "task": "bugfix",
+        "rep": 3,
+        "logRatio": -0.3976813350371405
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\baseline\\results.json",
+        "task": "refactor",
+        "rep": 1,
+        "logRatio": -0.12336569655034911
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\baseline\\results.json",
+        "task": "refactor",
+        "rep": 2,
+        "logRatio": -0.15829555043643728
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\baseline\\results.json",
+        "task": "refactor",
+        "rep": 3,
+        "logRatio": -0.21703608561998217
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\baseline\\results.json",
+        "task": "refresh",
+        "rep": 1,
+        "logRatio": -0.034964338915301166
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\baseline\\results.json",
+        "task": "refresh",
+        "rep": 2,
+        "logRatio": -0.8031336866846569
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\baseline\\results.json",
+        "task": "refresh",
+        "rep": 3,
+        "logRatio": -0.2272786895216707
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\fresh-refresh\\results.json",
+        "task": "refresh",
+        "rep": 1,
+        "logRatio": -0.3962494138457378
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\fresh-refresh\\results.json",
+        "task": "refresh",
+        "rep": 2,
+        "logRatio": 0.27610975231391777
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\fresh-refresh\\results.json",
+        "task": "refresh",
+        "rep": 3,
+        "logRatio": -0.2734402980985522
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\fresh-variant-incomplete\\results.json",
+        "task": "refactor",
+        "rep": 1,
+        "logRatio": -0.5426817777235902
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\fresh-variant-incomplete\\results.json",
+        "task": "refresh",
+        "rep": 1,
+        "logRatio": 0.1459601509457195
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\iteration\\results.json",
+        "task": "bugfix",
+        "rep": 1,
+        "logRatio": -0.2031562740278875
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\iteration\\results.json",
+        "task": "refresh",
+        "rep": 1,
+        "logRatio": -0.09406301728735522
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\mixed-json\\results.json",
+        "task": "refresh",
+        "rep": 1,
+        "logRatio": -0.27180930206880594
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\mixed-json\\results.json",
+        "task": "refresh",
+        "rep": 2,
+        "logRatio": -0.5993857711911503
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\mixed-json-natural\\results.json",
+        "task": "refresh",
+        "rep": 1,
+        "logRatio": -0.5230093723861213
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\mixed-json-natural\\results.json",
+        "task": "refresh",
+        "rep": 2,
+        "logRatio": -0.3731658144420335
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\output-cache-live\\results.json",
+        "task": "refresh",
+        "rep": 1,
+        "logRatio": 0.585835831079659
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\output-cache-live\\results.json",
+        "task": "refresh",
+        "rep": 2,
+        "logRatio": 0.17958437846543762
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\rare-boolean\\results.json",
+        "task": "refresh",
+        "rep": 1,
+        "logRatio": -0.4797679617015077
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\rare-boolean\\results.json",
+        "task": "refresh",
+        "rep": 2,
+        "logRatio": -0.26788242915687843
+      },
+      {
+        "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-workflows-2026-09-15\\rare-boolean\\results.json",
+        "task": "refresh",
+        "rep": 3,
+        "logRatio": -0.38509259744134494
+      }
+    ]
+  },
+  "sizing": {
+    "targetRatio": 0.8,
+    "superiorityMargin": 0.95,
+    "alphaTwoSided": 0.05,
+    "approximatePower": 0.8,
+    "minimumPairs": 70,
+    "maximumPairs": 210,
+    "note": "Normal approximation on paired log costs is planning only. Family-balanced bootstrap and correctness gates decide the result."
+  },
+  "scenario": {
+    "model": "gpt-6-astra",
+    "label": "Codex Enterprise standard rate-card scenario; not actual billed cost",
+    "verifiedOn": "2026-09-15",
+    "source": "https://help.openai.com/en/articles/20001415",
+    "usdPerMillion": {
+      "uncached": 10,
+      "cached": 1,
+      "output": 50
+    },
+    "assumptions": [
+      "All runs use standard speed with no regional or contract adjustments.",
+      "Codex Astra has no cache-write charge or long-context multiplier.",
+      "Subscription charges, credits, proxy compute, and account discounts are not measured."
+    ]
+  },
+  "bootstrap": {
+    "resamples": 20000,
+    "seed": 9152026,
+    "method": "paired BCa bootstrap within each family; pairs remain intact; delete-one-pair jackknife acceleration"
+  },
+  "success": {
+    "bothCostUpper95Below": 0.95,
+    "allProxyTasksPass": true,
+    "minimumOneSided95SuccessBound": 0.95,
+    "allAttemptsAccounted": true,
+    "allLedgersReconcile": true,
+    "artifactsFrozen": true
+  },
+  "schedule": [
+    {
+      "id": "logs-8",
+      "family": "logs",
+      "task": "logs",
+      "seed": 390781697,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "ad82ddb9048cae174c3b1f892be10d6ba136d7670459b33d5af4979361e6d416"
+    },
+    {
+      "id": "refresh-5",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 497512639,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "c401f6820e4ddd555991e89cbb549bbce027fbdadb82d79031b9f540224ab704"
+    },
+    {
+      "id": "logs-10",
+      "family": "logs",
+      "task": "logs",
+      "seed": 614474336,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "ae1739082af0213287c720e61abb1bc39900bef3fc18b66dd8e343ba13239650"
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 689979521,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "8e10eda592e196db5394864b832d09752751df8c4bb59bf373d9a5c8452964a5"
+    },
+    {
+      "id": "refactor-9",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 906216375,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "1018aa7575df6f355395600f27eaa6433fdf1d8ff003a88541b7aa84e377385c"
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 978961093,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "426bd1c3d13ff65399901f97a0dc67399b0f5b10c5cd46ce17960857ffdeeace"
+    },
+    {
+      "id": "logs-7",
+      "family": "logs",
+      "task": "logs",
+      "seed": 84977342,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "612c60c2b61a2782e3c54ecc289d7e8cc2bef429060e202a40bc10c1eae3dc2c"
+    },
+    {
+      "id": "json-4",
+      "family": "json",
+      "task": "json",
+      "seed": 604203497,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "5776e2a79708a9c36ccbfb6ef65ca95723f44def283e2bf33048767e7ba382a6"
+    },
+    {
+      "id": "refactor-5",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 126345986,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "276b7d2591527f75512ec4a09d1c2144229567b6809782cc26789e37fa2f5f1c"
+    },
+    {
+      "id": "code-9",
+      "family": "code",
+      "task": "code",
+      "seed": 826894605,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "ffb2d6281af2f28fc038754d73bd866db1402d090ded838b7ec2c3c920bb4c4c"
+    },
+    {
+      "id": "logs-6",
+      "family": "logs",
+      "task": "logs",
+      "seed": 327533347,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "05a74dd1d9d9c9dd00a7ad9de3084df29c54cc11dce3bcb89a0115f4cc214c04"
+    },
+    {
+      "id": "bugfix-7",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 697238768,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "36136069fe2812f1caa40b95d38463aa5794160fdbcc8cddc72e436d9a07e872"
+    },
+    {
+      "id": "json-6",
+      "family": "json",
+      "task": "json",
+      "seed": 513325721,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "54c67aac68680bd3d41718e9038c131c984be580e3b9dff18b69f061a2bc035b"
+    },
+    {
+      "id": "bugfix-6",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 918157582,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "dc0a9e51dc8f67a17fd13e11295532042563aaf022e6bfeb2d700e710132aef8"
+    },
+    {
+      "id": "mixed-2",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 956272700,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "f543a9367d50b99a9df6a0d358fae58ba617f8af1b8d1fefb59ca3d0caaf64f4"
+    },
+    {
+      "id": "refactor-1",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 346909335,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "e927850cb3eae85b776558ecf43fb45be75bfe620d38a513ac8456024427272b"
+    },
+    {
+      "id": "json-1",
+      "family": "json",
+      "task": "json",
+      "seed": 795344138,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "f2156e227ccea92af74b2e2395b5d8427298533fb1afc4f58539f7d421902251"
+    },
+    {
+      "id": "json-7",
+      "family": "json",
+      "task": "json",
+      "seed": 8830607,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "7a753961cf5144bec9a48b598ab86cdd4d644e43e0713c56fb33fa941add9cf3"
+    },
+    {
+      "id": "code-7",
+      "family": "code",
+      "task": "code",
+      "seed": 156402999,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "ef7797a30454f9ada326dcb7ee412e14fde0060c4fbdbfd20866cb013bc6037f"
+    },
+    {
+      "id": "refresh-3",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 453338815,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "1731676d2270c2a417ed62f36830d9d85062c11631ccf629ec2e5396902b8dd3"
+    },
+    {
+      "id": "code-4",
+      "family": "code",
+      "task": "code",
+      "seed": 889003059,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "7b6fecf599d8f7a5b15090026984e2978273f2286c66748c276e61d47238070c"
+    },
+    {
+      "id": "mixed-3",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 988734798,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "fc9e07d522e62a9fd58183bbe34cb865ac471883ef793bea4fb37017642ad321"
+    },
+    {
+      "id": "refresh-2",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 256241271,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "60a224d3cf847009f963cf3c159ff32b58879c1ae678da244cdbe468703fd867"
+    },
+    {
+      "id": "mixed-10",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 280685073,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "287966fb4386e310f47dc66e803ac3f2f22d03527bca7d227b56c9dacd5dde70"
+    },
+    {
+      "id": "mixed-1",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 899218566,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "78fe7f97b78d24441bd6f2006cd078f98af39e25f0d6b8482b6c115555c0c6e6"
+    },
+    {
+      "id": "refactor-6",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 272764290,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "4e2aba545757ae67dcc5cbe2cf73a5ab7f4cae454fc99489ba477b86b80f521a"
+    },
+    {
+      "id": "logs-1",
+      "family": "logs",
+      "task": "logs",
+      "seed": 300728163,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "54f62b11d9af880d3662c2f32bfe48237eaa5300fd769cd7856eec979047b41e"
+    },
+    {
+      "id": "code-6",
+      "family": "code",
+      "task": "code",
+      "seed": 662540781,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "780d8a7353eaec11935211695acc87a9695ab8564954ae7b3666e86d6361bf52"
+    },
+    {
+      "id": "refactor-3",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 797225920,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "42cfaa8b38b7fe5576fc262a5a18369fc44a06cd51f2ee87a9b31545c1060e70"
+    },
+    {
+      "id": "logs-2",
+      "family": "logs",
+      "task": "logs",
+      "seed": 457861673,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "407e7867631ccfe4ec908b72ffe387ea164b350342da9e5e4e6b2cb043ddb4ea"
+    },
+    {
+      "id": "refactor-4",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 779414872,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "5d222e324a05e4666835cc5b25c1dfd303be1470c33140f3104f7e24572839e4"
+    },
+    {
+      "id": "code-8",
+      "family": "code",
+      "task": "code",
+      "seed": 156198584,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "a7701e69ffa02bdfd1fec010498fe214c83f87a0725fa62fdea9a0d19b1355d9"
+    },
+    {
+      "id": "logs-5",
+      "family": "logs",
+      "task": "logs",
+      "seed": 906156275,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "70b09c9e0d6653ea00a3099f7e730448d4a1091780247146747819604e69c79f"
+    },
+    {
+      "id": "logs-9",
+      "family": "logs",
+      "task": "logs",
+      "seed": 889109066,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "d37af237c4c15787e2ab609480521e0100efa7c019e0df9502af81dde58bafaf"
+    },
+    {
+      "id": "json-10",
+      "family": "json",
+      "task": "json",
+      "seed": 668485384,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "c6236d4017161e3e012adb9b73598ccd3fc896cc182aea8ce3b455f676e86a3b"
+    },
+    {
+      "id": "logs-4",
+      "family": "logs",
+      "task": "logs",
+      "seed": 417645047,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "aca990f3ff71746061c3cfdc174c20fee5a59ebeef1916a160887055849b4733"
+    },
+    {
+      "id": "refresh-10",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 860697541,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "9fbb05a3f2031b1c97ecd8b0dc8f17185ac3b5c1394768dde2974e27ef65d117"
+    },
+    {
+      "id": "bugfix-4",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 557712821,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "64189d0df9f44fccae548767e17a651d542eb9c92b6810917c433c07eef204b7"
+    },
+    {
+      "id": "code-1",
+      "family": "code",
+      "task": "code",
+      "seed": 862695889,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "3d3bc2d5a0015bc37dff1ea8fe891df6705e2a3bb29a53829780b506c14acfdc"
+    },
+    {
+      "id": "refresh-1",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 941219412,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "f7cf3efcef5c14e644bf1c2688b50fed72776077707104eafa534da67c8b3eea"
+    },
+    {
+      "id": "refresh-6",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 240220909,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "2f2a68789b212916220ba1f1f2ae3d4b9d365d531517a22eed3aa7ad679691ff"
+    },
+    {
+      "id": "refresh-9",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 658465128,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "532c4570e23d51215dd8a735b2e7bbe3fc309b524606420cae3cebe03c11b177"
+    },
+    {
+      "id": "json-2",
+      "family": "json",
+      "task": "json",
+      "seed": 410068177,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "ad4abf5832d848f378afd868e12eed284b305bec46fb242b1b421f9a4e8489e7"
+    },
+    {
+      "id": "bugfix-2",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 259317755,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "4e2836bd1d877467adea0107b8c360e98917acd816a96d97914c752ec2f4f0df"
+    },
+    {
+      "id": "json-8",
+      "family": "json",
+      "task": "json",
+      "seed": 848470929,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "80babea323201e2b904a371eb8c3036ec1ad66ff519cbe52a7d3a6890a23e174"
+    },
+    {
+      "id": "mixed-5",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 472697395,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "30531699188c4a4be49cb3503833e2386fd59dfeb219895f91dea4399e6cea71"
+    },
+    {
+      "id": "json-9",
+      "family": "json",
+      "task": "json",
+      "seed": 838952338,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "10940f627b5006855b18ce9a094720320993fa90e078b62949ad91759685ede9"
+    },
+    {
+      "id": "mixed-6",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 882393121,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "f7636bd865901616826e5c02663a1d5a41e0ad6ff5422150712a1b8d38145a78"
+    },
+    {
+      "id": "mixed-9",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 400388061,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "61fc7e7930811dc0b5a9e8c7e8a08ea35f8d1d60732f8e1f895e0436a5dbd1e3"
+    },
+    {
+      "id": "code-3",
+      "family": "code",
+      "task": "code",
+      "seed": 9570012,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "714ea3a4a353072b6e8ec9fdc433ed8e02671606cb433c27e79751838a9c957f"
+    },
+    {
+      "id": "bugfix-10",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 484286124,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "eaf594d3de85d380feacacc565b0f776d8f20b18614940d2061a61c72001a044"
+    },
+    {
+      "id": "refactor-8",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 379979680,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "a395ea57aab74a0ece99db5e4749a230229dc18f257ac3b2baa6cc5c31553a9a"
+    },
+    {
+      "id": "refactor-10",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 574303162,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "13a365bef811e3454f4698e97fd67611743cdd140e03ebd2206fe4bb8788dbb6"
+    },
+    {
+      "id": "refresh-7",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 483056784,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "dd68e758e953da78cbab8950f02f4031234c5ec5bdfb2f074322ea0efe603981"
+    },
+    {
+      "id": "refactor-2",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 969073664,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "e8486e3d9b1feac8883db003cf393eb3a0733e7947918d2ffbdc5b29dff9ade8"
+    },
+    {
+      "id": "mixed-7",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 382030273,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "7f05071b23964540f11ba76e7d903f02301a5c86d335bb0e1ecaa79310b5fc32"
+    },
+    {
+      "id": "json-5",
+      "family": "json",
+      "task": "json",
+      "seed": 544089217,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "a40036aaffe07e742c89722e7684089a78d8998a1521826d77f7e2af454b92b9"
+    },
+    {
+      "id": "json-3",
+      "family": "json",
+      "task": "json",
+      "seed": 677708348,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "45b070f8433b84c9e4f33406e43d88432e867bebb4f5a619bb0407b63493442b"
+    },
+    {
+      "id": "logs-3",
+      "family": "logs",
+      "task": "logs",
+      "seed": 992470534,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "ff9b2d31c84a32059a036520ac01e6a469b3b71fa272e3b08be529d5205b5139"
+    },
+    {
+      "id": "bugfix-3",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 339831816,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "64a507765edd15d747f52db635aaa6eb1587764d6efb3473a690757e6764eb5c"
+    },
+    {
+      "id": "mixed-4",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 130326030,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "21a93860877a3eb20ef5527fd2b072ad84220f7a0ad7e731da25d8743f1b2252"
+    },
+    {
+      "id": "refresh-4",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 427209211,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "02c4923826882c3e08fd05c84bde7f1f14e7f68b3a9847f919f704b20823ae84"
+    },
+    {
+      "id": "refactor-7",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 860740285,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "4c60b6496cf0d304949fd138adbb4a4bab049053c3c020537ff4bdc1db4e5195"
+    },
+    {
+      "id": "bugfix-8",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 703919671,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "e12093c9b6b2d5d23c6e634e5c388bf02bcb2831124e180c7b468a43dafcd340"
+    },
+    {
+      "id": "code-2",
+      "family": "code",
+      "task": "code",
+      "seed": 143836241,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "4376f807621ca10b5d3522e619c859a37b114a5ea2af65be8b87c30e483f62da"
+    },
+    {
+      "id": "code-10",
+      "family": "code",
+      "task": "code",
+      "seed": 331562123,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "5126de5849503bf26f49ebc45a0b7b066eb4b8b8eaeaa06446d36b6a7d7aec20"
+    },
+    {
+      "id": "bugfix-5",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 143427508,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "51aafe99b8398e4bfe1b856c8815312d1baef556802ef7e6e020356124accba7"
+    },
+    {
+      "id": "bugfix-1",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 911733074,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "986a3f5135eea1ec8fada2ff8971e6e48e3868613066ce1be85cdb8dead2441e"
+    },
+    {
+      "id": "refresh-8",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 372279036,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "c19daddead18cc9802232f8011cac348a6689f9afab09f8acb78e97d72e0a652"
+    },
+    {
+      "id": "code-5",
+      "family": "code",
+      "task": "code",
+      "seed": 626543578,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "021f118d145faca8baa4ee080b167ef9f503343a20328aad1a30224cc5e91c3f"
+    }
+  ]
+}

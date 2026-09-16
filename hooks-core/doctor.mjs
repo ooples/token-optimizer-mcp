@@ -898,7 +898,12 @@ function speakMcp(entry, timeoutMs) {
       if (readTools(stdout)) finish();
     });
     child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
-    child.on('exit', (code, signal) => finish({ code, signal }));
+    // close follows stdio drainage, so a startup error is not lost on exit.
+    child.on('close', (code, signal) => finish({ code, signal }));
+    // A server can exit before consuming the handshake. EPIPE is asynchronous;
+    // the close outcome and captured stderr, not an unhandled stdin error,
+    // must determine the diagnosis.
+    child.stdin.on('error', () => {});
 
     const send = (message) => {
       try { child.stdin.write(`${JSON.stringify(message)}\n`); } catch { /* exited */ }

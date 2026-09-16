@@ -1,0 +1,142 @@
+[
+  {
+    "task": "numeric",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2697584200,
+    "verdict": "PASS",
+    "agentSeconds": 15.7,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 45567,
+      "cached": 28800,
+      "output": 183
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 245785,
+    "afterBytes": 245785,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12967,
+          "output_tokens": 77,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16235,
+          "output_tokens": 75,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 16365,
+          "output_tokens": 31,
+          "cached_input_tokens": 16000
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-4ba52911-125",
+      "maximum": 665,
+      "minimum": -7
+    },
+    "seconds": 27.1
+  },
+  {
+    "task": "numeric",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 2697584200,
+    "verdict": "PASS",
+    "agentSeconds": 14.8,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 43653,
+      "cached": 37376,
+      "output": 188
+    },
+    "requests": 3,
+    "compressedRequests": 2,
+    "beforeBytes": 245784,
+    "afterBytes": 205872,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13050,
+          "output_tokens": 80,
+          "cached_input_tokens": 9344
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15236,
+          "output_tokens": 75,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 15367,
+          "output_tokens": 33,
+          "cached_input_tokens": 15104
+        }
+      }
+    ],
+    "answer": {
+      "id": "sensor-4ba52911-125",
+      "maximum": 665,
+      "minimum": -7
+    },
+    "seconds": 15.8
+  }
+]

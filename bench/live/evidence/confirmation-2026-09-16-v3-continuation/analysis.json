@@ -1,0 +1,5048 @@
+{
+  "complete": false,
+  "issues": [
+    "bugfix-10: Provider error or missing ledger"
+  ],
+  "pairsMeasured": 69,
+  "pairsPlanned": 70,
+  "proxyPasses": 69,
+  "headroomPasses": 70,
+  "zeroFailureOneSided95SuccessLowerBound": null,
+  "pairs": [
+    {
+      "id": "mixed-7",
+      "family": "mixed",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.149892,
+          "firstRequestColdSensitivityUsd": 0.233988,
+          "input": 68382,
+          "cached": 62592,
+          "output": 588,
+          "firstInput": 13038,
+          "firstCached": 9344,
+          "continuationInput": 55344,
+          "continuationCached": 53248,
+          "requests": 5,
+          "agentSeconds": 32.4,
+          "seconds": 33.4
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.24474,
+          "firstRequestColdSensitivityUsd": 0.29082,
+          "input": 109103,
+          "cached": 98560,
+          "output": 815,
+          "firstInput": 12955,
+          "firstCached": 5120,
+          "continuationInput": 96148,
+          "continuationCached": 93440,
+          "requests": 8,
+          "agentSeconds": 51.9,
+          "seconds": 64.7
+        }
+      }
+    },
+    {
+      "id": "refactor-9",
+      "family": "refactor",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.251714,
+          "firstRequestColdSensitivityUsd": 0.334658,
+          "input": 113813,
+          "cached": 103424,
+          "output": 888,
+          "firstInput": 12830,
+          "firstCached": 9216,
+          "continuationInput": 100983,
+          "continuationCached": 94208,
+          "requests": 7,
+          "agentSeconds": 52.1,
+          "seconds": 63.5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.163744,
+          "firstRequestColdSensitivityUsd": 0.24784,
+          "input": 55296,
+          "cached": 49024,
+          "output": 1040,
+          "firstInput": 12913,
+          "firstCached": 9344,
+          "continuationInput": 42383,
+          "continuationCached": 39680,
+          "requests": 4,
+          "agentSeconds": 48.8,
+          "seconds": 49.9
+        }
+      }
+    },
+    {
+      "id": "bugfix-7",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.398442,
+          "firstRequestColdSensitivityUsd": 0.48138600000000004,
+          "input": 188807,
+          "cached": 171392,
+          "output": 1058,
+          "firstInput": 12836,
+          "firstCached": 9216,
+          "continuationInput": 175971,
+          "continuationCached": 162176,
+          "requests": 9,
+          "agentSeconds": 61.3,
+          "seconds": 72.7
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.28159,
+          "firstRequestColdSensitivityUsd": 0.28159,
+          "input": 73170,
+          "cached": 55040,
+          "output": 905,
+          "firstInput": 12919,
+          "firstCached": 0,
+          "continuationInput": 60251,
+          "continuationCached": 55040,
+          "requests": 5,
+          "agentSeconds": 42.8,
+          "seconds": 43.9
+        }
+      }
+    },
+    {
+      "id": "mixed-6",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.407754,
+          "firstRequestColdSensitivityUsd": 0.407754,
+          "input": 162600,
+          "cached": 140544,
+          "output": 933,
+          "firstInput": 12958,
+          "firstCached": 0,
+          "continuationInput": 149642,
+          "continuationCached": 140544,
+          "requests": 10,
+          "agentSeconds": 70.6,
+          "seconds": 81.7
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.322474,
+          "firstRequestColdSensitivityUsd": 0.322474,
+          "input": 82295,
+          "cached": 59264,
+          "output": 658,
+          "firstInput": 13041,
+          "firstCached": 0,
+          "continuationInput": 69254,
+          "continuationCached": 59264,
+          "requests": 6,
+          "agentSeconds": 46.1,
+          "seconds": 47
+        }
+      }
+    },
+    {
+      "id": "logs-1",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.281908,
+          "firstRequestColdSensitivityUsd": 0.281908,
+          "input": 46925,
+          "cached": 21888,
+          "output": 193,
+          "firstInput": 12977,
+          "firstCached": 0,
+          "continuationInput": 33948,
+          "continuationCached": 21888,
+          "requests": 3,
+          "agentSeconds": 15.5,
+          "seconds": 16.5
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.13372,
+          "firstRequestColdSensitivityUsd": 0.21666400000000002,
+          "input": 67654,
+          "cached": 62080,
+          "output": 318,
+          "firstInput": 12894,
+          "firstCached": 9216,
+          "continuationInput": 54760,
+          "continuationCached": 52864,
+          "requests": 5,
+          "agentSeconds": 28.5,
+          "seconds": 39.3
+        }
+      }
+    },
+    {
+      "id": "mixed-1",
+      "family": "mixed",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.257174,
+          "firstRequestColdSensitivityUsd": 0.257174,
+          "input": 82297,
+          "cached": 66944,
+          "output": 734,
+          "firstInput": 13035,
+          "firstCached": 0,
+          "continuationInput": 69262,
+          "continuationCached": 66944,
+          "requests": 6,
+          "agentSeconds": 49,
+          "seconds": 50
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.40457,
+          "firstRequestColdSensitivityUsd": 0.487514,
+          "input": 195679,
+          "cached": 177280,
+          "output": 866,
+          "firstInput": 12952,
+          "firstCached": 9216,
+          "continuationInput": 182727,
+          "continuationCached": 168064,
+          "requests": 10,
+          "agentSeconds": 67.1,
+          "seconds": 78.2
+        }
+      }
+    },
+    {
+      "id": "refactor-4",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.197852,
+          "firstRequestColdSensitivityUsd": 0.243932,
+          "input": 55160,
+          "cached": 44672,
+          "output": 966,
+          "firstInput": 12913,
+          "firstCached": 5120,
+          "continuationInput": 42247,
+          "continuationCached": 39552,
+          "requests": 4,
+          "agentSeconds": 41.2,
+          "seconds": 42.4
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.418908,
+          "firstRequestColdSensitivityUsd": 0.464988,
+          "input": 130236,
+          "cached": 105728,
+          "output": 1362,
+          "firstInput": 12830,
+          "firstCached": 5120,
+          "continuationInput": 117406,
+          "continuationCached": 100608,
+          "requests": 9,
+          "agentSeconds": 74.7,
+          "seconds": 86.3
+        }
+      }
+    },
+    {
+      "id": "mixed-10",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.473786,
+          "firstRequestColdSensitivityUsd": 0.473786,
+          "input": 190426,
+          "cached": 164736,
+          "output": 1043,
+          "firstInput": 12952,
+          "firstCached": 0,
+          "continuationInput": 177474,
+          "continuationCached": 164736,
+          "requests": 9,
+          "agentSeconds": 58.3,
+          "seconds": 69.3
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.191972,
+          "firstRequestColdSensitivityUsd": 0.276068,
+          "input": 97950,
+          "cached": 91392,
+          "output": 700,
+          "firstInput": 13035,
+          "firstCached": 9344,
+          "continuationInput": 84915,
+          "continuationCached": 82048,
+          "requests": 7,
+          "agentSeconds": 78.5,
+          "seconds": 79.4
+        }
+      }
+    },
+    {
+      "id": "code-5",
+      "family": "code",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.369946,
+          "firstRequestColdSensitivityUsd": 0.369946,
+          "input": 74708,
+          "cached": 43776,
+          "output": 337,
+          "firstInput": 12901,
+          "firstCached": 0,
+          "continuationInput": 61807,
+          "continuationCached": 43776,
+          "requests": 5,
+          "agentSeconds": 23.4,
+          "seconds": 35
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.268774,
+          "firstRequestColdSensitivityUsd": 0.35287,
+          "input": 45792,
+          "cached": 22144,
+          "output": 203,
+          "firstInput": 12984,
+          "firstCached": 9344,
+          "continuationInput": 32808,
+          "continuationCached": 12800,
+          "requests": 3,
+          "agentSeconds": 18.7,
+          "seconds": 19.7
+        }
+      }
+    },
+    {
+      "id": "logs-2",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.16905,
+          "firstRequestColdSensitivityUsd": 0.251994,
+          "input": 73346,
+          "cached": 64640,
+          "output": 347,
+          "firstInput": 12897,
+          "firstCached": 9216,
+          "continuationInput": 60449,
+          "continuationCached": 55424,
+          "requests": 5,
+          "agentSeconds": 26.6,
+          "seconds": 38.5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.16519,
+          "firstRequestColdSensitivityUsd": 0.21127,
+          "input": 46673,
+          "cached": 34560,
+          "output": 190,
+          "firstInput": 12980,
+          "firstCached": 5120,
+          "continuationInput": 33693,
+          "continuationCached": 29440,
+          "requests": 3,
+          "agentSeconds": 12.9,
+          "seconds": 13.8
+        }
+      }
+    },
+    {
+      "id": "logs-3",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.212458,
+          "firstRequestColdSensitivityUsd": 0.212458,
+          "input": 46912,
+          "cached": 29568,
+          "output": 189,
+          "firstInput": 12983,
+          "firstCached": 0,
+          "continuationInput": 33929,
+          "continuationCached": 29568,
+          "requests": 3,
+          "agentSeconds": 17.9,
+          "seconds": 19
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.381994,
+          "firstRequestColdSensitivityUsd": 0.381994,
+          "input": 75367,
+          "cached": 43264,
+          "output": 354,
+          "firstInput": 12900,
+          "firstCached": 0,
+          "continuationInput": 62467,
+          "continuationCached": 43264,
+          "requests": 5,
+          "agentSeconds": 30.7,
+          "seconds": 46.8
+        }
+      }
+    },
+    {
+      "id": "bugfix-1",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.433776,
+          "firstRequestColdSensitivityUsd": 0.433776,
+          "input": 172422,
+          "cached": 150016,
+          "output": 1194,
+          "firstInput": 12836,
+          "firstCached": 0,
+          "continuationInput": 159586,
+          "continuationCached": 150016,
+          "requests": 10,
+          "agentSeconds": 68.6,
+          "seconds": 82.8
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.309408,
+          "firstRequestColdSensitivityUsd": 0.355488,
+          "input": 73663,
+          "cached": 52608,
+          "output": 925,
+          "firstInput": 12919,
+          "firstCached": 5120,
+          "continuationInput": 60744,
+          "continuationCached": 47488,
+          "requests": 5,
+          "agentSeconds": 50.5,
+          "seconds": 51.7
+        }
+      }
+    },
+    {
+      "id": "code-2",
+      "family": "code",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.121354,
+          "firstRequestColdSensitivityUsd": 0.20545000000000002,
+          "input": 45455,
+          "cached": 38144,
+          "output": 202,
+          "firstInput": 12981,
+          "firstCached": 9344,
+          "continuationInput": 32474,
+          "continuationCached": 28800,
+          "requests": 3,
+          "agentSeconds": 16.5,
+          "seconds": 17.4
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.207024,
+          "firstRequestColdSensitivityUsd": 0.289968,
+          "input": 81060,
+          "cached": 68864,
+          "output": 324,
+          "firstInput": 12898,
+          "firstCached": 9216,
+          "continuationInput": 68162,
+          "continuationCached": 59648,
+          "requests": 5,
+          "agentSeconds": 27.9,
+          "seconds": 39.2
+        }
+      }
+    },
+    {
+      "id": "json-2",
+      "family": "json",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.229056,
+          "firstRequestColdSensitivityUsd": 0.229056,
+          "input": 49884,
+          "cached": 30976,
+          "output": 180,
+          "firstInput": 12903,
+          "firstCached": 0,
+          "continuationInput": 36981,
+          "continuationCached": 30976,
+          "requests": 3,
+          "agentSeconds": 18.3,
+          "seconds": 29.5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.175802,
+          "firstRequestColdSensitivityUsd": 0.175802,
+          "input": 40031,
+          "cached": 26112,
+          "output": 210,
+          "firstInput": 12986,
+          "firstCached": 0,
+          "continuationInput": 27045,
+          "continuationCached": 26112,
+          "requests": 3,
+          "agentSeconds": 13,
+          "seconds": 13.9
+        }
+      }
+    },
+    {
+      "id": "refactor-1",
+      "family": "refactor",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.713548,
+          "firstRequestColdSensitivityUsd": 0.759628,
+          "input": 219203,
+          "cached": 174848,
+          "output": 1903,
+          "firstInput": 12827,
+          "firstCached": 5120,
+          "continuationInput": 206376,
+          "continuationCached": 169728,
+          "requests": 10,
+          "agentSeconds": 89.1,
+          "seconds": 100.7
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.244468,
+          "firstRequestColdSensitivityUsd": 0.244468,
+          "input": 55254,
+          "cached": 39808,
+          "output": 1004,
+          "firstInput": 12923,
+          "firstCached": 0,
+          "continuationInput": 42331,
+          "continuationCached": 39808,
+          "requests": 4,
+          "agentSeconds": 44.4,
+          "seconds": 45.5
+        }
+      }
+    },
+    {
+      "id": "mixed-4",
+      "family": "mixed",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.406308,
+          "firstRequestColdSensitivityUsd": 0.406308,
+          "input": 98057,
+          "cached": 67968,
+          "output": 749,
+          "firstInput": 13035,
+          "firstCached": 0,
+          "continuationInput": 85022,
+          "continuationCached": 67968,
+          "requests": 7,
+          "agentSeconds": 42,
+          "seconds": 42.9
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.250324,
+          "firstRequestColdSensitivityUsd": 0.296404,
+          "input": 111249,
+          "cached": 100224,
+          "output": 797,
+          "firstInput": 12952,
+          "firstCached": 5120,
+          "continuationInput": 98297,
+          "continuationCached": 95104,
+          "requests": 8,
+          "agentSeconds": 55.2,
+          "seconds": 66.5
+        }
+      }
+    },
+    {
+      "id": "logs-8",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.182892,
+          "firstRequestColdSensitivityUsd": 0.265836,
+          "input": 76353,
+          "cached": 66432,
+          "output": 345,
+          "firstInput": 12900,
+          "firstCached": 9216,
+          "continuationInput": 63453,
+          "continuationCached": 57216,
+          "requests": 5,
+          "agentSeconds": 31.7,
+          "seconds": 42.9
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.132486,
+          "firstRequestColdSensitivityUsd": 0.216582,
+          "input": 47705,
+          "cached": 39296,
+          "output": 182,
+          "firstInput": 12983,
+          "firstCached": 9344,
+          "continuationInput": 34722,
+          "continuationCached": 29952,
+          "requests": 3,
+          "agentSeconds": 13.4,
+          "seconds": 14.4
+        }
+      }
+    },
+    {
+      "id": "refactor-5",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.32787,
+          "firstRequestColdSensitivityUsd": 0.37395,
+          "input": 55270,
+          "cached": 30720,
+          "output": 1033,
+          "firstInput": 12910,
+          "firstCached": 5120,
+          "continuationInput": 42360,
+          "continuationCached": 25600,
+          "requests": 4,
+          "agentSeconds": 47.7,
+          "seconds": 48.9
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.33288,
+          "firstRequestColdSensitivityUsd": 0.33288,
+          "input": 113849,
+          "cached": 96640,
+          "output": 1283,
+          "firstInput": 12827,
+          "firstCached": 0,
+          "continuationInput": 101022,
+          "continuationCached": 96640,
+          "requests": 8,
+          "agentSeconds": 62.8,
+          "seconds": 74.6
+        }
+      }
+    },
+    {
+      "id": "json-10",
+      "family": "json",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.14168,
+          "firstRequestColdSensitivityUsd": 0.224624,
+          "input": 48945,
+          "cached": 39680,
+          "output": 187,
+          "firstInput": 12900,
+          "firstCached": 9216,
+          "continuationInput": 36045,
+          "continuationCached": 30464,
+          "requests": 3,
+          "agentSeconds": 17.6,
+          "seconds": 28.7
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.175752,
+          "firstRequestColdSensitivityUsd": 0.175752,
+          "input": 40021,
+          "cached": 26112,
+          "output": 211,
+          "firstInput": 12983,
+          "firstCached": 0,
+          "continuationInput": 27038,
+          "continuationCached": 26112,
+          "requests": 3,
+          "agentSeconds": 15.6,
+          "seconds": 16.5
+        }
+      }
+    },
+    {
+      "id": "code-6",
+      "family": "code",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.301,
+          "firstRequestColdSensitivityUsd": 0.383944,
+          "input": 98687,
+          "cached": 78080,
+          "output": 337,
+          "firstInput": 12899,
+          "firstCached": 9216,
+          "continuationInput": 85788,
+          "continuationCached": 68864,
+          "requests": 5,
+          "agentSeconds": 25.2,
+          "seconds": 36.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.11872,
+          "firstRequestColdSensitivityUsd": 0.202816,
+          "input": 44821,
+          "cached": 37760,
+          "output": 207,
+          "firstInput": 12982,
+          "firstCached": 9344,
+          "continuationInput": 31839,
+          "continuationCached": 28416,
+          "requests": 3,
+          "agentSeconds": 15.3,
+          "seconds": 16.3
+        }
+      }
+    },
+    {
+      "id": "refresh-8",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.152826,
+          "firstRequestColdSensitivityUsd": 0.236922,
+          "input": 67980,
+          "cached": 62336,
+          "output": 681,
+          "firstInput": 12955,
+          "firstCached": 9344,
+          "continuationInput": 55025,
+          "continuationCached": 52992,
+          "requests": 5,
+          "agentSeconds": 39.7,
+          "seconds": 41
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.363516,
+          "firstRequestColdSensitivityUsd": 0.44646,
+          "input": 177980,
+          "cached": 162176,
+          "output": 866,
+          "firstInput": 12872,
+          "firstCached": 9216,
+          "continuationInput": 165108,
+          "continuationCached": 152960,
+          "requests": 9,
+          "agentSeconds": 73.9,
+          "seconds": 85
+        }
+      }
+    },
+    {
+      "id": "json-9",
+      "family": "json",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.146672,
+          "firstRequestColdSensitivityUsd": 0.229616,
+          "input": 49905,
+          "cached": 40192,
+          "output": 187,
+          "firstInput": 12897,
+          "firstCached": 9216,
+          "continuationInput": 37008,
+          "continuationCached": 30976,
+          "requests": 3,
+          "agentSeconds": 15.8,
+          "seconds": 29.7
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.174342,
+          "firstRequestColdSensitivityUsd": 0.174342,
+          "input": 39990,
+          "cached": 26112,
+          "output": 189,
+          "firstInput": 12980,
+          "firstCached": 0,
+          "continuationInput": 27010,
+          "continuationCached": 26112,
+          "requests": 3,
+          "agentSeconds": 15.1,
+          "seconds": 16.3
+        }
+      }
+    },
+    {
+      "id": "refresh-10",
+      "family": "refresh",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.35968,
+          "firstRequestColdSensitivityUsd": 0.35968,
+          "input": 139109,
+          "cached": 119040,
+          "output": 799,
+          "firstInput": 12879,
+          "firstCached": 0,
+          "continuationInput": 126230,
+          "continuationCached": 119040,
+          "requests": 8,
+          "agentSeconds": 50.7,
+          "seconds": 65.1
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.258908,
+          "firstRequestColdSensitivityUsd": 0.34300400000000003,
+          "input": 120468,
+          "cached": 110208,
+          "output": 922,
+          "firstInput": 12949,
+          "firstCached": 9344,
+          "continuationInput": 107519,
+          "continuationCached": 100864,
+          "requests": 7,
+          "agentSeconds": 62,
+          "seconds": 62.9
+        }
+      }
+    },
+    {
+      "id": "json-8",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.175872,
+          "firstRequestColdSensitivityUsd": 0.175872,
+          "input": 40023,
+          "cached": 26112,
+          "output": 213,
+          "firstInput": 12986,
+          "firstCached": 0,
+          "continuationInput": 27037,
+          "continuationCached": 26112,
+          "requests": 3,
+          "agentSeconds": 14.9,
+          "seconds": 15.8
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.136066,
+          "firstRequestColdSensitivityUsd": 0.21900999999999998,
+          "input": 48098,
+          "cached": 39296,
+          "output": 175,
+          "firstInput": 12903,
+          "firstCached": 9216,
+          "continuationInput": 35195,
+          "continuationCached": 30080,
+          "requests": 3,
+          "agentSeconds": 14,
+          "seconds": 25.2
+        }
+      }
+    },
+    {
+      "id": "refactor-2",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.286164,
+          "firstRequestColdSensitivityUsd": 0.286164,
+          "input": 55186,
+          "cached": 34944,
+          "output": 976,
+          "firstInput": 12913,
+          "firstCached": 0,
+          "continuationInput": 42273,
+          "continuationCached": 34944,
+          "requests": 4,
+          "agentSeconds": 40.1,
+          "seconds": 41.4
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.388138,
+          "firstRequestColdSensitivityUsd": 0.388138,
+          "input": 133121,
+          "cached": 113408,
+          "output": 1552,
+          "firstInput": 12830,
+          "firstCached": 0,
+          "continuationInput": 120291,
+          "continuationCached": 113408,
+          "requests": 9,
+          "agentSeconds": 86.1,
+          "seconds": 98
+        }
+      }
+    },
+    {
+      "id": "code-1",
+      "family": "code",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.25517,
+          "firstRequestColdSensitivityUsd": 0.25517,
+          "input": 74530,
+          "cached": 56320,
+          "output": 335,
+          "firstInput": 12899,
+          "firstCached": 0,
+          "continuationInput": 61631,
+          "continuationCached": 56320,
+          "requests": 5,
+          "agentSeconds": 29.8,
+          "seconds": 40.9
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.205552,
+          "firstRequestColdSensitivityUsd": 0.205552,
+          "input": 45325,
+          "cached": 28672,
+          "output": 207,
+          "firstInput": 12982,
+          "firstCached": 0,
+          "continuationInput": 32343,
+          "continuationCached": 28672,
+          "requests": 3,
+          "agentSeconds": 19,
+          "seconds": 19.9
+        }
+      }
+    },
+    {
+      "id": "json-1",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.091696,
+          "firstRequestColdSensitivityUsd": 0.175792,
+          "input": 40005,
+          "cached": 35456,
+          "output": 215,
+          "firstInput": 12977,
+          "firstCached": 9344,
+          "continuationInput": 27028,
+          "continuationCached": 26112,
+          "requests": 3,
+          "agentSeconds": 13.7,
+          "seconds": 14.7
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.223774,
+          "firstRequestColdSensitivityUsd": 0.223774,
+          "input": 48885,
+          "cached": 30464,
+          "output": 182,
+          "firstInput": 12894,
+          "firstCached": 0,
+          "continuationInput": 35991,
+          "continuationCached": 30464,
+          "requests": 3,
+          "agentSeconds": 14.1,
+          "seconds": 25.4
+        }
+      }
+    },
+    {
+      "id": "mixed-9",
+      "family": "mixed",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.358918,
+          "firstRequestColdSensitivityUsd": 0.404998,
+          "input": 97490,
+          "cached": 72448,
+          "output": 721,
+          "firstInput": 13035,
+          "firstCached": 5120,
+          "continuationInput": 84455,
+          "continuationCached": 67328,
+          "requests": 7,
+          "agentSeconds": 45,
+          "seconds": 46
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.274288,
+          "firstRequestColdSensitivityUsd": 0.357232,
+          "input": 137993,
+          "cached": 127488,
+          "output": 835,
+          "firstInput": 12952,
+          "firstCached": 9216,
+          "continuationInput": 125041,
+          "continuationCached": 118272,
+          "requests": 9,
+          "agentSeconds": 55.8,
+          "seconds": 67.2
+        }
+      }
+    },
+    {
+      "id": "refactor-6",
+      "family": "refactor",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.47235,
+          "firstRequestColdSensitivityUsd": 0.47235,
+          "input": 159156,
+          "cached": 131840,
+          "output": 1347,
+          "firstInput": 12824,
+          "firstCached": 0,
+          "continuationInput": 146332,
+          "continuationCached": 131840,
+          "requests": 11,
+          "agentSeconds": 80.8,
+          "seconds": 96.1
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.246172,
+          "firstRequestColdSensitivityUsd": 0.246172,
+          "input": 55209,
+          "cached": 39552,
+          "output": 1001,
+          "firstInput": 12907,
+          "firstCached": 0,
+          "continuationInput": 42302,
+          "continuationCached": 39552,
+          "requests": 4,
+          "agentSeconds": 48.6,
+          "seconds": 49.8
+        }
+      }
+    },
+    {
+      "id": "refresh-2",
+      "family": "refresh",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.463548,
+          "firstRequestColdSensitivityUsd": 0.509628,
+          "input": 187988,
+          "cached": 162048,
+          "output": 842,
+          "firstInput": 12895,
+          "firstCached": 5120,
+          "continuationInput": 175093,
+          "continuationCached": 156928,
+          "requests": 7,
+          "agentSeconds": 48.2,
+          "seconds": 64.3
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.49764,
+          "firstRequestColdSensitivityUsd": 0.49764,
+          "input": 109323,
+          "cached": 69760,
+          "output": 645,
+          "firstInput": 12978,
+          "firstCached": 0,
+          "continuationInput": 96345,
+          "continuationCached": 69760,
+          "requests": 6,
+          "agentSeconds": 38.9,
+          "seconds": 39.8
+        }
+      }
+    },
+    {
+      "id": "code-8",
+      "family": "code",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.277584,
+          "firstRequestColdSensitivityUsd": 0.277584,
+          "input": 78960,
+          "cached": 58624,
+          "output": 312,
+          "firstInput": 12924,
+          "firstCached": 0,
+          "continuationInput": 66036,
+          "continuationCached": 58624,
+          "requests": 5,
+          "agentSeconds": 20.9,
+          "seconds": 35.1
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.199308,
+          "firstRequestColdSensitivityUsd": 0.199308,
+          "input": 44435,
+          "cached": 28288,
+          "output": 191,
+          "firstInput": 13007,
+          "firstCached": 0,
+          "continuationInput": 31428,
+          "continuationCached": 28288,
+          "requests": 3,
+          "agentSeconds": 17.9,
+          "seconds": 18.8
+        }
+      }
+    },
+    {
+      "id": "bugfix-5",
+      "family": "bugfix",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.28526,
+          "firstRequestColdSensitivityUsd": 0.28526,
+          "input": 74288,
+          "cached": 55680,
+          "output": 870,
+          "firstInput": 12945,
+          "firstCached": 0,
+          "continuationInput": 61343,
+          "continuationCached": 55680,
+          "requests": 5,
+          "agentSeconds": 41.3,
+          "seconds": 42.5
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.529422,
+          "firstRequestColdSensitivityUsd": 0.575502,
+          "input": 194899,
+          "cached": 164352,
+          "output": 1192,
+          "firstInput": 12862,
+          "firstCached": 5120,
+          "continuationInput": 182037,
+          "continuationCached": 159232,
+          "requests": 9,
+          "agentSeconds": 71.5,
+          "seconds": 83.1
+        }
+      }
+    },
+    {
+      "id": "refresh-9",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.258454,
+          "firstRequestColdSensitivityUsd": 0.258454,
+          "input": 82330,
+          "cached": 66944,
+          "output": 753,
+          "firstInput": 12984,
+          "firstCached": 0,
+          "continuationInput": 69346,
+          "continuationCached": 66944,
+          "requests": 6,
+          "agentSeconds": 40.3,
+          "seconds": 41.4
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.430506,
+          "firstRequestColdSensitivityUsd": 0.430506,
+          "input": 117556,
+          "cached": 86656,
+          "output": 697,
+          "firstInput": 12901,
+          "firstCached": 0,
+          "continuationInput": 104655,
+          "continuationCached": 86656,
+          "requests": 7,
+          "agentSeconds": 44.9,
+          "seconds": 55.7
+        }
+      }
+    },
+    {
+      "id": "refresh-4",
+      "family": "refresh",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.31429,
+          "firstRequestColdSensitivityUsd": 0.31429,
+          "input": 123812,
+          "cached": 107520,
+          "output": 877,
+          "firstInput": 12895,
+          "firstCached": 0,
+          "continuationInput": 110917,
+          "continuationCached": 107520,
+          "requests": 9,
+          "agentSeconds": 62.3,
+          "seconds": 73.1
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.252406,
+          "firstRequestColdSensitivityUsd": 0.252406,
+          "input": 82130,
+          "cached": 66816,
+          "output": 649,
+          "firstInput": 12978,
+          "firstCached": 0,
+          "continuationInput": 69152,
+          "continuationCached": 66816,
+          "requests": 6,
+          "agentSeconds": 39.1,
+          "seconds": 40
+        }
+      }
+    },
+    {
+      "id": "json-3",
+      "family": "json",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.133688,
+          "firstRequestColdSensitivityUsd": 0.216632,
+          "input": 47700,
+          "cached": 39168,
+          "output": 184,
+          "firstInput": 12923,
+          "firstCached": 9216,
+          "continuationInput": 34777,
+          "continuationCached": 29952,
+          "requests": 3,
+          "agentSeconds": 16.6,
+          "seconds": 27.7
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.090426,
+          "firstRequestColdSensitivityUsd": 0.174522,
+          "input": 40043,
+          "cached": 35456,
+          "output": 182,
+          "firstInput": 13006,
+          "firstCached": 9344,
+          "continuationInput": 27037,
+          "continuationCached": 26112,
+          "requests": 3,
+          "agentSeconds": 21.5,
+          "seconds": 22.4
+        }
+      }
+    },
+    {
+      "id": "code-7",
+      "family": "code",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.2402,
+          "firstRequestColdSensitivityUsd": 0.2402,
+          "input": 46130,
+          "cached": 25600,
+          "output": 186,
+          "firstInput": 13007,
+          "firstCached": 0,
+          "continuationInput": 33123,
+          "continuationCached": 25600,
+          "requests": 3,
+          "agentSeconds": 17.4,
+          "seconds": 18.3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.136064,
+          "firstRequestColdSensitivityUsd": 0.21900799999999998,
+          "input": 68114,
+          "cached": 62464,
+          "output": 342,
+          "firstInput": 12924,
+          "firstCached": 9216,
+          "continuationInput": 55190,
+          "continuationCached": 53248,
+          "requests": 5,
+          "agentSeconds": 43.9,
+          "seconds": 54.6
+        }
+      }
+    },
+    {
+      "id": "logs-9",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.285324,
+          "firstRequestColdSensitivityUsd": 0.285324,
+          "input": 80235,
+          "cached": 59264,
+          "output": 327,
+          "firstInput": 12926,
+          "firstCached": 0,
+          "continuationInput": 67309,
+          "continuationCached": 59264,
+          "requests": 5,
+          "agentSeconds": 25.4,
+          "seconds": 36.2
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.13198,
+          "firstRequestColdSensitivityUsd": 0.216076,
+          "input": 47359,
+          "cached": 39040,
+          "output": 195,
+          "firstInput": 13009,
+          "firstCached": 9344,
+          "continuationInput": 34350,
+          "continuationCached": 29696,
+          "requests": 3,
+          "agentSeconds": 14.9,
+          "seconds": 15.8
+        }
+      }
+    },
+    {
+      "id": "refresh-5",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.245678,
+          "firstRequestColdSensitivityUsd": 0.329774,
+          "input": 109506,
+          "cached": 98048,
+          "output": 661,
+          "firstInput": 12981,
+          "firstCached": 9344,
+          "continuationInput": 96525,
+          "continuationCached": 88704,
+          "requests": 6,
+          "agentSeconds": 38.8,
+          "seconds": 39.7
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.305136,
+          "firstRequestColdSensitivityUsd": 0.38808000000000004,
+          "input": 116818,
+          "cached": 98816,
+          "output": 526,
+          "firstInput": 12898,
+          "firstCached": 9216,
+          "continuationInput": 103920,
+          "continuationCached": 89600,
+          "requests": 7,
+          "agentSeconds": 42.6,
+          "seconds": 53.1
+        }
+      }
+    },
+    {
+      "id": "refactor-10",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.245028,
+          "firstRequestColdSensitivityUsd": 0.245028,
+          "input": 55325,
+          "cached": 39808,
+          "output": 1001,
+          "firstInput": 12942,
+          "firstCached": 0,
+          "continuationInput": 42383,
+          "continuationCached": 39808,
+          "requests": 4,
+          "agentSeconds": 42.9,
+          "seconds": 44
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.539786,
+          "firstRequestColdSensitivityUsd": 0.62273,
+          "input": 265929,
+          "cached": 246656,
+          "output": 2008,
+          "firstInput": 12859,
+          "firstCached": 9216,
+          "continuationInput": 253070,
+          "continuationCached": 237440,
+          "requests": 12,
+          "agentSeconds": 99.8,
+          "seconds": 110.6
+        }
+      }
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.403734,
+          "firstRequestColdSensitivityUsd": 0.403734,
+          "input": 74260,
+          "cached": 42624,
+          "output": 895,
+          "firstInput": 12942,
+          "firstCached": 0,
+          "continuationInput": 61318,
+          "continuationCached": 42624,
+          "requests": 5,
+          "agentSeconds": 51.1,
+          "seconds": 52.2
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.316732,
+          "firstRequestColdSensitivityUsd": 0.39967600000000003,
+          "input": 156868,
+          "cached": 143872,
+          "output": 858,
+          "firstInput": 12859,
+          "firstCached": 9216,
+          "continuationInput": 144009,
+          "continuationCached": 134656,
+          "requests": 9,
+          "agentSeconds": 61.9,
+          "seconds": 73.1
+        }
+      }
+    },
+    {
+      "id": "bugfix-8",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.497056,
+          "firstRequestColdSensitivityUsd": 0.58,
+          "input": 155358,
+          "cached": 123136,
+          "output": 1034,
+          "firstInput": 12859,
+          "firstCached": 9216,
+          "continuationInput": 142499,
+          "continuationCached": 113920,
+          "requests": 9,
+          "agentSeconds": 65.4,
+          "seconds": 76.5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.324378,
+          "firstRequestColdSensitivityUsd": 0.324378,
+          "input": 75085,
+          "cached": 52608,
+          "output": 940,
+          "firstInput": 12942,
+          "firstCached": 0,
+          "continuationInput": 62143,
+          "continuationCached": 52608,
+          "requests": 5,
+          "agentSeconds": 45.9,
+          "seconds": 47
+        }
+      }
+    },
+    {
+      "id": "bugfix-3",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.334338,
+          "firstRequestColdSensitivityUsd": 0.41728200000000004,
+          "input": 109328,
+          "cached": 89088,
+          "output": 857,
+          "firstInput": 12862,
+          "firstCached": 9216,
+          "continuationInput": 96466,
+          "continuationCached": 79872,
+          "requests": 8,
+          "agentSeconds": 59.2,
+          "seconds": 70.2
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.22941,
+          "firstRequestColdSensitivityUsd": 0.313506,
+          "input": 72630,
+          "cached": 60160,
+          "output": 891,
+          "firstInput": 12945,
+          "firstCached": 9344,
+          "continuationInput": 59685,
+          "continuationCached": 50816,
+          "requests": 5,
+          "agentSeconds": 49.3,
+          "seconds": 50.5
+        }
+      }
+    },
+    {
+      "id": "refactor-8",
+      "family": "refactor",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.247418,
+          "firstRequestColdSensitivityUsd": 0.247418,
+          "input": 55359,
+          "cached": 39808,
+          "output": 1042,
+          "firstInput": 12936,
+          "firstCached": 0,
+          "continuationInput": 42423,
+          "continuationCached": 39808,
+          "requests": 4,
+          "agentSeconds": 44.3,
+          "seconds": 45.5
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.285246,
+          "firstRequestColdSensitivityUsd": 0.36819,
+          "input": 132565,
+          "cached": 121856,
+          "output": 1126,
+          "firstInput": 12853,
+          "firstCached": 9216,
+          "continuationInput": 119712,
+          "continuationCached": 112640,
+          "requests": 8,
+          "agentSeconds": 61.3,
+          "seconds": 72.6
+        }
+      }
+    },
+    {
+      "id": "refactor-7",
+      "family": "refactor",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.508226,
+          "firstRequestColdSensitivityUsd": 0.508226,
+          "input": 142313,
+          "cached": 109056,
+          "output": 1332,
+          "firstInput": 12850,
+          "firstCached": 0,
+          "continuationInput": 129463,
+          "continuationCached": 109056,
+          "requests": 10,
+          "agentSeconds": 77.1,
+          "seconds": 88.5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.160852,
+          "firstRequestColdSensitivityUsd": 0.244948,
+          "input": 55262,
+          "cached": 49152,
+          "output": 1012,
+          "firstInput": 12933,
+          "firstCached": 9344,
+          "continuationInput": 42329,
+          "continuationCached": 39808,
+          "requests": 4,
+          "agentSeconds": 46.4,
+          "seconds": 47.5
+        }
+      }
+    },
+    {
+      "id": "mixed-2",
+      "family": "mixed",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.18293,
+          "firstRequestColdSensitivityUsd": 0.267026,
+          "input": 68525,
+          "cached": 58880,
+          "output": 552,
+          "firstInput": 13061,
+          "firstCached": 9344,
+          "continuationInput": 55464,
+          "continuationCached": 49536,
+          "requests": 5,
+          "agentSeconds": 34.3,
+          "seconds": 35.3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.333332,
+          "firstRequestColdSensitivityUsd": 0.41627600000000003,
+          "input": 170695,
+          "cached": 157952,
+          "output": 959,
+          "firstInput": 12978,
+          "firstCached": 9216,
+          "continuationInput": 157717,
+          "continuationCached": 148736,
+          "requests": 10,
+          "agentSeconds": 67,
+          "seconds": 78.5
+        }
+      }
+    },
+    {
+      "id": "bugfix-6",
+      "family": "bugfix",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.313842,
+          "firstRequestColdSensitivityUsd": 0.313842,
+          "input": 94291,
+          "cached": 74752,
+          "output": 874,
+          "firstInput": 12945,
+          "firstCached": 0,
+          "continuationInput": 81346,
+          "continuationCached": 74752,
+          "requests": 6,
+          "agentSeconds": 55.8,
+          "seconds": 57.1
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.328504,
+          "firstRequestColdSensitivityUsd": 0.41144800000000004,
+          "input": 138825,
+          "cached": 124544,
+          "output": 1223,
+          "firstInput": 12862,
+          "firstCached": 9216,
+          "continuationInput": 125963,
+          "continuationCached": 115328,
+          "requests": 10,
+          "agentSeconds": 74.3,
+          "seconds": 86.8
+        }
+      }
+    },
+    {
+      "id": "logs-7",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.139556,
+          "firstRequestColdSensitivityUsd": 0.22365200000000002,
+          "input": 48988,
+          "cached": 39936,
+          "output": 182,
+          "firstInput": 13009,
+          "firstCached": 9344,
+          "continuationInput": 35979,
+          "continuationCached": 30592,
+          "requests": 3,
+          "agentSeconds": 17.6,
+          "seconds": 18.7
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.293734,
+          "firstRequestColdSensitivityUsd": 0.376678,
+          "input": 103250,
+          "cached": 84224,
+          "output": 385,
+          "firstInput": 12926,
+          "firstCached": 9216,
+          "continuationInput": 90324,
+          "continuationCached": 75008,
+          "requests": 5,
+          "agentSeconds": 24.4,
+          "seconds": 37.7
+        }
+      }
+    },
+    {
+      "id": "refresh-1",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.315714,
+          "firstRequestColdSensitivityUsd": 0.39981,
+          "input": 105165,
+          "cached": 85504,
+          "output": 672,
+          "firstInput": 12981,
+          "firstCached": 9344,
+          "continuationInput": 92184,
+          "continuationCached": 76160,
+          "requests": 6,
+          "agentSeconds": 41,
+          "seconds": 42
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.260074,
+          "firstRequestColdSensitivityUsd": 0.34301800000000005,
+          "input": 121530,
+          "cached": 110464,
+          "output": 779,
+          "firstInput": 12898,
+          "firstCached": 9216,
+          "continuationInput": 108632,
+          "continuationCached": 101248,
+          "requests": 9,
+          "agentSeconds": 51.4,
+          "seconds": 63.4
+        }
+      }
+    },
+    {
+      "id": "bugfix-2",
+      "family": "bugfix",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.449562,
+          "firstRequestColdSensitivityUsd": 0.449562,
+          "input": 89362,
+          "cached": 54912,
+          "output": 1003,
+          "firstInput": 12948,
+          "firstCached": 0,
+          "continuationInput": 76414,
+          "continuationCached": 54912,
+          "requests": 6,
+          "agentSeconds": 51.5,
+          "seconds": 52.8
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.38714,
+          "firstRequestColdSensitivityUsd": 0.470084,
+          "input": 151525,
+          "cached": 131840,
+          "output": 1169,
+          "firstInput": 12865,
+          "firstCached": 9216,
+          "continuationInput": 138660,
+          "continuationCached": 122624,
+          "requests": 9,
+          "agentSeconds": 67,
+          "seconds": 79.4
+        }
+      }
+    },
+    {
+      "id": "json-6",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.092076,
+          "firstRequestColdSensitivityUsd": 0.176172,
+          "input": 40088,
+          "cached": 35456,
+          "output": 206,
+          "firstInput": 13012,
+          "firstCached": 9344,
+          "continuationInput": 27076,
+          "continuationCached": 26112,
+          "requests": 3,
+          "agentSeconds": 20.4,
+          "seconds": 21.6
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.296546,
+          "firstRequestColdSensitivityUsd": 0.37949,
+          "input": 48524,
+          "cached": 22016,
+          "output": 189,
+          "firstInput": 12929,
+          "firstCached": 9216,
+          "continuationInput": 35595,
+          "continuationCached": 12800,
+          "requests": 3,
+          "agentSeconds": 14.9,
+          "seconds": 26.9
+        }
+      }
+    },
+    {
+      "id": "code-4",
+      "family": "code",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.12442,
+          "firstRequestColdSensitivityUsd": 0.208516,
+          "input": 46067,
+          "cached": 38400,
+          "output": 187,
+          "firstInput": 13014,
+          "firstCached": 9344,
+          "continuationInput": 33053,
+          "continuationCached": 29056,
+          "requests": 3,
+          "agentSeconds": 15.7,
+          "seconds": 16.7
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.130378,
+          "firstRequestColdSensitivityUsd": 0.213322,
+          "input": 67535,
+          "cached": 62208,
+          "output": 298,
+          "firstInput": 12931,
+          "firstCached": 9216,
+          "continuationInput": 54604,
+          "continuationCached": 52992,
+          "requests": 5,
+          "agentSeconds": 27.3,
+          "seconds": 39.3
+        }
+      }
+    },
+    {
+      "id": "refresh-7",
+      "family": "refresh",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.49683,
+          "firstRequestColdSensitivityUsd": 0.49683,
+          "input": 131152,
+          "cached": 95360,
+          "output": 871,
+          "firstInput": 12898,
+          "firstCached": 0,
+          "continuationInput": 118254,
+          "continuationCached": 95360,
+          "requests": 8,
+          "agentSeconds": 52.1,
+          "seconds": 64.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.3844,
+          "firstRequestColdSensitivityUsd": 0.468496,
+          "input": 128753,
+          "cached": 104320,
+          "output": 715,
+          "firstInput": 12981,
+          "firstCached": 9344,
+          "continuationInput": 115772,
+          "continuationCached": 94976,
+          "requests": 7,
+          "agentSeconds": 40,
+          "seconds": 41
+        }
+      }
+    },
+    {
+      "id": "logs-5",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.277494,
+          "firstRequestColdSensitivityUsd": 0.36043800000000004,
+          "input": 100709,
+          "cached": 82944,
+          "output": 338,
+          "firstInput": 12932,
+          "firstCached": 9216,
+          "continuationInput": 87777,
+          "continuationCached": 73728,
+          "requests": 5,
+          "agentSeconds": 24.2,
+          "seconds": 36.3
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.242364,
+          "firstRequestColdSensitivityUsd": 0.242364,
+          "input": 46692,
+          "cached": 25984,
+          "output": 186,
+          "firstInput": 13015,
+          "firstCached": 0,
+          "continuationInput": 33677,
+          "continuationCached": 25984,
+          "requests": 3,
+          "agentSeconds": 15.9,
+          "seconds": 16.8
+        }
+      }
+    },
+    {
+      "id": "code-3",
+      "family": "code",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.119974,
+          "firstRequestColdSensitivityUsd": 0.20407,
+          "input": 45407,
+          "cached": 38144,
+          "output": 184,
+          "firstInput": 13008,
+          "firstCached": 9344,
+          "continuationInput": 32399,
+          "continuationCached": 28800,
+          "requests": 3,
+          "agentSeconds": 14.8,
+          "seconds": 15.7
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.20537,
+          "firstRequestColdSensitivityUsd": 0.288314,
+          "input": 74564,
+          "cached": 62080,
+          "output": 369,
+          "firstInput": 12925,
+          "firstCached": 9216,
+          "continuationInput": 61639,
+          "continuationCached": 52864,
+          "requests": 5,
+          "agentSeconds": 27.7,
+          "seconds": 40.1
+        }
+      }
+    },
+    {
+      "id": "json-4",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.092496,
+          "firstRequestColdSensitivityUsd": 0.176592,
+          "input": 40105,
+          "cached": 35456,
+          "output": 211,
+          "firstInput": 13012,
+          "firstCached": 9344,
+          "continuationInput": 27093,
+          "continuationCached": 26112,
+          "requests": 3,
+          "agentSeconds": 14.6,
+          "seconds": 15.6
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.134878,
+          "firstRequestColdSensitivityUsd": 0.21782200000000002,
+          "input": 47809,
+          "cached": 39168,
+          "output": 186,
+          "firstInput": 12929,
+          "firstCached": 9216,
+          "continuationInput": 34880,
+          "continuationCached": 29952,
+          "requests": 3,
+          "agentSeconds": 14.8,
+          "seconds": 27.1
+        }
+      }
+    },
+    {
+      "id": "mixed-5",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.238502,
+          "firstRequestColdSensitivityUsd": 0.321446,
+          "input": 127052,
+          "cached": 119552,
+          "output": 879,
+          "firstInput": 12981,
+          "firstCached": 9216,
+          "continuationInput": 114071,
+          "continuationCached": 110336,
+          "requests": 9,
+          "agentSeconds": 59,
+          "seconds": 71.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.147908,
+          "firstRequestColdSensitivityUsd": 0.23200400000000002,
+          "input": 68454,
+          "cached": 62848,
+          "output": 580,
+          "firstInput": 13064,
+          "firstCached": 9344,
+          "continuationInput": 55390,
+          "continuationCached": 53504,
+          "requests": 5,
+          "agentSeconds": 40.6,
+          "seconds": 41.6
+        }
+      }
+    },
+    {
+      "id": "bugfix-4",
+      "family": "bugfix",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.454548,
+          "firstRequestColdSensitivityUsd": 0.454548,
+          "input": 115431,
+          "cached": 83968,
+          "output": 1119,
+          "firstInput": 12862,
+          "firstCached": 0,
+          "continuationInput": 102569,
+          "continuationCached": 83968,
+          "requests": 8,
+          "agentSeconds": 65.3,
+          "seconds": 78
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.213144,
+          "firstRequestColdSensitivityUsd": 0.29724,
+          "input": 75642,
+          "cached": 65664,
+          "output": 954,
+          "firstInput": 12945,
+          "firstCached": 9344,
+          "continuationInput": 62697,
+          "continuationCached": 56320,
+          "requests": 5,
+          "agentSeconds": 44.8,
+          "seconds": 46
+        }
+      }
+    },
+    {
+      "id": "code-9",
+      "family": "code",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.27318,
+          "firstRequestColdSensitivityUsd": 0.356124,
+          "input": 100027,
+          "cached": 82560,
+          "output": 319,
+          "firstInput": 12923,
+          "firstCached": 9216,
+          "continuationInput": 87104,
+          "continuationCached": 73344,
+          "requests": 5,
+          "agentSeconds": 25.1,
+          "seconds": 37.2
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.209686,
+          "firstRequestColdSensitivityUsd": 0.209686,
+          "input": 46094,
+          "cached": 29056,
+          "output": 205,
+          "firstInput": 13006,
+          "firstCached": 0,
+          "continuationInput": 33088,
+          "continuationCached": 29056,
+          "requests": 3,
+          "agentSeconds": 16.6,
+          "seconds": 17.5
+        }
+      }
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.40644,
+          "firstRequestColdSensitivityUsd": 0.48938400000000004,
+          "input": 189216,
+          "cached": 170880,
+          "output": 1044,
+          "firstInput": 12978,
+          "firstCached": 9216,
+          "continuationInput": 176238,
+          "continuationCached": 161664,
+          "requests": 11,
+          "agentSeconds": 73.3,
+          "seconds": 85.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.257814,
+          "firstRequestColdSensitivityUsd": 0.257814,
+          "input": 82992,
+          "cached": 67584,
+          "output": 723,
+          "firstInput": 13061,
+          "firstCached": 0,
+          "continuationInput": 69931,
+          "continuationCached": 67584,
+          "requests": 6,
+          "agentSeconds": 38.6,
+          "seconds": 39.5
+        }
+      }
+    },
+    {
+      "id": "logs-10",
+      "family": "logs",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.426908,
+          "firstRequestColdSensitivityUsd": 0.426908,
+          "input": 76272,
+          "cached": 39168,
+          "output": 334,
+          "firstInput": 12923,
+          "firstCached": 0,
+          "continuationInput": 63349,
+          "continuationCached": 39168,
+          "requests": 5,
+          "agentSeconds": 25.8,
+          "seconds": 38.1
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.133136,
+          "firstRequestColdSensitivityUsd": 0.217232,
+          "input": 47710,
+          "cached": 39296,
+          "output": 194,
+          "firstInput": 13006,
+          "firstCached": 9344,
+          "continuationInput": 34704,
+          "continuationCached": 29952,
+          "requests": 3,
+          "agentSeconds": 13.9,
+          "seconds": 14.8
+        }
+      }
+    },
+    {
+      "id": "refresh-6",
+      "family": "refresh",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.325176,
+          "firstRequestColdSensitivityUsd": 0.325176,
+          "input": 135519,
+          "cached": 119296,
+          "output": 873,
+          "firstInput": 12898,
+          "firstCached": 0,
+          "continuationInput": 122621,
+          "continuationCached": 119296,
+          "requests": 10,
+          "agentSeconds": 133.4,
+          "seconds": 144.6
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.277316,
+          "firstRequestColdSensitivityUsd": 0.361412,
+          "input": 68749,
+          "cached": 49536,
+          "output": 713,
+          "firstInput": 12981,
+          "firstCached": 9344,
+          "continuationInput": 55768,
+          "continuationCached": 40192,
+          "requests": 5,
+          "agentSeconds": 36.3,
+          "seconds": 37.2
+        }
+      }
+    },
+    {
+      "id": "mixed-3",
+      "family": "mixed",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.267418,
+          "firstRequestColdSensitivityUsd": 0.350362,
+          "input": 113274,
+          "cached": 100608,
+          "output": 803,
+          "firstInput": 12981,
+          "firstCached": 9216,
+          "continuationInput": 100293,
+          "continuationCached": 91392,
+          "requests": 8,
+          "agentSeconds": 50.5,
+          "seconds": 61.4
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.336232,
+          "firstRequestColdSensitivityUsd": 0.420328,
+          "input": 98419,
+          "cached": 77312,
+          "output": 957,
+          "firstInput": 13064,
+          "firstCached": 9344,
+          "continuationInput": 85355,
+          "continuationCached": 67968,
+          "requests": 7,
+          "agentSeconds": 48.3,
+          "seconds": 49.2
+        }
+      }
+    },
+    {
+      "id": "json-5",
+      "family": "json",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.142766,
+          "firstRequestColdSensitivityUsd": 0.22571000000000002,
+          "input": 49324,
+          "cached": 39936,
+          "output": 179,
+          "firstInput": 12926,
+          "firstCached": 9216,
+          "continuationInput": 36398,
+          "continuationCached": 30720,
+          "requests": 3,
+          "agentSeconds": 19.2,
+          "seconds": 29.8
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.091416,
+          "firstRequestColdSensitivityUsd": 0.175512,
+          "input": 40077,
+          "cached": 35456,
+          "output": 195,
+          "firstInput": 13009,
+          "firstCached": 9344,
+          "continuationInput": 27068,
+          "continuationCached": 26112,
+          "requests": 3,
+          "agentSeconds": 14.8,
+          "seconds": 15.7
+        }
+      }
+    },
+    {
+      "id": "refresh-3",
+      "family": "refresh",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.426108,
+          "firstRequestColdSensitivityUsd": 0.426108,
+          "input": 109579,
+          "cached": 78848,
+          "output": 799,
+          "firstInput": 12984,
+          "firstCached": 0,
+          "continuationInput": 96595,
+          "continuationCached": 78848,
+          "requests": 6,
+          "agentSeconds": 45.6,
+          "seconds": 46.5
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.281496,
+          "firstRequestColdSensitivityUsd": 0.281496,
+          "input": 94397,
+          "cached": 78336,
+          "output": 851,
+          "firstInput": 12901,
+          "firstCached": 0,
+          "continuationInput": 81496,
+          "continuationCached": 78336,
+          "requests": 7,
+          "agentSeconds": 43.6,
+          "seconds": 54.2
+        }
+      }
+    },
+    {
+      "id": "logs-6",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.135504,
+          "firstRequestColdSensitivityUsd": 0.21960000000000002,
+          "input": 48107,
+          "cached": 39424,
+          "output": 185,
+          "firstInput": 13006,
+          "firstCached": 9344,
+          "continuationInput": 35101,
+          "continuationCached": 30080,
+          "requests": 3,
+          "agentSeconds": 17.8,
+          "seconds": 18.8
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.203,
+          "firstRequestColdSensitivityUsd": 0.28594400000000003,
+          "input": 80357,
+          "cached": 68480,
+          "output": 315,
+          "firstInput": 12923,
+          "firstCached": 9216,
+          "continuationInput": 67434,
+          "continuationCached": 59264,
+          "requests": 5,
+          "agentSeconds": 25.5,
+          "seconds": 36.6
+        }
+      }
+    },
+    {
+      "id": "refactor-3",
+      "family": "refactor",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.416718,
+          "firstRequestColdSensitivityUsd": 0.499662,
+          "input": 151416,
+          "cached": 130688,
+          "output": 1575,
+          "firstInput": 12853,
+          "firstCached": 9216,
+          "continuationInput": 138563,
+          "continuationCached": 121472,
+          "requests": 9,
+          "agentSeconds": 76.2,
+          "seconds": 87.1
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.242558,
+          "firstRequestColdSensitivityUsd": 0.242558,
+          "input": 55303,
+          "cached": 39808,
+          "output": 956,
+          "firstInput": 12936,
+          "firstCached": 0,
+          "continuationInput": 42367,
+          "continuationCached": 39808,
+          "requests": 4,
+          "agentSeconds": 40,
+          "seconds": 41.1
+        }
+      }
+    },
+    {
+      "id": "logs-4",
+      "family": "logs",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.133526,
+          "firstRequestColdSensitivityUsd": 0.217622,
+          "input": 47789,
+          "cached": 39296,
+          "output": 186,
+          "firstInput": 13006,
+          "firstCached": 9344,
+          "continuationInput": 34783,
+          "continuationCached": 29952,
+          "requests": 3,
+          "agentSeconds": 14.8,
+          "seconds": 15.7
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.184996,
+          "firstRequestColdSensitivityUsd": 0.26794,
+          "input": 76769,
+          "cached": 66816,
+          "output": 373,
+          "firstInput": 12923,
+          "firstCached": 9216,
+          "continuationInput": 63846,
+          "continuationCached": 57600,
+          "requests": 5,
+          "agentSeconds": 30.9,
+          "seconds": 41.4
+        }
+      }
+    },
+    {
+      "id": "json-7",
+      "family": "json",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.089586,
+          "firstRequestColdSensitivityUsd": 0.173682,
+          "input": 40039,
+          "cached": 35456,
+          "output": 166,
+          "firstInput": 13012,
+          "firstCached": 9344,
+          "continuationInput": 27027,
+          "continuationCached": 26112,
+          "requests": 3,
+          "agentSeconds": 14.5,
+          "seconds": 15.5
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.139448,
+          "firstRequestColdSensitivityUsd": 0.22239199999999998,
+          "input": 48892,
+          "cached": 39808,
+          "output": 176,
+          "firstInput": 12929,
+          "firstCached": 9216,
+          "continuationInput": 35963,
+          "continuationCached": 30592,
+          "requests": 3,
+          "agentSeconds": 13.4,
+          "seconds": 24.3
+        }
+      }
+    },
+    {
+      "id": "code-10",
+      "family": "code",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.148256,
+          "firstRequestColdSensitivityUsd": 0.232352,
+          "input": 44529,
+          "cached": 34176,
+          "output": 211,
+          "firstInput": 13009,
+          "firstCached": 9344,
+          "continuationInput": 31520,
+          "continuationCached": 24832,
+          "requests": 3,
+          "agentSeconds": 17.1,
+          "seconds": 18
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.266822,
+          "firstRequestColdSensitivityUsd": 0.349766,
+          "input": 98440,
+          "cached": 81792,
+          "output": 371,
+          "firstInput": 12926,
+          "firstCached": 9216,
+          "continuationInput": 85514,
+          "continuationCached": 72576,
+          "requests": 5,
+          "agentSeconds": 24.9,
+          "seconds": 35.7
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Generated synthetic cases held out from product tuning; not independent real-world repositories.",
+    "Provider cache state is observed, not experimentally flushed. Fresh sessions may start warm.",
+    "Intervals assume independent case pairs within the sampled workload distribution; shared provider state can introduce dependence.",
+    "BCa intervals are approximate, and the study cannot establish superiority outside this model, rate scenario, or suite.",
+    "First-request cold sensitivity holds model behavior and subsequent usage fixed; it is not a cold-session experiment."
+  ],
+  "attempts": [
+    {
+      "case": "mixed-7",
+      "family": "mixed",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 68382,
+        "cached": 62592,
+        "output": 588
+      },
+      "knownEstimatedUsd": 0.149892,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.149892
+    },
+    {
+      "case": "mixed-7",
+      "family": "mixed",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 109103,
+        "cached": 98560,
+        "output": 815
+      },
+      "knownEstimatedUsd": 0.24474,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.24474
+    },
+    {
+      "case": "refactor-9",
+      "family": "refactor",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 113813,
+        "cached": 103424,
+        "output": 888
+      },
+      "knownEstimatedUsd": 0.251714,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.251714
+    },
+    {
+      "case": "refactor-9",
+      "family": "refactor",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 55296,
+        "cached": 49024,
+        "output": 1040
+      },
+      "knownEstimatedUsd": 0.163744,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.163744
+    },
+    {
+      "case": "bugfix-7",
+      "family": "bugfix",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 188807,
+        "cached": 171392,
+        "output": 1058
+      },
+      "knownEstimatedUsd": 0.398442,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.398442
+    },
+    {
+      "case": "bugfix-7",
+      "family": "bugfix",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 73170,
+        "cached": 55040,
+        "output": 905
+      },
+      "knownEstimatedUsd": 0.28159,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.28159
+    },
+    {
+      "case": "mixed-6",
+      "family": "mixed",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 162600,
+        "cached": 140544,
+        "output": 933
+      },
+      "knownEstimatedUsd": 0.407754,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.407754
+    },
+    {
+      "case": "mixed-6",
+      "family": "mixed",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 82295,
+        "cached": 59264,
+        "output": 658
+      },
+      "knownEstimatedUsd": 0.322474,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.322474
+    },
+    {
+      "case": "logs-1",
+      "family": "logs",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 46925,
+        "cached": 21888,
+        "output": 193
+      },
+      "knownEstimatedUsd": 0.281908,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.281908
+    },
+    {
+      "case": "logs-1",
+      "family": "logs",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 67654,
+        "cached": 62080,
+        "output": 318
+      },
+      "knownEstimatedUsd": 0.13372,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.13372
+    },
+    {
+      "case": "mixed-1",
+      "family": "mixed",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 82297,
+        "cached": 66944,
+        "output": 734
+      },
+      "knownEstimatedUsd": 0.257174,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.257174
+    },
+    {
+      "case": "mixed-1",
+      "family": "mixed",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 195679,
+        "cached": 177280,
+        "output": 866
+      },
+      "knownEstimatedUsd": 0.40457,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.40457
+    },
+    {
+      "case": "refactor-4",
+      "family": "refactor",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 55160,
+        "cached": 44672,
+        "output": 966
+      },
+      "knownEstimatedUsd": 0.197852,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.197852
+    },
+    {
+      "case": "refactor-4",
+      "family": "refactor",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 130236,
+        "cached": 105728,
+        "output": 1362
+      },
+      "knownEstimatedUsd": 0.418908,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.418908
+    },
+    {
+      "case": "mixed-10",
+      "family": "mixed",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 190426,
+        "cached": 164736,
+        "output": 1043
+      },
+      "knownEstimatedUsd": 0.473786,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.473786
+    },
+    {
+      "case": "mixed-10",
+      "family": "mixed",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 97950,
+        "cached": 91392,
+        "output": 700
+      },
+      "knownEstimatedUsd": 0.191972,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.191972
+    },
+    {
+      "case": "code-5",
+      "family": "code",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 74708,
+        "cached": 43776,
+        "output": 337
+      },
+      "knownEstimatedUsd": 0.369946,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.369946
+    },
+    {
+      "case": "code-5",
+      "family": "code",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 45792,
+        "cached": 22144,
+        "output": 203
+      },
+      "knownEstimatedUsd": 0.268774,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.268774
+    },
+    {
+      "case": "logs-2",
+      "family": "logs",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 73346,
+        "cached": 64640,
+        "output": 347
+      },
+      "knownEstimatedUsd": 0.16905,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.16905
+    },
+    {
+      "case": "logs-2",
+      "family": "logs",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 46673,
+        "cached": 34560,
+        "output": 190
+      },
+      "knownEstimatedUsd": 0.16519,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.16519
+    },
+    {
+      "case": "logs-3",
+      "family": "logs",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 46912,
+        "cached": 29568,
+        "output": 189
+      },
+      "knownEstimatedUsd": 0.212458,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.212458
+    },
+    {
+      "case": "logs-3",
+      "family": "logs",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 75367,
+        "cached": 43264,
+        "output": 354
+      },
+      "knownEstimatedUsd": 0.381994,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.381994
+    },
+    {
+      "case": "bugfix-1",
+      "family": "bugfix",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 172422,
+        "cached": 150016,
+        "output": 1194
+      },
+      "knownEstimatedUsd": 0.433776,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.433776
+    },
+    {
+      "case": "bugfix-1",
+      "family": "bugfix",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 73663,
+        "cached": 52608,
+        "output": 925
+      },
+      "knownEstimatedUsd": 0.309408,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.309408
+    },
+    {
+      "case": "code-2",
+      "family": "code",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 45455,
+        "cached": 38144,
+        "output": 202
+      },
+      "knownEstimatedUsd": 0.121354,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.121354
+    },
+    {
+      "case": "code-2",
+      "family": "code",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 81060,
+        "cached": 68864,
+        "output": 324
+      },
+      "knownEstimatedUsd": 0.207024,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.207024
+    },
+    {
+      "case": "json-2",
+      "family": "json",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 49884,
+        "cached": 30976,
+        "output": 180
+      },
+      "knownEstimatedUsd": 0.229056,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.229056
+    },
+    {
+      "case": "json-2",
+      "family": "json",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 40031,
+        "cached": 26112,
+        "output": 210
+      },
+      "knownEstimatedUsd": 0.175802,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.175802
+    },
+    {
+      "case": "refactor-1",
+      "family": "refactor",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 219203,
+        "cached": 174848,
+        "output": 1903
+      },
+      "knownEstimatedUsd": 0.713548,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.713548
+    },
+    {
+      "case": "refactor-1",
+      "family": "refactor",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 55254,
+        "cached": 39808,
+        "output": 1004
+      },
+      "knownEstimatedUsd": 0.244468,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.244468
+    },
+    {
+      "case": "mixed-4",
+      "family": "mixed",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 98057,
+        "cached": 67968,
+        "output": 749
+      },
+      "knownEstimatedUsd": 0.406308,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.406308
+    },
+    {
+      "case": "mixed-4",
+      "family": "mixed",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 111249,
+        "cached": 100224,
+        "output": 797
+      },
+      "knownEstimatedUsd": 0.250324,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.250324
+    },
+    {
+      "case": "logs-8",
+      "family": "logs",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 76353,
+        "cached": 66432,
+        "output": 345
+      },
+      "knownEstimatedUsd": 0.182892,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.182892
+    },
+    {
+      "case": "logs-8",
+      "family": "logs",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 47705,
+        "cached": 39296,
+        "output": 182
+      },
+      "knownEstimatedUsd": 0.132486,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.132486
+    },
+    {
+      "case": "refactor-5",
+      "family": "refactor",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 55270,
+        "cached": 30720,
+        "output": 1033
+      },
+      "knownEstimatedUsd": 0.32787,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.32787
+    },
+    {
+      "case": "refactor-5",
+      "family": "refactor",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 113849,
+        "cached": 96640,
+        "output": 1283
+      },
+      "knownEstimatedUsd": 0.33288,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.33288
+    },
+    {
+      "case": "json-10",
+      "family": "json",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 48945,
+        "cached": 39680,
+        "output": 187
+      },
+      "knownEstimatedUsd": 0.14168,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.14168
+    },
+    {
+      "case": "json-10",
+      "family": "json",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 40021,
+        "cached": 26112,
+        "output": 211
+      },
+      "knownEstimatedUsd": 0.175752,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.175752
+    },
+    {
+      "case": "code-6",
+      "family": "code",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 98687,
+        "cached": 78080,
+        "output": 337
+      },
+      "knownEstimatedUsd": 0.301,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.301
+    },
+    {
+      "case": "code-6",
+      "family": "code",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 44821,
+        "cached": 37760,
+        "output": 207
+      },
+      "knownEstimatedUsd": 0.11872,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.11872
+    },
+    {
+      "case": "refresh-8",
+      "family": "refresh",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 67980,
+        "cached": 62336,
+        "output": 681
+      },
+      "knownEstimatedUsd": 0.152826,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.152826
+    },
+    {
+      "case": "refresh-8",
+      "family": "refresh",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 177980,
+        "cached": 162176,
+        "output": 866
+      },
+      "knownEstimatedUsd": 0.363516,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.363516
+    },
+    {
+      "case": "json-9",
+      "family": "json",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 49905,
+        "cached": 40192,
+        "output": 187
+      },
+      "knownEstimatedUsd": 0.146672,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.146672
+    },
+    {
+      "case": "json-9",
+      "family": "json",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 39990,
+        "cached": 26112,
+        "output": 189
+      },
+      "knownEstimatedUsd": 0.174342,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.174342
+    },
+    {
+      "case": "refresh-10",
+      "family": "refresh",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 139109,
+        "cached": 119040,
+        "output": 799
+      },
+      "knownEstimatedUsd": 0.35968,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.35968
+    },
+    {
+      "case": "refresh-10",
+      "family": "refresh",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 120468,
+        "cached": 110208,
+        "output": 922
+      },
+      "knownEstimatedUsd": 0.258908,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.258908
+    },
+    {
+      "case": "json-8",
+      "family": "json",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 40023,
+        "cached": 26112,
+        "output": 213
+      },
+      "knownEstimatedUsd": 0.175872,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.175872
+    },
+    {
+      "case": "json-8",
+      "family": "json",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 48098,
+        "cached": 39296,
+        "output": 175
+      },
+      "knownEstimatedUsd": 0.136066,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.136066
+    },
+    {
+      "case": "refactor-2",
+      "family": "refactor",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 55186,
+        "cached": 34944,
+        "output": 976
+      },
+      "knownEstimatedUsd": 0.286164,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.286164
+    },
+    {
+      "case": "refactor-2",
+      "family": "refactor",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 133121,
+        "cached": 113408,
+        "output": 1552
+      },
+      "knownEstimatedUsd": 0.388138,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.388138
+    },
+    {
+      "case": "code-1",
+      "family": "code",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 74530,
+        "cached": 56320,
+        "output": 335
+      },
+      "knownEstimatedUsd": 0.25517,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.25517
+    },
+    {
+      "case": "code-1",
+      "family": "code",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 45325,
+        "cached": 28672,
+        "output": 207
+      },
+      "knownEstimatedUsd": 0.205552,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.205552
+    },
+    {
+      "case": "json-1",
+      "family": "json",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 40005,
+        "cached": 35456,
+        "output": 215
+      },
+      "knownEstimatedUsd": 0.091696,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.091696
+    },
+    {
+      "case": "json-1",
+      "family": "json",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 48885,
+        "cached": 30464,
+        "output": 182
+      },
+      "knownEstimatedUsd": 0.223774,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.223774
+    },
+    {
+      "case": "mixed-9",
+      "family": "mixed",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 97490,
+        "cached": 72448,
+        "output": 721
+      },
+      "knownEstimatedUsd": 0.358918,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.358918
+    },
+    {
+      "case": "mixed-9",
+      "family": "mixed",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 137993,
+        "cached": 127488,
+        "output": 835
+      },
+      "knownEstimatedUsd": 0.274288,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.274288
+    },
+    {
+      "case": "refactor-6",
+      "family": "refactor",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 159156,
+        "cached": 131840,
+        "output": 1347
+      },
+      "knownEstimatedUsd": 0.47235,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.47235
+    },
+    {
+      "case": "refactor-6",
+      "family": "refactor",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 55209,
+        "cached": 39552,
+        "output": 1001
+      },
+      "knownEstimatedUsd": 0.246172,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.246172
+    },
+    {
+      "case": "refresh-2",
+      "family": "refresh",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 187988,
+        "cached": 162048,
+        "output": 842
+      },
+      "knownEstimatedUsd": 0.463548,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.463548
+    },
+    {
+      "case": "refresh-2",
+      "family": "refresh",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 109323,
+        "cached": 69760,
+        "output": 645
+      },
+      "knownEstimatedUsd": 0.49764,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.49764
+    },
+    {
+      "case": "code-8",
+      "family": "code",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 78960,
+        "cached": 58624,
+        "output": 312
+      },
+      "knownEstimatedUsd": 0.277584,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.277584
+    },
+    {
+      "case": "code-8",
+      "family": "code",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 44435,
+        "cached": 28288,
+        "output": 191
+      },
+      "knownEstimatedUsd": 0.199308,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.199308
+    },
+    {
+      "case": "bugfix-5",
+      "family": "bugfix",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 74288,
+        "cached": 55680,
+        "output": 870
+      },
+      "knownEstimatedUsd": 0.28526,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.28526
+    },
+    {
+      "case": "bugfix-5",
+      "family": "bugfix",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 194899,
+        "cached": 164352,
+        "output": 1192
+      },
+      "knownEstimatedUsd": 0.529422,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.529422
+    },
+    {
+      "case": "refresh-9",
+      "family": "refresh",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 82330,
+        "cached": 66944,
+        "output": 753
+      },
+      "knownEstimatedUsd": 0.258454,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.258454
+    },
+    {
+      "case": "refresh-9",
+      "family": "refresh",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 117556,
+        "cached": 86656,
+        "output": 697
+      },
+      "knownEstimatedUsd": 0.430506,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.430506
+    },
+    {
+      "case": "refresh-4",
+      "family": "refresh",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 123812,
+        "cached": 107520,
+        "output": 877
+      },
+      "knownEstimatedUsd": 0.31429,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.31429
+    },
+    {
+      "case": "refresh-4",
+      "family": "refresh",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 82130,
+        "cached": 66816,
+        "output": 649
+      },
+      "knownEstimatedUsd": 0.252406,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.252406
+    },
+    {
+      "case": "json-3",
+      "family": "json",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 47700,
+        "cached": 39168,
+        "output": 184
+      },
+      "knownEstimatedUsd": 0.133688,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.133688
+    },
+    {
+      "case": "json-3",
+      "family": "json",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 40043,
+        "cached": 35456,
+        "output": 182
+      },
+      "knownEstimatedUsd": 0.090426,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.090426
+    },
+    {
+      "case": "code-7",
+      "family": "code",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 46130,
+        "cached": 25600,
+        "output": 186
+      },
+      "knownEstimatedUsd": 0.2402,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.2402
+    },
+    {
+      "case": "code-7",
+      "family": "code",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 68114,
+        "cached": 62464,
+        "output": 342
+      },
+      "knownEstimatedUsd": 0.136064,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.136064
+    },
+    {
+      "case": "logs-9",
+      "family": "logs",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 80235,
+        "cached": 59264,
+        "output": 327
+      },
+      "knownEstimatedUsd": 0.285324,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.285324
+    },
+    {
+      "case": "logs-9",
+      "family": "logs",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 47359,
+        "cached": 39040,
+        "output": 195
+      },
+      "knownEstimatedUsd": 0.13198,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.13198
+    },
+    {
+      "case": "refresh-5",
+      "family": "refresh",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 109506,
+        "cached": 98048,
+        "output": 661
+      },
+      "knownEstimatedUsd": 0.245678,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.245678
+    },
+    {
+      "case": "refresh-5",
+      "family": "refresh",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 116818,
+        "cached": 98816,
+        "output": 526
+      },
+      "knownEstimatedUsd": 0.305136,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.305136
+    },
+    {
+      "case": "refactor-10",
+      "family": "refactor",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 55325,
+        "cached": 39808,
+        "output": 1001
+      },
+      "knownEstimatedUsd": 0.245028,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.245028
+    },
+    {
+      "case": "refactor-10",
+      "family": "refactor",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 265929,
+        "cached": 246656,
+        "output": 2008
+      },
+      "knownEstimatedUsd": 0.539786,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.539786
+    },
+    {
+      "case": "bugfix-9",
+      "family": "bugfix",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 74260,
+        "cached": 42624,
+        "output": 895
+      },
+      "knownEstimatedUsd": 0.403734,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.403734
+    },
+    {
+      "case": "bugfix-9",
+      "family": "bugfix",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 156868,
+        "cached": 143872,
+        "output": 858
+      },
+      "knownEstimatedUsd": 0.316732,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.316732
+    },
+    {
+      "case": "bugfix-8",
+      "family": "bugfix",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 155358,
+        "cached": 123136,
+        "output": 1034
+      },
+      "knownEstimatedUsd": 0.497056,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.497056
+    },
+    {
+      "case": "bugfix-8",
+      "family": "bugfix",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 75085,
+        "cached": 52608,
+        "output": 940
+      },
+      "knownEstimatedUsd": 0.324378,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.324378
+    },
+    {
+      "case": "bugfix-3",
+      "family": "bugfix",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 109328,
+        "cached": 89088,
+        "output": 857
+      },
+      "knownEstimatedUsd": 0.334338,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.334338
+    },
+    {
+      "case": "bugfix-3",
+      "family": "bugfix",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 72630,
+        "cached": 60160,
+        "output": 891
+      },
+      "knownEstimatedUsd": 0.22941,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.22941
+    },
+    {
+      "case": "refactor-8",
+      "family": "refactor",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 55359,
+        "cached": 39808,
+        "output": 1042
+      },
+      "knownEstimatedUsd": 0.247418,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.247418
+    },
+    {
+      "case": "refactor-8",
+      "family": "refactor",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 132565,
+        "cached": 121856,
+        "output": 1126
+      },
+      "knownEstimatedUsd": 0.285246,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.285246
+    },
+    {
+      "case": "refactor-7",
+      "family": "refactor",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 142313,
+        "cached": 109056,
+        "output": 1332
+      },
+      "knownEstimatedUsd": 0.508226,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.508226
+    },
+    {
+      "case": "refactor-7",
+      "family": "refactor",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 55262,
+        "cached": 49152,
+        "output": 1012
+      },
+      "knownEstimatedUsd": 0.160852,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.160852
+    },
+    {
+      "case": "mixed-2",
+      "family": "mixed",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 68525,
+        "cached": 58880,
+        "output": 552
+      },
+      "knownEstimatedUsd": 0.18293,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.18293
+    },
+    {
+      "case": "mixed-2",
+      "family": "mixed",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 170695,
+        "cached": 157952,
+        "output": 959
+      },
+      "knownEstimatedUsd": 0.333332,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.333332
+    },
+    {
+      "case": "bugfix-6",
+      "family": "bugfix",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 94291,
+        "cached": 74752,
+        "output": 874
+      },
+      "knownEstimatedUsd": 0.313842,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.313842
+    },
+    {
+      "case": "bugfix-6",
+      "family": "bugfix",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 138825,
+        "cached": 124544,
+        "output": 1223
+      },
+      "knownEstimatedUsd": 0.328504,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.328504
+    },
+    {
+      "case": "logs-7",
+      "family": "logs",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 48988,
+        "cached": 39936,
+        "output": 182
+      },
+      "knownEstimatedUsd": 0.139556,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.139556
+    },
+    {
+      "case": "logs-7",
+      "family": "logs",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 103250,
+        "cached": 84224,
+        "output": 385
+      },
+      "knownEstimatedUsd": 0.293734,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.293734
+    },
+    {
+      "case": "refresh-1",
+      "family": "refresh",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 105165,
+        "cached": 85504,
+        "output": 672
+      },
+      "knownEstimatedUsd": 0.315714,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.315714
+    },
+    {
+      "case": "refresh-1",
+      "family": "refresh",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 121530,
+        "cached": 110464,
+        "output": 779
+      },
+      "knownEstimatedUsd": 0.260074,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.260074
+    },
+    {
+      "case": "bugfix-2",
+      "family": "bugfix",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 89362,
+        "cached": 54912,
+        "output": 1003
+      },
+      "knownEstimatedUsd": 0.449562,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.449562
+    },
+    {
+      "case": "bugfix-2",
+      "family": "bugfix",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 151525,
+        "cached": 131840,
+        "output": 1169
+      },
+      "knownEstimatedUsd": 0.38714,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.38714
+    },
+    {
+      "case": "json-6",
+      "family": "json",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 40088,
+        "cached": 35456,
+        "output": 206
+      },
+      "knownEstimatedUsd": 0.092076,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.092076
+    },
+    {
+      "case": "json-6",
+      "family": "json",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 48524,
+        "cached": 22016,
+        "output": 189
+      },
+      "knownEstimatedUsd": 0.296546,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.296546
+    },
+    {
+      "case": "code-4",
+      "family": "code",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 46067,
+        "cached": 38400,
+        "output": 187
+      },
+      "knownEstimatedUsd": 0.12442,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.12442
+    },
+    {
+      "case": "code-4",
+      "family": "code",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 67535,
+        "cached": 62208,
+        "output": 298
+      },
+      "knownEstimatedUsd": 0.130378,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.130378
+    },
+    {
+      "case": "refresh-7",
+      "family": "refresh",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 131152,
+        "cached": 95360,
+        "output": 871
+      },
+      "knownEstimatedUsd": 0.49683,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.49683
+    },
+    {
+      "case": "refresh-7",
+      "family": "refresh",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 128753,
+        "cached": 104320,
+        "output": 715
+      },
+      "knownEstimatedUsd": 0.3844,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.3844
+    },
+    {
+      "case": "logs-5",
+      "family": "logs",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 100709,
+        "cached": 82944,
+        "output": 338
+      },
+      "knownEstimatedUsd": 0.277494,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.277494
+    },
+    {
+      "case": "logs-5",
+      "family": "logs",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 46692,
+        "cached": 25984,
+        "output": 186
+      },
+      "knownEstimatedUsd": 0.242364,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.242364
+    },
+    {
+      "case": "code-3",
+      "family": "code",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 45407,
+        "cached": 38144,
+        "output": 184
+      },
+      "knownEstimatedUsd": 0.119974,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.119974
+    },
+    {
+      "case": "code-3",
+      "family": "code",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 74564,
+        "cached": 62080,
+        "output": 369
+      },
+      "knownEstimatedUsd": 0.20537,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.20537
+    },
+    {
+      "case": "json-4",
+      "family": "json",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 40105,
+        "cached": 35456,
+        "output": 211
+      },
+      "knownEstimatedUsd": 0.092496,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.092496
+    },
+    {
+      "case": "json-4",
+      "family": "json",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 47809,
+        "cached": 39168,
+        "output": 186
+      },
+      "knownEstimatedUsd": 0.134878,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.134878
+    },
+    {
+      "case": "mixed-5",
+      "family": "mixed",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 127052,
+        "cached": 119552,
+        "output": 879
+      },
+      "knownEstimatedUsd": 0.238502,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.238502
+    },
+    {
+      "case": "mixed-5",
+      "family": "mixed",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 68454,
+        "cached": 62848,
+        "output": 580
+      },
+      "knownEstimatedUsd": 0.147908,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.147908
+    },
+    {
+      "case": "bugfix-4",
+      "family": "bugfix",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 115431,
+        "cached": 83968,
+        "output": 1119
+      },
+      "knownEstimatedUsd": 0.454548,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.454548
+    },
+    {
+      "case": "bugfix-4",
+      "family": "bugfix",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 75642,
+        "cached": 65664,
+        "output": 954
+      },
+      "knownEstimatedUsd": 0.213144,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.213144
+    },
+    {
+      "case": "code-9",
+      "family": "code",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 100027,
+        "cached": 82560,
+        "output": 319
+      },
+      "knownEstimatedUsd": 0.27318,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.27318
+    },
+    {
+      "case": "code-9",
+      "family": "code",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 46094,
+        "cached": 29056,
+        "output": 205
+      },
+      "knownEstimatedUsd": 0.209686,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.209686
+    },
+    {
+      "case": "mixed-8",
+      "family": "mixed",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 189216,
+        "cached": 170880,
+        "output": 1044
+      },
+      "knownEstimatedUsd": 0.40644,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.40644
+    },
+    {
+      "case": "mixed-8",
+      "family": "mixed",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 82992,
+        "cached": 67584,
+        "output": 723
+      },
+      "knownEstimatedUsd": 0.257814,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.257814
+    },
+    {
+      "case": "logs-10",
+      "family": "logs",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 76272,
+        "cached": 39168,
+        "output": 334
+      },
+      "knownEstimatedUsd": 0.426908,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.426908
+    },
+    {
+      "case": "logs-10",
+      "family": "logs",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 47710,
+        "cached": 39296,
+        "output": 194
+      },
+      "knownEstimatedUsd": 0.133136,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.133136
+    },
+    {
+      "case": "refresh-6",
+      "family": "refresh",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 135519,
+        "cached": 119296,
+        "output": 873
+      },
+      "knownEstimatedUsd": 0.325176,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.325176
+    },
+    {
+      "case": "refresh-6",
+      "family": "refresh",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 68749,
+        "cached": 49536,
+        "output": 713
+      },
+      "knownEstimatedUsd": 0.277316,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.277316
+    },
+    {
+      "case": "mixed-3",
+      "family": "mixed",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 113274,
+        "cached": 100608,
+        "output": 803
+      },
+      "knownEstimatedUsd": 0.267418,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.267418
+    },
+    {
+      "case": "mixed-3",
+      "family": "mixed",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 98419,
+        "cached": 77312,
+        "output": 957
+      },
+      "knownEstimatedUsd": 0.336232,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.336232
+    },
+    {
+      "case": "json-5",
+      "family": "json",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 49324,
+        "cached": 39936,
+        "output": 179
+      },
+      "knownEstimatedUsd": 0.142766,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.142766
+    },
+    {
+      "case": "json-5",
+      "family": "json",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 40077,
+        "cached": 35456,
+        "output": 195
+      },
+      "knownEstimatedUsd": 0.091416,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.091416
+    },
+    {
+      "case": "refresh-3",
+      "family": "refresh",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 109579,
+        "cached": 78848,
+        "output": 799
+      },
+      "knownEstimatedUsd": 0.426108,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.426108
+    },
+    {
+      "case": "refresh-3",
+      "family": "refresh",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 94397,
+        "cached": 78336,
+        "output": 851
+      },
+      "knownEstimatedUsd": 0.281496,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.281496
+    },
+    {
+      "case": "logs-6",
+      "family": "logs",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 48107,
+        "cached": 39424,
+        "output": 185
+      },
+      "knownEstimatedUsd": 0.135504,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.135504
+    },
+    {
+      "case": "logs-6",
+      "family": "logs",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 80357,
+        "cached": 68480,
+        "output": 315
+      },
+      "knownEstimatedUsd": 0.203,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.203
+    },
+    {
+      "case": "refactor-3",
+      "family": "refactor",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 151416,
+        "cached": 130688,
+        "output": 1575
+      },
+      "knownEstimatedUsd": 0.416718,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.416718
+    },
+    {
+      "case": "refactor-3",
+      "family": "refactor",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 55303,
+        "cached": 39808,
+        "output": 956
+      },
+      "knownEstimatedUsd": 0.242558,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.242558
+    },
+    {
+      "case": "logs-4",
+      "family": "logs",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 47789,
+        "cached": 39296,
+        "output": 186
+      },
+      "knownEstimatedUsd": 0.133526,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.133526
+    },
+    {
+      "case": "logs-4",
+      "family": "logs",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 76769,
+        "cached": 66816,
+        "output": 373
+      },
+      "knownEstimatedUsd": 0.184996,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.184996
+    },
+    {
+      "case": "bugfix-10",
+      "family": "bugfix",
+      "arm": "proxy",
+      "verdict": "FAIL",
+      "infrastructureFailure": true,
+      "clientErrors": [
+        "unexpected status 503 Service Unavailable: upstream connect error or disconnect/reset before headers. retried and the latest reset reason: connection timeout, url: http://127.0.0.1:58283/backend-api/codex/responses, cf-ray: a3bce2307f844b49-BOS"
+      ],
+      "knownUsage": {
+        "input": 26115,
+        "cached": 22144,
+        "output": 136
+      },
+      "knownEstimatedUsd": 0.068654,
+      "unknownUsageRequests": [
+        {
+          "request": 3,
+          "status": 503
+        }
+      ],
+      "ledgerPresent": true,
+      "costComplete": false,
+      "totalEstimatedUsd": null
+    },
+    {
+      "case": "bugfix-10",
+      "family": "bugfix",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 165831,
+        "cached": 148864,
+        "output": 1107
+      },
+      "knownEstimatedUsd": 0.373884,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.373884
+    },
+    {
+      "case": "json-7",
+      "family": "json",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 40039,
+        "cached": 35456,
+        "output": 166
+      },
+      "knownEstimatedUsd": 0.089586,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.089586
+    },
+    {
+      "case": "json-7",
+      "family": "json",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 48892,
+        "cached": 39808,
+        "output": 176
+      },
+      "knownEstimatedUsd": 0.139448,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.139448
+    },
+    {
+      "case": "code-10",
+      "family": "code",
+      "arm": "proxy",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 44529,
+        "cached": 34176,
+        "output": 211
+      },
+      "knownEstimatedUsd": 0.148256,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.148256
+    },
+    {
+      "case": "code-10",
+      "family": "code",
+      "arm": "headroom",
+      "verdict": "PASS",
+      "infrastructureFailure": false,
+      "clientErrors": [],
+      "knownUsage": {
+        "input": 98440,
+        "cached": 81792,
+        "output": 371
+      },
+      "knownEstimatedUsd": 0.266822,
+      "unknownUsageRequests": [],
+      "ledgerPresent": true,
+      "costComplete": true,
+      "totalEstimatedUsd": 0.266822
+    }
+  ],
+  "attemptAccounting": {
+    "proxy": {
+      "attempts": 70,
+      "knownEstimatedUsd": 15.635996,
+      "unknownCostAttempts": 1,
+      "infrastructureFailures": 1
+    },
+    "headroom": {
+      "attempts": 70,
+      "knownEstimatedUsd": 21.968986,
+      "unknownCostAttempts": 0,
+      "infrastructureFailures": 0
+    }
+  },
+  "superiorityEstablished": false
+}

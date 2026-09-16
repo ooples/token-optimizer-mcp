@@ -1,0 +1,95 @@
+{
+  "scope": "Recorder timing; HeadRoom upstream includes competitor work and network/provider time, not isolated competitor CPU.",
+  "pairs": [
+    {
+      "group": "json",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "agentSeconds": 19.9,
+          "requests": 3,
+          "summedTransformMs": 225.18560000000184,
+          "summedUpstreamMs": 17615.871300000003
+        },
+        "headroom": {
+          "agentSeconds": 15,
+          "requests": 3,
+          "summedTransformMs": 1.6549000000004526,
+          "summedUpstreamMs": 12831.9856
+        }
+      }
+    },
+    {
+      "group": "nullable",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "agentSeconds": 17.4,
+          "requests": 3,
+          "summedTransformMs": 220.73720000000014,
+          "summedUpstreamMs": 15225.771700000001
+        },
+        "headroom": {
+          "agentSeconds": 17.1,
+          "requests": 3,
+          "summedTransformMs": 1.5740000000009786,
+          "summedUpstreamMs": 14950.599799999996
+        }
+      }
+    },
+    {
+      "group": "refresh",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "agentSeconds": 80.4,
+          "requests": 6,
+          "summedTransformMs": 278.3939000000098,
+          "summedUpstreamMs": 76836.6685
+        },
+        "headroom": {
+          "agentSeconds": 51.9,
+          "requests": 6,
+          "summedTransformMs": 3.471300000002543,
+          "summedUpstreamMs": 48152.1842
+        }
+      }
+    },
+    {
+      "group": "repeat",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "agentSeconds": 37.7,
+          "requests": 5,
+          "summedTransformMs": 329.4097000000013,
+          "summedUpstreamMs": 35027.9203
+        },
+        "headroom": {
+          "agentSeconds": 23.2,
+          "requests": 5,
+          "summedTransformMs": 4.620600000001673,
+          "summedUpstreamMs": 20783.3748
+        }
+      }
+    },
+    {
+      "group": "repeat",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "agentSeconds": 24.8,
+          "requests": 5,
+          "summedTransformMs": 294.8548000000012,
+          "summedUpstreamMs": 21871.7617
+        },
+        "headroom": {
+          "agentSeconds": 22.2,
+          "requests": 5,
+          "summedTransformMs": 3.751000000001113,
+          "summedUpstreamMs": 18987.8175
+        }
+      }
+    }
+  ]
+}

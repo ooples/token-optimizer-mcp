@@ -1,0 +1,52 @@
+{
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\headroom-gap-probe-WnH2Al",
+  "kind": "offline synthetic route probe; no model tasks, no provider charges, bytes not tokens",
+  "cases": [
+    {
+      "name": "repeat-1",
+      "inputBytes": 11422,
+      "oursBytes": 2066,
+      "headroomBytes": 4356
+    },
+    {
+      "name": "repeat-2",
+      "inputBytes": 22716,
+      "oursBytes": 4004,
+      "headroomBytes": 4461
+    },
+    {
+      "name": "repeat-3",
+      "inputBytes": 34010,
+      "oursBytes": 5942,
+      "headroomBytes": 4566
+    },
+    {
+      "name": "small",
+      "inputBytes": 802,
+      "oursBytes": 802,
+      "headroomBytes": 802
+    },
+    {
+      "name": "output-text",
+      "inputBytes": 11454,
+      "oursBytes": 11454,
+      "headroomBytes": 4388
+    },
+    {
+      "name": "local-shell",
+      "inputBytes": 11425,
+      "oursBytes": 11425,
+      "headroomBytes": 4359
+    },
+    {
+      "name": "apply-patch",
+      "inputBytes": 11425,
+      "oursBytes": 11425,
+      "headroomBytes": 4359
+    }
+  ],
+  "prefixStability": {
+    "ours": true,
+    "headroom": true
+  }
+}

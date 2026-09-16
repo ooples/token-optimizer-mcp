@@ -1,0 +1,1502 @@
+{
+  "version": 2,
+  "created": "2026-09-16T12:33:56.561Z",
+  "scheduleSeed": 3206388120,
+  "productCommit": "74f20dd34a63ae536a945922f238a6fefd78eb95",
+  "caseSuite": "adversarial-v1",
+  "model": "gpt-6-astra",
+  "families": [
+    "logs",
+    "json",
+    "code",
+    "bugfix",
+    "refactor",
+    "refresh",
+    "mixed",
+    "outer",
+    "tiny",
+    "entropy",
+    "numeric",
+    "nullable"
+  ],
+  "pairsPerFamily": 10,
+  "pairs": 120,
+  "runs": 240,
+  "scenario": {
+    "model": "gpt-6-astra",
+    "label": "Codex Enterprise standard rate-card scenario; not actual billed cost",
+    "verifiedOn": "2026-09-15",
+    "source": "https://help.openai.com/en/articles/20001415",
+    "usdPerMillion": {
+      "uncached": 10,
+      "cached": 1,
+      "output": 50
+    },
+    "assumptions": [
+      "All runs use standard speed with no regional or contract adjustments.",
+      "Codex Astra has no cache-write charge or long-context multiplier.",
+      "Subscription charges, credits, proxy compute, and account discounts are not measured."
+    ]
+  },
+  "bootstrap": {
+    "resamples": 20000,
+    "seed": 3206388120
+  },
+  "success": {
+    "minimumOneSided95SuccessBound": 0.95,
+    "bothCostUpper95Below": 0.95
+  },
+  "joint": {
+    "alpha": 0.05,
+    "comparisonsPerFamily": 3,
+    "strictObservedAllWins": true,
+    "minimumFamilyJointWinProbability": 0.5,
+    "method": "Bonferroni simultaneous one-sided paired log-ratio t bounds for cost and agent time; exact binomial lower bounds for joint wins. Parametric mean inference assumes independent approximately normal log ratios; probability bounds assume independent case pairs."
+  },
+  "sizing": {
+    "pairsPerFamily": 10,
+    "note": "A fixed diagnostic confirmation budget, not powered to certify a 95% per-task joint-win probability. At 10/10 wins the simultaneous binomial lower bound remains far below 95%. No sample extension based on results."
+  },
+  "schedule": [
+    {
+      "id": "nullable-4",
+      "family": "nullable",
+      "task": "nullable",
+      "seed": 2846507254,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "4d1382a224b52bd3405d213b930ae3844e15d5f48029f7b6c921f26a7d3a0034"
+    },
+    {
+      "id": "bugfix-7",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 2306344016,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "2a4bbc44cebea8f6f96cbb8378e4bc5947e1ee1cadb1195586438c0cecd581d0"
+    },
+    {
+      "id": "numeric-4",
+      "family": "numeric",
+      "task": "numeric",
+      "seed": 2606609803,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "2fb5387be053bdc3b793d0f0b3c514ad089ffcf064b9c7716254128bdc0a42d9"
+    },
+    {
+      "id": "entropy-7",
+      "family": "entropy",
+      "task": "entropy",
+      "seed": 2673174794,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "6cd1bafb4d6caaf3b109f3d0932867732e2c5fc0616ddd503f3af820f72e14c1"
+    },
+    {
+      "id": "refactor-3",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 2319240952,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "138e4c6beb66914d55e4f5f7798fc4f384314f8d3a731756cb8dfc8f305a8a57"
+    },
+    {
+      "id": "tiny-3",
+      "family": "tiny",
+      "task": "tiny",
+      "seed": 2728417532,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "d9320102e5b8445ca1af81684eef7defdfc41ce6e95830d6d82a46d95884b6bb"
+    },
+    {
+      "id": "bugfix-4",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 2734033796,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "6fba32918e54aff08c1a4abdf3bea1d2592487b1c50503d42b126c989ff0d42e"
+    },
+    {
+      "id": "outer-9",
+      "family": "outer",
+      "task": "refresh",
+      "seed": 2364228092,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "outer-truncated",
+      "caseSha256": "29a02e1f13a7b31e8a10b4896a805f6316ed04b627634661af181db30acace48"
+    },
+    {
+      "id": "code-7",
+      "family": "code",
+      "task": "code",
+      "seed": 2175418325,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "bd15fd6c32edfd28b51ecbbaf10aaff255594cd15d204aeb0a67154f7ce45fd2"
+    },
+    {
+      "id": "refactor-5",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 2366787204,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "64f274d8ca64160498c3d91e15d995361dfbcebacc4404daa4aa9335596be19a"
+    },
+    {
+      "id": "refresh-9",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 2547725452,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "a22f3ab35ea358da5f0438b6a0fde89fa46c206ef0d11038a71068168d327038"
+    },
+    {
+      "id": "bugfix-2",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 2078015043,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "93cd16d7acc6def1bb7b3b059fd8da9bb95cb813f77c866c8fa76bcddf5796bc"
+    },
+    {
+      "id": "tiny-2",
+      "family": "tiny",
+      "task": "tiny",
+      "seed": 2364097335,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "6ee927905416b7c9066ed929992c1d143a84647ec23ca506a130cd4ec5cb7a2a"
+    },
+    {
+      "id": "numeric-9",
+      "family": "numeric",
+      "task": "numeric",
+      "seed": 2413607152,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "418dd6cd96b4aa41d6324f740a4554c647e49dbd8cfe816db2e83c6fac96a659"
+    },
+    {
+      "id": "logs-5",
+      "family": "logs",
+      "task": "logs",
+      "seed": 2366531073,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "a9428e51f724364d43b91cd5ce09254b34470b2b56de87c930bfeb44f967c8fa"
+    },
+    {
+      "id": "logs-4",
+      "family": "logs",
+      "task": "logs",
+      "seed": 2390228232,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "cb6c4a190429b9f1c7a399bfaa0bf75208cba42895a936e479897ca7b6fbee0d"
+    },
+    {
+      "id": "mixed-7",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 2051892858,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "ce508a1c0c35d1602aaa88dd06ab2ae3d265b24883ac5e447021b003014f6cb7"
+    },
+    {
+      "id": "entropy-3",
+      "family": "entropy",
+      "task": "entropy",
+      "seed": 2249258524,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "e37b9c3091d67d638abe70c4c4accf6f158b2bce226bedd2dda9baa663072abf"
+    },
+    {
+      "id": "refresh-7",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 2876899335,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "4bff3cc98ae61d1ffae06a366208af4f70b812b136a9fec317013961dc749e2e"
+    },
+    {
+      "id": "refresh-2",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 2641362889,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "6a5359e3a46201cab2ec95d9048e71e3d1c8c4355be7aa8f6ecd4c425162731b"
+    },
+    {
+      "id": "entropy-1",
+      "family": "entropy",
+      "task": "entropy",
+      "seed": 2895215790,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "dc59b4c4b11ffb8ab59ad90cba8d209c5ba9148ef6855febc4923f6ffce88c86"
+    },
+    {
+      "id": "json-2",
+      "family": "json",
+      "task": "json",
+      "seed": 2324800420,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "dd1d5b6f62057eddb4d9b48c8a8add0f1428005c58f2fa3d3516443e1c38e960"
+    },
+    {
+      "id": "refactor-7",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 2208515418,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "c0779131a0ce2dd0ea2790198924b355160a4fad724906321679b6da16245beb"
+    },
+    {
+      "id": "logs-3",
+      "family": "logs",
+      "task": "logs",
+      "seed": 2805721718,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "8aa6ab23f1b8135e7f9a5b1a29471ae4a698498d0e858fbb813be4c5779a1a5a"
+    },
+    {
+      "id": "mixed-3",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 2693930584,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "6101c47354100283e1699ea36cc60655f050a9673501f3972d5de8bab4300e4f"
+    },
+    {
+      "id": "entropy-10",
+      "family": "entropy",
+      "task": "entropy",
+      "seed": 2147339431,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "27825e48206eedb46c7ede71dd53cb9499f5eed90586c964770c4c28f62f32de"
+    },
+    {
+      "id": "code-10",
+      "family": "code",
+      "task": "code",
+      "seed": 2157050907,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "9b645347190a8cccf3b3f7a365a09b921d89552a6f2bc1b5ac7bcf69561088d9"
+    },
+    {
+      "id": "json-8",
+      "family": "json",
+      "task": "json",
+      "seed": 2116230660,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "959241f4818224ee2c55353120292102904d201dc39afdf81ed38f56b7bd3f8d"
+    },
+    {
+      "id": "mixed-4",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 2584523176,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "8c573d767d84890a739f08ad491abc7ac622711ad40103117f87ebfcab4e9695"
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 2850107389,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "4bb697194ee716d0c6b7db4ce5a8be27b33ac4fee99ee6a7dff1f2197239d2a1"
+    },
+    {
+      "id": "outer-8",
+      "family": "outer",
+      "task": "refresh",
+      "seed": 2819397774,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "outer-truncated",
+      "caseSha256": "54b7de1e546eeb6805a1b80a18ec7844a2f0a5a7eea371f7d1fe79fbd8498019"
+    },
+    {
+      "id": "mixed-2",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 2240577481,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "01c83d5bf446d9d2a174f74eebd98c50f24e3ba18c33bcd65944a18cf2cb2ca7"
+    },
+    {
+      "id": "entropy-2",
+      "family": "entropy",
+      "task": "entropy",
+      "seed": 2663675206,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "f8e23b0c9dca29a3c6b5ba05dc09b29868c0499a2f9ed720d3f4a8e7b12d51a7"
+    },
+    {
+      "id": "tiny-7",
+      "family": "tiny",
+      "task": "tiny",
+      "seed": 2844719571,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "73f8c637cd8d9f04de54abcfe24f6768428ae9fc0ecc205c94ca61d164d5a991"
+    },
+    {
+      "id": "mixed-9",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 2456690842,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "292d1a0a91d78db7fe2835176cd3b247f4716ec46e4f1f37f0932dc29ca47479"
+    },
+    {
+      "id": "refactor-9",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 2156495259,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "4524d60dfe871348ff1ab0804b15120e076e186afe9af83a5c3a138358e4db96"
+    },
+    {
+      "id": "nullable-8",
+      "family": "nullable",
+      "task": "nullable",
+      "seed": 2741375492,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "e5a7cbe204c586529b6d76c80a998a3a110cd57e3842da33b1722b3041d80ddd"
+    },
+    {
+      "id": "code-3",
+      "family": "code",
+      "task": "code",
+      "seed": 2388600595,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "00d6e56008e7c48cbfc46cbd0c143276ea9437d307ecc39e1bad8f940a71cd89"
+    },
+    {
+      "id": "tiny-9",
+      "family": "tiny",
+      "task": "tiny",
+      "seed": 2636173450,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "735c078ad2b2489d02b20269262f7fd8739ebe77dff7e567a4cedda430290a8b"
+    },
+    {
+      "id": "logs-9",
+      "family": "logs",
+      "task": "logs",
+      "seed": 2260190363,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "8e3e4dc0ec8b04b5c138fd4ba3b0fdccc512650b41f162b1631c385ace86c135"
+    },
+    {
+      "id": "json-1",
+      "family": "json",
+      "task": "json",
+      "seed": 2623833785,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "4570950537af48615a51e9be3fe65d5ef739a347e339a155491bd8735c765639"
+    },
+    {
+      "id": "refresh-4",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 2294741733,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "b6e75c18659e2f5c0f8660a4e72bec82095f4c664b5e5670cb1435781b4904b8"
+    },
+    {
+      "id": "numeric-10",
+      "family": "numeric",
+      "task": "numeric",
+      "seed": 2697584200,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "e9e0843e9e1c34158da443a9304718d1e0c72f23a070d9a347ff8c419bc413b7"
+    },
+    {
+      "id": "numeric-7",
+      "family": "numeric",
+      "task": "numeric",
+      "seed": 2638172039,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "1437aa2491abe00daecb990be78504f4c6f7953aeb49ded40016e060d0551cf6"
+    },
+    {
+      "id": "entropy-8",
+      "family": "entropy",
+      "task": "entropy",
+      "seed": 2221096934,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "fb79ad624aaa802ea22489f94a4fd37be5f3641df5cdc56b1b6ad27713ee9ce4"
+    },
+    {
+      "id": "outer-4",
+      "family": "outer",
+      "task": "refresh",
+      "seed": 2740119570,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "outer-truncated",
+      "caseSha256": "2e9fff08282a6c07d74d0bc6f039b3412d7684fb25e9b1ad87ac63abd04a8fc4"
+    },
+    {
+      "id": "numeric-2",
+      "family": "numeric",
+      "task": "numeric",
+      "seed": 2227013718,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "dd499545dcd77f5d6e39562529b317848ce2382982b5c6a34d8274d541c58a03"
+    },
+    {
+      "id": "bugfix-1",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 2332364539,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "fe930e8874a76c863dbe69beab282708a95879241bc1cef93dc7f67326ae97a2"
+    },
+    {
+      "id": "entropy-9",
+      "family": "entropy",
+      "task": "entropy",
+      "seed": 2181230132,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "f8362c9b03a8a136c42c71540d7a6dffec53cdaf9eea3a226504362bc502fd09"
+    },
+    {
+      "id": "code-2",
+      "family": "code",
+      "task": "code",
+      "seed": 2744298078,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "693025069d73569f5ecd2b0ab338a9c75acef46c75d2f29d37cf23715cb5a9a8"
+    },
+    {
+      "id": "nullable-6",
+      "family": "nullable",
+      "task": "nullable",
+      "seed": 2982565263,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "9432229bc85beda5c03b97ba91dce5774f412ec6632aeba5b2a85a8c96cbdc68"
+    },
+    {
+      "id": "nullable-2",
+      "family": "nullable",
+      "task": "nullable",
+      "seed": 2016201826,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "729872d190e8be5cb170fd3869414564c5a1211b454c0556e87e8402567ea0e3"
+    },
+    {
+      "id": "mixed-1",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 2334017227,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "ffed4e563f12fd148d5c47113102c26ba4caf66a4a114f3625230e980a284d40"
+    },
+    {
+      "id": "logs-7",
+      "family": "logs",
+      "task": "logs",
+      "seed": 2332327910,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "d40820e9eb617d99470a81ef7aa4a693d6caa15fece4508c1d3cec2151f45287"
+    },
+    {
+      "id": "bugfix-5",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 2486765623,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "da6a58673cff2c9954db1108a3ea4ba0c8dc237f3dc3403aede357668b16c9cf"
+    },
+    {
+      "id": "numeric-1",
+      "family": "numeric",
+      "task": "numeric",
+      "seed": 2712123668,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "2c2fce441c40403c39ca4076e819d610a38ecc42f6aae2b5a2db147c4c21f7eb"
+    },
+    {
+      "id": "outer-3",
+      "family": "outer",
+      "task": "refresh",
+      "seed": 2924464992,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "outer-truncated",
+      "caseSha256": "e71f11e044dcbecd3c9a3ee796713038751ec53a604e92e2b8070e1a20240c9b"
+    },
+    {
+      "id": "code-9",
+      "family": "code",
+      "task": "code",
+      "seed": 2522563028,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "c7b8a504c2ddc91062b3cf3e4c97287cbe26e1bef8a9b8a13c26654581637cd0"
+    },
+    {
+      "id": "outer-6",
+      "family": "outer",
+      "task": "refresh",
+      "seed": 2327542613,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "outer-truncated",
+      "caseSha256": "270f7a734476e60b9ebbe94182b0213e21d8d51c47caa09e49aeec5b248dbbc5"
+    },
+    {
+      "id": "mixed-5",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 2462583921,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "a6a66cc8bfd087e399f17173a36563558994fa0075ca3029e5ebdbfa43df5e33"
+    },
+    {
+      "id": "entropy-5",
+      "family": "entropy",
+      "task": "entropy",
+      "seed": 2835546229,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "6687b6ae4f555ee11c09fdd8701d57f481d68658a386b806d8c8298c03bffb93"
+    },
+    {
+      "id": "numeric-8",
+      "family": "numeric",
+      "task": "numeric",
+      "seed": 2843447769,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "52e74591ee11165bced6aec746ae20f484c2c120c170de62dc330ded17c48a65"
+    },
+    {
+      "id": "nullable-3",
+      "family": "nullable",
+      "task": "nullable",
+      "seed": 2058637329,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "ba83d6ad2ace2abd8124b1d28ebc65f714141f2bf946c556fe23a165e5c5b612"
+    },
+    {
+      "id": "nullable-1",
+      "family": "nullable",
+      "task": "nullable",
+      "seed": 2997377713,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "e5b505129e532dcec2a7e8c2426e53d7f54e5489fb306ed781eaa2d0b245ebec"
+    },
+    {
+      "id": "tiny-4",
+      "family": "tiny",
+      "task": "tiny",
+      "seed": 2554990626,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "07b51d1389352ce84836c944a1b83de89dc65889e22927d2a6afc2bbff40ffff"
+    },
+    {
+      "id": "bugfix-10",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 2065273788,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "f42a29780d0ea4413b65a694a83877ac7300195c2b6fc5b97030d0fe4e06411d"
+    },
+    {
+      "id": "bugfix-6",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 2791252675,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "f4631c3c5f147a0d50d5513483c2a58498e99d5f29a2e46cc1fa21bc4bf25940"
+    },
+    {
+      "id": "refresh-5",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 2395049362,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "ef68b6fc137d47882b647814c48cb203264173b6df1c827eb6a864ce1fe0d713"
+    },
+    {
+      "id": "refresh-6",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 2181542168,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "3171e06713514b2f3a39b229721e02762abc50e18bb8793eb6e312481c1d78aa"
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 2978781053,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "6760e3863f89e10bc437962d844c3117888ebeb37f9135f6e8fe99784230de98"
+    },
+    {
+      "id": "mixed-10",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 2111067030,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "a94d41abd54ab86e9f68b062e9954d1c651164f998c8b5055227a13d1269f7c5"
+    },
+    {
+      "id": "code-6",
+      "family": "code",
+      "task": "code",
+      "seed": 2313101120,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "4f65c55919088e84da89495c9fd81f7ead9befd168b0c9b40bbb5ea582c29f2d"
+    },
+    {
+      "id": "refactor-1",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 2620121557,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "0fdf090e315d7ec520c5e526241e5f79763fae84c4640dd1ec0d30b8bc5c2304"
+    },
+    {
+      "id": "outer-7",
+      "family": "outer",
+      "task": "refresh",
+      "seed": 2277285795,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "outer-truncated",
+      "caseSha256": "f3b9f26ee0a4e7641e49ec82fe14e001794433fd511569adc3286081b025ef3f"
+    },
+    {
+      "id": "entropy-6",
+      "family": "entropy",
+      "task": "entropy",
+      "seed": 2797286017,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "7553c23cf50b777193e6c341d623f6968ecbc342ec1f7889277291f8c2b19267"
+    },
+    {
+      "id": "outer-5",
+      "family": "outer",
+      "task": "refresh",
+      "seed": 2979806432,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "outer-truncated",
+      "caseSha256": "b8ac83871a08ee1feaa2cfc4ad3b324d6c02c8b77d20cedaffadcf90020f5449"
+    },
+    {
+      "id": "code-4",
+      "family": "code",
+      "task": "code",
+      "seed": 2214579374,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "ebe04b5a7c1361b4e734aaa3a9633acaffa42f4e6d15cdddcc9304fe66327040"
+    },
+    {
+      "id": "numeric-3",
+      "family": "numeric",
+      "task": "numeric",
+      "seed": 2512349486,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "83a04fcbcd4543af287501233bdd201bb914fb832d25aeacef462b37b82cd6e6"
+    },
+    {
+      "id": "nullable-10",
+      "family": "nullable",
+      "task": "nullable",
+      "seed": 2694961209,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "3ed71a71eb8700b8bdc9ce563811b54fbd98bb6f5c7a6585dc3d6987926fc6e3"
+    },
+    {
+      "id": "tiny-10",
+      "family": "tiny",
+      "task": "tiny",
+      "seed": 2486851810,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "c9217a20d1c0ef0584205df0d9309eda6b344e9cb256c6a7e63f2f283579a235"
+    },
+    {
+      "id": "outer-1",
+      "family": "outer",
+      "task": "refresh",
+      "seed": 2763869307,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "outer-truncated",
+      "caseSha256": "b87ef378cbff828b5eef5b18c6aab8e4c780cd0349cfce57e5eeb67c3130475f"
+    },
+    {
+      "id": "bugfix-3",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 2349279460,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "17d9e6c02d5db62244f3572ac462c6eb3d996bc617a5c91b0256d0849fad194b"
+    },
+    {
+      "id": "tiny-5",
+      "family": "tiny",
+      "task": "tiny",
+      "seed": 2256539258,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "33753f555ae699894b3067afdabf5b60d5429c6fb392f3161fdd0c0735a5a5e7"
+    },
+    {
+      "id": "refresh-3",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 2280062667,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "1c462d445009b1cd6a5edebed846c7f729628094d32875c9e76c85cdcea8931a"
+    },
+    {
+      "id": "bugfix-8",
+      "family": "bugfix",
+      "task": "bugfix",
+      "seed": 2175469321,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "21dc17742e946b5a681832501ac3d6237aeaf768641a940db135870967ed5388"
+    },
+    {
+      "id": "nullable-5",
+      "family": "nullable",
+      "task": "nullable",
+      "seed": 2578187650,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "67868df42d1aa727f511cd6992a2eee668be788c4d6d092d39a967d6f4ae7d0f"
+    },
+    {
+      "id": "nullable-7",
+      "family": "nullable",
+      "task": "nullable",
+      "seed": 2190395889,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "fe2d54519d30bed93304a4f0e56b41d086972a654fd6bd1c48b2126169c2200c"
+    },
+    {
+      "id": "nullable-9",
+      "family": "nullable",
+      "task": "nullable",
+      "seed": 2494523014,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "6f8c64c828335915acbac9d93d24a02d2f2c1fe3468cc9b4dda43925e23b240c"
+    },
+    {
+      "id": "logs-8",
+      "family": "logs",
+      "task": "logs",
+      "seed": 2366430013,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "ffbae5481593f98d9f18180264969c986ea844f9fe66d60c12de810dc1a44739"
+    },
+    {
+      "id": "logs-2",
+      "family": "logs",
+      "task": "logs",
+      "seed": 2633347665,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "b0fc4ac30d9466718ad13d3e40338ccc4c07d5d73c08672259686e71e3601855"
+    },
+    {
+      "id": "refactor-10",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 2387943007,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "dbe25dfcc6389f30c293f85d210fe8761aecb65f82fb6d70e6908174f1a5b9bb"
+    },
+    {
+      "id": "logs-1",
+      "family": "logs",
+      "task": "logs",
+      "seed": 2539023305,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "9afc5f80d2bbcb4e5811916803c2aef81ce53233b0cc1356d5f75ad1b2b6d0f1"
+    },
+    {
+      "id": "code-8",
+      "family": "code",
+      "task": "code",
+      "seed": 2419924178,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "a61d28fc59c087cf0ccb578212e3306b0a7bd1718d83e5f6bd055e92b810baf9"
+    },
+    {
+      "id": "refactor-2",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 2417323461,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "d1a38d6a930ca83cf7d0dd6acc3ab2c6e80380cff8a267ebe61f0cfccd9111c3"
+    },
+    {
+      "id": "refactor-6",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 2287081113,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "cc6d1d74c3a72dff8fb3762b252d19b44641e8add7ec3f3505f7f1b4139183df"
+    },
+    {
+      "id": "refresh-1",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 2877647381,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "7b86608873c21ced9f58a306a847227e730100aeda9c244ae7d6acb0cb172ee0"
+    },
+    {
+      "id": "code-1",
+      "family": "code",
+      "task": "code",
+      "seed": 2779901477,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "b60e76d6c06dd70ecb582afc9c5f16ea49d83ecc02c44fc66df9dfccc5bb695d"
+    },
+    {
+      "id": "refactor-4",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 2281160836,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "c24a81d542a3791b0d4517cfe5fe0e662c4c2f38ba7141351dd2be81fe1a97dc"
+    },
+    {
+      "id": "json-3",
+      "family": "json",
+      "task": "json",
+      "seed": 2560402120,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "980a10857f691c208b3b730828cb8e8958ba2cdb8608b510c959b089b25c3010"
+    },
+    {
+      "id": "logs-6",
+      "family": "logs",
+      "task": "logs",
+      "seed": 2577824397,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "1c6d641b1f9146833f1ead8ee99ead39103e3937024bb006edd11fc4d65845f2"
+    },
+    {
+      "id": "entropy-4",
+      "family": "entropy",
+      "task": "entropy",
+      "seed": 2544012962,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "dbfce297f6b2e74bbccb51acdde6a3ee0522f354251a07bd1cdb98b296227855"
+    },
+    {
+      "id": "logs-10",
+      "family": "logs",
+      "task": "logs",
+      "seed": 2237903020,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "c3bc7537b1c3c6e56234d9a29d53784d099948ad684bbf4dbb16e944ddeeb0cf"
+    },
+    {
+      "id": "json-7",
+      "family": "json",
+      "task": "json",
+      "seed": 2198680454,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "7f3c815a8b489c70ea115d59b48bf67bec4d54c04d0f7d1490feee320a586481"
+    },
+    {
+      "id": "numeric-6",
+      "family": "numeric",
+      "task": "numeric",
+      "seed": 2511261881,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "4d30d62f06d3160d181c01c6a95d1cefe393a066211a5973ae1c87948595b420"
+    },
+    {
+      "id": "code-5",
+      "family": "code",
+      "task": "code",
+      "seed": 2549455328,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "fc50743ecf39623db3aa149717f0b12a8ae5c3140af8e57d85d6ff77154a2b06"
+    },
+    {
+      "id": "tiny-6",
+      "family": "tiny",
+      "task": "tiny",
+      "seed": 2874419253,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "5831bbec04a69e774dc15044cb08833f72c2a2f4cf21088a1e89b598e1884d7e"
+    },
+    {
+      "id": "json-4",
+      "family": "json",
+      "task": "json",
+      "seed": 2736189872,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "244315bf11931a4773bcc907558b8334d41698f51f9d8750ceea351088bff1ed"
+    },
+    {
+      "id": "json-5",
+      "family": "json",
+      "task": "json",
+      "seed": 2182412605,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "548a9802fc74a6da72d1a52a49e0986b14f2b30f8d069caf59b2c0dc48f56f75"
+    },
+    {
+      "id": "outer-10",
+      "family": "outer",
+      "task": "refresh",
+      "seed": 2058075318,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "outer-truncated",
+      "caseSha256": "2132a0e3c9cf6fbf9f2345cf1bd0559c6313d5ec37dc419bc0830026b8e4f2c2"
+    },
+    {
+      "id": "json-6",
+      "family": "json",
+      "task": "json",
+      "seed": 2956323374,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "6ee12bf29b9e1d33aee3ce2860cff3e1e8fe8f91f2eace78d20306d2c49ae609"
+    },
+    {
+      "id": "mixed-6",
+      "family": "mixed",
+      "task": "refresh",
+      "seed": 2369634803,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "mixed",
+      "caseSha256": "90181545d7dba1926d70faa36b0314cccdd4aac26edbbcf3599d91a09b24d05d"
+    },
+    {
+      "id": "refactor-8",
+      "family": "refactor",
+      "task": "refactor",
+      "seed": 2629624585,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "962c37f1e43154acdbb74aa68a26671a1879db44481cb5923ed52f8df9b0132a"
+    },
+    {
+      "id": "refresh-10",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 2053418964,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "850667d0d4212124955ea1617a6f20e65b663ff90484e99ac0c6e3fe0cb810d9"
+    },
+    {
+      "id": "outer-2",
+      "family": "outer",
+      "task": "refresh",
+      "seed": 2927319362,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "outer-truncated",
+      "caseSha256": "7352b1814dece07a411962a93d73e8b2943fdf4639218a11e6b70b14f86c22ee"
+    },
+    {
+      "id": "json-10",
+      "family": "json",
+      "task": "json",
+      "seed": 2628042505,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "209178b5f305017f424244bb9f4073500017aa6894b053ffeccd1e2fc80c6bb7"
+    },
+    {
+      "id": "tiny-8",
+      "family": "tiny",
+      "task": "tiny",
+      "seed": 2016704463,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "28035de55b9b6db6113f7434ada80be09984a8c8148accab235e61cffc479291"
+    },
+    {
+      "id": "json-9",
+      "family": "json",
+      "task": "json",
+      "seed": 2653009744,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "c5bb4838f5ffc09a854679e7411ef557dcbef8fa3c8b5790cc378afddd42ef46"
+    },
+    {
+      "id": "tiny-1",
+      "family": "tiny",
+      "task": "tiny",
+      "seed": 2052601189,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "50d7868c87739b10a6f66dbc1b46f6f744149c86bcd3a4b9901dec1b00624b95"
+    },
+    {
+      "id": "numeric-5",
+      "family": "numeric",
+      "task": "numeric",
+      "seed": 2703993509,
+      "arms": [
+        "proxy",
+        "headroom"
+      ],
+      "readMode": "natural",
+      "caseSha256": "3bab0570d116b9da9c409a3b3aa17e828cefc70fb6db3ed5fd4888f4214c39a7"
+    },
+    {
+      "id": "refresh-8",
+      "family": "refresh",
+      "task": "refresh",
+      "seed": 2525631462,
+      "arms": [
+        "headroom",
+        "proxy"
+      ],
+      "readMode": "natural",
+      "caseSha256": "24f90613e5b68fb2a3eef0daa7015e92a8fb3424334ad6ca5dc33f47c4cae12d"
+    }
+  ]
+}

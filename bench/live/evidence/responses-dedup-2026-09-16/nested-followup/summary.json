@@ -1,0 +1,69 @@
+{
+  "scope": "Development comparison; all scheduled outcomes retained, no universal-superiority claim.",
+  "totals": {
+    "proxy": {
+      "attempts": 2,
+      "passes": 2,
+      "estimatedUsd": 0.381052,
+      "agentSeconds": 48.2,
+      "inputTokens": 136561,
+      "cachedTokens": 112512,
+      "requests": 10
+    },
+    "headroom": {
+      "attempts": 2,
+      "passes": 2,
+      "estimatedUsd": 0.621684,
+      "agentSeconds": 53.7,
+      "inputTokens": 224926,
+      "cachedTokens": 184064,
+      "requests": 10
+    }
+  },
+  "costWins": 2,
+  "speedWins": 1,
+  "pairs": [
+    {
+      "group": "repeat",
+      "rep": 1,
+      "seed": 3141592201,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-nested-2026-09-16\\repeat\\run-REvpwx",
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.214832,
+          "agentSeconds": 24.1,
+          "requests": 5
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.327278,
+          "agentSeconds": 31.2,
+          "requests": 5
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "group": "repeat",
+      "rep": 2,
+      "seed": 3141592202,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-nested-2026-09-16\\repeat\\run-REvpwx",
+      "arms": {
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.294406,
+          "agentSeconds": 22.5,
+          "requests": 5
+        },
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.16622,
+          "agentSeconds": 24.1,
+          "requests": 5
+        }
+      },
+      "classification": "speed-loss"
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-joint-numeric-followup\\run-fuK7lg",
+  "scope": "Development cases, no confidence-backed confirmation claim.",
+  "pairs": [
+    {
+      "task": "numeric",
+      "rep": 1,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.110098,
+          "agentSeconds": 15.6,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.183562,
+          "agentSeconds": 14.3,
+          "requests": 3
+        }
+      },
+      "classification": "speed-loss"
+    },
+    {
+      "task": "numeric",
+      "rep": 2,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.110198,
+          "agentSeconds": 13.8,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.207466,
+          "agentSeconds": 14.7,
+          "requests": 3
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "task": "numeric",
+      "rep": 3,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.109968,
+          "agentSeconds": 13.3,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.20484,
+          "agentSeconds": 15.1,
+          "requests": 3
+        }
+      },
+      "classification": "joint-win"
+    },
+    {
+      "task": "numeric",
+      "rep": 4,
+      "arms": {
+        "proxy": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.194364,
+          "agentSeconds": 14,
+          "requests": 3
+        },
+        "headroom": {
+          "verdict": "PASS",
+          "estimatedUsd": 0.2054,
+          "agentSeconds": 15.7,
+          "requests": 3
+        }
+      },
+      "classification": "joint-win"
+    }
+  ]
+}

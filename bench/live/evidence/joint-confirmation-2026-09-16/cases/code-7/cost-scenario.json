@@ -1,0 +1,59 @@
+{
+  "scenario": {
+    "model": "gpt-6-astra",
+    "label": "Codex Enterprise standard rate-card scenario; not actual billed cost",
+    "verifiedOn": "2026-09-15",
+    "source": "https://help.openai.com/en/articles/20001415",
+    "usdPerMillion": {
+      "uncached": 10,
+      "cached": 1,
+      "output": 50
+    },
+    "assumptions": [
+      "All runs use standard speed with no regional or contract adjustments.",
+      "Codex Astra has no cache-write charge or long-context multiplier.",
+      "Subscription charges, credits, proxy compute, and account discounts are not measured."
+    ]
+  },
+  "valid": true,
+  "failures": [],
+  "measured": [
+    {
+      "task": "code",
+      "arm": "proxy",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.14477
+    },
+    {
+      "task": "code",
+      "arm": "headroom",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.38999
+    }
+  ],
+  "aggregates": [
+    {
+      "task": "code",
+      "arm": "proxy",
+      "meanEstimatedUsd": 0.14477
+    },
+    {
+      "task": "code",
+      "arm": "headroom",
+      "meanEstimatedUsd": 0.38999
+    }
+  ],
+  "comparisons": [
+    {
+      "task": "code",
+      "candidate": "proxy",
+      "against": "headroom",
+      "estimatedUsdDelta": -0.24522,
+      "reductionPercent": 62.87853534706018
+    }
+  ]
+}

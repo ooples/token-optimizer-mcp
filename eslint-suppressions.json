@@ -51,7 +51,7 @@
   },
   "src/server/index.ts": {
     "n/no-sync": {
-      "count": 11
+      "count": 10
     }
   },
   "src/server/mcp-diagnostics.ts": {

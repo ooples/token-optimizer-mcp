@@ -1,0 +1,13 @@
+{
+  "verifiedAt": "2026-09-16T15:35:34.142Z",
+  "frozenFiles": 823,
+  "unchanged": 822,
+  "changed": [
+    {
+      "path": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\report-codex.mjs",
+      "before": "9039293fe5e3c6f86eadb1a1fb7957d36fc161c1dc35db102ba3447a1af49107",
+      "after": "51a5d9110d5f74c53e7b11e132eceac132fce89171e414cc5e5bdb33c9f54714"
+    }
+  ],
+  "reason": "Only the post-study stderr allocation classifier integration changed an existing frozen artifact. Product build, competitor/client artifacts, plan, schedule and numerical analyzers remain unchanged. Original study analysis retained."
+}

@@ -1,0 +1,16 @@
+{
+  "model": "gpt-6-astra",
+  "arms": [
+    "control",
+    "proxy",
+    "headroom"
+  ],
+  "reps": 3,
+  "tasks": [
+    "refresh"
+  ],
+  "balanced": true,
+  "seedOffset": 7,
+  "readMode": "natural",
+  "started": "2026-09-15T21:02:15.482Z"
+}

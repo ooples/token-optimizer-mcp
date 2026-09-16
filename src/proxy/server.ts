@@ -47,6 +47,7 @@ import {
   deferTools,
   withAdvancedToolUse,
   DEFAULT_KEEP_RELEVANT,
+  SMALL_TOOL_CHARS,
 } from '../compress/tools.js';
 import {
   accountingPath,
@@ -55,6 +56,8 @@ import {
   type CompressionFacts,
 } from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
+import { captureDir, captureRequest } from './capture.js';
+import { compressResponses } from './responses.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
 import {
@@ -428,6 +431,20 @@ export function compressBody(
     // else entirely. Forward it untouched.
     return unchanged('body is not JSON');
   }
+  if (!parsed || typeof parsed !== 'object')
+    return unchanged('not a request object');
+  if (Array.isArray(parsed.input)) {
+    try {
+      return compressResponses(
+        body,
+        parsed as unknown as Record<string, unknown>,
+        spill,
+        tuning
+      );
+    } catch {
+      return unchanged('Responses compression failed');
+    }
+  }
   if (!Array.isArray(parsed.messages)) return unchanged('no messages array');
 
   // TOOL DEFERRAL IS ITS OWN CAPABILITY, and deliberately not folded into the
@@ -463,6 +480,7 @@ export function compressBody(
         // the prefix every turn. See taskIn for the measurement.
         query: taskIn(parsed),
         keepRelevant: keepToolsFromEnv(),
+        smallToolChars: smallToolCharsFromEnv(),
       });
       parsed = out.request;
       deferred = out.deferredCount;
@@ -762,6 +780,27 @@ export function deferToolsEnabled(
 }
 
 /**
+ * Below how many characters a tool definition is exempt from deferral.
+ * The previous default exempted definitions below 1,500 characters to avoid
+ * discovery round trips. Captured traffic showed that 88 of 115 real tools
+ * fell under that floor, leaving about 55 KB undeferred; tool definitions were
+ * 66.9% of the request. That aggregate cost motivated removing the default floor.
+ *
+ * `SMALL_TOOL_CHARS` is now zero: every eligible definition may be deferred.
+ * TOKEN_OPTIMIZER_PROXY_SMALL_TOOL_CHARS can restore a positive exemption for
+ * workloads where discovery round trips cost more than the saved definition.
+ */
+export function smallToolCharsFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const raw = env.TOKEN_OPTIMIZER_PROXY_SMALL_TOOL_CHARS;
+  if (raw === undefined || raw.trim() === '') return SMALL_TOOL_CHARS;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return SMALL_TOOL_CHARS;
+  return n;
+}
+
+/**
  * Is it safe to send credentials to this upstream?
  *
  * CREDENTIALS DO NOT GO OVER CLEARTEXT. Every request through here carries
@@ -825,7 +864,8 @@ function forward(
   req: IncomingMessage,
   res: ServerResponse,
   body: Buffer,
-  facts?: CompressionFacts
+  facts?: CompressionFacts,
+  transformMs = 0
 ): void {
   const path = requestPath(req.url);
   if (path === null) {
@@ -877,6 +917,9 @@ function forward(
       req.headers['anthropic-beta']
     );
 
+  const upstreamStarted = performance.now();
+  let upstreamHeadersMs: number | undefined;
+  let receivedResponse = false;
   const upstreamReq = send(
     {
       protocol: target.protocol,
@@ -887,6 +930,8 @@ function forward(
       headers,
     },
     (upstreamRes) => {
+      receivedResponse = true;
+      upstreamHeadersMs = performance.now() - upstreamStarted;
       // HOP-BY-HOP HEADERS ARE STRIPPED IN BOTH DIRECTIONS, and doing it in
       // only one was a real defect rather than an untidiness.
       //
@@ -942,19 +987,50 @@ function forward(
               path: requestPath(req.url) ?? '/',
               status: upstreamRes.statusCode || 0,
               ...facts,
+              timing: {
+                transformMs,
+                upstreamHeadersMs,
+                upstreamMs: performance.now() - upstreamStarted,
+              },
               usage,
             });
           },
           typeof encoding === 'string' ? encoding : undefined
         );
       }
+      // Codex closes after its terminal SSE event, even if the provider keeps
+      // the stream open. Cancel that upstream stream so its usage is settled.
+      res.once('close', () => {
+        if (!upstreamRes.complete) upstreamRes.destroy();
+      });
       // Piped, not buffered: an SSE stream must arrive as it is produced, or
       // the agent sits waiting for a response that has already started.
       upstreamRes.pipe(res);
     }
   );
 
+  res.once('close', () => upstreamReq.destroy());
   upstreamReq.on('error', (error) => {
+    // A connection failure has no response stream for tapUsage to observe.
+    // Keep the attempted request in the ledger with unknown usage, never zero.
+    const ledger = facts ? accountingPath() : null;
+    if (!receivedResponse && ledger && facts) {
+      receivedResponse = true;
+      appendRecord(ledger, {
+        ts: new Date().toISOString(),
+        path: requestPath(req.url) ?? '/',
+        status: 0,
+        ...facts,
+        timing: {
+          transformMs,
+          upstreamHeadersMs,
+          upstreamMs: performance.now() - upstreamStarted,
+        },
+        transportError:
+          (error as NodeJS.ErrnoException).code ?? 'UPSTREAM_ERROR',
+        usage: {},
+      });
+    }
     if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
     res.end(`token-optimizer proxy: upstream request failed: ${error.message}`);
   });
@@ -1064,6 +1140,7 @@ export async function startProxy(
   const guessing = upstreamIsDefault(options);
   const limit = bodyLimitFor(options);
 
+  let captureFailureWarned = false;
   const server = createServer((req, res) => {
     void (async () => {
       // VALIDATED BEFORE ANYTHING IS COMPRESSED, and the order is the fix. Compressing
@@ -1113,7 +1190,18 @@ export async function startProxy(
         res.writeHead(400).end();
         return;
       }
+      const capture = captureDir();
+      if (capture)
+        void captureRequest(capture, path, body).then((captured) => {
+          if (!captured && !captureFailureWarned) {
+            captureFailureWarned = true;
+            console.error(
+              'token-optimizer proxy: capture incomplete (write failed or memory queue full)'
+            );
+          }
+        });
 
+      const transformStarted = performance.now();
       const { body: next, summary } = compressBody(
         body,
         spill,
@@ -1131,7 +1219,14 @@ export async function startProxy(
       // knowledge block read its own effect as zero. The summary IS the
       // compression facts -- every field of it belongs in the ledger, and a
       // field added to one should never need remembering in the other.
-      forward(upstream, req, res, next, summary);
+      forward(
+        upstream,
+        req,
+        res,
+        next,
+        summary,
+        performance.now() - transformStarted
+      );
     })();
   });
 

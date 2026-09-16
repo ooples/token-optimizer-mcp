@@ -1,0 +1,75 @@
+{
+  "model": "gpt-6-astra",
+  "balanced": false,
+  "valid": true,
+  "failures": [],
+  "aggregates": [
+    {
+      "task": "refresh",
+      "arm": "control",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 118073,
+      "meanCached": 108160,
+      "meanUncached": 9913,
+      "meanOutput": 767,
+      "meanSeconds": 42.9,
+      "meanAgentSeconds": 41.9
+    },
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 103160,
+      "meanCached": 80768,
+      "meanUncached": 22392,
+      "meanOutput": 780,
+      "meanSeconds": 46.3,
+      "meanAgentSeconds": 45.4
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 154297,
+      "meanCached": 105472,
+      "meanUncached": 48825,
+      "meanOutput": 697,
+      "meanSeconds": 57.8,
+      "meanAgentSeconds": 46.8
+    },
+    {
+      "task": "refresh",
+      "arm": "full",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 153430,
+      "meanCached": 133248,
+      "meanUncached": 20182,
+      "meanOutput": 839,
+      "meanSeconds": 52.2,
+      "meanAgentSeconds": 51.3
+    }
+  ],
+  "comparison": [
+    {
+      "task": "refresh",
+      "candidate": "proxy",
+      "inputReductionVsHeadroom": 0.3314192758122323,
+      "inputReductionVsControl": 0.12630321919490484
+    },
+    {
+      "task": "refresh",
+      "candidate": "full",
+      "inputReductionVsHeadroom": 0.0056190334225552085,
+      "inputReductionVsControl": -0.29945034004387105
+    }
+  ],
+  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+}

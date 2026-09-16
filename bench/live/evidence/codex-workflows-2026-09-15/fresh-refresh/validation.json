@@ -1,0 +1,101 @@
+[
+  {
+    "task": "refresh",
+    "arm": "control",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "proxy",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "headroom",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "control",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "headroom",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "control",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "refresh",
+    "arm": "proxy",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "notApplicable": true
+    },
+    "clientErrors": []
+  }
+]

@@ -248,6 +248,7 @@ describe('queryIsUsable', () => {
 });
 
 describe('through the json engine, end to end', () => {
+  // Distinct distractors avoid rare-category retention, isolating ranking.
   const rows = (): string =>
     JSON.stringify(
       Array.from({ length: 60 }, (_, i) => ({
@@ -256,7 +257,7 @@ describe('through the json engine, end to end', () => {
         message:
           i === 47
             ? 'connection pool exhausted'
-            : 'routine heartbeat from the scheduler',
+            : `routine heartbeat from the scheduler ${i}`,
       }))
     );
 

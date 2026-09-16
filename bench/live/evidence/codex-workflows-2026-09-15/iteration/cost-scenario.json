@@ -1,0 +1,132 @@
+{
+  "scenario": {
+    "model": "gpt-6-astra",
+    "label": "Codex Enterprise standard rate-card scenario; not actual billed cost",
+    "verifiedOn": "2026-09-15",
+    "source": "https://help.openai.com/en/articles/20001415",
+    "usdPerMillion": {
+      "uncached": 10,
+      "cached": 1,
+      "output": 50
+    },
+    "assumptions": [
+      "All runs use standard speed with no regional or contract adjustments.",
+      "Codex Astra has no cache-write charge or long-context multiplier.",
+      "Subscription charges, credits, proxy compute, and account discounts are not measured."
+    ]
+  },
+  "valid": true,
+  "failures": [],
+  "measured": [
+    {
+      "task": "bugfix",
+      "arm": "control",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.364462
+    },
+    {
+      "task": "bugfix",
+      "arm": "proxy",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.24533
+    },
+    {
+      "task": "bugfix",
+      "arm": "headroom",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.300594
+    },
+    {
+      "task": "refresh",
+      "arm": "control",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.31679
+    },
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.207728
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "estimatedUsd": 0.228216
+    }
+  ],
+  "aggregates": [
+    {
+      "task": "bugfix",
+      "arm": "control",
+      "meanEstimatedUsd": 0.364462
+    },
+    {
+      "task": "bugfix",
+      "arm": "proxy",
+      "meanEstimatedUsd": 0.24533
+    },
+    {
+      "task": "bugfix",
+      "arm": "headroom",
+      "meanEstimatedUsd": 0.300594
+    },
+    {
+      "task": "refresh",
+      "arm": "control",
+      "meanEstimatedUsd": 0.31679
+    },
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "meanEstimatedUsd": 0.207728
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "meanEstimatedUsd": 0.228216
+    }
+  ],
+  "comparisons": [
+    {
+      "task": "bugfix",
+      "candidate": "proxy",
+      "against": "control",
+      "estimatedUsdDelta": -0.11913200000000002,
+      "reductionPercent": 32.68708397583288
+    },
+    {
+      "task": "bugfix",
+      "candidate": "proxy",
+      "against": "headroom",
+      "estimatedUsdDelta": -0.05526399999999998,
+      "reductionPercent": 18.38493116961749
+    },
+    {
+      "task": "refresh",
+      "candidate": "proxy",
+      "against": "control",
+      "estimatedUsdDelta": -0.10906200000000002,
+      "reductionPercent": 34.427223081536674
+    },
+    {
+      "task": "refresh",
+      "candidate": "proxy",
+      "against": "headroom",
+      "estimatedUsdDelta": -0.020488000000000006,
+      "reductionPercent": 8.977459950222599
+    }
+  ]
+}

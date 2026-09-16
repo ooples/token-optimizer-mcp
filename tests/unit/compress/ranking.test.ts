@@ -88,7 +88,8 @@ describe('the seam', () => {
 describe('a registered ranker is really in charge', () => {
   /**
    * Rows sharing no token with the question, so lexical scoring cannot reach
-   * the answer however it is tokenised.
+   * the answer however it is tokenised. Distinct distractors keep the separate
+   * rare-category rule from answering this fixture without the ranker.
    */
   const rows = (): string =>
     JSON.stringify(
@@ -98,7 +99,7 @@ describe('a registered ranker is really in charge', () => {
         message:
           i === 47
             ? 'connection pool exhausted'
-            : 'routine heartbeat from the scheduler',
+            : `routine heartbeat from the scheduler ${i}`,
       }))
     );
 

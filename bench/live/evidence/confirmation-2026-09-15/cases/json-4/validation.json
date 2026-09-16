@@ -1,0 +1,28 @@
+[
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "INVALID_READ",
+    "verdict": "INVALID_READ",
+    "read": {
+      "complete": false,
+      "truncated": true,
+      "requests": 4
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "INVALID_READ",
+    "verdict": "INVALID_READ",
+    "read": {
+      "complete": false,
+      "truncated": true,
+      "requests": 5
+    },
+    "clientErrors": []
+  }
+]

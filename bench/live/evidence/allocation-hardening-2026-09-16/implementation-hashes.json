@@ -1,0 +1,13 @@
+{
+  "note": "Collected after live verification. Fatal-report launch flags and replay scope wording were added after those runs; product behavior was unchanged.",
+  "files": {
+    "src/proxy/capture.ts": "43911b27b66b1dfa3297aa59435d7ca958d4d8380b9b66a6dfee52e5d8cf80d0",
+    "src/proxy/server.ts": "4a31d50be453a6871c27ed6d07a707ea060715b2f3a44a2e99a958795355f5d0",
+    "dist/proxy/capture.js": "e0f811307529b7d13417b8433ea3d0bf5f3c164d64b105ef2368325e95fd18e9",
+    "dist/proxy/server.js": "d798701bcdfa266f2b316d7292b5c93ac06d03ab3f48a920886312e102b3f30f",
+    "bench/live/codex.mjs": "a1f1bc5c5b68aa9d908a638d8c5fd983399cb7a79537786aac8e343c67d5d22d",
+    "bench/live/host-memory.mjs": "d69efd21f221efa0d69635357e148f36d605495bbf994d703987535507ce56e9",
+    "bench/live/host-memory.ps1": "08ba1097fcf2e1328930457d8b435afc5dbf223a504b6d25ffa88727a9f39cd1",
+    "bench/live/memory-replay.mjs": "da013222b2139ee134af228de22070da74425953f2a49af06a6ccff4cf598e7d"
+  }
+}

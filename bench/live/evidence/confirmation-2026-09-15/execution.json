@@ -1,0 +1,189 @@
+{
+  "started": "2026-09-15T22:45:43.152Z",
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy",
+  "plannedPairs": 70,
+  "pairs": [
+    {
+      "id": "logs-8",
+      "family": "logs",
+      "started": "2026-09-15T22:45:44.311Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy\\logs-8\\run-miPHSd",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T22:46:37.566Z"
+    },
+    {
+      "id": "refresh-5",
+      "family": "refresh",
+      "started": "2026-09-15T22:46:39.669Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy\\refresh-5\\run-3CcnDy",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T22:48:22.570Z"
+    },
+    {
+      "id": "logs-10",
+      "family": "logs",
+      "started": "2026-09-15T22:48:25.635Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy\\logs-10\\run-jZMmJ8",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T22:49:16.331Z"
+    },
+    {
+      "id": "bugfix-9",
+      "family": "bugfix",
+      "started": "2026-09-15T22:49:19.157Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy\\bugfix-9\\run-yhpahG",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T22:51:19.093Z"
+    },
+    {
+      "id": "refactor-9",
+      "family": "refactor",
+      "started": "2026-09-15T22:51:21.938Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy\\refactor-9\\run-LmygbF",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T22:53:29.328Z"
+    },
+    {
+      "id": "mixed-8",
+      "family": "mixed",
+      "started": "2026-09-15T22:53:32.428Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy\\mixed-8\\run-5TYdjs",
+      "verdicts": [
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T22:55:13.181Z"
+    },
+    {
+      "id": "logs-7",
+      "family": "logs",
+      "started": "2026-09-15T22:55:15.184Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy\\logs-7\\run-a5LMR1",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T22:56:05.325Z"
+    },
+    {
+      "id": "json-4",
+      "family": "json",
+      "started": "2026-09-15T22:56:07.950Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy\\json-4\\run-VHmpLD",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "INVALID_READ"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "INVALID_READ"
+        }
+      ],
+      "finished": "2026-09-15T22:57:08.073Z"
+    },
+    {
+      "id": "refactor-5",
+      "family": "refactor",
+      "started": "2026-09-15T22:57:10.199Z",
+      "status": "complete",
+      "runnerExit": 0,
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy\\refactor-5\\run-5r2Ixd",
+      "verdicts": [
+        {
+          "arm": "proxy",
+          "verdict": "PASS"
+        },
+        {
+          "arm": "headroom",
+          "verdict": "PASS"
+        }
+      ],
+      "finished": "2026-09-15T22:59:16.887Z"
+    },
+    {
+      "id": "code-9",
+      "family": "code",
+      "started": "2026-09-15T22:59:19.070Z",
+      "status": "interrupted",
+      "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-confirmation-7Gdsdy\\code-9\\run-Pyf8LC"
+    }
+  ],
+  "status": "incomplete",
+  "stopped": "2026-09-15T23:01:03.362Z",
+  "error": "Operator measurement-failure stop: both arms of json-4 returned full shell content but enclosing code-mode output truncated at its default budget. Original protocol full exposure failed. No outcomes reused as confirmation.",
+  "freezeVerifiedAtStop": true
+}

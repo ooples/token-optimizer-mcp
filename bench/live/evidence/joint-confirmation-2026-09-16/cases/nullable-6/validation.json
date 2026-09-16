@@ -1,0 +1,28 @@
+[
+  {
+    "task": "nullable",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "nullable",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  }
+]

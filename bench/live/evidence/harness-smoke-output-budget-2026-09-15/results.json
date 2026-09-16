@@ -1,0 +1,190 @@
+[
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 1,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 604203497,
+    "verdict": "PASS",
+    "agentSeconds": 43,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 7
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 166280,
+      "cached": 129280,
+      "output": 723
+    },
+    "requests": 7,
+    "compressedRequests": 6,
+    "beforeBytes": 1395064,
+    "afterBytes": 738248,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12903,
+          "output_tokens": 74,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13193,
+          "output_tokens": 252,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13663,
+          "output_tokens": 116,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 31132,
+          "output_tokens": 87,
+          "cached_input_tokens": 13440
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 31439,
+          "output_tokens": 85,
+          "cached_input_tokens": 30976
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 31909,
+          "output_tokens": 76,
+          "cached_input_tokens": 31232
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 32041,
+          "output_tokens": 33,
+          "cached_input_tokens": 31744
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-c53eb88c-33",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 44
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 2,
+    "kind": "controlled-read",
+    "artifactLayout": 2,
+    "seed": 604203497,
+    "verdict": "PASS",
+    "agentSeconds": 13.5,
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "validation": null,
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 49553,
+      "cached": 40064,
+      "output": 185
+    },
+    "requests": 3,
+    "compressedRequests": 0,
+    "beforeBytes": 310091,
+    "afterBytes": 310091,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12833,
+          "output_tokens": 77,
+          "cached_input_tokens": 9216
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18294,
+          "output_tokens": 76,
+          "cached_input_tokens": 12672
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 18426,
+          "output_tokens": 32,
+          "cached_input_tokens": 18176
+        }
+      }
+    ],
+    "answer": {
+      "id": "record-c53eb88c-33",
+      "status": "failed",
+      "reason": "checksum_mismatch"
+    },
+    "seconds": 26.1
+  }
+]

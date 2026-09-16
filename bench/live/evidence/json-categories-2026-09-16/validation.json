@@ -1,0 +1,108 @@
+[
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 1,
+    "recordedVerdict": "FAIL",
+    "verdict": "FAIL",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 2
+    },
+    "clientErrors": [
+      "unexpected status 503 Service Unavailable: upstream connect error or disconnect/reset before headers. retried and the latest reset reason: remote connection failure, transport failure reason: delayed connect error: Connection refused, url: http://127.0.0.1:58433/backend-api/codex/responses, cf-ray: a3bbee82fc64896f-BOS"
+    ]
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 1,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 2,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 3,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "json",
+    "arm": "headroom",
+    "rep": 4,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  },
+  {
+    "task": "json",
+    "arm": "proxy",
+    "rep": 4,
+    "recordedVerdict": "PASS",
+    "verdict": "PASS",
+    "read": {
+      "complete": true,
+      "truncated": false,
+      "requests": 3
+    },
+    "clientErrors": []
+  }
+]

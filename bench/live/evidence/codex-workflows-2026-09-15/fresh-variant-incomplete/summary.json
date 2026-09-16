@@ -1,0 +1,129 @@
+{
+  "model": "gpt-6-astra",
+  "balanced": false,
+  "valid": false,
+  "failures": [
+    "bugfix/proxy: incomplete or failed"
+  ],
+  "aggregates": [
+    {
+      "task": "bugfix",
+      "arm": "control",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 75675,
+      "meanCached": 65152,
+      "meanUncached": 10523,
+      "meanOutput": 848,
+      "meanSeconds": 46.4,
+      "meanAgentSeconds": 45.1
+    },
+    {
+      "task": "bugfix",
+      "arm": "proxy",
+      "passed": 0,
+      "expected": 1,
+      "measured": 0,
+      "meanInput": null,
+      "meanCached": null,
+      "meanUncached": null,
+      "meanOutput": null,
+      "meanSeconds": null,
+      "meanAgentSeconds": null
+    },
+    {
+      "task": "bugfix",
+      "arm": "headroom",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 123607,
+      "meanCached": 106112,
+      "meanUncached": 17495,
+      "meanOutput": 1161,
+      "meanSeconds": 84.3,
+      "meanAgentSeconds": 70.9
+    },
+    {
+      "task": "refactor",
+      "arm": "control",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 54676,
+      "meanCached": 35712,
+      "meanUncached": 18964,
+      "meanOutput": 924,
+      "meanSeconds": 40,
+      "meanAgentSeconds": 38.9
+    },
+    {
+      "task": "refactor",
+      "arm": "proxy",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 54729,
+      "meanCached": 39424,
+      "meanUncached": 15305,
+      "meanOutput": 922,
+      "meanSeconds": 43.3,
+      "meanAgentSeconds": 42.1
+    },
+    {
+      "task": "refactor",
+      "arm": "headroom",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 190365,
+      "meanCached": 173184,
+      "meanUncached": 17181,
+      "meanOutput": 1310,
+      "meanSeconds": 91.9,
+      "meanAgentSeconds": 78.5
+    },
+    {
+      "task": "refresh",
+      "arm": "control",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 128610,
+      "meanCached": 104320,
+      "meanUncached": 24290,
+      "meanOutput": 616,
+      "meanSeconds": 50.5,
+      "meanAgentSeconds": 49.3
+    },
+    {
+      "task": "refresh",
+      "arm": "proxy",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 80093,
+      "meanCached": 70400,
+      "meanUncached": 9693,
+      "meanOutput": 409,
+      "meanSeconds": 33.4,
+      "meanAgentSeconds": 32.5
+    },
+    {
+      "task": "refresh",
+      "arm": "headroom",
+      "passed": 1,
+      "expected": 1,
+      "measured": 1,
+      "meanInput": 75369,
+      "meanCached": 67968,
+      "meanUncached": 7401,
+      "meanOutput": 406,
+      "meanSeconds": 48.2,
+      "meanAgentSeconds": 36.2
+    }
+  ],
+  "comparison": [],
+  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+}
