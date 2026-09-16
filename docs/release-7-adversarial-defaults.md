@@ -95,7 +95,12 @@ does not clear the exhausted account's live model gate. The current-account
 Codex installed-package receipt is recorded separately in
 [release-7-defaults-proof.json](release-7-defaults-proof.json).
 
-Still open: account-blocked Claude/Copilot/Gemini model checks, managed routing for
-other CLIs and unsupported provider modes, managed enterprise settings behavior,
-and cost/performance comparisons for the newly enabled default combination.
+The subsequent [OpenCode verification](release-7-opencode-verification.md) adds
+managed OpenCode routing, Chat Completions compression, a current-account live
+task, and local managed-policy detection. It also records a successful local
+HeadRoom comparison with answer and recovery checks.
+
+Still open: account-blocked Claude/Copilot/Gemini model checks, remaining CLIs and
+unsupported provider modes, remote/MDM enterprise deployments, and broader
+end-to-end cost/performance confirmation for the newly enabled default combination.
 Green tests and successful activation do not establish superiority on every task.

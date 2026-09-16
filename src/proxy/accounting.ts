@@ -64,6 +64,16 @@ const CARRY_CHARS = 512;
  * occurrence is the total and an earlier one is a partial count.
  */
 export function scanUsage(text: string, into: RequestUsage): void {
+  // Chat Completions uses different names for the same inclusive token counts.
+  for (const [wire, canonical] of [
+    ['prompt_tokens', 'input_tokens'],
+    ['completion_tokens', 'output_tokens'],
+  ] as const) {
+    const pattern = new RegExp(`"${wire}"[ \\t]*:[ \\t]*(\\d+)`, 'g');
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null)
+      into[canonical] = Number(match[1]);
+  }
   for (const key of USAGE_KEYS) {
     // Anchored on the quoted key, so a field merely CONTAINING this name --
     // `cache_read_input_tokens` contains `input_tokens` -- cannot match it.

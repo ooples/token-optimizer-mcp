@@ -25,7 +25,9 @@ export function compressResponses(
   body: Buffer,
   request: Record<string, unknown>,
   spill: (content: string, hint: string) => string,
-  tuning?: Tuning
+  tuning?: Tuning,
+  outputLocation: (index: number) => string = (index) =>
+    `input[${index}].output`
 ): { body: Buffer; summary: CompressionFacts } {
   let elisions = 0;
   let dedupReferences = 0;
@@ -165,7 +167,7 @@ export function compressResponses(
       return transform(text, at);
     };
     if (typeof item.output === 'string') {
-      const output = compress(item.output, `input[${itemIndex}].output`);
+      const output = compress(item.output, outputLocation(itemIndex));
       return output === item.output ? item : { ...item, output };
     }
     // Multimodal output keeps every non-text part, with all original metadata.
@@ -180,7 +182,7 @@ export function compressResponses(
         ) {
           const text = compress(
             part.text,
-            `input[${itemIndex}].output[${i}].text`
+            `${outputLocation(itemIndex)}[${i}].text`
           );
           if (text !== part.text) {
             output ??= item.output.slice();

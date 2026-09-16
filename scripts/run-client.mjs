@@ -18,6 +18,8 @@ import { startProxy, proxyEnabled } from '../dist/proxy/server.js';
 import { captureDir, captureNotice } from '../dist/proxy/capture.js';
 import { claudeRoute } from './claude-routing.mjs';
 import { sessionRouting } from './session-routing.mjs';
+import { claudeManagedRouting } from './managed-policy.mjs';
+import { projectRootFor } from '../hooks-core/wiki.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const off = (value) => /^(0|false|no|off)$/i.test(value?.trim() || '');
@@ -50,6 +52,13 @@ export function executable(command, env) {
   // npm's standard shim is a known Node entrypoint. Do not pass user prompts
   // through cmd.exe; arbitrary batch wrappers are not safe to reconstruct.
   const shim = readFileSync(path, 'utf8');
+  const native = shim.match(/"%dp0%\\([^"\r\n%]+\.exe)"\s+%\*/i);
+  if (native) {
+    const target = resolve(dirname(path), native[1]);
+    if (!existsSync(target))
+      throw new Error('The npm native launcher target is missing.');
+    return { command: target, prefix: [] };
+  }
   const match = shim.match(/"%dp0%\\([^"\r\n]+\.(?:js|mjs|cjs))"\s+%\*/i);
   if (!match)
     throw new Error(
@@ -173,8 +182,10 @@ export async function runClient(
   args,
   { env = process.env, command = client } = {}
 ) {
-  if (!['claude', 'codex'].includes(client))
-    throw new Error('Managed launch currently supports claude and codex.');
+  if (!['claude', 'codex', 'opencode'].includes(client))
+    throw new Error(
+      'Managed launch currently supports claude, codex and opencode.'
+    );
   const childEnv = { ...env };
   childEnv.TOKEN_OPTIMIZER_CLIENT =
     client === 'claude' ? 'claude-code' : client;
@@ -213,6 +224,10 @@ export async function runClient(
       'migrate-rollouts',
       'sandbox',
       'debug',
+      'auth',
+      'models',
+      'upgrade',
+      'attach',
       'apply',
       'a',
       'cloud',
@@ -227,17 +242,51 @@ export async function runClient(
     (client === 'codex' &&
       (switches.includes('--oss') ||
         option(args, ['--local-provider', '--remote']))) ||
-    claude?.external;
-  const enabled = !management && !externalRouting && proxyEnabled(env);
+    claude?.external ||
+    (claude && (await claudeManagedRouting()));
+  const enabled =
+    client !== 'opencode' &&
+    !management &&
+    !externalRouting &&
+    proxyEnabled(env);
   if (!management && externalRouting && proxyEnabled(env))
     process.stderr.write(
-      '[token-optimizer] This provider mode retains native routing; managed proxy routing is unavailable.\n'
+      '[token-optimizer] Provider mode or locally managed routing policy retains native routing; session proxy routing is unavailable.\n'
     );
   // -C/--cd changes Codex's project independently of the shell working directory.
   const directory =
     client === 'codex' ? option(args, ['-C', '--cd']) : undefined;
   const projectRoot = directory ? resolve(directory) : process.cwd();
   try {
+    if (
+      client === 'opencode' &&
+      !management &&
+      env.TOKEN_OPTIMIZER_MODE?.trim().toLowerCase() !== 'off'
+    ) {
+      const config = JSON.parse(env.OPENCODE_CONFIG_CONTENT || '{}');
+      if (!config || typeof config !== 'object' || Array.isArray(config))
+        throw new Error('OpenCode inline configuration must be an object.');
+      if (!off(env.TOKEN_OPTIMIZER_MANAGED_MCP)) {
+        config.mcp = {
+          ...config.mcp,
+          'token-optimizer': {
+            type: 'local',
+            command: [process.execPath, join(root, 'dist/server/index.js')],
+            enabled: true,
+          },
+        };
+      }
+      if (proxyEnabled(env)) {
+        const plugin = pathToFileURL(
+          join(root, 'scripts/opencode-plugin.mjs')
+        ).href;
+        config.plugin = [
+          ...(config.plugin || []).filter((value) => value !== plugin),
+          plugin,
+        ];
+      }
+      childEnv.OPENCODE_CONFIG_CONTENT = JSON.stringify(config);
+    }
     if (enabled) {
       const route = client === 'codex' ? codexRoute(args, env) : claude;
       if (route.native) {
@@ -264,7 +313,10 @@ export async function runClient(
         routing = sessionRouting(client);
         proxy = await startProxy({
           upstream: upstream.origin,
-          projectRoot,
+          projectRoot: projectRootFor(
+            join(projectRoot, '__session__'),
+            projectRoot
+          ),
           knowledge: !selectsWorktree,
           onSummary: routing.observe,
         });
@@ -334,6 +386,7 @@ export async function runClient(
       }
     }
     if (
+      client !== 'opencode' &&
       !management &&
       env.TOKEN_OPTIMIZER_MODE?.trim().toLowerCase() !== 'off' &&
       !off(env.TOKEN_OPTIMIZER_MANAGED_MCP)

@@ -11,7 +11,7 @@ The subsequent [adversarial review](release-7-adversarial-defaults.md) found and
 fixed profile corruption/ownership hazards, provider-selection mismatches,
 Claude settings precedence, and graph loading from encoded installation paths.
 
-The installer now activates managed `claude` and `codex` commands in supported
+The installer now activates managed `claude`, `codex`, and `opencode` commands in supported
 shell profiles. A new shell loads the activation; each session starts and owns a
 loopback proxy, registers the packaged MCP server, and closes its proxy on exit.
 Explicit proxy, knowledge, MCP-registration and global opt-outs remain available.
@@ -36,8 +36,16 @@ release gate now includes managed-client, proxy, Responses knowledge and doctor
 coverage. Claude transport/auth preservation and proxy shutdown were checked
 against a local mock upstream; its real model task remains quota-blocked.
 
-Managed automatic routing currently covers Claude Code and Codex. Other clients
-retain their existing MCP/hooks integrations. This follow-up does not establish
+The [OpenCode follow-up](release-7-opencode-verification.md) adds managed routing
+for explicit OpenAI/Anthropic-compatible provider endpoints, Chat Completions
+compression and graph injection, current-account installed-package evidence, and
+an independently audited local comparison against installed HeadRoom. It also
+adds local enterprise routing-policy detection and nested-project graph resolution.
+Nine targeted suites passed 110 checks; the subsequent launcher hardening passed
+21 checks across its three affected suites. Build, changed-file lint and the package
+gate passed, with 24 required assets checked in the tarball.
+
+Other clients retain their existing MCP/hooks integrations. This follow-up does not establish
 universal routing, net cost superiority, or completion of the previously pending
 account-dependent live gates. The receipt identifies the tested tarball and the
 small subsequent launcher changes covered by targeted tests.

@@ -589,17 +589,25 @@ have separate results; see the [workflow evidence and limitations](bench/live/ev
 
 The proxy is enabled by default and binds loopback only. Run
 `token-optimizer-install` after installing the package: it installs Claude hooks
-and activates managed `claude`/`codex` commands in PowerShell, Bash, and Zsh.
+and activates managed `claude`/`codex`/`opencode` commands in PowerShell, Bash, and Zsh.
 Open a new shell to activate them. Each managed session starts its own proxy,
 registers the packaged core MCP tools (including wiki), and shuts the proxy down
-on exit. `token-optimizer-run codex ...` or `token-optimizer-run claude ...` works
+on exit. `token-optimizer-run codex ...`, `token-optimizer-run claude ...`, or
+`token-optimizer-run opencode ...` works
 without shell activation. Existing custom provider authentication stays in the
 client. Set `TOKEN_OPTIMIZER_PROXY=0` to disable routing, or
 `TOKEN_OPTIMIZER_MANAGED_CLIENTS=0` before installation to skip shell activation.
 `TOKEN_OPTIMIZER_MODE=off` disables optimization. npm lifecycle scripts may be
 blocked, so package installation alone is not proof that activation ran.
 Other integrations retain their MCP/hooks setup; automatic managed model routing
-currently covers Claude Code and Codex. `doctor` checks routing configuration.
+currently covers Claude Code, Codex, and OpenCode providers with explicit base URLs
+using the OpenAI, OpenAI-compatible, or Anthropic SDK. OpenCode's session plugin
+uses its resolved configuration and project directory; account credentials and
+provider files stay in place. Unsupported endpoints and provider modes retain
+native routing. Claude routing controlled by local managed-policy files or Windows
+registry policy also stays native. Remote/MDM policy can arrive after launch;
+the launcher reports observed model traffic, not just listener startup.
+`doctor` checks routing configuration.
 Request-body capture is opt-in via `TOKEN_OPTIMIZER_PROXY_CAPTURE`; when enabled,
 it writes plaintext request content to the named directory.
 Capture queues are bounded to 128 requests and 16 MiB of queued snapshots and

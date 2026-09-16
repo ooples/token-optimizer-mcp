@@ -19,6 +19,52 @@ import { sessionRouting } from '../../scripts/session-routing.mjs';
 import { putNode } from '../../hooks-core/wiki.mjs';
 
 describe('managed client installation', () => {
+  it('adds OpenCode runtime integration without changing existing inline configuration', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'optimizer-opencode-launch-'));
+    try {
+      const file = join(dir, 'config.json');
+      const script = join(dir, 'fake-opencode.mjs');
+      writeFileSync(
+        script,
+        `import fs from 'node:fs';fs.writeFileSync(${JSON.stringify(file)},process.env.OPENCODE_CONFIG_CONTENT);`
+      );
+      const config = {
+        provider: {
+          custom: { options: { headers: { 'x-test': 'synthetic' } } },
+        },
+        plugin: ['existing-plugin'],
+        mcp: { other: { enabled: true } },
+      };
+      const encoded = JSON.stringify(config);
+      const env = {
+        ...process.env,
+        OPENCODE_CONFIG_CONTENT: encoded,
+        TOKEN_OPTIMIZER_PROXY: '1',
+      };
+      expect(
+        await runClient('opencode', [script], {
+          env,
+          command: process.execPath,
+        })
+      ).toBe(0);
+      const actual = JSON.parse(readFileSync(file, 'utf8'));
+      expect(actual.provider).toEqual(config.provider);
+      expect(actual.plugin[0]).toBe('existing-plugin');
+      expect(actual.plugin[1]).toMatch(/opencode-plugin\.mjs$/);
+      expect(actual.mcp.other).toEqual({ enabled: true });
+      expect(actual.mcp['token-optimizer'].enabled).toBe(true);
+      expect(env.OPENCODE_CONFIG_CONTENT).toBe(encoded);
+      expect(
+        await runClient('opencode', [script], {
+          env: { ...env, TOKEN_OPTIMIZER_MODE: 'off' },
+          command: process.execPath,
+        })
+      ).toBe(0);
+      expect(readFileSync(file, 'utf8')).toBe(encoded);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   it('does not inject the launching project graph into a Claude-selected worktree', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'optimizer-worktree-'));
     const oldWiki = process.env.TOKEN_OPTIMIZER_WIKI_DIR;
@@ -181,6 +227,7 @@ describe('managed client installation', () => {
       const installed = readFileSync(path, 'utf8');
       expect(installed).toContain('function global:codex');
       expect(installed).toContain('function global:claude');
+      expect(installed).toContain('function global:opencode');
       expect(installed.startsWith(original)).toBe(true);
       expect(activateShells({ env })).toEqual([]);
       activateShells({ env, remove: true });
@@ -232,6 +279,13 @@ describe('managed client installation', () => {
       expect(executable('codex', { PATH: dir })).toEqual({
         command: process.execPath,
         prefix: [join(dir, 'node_modules', 'codex', 'index.js')],
+      });
+      const native = join(dir, 'opencode.exe');
+      writeFileSync(native, 'synthetic executable placeholder');
+      writeFileSync(join(dir, 'opencode-shim.cmd'), '"%dp0%\\opencode.exe" %*');
+      expect(executable('opencode-shim', { PATH: dir })).toEqual({
+        command: native,
+        prefix: [],
       });
     } finally {
       rmSync(dir, { recursive: true, force: true });

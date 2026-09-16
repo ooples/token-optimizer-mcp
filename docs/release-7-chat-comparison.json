@@ -1,0 +1,210 @@
+{
+  "audit": {
+    "passed": true,
+    "checks": [
+      {
+        "sample": 0,
+        "answerVisible": true,
+        "recoverable": true,
+        "metadataPreserved": true
+      },
+      {
+        "sample": 1,
+        "answerVisible": true,
+        "recoverable": true,
+        "metadataPreserved": true
+      },
+      {
+        "sample": 2,
+        "answerVisible": true,
+        "recoverable": true,
+        "metadataPreserved": true
+      },
+      {
+        "sample": 3,
+        "answerVisible": true,
+        "recoverable": true,
+        "metadataPreserved": true
+      },
+      {
+        "sample": 4,
+        "answerVisible": true,
+        "recoverable": true,
+        "metadataPreserved": true
+      },
+      {
+        "sample": 5,
+        "answerVisible": true,
+        "recoverable": true,
+        "metadataPreserved": true
+      },
+      {
+        "sample": 6,
+        "answerVisible": true,
+        "recoverable": true,
+        "metadataPreserved": true
+      },
+      {
+        "sample": 7,
+        "answerVisible": true,
+        "recoverable": true,
+        "metadataPreserved": true
+      }
+    ]
+  },
+  "kind": "Synthetic local HTTP probe; no model task or billed cost; first requests include cold transforms",
+  "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\chat-route-comparison-3Nvfd1",
+  "headroom": "0.37.0",
+  "headroomOverrides": [
+    "--no-rate-limit"
+  ],
+  "samples": [
+    {
+      "sample": 0,
+      "arm": "proxy",
+      "milliseconds": 277.41510000000017,
+      "beforeBytes": 14836,
+      "afterBytes": 1510,
+      "preserved": true,
+      "estimatedWireTokens": 376
+    },
+    {
+      "sample": 0,
+      "arm": "headroom",
+      "milliseconds": 457.5082999999995,
+      "beforeBytes": 14836,
+      "afterBytes": 5786,
+      "preserved": true,
+      "estimatedWireTokens": 1567
+    },
+    {
+      "sample": 1,
+      "arm": "headroom",
+      "milliseconds": 53.388600000000224,
+      "beforeBytes": 29878,
+      "afterBytes": 20714,
+      "preserved": true,
+      "estimatedWireTokens": 6034
+    },
+    {
+      "sample": 1,
+      "arm": "proxy",
+      "milliseconds": 24.02269999999953,
+      "beforeBytes": 29878,
+      "afterBytes": 1765,
+      "preserved": true,
+      "estimatedWireTokens": 444
+    },
+    {
+      "sample": 2,
+      "arm": "proxy",
+      "milliseconds": 17.997600000000602,
+      "beforeBytes": 45284,
+      "afterBytes": 2020,
+      "preserved": true,
+      "estimatedWireTokens": 502
+    },
+    {
+      "sample": 2,
+      "arm": "headroom",
+      "milliseconds": 56.74589999999989,
+      "beforeBytes": 45284,
+      "afterBytes": 36006,
+      "preserved": true,
+      "estimatedWireTokens": 10611
+    },
+    {
+      "sample": 3,
+      "arm": "headroom",
+      "milliseconds": 44.11319999999978,
+      "beforeBytes": 15382,
+      "afterBytes": 5990,
+      "preserved": true,
+      "estimatedWireTokens": 1624
+    },
+    {
+      "sample": 3,
+      "arm": "proxy",
+      "milliseconds": 13.241899999999077,
+      "beforeBytes": 15382,
+      "afterBytes": 1510,
+      "preserved": true,
+      "estimatedWireTokens": 378
+    },
+    {
+      "sample": 4,
+      "arm": "proxy",
+      "milliseconds": 13.103100000000268,
+      "beforeBytes": 30970,
+      "afterBytes": 1765,
+      "preserved": true,
+      "estimatedWireTokens": 437
+    },
+    {
+      "sample": 4,
+      "arm": "headroom",
+      "milliseconds": 54.963700000000244,
+      "beforeBytes": 30970,
+      "afterBytes": 21464,
+      "preserved": true,
+      "estimatedWireTokens": 6256
+    },
+    {
+      "sample": 5,
+      "arm": "headroom",
+      "milliseconds": 58.947299999999814,
+      "beforeBytes": 46922,
+      "afterBytes": 37302,
+      "preserved": true,
+      "estimatedWireTokens": 10998
+    },
+    {
+      "sample": 5,
+      "arm": "proxy",
+      "milliseconds": 12.889600000000428,
+      "beforeBytes": 46922,
+      "afterBytes": 2020,
+      "preserved": true,
+      "estimatedWireTokens": 503
+    },
+    {
+      "sample": 6,
+      "arm": "proxy",
+      "milliseconds": 11.221800000001167,
+      "beforeBytes": 15928,
+      "afterBytes": 1510,
+      "preserved": true,
+      "estimatedWireTokens": 378
+    },
+    {
+      "sample": 6,
+      "arm": "headroom",
+      "milliseconds": 38.23779999999897,
+      "beforeBytes": 15928,
+      "afterBytes": 6194,
+      "preserved": true,
+      "estimatedWireTokens": 1681
+    },
+    {
+      "sample": 7,
+      "arm": "headroom",
+      "milliseconds": 47.91120000000046,
+      "beforeBytes": 32062,
+      "afterBytes": 22214,
+      "preserved": true,
+      "estimatedWireTokens": 6478
+    },
+    {
+      "sample": 7,
+      "arm": "proxy",
+      "milliseconds": 13.186000000001513,
+      "beforeBytes": 32062,
+      "afterBytes": 1765,
+      "preserved": true,
+      "estimatedWireTokens": 441
+    }
+  ],
+  "optimizerOverrides": [
+    "knowledge:false; isolated compression probe"
+  ]
+}

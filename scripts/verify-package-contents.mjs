@@ -29,6 +29,9 @@ const gemini = JSON.parse(
   readFileSync(join(root, 'gemini-extension.json'), 'utf8')
 );
 const required = [
+  'scripts/opencode-plugin.mjs',
+  'scripts/session-routing.mjs',
+  'dist/proxy/chat-completions.js',
   ...Object.values(pkg.bin).map((path) => path.replace(/^\.\//, '')),
   'gemini-extension.json',
   gemini.contextFileName,

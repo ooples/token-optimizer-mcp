@@ -9,6 +9,7 @@ import {
 import { replaceProfile } from '../../scripts/profile-file.mjs';
 import { codexRoute } from '../../scripts/run-client.mjs';
 import { claudeRoute } from '../../scripts/claude-routing.mjs';
+import { claudeManagedRouting } from '../../scripts/managed-policy.mjs';
 
 function fixture(fn) {
   const dir = fs.mkdtempSync(join(tmpdir(), 'optimizer-adversary-'));
@@ -19,6 +20,46 @@ function fixture(fn) {
   }
 }
 describe('managed installation adversarial review', () => {
+  it('preserves routing controlled by managed files, drop-ins and Windows registry', async () => {
+    const dir = fs.mkdtempSync(join(tmpdir(), 'optimizer-managed-policy-'));
+    try {
+      const options = { directory: dir, platform: 'linux' };
+      expect(await claudeManagedRouting(options)).toBe(false);
+      fs.writeFileSync(
+        join(dir, 'managed-settings.json'),
+        JSON.stringify({ permissions: { deny: ['Read(secret)'] } })
+      );
+      expect(await claudeManagedRouting(options)).toBe(false);
+      fs.mkdirSync(join(dir, 'managed-settings.d'));
+      fs.writeFileSync(
+        join(dir, 'managed-settings.d/20-routing.json'),
+        JSON.stringify({
+          env: { ANTHROPIC_BASE_URL: 'https://managed.example' },
+        })
+      );
+      expect(await claudeManagedRouting(options)).toBe(true);
+      fs.unlinkSync(join(dir, 'managed-settings.d/20-routing.json'));
+      expect(
+        await claudeManagedRouting({
+          ...options,
+          platform: 'win32',
+          registry: async (hive) =>
+            hive === 'HKLM' ? { env: { CLAUDE_CODE_USE_VERTEX: '1' } } : {},
+        })
+      ).toBe(true);
+      expect(
+        await claudeManagedRouting({
+          ...options,
+          platform: 'win32',
+          registry: async () => ({}),
+        })
+      ).toBe(false);
+      fs.writeFileSync(join(dir, 'managed-settings.json'), '{invalid');
+      expect(await claudeManagedRouting(options)).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
   it('preserves first-party Claude tool search without overriding explicit choices', () =>
     fixture((dir) => {
       const args = ['--setting-sources', ''];

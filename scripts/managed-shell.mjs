@@ -76,7 +76,7 @@ export function activateShells({
     const powershell = path.endsWith('.ps1');
     const quote = powershell ? quotePs : quoteSh;
     const invocation = `${quote(process.execPath)} ${quote(join(root, 'scripts', 'run-client.mjs'))}`;
-    const functions = ['claude', 'codex']
+    const functions = ['claude', 'codex', 'opencode']
       .map((client) =>
         powershell
           ? `function global:${client} { & ${invocation} ${client} @args }`
@@ -85,6 +85,7 @@ export function activateShells({
       .join('\n');
     const digest = (text) => createHash('sha256').update(text).digest('hex');
     const legacy = `${begin}\n${functions}\n${end}`;
+    const legacyTwoClients = `${begin}\n${functions.split('\n').slice(0, 2).join('\n')}\n${end}`;
     const block = remove
       ? ''
       : `${begin}\n${functions}\n# token-optimizer sha256: ${digest(functions)}\n${end}`;
@@ -96,7 +97,11 @@ export function activateShells({
       const match = existing.match(
         /^# >>> token-optimizer managed clients >>>\n([\s\S]*)\n# token-optimizer sha256: ([a-f0-9]{64})\n# <<< token-optimizer managed clients <<<$/
       );
-      if (existing !== legacy && (!match || digest(match[1]) !== match[2]))
+      if (
+        existing !== legacy &&
+        existing !== legacyTwoClients &&
+        (!match || digest(match[1]) !== match[2])
+      )
         throw new Error(
           `Managed activation was edited in ${path}; refusing to overwrite or remove user changes.`
         );

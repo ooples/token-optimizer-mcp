@@ -58,6 +58,7 @@ import {
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import { captureDir, captureRequest } from './capture.js';
 import { compressResponses } from './responses.js';
+import { compressChatCompletions } from './chat-completions.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
@@ -340,7 +341,8 @@ export function compressBody(
   findings?: readonly Finding[],
   tuning?: Tuning,
   /** True when `findings` came from a graph shared across projects. */
-  sharedGraph?: boolean
+  sharedGraph?: boolean,
+  wireFormat?: 'chat-completions'
 ): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
   const before = body.length;
   const unchanged = (reason: string) => ({
@@ -436,6 +438,21 @@ export function compressBody(
   }
   if (!parsed || typeof parsed !== 'object')
     return unchanged('not a request object');
+  if (wireFormat === 'chat-completions' && Array.isArray(parsed.messages)) {
+    try {
+      return compressChatCompletions(
+        body,
+        parsed as Record<string, unknown>,
+        spill,
+        anchors,
+        findings,
+        tuning,
+        sharedGraph
+      );
+    } catch {
+      return unchanged('Chat Completions compression failed');
+    }
+  }
   if (Array.isArray(parsed.input)) {
     try {
       const result = compressResponses(
@@ -1219,7 +1236,12 @@ export async function startProxy(
         anchors,
         findings,
         tuning,
-        sharedGraphFlag
+        sharedGraphFlag,
+        /\/chat\/completions\/?$/.test(
+          (requestPath(req.url) ?? '').split('?')[0]
+        )
+          ? 'chat-completions'
+          : undefined
       );
       refreshFindings();
       options.onSummary?.({ path: req.url || '/', ...summary });

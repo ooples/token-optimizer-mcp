@@ -40,6 +40,18 @@ afterEach(() => {
 });
 
 describe('reading usage out of a response', () => {
+  it('normalizes Chat Completions usage while keeping cached input a subset', () => {
+    const usage: RequestUsage = {};
+    scanUsage(
+      '{"usage":{"prompt_tokens":1000,"completion_tokens":25,"prompt_tokens_details":{"cached_tokens":800},"total_tokens":1025}}',
+      usage
+    );
+    expect(usage).toEqual({
+      input_tokens: 1000,
+      output_tokens: 25,
+      cached_input_tokens: 800,
+    });
+  });
   it('reads every token class from a non-streaming body', () => {
     const usage: RequestUsage = {};
     scanUsage(
