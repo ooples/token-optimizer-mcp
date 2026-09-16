@@ -512,6 +512,16 @@ our arm; one measured pair still cost more. These are development results, not
 confirmation of the new build or an all-workload win. See the
 [complete screen and exclusions](bench/live/evidence/json-categories-2026-09-16/README.md).
 
+**Local proxy performance (2026-09-16).** Against installed HeadRoom 0.37.0,
+2,160 completed local-upstream requests covered repeated and unique logs, JSON,
+and code-search output in three rotated arm orders. Our mean latency and process
+CPU were lower in all six groups. Sampled peak process-tree private memory was
+80.0 MiB versus 1,909.9 MiB; this is footprint, not allocation volume. Unique
+code still forwarded 5.7% more bytes. HeadRoom's rate limit was disabled for this
+throughput measurement; compression settings stayed default. These measurements
+do not measure model quality or billed cost. See the
+[raw samples, reproduction commands, and limitations](bench/live/evidence/local-proxy-performance-2026-09-16/README.md).
+
 **Live Codex comparison (2026-09-15).** Local Codex CLI 0.154.0, `gpt-6-astra`,
 and installed HeadRoom 0.37.0 completed a balanced 27-run campaign. All three
 arms passed all nine tasks; every initial read was complete, and all provider
