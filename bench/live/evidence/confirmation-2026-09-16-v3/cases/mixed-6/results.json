@@ -1,0 +1,260 @@
+[
+  {
+    "task": "refresh",
+    "arm": "headroom",
+    "rep": 1,
+    "position": 1,
+    "kind": "workflow",
+    "artifactLayout": 2,
+    "seed": 439770681,
+    "verdict": "PASS",
+    "agentSeconds": 70.6,
+    "read": {
+      "notApplicable": true
+    },
+    "validation": {
+      "passed": true,
+      "failures": []
+    },
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 162600,
+      "cached": 140544,
+      "output": 933
+    },
+    "requests": 10,
+    "compressedRequests": 0,
+    "beforeBytes": 1677046,
+    "afterBytes": 1677046,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 12958,
+          "output_tokens": 81,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13114,
+          "output_tokens": 49,
+          "cached_input_tokens": 12800
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13718,
+          "output_tokens": 80,
+          "cached_input_tokens": 12928
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13875,
+          "output_tokens": 63,
+          "cached_input_tokens": 13568
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13978,
+          "output_tokens": 49,
+          "cached_input_tokens": 13696
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14435,
+          "output_tokens": 83,
+          "cached_input_tokens": 13824
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 19860,
+          "output_tokens": 128,
+          "cached_input_tokens": 14208
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 20031,
+          "output_tokens": 47,
+          "cached_input_tokens": 19712
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 20109,
+          "output_tokens": 282,
+          "cached_input_tokens": 19840
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 20522,
+          "output_tokens": 71,
+          "cached_input_tokens": 19968
+        }
+      }
+    ],
+    "answer": {
+      "disabledRoute": "route-5b33ff6f-163",
+      "baseLimit": 289,
+      "effectiveLimit": 15
+    },
+    "seconds": 81.7
+  },
+  {
+    "task": "refresh",
+    "arm": "proxy",
+    "rep": 1,
+    "position": 2,
+    "kind": "workflow",
+    "artifactLayout": 2,
+    "seed": 439770681,
+    "verdict": "PASS",
+    "agentSeconds": 46.1,
+    "read": {
+      "notApplicable": true
+    },
+    "validation": {
+      "passed": true,
+      "failures": []
+    },
+    "exit": 0,
+    "clientErrors": [],
+    "completedTools": [
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input": 82295,
+      "cached": 59264,
+      "output": 658
+    },
+    "requests": 6,
+    "compressedRequests": 5,
+    "beforeBytes": 654981,
+    "afterBytes": 399631,
+    "ledgerUsage": [
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13041,
+          "output_tokens": 84,
+          "cached_input_tokens": 0
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13414,
+          "output_tokens": 113,
+          "cached_input_tokens": 5120
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13622,
+          "output_tokens": 30,
+          "cached_input_tokens": 13184
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 13718,
+          "output_tokens": 119,
+          "cached_input_tokens": 13440
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14082,
+          "output_tokens": 241,
+          "cached_input_tokens": 13568
+        }
+      },
+      {
+        "status": 200,
+        "usage": {
+          "input_tokens": 14418,
+          "output_tokens": 71,
+          "cached_input_tokens": 13952
+        }
+      }
+    ],
+    "answer": {
+      "disabledRoute": "route-5b33ff6f-163",
+      "baseLimit": 289,
+      "effectiveLimit": 15
+    },
+    "seconds": 47
+  }
+]
