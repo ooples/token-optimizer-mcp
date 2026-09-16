@@ -34,26 +34,27 @@ function records(text: string): RecordParts[] {
     let encode = (value: string): string => value;
     let parsed: Record<string, unknown>;
     try {
-      const structural = raw.replace(
-        /("(?:\\.|[^"\\])*")|\\r\\n|\\n/g,
-        (token, quoted: string | undefined) =>
-          quoted ?? (token === '\\n' ? '\n' : '\r\n')
-      );
-      parsed = JSON.parse(structural.trim().replace(/,$/, ''));
-    } catch {
-      // The enclosing tool can truncate a serialized shell envelope itself.
-      // It is then invalid JSON, but complete escaped records on either side
-      // of the gap still have exact content. Decode only one complete record,
-      // require canonical round-trip encoding, and keep its original encoding
-      // in every template fragment. Never repair or parse across the gap.
-      try {
+      // A record's first quote opens its first property name. If escaped,
+      // this is a serialized record: avoid a predictably failing JSON parse
+      // and exception allocation for every row on the successful path.
+      if (raw[raw.indexOf('"') - 1] === '\\') {
+        // Decode only this complete record, require canonical round-trip
+        // encoding, and keep that encoding in every template fragment.
+        // Never repair or parse across a truncated gap.
         source = JSON.parse(`"${raw}"`) as string;
         encode = (value: string): string => JSON.stringify(value).slice(1, -1);
         if (encode(source) !== raw) continue;
         parsed = JSON.parse(source.trim().replace(/,$/, ''));
-      } catch {
-        continue;
+      } else {
+        const structural = raw.replace(
+          /("(?:\\.|[^"\\])*")|\\r\\n|\\n/g,
+          (token, quoted: string | undefined) =>
+            quoted ?? (token === '\\n' ? '\n' : '\r\n')
+        );
+        parsed = JSON.parse(structural.trim().replace(/,$/, ''));
       }
+    } catch {
+      continue;
     }
     if (
       !parsed ||

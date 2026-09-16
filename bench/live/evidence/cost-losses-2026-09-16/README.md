@@ -53,6 +53,14 @@ Estimated cost was **34.3% lower** and input **15.9% lower**. Agent time was 5.2
 
 The actual outer fragments in these fresh captures fell from 8,101 characters each to 2,521 and 2,490. `outer-live/*` contains all six standard evidence files; `outer-summary.json` records both paired costs, exposure, and raw locations. The compiled fragment module matched the exact-replay hash.
 
+## Request-path profiling and allocation fix
+
+V8 CPU/allocation profiling found that every valid escaped record first caused a failed JSON parse and an exception allocation. The final implementation chooses the decoder from the first property quote, keeping canonical round-trip validation and malformed-record rejection intact. No output format changes.
+
+A replay of seven captured requests over 200 fresh-cache rounds (1,400 calls) measured mean time **2.645 ? 1.437 ms**, p95 **12.963 ? 3.918 ms**, and sampled allocation **913,448,128 ? 764,762,056 bytes**: 45.7%, 69.8%, and 16.3% reductions respectively. Total process CPU fell 43.8%. This is one internal before/after profiling comparison with 32 KiB sampling, excluding network/disk; it is not a HeadRoom allocation or live agent-time comparison.
+
+The codec result and metadata match `510d570a` exactly on **69 unique large strings across 28 captured proxy conversations**, including all original losses, the complete follow-up, and both outer-truncation pairs. `fastpath/` retains summaries, allocation profiles, and the equivalence report. The focused fragment regressions and build passed after this change.
+
 ## Evidence and reproduction
 
 - `followup-plan.json`, `followup-execution.json`, `followup-summary.json`: complete fixed follow-up and raw locations.
