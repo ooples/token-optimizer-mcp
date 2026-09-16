@@ -495,6 +495,7 @@ not guarantee that shared provider-cache effects disappear.
 The subsequent Claude Code default-versus-aggressive confirmation hit Claude's
 weekly usage limit and is incomplete. Its missing usage cannot count as a win.
 Codex validation runs independently through the Responses API.
+
 **Expanded local Codex confirmation.** A preregistered seven-family study ran
 70 pairs / 140 attempts against installed HeadRoom 0.37.0. Our frozen proxy
 passed 70/70; HeadRoom passed 69/70 with one upstream HTTP 503 and missing usage.
@@ -510,8 +511,6 @@ HeadRoom, with three requests each. A fourth pair had a retained upstream 503 on
 our arm; one measured pair still cost more. These are development results, not
 confirmation of the new build or an all-workload win. See the
 [complete screen and exclusions](bench/live/evidence/json-categories-2026-09-16/README.md).
-
-
 
 **Live Codex comparison (2026-09-15).** Local Codex CLI 0.154.0, `gpt-6-astra`,
 and installed HeadRoom 0.37.0 completed a balanced 27-run campaign. All three
