@@ -19,6 +19,25 @@ import { sessionRouting } from '../../scripts/session-routing.mjs';
 import { putNode } from '../../hooks-core/wiki.mjs';
 
 describe('managed client installation', () => {
+  it('forwards Codex MCP routing state explicitly across its environment filter', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'optimizer-codex-mcp-env-'));
+    try {
+      const file = join(dir, 'argv.json');
+      const script = join(dir, 'client.mjs');
+      writeFileSync(script, `import fs from 'node:fs';fs.writeFileSync(${JSON.stringify(file)},JSON.stringify(process.argv.slice(2)));`);
+      writeFileSync(join(dir, 'config.toml'), 'model_provider="custom"\n[model_providers.custom]\nbase_url="http://127.0.0.1:1/v1"\n');
+      expect(await runClient('codex', [script], {
+        command: process.execPath,
+        env: { ...process.env, CODEX_HOME: dir, TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_MODE: 'balanced', TOKEN_OPTIMIZER_MANAGED_MCP: '1' },
+      })).toBe(0);
+      const args = JSON.parse(readFileSync(file, 'utf8'));
+      expect(args).toContain('mcp_servers.token-optimizer.env.TOKEN_OPTIMIZER_CLIENT="codex"');
+      expect(args).toContain('mcp_servers.token-optimizer.startup_timeout_sec=60');
+      expect(args.some((arg) => /^mcp_servers.token-optimizer.env.OPENAI_BASE_URL="http:\/\/127\.0\.0\.1:\d+/.test(arg))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   it('adds OpenCode runtime integration without changing existing inline configuration', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'optimizer-opencode-launch-'));
     try {

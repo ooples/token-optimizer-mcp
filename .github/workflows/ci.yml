@@ -39,6 +39,8 @@ jobs:
       - run: npm run sync:hooks:check
       - run: npm run build
       - run: npm run verify:package-contents
+      - name: Verify package report compatibility with publishing npm
+        run: npx --yes npm@12.0.2 run verify:package-contents
       - name: Verify edit safety and production MCP contracts
         run: >-
           npm test -- --runInBand
@@ -50,7 +52,9 @@ jobs:
           tests/integration/mcp-stdio-contract.test.ts
           tests/integration/edit-process-lock.test.mjs
           tests/integration/package-runtime-exclusions.test.mjs
+          tests/integration/npm-pack-report.test.mjs
           tests/integration/managed-clients.test.mjs
+          tests/integration/windows-command-activation.test.mjs
           tests/integration/opencode-routing.test.mjs
           tests/integration/lazy-analysis-loading.test.mjs
           tests/integration/managed-install-adversarial.test.mjs
@@ -71,6 +75,7 @@ jobs:
           tests/unit/token-counter-never-estimates.test.ts
           tests/unit/tokenizers.test.ts
           tests/unit/doctor-reports-proxy-state.test.ts
+          tests/unit/v7-postrelease-regressions.test.ts
 
   lint-and-format:
     name: Lint and Format Check

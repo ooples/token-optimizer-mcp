@@ -422,7 +422,7 @@ export class SmartGrepTool {
           try {
             filesSearched++;
             const content = readFileSync(file, opts.encoding);
-            const lines = content.split('\n');
+            const lines = content.split(/\r?\n/);
             const fileMatches: GrepMatch[] = [];
 
             // PER LINE, because that is how the search itself matches.

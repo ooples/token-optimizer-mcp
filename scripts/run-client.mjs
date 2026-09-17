@@ -20,6 +20,7 @@ import { claudeRoute } from './claude-routing.mjs';
 import { sessionRouting } from './session-routing.mjs';
 import { claudeManagedRouting } from './managed-policy.mjs';
 import { projectRootFor } from '../hooks-core/wiki.mjs';
+import { launcherMarker } from './windows-commands.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const off = (value) => /^(0|false|no|off)$/i.test(value?.trim() || '');
@@ -46,7 +47,8 @@ export function executable(command, env) {
           join(dir, `${command}.exe`),
           join(dir, `${command}.cmd`),
         ]);
-  const path = candidates.find(existsSync);
+  const path = candidates.find((candidate) => existsSync(candidate) &&
+    !(candidate.toLowerCase().endsWith('.cmd') && readFileSync(candidate, 'utf8').includes(launcherMarker)));
   if (!path) throw new Error(`Cannot find ${command} on PATH.`);
   if (!path.endsWith('.cmd')) return { command: path, prefix: [] };
   // npm's standard shim is a known Node entrypoint. Do not pass user prompts
@@ -400,6 +402,12 @@ export async function runClient(
           '-c',
           'mcp_servers.token-optimizer.startup_timeout_sec=60'
         );
+        // Codex filters inherited MCP environment variables. Forward the
+        // non-secret routing state explicitly instead of relying on inheritance.
+        for (const name of ['TOKEN_OPTIMIZER_CLIENT', 'TOKEN_OPTIMIZER_PROXY', 'TOKEN_OPTIMIZER_MODE', ...(proxy ? ['OPENAI_BASE_URL'] : [])]) {
+          if (childEnv[name] !== undefined)
+            forwarded.push('-c', `mcp_servers.token-optimizer.env.${name}=${literal(childEnv[name])}`);
+        }
       } else {
         forwarded.push(
           '--mcp-config',

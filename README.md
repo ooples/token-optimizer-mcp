@@ -588,10 +588,12 @@ have separate results; see the [workflow evidence and limitations](bench/live/ev
 
 
 The proxy is enabled by default and binds loopback only. Global npm installs
-activate Claude hooks and managed `claude`/`codex`/`opencode` commands in PowerShell,
-Bash, and Zsh when lifecycle scripts are enabled. For local installs or disabled
-lifecycle scripts, run `token-optimizer-install`. Open a new shell to activate
-them. Each managed session starts its own proxy,
+activate Claude hooks and managed `claude`/`codex`/`opencode` commands in Command Prompt,
+PowerShell, Bash, and Zsh when lifecycle scripts are enabled. Windows installs add
+owned `.cmd` launchers to the User PATH, so profiles and PowerShell execution-policy
+changes are not required. For local installs or disabled lifecycle scripts, run
+`token-optimizer-install`. Reopen the terminal to load the updated PATH and shell
+activation. Each managed session starts its own proxy,
 registers the packaged core MCP tools (including wiki), and shuts the proxy down
 on exit. `token-optimizer-run codex ...`, `token-optimizer-run claude ...`, or
 `token-optimizer-run opencode ...` works

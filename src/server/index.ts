@@ -2986,6 +2986,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
         () =>
           installDoctor({
             ...(request.params.arguments as any),
+            clientName: server.getClientVersion()?.name,
             // A runtime fact no file inspection can reach: this process may be
             // running on an in-memory cache because the real one would not open.
             // Nothing persists in that state and nothing outside says so.
