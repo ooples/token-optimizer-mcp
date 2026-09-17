@@ -121,6 +121,8 @@ try {
               sent.messages[index].tool_call_id === message.tool_call_id
             : JSON.stringify(sent.messages[index]) === JSON.stringify(message)
         );
+      // Tool content may be compressed or replaced by an earlier reference.
+      // auditChatProbe independently checks EVERY generated payload below.
       samples.push({
         sample,
         arm,

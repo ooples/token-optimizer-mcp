@@ -12,6 +12,7 @@ import {
 import type { FileHandle } from 'fs/promises';
 import { createHash, randomUUID } from 'crypto';
 import { basename, dirname, join } from 'path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const pending = new Map<string, Promise<void>>();
 
@@ -118,8 +119,22 @@ async function commitLocked(
     await handle.sync();
     await handle.close();
     handle = undefined;
-    await verify();
-    await rename(temporary, target);
+    for (let attempt = 0; ; attempt++) {
+      // Recheck after each wait so a concurrent external edit is not clobbered.
+      await verify();
+      try {
+        await rename(temporary, target);
+        break;
+      } catch (error) {
+        if (
+          process.platform !== 'win32' ||
+          (error as NodeJS.ErrnoException).code !== 'EPERM' ||
+          attempt >= 3
+        )
+          throw error;
+        await delay(25 * 2 ** attempt);
+      }
+    }
   } finally {
     if (handle) {
       try {

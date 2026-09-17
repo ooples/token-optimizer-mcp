@@ -198,6 +198,7 @@ describe('managed installation adversarial review', () => {
       const io = {
         ...fs,
         writeFileSync(fd, bytes) {
+          if (typeof bytes === 'string') return fs.writeFileSync(fd, bytes);
           fs.writeSync(fd, bytes.subarray(0, 3));
           throw Object.assign(new Error('full'), { code: 'ENOSPC' });
         },

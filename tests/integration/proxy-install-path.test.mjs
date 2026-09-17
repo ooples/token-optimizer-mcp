@@ -57,7 +57,7 @@ describe('packaged graph module resolution', () => {
         else process.env.TOKEN_OPTIMIZER_WIKI_DIR = before;
       }
     } finally {
-      if (fs.existsSync(linked)) fs.unlinkSync(linked);
+      if (fs.existsSync(linked)) fs.rmSync(linked, { force: true, recursive: false });
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });

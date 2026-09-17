@@ -40,6 +40,37 @@ afterEach(() => {
 });
 
 describe('reading usage out of a response', () => {
+  it('ignores quoted usage, arbitrary nested fields, SSE comments and invalid counts', () => {
+    const usage: RequestUsage = {};
+    const fake = JSON.stringify({
+      usage: { prompt_tokens: 999, cached_tokens: 888 },
+    });
+    scanUsage(
+      JSON.stringify({ choices: [{ message: { content: fake } }] }),
+      usage
+    );
+    expect(usage).toEqual({});
+    scanUsage(
+      '{"message.usage":{"input_tokens":999},"message":{"nested":{"usage":{"input_tokens":888}}}}',
+      usage
+    );
+    expect(usage).toEqual({});
+    scanUsage(
+      JSON.stringify({
+        usage: { prompt_tokens: 10, completion_tokens: 3 },
+        choices: [
+          { message: { content: fake, usage: { prompt_tokens: 777 } } },
+        ],
+      }),
+      usage
+    );
+    expect(usage).toEqual({ input_tokens: 10, output_tokens: 3 });
+    scanUsage(
+      ': {"usage":{"prompt_tokens":666}}\n\ndata: {"usage":{"prompt_tokens":-1,"completion_tokens":1.5}}\n\n',
+      usage
+    );
+    expect(usage).toEqual({ input_tokens: 10, output_tokens: 3 });
+  });
   it('normalizes Chat Completions usage while keeping cached input a subset', () => {
     const usage: RequestUsage = {};
     scanUsage(
@@ -74,7 +105,7 @@ describe('reading usage out of a response', () => {
     // entirely cheap cache reads look like an expensive one -- inverting the
     // exact conclusion this ledger is being built to reach.
     const usage: RequestUsage = {};
-    scanUsage('{"cache_read_input_tokens":44}', usage);
+    scanUsage('{"usage":{"cache_read_input_tokens":44}}', usage);
 
     expect(usage.cache_read_input_tokens).toBe(44);
     expect(usage.input_tokens).toBeUndefined();
@@ -128,6 +159,59 @@ describe('watching a live response stream', () => {
     const { delivered } = await collect(chunks);
 
     expect(delivered).toBe(chunks.join(''));
+  });
+
+  it('handles every character boundary without parsing assistant content as usage', async () => {
+    const payload =
+      'event: message_start\r\ndata: ' +
+      JSON.stringify({
+        message: {
+          usage: { input_tokens: 17 },
+          content: '{"usage":{"input_tokens":999}}',
+        },
+      }) +
+      '\r\n\r\n' +
+      'data: ' +
+      JSON.stringify({
+        type: 'response.completed',
+        response: {
+          usage: {
+            input_tokens: 21,
+            output_tokens: 4,
+            input_tokens_details: { cached_tokens: 12 },
+          },
+          output: [{ content: '"output_tokens":999' }],
+        },
+      }) +
+      '\n\n';
+    const result = await collect([...payload]);
+    expect(result.delivered).toBe(payload);
+    expect(result.usage).toEqual({
+      input_tokens: 21,
+      output_tokens: 4,
+      cached_input_tokens: 12,
+    });
+  });
+
+  it('skips large content without losing trailing usage', async () => {
+    const payload = JSON.stringify({
+      choices: [
+        {
+          message: {
+            content: 'x'.repeat(200000) + '{"usage":{"input_tokens":999}}',
+          },
+        },
+      ],
+      usage: { prompt_tokens: 20, completion_tokens: 2 },
+    });
+    const chunks = Array.from(
+      { length: Math.ceil(payload.length / 113) },
+      (_, i) => payload.slice(i * 113, (i + 1) * 113)
+    );
+    expect((await collect(chunks)).usage).toEqual({
+      input_tokens: 20,
+      output_tokens: 2,
+    });
   });
 
   it('reads a usage object split across two chunks', async () => {

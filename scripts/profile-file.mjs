@@ -30,13 +30,22 @@ export function replaceProfile(path, expected, next, io = fs) {
   const target = io.existsSync(path) ? io.realpathSync(path) : path;
   io.mkdirSync(dirname(target), { recursive: true });
   const lock = `${target}.token-optimizer.lock`;
-  const owner = io.openSync(lock, 'wx', 0o600);
+  let owner;
+  try {
+    owner = io.openSync(lock, 'wx', 0o600);
+  } catch (error) {
+    if (error.code === 'EEXIST')
+      throw new Error(`Shell profile lock exists: ${lock}. Inspect its owner; after that process stops, run node scripts/recover-profile-lock.mjs with the profile path to recover explicitly.`);
+    throw error;
+  }
   const temporary = join(
     dirname(target),
     `.${basename(target)}.${randomUUID()}.tmp`
   );
   let handle;
   try {
+    io.writeFileSync(owner, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), nonce: randomUUID() }));
+    io.fsyncSync(owner);
     const verify = () => {
       const current = io.existsSync(target) ? io.readFileSync(target) : null;
       if (expected === null ? current !== null : !current?.equals(expected))

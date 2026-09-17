@@ -28,6 +28,8 @@ import { appendFileSync } from 'node:fs';
 import type { Readable, Writable } from 'node:stream';
 import { createGunzip, createInflate, createBrotliDecompress } from 'node:zlib';
 import * as zlib from 'node:zlib';
+import { StringDecoder } from 'node:string_decoder';
+import { UsageParser } from './usage-parser.js';
 
 /** The token classes a provider bills separately. */
 export interface RequestUsage {
@@ -48,13 +50,6 @@ const USAGE_KEYS = [
 ] as const;
 
 /**
- * How much of the previous chunk to re-scan, so a `usage` object split across a
- * chunk boundary is still seen whole. The objects in question are well under
- * this; the cost is re-scanning a few hundred bytes per chunk.
- */
-const CARRY_CHARS = 512;
-
-/**
  * Pulls usage numbers out of a response fragment, keeping the LAST value seen
  * for each key.
  *
@@ -64,31 +59,33 @@ const CARRY_CHARS = 512;
  * occurrence is the total and an earlier one is a partial count.
  */
 export function scanUsage(text: string, into: RequestUsage): void {
-  // Chat Completions uses different names for the same inclusive token counts.
+  new UsageParser((usage) => mergeUsage(usage, into)).write(text);
+}
+
+function mergeUsage(usage: Record<string, unknown>, into: RequestUsage): void {
+  const assign = (key: keyof RequestUsage, value: unknown): void => {
+    if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
+      into[key] = value;
+  };
   for (const [wire, canonical] of [
     ['prompt_tokens', 'input_tokens'],
     ['completion_tokens', 'output_tokens'],
   ] as const) {
-    const pattern = new RegExp(`"${wire}"[ \\t]*:[ \\t]*(\\d+)`, 'g');
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null)
-      into[canonical] = Number(match[1]);
+    assign(canonical, usage[wire]);
   }
   for (const key of USAGE_KEYS) {
-    // Anchored on the quoted key, so a field merely CONTAINING this name --
-    // `cache_read_input_tokens` contains `input_tokens` -- cannot match it.
-    const pattern = new RegExp(`"${key}"[ \\t]*:[ \\t]*(\\d+)`, 'g');
-    let match: RegExpExecArray | null;
-    let last: string | undefined;
-    while ((match = pattern.exec(text)) !== null) last = match[1];
-    if (last !== undefined) into[key] = Number(last);
+    assign(key, usage[key]);
   }
   // Responses reports cache reads inside input_tokens_details. Keep its native
   // semantics separate from Anthropic's exclusive token classes.
-  const cached = /"cached_tokens"[ \t]*:[ \t]*(\d+)/g;
-  let match: RegExpExecArray | null;
-  while ((match = cached.exec(text)) !== null)
-    into.cached_input_tokens = Number(match[1]);
+  for (const key of ['input_tokens_details', 'prompt_tokens_details']) {
+    const details = usage[key];
+    if (details && typeof details === 'object' && !Array.isArray(details))
+      assign(
+        'cached_input_tokens',
+        (details as Record<string, unknown>).cached_tokens
+      );
+  }
 }
 
 /** What compression did to one request, as the summary already reports it. */
@@ -182,9 +179,8 @@ export function appendRecord(path: string, record: AccountingRecord): void {
  * unchanged -- which matters more here than anywhere, because an SSE stream has
  * to arrive as it is produced and this is a byte-faithful proxy.
  *
- * BOUNDED. It keeps a few hundred characters of overlap and nothing else, so a
- * long response costs a constant amount of memory rather than being buffered to
- * be measured.
+ * BOUNDED. The parser retains only bounded usage objects and structural state,
+ * never the assistant's response content.
  */
 export function tapUsage(
   stream: Readable,
@@ -192,7 +188,8 @@ export function tapUsage(
   contentEncoding?: string
 ): void {
   const usage: RequestUsage = {};
-  let carry = '';
+  const parser = new UsageParser((value) => mergeUsage(value, usage));
+  const utf8 = new StringDecoder('utf8');
   let settled = false;
   let settling = false;
 
@@ -210,6 +207,7 @@ export function tapUsage(
   const finish = (): void => {
     if (settled) return;
     settled = true;
+    parser.write(utf8.end());
     try {
       done(usage);
     } catch {
@@ -218,15 +216,13 @@ export function tapUsage(
   };
 
   const absorb = (text: string): void => {
-    const combined = carry + text;
-    scanUsage(combined, usage);
-    carry = combined.slice(Math.max(0, combined.length - CARRY_CHARS));
+    parser.write(text);
   };
 
   if (decoder) {
     decoder.on('data', (chunk: Buffer) => {
       try {
-        absorb(chunk.toString('utf8'));
+        absorb(utf8.write(chunk));
       } catch {
         // Instrumentation only.
       }
@@ -242,7 +238,7 @@ export function tapUsage(
         decoder.write(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
         return;
       }
-      absorb(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+      absorb(typeof chunk === 'string' ? chunk : utf8.write(chunk));
     } catch {
       // A chunk that will not decode tells us nothing; the response is
       // unaffected either way.

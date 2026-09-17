@@ -5,8 +5,12 @@ import { homedir } from 'node:os';
 function argument(args, name) {
   let result;
   for (let i = 0; i < args.length && args[i] !== '--'; i++) {
-    if (args[i] === name)
-      result = { index: ++i, value: args[i], inline: false };
+    if (args[i] === name) {
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith('--'))
+        throw new Error(`${name} needs a value.`);
+      result = { index: ++i, value, inline: false };
+    }
     else if (args[i].startsWith(`${name}=`))
       result = {
         index: i,

@@ -31,7 +31,7 @@ try {
   run('record-install.mjs', [hooksDir, settings]);
   if (!/^(0|false|no|off)$/i.test(process.env.TOKEN_OPTIMIZER_MANAGED_CLIENTS?.trim() || '')) {
     const profiles = activateShells();
-    for (const profile of profiles) console.log(`Managed Claude Code and Codex activation: ${profile}`);
+    for (const profile of profiles) console.log(`Managed Claude Code, Codex, and OpenCode activation: ${profile}`);
     if (profiles.length) console.log('Open a new PowerShell, Bash, or Zsh session to activate normal claude/codex/opencode commands.');
   }
   console.log('');

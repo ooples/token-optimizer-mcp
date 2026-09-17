@@ -29,6 +29,8 @@ const gemini = JSON.parse(
   readFileSync(join(root, 'gemini-extension.json'), 'utf8')
 );
 const required = [
+  'scripts/recover-profile-lock.mjs',
+  'dist/proxy/usage-parser.js',
   'scripts/opencode-plugin.mjs',
   'scripts/session-routing.mjs',
   'dist/proxy/chat-completions.js',

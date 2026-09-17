@@ -18,6 +18,56 @@ describe('Responses project knowledge', () => {
     input: [{ role: 'user', content: 'Find the project release marker.' }],
   };
   const spill = () => '/unused';
+  it('retains a frozen prefix after more than 1000 other openings', () => {
+    const store = anchorStore();
+    const first = compressBody(
+      Buffer.from(JSON.stringify(request)),
+      spill,
+      store,
+      findings
+    );
+    for (let i = 0; i < 1001; i++)
+      compressBody(
+        Buffer.from(
+          JSON.stringify({
+            ...request,
+            input: [{ role: 'user', content: `Other task ${i}` }],
+          })
+        ),
+        spill,
+        store,
+        findings
+      );
+    const later = compressBody(
+      Buffer.from(
+        JSON.stringify({
+          ...request,
+          input: [
+            ...request.input,
+            { role: 'assistant', content: 'Continuing' },
+          ],
+        })
+      ),
+      spill,
+      store,
+      []
+    );
+    expect(JSON.parse(later.body.toString()).instructions).toBe(
+      JSON.parse(first.body.toString()).instructions
+    );
+    const overflow = compressBody(
+      Buffer.from(
+        JSON.stringify({
+          ...request,
+          input: [{ role: 'user', content: 'Overflow task' }],
+        })
+      ),
+      spill,
+      store,
+      findings
+    );
+    expect(overflow.summary.injectedChars ?? 0).toBe(0);
+  });
 
   it('separates new tasks sharing the same initial AGENTS message', () => {
     const store = anchorStore();

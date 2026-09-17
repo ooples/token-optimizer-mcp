@@ -46,6 +46,10 @@ export function withResponsesKnowledge(
     blocks.set(anchors, cache);
   }
   if (!cache.has(key)) {
+    // Never evict a frozen prefix while its proxy is alive. Bound admission
+    // instead: overflow conversations run without injected knowledge. The
+    // WeakMap releases all blocks when the session's AnchorStore is collected.
+    if (cache.size >= 1000) return result;
     // Joining an established conversation must not invalidate its prefix.
     // CLI setup can contain many user/developer messages before the first
     // inference. Assistant/tool/reasoning history, not envelope count, signals
@@ -56,7 +60,6 @@ export function withResponsesKnowledge(
           sharedGraph,
         })
       : null;
-    if (cache.size >= 1000) cache.delete(cache.keys().next().value!);
     cache.set(key, block);
   }
   const block = cache.get(key);

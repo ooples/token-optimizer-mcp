@@ -86,7 +86,7 @@ describe('smart_edit preserves the original on storage failure', () => {
     expectOriginal();
   });
   it('preserves the original when replacement is denied', async () => {
-    rename.mockImplementationOnce(async () => {
+    rename.mockImplementation(async () => {
       throw Object.assign(new Error('EPERM: replacement denied'), {
         code: 'EPERM',
       });
@@ -108,6 +108,32 @@ describe('smart_edit preserves the original on storage failure', () => {
         .filter((name) => name.startsWith('.token-optimizer-edit-'))
     ).toEqual([]);
   });
+  (process.platform === 'win32' ? it : it.skip)(
+    'retries a transient sharing failure without deleting the target',
+    async () => {
+      rename.mockImplementationOnce(async () => {
+        expect(fs.readFileSync(file, 'utf8')).toBe(original);
+        throw Object.assign(new Error('sharing violation'), { code: 'EPERM' });
+      });
+      expect((await edit()).success).toBe(true);
+      expect(rename).toHaveBeenCalledTimes(2);
+      expect(fs.readFileSync(file, 'utf8')).toBe(
+        original.replace('pending', 'ready')
+      );
+    }
+  );
+  (process.platform === 'win32' ? it : it.skip)(
+    'rejects external edits made during a sharing retry',
+    async () => {
+      rename.mockImplementationOnce(async () => {
+        fs.writeFileSync(file, 'external change');
+        throw Object.assign(new Error('sharing violation'), { code: 'EPERM' });
+      });
+      expect((await edit()).success).toBe(false);
+      expect(rename).toHaveBeenCalledTimes(1);
+      expect(fs.readFileSync(file, 'utf8')).toBe('external change');
+    }
+  );
   it('rejects hard-linked targets without changing either name', async () => {
     const alias = join(root, 'alias.txt');
     fs.linkSync(file, alias);
