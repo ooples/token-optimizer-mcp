@@ -38,3 +38,14 @@ growth, not cumulative allocation volume.
   usage, the existing rate-card scenario, agent execution and total duration.
 - Report each workload separately, including losses. This bounded synthetic
   campaign is not production-repository or universal-superiority proof.
+
+The first campaign (`run-7Q1bSc`) stopped before logs repetition 2 on its memory
+guard, after two passing attempts. Its samples and results remain intact.
+Inspection found preflight could reuse a sample taken while the preceding arm
+was still alive. Preflight now requires a sample after cleanup for every arm,
+including when the preceding sample looked healthy. The same memory thresholds
+apply; fresh low-memory readings still stop immediately.
+
+The complete restart uses seed offset **1900000801**, with the same arms, tasks,
+repetition count, and analysis criteria. The incomplete campaign is retained
+separately and will not be pooled into a balanced result.
