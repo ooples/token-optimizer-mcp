@@ -33,6 +33,7 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { acceptedOptions, declaredProperties } from './helpers/schema-source.js';
+import * as analysisDefinitions from '../../src/tools/code-analysis/analysis-tool-definitions.js';
 
 const ROOT = process.cwd();
 const TOOLS = join(ROOT, 'src', 'tools');
@@ -114,7 +115,15 @@ describe('every tool that can answer partially says so', () => {
         undeclared.push(`${tool.file}: does not accept deadlineMs at all`);
         continue;
       }
-      const declared = declaredProperties(tool.text);
+      // Lazy analysis implementations re-export their published schema. Resolve
+      // that exact export rather than looking for an unrelated inline schema.
+      const reexport = /export\s*\{\s*(\w+_TOOL_DEFINITION)\s*\}\s*from\s*['"]\.\/analysis-tool-definitions\.js['"]/.exec(tool.text);
+      const definition = reexport
+        ? analysisDefinitions[reexport[1] as keyof typeof analysisDefinitions]
+        : undefined;
+      const declared = definition
+        ? Object.keys(definition.inputSchema.properties)
+        : declaredProperties(tool.text);
       if (!declared || !declared.includes('deadlineMs')) {
         undeclared.push(`${tool.file}: accepts deadlineMs but does not declare it`);
       }
