@@ -8,6 +8,16 @@ Date: 2026-09-16. Release PR: #345. Candidate base:
 The [startup follow-up](release-7-startup-verification.md) removes unused encoder
 allocations and records before/after MCP startup and memory measurements.
 
+### Dependency audit follow-up
+
+The 2026-09-16 registry audit reported no runtime findings, but 11 development
+dependency findings. The compatible lockfile refresh updates npm's bundled
+dependencies, ESLint's configuration loader, and cosmiconfig. The security
+overrides now select js-yaml 4.3.2 and qs 6.16.0. After an incremental install,
+`npm audit` reports zero findings across all 1,190 audited packages. Build, lint,
+and the ten targeted lifecycle/model-count regressions pass with that installed
+tree. Registry audit results are time-specific, not a guarantee of no defects.
+
 ### Default activation follow-up
 
 The subsequent [adversarial review](release-7-adversarial-defaults.md) found and
