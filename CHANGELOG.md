@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.1](https://github.com/ooples/token-optimizer-mcp/compare/v7.0.0...v7.0.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* repair v7 publication, Windows activation, and reported regressions ([#388](https://github.com/ooples/token-optimizer-mcp/issues/388)) ([f44a7ce](https://github.com/ooples/token-optimizer-mcp/commit/f44a7ce9879810b9f72c9445d838fdda9cb41c9c))
+
 ## [7.0.0](https://github.com/ooples/token-optimizer-mcp/compare/v6.0.2...v7.0.0) (2026-09-17)
 
 
