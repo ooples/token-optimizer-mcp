@@ -59,7 +59,7 @@ import {
   statSync,
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Decoded absolute path to THIS file. Must use fileURLToPath, not
@@ -81,6 +81,13 @@ const CURRENT_FILE = join(RUNTIME, 'current');
 const LOCK_DIR = join(RUNTIME, '.refresh.lock');
 const ACTIVE_DIR = join(RUNTIME, 'active');
 const LAST_REFRESH_FILE = join(RUNTIME, '.last-refresh');
+// A failed refresh is recorded here, NOT in LAST_REFRESH_FILE (#394). Stamping the throttle before
+// installing meant one offline launch, or a release npm had not finished propagating, silenced every
+// retry for the whole refresh interval.
+const REFRESH_FAILED_FILE = join(RUNTIME, '.refresh-failed');
+// The plugin's own version could not be installed (not on npm yet, offline). Launches back off
+// instead of each waiting out PLUGIN_UPGRADE_WAIT_MS for an install that cannot succeed (#393).
+const FLOOR_FAILED_FILE = join(RUNTIME, '.plugin-version-failed');
 
 // Don't hammer the registry on frequent restarts: only background-refresh if it
 // has been at least this long since the last attempt. Default 6h; 0 disables the
@@ -90,6 +97,16 @@ const REFRESH_INTERVAL_MS = numericEnv(
   'TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS',
   6 * 60 * 60 * 1000
 );
+
+// After a FAILED refresh, the next attempt is due this soon rather than a whole interval later.
+const REFRESH_RETRY_MS = numericEnv('TOKEN_OPTIMIZER_REFRESH_RETRY_MS', 15 * 60 * 1000);
+
+// How long a launch waits for the plugin's own version to install before serving what it has.
+// Claude Code gives an MCP server about 30 s to answer. Measured 2026-09-17 on Windows: a real
+// install of 7.0.1 took ~20 s and a cold server start up to 6 s, so 15 s keeps a margin; a slower
+// install serves the previous runtime once and the new one from the next launch.
+const PLUGIN_UPGRADE_WAIT_MS = numericEnv('TOKEN_OPTIMIZER_PLUGIN_UPGRADE_WAIT_MS', 15 * 1000);
+const PLUGIN_UPGRADE_RETRY_MS = numericEnv('TOKEN_OPTIMIZER_PLUGIN_RETRY_MS', 10 * 60 * 1000);
 
 /**
  * An exact version to serve, or '' for the normal @latest-tracking behaviour.
@@ -174,13 +191,45 @@ function entryFor(versionDir) {
   return pkgInfo(join(versionDir, 'node_modules', PACKAGE))?.entry ?? null;
 }
 
-/** Numeric-dotted version compare: 1 if a>b, -1 if a<b, 0 if equal. */
-function compareVersions(a, b) {
-  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] || 0) - (pb[i] || 0);
+/**
+ * SemVer precedence: 1 if a>b, -1 if a<b, 0 if equal.
+ *
+ * PRERELEASES RANK BELOW THEIR OWN RELEASE. Comparing the numeric components alone made 7.0.1 and
+ * 7.0.1-beta.1 equal, so a plugin at the release was not newer than a runtime at its prerelease and
+ * the upgrade was skipped. Identifiers compare per SemVer §11: numeric ones numerically, others
+ * as ASCII, numeric below non-numeric, and a longer set of otherwise-equal identifiers wins.
+ */
+export function compareVersions(a, b) {
+  const split = (value) => {
+    const withoutBuild = String(value).split('+')[0]; // build metadata is ignored for precedence
+    const dash = withoutBuild.indexOf('-');
+    const core = dash === -1 ? withoutBuild : withoutBuild.slice(0, dash);
+    const prerelease = dash === -1 ? '' : withoutBuild.slice(dash + 1);
+    return {
+      core: core.split('.').map((n) => parseInt(n, 10) || 0),
+      pre: prerelease ? prerelease.split('.') : [],
+    };
+  };
+  const left = split(a);
+  const right = split(b);
+  for (let i = 0; i < Math.max(left.core.length, right.core.length); i++) {
+    const d = (left.core[i] || 0) - (right.core[i] || 0);
     if (d) return d > 0 ? 1 : -1;
+  }
+  if (!left.pre.length && !right.pre.length) return 0;
+  if (!left.pre.length) return 1; // a release outranks any prerelease of it
+  if (!right.pre.length) return -1;
+  for (let i = 0; i < Math.max(left.pre.length, right.pre.length); i++) {
+    const x = left.pre[i];
+    const y = right.pre[i];
+    if (x === undefined) return -1; // fewer identifiers ranks lower
+    if (y === undefined) return 1;
+    if (x === y) continue;
+    const xNumeric = /^\d+$/.test(x);
+    const yNumeric = /^\d+$/.test(y);
+    if (xNumeric && yNumeric) return Number(x) > Number(y) ? 1 : -1;
+    if (xNumeric !== yNumeric) return xNumeric ? -1 : 1; // numeric ranks below alphanumeric
+    return x > y ? 1 : -1;
   }
   return 0;
 }
@@ -254,25 +303,22 @@ function installLatest(spec = 'latest') {
   );
   mkdirSync(staging, { recursive: true });
   try {
-    const res = spawnSync(
-      NPM,
-      [
-        'install',
-        `${PACKAGE}@${spec}`,
-        '--prefix',
-        staging,
-        '--no-save',
-        '--no-audit',
-        '--no-fund',
-        '--loglevel=error',
-      ],
-      {
-        stdio: ['ignore', 'ignore', 'inherit'],
-        // .cmd on Windows must go through a shell; args have no shell metachars.
-        shell: IS_WIN,
-        env: process.env,
-      }
-    );
+    const invocation = npmInvocation([
+      'install',
+      `${PACKAGE}@${spec}`,
+      '--prefix',
+      staging,
+      '--no-save',
+      '--no-audit',
+      '--no-fund',
+      '--loglevel=error',
+    ]);
+    const res = spawnSync(invocation.command, invocation.args, {
+      stdio: ['ignore', 'ignore', 'inherit'],
+      env: process.env,
+      windowsHide: true,
+      ...invocation.options,
+    });
     if (res.status !== 0) {
       log(`install failed (npm exit ${res.status ?? 'null'})`);
       safeRm(staging);
@@ -306,6 +352,61 @@ function installLatest(spec = 'latest') {
     safeRm(staging);
     return null;
   }
+}
+
+/**
+ * How to run npm with these arguments.
+ *
+ * npm is `npm.cmd` on Windows, and Node refuses to spawn a .cmd directly. `shell: true` works but
+ * concatenates the argument list unescaped, which Node now reports on every call (DEP0190). cmd.exe
+ * is invoked explicitly instead, with every argument quoted here. Inside double quotes only `"` and
+ * `%` still mean something to cmd, so an argument containing either (a runtime path with a `%` in
+ * it, in practice) keeps the old shell route rather than being quoted wrongly.
+ */
+function npmInvocation(args) {
+  if (!IS_WIN) return { command: NPM, args, options: {} };
+  if (args.some((arg) => /["%\r\n]/.test(arg))) {
+    return { command: NPM, args, options: { shell: true } };
+  }
+  // The command name stays UNQUOTED: cmd resolves %~dp0 inside a batch file invoked by a quoted
+  // name found on PATH to the current directory, and npm.cmd finds npm-cli.js through %~dp0.
+  const line = [NPM, ...args.map((arg) => `"${arg}"`)].join(' ');
+  return {
+    command: process.env.ComSpec || 'cmd.exe',
+    args: ['/d', '/s', '/c', `"${line}"`],
+    options: { windowsVerbatimArguments: true },
+  };
+}
+
+function readJsonFile(file) {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** The version `current` names, or null. */
+function currentVersion() {
+  try {
+    return readFileSync(CURRENT_FILE, 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The version of the plugin this shim ships in, or ''.
+ *
+ * A FLOOR, NOT A PIN (#393). The shim otherwise serves whatever `current` names and only moves
+ * through the throttled background refresh, for the NEXT launch -- so updating the plugin left its
+ * hooks running against the previous server for hours. `latest` stays the policy; the plugin's own
+ * release is simply never served older than.
+ */
+function pluginVersion() {
+  const manifest = readJsonFile(join(dirname(THIS_FILE), '.claude-plugin', 'plugin.json'));
+  const version = String(manifest?.version ?? '').trim();
+  return EXACT_VERSION.test(version) ? version : '';
 }
 
 function safeRm(p) {
@@ -549,11 +650,17 @@ export function pruneOldVersions(keepVersion, alsoKeep = null) {
 
 /** --refresh: install latest for NEXT launch, flip pointer, prune. */
 function runRefresh() {
-  if (!acquireLock()) return; // another refresh is in flight
+  if (!acquireLock()) return true; // another refresh is in flight
   try {
-    atomicWrite(LAST_REFRESH_FILE, String(Date.now()));
     const entry = installLatest();
-    if (!entry) return; // offline or failed — keep the current pointer as-is
+    if (!entry) {
+      // Offline or failed: keep the current pointer, and retry after REFRESH_RETRY_MS rather than
+      // after a whole interval.
+      atomicWrite(REFRESH_FAILED_FILE, JSON.stringify({ at: Date.now() }));
+      return false;
+    }
+    atomicWrite(LAST_REFRESH_FILE, String(Date.now()));
+    safeRm(REFRESH_FAILED_FILE);
     // entry === <VERSIONS_DIR>/<version>/node_modules/...; recover <version>.
     const version = entry
       .slice(VERSIONS_DIR.length + 1)
@@ -568,6 +675,7 @@ function runRefresh() {
     // `prev` is what a live session is still running from, so it is named
     // explicitly rather than trusted to be among the newest by mtime.
     pruneOldVersions(version, prev);
+    return true;
   } finally {
     releaseLock();
   }
@@ -575,6 +683,11 @@ function runRefresh() {
 
 function refreshDueNow() {
   if (REFRESH_INTERVAL_MS === 0) return true;
+  // THE FAILURE DECIDES ON ITS OWN. Falling through to the success stamp meant a refresh that
+  // succeeded an hour ago and failed a minute later waited the whole interval from the SUCCESS,
+  // so the short retry never applied when it was needed most.
+  const failedAt = Number(readJsonFile(REFRESH_FAILED_FILE)?.at);
+  if (Number.isFinite(failedAt)) return Date.now() - failedAt >= REFRESH_RETRY_MS;
   try {
     const last = Number(readFileSync(LAST_REFRESH_FILE, 'utf8').trim());
     if (Number.isFinite(last)) return Date.now() - last >= REFRESH_INTERVAL_MS;
@@ -582,6 +695,111 @@ function refreshDueNow() {
     /* no record yet */
   }
   return true;
+}
+
+/**
+ * --install-version <v>: install exactly <v> and make it current unless something newer already is.
+ *
+ * Runs detached from a launch that found the plugin newer than its runtime. Waits for the refresh
+ * lock rather than giving up, because a background `latest` refresh holding it is common right
+ * after a release. Returns false, and records the failure, when <v> cannot be installed.
+ */
+function runInstallVersion(version) {
+  if (!EXACT_VERSION.test(version)) {
+    log(`--install-version needs an exact version (got "${version}")`);
+    return false;
+  }
+  let locked = false;
+  for (let i = 0; i < 240 && !locked; i++) {
+    locked = acquireLock();
+    if (!locked) sleepSync(500);
+  }
+  if (!locked) {
+    log(`could not install ${version}: another install held the runtime lock for two minutes`);
+    return false;
+  }
+  try {
+    const prev = currentVersion();
+    let entry = entryFor(join(VERSIONS_DIR, version));
+    if (!entry) {
+      entry = installLatest(version);
+      const installed = pkgInfo(join(VERSIONS_DIR, version, 'node_modules', PACKAGE));
+      if (!entry || installed?.version !== version) {
+        atomicWrite(FLOOR_FAILED_FILE, JSON.stringify({ version, at: Date.now() }));
+        log(`could not install plugin version ${version}; serving ${prev ?? 'nothing newer'} for now`);
+        return false;
+      }
+    }
+    safeRm(FLOOR_FAILED_FILE);
+    if (!prev || compareVersions(version, prev) > 0) {
+      atomicWrite(CURRENT_FILE, version);
+      log(`runtime -> ${version} to match the plugin (was ${prev ?? 'none'})`);
+    }
+    pruneOldVersions(currentVersion() ?? version, prev);
+    return true;
+  } finally {
+    releaseLock();
+  }
+}
+
+/**
+ * Make the runtime at least the plugin's own version and return the entry to serve, or null.
+ *
+ * An already-installed copy is adopted at once. Otherwise the install runs DETACHED and this launch
+ * waits up to PLUGIN_UPGRADE_WAIT_MS for it: in time, the new server is served now; too slow, the old
+ * one is served and the next launch finds the new one; impossible (not on npm yet, offline), the
+ * failure is recorded so later launches do not each wait for it again.
+ */
+function ensurePluginVersion(version) {
+  const versionDir = join(VERSIONS_DIR, version);
+  const installed = entryFor(versionDir);
+  if (installed) {
+    const prev = currentVersion();
+    if (!prev || compareVersions(version, prev) > 0) {
+      atomicWrite(CURRENT_FILE, version);
+      log(`runtime -> ${version} to match the plugin (was ${prev ?? 'none'})`);
+    }
+    return installed;
+  }
+
+  const failure = readJsonFile(FLOOR_FAILED_FILE);
+  if (failure?.version === version && Date.now() - Number(failure.at) < PLUGIN_UPGRADE_RETRY_MS) {
+    return null;
+  }
+
+  const cached = findCachedEntry(version);
+  const startedAt = Date.now();
+  try {
+    const child = spawn(process.execPath, [THIS_FILE, '--install-version', version], {
+      detached: true,
+      stdio: 'ignore',
+      env: process.env,
+      windowsHide: true,
+    });
+    child.unref();
+  } catch (err) {
+    log(`could not start installing plugin version ${version}: ${err?.message ?? err}`);
+    return cached?.entry ?? null;
+  }
+  if (cached) {
+    log(`plugin ${version}: serving the npx-cached copy while the runtime installs it`);
+    return cached.entry;
+  }
+
+  log(`plugin ${version} is newer than the runtime; installing it...`);
+  while (Date.now() - startedAt < PLUGIN_UPGRADE_WAIT_MS) {
+    sleepSync(250);
+    const entry = entryFor(versionDir);
+    if (entry && currentVersion() === version) return entry;
+    const failed = readJsonFile(FLOOR_FAILED_FILE);
+    if (failed?.version === version && Number(failed.at) >= startedAt) {
+      log(`plugin ${version} could not be installed (not published yet, or offline); ` +
+        `serving ${currentVersion() ?? 'the previous runtime'} and retrying later`);
+      return null;
+    }
+  }
+  log(`plugin ${version} is still installing; it will be served from the next launch`);
+  return null;
 }
 
 /** Fire a detached background refresh that outlives this process. */
@@ -592,6 +810,7 @@ function spawnBackgroundRefresh() {
       detached: true,
       stdio: 'ignore',
       env: process.env,
+      windowsHide: true,
     });
     child.unref();
   } catch (err) {
@@ -674,7 +893,14 @@ function main() {
   mkdirSync(RUNTIME, { recursive: true });
 
   if (process.argv.includes('--refresh')) {
-    runRefresh();
+    // An explicit refresh reports failure, so scripts and schedulers can see it.
+    if (!runRefresh()) process.exitCode = 1;
+    return;
+  }
+
+  const installIndex = process.argv.indexOf('--install-version');
+  if (installIndex !== -1) {
+    if (!runInstallVersion(String(process.argv[installIndex + 1] ?? ''))) process.exitCode = 1;
     return;
   }
 
@@ -749,6 +975,19 @@ function main() {
     return;
   }
 
+  const floor = pluginVersion();
+  if (floor) {
+    const served = currentVersion();
+    if (!served || !currentEntry() || compareVersions(floor, served) > 0) {
+      const upgraded = ensurePluginVersion(floor);
+      if (upgraded) {
+        spawnBackgroundRefresh();
+        runServer(upgraded);
+        return;
+      }
+    }
+  }
+
   let entry = currentEntry();
   if (entry) {
     // Fast path: serve immediately from the managed runtime, update in background.
@@ -777,11 +1016,13 @@ function main() {
   log('no cached server; installing latest (one-time)…');
   if (acquireLock()) {
     try {
-      atomicWrite(LAST_REFRESH_FILE, String(Date.now()));
       entry = installLatest();
       if (entry) {
         const version = entry.slice(VERSIONS_DIR.length + 1).split(/[\\/]/)[0];
         atomicWrite(CURRENT_FILE, version);
+        atomicWrite(LAST_REFRESH_FILE, String(Date.now()));
+      } else {
+        atomicWrite(REFRESH_FAILED_FILE, JSON.stringify({ at: Date.now() }));
       }
     } finally {
       releaseLock();

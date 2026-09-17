@@ -83,3 +83,10 @@ process.env.TOKEN_OPTIMIZER_HARVEST_STATE = join(
   mkdtempSync(join(tmpdir(), 'token-optimizer-test-harvest-')),
   'last-harvest.json'
 );
+
+// THE DEVELOPER'S OPT-OUT MUST NOT REACH THE SUITE. TOKEN_OPTIMIZER_MODE=off in the shell (or in the
+// agent's settings `env`, which its child processes inherit) disables every hook, and 69 hook tests
+// then failed on a machine where that override had been set -- while CI, which never sets it, stayed
+// green. Tests assert the default posture unless they set a mode themselves, which they still can:
+// beforeEach and per-spawn env run after this.
+delete process.env.TOKEN_OPTIMIZER_MODE;

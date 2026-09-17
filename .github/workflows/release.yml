@@ -150,6 +150,53 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  # 2b) Prove the PUBLISHED package installs and starts through the plugin's own launcher, on both
+  #     platforms users run it on. v7.0.0 shipped a tag with no npm package and 7.0.1 reached npm
+  #     while installed plugins kept serving 6.0.2; both were found by users. A failure here opens
+  #     an issue immediately instead.
+  verify-published:
+    name: Verify published release (${{ matrix.os }})
+    needs: [release-please, publish-npm]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+    steps:
+      - name: Checkout the released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          # This job runs package scripts from the released tag; without this, checkout leaves a
+          # token with issues: write in the local git config for them to read.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install and launch the published version through plugin/launch.mjs
+        env:
+          RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
+        run: npm run verify:published-launch -- --version "$RELEASE_VERSION" --wait-minutes 20
+        shell: bash
+
+      - name: Open an issue when the published release does not start
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "v$RELEASE_VERSION does not install or start through the plugin launcher (${{ matrix.os }})" --body "The post-publish verification failed for v$RELEASE_VERSION on ${{ matrix.os }}: $RUN_URL. Users installing or updating the plugin are affected until this is fixed."
+
   # 3) Fan-out notifications, mirroring the previous pipeline. All optional and
   #    skipped silently when the corresponding repo variable/secret is absent.
   notify:

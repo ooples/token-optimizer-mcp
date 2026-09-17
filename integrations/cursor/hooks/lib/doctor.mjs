@@ -47,6 +47,9 @@ function describeBytes(bytes) {
 
 const ok = (name, detail) => ({ name, pass: true, detail });
 const bad = (name, detail, remedy) => ({ name, pass: false, detail, remedy });
+// A healthy install in a state the user must know about. It never fails the doctor (an
+// opt-out is not a broken hook) and is never counted as a pass either.
+const warn = (name, detail, remedy) => ({ name, pass: true, warn: true, detail, remedy });
 
 const PLUGIN_ID = 'token-optimizer@token-optimizer';
 
@@ -1230,9 +1233,7 @@ export async function diagnose({
   ]);
 
   const checks = [
-    ok('effective optimization mode', mode() === 'off'
-      ? 'disabled by TOKEN_OPTIMIZER_MODE=off; remove this override to enable optimization. Hook probes below temporarily use enforce mode.'
-      : `${mode()}; hook probes below temporarily use enforce mode`),
+    ...probeMode({ settingsPath }),
     ...checklist({ root, settingsPath, install }),
     ...probeVersion({ install }),
     ...probeHarvest(),
@@ -1246,23 +1247,70 @@ export async function diagnose({
   ];
 
   const failed = checks.filter((c) => !c.pass);
+  const warnings = checks.filter((c) => c.pass && c.warn);
   return {
     // Carried so the report can speak about the file that was examined.
     settingsPath: settingsPath ?? null,
     mode: mode(),
     checks,
-    passed: checks.length - failed.length,
+    passed: checks.length - failed.length - warnings.length,
+    warnings: warnings.length,
     total: checks.length,
     healthy: failed.length === 0,
     failed,
   };
 }
 
+/**
+ * The effective mode, and where an opt-out comes from (#395).
+ *
+ * TOKEN_OPTIMIZER_MODE=off is a deliberate, healthy configuration that saves nothing. Reporting it
+ * as one more PASS let the override sit unnoticed in ~/.claude/settings.json behind a clean sheet,
+ * so it is a warning that names the file (or the process environment) and the key to remove.
+ */
+export function probeMode({ settingsPath } = {}) {
+  const effective = mode();
+  if (effective !== 'off') {
+    return [ok('effective optimization mode', `${effective}; hook probes below temporarily use enforce mode`)];
+  }
+  // BOTH SOURCES WHEN BOTH ARE SET. mode() reads the process environment, so removing the settings
+  // entry alone would not change anything -- and naming only the file would send the user to fix
+  // half of it and find the doctor unmoved.
+  let fromSettings = false;
+  if (settingsPath && existsSync(settingsPath)) {
+    try {
+      const value = JSON.parse(readFileSync(settingsPath, 'utf8'))?.env?.TOKEN_OPTIMIZER_MODE;
+      fromSettings = String(value ?? '').trim().toLowerCase() === 'off';
+    } catch {
+      /* an unparseable settings file is reported by the checklist */
+    }
+  }
+  // WHEN THE FILE SETS IT, BOTH SOURCES ARE NAMED. The agent applies its settings `env` block to
+  // the processes it launches, so a settings opt-out reaches mode() as a process variable as well,
+  // and from in here that is indistinguishable from a shell that also exports it. Naming only the
+  // file would send someone to edit it, restart, and find the doctor unmoved.
+  const detail = fromSettings
+    ? `disabled by TOKEN_OPTIMIZER_MODE=off in the "env" block of ${settingsPath}, which the agent ` +
+      'also applies to this process'
+    : 'disabled by TOKEN_OPTIMIZER_MODE=off in the process environment';
+  const remedy = fromSettings
+    ? `remove "TOKEN_OPTIMIZER_MODE" from the "env" block of ${settingsPath}, and unset it in any ` +
+      'shell that exports it, then start a new session'
+    : 'unset TOKEN_OPTIMIZER_MODE where the agent is launched, then start a new session';
+  return [warn('effective optimization mode',
+    `${detail}: hooks neither refuse nor advise, so nothing is saved. ` +
+      'Hook probes below temporarily use enforce mode.',
+    remedy)];
+}
+
 /** The report, with a remedy on every failure. */
 export function renderDiagnosis(result) {
-  const lines = result.checks.map((check) => `  ${check.pass ? 'PASS' : 'FAIL'}  ${check.name}` +
+  const label = (check) => (!check.pass ? 'FAIL' : check.warn ? 'WARN' : 'PASS');
+  const lines = result.checks.map((check) => `  ${label(check)}  ${check.name}` +
     (check.detail ? `\n          ${check.detail}` : '') +
-    (check.pass || !check.remedy ? '' : `\n          fix: ${check.remedy}`));
+    ((check.pass && !check.warn) || !check.remedy ? '' : `\n          fix: ${check.remedy}`));
+  const warnings = Number(result.warnings ?? result.checks.filter((c) => c.pass && c.warn).length);
+  const disabled = result.checks.find((c) => c.warn && c.name === 'effective optimization mode');
 
   const residueNote = [];
   // The path diagnose ACTUALLY EXAMINED. Reading the env override here meant the
@@ -1279,16 +1327,22 @@ export function renderDiagnosis(result) {
   }
 
   return [
-    `${result.passed}/${result.total} checks passed.`,
+    `${result.passed}/${result.total} checks passed` +
+      (warnings ? `, ${warnings} warning${warnings === 1 ? '' : 's'}.` : '.'),
     '',
     ...lines,
     ...residueNote,
     '',
     result.healthy
-      ? result.mode === 'off'
-        ? 'Installation probes passed; optimization is disabled by TOKEN_OPTIMIZER_MODE=off.'
-        : 'Installation probes passed: the hook emitted policy and refused a synthetic large read in enforce mode.'
+      ? 'Installation probes passed: the hook emitted policy and refused a synthetic large read in enforce mode.'
       : 'Something above is broken. Each failure names its own fix.',
+    // SAID WHETHER OR NOT THE INSTALL IS HEALTHY. Tying this to `healthy` hid it on exactly the
+    // installs that need it most -- a broken install with optimization switched off reported only
+    // the breakage -- and made the report depend on the machine it ran on.
+    ...(result.mode === 'off'
+      ? [`Optimization is disabled by TOKEN_OPTIMIZER_MODE=off: nothing is being saved.` +
+          (disabled?.remedy ? ` To enable it: ${disabled.remedy}.` : '')]
+      : []),
     'Enforcement can be turned off at any time with TOKEN_OPTIMIZER_MODE=off.',
   ].join('\n');
 }
