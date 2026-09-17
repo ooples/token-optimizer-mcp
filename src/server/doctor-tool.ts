@@ -47,6 +47,7 @@ const say = (body: string, isError = false) => ({
 
 export async function installDoctor(input: {
   uninstallPlan?: boolean;
+  clientName?: string;
   /**
    * Set by the server when its cache fell back to memory. Passed in rather than
    * detected here because it is a property of THIS process, not of the files on
@@ -103,6 +104,7 @@ export async function installDoctor(input: {
       path.join(os.homedir(), '.claude', 'settings.json'),
     // We ARE the server. Spawning another copy to ask it questions deadlocks.
     skipServer: true,
+    clientName: input?.clientName,
     cacheDegradedReason: input?.cacheDegradedReason ?? null,
   });
 

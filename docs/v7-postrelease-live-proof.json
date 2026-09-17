@@ -1,0 +1,40 @@
+{
+  "work": "C:/Users/yolan/AppData/Local/Temp/token-optimizer-pr388-S6NEtZ",
+  "root": "C:/Users/yolan/.token-optimizer/local/v7-pr388/node_modules/@ooples/token-optimizer-mcp",
+  "mcpProof": {
+    "version": {
+      "name": "token-optimizer-mcp",
+      "version": "7.0.0"
+    },
+    "offDoctorPassed": true,
+    "crlfAnchoredSearchPassed": true
+  },
+  "code": 0,
+  "result": {
+    "doctorPassed": true,
+    "matchedLine": "  NEEDLE"
+  },
+  "modelRequests": 7,
+  "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+  ],
+  "graphEnriched": 6,
+  "installedBuild": "Locally patched v7 from PR #388; not an npm release",
+  "tarballSha256": "4ff2a5c99dab74a7577ec2accf18bb5f2e6cefc74a912fd65b714e44dd4ab3ed",
+  "issues": [
+    389,
+    390,
+    391
+  ],
+  "doctorChecks": {
+    "passed": 16,
+    "total": 16
+  },
+  "regressions": "All three reports reproduced before fixes and passed afterward; includes anchored CRLF search and prerelease skew."
+}

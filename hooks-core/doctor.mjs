@@ -25,6 +25,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { harvestMode, harvestFailure } from './harvest.mjs';
 import { proxyEnvFor } from './capabilities.mjs';
+import { mode } from './policy.mjs';
 import { readManifest, verifyManifest, residue, manifestSize } from './manifest.mjs';
 import { mcpClientsSeen } from './metrics.mjs';
 
@@ -337,7 +338,7 @@ export function pointsAtLoopback(value) {
   );
 }
 
-export function probeProxy(env = process.env) {
+export function probeProxy(env = process.env, { clientName } = {}) {
   // NORMALISED THE WAY THE RUNTIME NORMALISES IT. `policy.mode()` trims and
   // lowercases, so `OFF` and ` off ` genuinely turn the product off -- while a raw
   // comparison here read them as "on" and reported proxy failures against a
@@ -353,11 +354,19 @@ export function probeProxy(env = process.env) {
     ];
   }
 
-  const variable = proxyEnvFor(env.TOKEN_OPTIMIZER_CLIENT);
+  const reported = String(clientName || '').toLowerCase();
+  const client = env.TOKEN_OPTIMIZER_CLIENT ||
+    (/^(codex|codex[_-](cli|mcp|desktop))$/.test(reported) ? 'codex' :
+      /^(claude-code|claude)$/.test(reported) ? 'claude-code' :
+        reported === 'opencode' ? 'opencode' : '');
+  if (!client) return [bad('compression proxy routing is unverified',
+    'The MCP client did not identify a supported client; MCP connectivity alone does not prove model routing.',
+    'Launch with token-optimizer-run codex, token-optimizer-run claude, or token-optimizer-run opencode.')];
+  const variable = proxyEnvFor(client);
   if (!variable) {
     return [
       bad('the compression proxy cannot serve this client',
-        (env.TOKEN_OPTIMIZER_CLIENT || 'this client') +
+        client +
           ' exposes no supported way to redirect its model traffic',
         'use token-optimizer-run with a supported client, or set TOKEN_OPTIMIZER_PROXY=0'),
     ];
@@ -368,18 +377,17 @@ export function probeProxy(env = process.env) {
   if (!loopback) {
     return [
       bad('the compression proxy is on but nothing is routed through it',
-        variable + ' is ' + (pointed ? 'set to ' + pointed : 'not set') +
+        variable + ' is ' + (pointed ? 'not a loopback URL' : 'not set') +
           ', so this client talks straight to the provider',
-        'set ' + variable + ' to the address the proxy is listening on; until then ' +
-          'nothing is compressed'),
+        'Launch through token-optimizer-run ' + (client === 'claude-code' ? 'claude' : client) +
+          ' so the proxy starts before the client; restarting the MCP server alone cannot reroute an existing session.'),
     ];
   }
 
   return [
     ok('request compression is available',
-      'the compression proxy is on and ' + variable + ' points at it. Tool results ' +
-      'and history are compressed on the way to the model, and the cached prefix is ' +
-      'never rewritten'),
+      'the compression proxy is enabled and ' + variable + ' points at loopback. ' +
+      'Routing is configured; confirm model traffic in the managed launch ledger. The cached prefix is never rewritten.'),
   ];
 }
 
@@ -411,11 +419,15 @@ export function probeVersion({ install }) {
   // was looking at.
   if (!sameTree && packageVersion) {
     const label = 'other clients agree with this package';
-    return checks.concat(compareVersions(installedVersion, packageVersion) < 0
+    return checks.concat(installedVersion !== packageVersion
       ? [bad(label,
         `the Claude Code plugin cache holds ${installedVersion}, but this package is ${packageVersion}`,
-        'this run diagnosed the package, not the plugin. Run /plugin in Claude Code and ' +
-        'update token-optimizer so both clients run the same build')]
+        compareVersions(installedVersion, packageVersion) < 0
+          ? 'this run diagnosed the package, not the plugin. Run /plugin in Claude Code and ' +
+            'update token-optimizer so both clients run the same build'
+          : 'this run diagnosed the served runtime, not the plugin. Update the managed runtime ' +
+            'to the plugin version and restart the client. If npm does not yet carry that version, ' +
+            'the release publication must complete first; otherwise refresh the stale runtime.')]
       : [ok(label, `Claude Code plugin ${installedVersion}; this package ${packageVersion}`)]);
   }
 
@@ -717,7 +729,9 @@ export async function probeSessionStart({ root, workspace, hooksDir, install }) 
   // exist makes the SPAWN fail rather than the hook. Do not depend on another
   // check having run first.
   mkdirSync(workspace, { recursive: true });
-  const out = await probe(binary, {}, { cwd: workspace });
+  // Test the installed binary independently of an intentional runtime opt-out,
+  // as probeEnforcement does. diagnose reports the effective mode separately.
+  const out = await probe(binary, {}, { cwd: workspace, env: { TOKEN_OPTIMIZER_MODE: 'enforce' } });
   // JSON.parse(null) coerces to the string 'null' and RETURNS null rather than
   // throwing, so without this the never-ran case fell past the catch written for
   // it and reported 'ran, but produced no policy text' -- sending the user after
@@ -1193,7 +1207,7 @@ export function probeCache({ degradedReason }) {
  */
 export async function diagnose({
   root, workspace, graphDir, settingsPath, pluginsDir, skipServer = false,
-  cacheDegradedReason = null, codexHome,
+  cacheDegradedReason = null, codexHome, clientName,
 } = {}) {
   // Resolved ONCE and threaded through, so every check reasons about the same
   // install. Detecting per-probe is how the checklist and the enforcement probe
@@ -1214,10 +1228,13 @@ export async function diagnose({
   ]);
 
   const checks = [
+    ok('effective optimization mode', mode() === 'off'
+      ? 'disabled by TOKEN_OPTIMIZER_MODE=off; remove this override to enable optimization. Hook probes below temporarily use enforce mode.'
+      : `${mode()}; hook probes below temporarily use enforce mode`),
     ...checklist({ root, settingsPath, install }),
     ...probeVersion({ install }),
     ...probeHarvest(),
-    ...probeProxy(),
+    ...probeProxy(process.env, { clientName }),
     ...enforcement,
     ...sessionStart,
     ...probeGraph({ dir: graphDir }),
@@ -1230,6 +1247,7 @@ export async function diagnose({
   return {
     // Carried so the report can speak about the file that was examined.
     settingsPath: settingsPath ?? null,
+    mode: mode(),
     checks,
     passed: checks.length - failed.length,
     total: checks.length,
@@ -1265,7 +1283,9 @@ export function renderDiagnosis(result) {
     ...residueNote,
     '',
     result.healthy
-      ? 'Enforcement is live: the hook was run and the refusal came back.'
+      ? result.mode === 'off'
+        ? 'Installation probes passed; optimization is disabled by TOKEN_OPTIMIZER_MODE=off.'
+        : 'Installation probes passed: the hook emitted policy and refused a synthetic large read in enforce mode.'
       : 'Something above is broken. Each failure names its own fix.',
     'Enforcement can be turned off at any time with TOKEN_OPTIMIZER_MODE=off.',
   ].join('\n');
