@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import type { Tiktoken } from 'tiktoken';
+import { provesTokenBenefit } from './token-bounds.js';
 
 const require = createRequire(import.meta.url);
 let encoder: Tiktoken | undefined;
@@ -38,14 +39,17 @@ export function tokenBenefit(before: string, after: string): boolean {
   // same original. Keep both decisions so every turn doesn't recount both.
   const hit = decisions.get(before)?.get(after);
   if (hit) return hit.accepted;
+  const beforeBytes = Buffer.byteLength(before);
+  const afterBytes = Buffer.byteLength(after);
   if (
-    Buffer.byteLength(after) >= Buffer.byteLength(before) ||
+    afterBytes >= beforeBytes ||
     Buffer.byteLength(JSON.stringify(after)) >=
       Buffer.byteLength(JSON.stringify(before))
   )
     return false;
-  let accepted = Buffer.byteLength(after) <= Buffer.byteLength(before) * 0.75;
-  if (before.length <= 128 * 1024 && after.length <= 128 * 1024) {
+  const proven = provesTokenBenefit(before, beforeBytes, afterBytes);
+  let accepted = proven || afterBytes <= beforeBytes * 0.75;
+  if (!proven && before.length <= 128 * 1024 && after.length <= 128 * 1024) {
     try {
       encoder ??= (
         require('tiktoken') as typeof import('tiktoken')

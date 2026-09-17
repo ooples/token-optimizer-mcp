@@ -1,4 +1,5 @@
-/** Confirmation-only generated cases. Never used to tune the frozen product. */
+/** Seeded development cases. These workload families have informed tuning;
+ * new seeds alone do not make them independent held-out confirmation. */
 import { createHash } from 'node:crypto';
 import {
   workflow as developmentWorkflow,

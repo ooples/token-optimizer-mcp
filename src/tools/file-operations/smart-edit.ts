@@ -11,7 +11,8 @@
  * Target: 90% reduction vs reading full file + writing changes
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
+import { replaceFile } from '../../utils/replace-file.js';
 import { homedir } from 'os';
 import { join } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -378,8 +379,13 @@ export class SmartEditTool {
         ? writeBackup(filePath, originalContent, opts.encoding)
         : false;
 
-      // Apply changes to file
-      writeFileSync(filePath, editedContent, opts.encoding);
+      // Commit only after a complete write; ENOSPC must not truncate the original.
+      await replaceFile(
+        filePath,
+        editedContent,
+        opts.encoding,
+        originalContent
+      );
       // Tell the search tools the tree moved, so no cached grep or glob
       // result can describe a state that no longer exists.
       bumpFsGeneration();

@@ -58,6 +58,8 @@ import {
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import { captureDir, captureRequest } from './capture.js';
 import { compressResponses } from './responses.js';
+import { compressChatCompletions } from './chat-completions.js';
+import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
 import {
@@ -157,6 +159,8 @@ export interface ProxyOptions {
    * rest of this package resolves a project from.
    */
   readonly projectRoot?: string;
+  /** Disable graph injection when a client chooses its working tree after launch. */
+  readonly knowledge?: boolean;
   /** Named starting point for the dials. Defaults to the environment's. */
   readonly preset?: PresetName | string;
   /** Expert overrides, layered over the preset. */
@@ -213,10 +217,10 @@ export interface ProxySummary {
   readonly messageCount?: number;
 }
 
-/** Enabled only on an explicit opt-in, and never when the kill switch is set. */
+/** Enabled by default; explicit opt-outs and the global kill switch win. */
 export function proxyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.TOKEN_OPTIMIZER_MODE === 'off') return false;
-  return /^(1|true|yes|on)$/i.test(env.TOKEN_OPTIMIZER_PROXY || '');
+  if (env.TOKEN_OPTIMIZER_MODE?.trim().toLowerCase() === 'off') return false;
+  return !/^(0|false|no|off)$/i.test(env.TOKEN_OPTIMIZER_PROXY?.trim() || '');
 }
 
 /**
@@ -337,7 +341,8 @@ export function compressBody(
   findings?: readonly Finding[],
   tuning?: Tuning,
   /** True when `findings` came from a graph shared across projects. */
-  sharedGraph?: boolean
+  sharedGraph?: boolean,
+  wireFormat?: 'chat-completions'
 ): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
   const before = body.length;
   const unchanged = (reason: string) => ({
@@ -420,8 +425,8 @@ export function compressBody(
       },
     };
   }
-
-  if (before < MIN_BYTES) return unchanged('below the size floor');
+  if (before < MIN_BYTES && !anchors && !findings?.length)
+    return unchanged('below the size floor');
 
   let parsed: ProviderRequest;
   try {
@@ -433,13 +438,36 @@ export function compressBody(
   }
   if (!parsed || typeof parsed !== 'object')
     return unchanged('not a request object');
+  if (wireFormat === 'chat-completions' && Array.isArray(parsed.messages)) {
+    try {
+      return compressChatCompletions(
+        body,
+        parsed as Record<string, unknown>,
+        spill,
+        anchors,
+        findings,
+        tuning,
+        sharedGraph
+      );
+    } catch {
+      return unchanged('Chat Completions compression failed');
+    }
+  }
   if (Array.isArray(parsed.input)) {
     try {
-      return compressResponses(
+      const result = compressResponses(
         body,
         parsed as unknown as Record<string, unknown>,
         spill,
         tuning
+      );
+      return withResponsesKnowledge(
+        result,
+        parsed as unknown as Record<string, unknown>,
+        anchors,
+        findings,
+        tuning,
+        sharedGraph
       );
     } catch {
       return unchanged('Responses compression failed');
@@ -699,13 +727,8 @@ const HOP_BY_HOP = new Set([
 ]);
 
 /**
- * Is the cached-knowledge block switched on?
- *
- * SEPARATE FROM THE PROXY SWITCH, and off unless asked for. Compression
- * removes tokens; this ADDS them, and it is justified by turns rather than
- * by size -- a claim this repository cannot yet make, because only THOL
- * measures turns and it has not been run against this. Folding an unproven
- * addition into a proven reduction would make the reduction untrue.
+ * Knowledge is enabled by default, with a separate opt-out. Its added characters
+ * are reported separately: activation is not evidence of net cost savings.
  */
 /**
  * How stale the in-memory findings may get before a background re-read.
@@ -719,8 +742,12 @@ const HOP_BY_HOP = new Set([
 const FINDINGS_REFRESH_MS = 60_000;
 
 export function knowledgeEnabled(env: NodeJS.ProcessEnv): boolean {
-  if (env.TOKEN_OPTIMIZER_MODE === 'off') return false;
-  return /^(1|true|yes|on)$/i.test(env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE || '');
+  return (
+    proxyEnabled(env) &&
+    !/^(0|false|no|off)$/i.test(
+      env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE?.trim() || ''
+    )
+  );
 }
 
 /**
@@ -1089,7 +1116,8 @@ export async function startProxy(
   );
   // Read at startup, then refreshed in the background -- see the block below,
   // which owns the reasoning about why the refresh cannot be synchronous.
-  const knowledgeOn = knowledgeEnabled(process.env);
+  const knowledgeOn =
+    options.knowledge !== false && knowledgeEnabled(process.env);
   const graphRoot = options.projectRoot || process.cwd();
   const loaded = knowledgeOn
     ? await loadFindingsFrom(graphRoot)
@@ -1208,7 +1236,12 @@ export async function startProxy(
         anchors,
         findings,
         tuning,
-        sharedGraphFlag
+        sharedGraphFlag,
+        /\/chat\/completions\/?$/.test(
+          (requestPath(req.url) ?? '').split('?')[0]
+        )
+          ? 'chat-completions'
+          : undefined
       );
       refreshFindings();
       options.onSummary?.({ path: req.url || '/', ...summary });

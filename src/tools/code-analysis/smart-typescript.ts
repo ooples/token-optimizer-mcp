@@ -1110,44 +1110,4 @@ export async function runSmartTypescript(
 }
 
 // MCP Tool definition
-export const SMART_TYPESCRIPT_TOOL_DEFINITION = {
-  name: 'smart_typescript',
-  description:
-    'Incremental TypeScript compilation with dependency tracking and intelligent caching (83% token reduction)',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      force: {
-        type: 'boolean',
-        description: 'Force full compilation (ignore cache)',
-        default: false,
-      },
-      projectRoot: {
-        type: 'string',
-        description: 'Project root directory',
-      },
-      tsconfig: {
-        type: 'string',
-        description: 'TypeScript config file path',
-        default: 'tsconfig.json',
-      },
-      maxCacheAge: {
-        type: 'number',
-        description: 'Maximum cache age in seconds (default: 300)',
-        default: 300,
-      },
-      files: {
-        type: 'array',
-        description: 'Specific files to check (enables incremental mode)',
-        items: {
-          type: 'string',
-        },
-      },
-      includeTypeInfo: {
-        type: 'boolean',
-        description: 'Include type information for exported symbols',
-        default: false,
-      },
-    },
-  },
-};
+export { SMART_TYPESCRIPT_TOOL_DEFINITION } from './analysis-tool-definitions.js';

@@ -102,13 +102,29 @@ export async function monitorHostMemory(
   return {
     stop,
     async assertReady(attempt) {
-      if (!fault && !ended && memoryReady(sample)) return;
+      // A cached sample can describe the previous arm before its processes
+      // exited. Require a new sample after cleanup for every arm, including a
+      // previously healthy sample: old headroom must not authorize a new run.
+      const requestedAt = Date.now();
+      const previous = sample;
+      const freshDeadline = requestedAt + memoryPolicy.maximumSampleAgeMs;
+      while (
+        !fault &&
+        !ended &&
+        (sample === previous || Date.parse(sample?.at) < requestedAt) &&
+        Date.now() < freshDeadline
+      )
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      const fresh = sample !== previous && Date.parse(sample?.at) >= requestedAt;
+      if (fresh && !fault && !ended && memoryReady(sample)) return;
       await writeFile(
         join(directory, 'host-memory-stop.json'),
         JSON.stringify(
           {
             attempt,
             sample,
+            requestedAt: new Date(requestedAt).toISOString(),
+            fresh,
             policy: memoryPolicy,
             error: fault ? String(fault) : null,
             reason:

@@ -1,9 +1,11 @@
 import { createHash } from 'crypto';
-import { encoding_for_model, Tiktoken, TiktokenModel } from 'tiktoken';
+import { createRequire } from 'node:module';
+import type { Tiktoken, TiktokenModel } from 'tiktoken';
 import { ITokenizer } from './i-tokenizer.js';
 import { LruCache } from '../../utils/lru-cache.js';
 
 const DEFAULT_CACHE_SIZE = 500;
+const require = createRequire(import.meta.url);
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
 /**
  * Strings longer than this are hashed before being used as a cache key
@@ -36,6 +38,8 @@ export class TiktokenTokenizer implements ITokenizer {
       cache ??
       new LruCache<string, number>(DEFAULT_CACHE_SIZE, DEFAULT_CACHE_TTL_MS);
     const tiktokenModel = TiktokenTokenizer.mapToTiktokenModel(modelName);
+    const { encoding_for_model } =
+      require('tiktoken') as typeof import('tiktoken');
     this.encoder = encoding_for_model(tiktokenModel);
   }
 

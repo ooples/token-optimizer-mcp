@@ -127,6 +127,9 @@ jobs:
           fi
           echo "Build artifacts verified successfully"
 
+      - name: Verify npm client entrypoints and manifests
+        run: npm run verify:package-contents
+
       # Offline verification, alongside (not instead of) the provenance
       # attestation the publish below produces. Generated from the built tree so
       # it hashes exactly what ships.

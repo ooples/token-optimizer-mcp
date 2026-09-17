@@ -11,12 +11,15 @@
     "token-optimizer-install": "./scripts/install-cli.mjs",
     "token-optimizer-doctor": "./scripts/doctor.mjs",
     "token-optimizer-diagnostics": "./scripts/export-diagnostics.mjs",
-    "token-optimizer-proxy": "./dist/proxy/cli.js"
+    "token-optimizer-proxy": "./dist/proxy/cli.js",
+    "token-optimizer-run": "./scripts/run-client.mjs"
   },
   "files": [
     "dist/**/*",
     "cli-wrapper.mjs",
     "hooks/**/*",
+    "gemini-extension.json",
+    "GEMINI.md",
     "install-hooks.ps1",
     "install-hooks.sh",
     "README.md",
@@ -29,7 +32,22 @@
     "evals/ucr/**/*",
     "integrations/**/*",
     "plugin/**/*",
-    "scripts/**/*"
+    "scripts/**/*",
+    "!**/logs/**",
+    "!**/*.log",
+    "!**/.cache/**",
+    "!**/.token-optimizer/**",
+    "!**/*.db",
+    "!**/*.db-*",
+    "!**/*.sqlite",
+    "!**/*.sqlite-*",
+    "!**/*.sqlite3",
+    "!**/*.sqlite3-*",
+    "!**/*.tmp",
+    "!**/*.temp",
+    "!**/.token-optimizer-edit-*.lock",
+    "!**/.env",
+    "!**/.env.*"
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.cjs",
@@ -60,6 +78,7 @@
     "format": "prettier --write 'src/**/*.{ts,js,json}'",
     "format:check": "prettier --check 'src/**/*.{ts,js,json}'",
     "validate": "node scripts/validate-package.js",
+    "verify:package-contents": "node scripts/verify-package-contents.mjs",
     "sync:hooks": "node scripts/sync-hook-core.mjs && node scripts/generate-client-entries.mjs && node scripts/generate-client-configs.mjs && node scripts/pin-mcp-version.mjs",
     "sync:hooks:check": "node scripts/sync-hook-core.mjs --check && node scripts/generate-client-entries.mjs --check && node scripts/generate-client-configs.mjs --check && node scripts/pin-mcp-version.mjs --check",
     "stamp:version": "node scripts/sync-hook-core.mjs --stamp && node scripts/generate-client-entries.mjs --stamp",
@@ -225,7 +244,8 @@
   },
   "overrides": {
     "brace-expansion": "5.0.9",
-    "js-yaml": "4.3.0",
-    "undici": "7.29.0"
+    "js-yaml": "4.3.2",
+    "undici": "7.29.0",
+    "qs": "6.16.0"
   }
 }

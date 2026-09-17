@@ -1,0 +1,138 @@
+{
+  "kind": "Installed npm tarball; managed OpenCode 1.17.12; existing configured Azure account; live model task",
+  "recordedAt": "2026-09-16T23:55:29.593Z",
+  "tarballSha256": "83408a0287ceab82123429f6680e6d5c3b9f59ea8b5947c83dee7219b73a4729",
+  "work": "C:\\Users\\yolan\\AppData\\Local\\Temp\\token-optimizer-release7-3768c78758\\opencode-managed-lh93dL",
+  "code": 0,
+  "timedOut": false,
+  "seconds": 32.946,
+  "result": {
+    "marker": "CHAT_GRAPH_7_42af",
+    "state": "ready"
+  },
+  "fixture": "release_state=ready\n",
+  "requests": 7,
+  "all200": true,
+  "injectedRequests": 7,
+  "toolCalls": [
+    {
+      "tool": "token-optimizer_smart_read",
+      "status": "completed"
+    },
+    {
+      "tool": "token-optimizer_smart_read",
+      "status": "completed"
+    },
+    {
+      "tool": "token-optimizer_smart_edit",
+      "status": "completed"
+    },
+    {
+      "tool": "token-optimizer_smart_read",
+      "status": "completed"
+    },
+    {
+      "tool": "token-optimizer_smart_write",
+      "status": "completed"
+    },
+    {
+      "tool": "token-optimizer_wiki_query",
+      "status": "completed"
+    }
+  ],
+  "checks": {
+    "artifactPass": true,
+    "wikiAfterWriting": true,
+    "wikiFindsSameMarker": true,
+    "allToolsCompleted": true,
+    "allModelRequests200": true,
+    "graphEveryRequest": true,
+    "usageEveryRequest": true
+  },
+  "requestSummary": [
+    {
+      "status": 200,
+      "path": "/openai/v1/chat/completions",
+      "beforeBytes": 3229,
+      "afterBytes": 3537,
+      "injectedChars": 273,
+      "usage": {
+        "input_tokens": 790,
+        "output_tokens": 9,
+        "cached_input_tokens": 0
+      }
+    },
+    {
+      "status": 200,
+      "path": "/openai/v1/chat/completions",
+      "beforeBytes": 60832,
+      "afterBytes": 61140,
+      "injectedChars": 273,
+      "usage": {
+        "input_tokens": 11437,
+        "output_tokens": 124,
+        "cached_input_tokens": 10752
+      }
+    },
+    {
+      "status": 200,
+      "path": "/openai/v1/chat/completions",
+      "beforeBytes": 62759,
+      "afterBytes": 62853,
+      "injectedChars": 273,
+      "usage": {
+        "input_tokens": 11921,
+        "output_tokens": 84,
+        "cached_input_tokens": 11520
+      }
+    },
+    {
+      "status": 200,
+      "path": "/openai/v1/chat/completions",
+      "beforeBytes": 63786,
+      "afterBytes": 63880,
+      "injectedChars": 273,
+      "usage": {
+        "input_tokens": 12171,
+        "output_tokens": 54,
+        "cached_input_tokens": 11904
+      }
+    },
+    {
+      "status": 200,
+      "path": "/openai/v1/chat/completions",
+      "beforeBytes": 64935,
+      "afterBytes": 64864,
+      "injectedChars": 273,
+      "usage": {
+        "input_tokens": 12405,
+        "output_tokens": 76,
+        "cached_input_tokens": 12160
+      }
+    },
+    {
+      "status": 200,
+      "path": "/openai/v1/chat/completions",
+      "beforeBytes": 65935,
+      "afterBytes": 65864,
+      "injectedChars": 273,
+      "usage": {
+        "input_tokens": 12641,
+        "output_tokens": 23,
+        "cached_input_tokens": 12416
+      }
+    },
+    {
+      "status": 200,
+      "path": "/openai/v1/chat/completions",
+      "beforeBytes": 66717,
+      "afterBytes": 66646,
+      "injectedChars": 273,
+      "usage": {
+        "input_tokens": 12819,
+        "output_tokens": 93,
+        "cached_input_tokens": 12544
+      }
+    }
+  ]
+}

@@ -17,6 +17,7 @@
  */
 
 import { count, inlineMarker } from './annotate.js';
+import { compressLogPeriods } from './log-periods.js';
 import { overlapsStructural, structuralRanges } from './structural.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
@@ -45,12 +46,12 @@ const TIMESTAMP =
  * ones with a clock on every line, would be the ones we could not touch.
  */
 function foldKey(line: string): string {
-  return line.replace(TIMESTAMP, '').trimEnd();
+  return line.replace(TIMESTAMP, '');
 }
 
 /** The timestamp that was stripped, or an empty string when there was none. */
 function stampOf(line: string): string {
-  return (line.match(TIMESTAMP)?.[0] ?? '').trim();
+  return line.match(TIMESTAMP)?.[0] ?? '';
 }
 
 /**
@@ -92,7 +93,18 @@ export function compressLog(
   ctx: EngineContext = {}
 ): CompressionResult {
   const lines = text.split('\n');
-  if (lines.length < MIN_RUN) return unchanged(text);
+  if (
+    lines.length < MIN_RUN ||
+    lines.some(
+      (line) =>
+        line.trimStart().startsWith('[... ') ||
+        /\[\d+ occurrences, positions=\[/.test(line)
+    )
+  )
+    return unchanged(text);
+  const periodic = compressLogPeriods(text, (line) => LOAD_BEARING.test(line));
+  // Return directly: later grouping must not move the lines a repeat references.
+  if (periodic) return periodic;
 
   const out: string[] = [];
   const elisions: Elision[] = [];
@@ -121,7 +133,7 @@ export function compressLog(
     const key = foldKey(line);
 
     // An empty key would fold every blank line in the file into one run.
-    if (!key || LOAD_BEARING.test(line)) {
+    if (!key.trim() || LOAD_BEARING.test(line)) {
       out.push(line);
       i += 1;
       continue;
@@ -147,10 +159,11 @@ export function compressLog(
       // is above and each stamp is named. Listing costs a fraction of what
       // the lines cost, and the fold is skipped outright when it would not.
       const removedLines = lines.slice(i + 1, i + run);
-      const stamps = removedLines.map(stampOf).filter(Boolean);
-      const varying =
-        stamps.length > 0 && stamps.some((s) => s !== stampOf(line));
-      const listed = varying ? ` at ${stamps.join(', ')}` : '';
+      const stamps = removedLines.map(stampOf);
+      const varying = stamps.some((stamp) => stamp !== stampOf(line));
+      const listed = varying
+        ? ` with prefix replacements ${JSON.stringify({ firstPrefix: stampOf(line), copies: stamps })}`
+        : '';
       const removedBytes = removedLines.reduce((n, l) => n + l.length + 1, 0);
 
       const tooDear = listed.length > removedBytes * STAMP_BUDGET;
@@ -305,7 +318,12 @@ function templated(lines: string[], elisions: Elision[]): string[] {
   const groups = new Map<string, number[]>();
 
   lines.forEach((line, index) => {
-    if (!line.trim() || line.trimStart().startsWith('[... ')) return;
+    if (
+      !line.trim() ||
+      line.includes('#') ||
+      line.trimStart().startsWith('[... ')
+    )
+      return;
     const shape = shapeOf(line);
     // A line with nothing variable in it is not a template, it is a line.
     if (shape === line) return;
@@ -321,9 +339,13 @@ function templated(lines: string[], elisions: Elision[]): string[] {
     if (members.length < MIN_TEMPLATE) continue;
 
     // One row of values per occurrence, in the order they appeared.
-    const rows = members.map((i) => valuesOf(lines[i]).join(' '));
+    const valueRows = members.map((i) => valuesOf(lines[i]));
+    // Values must not collide with the inline row/column delimiters.
+    if (valueRows.some((row) => row.some((value) => /\s|\|/.test(value))))
+      continue;
+    const rows = valueRows.map((row) => row.join(' '));
     const rendered =
-      `${shape}  [${count(members.length, 'occurrence')}, # = ` +
+      `${shape}  [${count(members.length, 'occurrence')}, positions=${JSON.stringify(members.map((index) => index + 1))}; # = ` +
       `${rows.join(' | ')}]`;
 
     // Only if it actually pays. A template over long, highly variable lines
@@ -358,81 +380,61 @@ function templated(lines: string[], elisions: Elision[]): string[] {
  * repetition -- the same peer-dependency warning four hundred times, scattered
  * between other lines -- so consecutive-only folding compressed it by 0%.
  *
- * The first occurrence keeps its position, so the log still reads in order and
- * the reader still sees where the line first appeared. Later occurrences are
- * dropped and counted on that first line. Still lossless: the output states
- * the line and exactly how many times it occurred.
+ * The first occurrence stays visible. Explicit sequence positions and raw
+ * prefixes preserve the location of every removed copy, even when timestamps
+ * are identical, out of order, absent, or carry different whitespace.
  *
  * Load-bearing lines are exempt here for the same reason as above, and it
  * matters more at this range: two identical AssertionErrors five hundred lines
  * apart are two failures, and a debugging agent needs both.
  */
 function foldScattered(lines: string[], elisions: Elision[]): string[] {
-  const seen = new Map<string, number>();
-  const extra = new Map<number, string[]>();
-
-  const foldable = (line: string): boolean =>
-    Boolean(line.trim()) &&
-    !LOAD_BEARING.test(line) &&
-    // A marker this function or the run-folder already wrote.
-    !line.trimStart().startsWith('[... ') &&
-    Boolean(foldKey(line));
-
+  const groups = new Map<string, number[]>();
   lines.forEach((line, index) => {
-    if (!foldable(line)) return;
+    if (
+      !line.trim() ||
+      LOAD_BEARING.test(line) ||
+      line.trimStart().startsWith('[... ')
+    )
+      return;
     const key = foldKey(line);
-    const first = seen.get(key);
-    if (first === undefined) seen.set(key, index);
-    else extra.set(first, [...(extra.get(first) ?? []), stampOf(line)]);
+    if (!key) return;
+    const members = groups.get(key);
+    if (members) members.push(index);
+    else groups.set(key, [index]);
   });
-
-  if (!extra.size) return lines;
-
-  // WHERE A SCATTERED LINE WAS IS PART OF WHAT IT SAID, and this fold used to
-  // throw that away while reporting `lossless: true`. A run fold is easy: the
-  // removed lines were adjacent, so naming their timestamps reconstructs them
-  // exactly. A SCATTERED fold removes lines from all over the file, so their
-  // interleaving with everything else is gone too -- and on a log the
-  // timestamp IS the position, which is what makes the honest version
-  // possible at all.
-  //
-  // So a group folds only when every removed occurrence carries a timestamp,
-  // and the timestamps are listed. Unstamped duplicates are left where they
-  // are: there would be no way to say where they had been, and a marker that
-  // cannot be redeemed is the thing this design exists to avoid.
-  const placeable = new Set<number>();
-  for (const [first, stamps] of extra) {
-    if (stamps.every(Boolean) && stampOf(lines[first])) placeable.add(first);
-  }
-
+  const markers = new Map<number, string>();
   const drop = new Set<number>();
-  lines.forEach((line, index) => {
-    if (!foldable(line)) return;
-    const first = seen.get(foldKey(line));
-    if (first === undefined || first === index) return;
-    if (placeable.has(first)) drop.add(index);
-  });
-
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+    const first = members[0];
+    // Positions refer to the sequence entering this stage, not timestamps.
+    // Restore templates, then scattered copies, then adjacent runs.
+    const copies = members
+      .slice(1)
+      .map((index) => [index + 1, stampOf(lines[index])]);
+    const annotation = inlineMarker(
+      `the same line, ${count(copies.length, 'more time')} elsewhere; before scattered folding ${JSON.stringify({ firstPrefix: stampOf(lines[first]), copiesAtLines: copies })}`,
+      null
+    );
+    const removedSize = members
+      .slice(1)
+      .reduce((size, index) => size + lines[index].length + 1, 0);
+    if (annotation.length + 1 >= removedSize) continue;
+    markers.set(first, annotation);
+    for (const index of members.slice(1)) drop.add(index);
+    elisions.push({
+      removed: count(copies.length, 'duplicate line'),
+      recoverAt: null,
+      lossless: true,
+    });
+  }
   const out: string[] = [];
   lines.forEach((line, index) => {
     if (drop.has(index)) return;
     out.push(line);
-    const stamps = placeable.has(index) ? extra.get(index) : undefined;
-    if (stamps && stamps.length) {
-      out.push(
-        inlineMarker(
-          `the same line, ${count(stamps.length, 'more time')} elsewhere at ${stamps.join(', ')}`,
-          null
-        )
-      );
-      elisions.push({
-        removed: count(stamps.length, 'duplicate line'),
-        recoverAt: null,
-        // Lossless: the line is above, and each removed copy is placed by its
-        // own timestamp.
-        lossless: true,
-      });
-    }
+    const marker = markers.get(index);
+    if (marker) out.push(marker);
   });
   return out;
 }

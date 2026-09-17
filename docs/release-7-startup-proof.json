@@ -1,0 +1,165 @@
+{
+  "kind": "Local before/after development measurements; four fresh processes per arm, sequential batches, not a competitor or statistical confirmation",
+  "baselineCommit": "5cb5938b",
+  "command": "node bench/live/startup-probe.mjs",
+  "scope": "Counter timings include module import; RSS is process resident-memory growth, not total allocated bytes. MCP timing includes client module import, initialize and tools/list. No model requests.",
+  "before": {
+    "node": "v22.15.0",
+    "platform": "win32",
+    "rows": [
+      {
+        "repetition": 0,
+        "counter": {
+          "constructedMs": 180.9446,
+          "constructedRss": 76587008,
+          "countedMs": 185.156,
+          "countedRss": 78401536,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1973.7121,
+          "listedMs": 1986.2987,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 1,
+        "counter": {
+          "constructedMs": 196.1134,
+          "constructedRss": 77996032,
+          "countedMs": 200.2115,
+          "countedRss": 78589952,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1846.2354,
+          "listedMs": 1859.2358000000002,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 2,
+        "counter": {
+          "constructedMs": 185.9625,
+          "constructedRss": 76312576,
+          "countedMs": 190.3304,
+          "countedRss": 78008320,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1827.3937,
+          "listedMs": 1838.0030000000002,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 3,
+        "counter": {
+          "constructedMs": 182.0562,
+          "constructedRss": 76550144,
+          "countedMs": 186.4606,
+          "countedRss": 78434304,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1832.9,
+          "listedMs": 1844.0009,
+          "tools": 19
+        }
+      }
+    ]
+  },
+  "after": {
+    "node": "v22.15.0",
+    "platform": "win32",
+    "rows": [
+      {
+        "repetition": 0,
+        "counter": {
+          "constructedMs": 27.237099999999998,
+          "constructedRss": 20148224,
+          "countedMs": 130.63920000000002,
+          "countedRss": 50663424,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1632.6191999999999,
+          "listedMs": 1645.1217,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 1,
+        "counter": {
+          "constructedMs": 25.8588,
+          "constructedRss": 20344832,
+          "countedMs": 127.27039999999998,
+          "countedRss": 51040256,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1641.215,
+          "listedMs": 1652.5897,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 2,
+        "counter": {
+          "constructedMs": 25.011400000000002,
+          "constructedRss": 20135936,
+          "countedMs": 128.9279,
+          "countedRss": 51552256,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1593.0656000000001,
+          "listedMs": 1605.1965,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 3,
+        "counter": {
+          "constructedMs": 26.523299999999995,
+          "constructedRss": 20316160,
+          "countedMs": 124.52640000000001,
+          "countedRss": 49262592,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1590.9884,
+          "listedMs": 1602.9018999999998,
+          "tools": 19
+        }
+      }
+    ]
+  },
+  "metrics": {
+    "mcp.listedMs": {
+      "before": 1881.8846,
+      "after": 1626.45245,
+      "reductionPercent": 13.573210068247548
+    },
+    "counter.constructedMs": {
+      "before": 186.269175,
+      "after": 26.15765,
+      "reductionPercent": 85.95706992313677
+    },
+    "counter.countedMs": {
+      "before": 190.539625,
+      "after": 127.840975,
+      "reductionPercent": 32.905832579443775
+    },
+    "counter.constructedRss": {
+      "before": 76861440,
+      "after": 20236288,
+      "reductionPercent": 73.67172928324007
+    },
+    "counter.countedRss": {
+      "before": 78358528,
+      "after": 50629632,
+      "reductionPercent": 35.38720890724236
+    }
+  }
+}

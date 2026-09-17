@@ -1,0 +1,163 @@
+{
+  "baseline": "77993982",
+  "kind": "Sequential local development batches, four fresh processes each; variable baseline, not statistical confirmation",
+  "before": {
+    "node": "v22.15.0",
+    "platform": "win32",
+    "rows": [
+      {
+        "repetition": 0,
+        "counter": {
+          "constructedMs": 27.014899999999997,
+          "constructedRss": 20135936,
+          "countedMs": 139.6938,
+          "countedRss": 52346880,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1829.2121,
+          "listedMs": 1842.7375,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 1,
+        "counter": {
+          "constructedMs": 26.653,
+          "constructedRss": 20369408,
+          "countedMs": 133.2851,
+          "countedRss": 49295360,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1918.5999,
+          "listedMs": 1933.301,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 2,
+        "counter": {
+          "constructedMs": 39.630900000000004,
+          "constructedRss": 20111360,
+          "countedMs": 171.077,
+          "countedRss": 50651136,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1807.7499,
+          "listedMs": 1820.9981,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 3,
+        "counter": {
+          "constructedMs": 37.284600000000005,
+          "constructedRss": 20078592,
+          "countedMs": 176.65449999999998,
+          "countedRss": 49954816,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 2370.1556,
+          "listedMs": 2389.2542000000003,
+          "tools": 19
+        }
+      }
+    ]
+  },
+  "after": {
+    "node": "v22.15.0",
+    "platform": "win32",
+    "rows": [
+      {
+        "repetition": 0,
+        "counter": {
+          "constructedMs": 15.118499999999997,
+          "constructedRss": 2150400,
+          "countedMs": 130.5229,
+          "countedRss": 48041984,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1644.4449,
+          "listedMs": 1656.108,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 1,
+        "counter": {
+          "constructedMs": 12.3585,
+          "constructedRss": 2068480,
+          "countedMs": 140.83550000000002,
+          "countedRss": 50118656,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1594.2878,
+          "listedMs": 1608.0047,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 2,
+        "counter": {
+          "constructedMs": 14.649899999999995,
+          "constructedRss": 2142208,
+          "countedMs": 148.0597,
+          "countedRss": 52699136,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1765.3269,
+          "listedMs": 1783.2166,
+          "tools": 19
+        }
+      },
+      {
+        "repetition": 3,
+        "counter": {
+          "constructedMs": 15.207100000000004,
+          "constructedRss": 2056192,
+          "countedMs": 152.29840000000002,
+          "countedRss": 51363840,
+          "tokens": 4
+        },
+        "mcp": {
+          "connectedMs": 1680.5227,
+          "listedMs": 1694.9270999999999,
+          "tools": 19
+        }
+      }
+    ]
+  },
+  "metrics": {
+    "mcp.listedMs": {
+      "before": 1996.5727,
+      "after": 1685.5640999999998,
+      "reductionPercent": 15.57712373809379
+    },
+    "counter.constructedMs": {
+      "before": 32.64585,
+      "after": 14.333499999999999,
+      "reductionPercent": 56.09395987545124
+    },
+    "counter.countedMs": {
+      "before": 155.17759999999998,
+      "after": 142.929125,
+      "reductionPercent": 7.893197858453789
+    },
+    "counter.constructedRss": {
+      "before": 20173824,
+      "after": 2104320,
+      "reductionPercent": 89.56905740825339
+    },
+    "counter.countedRss": {
+      "before": 50562048,
+      "after": 50555904,
+      "reductionPercent": 0.012151406525305304
+    }
+  }
+}

@@ -973,47 +973,4 @@ export async function runSmartImports(
 /**
  * MCP Tool Definition
  */
-export const SMART_IMPORTS_TOOL_DEFINITION = {
-  name: 'smart_imports',
-  description:
-    'Analyze TypeScript/JavaScript import statements with intelligent caching. Detects unused imports, missing imports, and provides optimization suggestions. Achieves 75-85% token reduction through import analysis summarization.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      filePath: {
-        type: 'string',
-        description: 'Path to the TypeScript/JavaScript file to analyze',
-      },
-      fileContent: {
-        type: 'string',
-        description: 'File content (alternative to filePath)',
-      },
-      projectRoot: {
-        type: 'string',
-        description:
-          'Project root directory (default: current working directory)',
-      },
-      force: {
-        type: 'boolean',
-        description:
-          'Force analysis even if cached result exists (default: false)',
-        default: false,
-      },
-      maxCacheAge: {
-        type: 'number',
-        description: 'Maximum cache age in seconds (default: 300)',
-        default: 300,
-      },
-      checkCircular: {
-        type: 'boolean',
-        description: 'Check for circular dependencies (default: true)',
-        default: true,
-      },
-      suggestMissing: {
-        type: 'boolean',
-        description: 'Suggest missing imports (default: true)',
-        default: true,
-      },
-    },
-  },
-};
+export { SMART_IMPORTS_TOOL_DEFINITION } from './analysis-tool-definitions.js';

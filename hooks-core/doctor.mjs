@@ -345,14 +345,11 @@ export function probeProxy(env = process.env) {
   // about whether the runtime is enabled is worse than no diagnostic.
   const mode = String(env.TOKEN_OPTIMIZER_MODE || '').trim().toLowerCase();
   if (mode === 'off') return [];
-
-  const on = /^(1|true|yes|on)$/i.test(env.TOKEN_OPTIMIZER_PROXY || '');
+  const on = !/^(0|false|no|off)$/i.test(env.TOKEN_OPTIMIZER_PROXY?.trim() || '');
   if (!on) {
     return [
-      ok('request compression is available',
-        'the compression proxy is off. It compresses tool results and history on the ' +
-        'way to the model, which a hook cannot do -- PostToolUse can add context but ' +
-        'not replace a result. Set TOKEN_OPTIMIZER_PROXY=1 to turn it on'),
+      ok('request compression was explicitly disabled',
+        'TOKEN_OPTIMIZER_PROXY opts out of request compression; remove it to restore the default'),
     ];
   }
 
@@ -362,7 +359,7 @@ export function probeProxy(env = process.env) {
       bad('the compression proxy cannot serve this client',
         (env.TOKEN_OPTIMIZER_CLIENT || 'this client') +
           ' exposes no supported way to redirect its model traffic',
-        'unset TOKEN_OPTIMIZER_PROXY, or run a client that reads a base-URL variable'),
+        'use token-optimizer-run with a supported client, or set TOKEN_OPTIMIZER_PROXY=0'),
     ];
   }
 

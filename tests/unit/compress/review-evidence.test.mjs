@@ -153,7 +153,9 @@ test('memory-monitor stderr is diagnostic while valid telemetry remains fresh', 
   const child = new EventEmitter();
   child.stdout = new PassThrough();
   child.stderr = new PassThrough();
+  let sampleTimer;
   child.kill = () => {
+    clearInterval(sampleTimer);
     child.stdout.end();
     child.stderr.end();
     child.emit('close', 0);
@@ -161,7 +163,7 @@ test('memory-monitor stderr is diagnostic while valid telemetry remains fresh', 
   const monitor = await monitorHostMemory(dir, {
     platform: 'win32',
     spawnProcess: () => {
-      setTimeout(() => {
+      sampleTimer = setInterval(() => {
         child.stderr.write('transient diagnostic');
         child.stdout.write(
           JSON.stringify({

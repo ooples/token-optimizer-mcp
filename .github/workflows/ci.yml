@@ -17,6 +17,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-verification:
+    name: Release verification (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # node-gyp in the locked dependency tree recognizes VS 2022; the
+        # moving Windows image currently carries unsupported VS 18.
+        os: [ubuntu-latest, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run sync:hooks:check
+      - run: npm run build
+      - run: npm run verify:package-contents
+      - name: Verify edit safety and production MCP contracts
+        run: >-
+          npm test -- --runInBand
+          tests/unit/file-operations/smart-edit-write-failure.test.ts
+          tests/unit/file-operations/smart-edit-patterns.test.ts
+          tests/unit/file-operations/smart-edit-line-endings.test.ts
+          tests/unit/file-operations/read-diffs-against-the-write.test.ts
+          tests/unit/file-operations/smart-edit-reports-the-write.test.ts
+          tests/integration/mcp-stdio-contract.test.ts
+          tests/integration/edit-process-lock.test.mjs
+          tests/integration/package-runtime-exclusions.test.mjs
+          tests/integration/managed-clients.test.mjs
+          tests/integration/opencode-routing.test.mjs
+          tests/integration/lazy-analysis-loading.test.mjs
+          tests/integration/managed-install-adversarial.test.mjs
+          tests/integration/postinstall-defaults.test.mjs
+          tests/integration/review387-regressions.test.mjs
+          tests/integration/proxy-install-path.test.mjs
+          tests/unit/compress/proxy.test.ts
+          tests/unit/compress/proxy-cli.test.ts
+          tests/unit/compress/responses-knowledge.test.ts
+          tests/unit/compress/chat-completions.test.ts
+          tests/unit/compress/accounting.test.ts
+          tests/unit/compress/responses-proxy.test.ts
+          tests/unit/compress/responses-dedup.test.ts
+          tests/unit/compress/log-order.test.ts
+          tests/unit/compress/log-periods.test.ts
+          tests/unit/compress/token-bounds.test.ts
+          tests/unit/token-counter-lifecycle.test.ts
+          tests/unit/token-counter-never-estimates.test.ts
+          tests/unit/tokenizers.test.ts
+          tests/unit/doctor-reports-proxy-state.test.ts
+
   lint-and-format:
     name: Lint and Format Check
     runs-on: ubuntu-latest
