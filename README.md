@@ -587,10 +587,11 @@ synthetic repositories with natural tool selection. Uncached input and latency
 have separate results; see the [workflow evidence and limitations](bench/live/evidence/codex-workflows-2026-09-15/README.md).
 
 
-The proxy is enabled by default and binds loopback only. Run
-`token-optimizer-install` after installing the package: it installs Claude hooks
-and activates managed `claude`/`codex`/`opencode` commands in PowerShell, Bash, and Zsh.
-Open a new shell to activate them. Each managed session starts its own proxy,
+The proxy is enabled by default and binds loopback only. Global npm installs
+activate Claude hooks and managed `claude`/`codex`/`opencode` commands in PowerShell,
+Bash, and Zsh when lifecycle scripts are enabled. For local installs or disabled
+lifecycle scripts, run `token-optimizer-install`. Open a new shell to activate
+them. Each managed session starts its own proxy,
 registers the packaged core MCP tools (including wiki), and shuts the proxy down
 on exit. `token-optimizer-run codex ...`, `token-optimizer-run claude ...`, or
 `token-optimizer-run opencode ...` works
@@ -1161,20 +1162,13 @@ add the recommendations from [`integrations/AGENTS.md`](./integrations/AGENTS.md
 to your `CLAUDE.md` — but be aware that guidance in a context file is advisory,
 and models routinely read past it.
 
-The standalone global installer can also configure the Claude Code hooks and supported desktop clients:
+A global installation automatically configures Claude Code hooks and managed Claude Code, Codex, and OpenCode commands:
 
 ```bash
 npm install -g @ooples/token-optimizer-mcp@latest
 ```
 
-On Windows, a restrictive PowerShell policy may need this user-scoped adjustment first:
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-npm install -g @ooples/token-optimizer-mcp@latest
-```
-
-Interactive global installs run the hook installer; CI and local dependency installs skip it. If automatic setup is skipped, use `install-hooks.ps1` on Windows or `install-hooks.sh` on macOS/Linux. See the [Claude Code MCP guide](https://code.claude.com/docs/en/mcp) and this project's [hook installation guide](./docs/HOOKS-INSTALLATION.md).
+Global installs run the packaged Node installer, including when npm pipes lifecycle output. CI and local dependency installs skip automatic setup. If your package manager disables lifecycle scripts, run `token-optimizer-install` explicitly. Open a new shell to activate managed CLI commands, or use `token-optimizer-run` directly. See the [hook installation guide](./docs/HOOKS-INSTALLATION.md).
 
 ### GitHub Copilot CLI
 
