@@ -49,9 +49,14 @@ describe('Windows managed commands', () => {
     fs.mkdirSync(join(fakeRoot, 'scripts'), { recursive: true });
     fs.writeFileSync(join(fakeRoot, 'scripts/run-client.mjs'), 'console.log(JSON.stringify(process.argv.slice(2))); process.exitCode=7;');
     activateWindowsCommands({ ...options, root: fakeRoot });
+    // Resolved through PATH, as users reach it -- not through cmd's current-directory lookup, which
+    // NoDefaultCurrentDirectoryInExePath=1 disables (Claude Code sets it), so a real `codex` on the
+    // machine answered instead of this fixture.
+    const pathKey = Object.keys(process.env).find((key) => key.toUpperCase() === 'PATH') || 'PATH';
     try {
       execFileSync('cmd.exe', ['/d', '/s', '/c', 'codex "space & literal"'], {
         cwd: options.directory, windowsHide: true, windowsVerbatimArguments: true, encoding: 'utf8',
+        env: { ...process.env, [pathKey]: `${options.directory};${process.env[pathKey] || ''}` },
       });
       throw new Error('Expected child exit status 7');
     } catch (error) {
