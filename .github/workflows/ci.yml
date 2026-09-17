@@ -39,6 +39,8 @@ jobs:
       - run: npm run sync:hooks:check
       - run: npm run build
       - run: npm run verify:package-contents
+      - name: Verify package report compatibility with publishing npm
+        run: npx --yes npm@12.0.2 run verify:package-contents
       - name: Verify edit safety and production MCP contracts
         run: >-
           npm test -- --runInBand
@@ -50,6 +52,7 @@ jobs:
           tests/integration/mcp-stdio-contract.test.ts
           tests/integration/edit-process-lock.test.mjs
           tests/integration/package-runtime-exclusions.test.mjs
+          tests/integration/npm-pack-report.test.mjs
           tests/integration/managed-clients.test.mjs
           tests/integration/opencode-routing.test.mjs
           tests/integration/lazy-analysis-loading.test.mjs

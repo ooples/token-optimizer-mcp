@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { parsePackReport } from '../../scripts/npm-pack-report.mjs';
 
 it('excludes runtime data from broad npm allowlists while keeping client assets', () => {
   const original = JSON.parse(
@@ -48,7 +49,7 @@ it('excludes runtime data from broad npm allowlists while keeping client assets'
       mkdirSync(dirname(join(root, path)), { recursive: true });
       writeFileSync(join(root, path), 'synthetic fixture');
     }
-    const [pack] = JSON.parse(
+    const pack = parsePackReport(
       execFileSync(
         process.execPath,
         [
@@ -59,7 +60,8 @@ it('excludes runtime data from broad npm allowlists while keeping client assets'
           '--json',
         ],
         { cwd: root, encoding: 'utf8', windowsHide: true }
-      )
+      ),
+      'release-runtime-exclusion-fixture'
     );
     const files = pack.files.map((file) => file.path);
     for (const path of shipped) expect(files).toContain(path);
