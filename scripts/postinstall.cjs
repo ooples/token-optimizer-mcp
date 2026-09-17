@@ -1,128 +1,29 @@
 #!/usr/bin/env node
 
-/**
- * Automatic hook installation after npm install
- * Runs the appropriate platform-specific installer
- */
+/** Activate global installs using the same non-interactive installer as the CLI. */
+const { execFileSync } = require('node:child_process');
+const path = require('node:path');
 
-const { execSync, execFileSync } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+// npm can pipe lifecycle output even for an interactive global install.
+// A missing TTY therefore says nothing about whether setup was requested.
+const enabled = (value) => /^(1|true|yes)$/i.test(value || '');
+const isCI = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS'].some(
+  (key) => enabled(process.env[key])
+);
 
-// Detect if we're in a CI environment or non-interactive shell
-const isCI =
-  process.env.CI === 'true' ||
-  process.env.CONTINUOUS_INTEGRATION === 'true' ||
-  process.env.GITHUB_ACTIONS === 'true' ||
-  !process.stdout.isTTY;
-
-// Skip hook installation in CI or when installing as a dependency
-if (isCI || process.env.npm_config_global !== 'true') {
-  console.log(
-    '[token-optimizer-mcp] Skipping automatic hook installation (CI or local install)'
-  );
-  console.log(
-    '[token-optimizer-mcp] To install hooks manually, see: https://github.com/ooples/token-optimizer-mcp#installation'
-  );
-  process.exit(0);
-}
-
-console.log('[token-optimizer-mcp] Starting automatic hook installation...');
-
-try {
-  const platform = process.platform;
-  const packageRoot = path.resolve(__dirname, '..');
-
-  let installScript;
-  let runner;
-  let runnerArgs;
-
-  if (platform === 'win32') {
-    installScript = path.join(packageRoot, 'install-hooks.ps1');
-
-    // Check if PowerShell is available
-    try {
-      execSync('powershell -Command "exit 0"', { stdio: 'ignore' });
-    } catch (error) {
-      console.warn(
-        '[token-optimizer-mcp] PowerShell not available, skipping hook installation'
-      );
-      console.log(
-        '[token-optimizer-mcp] Run install-hooks.ps1 manually to enable hooks'
-      );
-      process.exit(0);
-    }
-
-    runner = 'powershell';
-    runnerArgs = ['-ExecutionPolicy', 'Bypass', '-File', installScript];
-  } else {
-    installScript = path.join(packageRoot, 'install-hooks.sh');
-
-    // Make the script executable
-    try {
-      fs.chmodSync(installScript, 0o755);
-    } catch (error) {
-      console.warn(
-        '[token-optimizer-mcp] Could not make install script executable:',
-        error.message
-      );
-    }
-
-    runner = 'bash';
-    runnerArgs = [installScript];
+if (isCI || !enabled(process.env.npm_config_global)) {
+  console.log('[token-optimizer-mcp] Skipping automatic setup (CI or local install)');
+  console.log('[token-optimizer-mcp] Run token-optimizer-install to activate hooks and managed CLI commands.');
+} else {
+  try {
+    const root = path.resolve(__dirname, '..');
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'install-cli.mjs')], {
+      stdio: 'inherit', cwd: root, windowsHide: true,
+    });
+    console.log('[token-optimizer-mcp] Hooks and managed CLI commands installed. Open a new shell to activate them.');
+  } catch (error) {
+    // An optional integration failure must not make the MCP package unusable.
+    console.warn('[token-optimizer-mcp] Automatic setup failed:', error.message);
+    console.warn('[token-optimizer-mcp] Run token-optimizer-install to retry setup.');
   }
-
-  // Check if install script exists
-  if (!fs.existsSync(installScript)) {
-    console.warn(
-      '[token-optimizer-mcp] Install script not found:',
-      installScript
-    );
-    console.log('[token-optimizer-mcp] Skipping automatic hook installation');
-    process.exit(0);
-  }
-
-  console.log('[token-optimizer-mcp] Running hook installer...');
-
-  // Run the installer in ARGV MODE, not through a shell.
-  //
-  // This built a shell string by interpolating installScript, which is
-  // derived from the package's own directory -- so it is trusted and this was
-  // never exploitable. It is still worth removing: it runs on npm install,
-  // the highest-consequence moment in a package's life, and a global prefix
-  // path containing a quote or a command substitution would break out of the
-  // quoting. Argv
-  // mode makes the question not arise, whatever the install directory is
-  // called. Raised by the mcpaudit static audit in #343.
-  execFileSync(runner, runnerArgs, {
-    stdio: 'inherit',
-    cwd: packageRoot,
-  });
-  execFileSync(process.execPath, [path.join(packageRoot, 'scripts', 'install-cli.mjs')], {
-    stdio: 'inherit', cwd: packageRoot,
-  });
-
-  console.log('[token-optimizer-mcp] ✓ Hooks installed successfully!');
-  console.log(
-    '[token-optimizer-mcp] Token optimization is active for supported coding agents and CLI tools'
-  );
-} catch (error) {
-  console.warn(
-    '[token-optimizer-mcp] Hook installation encountered an issue:',
-    error.message
-  );
-  console.log(
-    '[token-optimizer-mcp] You can manually install hooks by running:'
-  );
-
-  if (process.platform === 'win32') {
-    console.log(
-      '[token-optimizer-mcp]   powershell -ExecutionPolicy Bypass -File install-hooks.ps1'
-    );
-  } else {
-    console.log('[token-optimizer-mcp]   bash install-hooks.sh');
-  }
-
-  // Don't fail the installation if hooks can't be installed
-  process.exit(0);
 }

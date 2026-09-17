@@ -59,5 +59,25 @@ RSS growth of 0.42 MiB versus 39.2 MiB. RSS is resident-memory growth, not total
 allocated bytes. The gate bounds apply to the named local estimate tokenizer,
 not to an unknown provider's billed tokenizer.
 
-The full release suite and a fresh live log-cost comparison are the next gates
-for this change. Account-blocked Claude, Copilot and Gemini gates stay pending.
+## Follow-up validation
+
+The full local run completed 330 suites: 328 passed and two fixture/schema
+checks failed. Both were corrected and their 14 tests passed on the targeted
+rerun. The original run had 4,500 passing tests and 12 skipped tests; no product
+failure remained from that run.
+
+[The fresh log campaign](release-7-log-cost-proof.json) passed all eight attempts.
+All four pairs favored ours on both agent time and estimated cost. Mean agent
+time was 17.10 s versus 32.525 s; mean estimated cost was $0.119668 versus
+$0.296643, a 59.66% reduction under the recorded rate-card scenario. Input tokens
+averaged 41,532 versus 117,522. Provider cache variation remains included.
+These are development results, not universal or unseen-workload confirmation.
+
+The install review also found that piped npm lifecycle output was mistaken for
+CI. Global postinstall now invokes the packaged, non-interactive Node installer
+without requiring a TTY or an installed Claude binary. Explicit CI and local
+dependency installs still skip automatic user configuration. Nineteen targeted
+installation tests passed. Package-manager policies that disable lifecycle
+scripts still require the explicit `token-optimizer-install` command.
+
+Account-blocked Claude, Copilot and Gemini gates stay pending.

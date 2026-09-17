@@ -2,11 +2,9 @@
 /**
  * `npx token-optimizer-install` -- wire the hooks when postinstall could not.
  *
- * npm 11 gates lifecycle scripts behind `allow-scripts`, so on a default global
- * install our postinstall NEVER RUNS and no hooks are wired. The package
- * installs, the server appears in /mcp, and nothing is optimized -- which is
- * precisely the "connected but saving nothing" failure this project exists to
- * prevent, arriving through the package manager instead of through the code.
+ * Package-manager policy can disable lifecycle scripts. In that case the
+ * package installs without wiring hooks or managed CLI commands. This command
+ * provides an explicit setup path independent of lifecycle policy.
  *
  * Relying on a lifecycle script that the ecosystem is actively disabling is not
  * a plan, so recovery is a first-class command rather than a buried shell

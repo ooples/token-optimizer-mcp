@@ -1,0 +1,1081 @@
+{
+  "kind": "Balanced development follow-up on the previously losing log workload",
+  "directory": "C:/Users/yolan/AppData/Local/Temp/token-optimizer-release7-3768c78758/log-cost-followup/run-T495P9",
+  "manifest": {
+    "model": "gpt-6-astra",
+    "arms": [
+      "full",
+      "headroom"
+    ],
+    "reps": 4,
+    "tasks": [
+      "logs"
+    ],
+    "balanced": true,
+    "seedOffset": 1900000901,
+    "readMode": "natural",
+    "mcpDiscovery": "bounded",
+    "caseSuite": "heldout-v1",
+    "repeatReads": 1,
+    "toolCodeExperiment": false,
+    "hostMemoryPolicy": {
+      "platform": "win32",
+      "minimumCommitReserveBytes": 2147483648,
+      "minimumAvailablePhysicalBytes": 536870912,
+      "maximumSampleAgeMs": 5000
+    },
+    "started": "2026-09-17T01:21:09.910Z"
+  },
+  "provenance": {
+    "capturedAt": "2026-09-17T01:21:09.907Z",
+    "node": "v22.15.0",
+    "codex": "codex-cli 0.154.0",
+    "headroom": "0.37.0",
+    "gitHead": "74a8bf0d01f784e4985744b8e66ed1ba6c0a8e82",
+    "proxyBin": "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\cli.js",
+    "sha256": {
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\server\\index.js": "170dfe8b4dc370ff07909336a2047710f66fc047b0de23ec8949f84e9b702b63",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\server\\tool-profile.js": "586f6e42c89ae9893af85f461c8d751bba9c54e6d67ab6db8f6bd6e14d15e2a4",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\tools\\file-operations\\smart-read.js": "60da85f59440fb857c4c2a837bb3b28fc776c4ae48578d034bbbbe674576f194",
+      "bench/live/codex.mjs": "9d9e901f92edf56b8162b30f1cab05d7250bef4b3f9b50d04427aeb466c4aea9",
+      "bench/live/codex-workflows.mjs": "c89588f61a3c5d4163b856fa1e579d3595c7de47dafea6e0209dfb846e871647",
+      "bench/live/heldout-cases.mjs": "c751a64335b4ac6a4b453ae9467bbee273ee3507eabf6cd87c00ffbc66fd742e",
+      "bench/live/adversarial-cases.mjs": "469512a33a5dd89b4d15640bbd9414addecf2525b205cb909dfdf14e581ca102",
+      "bench/live/codex-mcp-evidence.mjs": "c7cdc0b34066f5b20b934c013b17f56a3186d33bf5f28d822b6f8c7dd3831cbe",
+      "bench/live/report-codex.mjs": "b5a1699034cadaf60199338c8249154bb1362765322e7c1a4cc5763e60254f0d",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\cli.js": "0b249ab44d71f791a0241fd07368caa40beb84d8dc82558220aab079d65fb45b",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\server.js": "5c57557e4a06bf1d259cf53cfe4b62127f3c08cf1e6be682d9a3cc534ea1e7a8",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\responses.js": "489ea39f639663e48dd7a8cf100e3b5b9880115af2c80bc8238cc5fe29d2d883",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\response-dedup.js": "ef2256d6f5df3c93feda250aac1efc3f5d840b372c970d312308dbb136ef660f",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\token-gate.js": "4027653337e7dae86be5ed7dafcc7194f53ddfac9f4b570820e7d6aa51e92f48",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\tool-code.js": "ab8d88a714f03357c4a4d30a21ced48d6bad8f93b890fefb0f82a158d65c51fd",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\output-cache.js": "781856b61be1be7fa99f50025b54fbd7b490d0332c111d38885d47e5e1bf4e3c",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\accounting.js": "1c5101dde7badd3266426b023e58cd2839e9e3265926369301a5ccaad9a533c9",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\proxy\\capture.js": "c9d8dfd8ea218ff933e2ba47e4fba62173d22d5c12e723dcf271d426ddd0783c",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\router.js": "2777b931bd2c27baa613076b7cf2185059d99a257c95e9738a445ecb3ba5c15b",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\tap.js": "fd32dfd41265b57d151588ce3586fa0ea2b09f4b4eabead005f60ee1c8ff2fce",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\json-fragments.js": "c9f3b4f710c4bda5e6c0c87e28fdf1e84783541b02c48bbce9494bd63d7dd5da",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\json-sections.js": "e8e684babd3534db0899dfcff97856f2cec4cc2d1c07359d2d482eae0dd25d11",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\json.js": "458335c36885f9549008c93f6e0e8145ef783595ac7513c6b43187aec3a60da6",
+      "C:\\Users\\yolan\\source\\repos\\token-optimizer-release7-check\\dist\\compress\\json-facts.js": "ac3fa443e3e1e4c48e93382cb1093ef508b10254501df9fc109a59928a1c85b3"
+    }
+  },
+  "summary": {
+    "model": "gpt-6-astra",
+    "balanced": true,
+    "valid": true,
+    "failures": [],
+    "aggregates": [
+      {
+        "task": "logs",
+        "arm": "full",
+        "passed": 4,
+        "expected": 4,
+        "measured": 4,
+        "meanInput": 41532.25,
+        "meanCached": 33888,
+        "meanUncached": 7644.25,
+        "meanOutput": 186.75,
+        "meanSeconds": 18.075,
+        "meanAgentSeconds": 17.099999999999998
+      },
+      {
+        "task": "logs",
+        "arm": "headroom",
+        "passed": 4,
+        "expected": 4,
+        "measured": 4,
+        "meanInput": 117522,
+        "meanCached": 100128,
+        "meanUncached": 17394,
+        "meanOutput": 451.5,
+        "meanSeconds": 46.65,
+        "meanAgentSeconds": 32.525
+      }
+    ],
+    "comparison": [
+      {
+        "task": "logs",
+        "candidate": "full",
+        "inputReductionVsFull": null,
+        "inputReductionVsHeadroom": 0.6466002110243189,
+        "inputReductionVsControl": null
+      }
+    ],
+    "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+  },
+  "cost": {
+    "scenario": {
+      "model": "gpt-6-astra",
+      "label": "Codex Enterprise standard rate-card scenario; not actual billed cost",
+      "verifiedOn": "2026-09-15",
+      "source": "https://help.openai.com/en/articles/20001415",
+      "usdPerMillion": {
+        "uncached": 10,
+        "cached": 1,
+        "output": 50
+      },
+      "assumptions": [
+        "All runs use standard speed with no regional or contract adjustments.",
+        "Codex Astra has no cache-write charge or long-context multiplier.",
+        "Subscription charges, credits, proxy compute, and account discounts are not measured."
+      ]
+    },
+    "valid": true,
+    "failures": [],
+    "measured": [
+      {
+        "task": "logs",
+        "arm": "full",
+        "rep": 1,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.100284
+      },
+      {
+        "task": "logs",
+        "arm": "headroom",
+        "rep": 1,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.379366
+      },
+      {
+        "task": "logs",
+        "arm": "headroom",
+        "rep": 2,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.413598
+      },
+      {
+        "task": "logs",
+        "arm": "full",
+        "rep": 2,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.097204
+      },
+      {
+        "task": "logs",
+        "arm": "full",
+        "rep": 3,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.181652
+      },
+      {
+        "task": "logs",
+        "arm": "headroom",
+        "rep": 3,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.214178
+      },
+      {
+        "task": "logs",
+        "arm": "headroom",
+        "rep": 4,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.17943
+      },
+      {
+        "task": "logs",
+        "arm": "full",
+        "rep": 4,
+        "recordedVerdict": "PASS",
+        "verdict": "PASS",
+        "estimatedUsd": 0.099532
+      }
+    ],
+    "aggregates": [
+      {
+        "task": "logs",
+        "arm": "full",
+        "meanEstimatedUsd": 0.11966800000000001
+      },
+      {
+        "task": "logs",
+        "arm": "headroom",
+        "meanEstimatedUsd": 0.296643
+      }
+    ],
+    "comparisons": [
+      {
+        "task": "logs",
+        "candidate": "full",
+        "against": "headroom",
+        "estimatedUsdDelta": -0.176975,
+        "reductionPercent": 59.659253715745855
+      }
+    ]
+  },
+  "validation": [
+    {
+      "task": "logs",
+      "arm": "full",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "clientErrors": []
+    },
+    {
+      "task": "logs",
+      "arm": "headroom",
+      "rep": 1,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 7
+      },
+      "clientErrors": []
+    },
+    {
+      "task": "logs",
+      "arm": "headroom",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 8
+      },
+      "clientErrors": []
+    },
+    {
+      "task": "logs",
+      "arm": "full",
+      "rep": 2,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "clientErrors": []
+    },
+    {
+      "task": "logs",
+      "arm": "full",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "clientErrors": []
+    },
+    {
+      "task": "logs",
+      "arm": "headroom",
+      "rep": 3,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 6
+      },
+      "clientErrors": []
+    },
+    {
+      "task": "logs",
+      "arm": "headroom",
+      "rep": 4,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 5
+      },
+      "clientErrors": []
+    },
+    {
+      "task": "logs",
+      "arm": "full",
+      "rep": 4,
+      "recordedVerdict": "PASS",
+      "verdict": "PASS",
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "clientErrors": []
+    }
+  ],
+  "results": [
+    {
+      "task": "logs",
+      "arm": "full",
+      "rep": 1,
+      "position": 1,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000902,
+      "verdict": "PASS",
+      "agentSeconds": 17.9,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 41665,
+        "cached": 36224,
+        "output": 193
+      },
+      "requests": 3,
+      "compressedRequests": 2,
+      "beforeBytes": 234742,
+      "afterBytes": 199134,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13145,
+            "output_tokens": 82,
+            "cached_input_tokens": 9344
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 14193,
+            "output_tokens": 77,
+            "cached_input_tokens": 12928
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 14327,
+            "output_tokens": 34,
+            "cached_input_tokens": 13952
+          }
+        }
+      ],
+      "answer": {
+        "request": "req-40c6fa1e",
+        "code": "E_TIMEOUT",
+        "worker": "worker-16"
+      },
+      "seconds": 18.9
+    },
+    {
+      "task": "logs",
+      "arm": "headroom",
+      "rep": 1,
+      "position": 2,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000902,
+      "verdict": "PASS",
+      "agentSeconds": 31.4,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 7
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 139086,
+        "cached": 114816,
+        "output": 437
+      },
+      "requests": 7,
+      "compressedRequests": 0,
+      "beforeBytes": 814406,
+      "afterBytes": 814406,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 12970,
+            "output_tokens": 75,
+            "cached_input_tokens": 0
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13119,
+            "output_tokens": 53,
+            "cached_input_tokens": 12800
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 22256,
+            "output_tokens": 56,
+            "cached_input_tokens": 12928
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 22377,
+            "output_tokens": 66,
+            "cached_input_tokens": 22016
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 22514,
+            "output_tokens": 86,
+            "cached_input_tokens": 22144
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 22858,
+            "output_tokens": 78,
+            "cached_input_tokens": 22272
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 22992,
+            "output_tokens": 23,
+            "cached_input_tokens": 22656
+          }
+        }
+      ],
+      "answer": {
+        "request": "req-40c6fa1e",
+        "code": "E_TIMEOUT",
+        "worker": "worker-16"
+      },
+      "seconds": 55.4
+    },
+    {
+      "task": "logs",
+      "arm": "headroom",
+      "rep": 2,
+      "position": 1,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000903,
+      "verdict": "PASS",
+      "agentSeconds": 42.6,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 8
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 162215,
+        "cached": 137728,
+        "output": 620
+      },
+      "requests": 8,
+      "compressedRequests": 0,
+      "beforeBytes": 965850,
+      "afterBytes": 965850,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 12970,
+            "output_tokens": 80,
+            "cached_input_tokens": 0
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13123,
+            "output_tokens": 54,
+            "cached_input_tokens": 12800
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 22194,
+            "output_tokens": 109,
+            "cached_input_tokens": 12928
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 22374,
+            "output_tokens": 102,
+            "cached_input_tokens": 22016
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 22582,
+            "output_tokens": 73,
+            "cached_input_tokens": 22144
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 22727,
+            "output_tokens": 104,
+            "cached_input_tokens": 22400
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 23055,
+            "output_tokens": 77,
+            "cached_input_tokens": 22528
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 23190,
+            "output_tokens": 21,
+            "cached_input_tokens": 22912
+          }
+        }
+      ],
+      "answer": {
+        "request": "req-6f158000",
+        "code": "E_CHECKSUM",
+        "worker": "worker-7"
+      },
+      "seconds": 53.3
+    },
+    {
+      "task": "logs",
+      "arm": "full",
+      "rep": 2,
+      "position": 2,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000903,
+      "verdict": "PASS",
+      "agentSeconds": 16.9,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 41407,
+        "cached": 36224,
+        "output": 183
+      },
+      "requests": 3,
+      "compressedRequests": 2,
+      "beforeBytes": 233109,
+      "afterBytes": 198317,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13145,
+            "output_tokens": 84,
+            "cached_input_tokens": 9344
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 14069,
+            "output_tokens": 66,
+            "cached_input_tokens": 12928
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 14193,
+            "output_tokens": 33,
+            "cached_input_tokens": 13952
+          }
+        }
+      ],
+      "answer": {
+        "request": "req-6f158000",
+        "code": "E_CHECKSUM",
+        "worker": "worker-7"
+      },
+      "seconds": 17.9
+    },
+    {
+      "task": "logs",
+      "arm": "full",
+      "rep": 3,
+      "position": 1,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000904,
+      "verdict": "PASS",
+      "agentSeconds": 15.3,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 41327,
+        "cached": 26752,
+        "output": 183
+      },
+      "requests": 3,
+      "compressedRequests": 2,
+      "beforeBytes": 230500,
+      "afterBytes": 198108,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13145,
+            "output_tokens": 75,
+            "cached_input_tokens": 0
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 14024,
+            "output_tokens": 77,
+            "cached_input_tokens": 12928
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 14158,
+            "output_tokens": 31,
+            "cached_input_tokens": 13824
+          }
+        }
+      ],
+      "answer": {
+        "request": "req-2f02953a",
+        "code": "E_TIMEOUT",
+        "worker": "worker-15"
+      },
+      "seconds": 16.2
+    },
+    {
+      "task": "logs",
+      "arm": "headroom",
+      "rep": 3,
+      "position": 2,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000904,
+      "verdict": "PASS",
+      "agentSeconds": 31.6,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 6
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 92580,
+        "cached": 81408,
+        "output": 421
+      },
+      "requests": 6,
+      "compressedRequests": 0,
+      "beforeBytes": 709500,
+      "afterBytes": 709500,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 12970,
+            "output_tokens": 78,
+            "cached_input_tokens": 9216
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13123,
+            "output_tokens": 50,
+            "cached_input_tokens": 12800
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13747,
+            "output_tokens": 74,
+            "cached_input_tokens": 12928
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13885,
+            "output_tokens": 112,
+            "cached_input_tokens": 13568
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 19361,
+            "output_tokens": 76,
+            "cached_input_tokens": 13696
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 19494,
+            "output_tokens": 31,
+            "cached_input_tokens": 19200
+          }
+        }
+      ],
+      "answer": {
+        "request": "req-2f02953a",
+        "code": "E_TIMEOUT",
+        "worker": "worker-15"
+      },
+      "seconds": 42.5
+    },
+    {
+      "task": "logs",
+      "arm": "headroom",
+      "rep": 4,
+      "position": 1,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000905,
+      "verdict": "PASS",
+      "agentSeconds": 24.5,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 5
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 76207,
+        "cached": 66560,
+        "output": 328
+      },
+      "requests": 5,
+      "compressedRequests": 0,
+      "beforeBytes": 574406,
+      "afterBytes": 574406,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 12970,
+            "output_tokens": 81,
+            "cached_input_tokens": 9216
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13129,
+            "output_tokens": 52,
+            "cached_input_tokens": 12800
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13817,
+            "output_tokens": 97,
+            "cached_input_tokens": 12928
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 18079,
+            "output_tokens": 77,
+            "cached_input_tokens": 13696
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 18212,
+            "output_tokens": 21,
+            "cached_input_tokens": 17920
+          }
+        }
+      ],
+      "answer": {
+        "request": "req-4f9112da",
+        "code": "E_CHECKSUM",
+        "worker": "worker-13"
+      },
+      "seconds": 35.4
+    },
+    {
+      "task": "logs",
+      "arm": "full",
+      "rep": 4,
+      "position": 2,
+      "kind": "controlled-read",
+      "artifactLayout": 2,
+      "seed": 1900000905,
+      "verdict": "PASS",
+      "agentSeconds": 18.3,
+      "read": {
+        "complete": true,
+        "truncated": false,
+        "requests": 3
+      },
+      "validation": null,
+      "exit": 0,
+      "clientErrors": [],
+      "completedTools": [
+        {
+          "type": "command_execution",
+          "status": "completed"
+        },
+        {
+          "type": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "usage": {
+        "input": 41730,
+        "cached": 36352,
+        "output": 188
+      },
+      "requests": 3,
+      "compressedRequests": 2,
+      "beforeBytes": 233745,
+      "afterBytes": 199289,
+      "ledgerUsage": [
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 13145,
+            "output_tokens": 76,
+            "cached_input_tokens": 9344
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 14225,
+            "output_tokens": 78,
+            "cached_input_tokens": 12928
+          }
+        },
+        {
+          "status": 200,
+          "usage": {
+            "input_tokens": 14360,
+            "output_tokens": 34,
+            "cached_input_tokens": 14080
+          }
+        }
+      ],
+      "answer": {
+        "request": "req-4f9112da",
+        "code": "E_CHECKSUM",
+        "worker": "worker-13"
+      },
+      "seconds": 19.3
+    }
+  ],
+  "pairs": [
+    {
+      "rep": 1,
+      "agentSeconds": {
+        "ours": 17.9,
+        "headroom": 31.4
+      },
+      "estimatedUsd": {
+        "ours": 0.100284,
+        "headroom": 0.379366
+      },
+      "agentWin": true,
+      "costWin": true
+    },
+    {
+      "rep": 2,
+      "agentSeconds": {
+        "ours": 16.9,
+        "headroom": 42.6
+      },
+      "estimatedUsd": {
+        "ours": 0.097204,
+        "headroom": 0.413598
+      },
+      "agentWin": true,
+      "costWin": true
+    },
+    {
+      "rep": 3,
+      "agentSeconds": {
+        "ours": 15.3,
+        "headroom": 31.6
+      },
+      "estimatedUsd": {
+        "ours": 0.181652,
+        "headroom": 0.214178
+      },
+      "agentWin": true,
+      "costWin": true
+    },
+    {
+      "rep": 4,
+      "agentSeconds": {
+        "ours": 18.3,
+        "headroom": 24.5
+      },
+      "estimatedUsd": {
+        "ours": 0.099532,
+        "headroom": 0.17943
+      },
+      "agentWin": true,
+      "costWin": true
+    }
+  ],
+  "scope": "Four fresh generated pairs from a workload family used during development. Estimated rate-card costs include measured provider cache usage; they are not invoices or independent held-out confirmation."
+}
