@@ -19,7 +19,6 @@ concurrency:
 jobs:
   release-verification:
     name: Release verification (${{ matrix.os }})
-    if: startsWith(github.head_ref, 'release-please')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:

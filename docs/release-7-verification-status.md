@@ -2,6 +2,13 @@
 
 Verified runtime source: `9e386efa`. No release was published or merged.
 
+The fixes are maintained on `fix/release7-production-readiness`, targeting
+`master`; Release Please PR #345 contains only its release preparation changes.
+The receipts retain their original tested commit IDs and 7.0.0 tarball hashes.
+Rebasing the fixes onto master removed only Release Please's version/changelog
+changes; the runtime implementation is unchanged. Release Please owns the final
+version bump after the fixes merge.
+
 ## Installation and default operation
 
 [Fresh global-install receipt](release-7-global-install-proof.json): npm 11.4.2
