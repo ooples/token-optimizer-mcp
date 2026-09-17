@@ -8,6 +8,28 @@ import { replaceProfile } from '../../scripts/profile-file.mjs';
 import { recoverProfileLock } from '../../scripts/recover-profile-lock.mjs';
 import { auditChatProbe } from '../../bench/live/chat-route-audit.mjs';
 
+test.each(['not-a-url', '/relative', 'file:///private'])(
+  'names the invalid base URL setting: %s',
+  (value) => {
+    expect(() =>
+      claudeRoute(
+        ['--setting-sources', ''],
+        { ANTHROPIC_BASE_URL: value },
+        tmpdir()
+      )
+    ).toThrow('ANTHROPIC_BASE_URL must be an absolute HTTP or HTTPS URL');
+  }
+);
+test('external provider routing does not validate an unused Anthropic URL', () => {
+  expect(
+    claudeRoute(
+      ['--setting-sources', ''],
+      { ANTHROPIC_BASE_URL: 'unused-invalid', CLAUDE_CODE_USE_VERTEX: '1' },
+      tmpdir()
+    ).external
+  ).toBe(true);
+});
+
 test.each([
   ['--setting-sources'],
   ['--setting-sources', '--settings', '{}'],

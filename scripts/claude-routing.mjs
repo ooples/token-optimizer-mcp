@@ -60,12 +60,22 @@ export function claudeRoute(args, env, projectRoot) {
     /^(1|true|yes|on)$/i.test(String(effective[key] || '').trim())
   );
   const upstream = effective.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+  let origin;
+  if (!external) {
+    try {
+      const parsed = new URL(upstream);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+      origin = parsed.origin;
+    } catch {
+      throw new Error('ANTHROPIC_BASE_URL must be an absolute HTTP or HTTPS URL.');
+    }
+  }
   // Loopback routing must not turn off Claude's first-party MCP deferral.
   // Preserve explicit user/settings choices and third-party gateway behavior.
   const preserveToolSearch =
     !external &&
     effective.ENABLE_TOOL_SEARCH === undefined &&
-    new URL(upstream).origin === 'https://api.anthropic.com';
+    origin === 'https://api.anthropic.com';
   return {
     upstream,
     preserveToolSearch,
