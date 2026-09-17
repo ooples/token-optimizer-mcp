@@ -1,0 +1,103 @@
+{
+  "sourceCommit": "ee57a558",
+  "recordedAt": "2026-09-17T00:12:53.403Z",
+  "tarballSha256": "2aeec7da0acc634b725033a2c7a6929edddd64f07aeea2c174ee8876b17026bb",
+  "installation": {
+    "freshPrefix": "C:\\Users\\yolan\\AppData\\Local\\Temp\\token-optimizer-release7-3768c78758\\final-ee57a558",
+    "dependencyPackages": 145,
+    "command": "npm install --prefix FRESH_PREFIX --omit=dev --no-fund --no-audit TARBALL",
+    "packageContentsGate": "24 required assets; 2005 files"
+  },
+  "codex": {
+    "code": 0,
+    "result": {
+      "marker": "default-graph-7-f83ad1",
+      "state": "ready"
+    },
+    "markerMatches": true,
+    "fixture": "release_state=ready\n",
+    "injectedRequests": 10,
+    "requests": 10,
+    "tools": [
+      "smart_read",
+      "smart_read",
+      "smart_edit",
+      "smart_read",
+      "smart_write",
+      "wiki_query"
+    ],
+    "all200": true,
+    "graphEveryRequest": true,
+    "noWikiLookupBeforeWrite": true
+  },
+  "opencode": {
+    "work": "C:\\Users\\yolan\\AppData\\Local\\Temp\\token-optimizer-release7-3768c78758\\opencode-managed-bkgGqe",
+    "code": 0,
+    "timedOut": false,
+    "seconds": 23.168,
+    "result": {
+      "marker": "CHAT_GRAPH_7_42af",
+      "state": "ready"
+    },
+    "fixture": "release_state=ready\n",
+    "requests": 7,
+    "all200": true,
+    "injectedRequests": 7,
+    "toolCalls": [
+      {
+        "tool": "token-optimizer_smart_read",
+        "status": "completed"
+      },
+      {
+        "tool": "token-optimizer_smart_read",
+        "status": "completed"
+      },
+      {
+        "tool": "token-optimizer_smart_edit",
+        "status": "completed"
+      },
+      {
+        "tool": "token-optimizer_smart_read",
+        "status": "completed"
+      },
+      {
+        "tool": "token-optimizer_smart_write",
+        "status": "completed"
+      },
+      {
+        "tool": "token-optimizer_wiki_query",
+        "status": "completed"
+      }
+    ],
+    "wikiFindsSameMarker": true,
+    "noWikiLookupBeforeWrite": true,
+    "usageEveryRequest": true
+  },
+  "claude": {
+    "kind": "real Claude binary with synthetic local upstream, no account/model validation",
+    "code": 0,
+    "requests": [
+      {
+        "path": "/test-provider/api/hello",
+        "keyMatches": false,
+        "bytes": 0
+      },
+      {
+        "path": "/test-provider/v1/messages?beta=true",
+        "keyMatches": true,
+        "bytes": 118219
+      }
+    ],
+    "proxyRequests": 2,
+    "all200": true,
+    "expectedReply": true
+  },
+  "scope": "Fresh-package installation and live correctness; not a performance comparison. Claude uses the actual CLI with a synthetic local upstream, not a model/account gate.",
+  "pending": [
+    "Claude account quota",
+    "Copilot account quota",
+    "Gemini account/client rejection",
+    "CI for this source head",
+    "End-to-end agent-speed superiority"
+  ]
+}

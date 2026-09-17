@@ -5,6 +5,14 @@ Date: 2026-09-16. Release PR: #345. Candidate base:
 
 ## Finding and fix
 
+[Final fresh-install receipt](release-7-final-install-proof.json) verifies source
+`ee57a558` from a newly packed tarball in a new dependency prefix (145 packages).
+The installed package passed live Codex (10 model requests) and OpenCode (7)
+read/edit/write/wiki tasks with correct markers, stable graph injection, provider
+usage and HTTP 200 throughout. The real Claude CLI passed its synthetic local
+upstream check; this does not satisfy the pending Claude account gate. The new
+source-head CI jobs were still queued when the receipt was recorded.
+
 The [startup follow-up](release-7-startup-verification.md) removes unused encoder
 allocations and records before/after MCP startup and memory measurements.
 
