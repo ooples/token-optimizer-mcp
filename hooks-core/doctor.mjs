@@ -747,7 +747,7 @@ export async function probeSessionStart({ root, workspace, hooksDir, install }) 
     return [context.includes('Token optimization is active')
       ? ok('session-start emits the policy', `${Math.ceil(context.length / 4)} tokens of standing context`)
       : bad('session-start emits the policy', 'ran, but produced no policy text',
-        'check TOKEN_OPTIMIZER_MODE is not "off"')];
+        'reinstall the package and report the session-start hook failure if the policy is still missing')];
   } catch {
     return [bad('session-start emits the policy', `unparseable output: ${String(out).slice(0, 120)}`,
       'reinstall the package; the hook is present but not producing valid output')];

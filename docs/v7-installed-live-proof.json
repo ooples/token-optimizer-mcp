@@ -4,7 +4,7 @@
   "sourceCommit": "b36651145db1032e13ec95f24b9c7736af1eb118",
   "installation": "Built and version-stamped from the exact public Git tag; not downloaded from npm. npm publication failed before this verification.",
   "tarballSha256": "dfd2551dcb5c000abc659259b1f0377aa3fde4ba792da25459ec639613721c55",
-  "runtime": "C:/Users/yolan/.token-optimizer/runtime/versions/7.0.0",
+  "runtime": "<runtime-directory>",
   "pinnedVersion": "7.0.0",
   "plugin": {
     "server": {
@@ -14,7 +14,7 @@
     "toolCount": 19,
     "requiredTools": true,
     "smartReadSucceeded": true,
-    "launch": "C:/Users/yolan/.claude/plugins/cache/token-optimizer/token-optimizer/7.0.0/launch.mjs",
+    "launch": "<plugin-launcher>",
     "stderr": ""
   },
   "codex": {
@@ -30,7 +30,7 @@
     "all200": true
   },
   "opencode": {
-    "work": "C:\\Users\\yolan\\AppData\\Local\\Temp\\token-optimizer-release7-3768c78758\\opencode-managed-pKXcGg",
+    "work": "<verification-workspace>",
     "code": 0,
     "timedOut": false,
     "seconds": 25.645,

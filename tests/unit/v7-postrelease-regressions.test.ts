@@ -7,8 +7,29 @@ import { SmartGrepTool } from '../../src/tools/file-operations/smart-grep.js';
 import { CacheEngine } from '../../src/core/cache-engine.js';
 import { TokenCounter } from '../../src/core/token-counter.js';
 import { MetricsCollector } from '../../src/core/metrics.js';
+import { redactV7Proof } from '../../scripts/export-v7-proof.mjs';
 
 describe('v7 user reports', () => {
+  it('exports portable proof records without changing measured evidence or private inputs', () => {
+    const input = { runtime: 'C:/Users/example/runtime', root: '/home/example/package', work: '/tmp/private', plugin: { launch: 'C:\\Users\\example\\launch.mjs' }, opencode: { work: '/tmp/other-private', code: 0 }, statuses: [200], tarballSha256: 'unchanged', requests: [{ path: '/v1/messages' }] };
+    expect(redactV7Proof(input)).toEqual({ runtime: '<runtime-directory>', root: '<installed-package-directory>', work: '<verification-workspace>', plugin: { launch: '<plugin-launcher>' }, opencode: { work: '<verification-workspace>', code: 0 }, statuses: [200], tarballSha256: 'unchanged', requests: [{ path: '/v1/messages' }] });
+    expect(input.plugin.launch).toBe('C:\\Users\\example\\launch.mjs');
+  });
+
+  it('reports a broken session hook when enforce-mode output has no policy', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'optimizer-missing-policy-'));
+    try {
+      writeFileSync(join(workspace, 'session-start.mjs'), 'console.log(JSON.stringify({hookSpecificOutput:{additionalContext:process.env.TOKEN_OPTIMIZER_MODE}}));');
+      const checks = await probeSessionStart({ root: process.cwd(), workspace, hooksDir: workspace });
+      expect(checks[0].pass).toBe(false);
+      expect(checks[0].detail).toBe('ran, but produced no policy text');
+      expect(checks[0].remedy).toContain('reinstall');
+      expect(checks[0].remedy).toContain('report');
+      expect(checks[0].remedy).not.toContain('TOKEN_OPTIMIZER_MODE');
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
   it.each(['7.0.0', '6.0.2-beta.1'])('#389 rejects hooks %s ahead of or different from the served package', (installedVersion) => {
     const checks = probeVersion({ install: { method: 'plugin', installedVersion, packageVersion: '6.0.2', sameTree: false } });
     const skew = checks.find((check: { name: string }) => check.name === 'other clients agree with this package');

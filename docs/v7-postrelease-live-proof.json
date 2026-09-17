@@ -1,6 +1,6 @@
 {
-  "work": "C:/Users/yolan/AppData/Local/Temp/token-optimizer-pr388-S6NEtZ",
-  "root": "C:/Users/yolan/.token-optimizer/local/v7-pr388/node_modules/@ooples/token-optimizer-mcp",
+  "work": "<verification-workspace>",
+  "root": "<installed-package-directory>",
   "mcpProof": {
     "version": {
       "name": "token-optimizer-mcp",
