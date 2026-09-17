@@ -46,6 +46,18 @@ describe('the effective mode check', () => {
     expect(check.remedy).toContain(settingsPath);
   });
 
+  test('a settings opt-out names the file and the environment it also reaches', () => {
+    // The agent applies its settings `env` block to the processes it launches, so editing the file
+    // alone may not be enough; the remedy has to say so.
+    process.env.TOKEN_OPTIMIZER_MODE = 'off';
+    const settingsPath = settingsWith({ TOKEN_OPTIMIZER_MODE: 'off' });
+    const [check] = probeMode({ settingsPath });
+    expect(check.detail).toContain(settingsPath);
+    expect(check.detail).toContain('this process');
+    expect(check.remedy).toContain(settingsPath);
+    expect(check.remedy).toMatch(/unset it in any shell/);
+  });
+
   test('off from the process environment says so instead of blaming the settings file', () => {
     process.env.TOKEN_OPTIMIZER_MODE = 'off';
     const settingsPath = settingsWith({});
@@ -76,11 +88,33 @@ describe('the rendered report', () => {
     const text = renderDiagnosis(result);
     expect(text).toMatch(/^\d+\/\d+ checks passed, 1 warning\./);
     expect(text).toMatch(/\n {2}WARN {2}effective optimization mode\n/);
-    expect(text).toContain('optimization is disabled by TOKEN_OPTIMIZER_MODE=off');
+    expect(text).toContain('Optimization is disabled by TOKEN_OPTIMIZER_MODE=off');
     expect(text).toContain(settingsPath);
     // The probes themselves still prove the install: an opt-out is not a broken hook.
     expect(result.checks.find((c) => c.name === 'session-start emits the policy')?.pass).toBe(true);
   }, 60_000);
+
+  test('the disabled state is reported even when other checks fail', () => {
+    // A machine without the hooks installed fails two checklist checks. Reporting the opt-out only
+    // for a healthy install hid it exactly there -- and made this suite pass locally and fail in CI.
+    const text = renderDiagnosis({
+      mode: 'off',
+      passed: 1,
+      total: 3,
+      warnings: 1,
+      healthy: false,
+      failed: [{ name: 'hooks wired into settings', pass: false }],
+      checks: [
+        { name: 'effective optimization mode', pass: true, warn: true, detail: 'disabled', remedy: 'remove it' },
+        { name: 'hooks wired into settings', pass: false, detail: 'no entries', remedy: 'install them' },
+        { name: 'hook binary present', pass: true, detail: 'there' },
+      ],
+    });
+    expect(text).toMatch(/^1\/3 checks passed, 1 warning\./);
+    expect(text).toContain('Something above is broken');
+    expect(text).toContain('Optimization is disabled by TOKEN_OPTIMIZER_MODE=off');
+    expect(text).toContain('To enable it: remove it.');
+  });
 
   test('an enabled install reports no warning', async () => {
     delete process.env.TOKEN_OPTIMIZER_MODE;

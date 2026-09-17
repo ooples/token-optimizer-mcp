@@ -1273,6 +1273,9 @@ export function probeMode({ settingsPath } = {}) {
   if (effective !== 'off') {
     return [ok('effective optimization mode', `${effective}; hook probes below temporarily use enforce mode`)];
   }
+  // BOTH SOURCES WHEN BOTH ARE SET. mode() reads the process environment, so removing the settings
+  // entry alone would not change anything -- and naming only the file would send the user to fix
+  // half of it and find the doctor unmoved.
   let fromSettings = false;
   if (settingsPath && existsSync(settingsPath)) {
     try {
@@ -1282,13 +1285,22 @@ export function probeMode({ settingsPath } = {}) {
       /* an unparseable settings file is reported by the checklist */
     }
   }
-  const source = fromSettings ? `the "env" block of ${settingsPath}` : 'the process environment';
+  // WHEN THE FILE SETS IT, BOTH SOURCES ARE NAMED. The agent applies its settings `env` block to
+  // the processes it launches, so a settings opt-out reaches mode() as a process variable as well,
+  // and from in here that is indistinguishable from a shell that also exports it. Naming only the
+  // file would send someone to edit it, restart, and find the doctor unmoved.
+  const detail = fromSettings
+    ? `disabled by TOKEN_OPTIMIZER_MODE=off in the "env" block of ${settingsPath}, which the agent ` +
+      'also applies to this process'
+    : 'disabled by TOKEN_OPTIMIZER_MODE=off in the process environment';
+  const remedy = fromSettings
+    ? `remove "TOKEN_OPTIMIZER_MODE" from the "env" block of ${settingsPath}, and unset it in any ` +
+      'shell that exports it, then start a new session'
+    : 'unset TOKEN_OPTIMIZER_MODE where the agent is launched, then start a new session';
   return [warn('effective optimization mode',
-    `disabled by TOKEN_OPTIMIZER_MODE=off in ${source}: hooks neither refuse nor advise, so nothing is saved. ` +
+    `${detail}: hooks neither refuse nor advise, so nothing is saved. ` +
       'Hook probes below temporarily use enforce mode.',
-    fromSettings
-      ? `remove "TOKEN_OPTIMIZER_MODE" from the "env" block of ${settingsPath}, then start a new session`
-      : 'unset TOKEN_OPTIMIZER_MODE where the agent is launched, then start a new session')];
+    remedy)];
 }
 
 /** The report, with a remedy on every failure. */
@@ -1322,11 +1334,15 @@ export function renderDiagnosis(result) {
     ...residueNote,
     '',
     result.healthy
-      ? result.mode === 'off'
-        ? 'Installation probes passed, but optimization is disabled by TOKEN_OPTIMIZER_MODE=off: nothing is being saved.' +
-          (disabled?.remedy ? ` To enable it: ${disabled.remedy}.` : '')
-        : 'Installation probes passed: the hook emitted policy and refused a synthetic large read in enforce mode.'
+      ? 'Installation probes passed: the hook emitted policy and refused a synthetic large read in enforce mode.'
       : 'Something above is broken. Each failure names its own fix.',
+    // SAID WHETHER OR NOT THE INSTALL IS HEALTHY. Tying this to `healthy` hid it on exactly the
+    // installs that need it most -- a broken install with optimization switched off reported only
+    // the breakage -- and made the report depend on the machine it ran on.
+    ...(result.mode === 'off'
+      ? [`Optimization is disabled by TOKEN_OPTIMIZER_MODE=off: nothing is being saved.` +
+          (disabled?.remedy ? ` To enable it: ${disabled.remedy}.` : '')]
+      : []),
     'Enforcement can be turned off at any time with TOKEN_OPTIMIZER_MODE=off.',
   ].join('\n');
 }

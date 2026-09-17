@@ -172,6 +172,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
+          # This job runs package scripts from the released tag; without this, checkout leaves a
+          # token with issues: write in the local git config for them to read.
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -191,13 +191,45 @@ function entryFor(versionDir) {
   return pkgInfo(join(versionDir, 'node_modules', PACKAGE))?.entry ?? null;
 }
 
-/** Numeric-dotted version compare: 1 if a>b, -1 if a<b, 0 if equal. */
-function compareVersions(a, b) {
-  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] || 0) - (pb[i] || 0);
+/**
+ * SemVer precedence: 1 if a>b, -1 if a<b, 0 if equal.
+ *
+ * PRERELEASES RANK BELOW THEIR OWN RELEASE. Comparing the numeric components alone made 7.0.1 and
+ * 7.0.1-beta.1 equal, so a plugin at the release was not newer than a runtime at its prerelease and
+ * the upgrade was skipped. Identifiers compare per SemVer §11: numeric ones numerically, others
+ * as ASCII, numeric below non-numeric, and a longer set of otherwise-equal identifiers wins.
+ */
+export function compareVersions(a, b) {
+  const split = (value) => {
+    const withoutBuild = String(value).split('+')[0]; // build metadata is ignored for precedence
+    const dash = withoutBuild.indexOf('-');
+    const core = dash === -1 ? withoutBuild : withoutBuild.slice(0, dash);
+    const prerelease = dash === -1 ? '' : withoutBuild.slice(dash + 1);
+    return {
+      core: core.split('.').map((n) => parseInt(n, 10) || 0),
+      pre: prerelease ? prerelease.split('.') : [],
+    };
+  };
+  const left = split(a);
+  const right = split(b);
+  for (let i = 0; i < Math.max(left.core.length, right.core.length); i++) {
+    const d = (left.core[i] || 0) - (right.core[i] || 0);
     if (d) return d > 0 ? 1 : -1;
+  }
+  if (!left.pre.length && !right.pre.length) return 0;
+  if (!left.pre.length) return 1; // a release outranks any prerelease of it
+  if (!right.pre.length) return -1;
+  for (let i = 0; i < Math.max(left.pre.length, right.pre.length); i++) {
+    const x = left.pre[i];
+    const y = right.pre[i];
+    if (x === undefined) return -1; // fewer identifiers ranks lower
+    if (y === undefined) return 1;
+    if (x === y) continue;
+    const xNumeric = /^\d+$/.test(x);
+    const yNumeric = /^\d+$/.test(y);
+    if (xNumeric && yNumeric) return Number(x) > Number(y) ? 1 : -1;
+    if (xNumeric !== yNumeric) return xNumeric ? -1 : 1; // numeric ranks below alphanumeric
+    return x > y ? 1 : -1;
   }
   return 0;
 }
@@ -651,8 +683,11 @@ function runRefresh() {
 
 function refreshDueNow() {
   if (REFRESH_INTERVAL_MS === 0) return true;
+  // THE FAILURE DECIDES ON ITS OWN. Falling through to the success stamp meant a refresh that
+  // succeeded an hour ago and failed a minute later waited the whole interval from the SUCCESS,
+  // so the short retry never applied when it was needed most.
   const failedAt = Number(readJsonFile(REFRESH_FAILED_FILE)?.at);
-  if (Number.isFinite(failedAt) && Date.now() - failedAt < REFRESH_RETRY_MS) return false;
+  if (Number.isFinite(failedAt)) return Date.now() - failedAt >= REFRESH_RETRY_MS;
   try {
     const last = Number(readFileSync(LAST_REFRESH_FILE, 'utf8').trim());
     if (Number.isFinite(last)) return Date.now() - last >= REFRESH_INTERVAL_MS;

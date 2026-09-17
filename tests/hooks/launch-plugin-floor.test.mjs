@@ -200,6 +200,24 @@ describe('#393 the plugin version is a floor for what is served', () => {
     expect(second.served).toBe('7.0.1');
   });
 
+  test('a stable plugin outranks a prerelease runtime with the same numbers', () => {
+    // Numeric-only comparison called 7.0.1 and 7.0.1-beta.1 equal, so the release was never served.
+    seedVersion('7.0.1-beta.1');
+    setCurrent('7.0.1-beta.1');
+    seedVersion('7.0.1');
+    const r = run(pluginWith('7.0.1'));
+    expect(r.served).toBe('7.0.1');
+    expect(readCurrent()).toBe('7.0.1');
+  });
+
+  test('a prerelease plugin does not pull back a stable runtime', () => {
+    seedVersion('7.0.1');
+    setCurrent('7.0.1');
+    const r = run(pluginWith('7.0.1-beta.1'), [], { FAKE_NPM_AVAILABLE: '7.0.1-beta.1' });
+    expect(r.served).toBe('7.0.1');
+    expect(npmCalls()).toHaveLength(0);
+  });
+
   test('a runtime already newer than the plugin is left alone', () => {
     seedVersion('7.0.2');
     setCurrent('7.0.2');
@@ -262,6 +280,26 @@ describe('#394 a failed refresh does not silence retries', () => {
     const retry = { ...env, TOKEN_OPTIMIZER_REFRESH_RETRY_MS: '0', FAKE_NPM_AVAILABLE: '7.0.1' };
     expect(run(shim, [], retry).served).toBe('6.0.2');
     expect(await waitFor(() => readCurrent() === '7.0.1')).toBe(true);
+  });
+
+  test('a recent success does not delay the retry after a later failure', async () => {
+    // The failure decides: a refresh that succeeded an hour ago and failed a minute later must
+    // retry on the short backoff, not wait out the interval from that success.
+    seedVersion('6.0.2');
+    setCurrent('6.0.2');
+    const shim = pluginWith(null);
+    const env = { TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS: String(6 * 60 * 60 * 1000), FAKE_NPM_LATEST: '7.0.1' };
+
+    expect(run(shim, ['--refresh'], env).status).not.toBe(0);
+    // A success one hour old, and the failure just recorded, aged past the retry window.
+    writeFileSync(join(runtime, '.last-refresh'), String(Date.now() - 60 * 60 * 1000));
+    const failure = JSON.parse(readFileSync(join(runtime, '.refresh-failed'), 'utf8'));
+    writeFileSync(join(runtime, '.refresh-failed'), JSON.stringify({ ...failure, at: Date.now() - 20 * 60 * 1000 }));
+    const before = npmCalls().length;
+
+    expect(run(shim, [], { ...env, FAKE_NPM_AVAILABLE: '7.0.1' }).served).toBe('6.0.2');
+    expect(await waitFor(() => readCurrent() === '7.0.1')).toBe(true);
+    expect(npmCalls().length).toBeGreaterThan(before);
   });
 
   test('installing through npm prints no DEP0190 warning', () => {
