@@ -16,14 +16,24 @@ export interface TokenCountResult {
  * `calculateCacheSavings`, `exceedsLimit`, `truncate`,
  * `getTokenCharRatio`, `free`) the rest of the codebase relies on.
  *
- * Truncation still uses a local tiktoken encoder because the
- * ITokenizer contract doesn't expose the raw token array — we
- * keep one for GPT-4-family models and otherwise degrade to
- * character-based truncation.
+ * Synchronous counting and truncation use a lazily allocated local encoder.
+ * Async counting uses a separate factory-owned tokenizer only when requested.
  */
 export class TokenCounter {
-  private readonly tokenizer: ITokenizer;
-  private readonly encoder: Tiktoken | null;
+  private localEncoder: Tiktoken | null = null;
+  private freed = false;
+
+  private get encoder(): Tiktoken {
+    if (this.freed) throw new Error('TokenCounter has been freed');
+    return (this.localEncoder ??= encoding_for_model(
+      TiktokenTokenizer.mapToTiktokenModel(this.model)
+    ));
+  }
+
+  private get tokenizer(): ITokenizer {
+    if (this.freed) throw new Error('TokenCounter has been freed');
+    return TokenizerFactory.create(this.model);
+  }
   public readonly model: string;
 
   constructor(model?: string) {
@@ -35,7 +45,8 @@ export class TokenCounter {
       process.env.GOOGLE_AI_MODEL ||
       'gpt-4';
 
-    this.tokenizer = TokenizerFactory.create(this.model);
+    // Allocate encoders only when used. Synchronous counting does not need
+    // the factory's separate async encoder; unused counters need neither.
 
     // ALWAYS TOKENIZE. This used to null the encoder for any model tiktoken
     // does not name, and `count()` then fell back to Math.ceil(length / 4) --
@@ -58,9 +69,7 @@ export class TokenCounter {
     // encoder is always available; there was never a reason to divide by four.
     // A neighbouring model's tokenizer is wrong by a few percent. Length over
     // four is wrong by more than double.
-    this.encoder = encoding_for_model(
-      TiktokenTokenizer.mapToTiktokenModel(this.model)
-    );
+    // The lazy encoder getter preserves this model mapping for every count.
   }
 
   /**
@@ -315,9 +324,9 @@ export class TokenCounter {
   }
 
   free(): void {
-    if (this.encoder) {
-      this.encoder.free();
-    }
+    this.localEncoder?.free();
+    this.localEncoder = null;
+    this.freed = true;
     // The memo goes with the encoder. Without this a freed counter still pins
     // up to CACHE_MAX_BYTES of text, which is the opposite of what free() is
     // for -- and the counts would be unusable anyway once the encoder is gone.

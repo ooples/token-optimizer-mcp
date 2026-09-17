@@ -5,6 +5,9 @@ Date: 2026-09-16. Release PR: #345. Candidate base:
 
 ## Finding and fix
 
+The [startup follow-up](release-7-startup-verification.md) removes unused encoder
+allocations and records before/after MCP startup and memory measurements.
+
 ### Default activation follow-up
 
 The subsequent [adversarial review](release-7-adversarial-defaults.md) found and

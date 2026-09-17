@@ -60,6 +60,9 @@ jobs:
           tests/unit/compress/accounting.test.ts
           tests/unit/compress/responses-proxy.test.ts
           tests/unit/compress/responses-dedup.test.ts
+          tests/unit/token-counter-lifecycle.test.ts
+          tests/unit/token-counter-never-estimates.test.ts
+          tests/unit/tokenizers.test.ts
           tests/unit/doctor-reports-proxy-state.test.ts
 
   lint-and-format:
