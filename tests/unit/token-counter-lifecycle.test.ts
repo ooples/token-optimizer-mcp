@@ -3,6 +3,24 @@ import { TokenCounter } from '../../src/core/token-counter.js';
 import { TokenizerFactory } from '../../src/core/tokenizers/tokenizer-factory.js';
 
 describe('lazy counter ownership', () => {
+  it('counts repeated long slices exactly without repeatedly allocating token arrays', () => {
+    const counter = new TokenCounter('gpt-4');
+    const chunk = 'x'.repeat(8192);
+    const expectedPerChunk = counter.count(chunk).tokens;
+    const internals = counter as unknown as {
+      localEncoder: { encode(text: string): Uint32Array };
+    };
+    const encode = jest.spyOn(internals.localEncoder, 'encode');
+    try {
+      expect(counter.count(chunk.repeat(64)).tokens).toBe(
+        expectedPerChunk * 64
+      );
+      expect(encode).toHaveBeenCalledTimes(1);
+    } finally {
+      encode.mockRestore();
+      counter.free();
+    }
+  });
   it('does not create an async tokenizer for synchronous work or cleanup', () => {
     const create = jest.spyOn(TokenizerFactory, 'create');
     const unused = new TokenCounter('gpt-4');

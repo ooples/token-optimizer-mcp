@@ -61,6 +61,9 @@ jobs:
           tests/unit/compress/accounting.test.ts
           tests/unit/compress/responses-proxy.test.ts
           tests/unit/compress/responses-dedup.test.ts
+          tests/unit/compress/log-order.test.ts
+          tests/unit/compress/log-periods.test.ts
+          tests/unit/compress/token-bounds.test.ts
           tests/unit/token-counter-lifecycle.test.ts
           tests/unit/token-counter-never-estimates.test.ts
           tests/unit/tokenizers.test.ts

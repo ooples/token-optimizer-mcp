@@ -29,7 +29,8 @@ export class TokenCounter {
   private get encoder(): Tiktoken {
     if (this.freed) throw new Error('TokenCounter has been freed');
     if (this.localEncoder) return this.localEncoder;
-    const { encoding_for_model } = require('tiktoken') as typeof import('tiktoken');
+    const { encoding_for_model } =
+      require('tiktoken') as typeof import('tiktoken');
     return (this.localEncoder ??= encoding_for_model(
       TiktokenTokenizer.mapToTiktokenModel(this.model)
     ));
@@ -186,9 +187,14 @@ export class TokenCounter {
    * Encodes in bounded slices, so one pathological input cannot stall a call.
    */
   private encodeBounded(text: string): number {
-    if (!this.encoder) return 0;
+    const encoder = this.encoder;
     const slice = TokenCounter.ENCODE_SLICE;
-    if (text.length <= slice) return this.encoder.encode(text).length;
+    if (text.length <= slice) return encoder.encode(text).length;
+
+    // Repetitive payloads otherwise repeat the expensive BPE merge work for
+    // every identical slice. Local, bounded and keyed by the complete slice:
+    // counts and boundaries are unchanged, and no input outlives this call.
+    const chunks = new Map<string, number>();
 
     let total = 0;
     let from = 0;
@@ -209,7 +215,14 @@ export class TokenCounter {
         while (cut > floor && text[cut - 1] !== '\n') cut--;
         if (cut > floor) end = cut;
       }
-      total += this.encoder.encode(text.slice(from, end)).length;
+      const chunk = text.slice(from, end);
+      let tokens = chunks.get(chunk);
+      if (tokens === undefined) {
+        tokens = encoder.encode(chunk).length;
+        if (chunks.size >= 16) chunks.delete(chunks.keys().next().value!);
+        chunks.set(chunk, tokens);
+      }
+      total += tokens;
       from = end;
     }
     return total;
