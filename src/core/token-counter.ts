@@ -1,7 +1,10 @@
-import { encoding_for_model, Tiktoken } from 'tiktoken';
+import { createRequire } from 'node:module';
+import type { Tiktoken } from 'tiktoken';
 import { TokenizerFactory } from './tokenizers/tokenizer-factory.js';
 import { ITokenizer } from './tokenizers/i-tokenizer.js';
 import { TiktokenTokenizer } from './tokenizers/tiktoken-tokenizer.js';
+
+const require = createRequire(import.meta.url);
 
 export interface TokenCountResult {
   tokens: number;
@@ -25,6 +28,8 @@ export class TokenCounter {
 
   private get encoder(): Tiktoken {
     if (this.freed) throw new Error('TokenCounter has been freed');
+    if (this.localEncoder) return this.localEncoder;
+    const { encoding_for_model } = require('tiktoken') as typeof import('tiktoken');
     return (this.localEncoder ??= encoding_for_model(
       TiktokenTokenizer.mapToTiktokenModel(this.model)
     ));

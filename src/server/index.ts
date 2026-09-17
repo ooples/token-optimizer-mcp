@@ -55,7 +55,7 @@ import {
 import {
   runSmartComplexity,
   SMART_COMPLEXITY_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-complexity.js';
+} from '../tools/code-analysis/lazy-tools.js';
 import {
   runSmartDependencies,
   SMART_DEPENDENCIES_TOOL_DEFINITION,
@@ -63,15 +63,15 @@ import {
 import {
   runSmartExports,
   SMART_EXPORTS_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-exports.js';
+} from '../tools/code-analysis/lazy-tools.js';
 import {
   runSmartImports,
   SMART_IMPORTS_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-imports.js';
+} from '../tools/code-analysis/lazy-tools.js';
 import {
   runSmartRefactor,
   SMART_REFACTOR_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-refactor.js';
+} from '../tools/code-analysis/lazy-tools.js';
 import {
   runSmartSecurity,
   SMART_SECURITY_TOOL_DEFINITION,
@@ -79,11 +79,11 @@ import {
 import {
   runSmartSymbols,
   SMART_SYMBOLS_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-symbols.js';
+} from '../tools/code-analysis/lazy-tools.js';
 import {
   runSmartTypescript,
   SMART_TYPESCRIPT_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-typescript.js';
+} from '../tools/code-analysis/lazy-tools.js';
 import {
   runSmartConfigRead,
   SMART_CONFIG_READ_TOOL_DEFINITION,
