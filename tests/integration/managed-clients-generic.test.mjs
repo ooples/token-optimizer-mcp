@@ -18,6 +18,7 @@ import {
   writeFileSync,
   rmSync,
   mkdirSync,
+  chmodSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -171,10 +172,16 @@ describe('which clients get a launcher', () => {
     try {
       const bin = join(dir, 'bin');
       mkdirSync(bin);
-      writeFileSync(
-        join(bin, process.platform === 'win32' ? 'qwen.cmd' : 'qwen'),
-        ''
+      // EXECUTABLE ON POSIX, because that is what commandExists now requires: a file merely named
+      // like a client is not one you can launch. Windows decides by extension, so the mode is
+      // irrelevant there -- which is exactly why writing the file without it passed locally on
+      // Windows and failed on the Linux runners.
+      const installed = join(
+        bin,
+        process.platform === 'win32' ? 'qwen.cmd' : 'qwen'
       );
+      writeFileSync(installed, '');
+      if (process.platform !== 'win32') chmodSync(installed, 0o755);
       const env = { PATH: bin };
       expect(
         launcherCommands({
@@ -194,10 +201,14 @@ describe('which clients get a launcher', () => {
     // its wrapper.
     const dir = mkdtempSync(join(tmpdir(), 'optimizer-detect-ours-'));
     try {
-      writeFileSync(
-        join(dir, process.platform === 'win32' ? 'qwen.cmd' : 'qwen'),
-        ''
+      // Executable, so this proves the OWNERSHIP exclusion. Left non-executable it would answer
+      // false on POSIX for the wrong reason and assert nothing about our own directory.
+      const ours = join(
+        dir,
+        process.platform === 'win32' ? 'qwen.cmd' : 'qwen'
       );
+      writeFileSync(ours, '');
+      if (process.platform !== 'win32') chmodSync(ours, 0o755);
       expect(
         commandExists('qwen', { env: { PATH: dir }, directory: dir })
       ).toBe(false);
