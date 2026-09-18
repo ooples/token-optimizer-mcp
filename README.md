@@ -587,29 +587,69 @@ synthetic repositories with natural tool selection. Uncached input and latency
 have separate results; see the [workflow evidence and limitations](bench/live/evidence/codex-workflows-2026-09-15/README.md).
 
 
-The proxy is enabled by default and binds loopback only. Global npm installs
-activate Claude hooks and managed `claude`/`codex`/`opencode` commands in Command Prompt,
-PowerShell, Bash, and Zsh when lifecycle scripts are enabled. Windows installs add
-owned `.cmd` launchers to the User PATH, so profiles and PowerShell execution-policy
-changes are not required. For local installs or disabled lifecycle scripts, run
+The proxy is enabled by default and binds loopback only.
+
+**It is now on without launching anything through us.** Until 7.1.0 the only way
+to be routed was to start the client through our wrapper, so anyone who installed
+with `/plugin` and then opened Claude Code from a shortcut, an IDE or the desktop
+app saved nothing -- and the doctor reported that as a broken installation rather
+than as a feature that never applied. Installation now writes the endpoint into
+Claude Code's own `settings.json`, which is the one thing a session we did not
+start will read, and a small background proxy serves it. Four rules make that
+safe to switch on:
+
+- **Recorded.** Every value written is stored with whatever was there before.
+  `token-optimizer-uninstall --apply` restores it exactly, and refuses when the
+  value is no longer the one we wrote -- if you change it, it is yours again.
+- **Never written on hope.** The entry appears only after the proxy has actually
+  served the route. A settings file naming a dead port does not degrade politely:
+  the client cannot reach its provider at all.
+- **Self-healing.** The check runs again at every session start, before the first
+  model request, and removes the entry the moment the route cannot be served.
+- **Hands off what is not ours.** A client already pointed at another local proxy
+  is left alone, and a settings file we cannot parse is never rewritten.
+
+Set `TOKEN_OPTIMIZER_DEFAULT_ROUTING=0` to keep the wrapper-only behaviour, or
+`TOKEN_OPTIMIZER_PROXY_AUTOSTART=0` if you do not want a local background service
+at all. Either one also undoes an entry already written.
+
+**Managed commands.** Global npm installs activate Claude hooks and wrap the
+client commands you actually have -- `claude`, `codex`, `gemini`, `opencode`,
+`qwen`, `crush`, `droid`, `cn` (Continue), `copilot` and `amp` -- in Command
+Prompt, PowerShell, Bash, and Zsh when lifecycle scripts are enabled. Only
+commands already on your PATH are wrapped, so installing this does not claim a
+name for a client you have not installed; `TOKEN_OPTIMIZER_MANAGED_CLIENTS` takes
+a comma-separated list (or `all`) when a client lives somewhere PATH cannot see,
+and `0` skips shell activation entirely. Windows installs add owned `.cmd`
+launchers to the User PATH, so profiles and PowerShell execution-policy changes
+are not required. For local installs or disabled lifecycle scripts, run
 `token-optimizer-install`. Reopen the terminal to load the updated PATH and shell
-activation. Each managed session starts its own proxy,
-registers the packaged core MCP tools (including wiki), and shuts the proxy down
-on exit. `token-optimizer-run codex ...`, `token-optimizer-run claude ...`, or
-`token-optimizer-run opencode ...` works
-without shell activation. Existing custom provider authentication stays in the
-client. Set `TOKEN_OPTIMIZER_PROXY=0` to disable routing, or
-`TOKEN_OPTIMIZER_MANAGED_CLIENTS=0` before installation to skip shell activation.
+activation. Each managed session starts its own proxy, registers the packaged
+core MCP tools (including wiki), and shuts the proxy down on exit.
+`token-optimizer-run <client> ...` works without shell activation.
+
+**Which clients can be routed, and which cannot.** Ten have a supported way to
+redirect model traffic and are listed above. Claude Code and Gemini have exactly
+one provider each, so they are routed on installation. The rest choose a provider
+in their own configuration, and are routed once that configuration names an
+endpoint -- because forwarding on a guess would deliver one provider's
+credentials to another company. Six clients cannot be routed at all: Cursor,
+Cline, Windsurf, Kilo, Roo and Zed run the assistant inside the editor process
+and expose no documented redirect. Everything else -- the optimizer tools, the
+graph, the hooks -- still applies to them, and the doctor states the limitation
+instead of counting it as a failure.
+
+Existing custom provider authentication stays in the client, and your own
+endpoint stays yours: the proxy is inserted in front of whatever you configured,
+never in place of it. `TOKEN_OPTIMIZER_PROXY=0` disables routing and
 `TOKEN_OPTIMIZER_MODE=off` disables optimization. npm lifecycle scripts may be
 blocked, so package installation alone is not proof that activation ran.
-Other integrations retain their MCP/hooks setup; automatic managed model routing
-currently covers Claude Code, Codex, and OpenCode providers with explicit base URLs
-using the OpenAI, OpenAI-compatible, or Anthropic SDK. OpenCode's session plugin
-uses its resolved configuration and project directory; account credentials and
-provider files stay in place. Unsupported endpoints and provider modes retain
-native routing. Claude routing controlled by local managed-policy files or Windows
-registry policy also stays native. Remote/MDM policy can arrive after launch;
-the launcher reports observed model traffic, not just listener startup.
+OpenCode's session plugin uses its resolved configuration and project directory;
+account credentials and provider files stay in place. Unsupported endpoints and
+provider modes retain native routing. Claude routing controlled by local
+managed-policy files or Windows registry policy also stays native. Remote/MDM
+policy can arrive after launch; the launcher reports observed model traffic, not
+just listener startup.
 `doctor` checks routing configuration.
 Request-body capture is opt-in via `TOKEN_OPTIMIZER_PROXY_CAPTURE`; when enabled,
 it writes plaintext request content to the named directory.
@@ -666,9 +706,13 @@ all.
 
 | variable                          | default    | what it does                                               |
 | --------------------------------- | ---------- | ---------------------------------------------------------- |
-| `TOKEN_OPTIMIZER_PROXY`           | off        | the compression proxy itself                               |
+| `TOKEN_OPTIMIZER_PROXY`           | on         | the compression proxy itself; set `0` to opt out           |
 | `TOKEN_OPTIMIZER_COMPRESSION`     | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`       |
-| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | off        | put what this project already learned in the cached prefix |
+| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | on         | put what this project already learned in the cached prefix |
+
+Both of the `on` rows said `off` here until 7.1.0, which was wrong about the
+shipped code rather than a change of default: an unset value has always meant
+enabled, and `0`, `false`, `no` and `off` are what turn either one off.
 
 `lossless` is worth knowing about: it forbids every transform that removes
 something the output cannot reconstruct -- function bodies, array tails,
