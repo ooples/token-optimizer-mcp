@@ -77,6 +77,26 @@ describe('provider-aware token pricing', () => {
     });
   });
 
+  it('names the gateway as the route when the provider says OrcaRouter', () => {
+    // OrcaRouter resells many vendors behind one endpoint, so its models arrive with a
+    // `vendor/model` namespace. The route follows the NAMED provider, not the namespace: a
+    // namespaced model with no provider named stays unknown rather than being credited to a
+    // gateway it may never have touched.
+    expect(
+      inferProviderRoute(
+        'claude-code',
+        'deepseek/deepseek-v4-pro',
+        'orcarouter'
+      )
+    ).toEqual({ provider: 'orcarouter', route: 'orcarouter-api' });
+    expect(
+      inferProviderRoute('claude-code', 'deepseek/deepseek-v4-pro')
+    ).toEqual({
+      provider: 'unknown',
+      route: 'unknown',
+    });
+  });
+
   it('fails closed when a route does not publish a captured cache-write rate', () => {
     const priced = priceTokenUsage({
       client: 'github-copilot',

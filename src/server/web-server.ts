@@ -15,6 +15,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { registerWikiRoutes } from './wiki-routes.js';
 import { registerUcrRoutes } from './ucr-routes.js';
+import { registerOrcaRouterRoutes } from './orcarouter-routes.js';
 import {
   readHookDiagnosticEvents,
   summarizeHookDiagnostics,
@@ -647,6 +648,9 @@ app.get('/api/health', (_req, res) => {
 // graph from plain ESM under hooks-core/ rather than from this build.
 registerWikiRoutes(app);
 registerUcrRoutes(app);
+// The OrcaRouter provider API. Server-side because the browser must never hold an OrcaRouter key:
+// the dashboard posts a secret in and reads a redacted status back. See the module header.
+registerOrcaRouterRoutes(app);
 
 // Serve the wiki graph browser through the same static middleware that already
 // serves /wiki.html reliably in globally installed packages. Express sendFile

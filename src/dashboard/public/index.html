@@ -6,6 +6,7 @@
     <title>Token Optimizer</title>
     <link rel="stylesheet" href="/css/tokens.css" />
     <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="/css/orcarouter.css" />
   </head>
   <body>
     <div class="shell">
@@ -190,6 +191,200 @@
           </table>
         </div>
         <p class="accounting-note" id="provider-accounting-note"></p>
+      </section>
+
+      <!-- The model provider the optimizer's own calls go through. Two
+           independent ways in, because they serve different users: a key you
+           already hold, or a browser sign-in that issues one. The key never
+           reaches this page -- it is posted to the local server and only a
+           redacted form comes back. -->
+      <section
+        class="card provider-connect"
+        id="orcarouter-card"
+        data-state="loading"
+        aria-busy="true"
+        aria-labelledby="orcarouter-heading"
+      >
+        <div class="section-heading-row">
+          <div class="provider-identity">
+            <span class="provider-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" role="img">
+                <path
+                  d="M3 16.5c3.4 0 5.1-3 6.4-6.2C10.7 6.9 12.2 4 15.4 4c2.4 0 4.1 1.5 5.6 3.6"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M21 7.5c-3.4 0-5.1 3-6.4 6.2-1.3 3.4-2.8 6.3-6 6.3-2.4 0-4.1-1.5-5.6-3.6"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  opacity="0.55"
+                />
+              </svg>
+            </span>
+            <div>
+              <p class="card-title" id="orcarouter-heading">OrcaRouter</p>
+              <p class="card-sub" id="orcarouter-sub">
+                One OpenAI-compatible endpoint in front of many providers. The
+                key belongs to your OrcaRouter account and is billed to it.
+              </p>
+            </div>
+          </div>
+          <span class="source-chip" id="orcarouter-state">Loading</span>
+        </div>
+
+        <div class="connect-grid">
+          <div class="connect-choice" id="orcarouter-choice-api">
+            <p class="connect-choice-title">
+              OrcaRouter &ndash; API
+              <span class="choice-flag" id="orcarouter-flag-api" hidden>In use</span>
+            </p>
+            <p class="connect-choice-sub">
+              Paste a key you already hold. Nothing opens.
+            </p>
+            <label class="connect-label" for="orcarouter-key">API key</label>
+            <input
+              class="connect-input"
+              id="orcarouter-key"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="sk-orca-…"
+              aria-describedby="orcarouter-key-hint"
+            />
+            <p class="connect-hint" id="orcarouter-key-hint">
+              Starts with <code>sk-orca-</code>. It is sent to this local server
+              and stored under your token-optimizer home, never in the page.
+            </p>
+            <div class="connect-actions">
+              <button class="btn" id="orcarouter-save" type="button">
+                Save key
+              </button>
+              <button class="btn" id="orcarouter-clear" type="button">
+                Clear key
+              </button>
+            </div>
+          </div>
+
+          <div class="connect-choice" id="orcarouter-choice-auth">
+            <p class="connect-choice-title">
+              OrcaRouter &ndash; Auth
+              <span class="choice-flag" id="orcarouter-flag-auth" hidden>In use</span>
+            </p>
+            <p class="connect-choice-sub">
+              Sign in with your OrcaRouter account. No key to copy.
+            </p>
+            <p class="connect-hint">
+              Uses OAuth 2.0 with PKCE. A browser tab asks for consent and the
+              key comes back to this machine; no client secret is involved.
+            </p>
+            <div class="connect-actions">
+              <button class="btn btn-primary" id="orcarouter-connect" type="button">
+                Connect with OrcaRouter
+              </button>
+              <button class="btn" id="orcarouter-cancel" type="button" hidden>
+                Cancel
+              </button>
+              <button class="btn" id="orcarouter-disconnect" type="button">
+                Disconnect
+              </button>
+            </div>
+            <div class="connect-manual" id="orcarouter-manual" hidden>
+              <label class="connect-label" for="orcarouter-code">
+                Authorization code
+              </label>
+              <input
+                class="connect-input"
+                id="orcarouter-code"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="Paste the code shown in the browser"
+              />
+              <button class="btn" id="orcarouter-submit-code" type="button">
+                Use this code
+              </button>
+            </div>
+            <p class="connect-status" id="orcarouter-auth-status" role="status"></p>
+          </div>
+        </div>
+
+        <div class="model-row">
+          <div class="model-field">
+            <span class="connect-label" id="orcarouter-model-label">
+              Model for optimizer calls
+            </span>
+            <!-- A real listbox rather than a native <select>: the panel is a
+                 DOM element, so its background, its border and its alignment to
+                 the trigger are things a test can measure and a screenshot can
+                 show. It is also the only way to offer a search box over a
+                 catalog that can be long. -->
+            <div class="model-combobox" id="orcarouter-model-combobox">
+              <button
+                class="connect-input model-trigger"
+                id="orcarouter-model"
+                type="button"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-controls="orcarouter-model-panel"
+                aria-labelledby="orcarouter-model-label orcarouter-model"
+                aria-describedby="orcarouter-model-hint"
+              >
+                <span id="orcarouter-model-value">Not selected</span>
+                <span class="model-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="model-panel" id="orcarouter-model-panel" hidden>
+                <input
+                  class="connect-input model-search"
+                  id="orcarouter-model-search"
+                  type="search"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="Search models"
+                  aria-label="Search models"
+                  aria-controls="orcarouter-model-list"
+                />
+                <ul
+                  class="model-list"
+                  id="orcarouter-model-list"
+                  role="listbox"
+                  aria-labelledby="orcarouter-model-label"
+                ></ul>
+                <p class="model-panel-note" id="orcarouter-model-panel-note"></p>
+              </div>
+            </div>
+            <p class="connect-hint" id="orcarouter-model-hint">
+              Loaded from this workspace's own model list. No free-text entry: a
+              name that is not in the list is not offered.
+            </p>
+          </div>
+          <div class="model-field">
+            <label class="connect-label" for="orcarouter-modality">
+              Send to this entry point
+            </label>
+            <select class="connect-input" id="orcarouter-modality">
+              <option value="text">Text only</option>
+              <option value="image">Text and images</option>
+              <option value="audio">Text and audio</option>
+              <option value="video">Text and video</option>
+            </select>
+            <p class="connect-hint" id="orcarouter-model-count">
+              Checking the catalog&hellip;
+            </p>
+          </div>
+          <div class="model-field">
+            <button class="btn" id="orcarouter-refresh" type="button">
+              Refresh models
+            </button>
+          </div>
+        </div>
+
+        <p class="accounting-note" id="orcarouter-note"></p>
       </section>
 
       <!-- Plain-language metrics. Every label says what it is, not what the

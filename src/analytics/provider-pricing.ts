@@ -379,6 +379,12 @@ export function inferProviderRoute(
   if (clientKey.includes('copilot'))
     return { provider: 'github', route: 'github-copilot' };
   const explicit = String(provider || '').toLowerCase();
+  // A gateway is named, never inferred from the model. OrcaRouter resells many vendors behind one
+  // endpoint, so its models keep a `vendor/model` namespace -- but so do several other gateways, and
+  // reading a namespace as "this went through OrcaRouter" would attribute one company's traffic to
+  // another. The billing route is only OrcaRouter when the provider says so.
+  if (explicit.includes('orcarouter'))
+    return { provider: 'orcarouter', route: 'orcarouter-api' };
   if (explicit.includes('openai'))
     return { provider: 'openai', route: 'openai-api' };
   if (explicit.includes('anthropic'))

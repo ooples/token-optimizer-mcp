@@ -15,6 +15,7 @@
 
 import { donut, comparison, compact, fmt, escapeHtml } from './charts.js';
 import { createKnowledgeGraph3D } from './graph3d.js';
+import './orcarouter.js';
 
 const API = '/api';
 
