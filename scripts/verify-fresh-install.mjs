@@ -283,7 +283,18 @@ try {
       [join(installed, 'dist', 'server', 'index.js')],
       { env, stdio: ['pipe', 'pipe', 'pipe'] }
     );
-    const outcome = { server: null, tools: [], stderr: '', timedOut: false };
+    const outcome = {
+      server: null,
+      tools: [],
+      stderr: '',
+      timedOut: false,
+      // NON-JSON LINES ARE A DEFECT, NOT NOISE. MCP's stdio transport reserves stdout for
+      // newline-delimited JSON-RPC and nothing else, so a banner printed there is a protocol
+      // violation a conforming client may reject outright. Skipping such a line quietly -- which
+      // is what this did first -- would let exactly the kind of release this job exists to stop
+      // walk straight through the gate. They are collected and asserted on instead.
+      junk: [],
+    };
     const timer = setTimeout(() => {
       outcome.timedOut = true;
       child.kill();
@@ -301,7 +312,8 @@ try {
         try {
           message = JSON.parse(line);
         } catch {
-          continue; // the server may print non-JSON banners; only replies matter
+          if (line) outcome.junk.push(line);
+          continue;
         }
         if (message.id === 1) {
           outcome.server = message.result?.serverInfo ?? null;
@@ -347,6 +359,11 @@ try {
     mcp.server !== null,
     'the installed server completed an MCP initialize',
     mcp.stderr.slice(-200)
+  );
+  check(
+    mcp.junk.length === 0,
+    'the installed server wrote only JSON-RPC to stdout',
+    mcp.junk.slice(0, 3).join(' | ').slice(0, 200)
   );
   const missingTools = REQUIRED_TOOLS.filter((t) => !mcp.tools.includes(t));
   check(
