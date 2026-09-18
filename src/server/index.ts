@@ -2,6 +2,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { maintainDefaultRouting } from '../proxy/default-routing.js';
 import { installShutdownHandlers } from './lifecycle.js';
 import { discloseResult, expandRef, EXPAND_TOOL } from './disclosure.js';
 import {
@@ -3076,6 +3077,18 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   mcpEvidence.transportConnected();
+
+  // ON BY DEFAULT FOR A CLIENT WE DID NOT LAUNCH. This process is started by the client itself at
+  // session start, before its first model request, which makes it the one place that runs for every
+  // integration without asking the user to change how they start anything. It ensures the proxy is
+  // up and points Claude Code's settings at it -- or takes that entry back out when the proxy
+  // cannot be served, so a settings file never names a dead port.
+  //
+  // Deliberately not awaited: MCP must be answering immediately, and nothing here is allowed to
+  // delay or fail that.
+  void maintainDefaultRouting().catch(() => {
+    /* fail open: the user keeps the behaviour they have today */
+  });
 
   // All termination paths (SIGINT/SIGTERM/SIGHUP + stdin end/close/error) run
   // through one guarded shutdown. See ./lifecycle.ts for the full rationale
