@@ -1,90 +1,35 @@
 {
   "name": "token-optimizer-mcp",
   "display_name": "Token Optimizer MCP",
-  "verified": true,
-  "version_pin": "6.0.2",
-  "version_checked": "2026-08-29",
+  "verified": false,
+  "version_pin": "7.1.0",
+  "version_checked": "2026-09-18",
   "upstream": "https://github.com/ooples/token-optimizer-mcp",
-  "install_doc": "Transcribed from README.md 'Installation' -> 'Claude Code': '/plugin marketplace add ooples/token-optimizer-mcp' then '/plugin install token-optimizer@token-optimizer'. Both are interactive slash commands that write outside the sandbox, so per THOL CONTRIBUTING rule 1 the entries the plugin installs are transcribed here verbatim instead of running the installer: the MCP entry from plugin/.mcp.json and the five hooks from plugin/hooks/hooks.json, with ${CLAUDE_PLUGIN_ROOT} resolved to the global npm install path. DOCUMENTED DEVIATION (version pinning): plugin/launch.mjs is a warm-launch shim that, on a cold runtime, npm-installs @latest into its own managed runtime dir rather than serving the installed copy -- verified by handshake, an image pinned to 6.0.1 served 6.0.2. Because THOL gives every run a throwaway HOME, the default runtime path is cold on every run, so the shim would re-resolve @latest 153 times and the measured version could change mid-campaign. TOKEN_OPTIMIZER_RUNTIME therefore points at a shared runtime pre-seeded at build time with exactly 6.0.2 (versions/<v>/node_modules/<pkg> plus the 'current' and '.last-refresh' markers the shim expects; the latter is required because refreshDueNow() returns true when it is unreadable). The real shipped launch path still runs -- only the version it resolves is frozen. No other behaviour is altered.",
-  "requires": [
-    "node"
+  "install_doc": "README 'Quick start' -> Claude Code (https://github.com/ooples/token-optimizer-mcp#quick-start): '/plugin marketplace add ooples/token-optimizer-mcp', '/plugin install token-optimizer@token-optimizer', '/reload-plugins'. Those are interactive slash commands inside a running Claude Code session, so per CONTRIBUTING rule 1 they are not run in the harness. Instead setup_commands runs the package's own documented non-interactive installer, `token-optimizer-install`, which wires exactly the hooks the plugin installs into the sandboxed HOME's settings.json (scripts/install-cli.mjs -> wire-hooks.mjs, writing $HOME/.claude/settings.json). That installer does not register the MCP server, which the plugin install does, so the `mcp` block below is transcribed verbatim from plugin/.mcp.json with ${CLAUDE_PLUGIN_ROOT} resolved to the global npm install path. Nothing else is altered and no harness special-casing is required.",
+  "notes": "MCP server + five Claude Code lifecycle hooks. The hooks are the product: the README states that adding the bare MCP server alone 'just gives the model tools it can ignore'. SessionStart injects the project's knowledge graph; PreToolUse routes Read/Grep/Glob/Edit/Write/Bash/WebFetch/WebSearch toward the compressing smart_* equivalents and can rewrite a command via updatedInput rather than refusing it; PreCompact optimizes the transcript before the client compacts; PostToolUse records edits and compacts noisy command output; Stop harvests durable findings into the graph for the next session. VERSION PINNING: plugin/launch.mjs normally tracks the `latest` dist-tag and re-resolves it per cold runtime, which under THOL's throwaway HOME would let the measured version drift mid-campaign. TOKEN_OPTIMIZER_VERSION is the shipped, documented exact-version pin for precisely this case: it refuses anything that is not an exact version, installs that version, and disables the background refresh. It is a product feature, not a harness deviation. DEFAULT POSTURE: 7.1.0 ships `assist` (hooks-core/policy.mjs mode() returns MODE_ASSIST when TOKEN_OPTIMIZER_MODE is unset). Earlier versions referenced in setup/install_competitors.sh (5.0.1) shipped `enforce`, a materially different and worse-measuring posture; this entry measures what a user installs today.",
+  "requires": ["node"],
+  "setup_commands": [
+    "npm install -g @ooples/token-optimizer-mcp@7.1.0",
+    "token-optimizer-install"
   ],
   "mcp": {
     "mcpServers": {
       "token-optimizer": {
+        "type": "stdio",
         "command": "node",
         "args": [
           "/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/launch.mjs"
         ],
         "env": {
-          "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
-          "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime"
-        },
-        "type": "stdio"
+          "TOKEN_OPTIMIZER_VERSION": "7.1.0"
+        }
       }
     }
   },
   "settings": {
     "env": {
-      "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
-      "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime"
-    },
-    "hooks": {
-      "SessionStart": [
-        {
-          "hooks": [
-            {
-              "type": "command",
-              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/session-start.mjs\""
-            }
-          ]
-        }
-      ],
-      "PreToolUse": [
-        {
-          "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
-          "hooks": [
-            {
-              "type": "command",
-              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/pretooluse-router.mjs\""
-            }
-          ]
-        }
-      ],
-      "PreCompact": [
-        {
-          "hooks": [
-            {
-              "type": "command",
-              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/precompact-optimize.mjs\""
-            }
-          ]
-        }
-      ],
-      "PostToolUse": [
-        {
-          "matcher": "Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)",
-          "hooks": [
-            {
-              "type": "command",
-              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/post-tool.mjs\""
-            }
-          ]
-        }
-      ],
-      "Stop": [
-        {
-          "hooks": [
-            {
-              "type": "command",
-              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/stop.mjs\""
-            }
-          ]
-        }
-      ]
+      "TOKEN_OPTIMIZER_VERSION": "7.1.0"
     }
   },
-  "tool_prefixes": [
-    "mcp__token-optimizer__"
-  ]
+  "tool_prefixes": ["mcp__token-optimizer__"]
 }
