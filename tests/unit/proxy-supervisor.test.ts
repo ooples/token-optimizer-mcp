@@ -30,6 +30,7 @@ import {
 let upstream: Server;
 let upstreamUrl: string;
 let seen: string[];
+let bodies: string[];
 let supervisor: { server: Server; close: () => Promise<void> } | null;
 let home: string;
 let env: NodeJS.ProcessEnv;
@@ -74,10 +75,16 @@ function get(
 
 beforeEach(async () => {
   seen = [];
+  bodies = [];
   upstream = createServer((req, res) => {
     seen.push(req.url || '');
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, path: req.url }));
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      bodies.push(Buffer.concat(chunks).toString('utf8'));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, path: req.url }));
+    });
   });
   await new Promise<void>((resolve) =>
     upstream.listen(0, '127.0.0.1', resolve)
@@ -169,6 +176,61 @@ describe('the proxy supervisor', () => {
     expect(port).toBeGreaterThan(controlPort(env));
     expect(port).toBeLessThanOrEqual(65535);
   });
+
+  it('never injects one project’s findings into another project’s session', async () => {
+    // THE DAEMON HAS NO PROJECT. startProxy resolves the graph root once, from projectRoot or
+    // process.cwd(), and holds it for the listener's life -- correct for a per-session proxy started
+    // inside the user's project, wrong for one detached daemon serving every project on the machine,
+    // whose cwd is whatever spawned it.
+    //
+    // bench/thol/manifests/token-optimizer-proxy-knowledge measured what that costs on a real seed
+    // graph: 69% of what would be injected is wrong-project advice, paid for in the cached prefix
+    // and re-read every turn. So the daemon forwards the caller's own content and adds nothing until
+    // it can tell which project a request belongs to.
+    //
+    // This runs with the repository's own graph as cwd, which is populated, so a regression that
+    // reinstated injection here would be caught rather than silently shipped.
+    supervisor = await runSupervisor(env);
+    const route = await ensureRoute(upstreamUrl, env);
+    // SHAPED SO INJECTION WOULD ACTUALLY FIRE. A short body proves nothing: the first version of
+    // this test sent 48 bytes, and it passed with injection deliberately switched back ON, because
+    // the block is only added to a request that carries a `system` field and is large enough to be
+    // worth rewriting. A control arm that cannot fail is not a control arm.
+    const body = JSON.stringify({
+      system: 'You are a coding agent.',
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'context line\n'.repeat(600) }],
+        },
+      ],
+    });
+    await new Promise<void>((resolve, reject) => {
+      const target = new URL(route!);
+      const req = request(
+        {
+          host: target.hostname,
+          port: target.port,
+          path: '/v1/messages',
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+        },
+        (res) => {
+          res.on('data', () => {});
+          res.on('end', () => resolve());
+        }
+      );
+      req.on('error', reject);
+      req.end(body);
+    });
+    expect(seen).toContain('/v1/messages');
+    // ASSERTED ON WHAT THE UPSTREAM ACTUALLY RECEIVED. Checking a variable this test never filled
+    // would pass against an injecting proxy just as happily, which is no control at all.
+    const forwarded = bodies.join('');
+    expect(forwarded).not.toContain('Already established');
+    expect(JSON.parse(forwarded).system).toBe('You are a coding agent.');
+    expect(JSON.parse(forwarded).messages).toEqual(JSON.parse(body).messages);
+  }, 30_000);
 
   it('records what it serves where the doctor can read it', async () => {
     supervisor = await runSupervisor(env);
