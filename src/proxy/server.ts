@@ -61,7 +61,8 @@ import { compressResponses } from './responses.js';
 import { compressChatCompletions } from './chat-completions.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
-import { loadFindingsFrom } from './findings.js';
+import { loadFindingsFrom, type LoadedFindings } from './findings.js';
+import { projectRootFromRequest } from './request-project.js';
 import {
   presetFromEnv,
   resolveTuning,
@@ -161,6 +162,14 @@ export interface ProxyOptions {
   readonly projectRoot?: string;
   /** Disable graph injection when a client chooses its working tree after launch. */
   readonly knowledge?: boolean;
+  /**
+   * Resolve the project per request instead of once at startup.
+   *
+   * For the supervisor, which is one daemon serving every project on the machine and therefore has
+   * no project of its own. A per-session proxy must NOT set this: it already knows its project, and
+   * the request is a worse source of truth than the directory it was started in.
+   */
+  readonly scopeToRequestProject?: boolean;
   /** Named starting point for the dials. Defaults to the environment's. */
   readonly preset?: PresetName | string;
   /** Expert overrides, layered over the preset. */
@@ -1119,9 +1128,12 @@ export async function startProxy(
   const knowledgeOn =
     options.knowledge !== false && knowledgeEnabled(process.env);
   const graphRoot = options.projectRoot || process.cwd();
-  const loaded = knowledgeOn
-    ? await loadFindingsFrom(graphRoot)
-    : { findings: [], sharedGraph: false };
+  // NOT LOADED AT ALL when every request resolves its own project: the daemon's cwd is not a
+  // project, and reading it here would only create a set of findings for something to fall back to.
+  const loaded =
+    knowledgeOn && !options.scopeToRequestProject
+      ? await loadFindingsFrom(graphRoot)
+      : { findings: [], sharedGraph: false };
   // MUTABLE, AND REFRESHED IN THE BACKGROUND. Read once per process was a real
   // defect: a finding written today did not reach tomorrow's session until the
   // proxy restarted, and this project writes findings continuously.
@@ -1142,7 +1154,8 @@ export async function startProxy(
   let lastFindingsRead = Date.now();
   let refreshing = false;
   const refreshFindings = (): void => {
-    if (!knowledgeOn || refreshing) return;
+    // Per-request scoping refreshes through its own cache, keyed by project.
+    if (!knowledgeOn || refreshing || options.scopeToRequestProject) return;
     if (Date.now() - lastFindingsRead < FINDINGS_REFRESH_MS) return;
     refreshing = true;
     void loadFindingsFrom(graphRoot)
@@ -1160,6 +1173,37 @@ export async function startProxy(
         refreshing = false;
       });
   };
+  /**
+   * The findings for the project a single request came from.
+   *
+   * ONE ENTRY PER PROJECT, CAPPED. This daemon outlives every session on the machine, so an
+   * unbounded map keyed by project root is a slow leak; the oldest root is dropped once the cap is
+   * reached, and it is simply re-read the next time that project appears.
+   *
+   * AN UNKNOWN PROJECT INJECTS NOTHING. Falling back to the daemon's own cwd is precisely the bug
+   * this exists to prevent, and there is no such thing as a safe guess: a `project`-scoped claim is
+   * a statement about one tree, so serving it to another is wrong however plausible it looks.
+   */
+  const perProject = new Map<string, { loaded: LoadedFindings; at: number }>();
+  const PROJECT_CACHE_MAX = 32;
+  const findingsForRequest = async (body: Buffer): Promise<LoadedFindings> => {
+    const root = await projectRootFromRequest(body);
+    if (!root) return { findings: [], sharedGraph: false };
+    const hit = perProject.get(root);
+    if (hit && Date.now() - hit.at < FINDINGS_REFRESH_MS) return hit.loaded;
+    try {
+      const next = await loadFindingsFrom(root);
+      if (perProject.size >= PROJECT_CACHE_MAX) {
+        const oldest = perProject.keys().next().value;
+        if (oldest !== undefined) perProject.delete(oldest);
+      }
+      perProject.set(root, { loaded: next, at: Date.now() });
+      return next;
+    } catch {
+      return hit?.loaded ?? { findings: [], sharedGraph: false };
+    }
+  };
+
   // CARRIED WITH THE FINDINGS, not recomputed here. A shared graph -- the
   // unrooted fallback, or one mounted across several repositories -- holds
   // `project` claims about trees other than this one, and only the loader knows
@@ -1229,14 +1273,21 @@ export async function startProxy(
           }
         });
 
+      // RESOLVED HERE, from the body, when this proxy has no project of its own. The result feeds
+      // the same injection path as the startup-loaded findings, so the daemon enriches a session
+      // with that session's project and never with another's.
+      const scoped =
+        knowledgeOn && options.scopeToRequestProject
+          ? await findingsForRequest(body)
+          : null;
       const transformStarted = performance.now();
       const { body: next, summary } = compressBody(
         body,
         spill,
         anchors,
-        findings,
+        scoped ? scoped.findings : findings,
         tuning,
-        sharedGraphFlag,
+        scoped ? scoped.sharedGraph : sharedGraphFlag,
         /\/chat\/completions\/?$/.test(
           (requestPath(req.url) ?? '').split('?')[0]
         )

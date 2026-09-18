@@ -262,25 +262,22 @@ export async function runSupervisor(
         const { server: listener, port } = await startProxy({
           upstream,
           port: (await portIsFree(preferred)) ? preferred : 0,
-          // KNOWLEDGE OFF ON THIS PATH, AND THIS IS NOT A DOWNGRADE OF THE FEATURE.
+          // THE PROJECT COMES FROM THE REQUEST, because this daemon has none of its own.
           //
-          // `startProxy` resolves the graph root ONCE, from `projectRoot` or `process.cwd()`, and
-          // holds it for the life of the listener. That is right for a per-session proxy the
-          // launcher starts inside the user's project. This is the opposite: one detached daemon,
-          // serving every project on the machine, whose cwd is whatever directory happened to spawn
-          // it. It would therefore inject one project's findings into every other project's
-          // sessions, under the heading "Already established in this project".
+          // `startProxy` otherwise resolves the graph root once, from `projectRoot` or
+          // `process.cwd()`, and holds it for the life of the listener. That is right for a
+          // per-session proxy the launcher starts inside the user's project, and wrong here: one
+          // detached daemon serving every project on the machine, whose cwd is whatever directory
+          // happened to spawn it. Left alone it would inject one project's findings into every
+          // other project's sessions, under the heading "Already established in this project" --
+          // measured in bench/thol/manifests/token-optimizer-proxy-knowledge at 69% wrong-project
+          // advice, paid for in the cached prefix and re-read every turn.
           //
-          // That is not a small inaccuracy. bench/thol/manifests/token-optimizer-proxy-knowledge
-          // measured it on a real seed graph: a per-project ceiling of 99,842 characters against a
-          // transferable 30,870, so 69% of what would be injected is wrong-project advice -- paid
-          // for in the cached prefix and re-read every turn, to make the agent worse. Compression
-          // removes tokens and the knowledge block adds them, so mis-scoped injection loses on both
-          // of the things this product competes on.
-          //
-          // Injection returns to this path when the daemon can determine the project a request
-          // belongs to, and never injects a `project`-scoped finding when it cannot.
-          knowledge: false,
+          // So each request is scoped to the project it actually came from, and a request whose
+          // project cannot be determined gets no project-scoped findings at all. That keeps the
+          // graph working where it helps -- your own project's lessons, in your own project's
+          // sessions -- without the failure that would make it cost tokens to be wrong.
+          scopeToRequestProject: true,
         });
         listeners.add(listener);
         const route: SupervisorRoute = {

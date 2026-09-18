@@ -177,36 +177,36 @@ describe('the proxy supervisor', () => {
     expect(port).toBeLessThanOrEqual(65535);
   });
 
-  it('never injects one project’s findings into another project’s session', async () => {
-    // THE DAEMON HAS NO PROJECT. startProxy resolves the graph root once, from projectRoot or
-    // process.cwd(), and holds it for the listener's life -- correct for a per-session proxy started
-    // inside the user's project, wrong for one detached daemon serving every project on the machine,
-    // whose cwd is whatever spawned it.
-    //
-    // bench/thol/manifests/token-optimizer-proxy-knowledge measured what that costs on a real seed
-    // graph: 69% of what would be injected is wrong-project advice, paid for in the cached prefix
-    // and re-read every turn. So the daemon forwards the caller's own content and adds nothing until
-    // it can tell which project a request belongs to.
-    //
-    // This runs with the repository's own graph as cwd, which is populated, so a regression that
-    // reinstated injection here would be caught rather than silently shipped.
-    supervisor = await runSupervisor(env);
-    const route = await ensureRoute(upstreamUrl, env);
-    // SHAPED SO INJECTION WOULD ACTUALLY FIRE. A short body proves nothing: the first version of
-    // this test sent 48 bytes, and it passed with injection deliberately switched back ON, because
-    // the block is only added to a request that carries a `system` field and is large enough to be
-    // worth rewriting. A control arm that cannot fail is not a control arm.
-    const body = JSON.stringify({
+  /**
+   * A request body shaped so injection would really fire.
+   *
+   * A short body proves nothing: the first version of this test sent 48 bytes and passed with
+   * injection deliberately switched ON, because the block is only added to a request that carries a
+   * `system` field and is large enough to be worth rewriting. A control arm that cannot fail is not
+   * a control arm.
+   */
+  const askFrom = (workingDirectory: string | null): string =>
+    JSON.stringify({
       system: 'You are a coding agent.',
       messages: [
         {
           role: 'user',
-          content: [{ type: 'text', text: 'context line\n'.repeat(600) }],
+          content: [
+            {
+              type: 'text',
+              text:
+                (workingDirectory
+                  ? `Primary working directory: ${workingDirectory}\n`
+                  : '') + 'context line\n'.repeat(600),
+            },
+          ],
         },
       ],
     });
+
+  const post = async (route: string, body: string): Promise<void> => {
     await new Promise<void>((resolve, reject) => {
-      const target = new URL(route!);
+      const target = new URL(route);
       const req = request(
         {
           host: target.hostname,
@@ -223,13 +223,63 @@ describe('the proxy supervisor', () => {
       req.on('error', reject);
       req.end(body);
     });
+  };
+
+  it('injects the findings of the project the request came from', async () => {
+    // THE POINT OF THE WHOLE GRAPH. A session working in a project gets that project's own lessons
+    // placed in the cached prefix, so the agent does not re-derive what was already worked out.
+    //
+    // The working directory is read from the request because this daemon has no project of its own,
+    // and the marker is the one a real Claude Code request carries -- verified by pointing a live
+    // `claude -p` at a recorder and reading the 177KB body it sent.
+    //
+    // This repository's own graph is the fixture: it is populated, so a regression that stopped
+    // resolving the project would show up here as an empty prefix rather than as silence.
+    supervisor = await runSupervisor(env);
+    const route = await ensureRoute(upstreamUrl, env);
+    await post(route!, askFrom(process.cwd()));
+
     expect(seen).toContain('/v1/messages');
-    // ASSERTED ON WHAT THE UPSTREAM ACTUALLY RECEIVED. Checking a variable this test never filled
-    // would pass against an injecting proxy just as happily, which is no control at all.
+    const forwarded = bodies.join('');
+    expect(forwarded).toContain('Already established');
+    expect(String(JSON.parse(forwarded).system)).toContain(
+      'You are a coding agent.'
+    );
+  }, 30_000);
+
+  it('injects nothing when it cannot tell which project the request is from', async () => {
+    // THE FAILURE THIS REPLACED. Falling back to the daemon's own cwd would serve one project's
+    // findings to every other project, under the heading "Already established in this project" --
+    // measured in bench/thol/manifests/token-optimizer-proxy-knowledge at 69% wrong-project advice,
+    // charged to the cached prefix and re-read every turn.
+    //
+    // A `project`-scoped claim is a statement about one tree, so there is no safe guess: not knowing
+    // the project means injecting nothing, and the request is forwarded as the caller wrote it.
+    supervisor = await runSupervisor(env);
+    const route = await ensureRoute(upstreamUrl, env);
+    const body = askFrom(null);
+    await post(route!, body);
+
     const forwarded = bodies.join('');
     expect(forwarded).not.toContain('Already established');
     expect(JSON.parse(forwarded).system).toBe('You are a coding agent.');
     expect(JSON.parse(forwarded).messages).toEqual(JSON.parse(body).messages);
+  }, 30_000);
+
+  it('does not serve one project’s findings to a different project', async () => {
+    // The two cases above are each consistent with a proxy that ignores the request entirely, so
+    // this is the one that separates them: a directory that exists and is NOT this repository must
+    // not receive this repository's findings.
+    supervisor = await runSupervisor(env);
+    const route = await ensureRoute(upstreamUrl, env);
+    await post(route!, askFrom(tmpdir()));
+
+    // The temp directory is a real directory with no graph of its own, so the only findings that
+    // could appear here are this repository's -- which is exactly what the old, cwd-bound behaviour
+    // would have sent.
+    const forwarded = bodies.join('');
+    expect(forwarded).not.toContain('Already established');
+    expect(JSON.parse(forwarded).system).toBe('You are a coding agent.');
   }, 30_000);
 
   it('records what it serves where the doctor can read it', async () => {

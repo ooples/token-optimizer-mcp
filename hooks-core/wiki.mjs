@@ -172,7 +172,25 @@ export function unrootedRoot() {
  */
 export function isSharedDir(dir) {
   try {
-    return canonicalPath(dir) === canonicalPath(sharedDir());
+    const here = canonicalPath(dir);
+    // BOTH MACHINE-LEVEL GRAPHS, and the second one was missing. `unrootedRoot` is where every
+    // file with no repository above it lands, from every project on the machine, so its graph holds
+    // `project` claims about trees that have nothing to do with each other. Answering "not shared"
+    // for it meant those claims were injected under the heading "Already established in this
+    // project" into whatever session happened to resolve there -- the exact failure this function
+    // exists to prevent, and measured at 69% wrong-project advice on a real graph.
+    //
+    // Observed directly: a request from a directory with no VCS marker was served three `project`
+    // findings belonging to a different repository, with sharedGraph reported as false.
+    //
+    // COMPUTED WITHOUT wikiDir(), and that mattered: wikiDir() returns TOKEN_OPTIMIZER_WIKI_DIR
+    // whenever it is set, so `wikiDir(unrootedRoot())` collapsed to whatever the caller had
+    // overridden it to and this function then answered "shared" for every graph. Two suites caught
+    // it immediately -- a per-project graph lost its own findings.
+    const unrootedGraph = join(unrootedRoot(), '.token-optimizer', 'wiki');
+    return (
+      here === canonicalPath(sharedDir()) || here === canonicalPath(unrootedGraph)
+    );
   } catch {
     return false;
   }
