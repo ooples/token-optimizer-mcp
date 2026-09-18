@@ -21,6 +21,7 @@ import {
   controlPort,
   ensureRoute,
   readSupervisorState,
+  routePort,
   runSupervisor,
   supervisorHealth,
   supervisorStateFile,
@@ -42,16 +43,27 @@ async function freePort(): Promise<number> {
   return port;
 }
 
-function get(url: string, path: string): Promise<{ status: number; body: string }> {
+function get(
+  url: string,
+  path: string
+): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const target = new URL(path, url);
     const req = request(
-      { host: target.hostname, port: target.port, path: target.pathname, method: 'POST' },
+      {
+        host: target.hostname,
+        port: target.port,
+        path: target.pathname,
+        method: 'POST',
+      },
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (c: Buffer) => chunks.push(c));
         res.on('end', () =>
-          resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') })
+          resolve({
+            status: res.statusCode ?? 0,
+            body: Buffer.concat(chunks).toString('utf8'),
+          })
         );
       }
     );
@@ -67,7 +79,9 @@ beforeEach(async () => {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: true, path: req.url }));
   });
-  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) =>
+    upstream.listen(0, '127.0.0.1', resolve)
+  );
   upstreamUrl = `http://127.0.0.1:${(upstream.address() as { port: number }).port}`;
   home = mkdtempSync(join(tmpdir(), 'supervisor-home-'));
   env = {
@@ -112,7 +126,9 @@ describe('the proxy supervisor', () => {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end('{}');
     });
-    await new Promise<void>((resolve) => second.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) =>
+      second.listen(0, '127.0.0.1', resolve)
+    );
     const secondUrl = `http://127.0.0.1:${(second.address() as { port: number }).port}`;
     try {
       supervisor = await runSupervisor(env);
@@ -122,11 +138,37 @@ describe('the proxy supervisor', () => {
       expect(b).not.toBeNull();
       expect(a).not.toBe(b);
       const state = readSupervisorState(env);
-      expect(state?.routes.map((r) => r.upstream).sort()).toEqual([upstreamUrl, secondUrl].sort());
+      expect(state?.routes.map((r) => r.upstream).sort()).toEqual(
+        [upstreamUrl, secondUrl].sort()
+      );
     } finally {
       await new Promise<void>((resolve) => second.close(() => resolve()));
     }
   }, 30_000);
+
+  it('serves an upstream on the same port after a restart', async () => {
+    // A client's own configuration names this URL and outlives the supervisor. An ephemeral port
+    // would therefore leave that client pointed at nothing after a reboot -- unable to reach its
+    // provider at all, which is worse than never having compressed anything.
+    supervisor = await runSupervisor(env);
+    const first = await ensureRoute(upstreamUrl, env);
+    await supervisor!.close();
+    supervisor = await runSupervisor(env);
+    expect(await ensureRoute(upstreamUrl, env)).toBe(first);
+    expect(first).toBe(`http://127.0.0.1:${routePort(upstreamUrl, env)}`);
+  }, 30_000);
+
+  it('derives a route port that is stable, in range, and specific to the upstream', () => {
+    expect(routePort('https://api.anthropic.com', env)).toBe(
+      routePort('https://api.anthropic.com', env)
+    );
+    expect(routePort('https://api.anthropic.com', env)).not.toBe(
+      routePort('https://generativelanguage.googleapis.com', env)
+    );
+    const port = routePort('https://api.anthropic.com', env);
+    expect(port).toBeGreaterThan(controlPort(env));
+    expect(port).toBeLessThanOrEqual(65535);
+  });
 
   it('records what it serves where the doctor can read it', async () => {
     supervisor = await runSupervisor(env);
@@ -136,7 +178,9 @@ describe('the proxy supervisor', () => {
     expect(state?.pid).toBe(process.pid);
     expect(state?.controlUrl).toBe(`http://127.0.0.1:${controlPort(env)}`);
     expect(existsSync(supervisorStateFile(env))).toBe(true);
-    expect(JSON.parse(readFileSync(supervisorStateFile(env), 'utf8')).routes).toHaveLength(1);
+    expect(
+      JSON.parse(readFileSync(supervisorStateFile(env), 'utf8')).routes
+    ).toHaveLength(1);
   }, 30_000);
 
   it('refuses to run twice on one control port', async () => {
@@ -167,19 +211,26 @@ describe('the proxy supervisor', () => {
     expect(await ensureRoute(upstreamUrl, offline)).toBeNull();
   }, 30_000);
 
-  it.each(['0', 'false', 'no', 'off'])('never starts a background service when autostart is %s', (value) => {
-    expect(autostartAllowed({ TOKEN_OPTIMIZER_PROXY_AUTOSTART: value })).toBe(false);
-  });
+  it.each(['0', 'false', 'no', 'off'])(
+    'never starts a background service when autostart is %s',
+    (value) => {
+      expect(autostartAllowed({ TOKEN_OPTIMIZER_PROXY_AUTOSTART: value })).toBe(
+        false
+      );
+    }
+  );
 
   it('starts one by default, and for any other value', () => {
     expect(autostartAllowed({})).toBe(true);
-    expect(autostartAllowed({ TOKEN_OPTIMIZER_PROXY_AUTOSTART: '1' })).toBe(true);
+    expect(autostartAllowed({ TOKEN_OPTIMIZER_PROXY_AUTOSTART: '1' })).toBe(
+      true
+    );
   });
 
   it('rejects a control port that is not a port', () => {
-    expect(() => controlPort({ TOKEN_OPTIMIZER_PROXY_CONTROL_PORT: 'http://x' })).toThrow(
-      /must be a port number/
-    );
+    expect(() =>
+      controlPort({ TOKEN_OPTIMIZER_PROXY_CONTROL_PORT: 'http://x' })
+    ).toThrow(/must be a port number/);
     expect(controlPort({})).toBe(45710);
   });
 });

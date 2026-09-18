@@ -34,7 +34,9 @@ import { fileURLToPath } from 'node:url';
 import { startProxy } from './server.js';
 
 /** Where the supervisor records what it is serving, for callers and for the doctor. */
-export function supervisorStateFile(env: NodeJS.ProcessEnv = process.env): string {
+export function supervisorStateFile(
+  env: NodeJS.ProcessEnv = process.env
+): string {
   return join(
     env.TOKEN_OPTIMIZER_HOME || join(homedir(), '.token-optimizer'),
     'proxy-supervisor.json'
@@ -64,6 +66,43 @@ export interface SupervisorRoute {
   readonly upstream: string;
   readonly url: string;
   readonly port: number;
+}
+
+/**
+ * The port a given upstream should be served on, derived from the upstream itself.
+ *
+ * WHY NOT PORT 0. An ephemeral port is fine while the only consumer is a launcher that learns it at
+ * startup. It is not fine once a client's own configuration names the URL: that file outlives the
+ * supervisor, so a restart on a fresh port would leave a client pointed at a port nothing is
+ * listening on -- the one failure mode worse than saving nothing, because the client cannot reach
+ * its provider at all.
+ *
+ * Derived rather than assigned so it survives the state file being lost, and taken from the IANA
+ * dynamic range just above the control port. A collision with something else on the machine is
+ * handled by the caller, which falls back to any free port and republishes.
+ */
+export function routePort(
+  upstream: string,
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const base = controlPort(env) + 2;
+  // FNV-1a: a few lines, stable across Node versions, and nothing here is security-sensitive.
+  let hash = 0x811c9dc5;
+  for (const character of upstream) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  const span = Math.min(1000, 65535 - base);
+  return base + (hash % span);
+}
+
+/** Can we bind this port right now? A refusal is an answer, not an error. */
+function portIsFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = createServer();
+    probe.once('error', () => resolve(false));
+    probe.listen(port, '127.0.0.1', () => probe.close(() => resolve(true)));
+  });
 }
 
 export interface SupervisorState {
@@ -121,7 +160,8 @@ async function control<T>(
         resolve(value);
       }
     };
-    const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
+    const payload =
+      body === undefined ? undefined : Buffer.from(JSON.stringify(body));
     const req = request(
       {
         host: '127.0.0.1',
@@ -130,7 +170,10 @@ async function control<T>(
         method: payload ? 'POST' : 'GET',
         timeout: timeoutMs,
         headers: payload
-          ? { 'content-type': 'application/json', 'content-length': payload.length }
+          ? {
+              'content-type': 'application/json',
+              'content-length': payload.length,
+            }
           : {},
       },
       (res) => {
@@ -175,7 +218,11 @@ export async function supervisorHealth(
  */
 export async function runSupervisor(
   env: NodeJS.ProcessEnv = process.env
-): Promise<{ server: Server; port: number; close: () => Promise<void> } | null> {
+): Promise<{
+  server: Server;
+  port: number;
+  close: () => Promise<void>;
+} | null> {
   if (await supervisorHealth(env)) return null;
 
   const routes = new Map<string, SupervisorRoute>();
@@ -196,14 +243,26 @@ export async function runSupervisor(
 
   // One in-flight start per upstream, so two callers asking at once get one listener.
   const starting = new Map<string, Promise<SupervisorRoute | null>>();
-  const routeFor = async (upstream: string): Promise<SupervisorRoute | null> => {
+  const routeFor = async (
+    upstream: string
+  ): Promise<SupervisorRoute | null> => {
     const existing = routes.get(upstream);
     if (existing) return existing;
     const pending = starting.get(upstream);
     if (pending) return pending;
     const attempt = (async () => {
       try {
-        const { server: listener, port } = await startProxy({ upstream });
+        // The derived port first, so a client's stored URL keeps working across restarts. Falling
+        // back to any free port keeps an occupied port from costing the user compression entirely;
+        // the caller republishes and the client's configuration is corrected at its next start.
+        //
+        // Probed with a bare listener rather than by letting startProxy fail, because a startProxy
+        // that rejects has already created its spill directory and has no close event to remove it.
+        const preferred = routePort(upstream, env);
+        const { server: listener, port } = await startProxy({
+          upstream,
+          port: (await portIsFree(preferred)) ? preferred : 0,
+        });
         listeners.add(listener);
         const route: SupervisorRoute = {
           upstream,
@@ -237,20 +296,28 @@ export async function runSupervisor(
         res.end(text);
       };
       if (path === '/__token-optimizer/health') {
-        return reply(200, { ok: true, pid: process.pid, routes: [...routes.values()] });
+        return reply(200, {
+          ok: true,
+          pid: process.pid,
+          routes: [...routes.values()],
+        });
       }
       if (path === '/__token-optimizer/route' && req.method === 'POST') {
         const chunks: Buffer[] = [];
         for await (const chunk of req) chunks.push(chunk as Buffer);
         let upstream = '';
         try {
-          upstream = String(JSON.parse(Buffer.concat(chunks).toString('utf8'))?.upstream ?? '');
+          upstream = String(
+            JSON.parse(Buffer.concat(chunks).toString('utf8'))?.upstream ?? ''
+          );
         } catch {
           return reply(400, { error: 'body must be JSON naming an upstream' });
         }
         if (!upstream) return reply(400, { error: 'upstream is required' });
         const route = await routeFor(upstream);
-        return route ? reply(200, route) : reply(502, { error: `cannot serve ${upstream}` });
+        return route
+          ? reply(200, route)
+          : reply(502, { error: `cannot serve ${upstream}` });
       }
       reply(404, { error: 'not a supervisor route' });
     })();
@@ -268,7 +335,9 @@ export async function runSupervisor(
     listeners.clear();
     routes.clear();
     await Promise.all(
-      all.map((one) => new Promise<void>((resolve) => one.close(() => resolve())))
+      all.map(
+        (one) => new Promise<void>((resolve) => one.close(() => resolve()))
+      )
     );
   };
   return { server, port: controlPort(env), close };
@@ -280,8 +349,12 @@ export async function runSupervisor(
  * Someone who does not want a long-lived local service gets to say so, and a test that must not
  * leave one behind says the same thing. An already-running supervisor is still used either way.
  */
-export function autostartAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
-  return !/^(0|false|no|off)$/i.test((env.TOKEN_OPTIMIZER_PROXY_AUTOSTART || '').trim());
+export function autostartAllowed(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  return !/^(0|false|no|off)$/i.test(
+    (env.TOKEN_OPTIMIZER_PROXY_AUTOSTART || '').trim()
+  );
 }
 
 /** Spawn a detached supervisor and wait for it to answer, or give up. */
@@ -292,7 +365,10 @@ export async function ensureSupervisor(
   if (await supervisorHealth(env)) return true;
   if (!autostartAllowed(env)) return false;
   try {
-    const entry = join(dirname(fileURLToPath(import.meta.url)), 'supervisor-cli.js');
+    const entry = join(
+      dirname(fileURLToPath(import.meta.url)),
+      'supervisor-cli.js'
+    );
     const child = spawn(process.execPath, [entry], {
       detached: true,
       stdio: 'ignore',
