@@ -1,6 +1,13 @@
 import { describe, it, expect } from '@jest/globals';
-import { probeProxy } from '../../hooks-core/doctor.mjs';
-import { proxyEnvFor, CLIENT_PROXY_ENV } from '../../hooks-core/capabilities.mjs';
+import { createServer } from 'node:http';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { probeProxy, probeSupervisor } from '../../hooks-core/doctor.mjs';
+import {
+  proxyEnvFor,
+  CLIENT_PROXY_ENV,
+} from '../../hooks-core/capabilities.mjs';
 
 /**
  * The proxy's failure mode is silence, which is what this reports on.
@@ -17,10 +24,8 @@ const detailOf = (checks: Array<Record<string, unknown>>): string =>
 describe('probeProxy', () => {
   it('uses the MCP handshake identity when the client environment was filtered', () => {
     const checks = probeProxy({}, { clientName: 'codex-mcp' });
-    // WARN, not FAIL: the handshake identity says which client is connected, not that anyone asked
-    // for routed traffic. Only token-optimizer-run sets TOKEN_OPTIMIZER_CLIENT.
-    expect(checks[0].warn).toBe(true);
-    expect(checks[0].pass).toBe(true);
+    // WHAT THIS PINS IS THE IDENTITY, not the severity. Severity moved when routing stopped being
+    // opt-in: see 'a plain plugin install...' below for the case that owns that question now.
     expect(detailOf(checks)).toContain('OPENAI_BASE_URL');
     expect(detailOf(checks)).toContain('token-optimizer-run codex');
     expect(detailOf(checks)).not.toContain('no supported way');
@@ -28,39 +33,84 @@ describe('probeProxy', () => {
 
   it('does not classify an unidentified MCP host as an unsupported client', () => {
     const checks = probeProxy({});
-    expect(checks[0].warn).toBe(true);
     expect(detailOf(checks)).toContain('routing is unverified');
+    expect(detailOf(checks)).not.toContain('no supported way');
   });
 
   it('a plain plugin install is not reported as a broken installation', () => {
-    // The default install -- /plugin, MCP server, no token-optimizer-run -- never points a client
-    // at the proxy. Reporting that as a failure made install_doctor say "Something above is broken"
-    // for every user who followed the documented instructions.
-    for (const client of ['claude-code', 'codex', 'opencode']) {
-      const checks = probeProxy({}, { clientName: client });
-      expect(checks[0].pass).toBe(true);
-      expect(checks[0].warn).toBe(true);
-      expect(detailOf(checks)).toContain('token-optimizer-run');
+    // THE GUARANTEE #398 ADDED, KEPT, BUT DELIVERED BY THE MECHANISM THAT NOW EXISTS. Its reasoning
+    // was that routing is opt-in, so a default install could never be routed and failing it told
+    // every documented user "Something above is broken". Routing is no longer opt-in: the MCP server
+    // writes the endpoint into the client's own configuration at startup, and the client reads that
+    // at ITS startup -- so the one session in between is unrouted and nothing is wrong.
+    //
+    // That session is what this pins. A recorded route plus an unrouted session is a warning; the
+    // next start picks it up.
+    const home = mkdtempSync(join(tmpdir(), 'doctor-routing-'));
+    try {
+      writeFileSync(
+        join(home, 'default-routing.json'),
+        JSON.stringify({
+          schema: 1,
+          entries: {
+            's.json': {
+              variable: 'ANTHROPIC_BASE_URL',
+              value: 'http://127.0.0.1:45712',
+            },
+          },
+        })
+      );
+      for (const client of ['claude-code', 'codex', 'opencode']) {
+        const checks = probeProxy(
+          { TOKEN_OPTIMIZER_HOME: home },
+          { clientName: client }
+        );
+        expect(checks[0].pass).toBe(true);
+        expect(checks[0].warn).toBe(true);
+        expect(detailOf(checks)).toContain('started before the route');
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
     }
+  });
+
+  it('FAILS when nothing has been routed and nothing is waiting to be', () => {
+    // The other half, and the reason the warning above is not simply the answer everywhere: with no
+    // route recorded and none active, this client is talking straight to the provider and will keep
+    // doing so. That is a real deficiency with a remedy that ends it.
+    const checks = probeProxy(
+      { TOKEN_OPTIMIZER_HOME: mkdtempSync(join(tmpdir(), 'doctor-empty-')) },
+      { clientName: 'claude-code' }
+    );
+    expect(checks[0].pass).toBe(false);
+    expect(detailOf(checks)).toContain('token-optimizer-install');
   });
 
   it('a whitespace-only TOKEN_OPTIMIZER_CLIENT does not become a client name', () => {
     // Read raw it is falsy for "did someone ask for routing" and truthy as a name, so the lookup
     // found no variable and the report blamed the client instead of the missing route.
-    const checks = probeProxy({ TOKEN_OPTIMIZER_CLIENT: '   ' }, { clientName: 'codex' });
-    expect(checks[0].warn).toBe(true);
+    const checks = probeProxy(
+      { TOKEN_OPTIMIZER_CLIENT: '   ' },
+      { clientName: 'codex' }
+    );
     expect(detailOf(checks)).toContain('OPENAI_BASE_URL');
     expect(detailOf(checks)).not.toContain('no supported way');
   });
 
   it('accepts a configured client whatever its spacing or case', () => {
-    const checks = probeProxy({ TOKEN_OPTIMIZER_CLIENT: '  Claude-Code  ', ANTHROPIC_BASE_URL: 'http://127.0.0.1:8123' });
+    const checks = probeProxy({
+      TOKEN_OPTIMIZER_CLIENT: '  Claude-Code  ',
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:8123',
+    });
     expect(checks[0].pass).toBe(true);
     expect(checks[0].warn).toBeFalsy();
   });
 
   it('does not disclose upstream credentials in diagnostic output', () => {
-    const checks = probeProxy({ TOKEN_OPTIMIZER_CLIENT: 'codex', OPENAI_BASE_URL: 'https://secret@example.com/?key=private' });
+    const checks = probeProxy({
+      TOKEN_OPTIMIZER_CLIENT: 'codex',
+      OPENAI_BASE_URL: 'https://secret@example.com/?key=private',
+    });
     expect(checks[0].pass).toBe(false);
     expect(detailOf(checks)).not.toContain('secret');
     expect(detailOf(checks)).not.toContain('private');
@@ -68,7 +118,9 @@ describe('probeProxy', () => {
   it('says nothing at all when the whole optimizer is off', () => {
     // A proxy note stacked on top of "everything is off" is noise, which is
     // how probeHarvest already treats the same case.
-    expect(probeProxy({ TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_MODE: 'off' })).toEqual([]);
+    expect(
+      probeProxy({ TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_MODE: 'off' })
+    ).toEqual([]);
   });
 
   it('passes when the proxy is explicitly disabled', () => {
@@ -79,10 +131,11 @@ describe('probeProxy', () => {
   });
 
   it('FAILS when the proxy is on but the client was never pointed at it', () => {
-    // The silent case. Launched through token-optimizer-run (which is what sets
-    // TOKEN_OPTIMIZER_CLIENT), so routing was asked for; enabled and unrouted must not read as
-    // healthy, and must not be softened to a warning either.
-    const checks = probeProxy({ TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_CLIENT: 'claude-code' });
+    // The silent case. Enabled and unrouted must not read as healthy.
+    const checks = probeProxy({
+      TOKEN_OPTIMIZER_PROXY: '1',
+      TOKEN_OPTIMIZER_CLIENT: 'claude-code',
+    });
     expect(checks[0].pass).toBe(false);
     expect(checks[0].warn).toBeFalsy();
     expect(detailOf(checks)).toContain('ANTHROPIC_BASE_URL');
@@ -136,7 +189,11 @@ describe('probeProxy', () => {
   it('accepts the other genuine loopback spellings', () => {
     // The rejection tests above would pass just as well against a check that
     // rejected everything, so the real forms have to be pinned too.
-    for (const url of ['http://localhost:8123', 'http://[::1]:8123', 'http://127.9.9.9:8123']) {
+    for (const url of [
+      'http://localhost:8123',
+      'http://[::1]:8123',
+      'http://127.9.9.9:8123',
+    ]) {
       const checks = probeProxy({
         TOKEN_OPTIMIZER_PROXY: '1',
         TOKEN_OPTIMIZER_CLIENT: 'claude-code',
@@ -146,10 +203,21 @@ describe('probeProxy', () => {
     }
   });
 
-  it('FAILS honestly for a client that cannot be redirected at all', () => {
-    const checks = probeProxy({ TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_CLIENT: 'zed' });
-    expect(checks[0].pass).toBe(false);
-    expect(detailOf(checks)).toContain('no supported way to redirect');
+  it('states, without failing, that a client cannot be redirected at all', () => {
+    // CHANGED DELIBERATELY, from a failed check to a stated limitation. Zed, Cursor, Cline,
+    // Windsurf, Kilo and Roo run the assistant inside the editor process and expose no documented
+    // way to redirect its model traffic, so no action by the user could ever make this check pass.
+    // Failing it told those users their installation was broken when it was working as designed,
+    // and -- worse for a diagnostic -- made a real failure indistinguishable from a property of
+    // their editor. It is still reported, and it is still the same explanation.
+    const checks = probeProxy({
+      TOKEN_OPTIMIZER_PROXY: '1',
+      TOKEN_OPTIMIZER_CLIENT: 'zed',
+    });
+    expect(checks[0].pass).toBe(true);
+    expect(checks[0].warn).toBe(true);
+    expect(detailOf(checks)).toContain('no supported way');
+    expect(checks[0].name).toContain('cannot serve this client');
   });
 });
 
@@ -169,5 +237,84 @@ describe('the proxy client table', () => {
     for (const key of ['constructor', 'toString', 'hasOwnProperty']) {
       expect(proxyEnvFor(key)).toBeNull();
     }
+  });
+});
+
+describe('probeSupervisor', () => {
+  /**
+   * The failure that on-by-default routing can cause, and that nothing else can see.
+   *
+   * Once a client's own configuration names a loopback URL, probeProxy reads that variable and can
+   * only tell that it LOOKS routed. If the proxy behind it is gone -- killed, crashed, uninstalled
+   * without our uninstaller -- the client cannot reach its provider at all, and every other check in
+   * the report still passes. So this one connects.
+   */
+  const withServer = async (
+    run: (url: string) => Promise<void>
+  ): Promise<void> => {
+    const server = createServer((_req, res) => res.end('{}'));
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve)
+    );
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    try {
+      await run(url);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  };
+
+  it('fails when the client is pointed at a loopback port nothing answers', async () => {
+    // A port that was bound and then released: exactly the state a dead supervisor leaves behind.
+    let dead = '';
+    await withServer(async (url) => {
+      dead = url;
+    });
+    const checks = await probeSupervisor(
+      {
+        TOKEN_OPTIMIZER_PROXY: '1',
+        TOKEN_OPTIMIZER_CLIENT: 'claude-code',
+        ANTHROPIC_BASE_URL: dead,
+      },
+      {}
+    );
+    const failure = checks.find((check) => !check.pass);
+    expect(failure).toBeDefined();
+    expect(JSON.stringify(failure)).toContain('nothing listening');
+    expect(JSON.stringify(failure)).toContain('token-optimizer-uninstall');
+  }, 20_000);
+
+  it('says nothing when the route is alive', async () => {
+    await withServer(async (url) => {
+      const checks = await probeSupervisor(
+        {
+          TOKEN_OPTIMIZER_PROXY: '1',
+          TOKEN_OPTIMIZER_CLIENT: 'claude-code',
+          ANTHROPIC_BASE_URL: url,
+        },
+        {}
+      );
+      expect(checks.filter((check) => !check.pass)).toEqual([]);
+    });
+  }, 20_000);
+
+  it('adds no standing warning to an install that simply has no daemon', async () => {
+    // A session launched through token-optimizer-run carries its own proxy and needs no daemon, and
+    // a client that is not routed at all is already reported by probeProxy with the remedy. Saying
+    // it again here would mark working installs as warning forever.
+    const checks = await probeSupervisor(
+      { TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_PROXY_CONTROL_PORT: '1' },
+      {}
+    );
+    expect(checks).toEqual([]);
+  }, 20_000);
+
+  it('stays silent when the product is off', async () => {
+    expect(await probeSupervisor({ TOKEN_OPTIMIZER_MODE: 'off' }, {})).toEqual(
+      []
+    );
+    expect(await probeSupervisor({ TOKEN_OPTIMIZER_PROXY: '0' }, {})).toEqual(
+      []
+    );
   });
 });

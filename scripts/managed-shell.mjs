@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { decodeProfile, replaceProfile } from './profile-file.mjs';
+import {
+  LEGACY_LAUNCHER_COMMANDS,
+  launcherCommands,
+} from './managed-clients.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const begin = '# >>> token-optimizer managed clients >>>';
@@ -52,6 +56,7 @@ export function activateShells({
   remove = false,
   apply = true,
   env = process.env,
+  clients = launcherCommands({ env }),
 } = {}) {
   const changed = [];
   const plans = [];
@@ -76,19 +81,29 @@ export function activateShells({
     const powershell = path.endsWith('.ps1');
     const quote = powershell ? quotePs : quoteSh;
     const invocation = `${quote(process.execPath)} ${quote(join(root, 'scripts', 'run-client.mjs'))}`;
-    const functions = ['claude', 'codex', 'opencode']
-      .map((client) =>
-        powershell
-          ? `function global:${client} { & ${invocation} ${client} @args }`
-          : `${client}() { ${invocation} ${client} "$@"; }`
-      )
-      .join('\n');
+    const define = (names) =>
+      names
+        .map((client) =>
+          powershell
+            ? `function global:${client} { & ${invocation} ${client} @args }`
+            : `${client}() { ${invocation} ${client} "$@"; }`
+        )
+        .join('\n');
+    const functions = define(clients);
     const digest = (text) => createHash('sha256').update(text).digest('hex');
-    const legacy = `${begin}\n${functions}\n${end}`;
-    const legacyTwoClients = `${begin}\n${functions.split('\n').slice(0, 2).join('\n')}\n${end}`;
-    const block = remove
-      ? ''
-      : `${begin}\n${functions}\n# token-optimizer sha256: ${digest(functions)}\n${end}`;
+    // The blocks earlier versions wrote carried no checksum, so they are recognised by their exact
+    // text. That text is the CLIENTS THEY WRAPPED, not whatever this machine wraps today: deriving
+    // it from `functions` would stop recognising our own old block the moment the list changed, and
+    // the user would be told their profile had been edited by hand.
+    const previous = define(LEGACY_LAUNCHER_COMMANDS);
+    const legacy = `${begin}\n${previous}\n${end}`;
+    const legacyTwoClients = `${begin}\n${previous.split('\n').slice(0, 2).join('\n')}\n${end}`;
+    // No client on this machine means no block: an empty one would define nothing and still have to
+    // be explained to whoever opens the profile.
+    const block =
+      remove || clients.length === 0
+        ? ''
+        : `${begin}\n${functions}\n# token-optimizer sha256: ${digest(functions)}\n${end}`;
     if (start >= 0) {
       const existing = original
         .slice(start, finish + end.length)

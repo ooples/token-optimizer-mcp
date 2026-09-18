@@ -154,7 +154,7 @@ describe('managed installation adversarial review', () => {
         Buffer.from('# café\r\n$custom = 123\r\n', 'utf16le'),
       ]);
       fs.writeFileSync(path, original);
-      const env = { TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify([path]) };
+      const env = { TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify([path]), TOKEN_OPTIMIZER_MANAGED_CLIENTS: 'claude,codex,opencode' };
       activateShells({ env });
       expect(fs.readFileSync(path).subarray(0, original.length)).toEqual(
         original
@@ -173,7 +173,7 @@ describe('managed installation adversarial review', () => {
     fixture((dir) => {
       const a = join(dir, 'a.ps1'),
         b = join(dir, 'b.ps1');
-      const env = { TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify([a, b]) };
+      const env = { TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify([a, b]), TOKEN_OPTIMIZER_MANAGED_CLIENTS: 'claude,codex,opencode' };
       activateShells({ env });
       fs.writeFileSync(
         b,

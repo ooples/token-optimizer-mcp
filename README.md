@@ -492,6 +492,50 @@ This small arithmetic repair task does not establish superiority across tasks,
 compression quality, or total cost. Rotation balances run position, but does
 not guarantee that shared provider-cache effects disappear.
 
+**Codex three-task comparison against HeadRoom 0.37.0 (2026-09-18).** Three
+synthetic controlled-read tasks, three repetitions, three arms, every arm in
+every position. All 27 runs returned the correct answer, so this compares cost
+at equal correctness rather than accuracy. HeadRoom ran in `--mode token`, its
+compression-first setting, not the `cache` default that exists to freeze the
+cache hit rate.
+
+| arm | mean input tokens | of which cached | output | requests | agent seconds |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| uncompressed control | 55,632 | 43,079 | 200 | 3.0 | 19.1 |
+| Token Optimizer | 42,468 | 33,052 | 189 | 3.0 | 17.3 |
+| HeadRoom 0.37.0, `--mode token` | 71,626 | 51,897 | 285 | 4.3 | 27.3 |
+
+Input reduction against the control was 22.7% on the log task, 34.3% on the JSON
+task and 11.5% on the code search; against HeadRoom, 54.9%, 10.0% and 42.2%.
+Every task favoured this proxy on both comparisons, and the JSON column is where
+HeadRoom is strongest and the margin thinnest.
+
+The mechanism is visible in two numbers that move independently. Mean input per
+REQUEST was 14,156 here against HeadRoom's 16,529 and the control's 18,544 --
+both proxies compress, and this one compresses harder. Mean requests per RUN was
+3.0, the same as the control, against HeadRoom's 4.3. A compressor that elides
+content the agent then has to read back spends a turn recovering it, and on
+these workloads a turn costs more than the elision saved; that is the failure
+this project's own deferral floor exists to avoid, and it is what the extra
+1.3 requests are.
+
+WHAT THIS DOES NOT SHOW. These are token counts, not dollar costs, and
+`bench/live/report-codex.mjs` deliberately declines to price them. Three short
+synthetic workloads do not establish a universal win. Each task ran in a fresh
+temporary workspace with no knowledge graph, so graph injection contributed
+nothing and this measures compression alone. Cached tokens are a subset of the
+input column, not an additional charge. HeadRoom's compression is scored from
+provider usage rather than byte counts recorded at our own listener.
+
+Reproduce with `HEADROOM_MODE=token node bench/live/codex.mjs`, then
+`node bench/live/report-codex.mjs <evidence-dir>`; the figures above were read
+only after that reporter returned `valid: true` with `balanced: true` and no
+failures. Four earlier campaigns were discarded rather than published: one ran
+without HeadRoom's `[proxy]` extra so every HeadRoom run errored before
+readiness, one ran HeadRoom in its `cache` default, one was voided by the
+reporter for an incomplete request capture, and one died on `ENOSPC` with the
+host disk full.
+
 The subsequent Claude Code default-versus-aggressive confirmation hit Claude's
 weekly usage limit and is incomplete. Its missing usage cannot count as a win.
 Codex validation runs independently through the Responses API.
@@ -587,29 +631,85 @@ synthetic repositories with natural tool selection. Uncached input and latency
 have separate results; see the [workflow evidence and limitations](bench/live/evidence/codex-workflows-2026-09-15/README.md).
 
 
-The proxy is enabled by default and binds loopback only. Global npm installs
-activate Claude hooks and managed `claude`/`codex`/`opencode` commands in Command Prompt,
-PowerShell, Bash, and Zsh when lifecycle scripts are enabled. Windows installs add
-owned `.cmd` launchers to the User PATH, so profiles and PowerShell execution-policy
-changes are not required. For local installs or disabled lifecycle scripts, run
+The proxy is enabled by default and binds loopback only.
+
+**It is now on without launching anything through us.** Until 7.1.0 the only way
+to be routed was to start the client through our wrapper, so anyone who installed
+with `/plugin` and then opened Claude Code from a shortcut, an IDE or the desktop
+app saved nothing -- and the doctor reported that as a broken installation rather
+than as a feature that never applied. Installation now writes the endpoint into
+Claude Code's own `settings.json`, which is the one thing a session we did not
+start will read, and a small background proxy serves it. Four rules make that
+safe to switch on:
+
+- **Recorded.** Every value written is stored with whatever was there before.
+  `token-optimizer-uninstall --apply` restores it exactly, and refuses when the
+  value is no longer the one we wrote -- if you change it, it is yours again.
+- **Never written on hope.** The entry appears only after the proxy has actually
+  served the route. A settings file naming a dead port does not degrade politely:
+  the client cannot reach its provider at all.
+- **Self-healing.** The check runs again at every session start, before the first
+  model request, and removes the entry the moment the route cannot be served.
+- **Hands off what is not ours.** A client already pointed at another local proxy
+  is left alone, and a settings file we cannot parse is never rewritten.
+
+Set `TOKEN_OPTIMIZER_DEFAULT_ROUTING=0` to keep the wrapper-only behaviour, or
+`TOKEN_OPTIMIZER_PROXY_AUTOSTART=0` if you do not want a local background service
+at all. Either one also undoes an entry already written.
+
+**Managed commands.** Global npm installs activate Claude hooks and wrap the
+client commands you actually have -- `claude`, `codex`, `gemini`, `opencode`,
+`qwen`, `crush`, `droid`, `cn` (Continue), `copilot` and `amp` -- in Command
+Prompt, PowerShell, Bash, and Zsh when lifecycle scripts are enabled. Only
+commands already on your PATH are wrapped, so installing this does not claim a
+name for a client you have not installed; `TOKEN_OPTIMIZER_MANAGED_CLIENTS` takes
+a comma-separated list (or `all`) when a client lives somewhere PATH cannot see,
+and `0` skips shell activation entirely. Windows installs add owned `.cmd`
+launchers to the User PATH, so profiles and PowerShell execution-policy changes
+are not required. For local installs or disabled lifecycle scripts, run
 `token-optimizer-install`. Reopen the terminal to load the updated PATH and shell
-activation. Each managed session starts its own proxy,
-registers the packaged core MCP tools (including wiki), and shuts the proxy down
-on exit. `token-optimizer-run codex ...`, `token-optimizer-run claude ...`, or
-`token-optimizer-run opencode ...` works
-without shell activation. Existing custom provider authentication stays in the
-client. Set `TOKEN_OPTIMIZER_PROXY=0` to disable routing, or
-`TOKEN_OPTIMIZER_MANAGED_CLIENTS=0` before installation to skip shell activation.
+activation. Each managed session starts its own proxy, registers the packaged
+core MCP tools (including wiki), and shuts the proxy down on exit.
+`token-optimizer-run <client> ...` works without shell activation.
+
+**Which clients can be routed, and which cannot.** Ten have a supported way to
+redirect model traffic and are listed above. Claude Code and Gemini have exactly
+one provider each, so they are routed on installation. The rest choose a provider
+in their own configuration, and are routed once that configuration names an
+endpoint -- because forwarding on a guess would deliver one provider's
+credentials to another company. Six clients cannot be routed at all: Cursor,
+Cline, Windsurf, Kilo, Roo and Zed run the assistant inside the editor process
+and expose no documented redirect. Everything else -- the optimizer tools, the
+graph, the hooks -- still applies to them, and the doctor states the limitation
+instead of counting it as a failure.
+
+`token-optimizer-route` shows what is running and what configuration has been
+written on your behalf. Zed is the one client that can be routed and cannot be
+routed for you -- its provider is a named entry you pick inside the editor, and
+only you know which endpoint and model it should use:
+
+```bash
+token-optimizer-route                                                  # what is routed right now
+token-optimizer-route zed --upstream https://api.openai.com/v1 --model gpt-4o
+token-optimizer-route zed --remove
+```
+
+Zed's provider schema here comes from its published settings documentation and
+has not been exercised against an installed Zed in this repository. It is
+written into a file the command can take back out, and nothing is written unless
+the route is already being served.
+
+Existing custom provider authentication stays in the client, and your own
+endpoint stays yours: the proxy is inserted in front of whatever you configured,
+never in place of it. `TOKEN_OPTIMIZER_PROXY=0` disables routing and
 `TOKEN_OPTIMIZER_MODE=off` disables optimization. npm lifecycle scripts may be
 blocked, so package installation alone is not proof that activation ran.
-Other integrations retain their MCP/hooks setup; automatic managed model routing
-currently covers Claude Code, Codex, and OpenCode providers with explicit base URLs
-using the OpenAI, OpenAI-compatible, or Anthropic SDK. OpenCode's session plugin
-uses its resolved configuration and project directory; account credentials and
-provider files stay in place. Unsupported endpoints and provider modes retain
-native routing. Claude routing controlled by local managed-policy files or Windows
-registry policy also stays native. Remote/MDM policy can arrive after launch;
-the launcher reports observed model traffic, not just listener startup.
+OpenCode's session plugin uses its resolved configuration and project directory;
+account credentials and provider files stay in place. Unsupported endpoints and
+provider modes retain native routing. Claude routing controlled by local
+managed-policy files or Windows registry policy also stays native. Remote/MDM
+policy can arrive after launch; the launcher reports observed model traffic, not
+just listener startup.
 `doctor` checks routing configuration.
 Request-body capture is opt-in via `TOKEN_OPTIMIZER_PROXY_CAPTURE`; when enabled,
 it writes plaintext request content to the named directory.
@@ -666,9 +766,13 @@ all.
 
 | variable                          | default    | what it does                                               |
 | --------------------------------- | ---------- | ---------------------------------------------------------- |
-| `TOKEN_OPTIMIZER_PROXY`           | off        | the compression proxy itself                               |
+| `TOKEN_OPTIMIZER_PROXY`           | on         | the compression proxy itself; set `0` to opt out           |
 | `TOKEN_OPTIMIZER_COMPRESSION`     | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`       |
-| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | off        | put what this project already learned in the cached prefix |
+| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | on         | put what this project already learned in the cached prefix |
+
+Both of the `on` rows said `off` here until 7.1.0, which was wrong about the
+shipped code rather than a change of default: an unset value has always meant
+enabled, and `0`, `false`, `no` and `off` are what turn either one off.
 
 `lossless` is worth knowing about: it forbids every transform that removes
 something the output cannot reconstruct -- function bodies, array tails,

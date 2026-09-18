@@ -11,7 +11,13 @@ export function sessionRouting(
       // Ignore telemetry, discovery and health requests. Strip only the query;
       // never print URLs, headers, prompts or provider configuration.
       const path = summary.path.split('?')[0];
-      if (!/(?:\/responses|\/messages|\/chat\/completions)\/?$/.test(path))
+      // Gemini names the model in the path and the operation after a colon, so it matches none of
+      // the OpenAI- or Anthropic-shaped routes. Leaving it out did not merely miscount: a routed
+      // Gemini session would end by reporting that routing was never observed.
+      if (
+        !/(?:\/responses|\/messages|\/chat\/completions)\/?$/.test(path) &&
+        !/:(?:stream)?[Gg]enerateContent$/.test(path)
+      )
         return;
       requests++;
       // The proxy's "compressed" flag also covers knowledge-only rewrites.

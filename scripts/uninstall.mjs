@@ -16,42 +16,79 @@
  *     node scripts/uninstall.mjs --apply    # carry it out
  */
 
-import { readManifest, removalPlan, uninstall, residue, manifestPath } from '../hooks-core/manifest.mjs';
+import {
+  readManifest,
+  removalPlan,
+  uninstall,
+  residue,
+  manifestPath,
+} from '../hooks-core/manifest.mjs';
 import { unwire, wiredEntries } from '../hooks-core/wire.mjs';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { activateShells } from './managed-shell.mjs';
 import { activateWindowsCommands } from './windows-commands.mjs';
+import { removeDefaultRouting } from '../dist/proxy/default-routing.js';
 
 /** The settings file this machine actually uses. */
-const settingsPath = process.env.TOKEN_OPTIMIZER_SETTINGS
-  || join(homedir(), '.claude', 'settings.json');
+const settingsPath =
+  process.env.TOKEN_OPTIMIZER_SETTINGS ||
+  join(homedir(), '.claude', 'settings.json');
 
 const apply = process.argv.includes('--apply');
 for (const path of activateWindowsCommands({ remove: true, apply })) {
-  console.log(`${apply ? 'Removed' : 'Would remove'} managed Windows command activation: ${path}`);
+  console.log(
+    `${apply ? 'Removed' : 'Would remove'} managed Windows command activation: ${path}`
+  );
 }
 for (const path of activateShells({ remove: true, apply })) {
-  console.log(`${apply ? 'Removed' : 'Would remove'} managed client activation from ${path}`);
+  console.log(
+    `${apply ? 'Removed' : 'Would remove'} managed client activation from ${path}`
+  );
 }
+// BEFORE THE HOOK RECORD IS TOUCHED, because this entry is the one that breaks a client if it
+// outlives us: settings.json would keep naming a proxy that is no longer there. It is removed even
+// on a dry run's report, and refuses when the user has since changed the value themselves.
+if (apply) {
+  const routing = removeDefaultRouting();
+  if (routing.status === 'removed')
+    console.log(`Removed default proxy routing from ${routing.path}`);
+  if (routing.status === 'user-owned')
+    console.log(
+      `Left ${routing.path} alone: its base URL is no longer the one we wrote.`
+    );
+} else {
+  console.log(
+    'Would remove default proxy routing from the Claude Code settings file.'
+  );
+}
+
 const manifest = readManifest();
 
 if (!manifest) {
   console.log(`No installation record at ${manifestPath()}.`);
-  console.log('Nothing to remove that we can prove is ours -- and we will not guess.');
-  console.log('If hooks were installed by hand, remove the token-optimizer entries from your');
+  console.log(
+    'Nothing to remove that we can prove is ours -- and we will not guess.'
+  );
+  console.log(
+    'If hooks were installed by hand, remove the token-optimizer entries from your'
+  );
   console.log('settings.json and delete ~/.claude-global/hooks/ yourself.');
   process.exit(0);
 }
 
 const plan = removalPlan(manifest);
-console.log(`Installed ${new Date(manifest.installedAt).toISOString().slice(0, 10)}` +
-  `${manifest.packageVersion ? `, version ${manifest.packageVersion}` : ''}.`);
+console.log(
+  `Installed ${new Date(manifest.installedAt).toISOString().slice(0, 10)}` +
+    `${manifest.packageVersion ? `, version ${manifest.packageVersion}` : ''}.`
+);
 console.log('');
 
 if (plan.remove.length) {
-  console.log(`Will remove ${plan.remove.length} file(s) we wrote and that are unchanged:`);
+  console.log(
+    `Will remove ${plan.remove.length} file(s) we wrote and that are unchanged:`
+  );
   for (const path of plan.remove) console.log(`  - ${path}`);
 } else {
   console.log('No files to remove.');
@@ -59,7 +96,9 @@ if (plan.remove.length) {
 
 if (plan.keep.length) {
   console.log('');
-  console.log('Leaving alone (edited since we wrote them -- removing would destroy your changes):');
+  console.log(
+    'Leaving alone (edited since we wrote them -- removing would destroy your changes):'
+  );
   for (const item of plan.keep) console.log(`  ! ${item.path}`);
 }
 
@@ -70,8 +109,13 @@ if (plan.gone.length) {
 
 if (plan.entries.length) {
   console.log('');
-  console.log('Hook entries we added, which will be removed from your settings:');
-  for (const entry of plan.entries) console.log(`  - ${entry.file}: ${entry.path}${entry.description ? ` (${entry.description})` : ''}`);
+  console.log(
+    'Hook entries we added, which will be removed from your settings:'
+  );
+  for (const entry of plan.entries)
+    console.log(
+      `  - ${entry.file}: ${entry.path}${entry.description ? ` (${entry.description})` : ''}`
+    );
 }
 
 console.log('');
@@ -79,7 +123,9 @@ console.log(plan.untouched);
 
 if (!apply) {
   console.log('');
-  console.log('Dry run -- nothing was changed. Re-run with --apply to carry this out.');
+  console.log(
+    'Dry run -- nothing was changed. Re-run with --apply to carry this out.'
+  );
   process.exit(0);
 }
 
@@ -113,9 +159,14 @@ if (existsSync(settingsPath)) {
 
     if (ours > 0) {
       const after = unwire(before);
-      writeFileSync(settingsPath, `${JSON.stringify(after, null, 2)}
-`);
-      console.log(`Removed ${ours} hook entr${ours === 1 ? 'y' : 'ies'} from ${settingsPath}.`);
+      writeFileSync(
+        settingsPath,
+        `${JSON.stringify(after, null, 2)}
+`
+      );
+      console.log(
+        `Removed ${ours} hook entr${ours === 1 ? 'y' : 'ies'} from ${settingsPath}.`
+      );
     } else {
       console.log(`No token-optimizer hook entries in ${settingsPath}.`);
     }
@@ -127,14 +178,17 @@ if (existsSync(settingsPath)) {
 }
 if (result.failed?.length) {
   console.log(`${result.failed.length} could not be removed:`);
-  for (const failure of result.failed) console.log(`  ! ${failure.path}: ${failure.error}`);
+  for (const failure of result.failed)
+    console.log(`  ! ${failure.path}: ${failure.error}`);
 }
 
 // Confirm rather than assert. The claim "your machine is clean" should be
 // checked by looking, not by having intended it.
 if (existsSync(settingsPath)) {
   const found = residue(settingsPath);
-  console.log(found.clean
-    ? 'Verified: no token-optimizer entries remain in the settings file.'
-    : `${found.entries.length} entry/entries remain in ${settingsPath} -- remove them by hand.`);
+  console.log(
+    found.clean
+      ? 'Verified: no token-optimizer entries remain in the settings file.'
+      : `${found.entries.length} entry/entries remain in ${settingsPath} -- remove them by hand.`
+  );
 }

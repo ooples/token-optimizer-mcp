@@ -41,6 +41,12 @@ jobs:
       - run: npm run verify:package-contents
       - name: Verify package report compatibility with publishing npm
         run: npx --yes npm@12.0.2 run verify:package-contents
+      # THE ONE GATE THAT PERFORMS AN INSTALLATION. verify:package-contents reads the tarball's file
+      # list; this packs that tarball, installs it into a throwaway prefix, runs the installer from
+      # the installed tree and drives the doctor. Two releases in a row shipped to fix installation
+      # because nothing here ever installed anything, and both were found by users.
+      - name: Verify the packed tarball installs and runs
+        run: npm run verify:install
       - name: Verify edit safety and production MCP contracts
         run: >-
           npm test -- --runInBand

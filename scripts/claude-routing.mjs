@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { originalUpstream } from '../dist/proxy/default-routing.js';
 
 function argument(args, name) {
   let result;
@@ -10,8 +11,7 @@ function argument(args, name) {
       if (value === undefined || value.startsWith('--'))
         throw new Error(`${name} needs a value.`);
       result = { index: ++i, value, inline: false };
-    }
-    else if (args[i].startsWith(`${name}=`))
+    } else if (args[i].startsWith(`${name}=`))
       result = {
         index: i,
         value: args[i].slice(name.length + 1),
@@ -59,7 +59,12 @@ export function claudeRoute(args, env, projectRoot) {
   ].some((key) =>
     /^(1|true|yes|on)$/i.test(String(effective[key] || '').trim())
   );
-  const upstream = effective.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+  // A settings value that is our own installed route is not an endpoint to forward to: taking it
+  // would put a second proxy in front of the first. originalUpstream gives back what that route
+  // stands in for, and leaves a genuine local gateway alone.
+  const upstream =
+    originalUpstream(effective.ANTHROPIC_BASE_URL, env) ||
+    'https://api.anthropic.com';
   let origin;
   if (!external) {
     try {
@@ -67,7 +72,9 @@ export function claudeRoute(args, env, projectRoot) {
       if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
       origin = parsed.origin;
     } catch {
-      throw new Error('ANTHROPIC_BASE_URL must be an absolute HTTP or HTTPS URL.');
+      throw new Error(
+        'ANTHROPIC_BASE_URL must be an absolute HTTP or HTTPS URL.'
+      );
     }
   }
   // Loopback routing must not turn off Claude's first-party MCP deferral.

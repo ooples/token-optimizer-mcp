@@ -685,6 +685,16 @@ describe('what the proxy refuses to buffer or forward', () => {
 
   it('still forwards a body under the limit', async () => {
     // The control: a limit that rejected everything would pass the test above.
+    //
+    // INJECTION STAYS ON HERE, deliberately. This asserted the body arrived byte for byte, which
+    // held only while this repository's own graph had nothing worth injecting: the moment a finding
+    // was recorded, the proxy added a `system` block and the comparison failed on a developer
+    // machine while CI, with an empty graph, stayed green.
+    //
+    // Turning injection off would have fixed the symptom and removed the only place where injection
+    // being on by default is exercised at all. What this test is the control for is the SIZE LIMIT
+    // -- a limit that rejected everything would pass the 413 case above -- so it asserts what that
+    // actually requires: the request got through, and the caller's own content arrived intact.
     const { url, seen } = await upstream();
     const { server, port } = await startProxy({
       upstream: url,
@@ -702,7 +712,8 @@ describe('what the proxy refuses to buffer or forward', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(seen.body).toBe(body);
+    const forwarded = JSON.parse(seen.body);
+    expect(forwarded.messages).toEqual(JSON.parse(body).messages);
   });
 
   it('will not raise the ceiling past the built-in one', () => {
