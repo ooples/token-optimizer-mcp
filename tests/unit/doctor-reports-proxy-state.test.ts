@@ -17,7 +17,10 @@ const detailOf = (checks: Array<Record<string, unknown>>): string =>
 describe('probeProxy', () => {
   it('uses the MCP handshake identity when the client environment was filtered', () => {
     const checks = probeProxy({}, { clientName: 'codex-mcp' });
-    expect(checks[0].pass).toBe(false);
+    // WARN, not FAIL: the handshake identity says which client is connected, not that anyone asked
+    // for routed traffic. Only token-optimizer-run sets TOKEN_OPTIMIZER_CLIENT.
+    expect(checks[0].warn).toBe(true);
+    expect(checks[0].pass).toBe(true);
     expect(detailOf(checks)).toContain('OPENAI_BASE_URL');
     expect(detailOf(checks)).toContain('token-optimizer-run codex');
     expect(detailOf(checks)).not.toContain('no supported way');
@@ -25,8 +28,20 @@ describe('probeProxy', () => {
 
   it('does not classify an unidentified MCP host as an unsupported client', () => {
     const checks = probeProxy({});
-    expect(checks[0].pass).toBe(false);
+    expect(checks[0].warn).toBe(true);
     expect(detailOf(checks)).toContain('routing is unverified');
+  });
+
+  it('a plain plugin install is not reported as a broken installation', () => {
+    // The default install -- /plugin, MCP server, no token-optimizer-run -- never points a client
+    // at the proxy. Reporting that as a failure made install_doctor say "Something above is broken"
+    // for every user who followed the documented instructions.
+    for (const client of ['claude-code', 'codex', 'opencode']) {
+      const checks = probeProxy({}, { clientName: client });
+      expect(checks[0].pass).toBe(true);
+      expect(checks[0].warn).toBe(true);
+      expect(detailOf(checks)).toContain('token-optimizer-run');
+    }
   });
 
   it('does not disclose upstream credentials in diagnostic output', () => {
@@ -49,9 +64,12 @@ describe('probeProxy', () => {
   });
 
   it('FAILS when the proxy is on but the client was never pointed at it', () => {
-    // The silent case. Enabled and unrouted must not read as healthy.
+    // The silent case. Launched through token-optimizer-run (which is what sets
+    // TOKEN_OPTIMIZER_CLIENT), so routing was asked for; enabled and unrouted must not read as
+    // healthy, and must not be softened to a warning either.
     const checks = probeProxy({ TOKEN_OPTIMIZER_PROXY: '1', TOKEN_OPTIMIZER_CLIENT: 'claude-code' });
     expect(checks[0].pass).toBe(false);
+    expect(checks[0].warn).toBeFalsy();
     expect(detailOf(checks)).toContain('ANTHROPIC_BASE_URL');
     expect(detailOf(checks)).toContain('straight to the provider');
   });
