@@ -74,11 +74,21 @@ export interface SupervisorState {
   readonly routes: readonly SupervisorRoute[];
 }
 
+/**
+ * SYNCHRONOUS ON PURPOSE, against `n/no-sync`, for the reason accounting.ts records: two routes can
+ * start at once, and each publishes the whole file. Awaited writes would let those two interleave,
+ * so the rename that landed last could carry the state that was read first -- a route missing from
+ * the file a caller then reads. The payload is a few hundred bytes, and write-then-rename is what
+ * makes a reader see either the old file or the new one and never half of one.
+ */
 function writeState(state: SupervisorState, env: NodeJS.ProcessEnv): void {
   const file = supervisorStateFile(env);
+  // eslint-disable-next-line n/no-sync -- see above
   mkdirSync(dirname(file), { recursive: true });
   const temporary = `${file}.tmp-${process.pid}`;
+  // eslint-disable-next-line n/no-sync -- see above
   writeFileSync(temporary, JSON.stringify(state, null, 2), { mode: 0o600 });
+  // eslint-disable-next-line n/no-sync -- see above
   renameSync(temporary, file);
 }
 
@@ -86,6 +96,9 @@ export function readSupervisorState(
   env: NodeJS.ProcessEnv = process.env
 ): SupervisorState | null {
   try {
+    // Sync so the doctor and any other reporter can ask what is being served without becoming
+    // async themselves; the file is small and written atomically by writeState.
+    // eslint-disable-next-line n/no-sync -- see above
     const parsed = JSON.parse(readFileSync(supervisorStateFile(env), 'utf8'));
     return parsed?.schema === 1 ? (parsed as SupervisorState) : null;
   } catch {

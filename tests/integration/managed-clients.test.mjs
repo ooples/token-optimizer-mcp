@@ -241,7 +241,7 @@ describe('managed client installation', () => {
       const path = join(dir, 'profile.ps1');
       const original = '# personal settings\n$custom = 123\n';
       writeFileSync(path, original);
-      const env = { TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify([path]) };
+      const env = { TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify([path]), TOKEN_OPTIMIZER_MANAGED_CLIENTS: 'claude,codex,opencode' };
       activateShells({ env });
       const installed = readFileSync(path, 'utf8');
       expect(installed).toContain('function global:codex');

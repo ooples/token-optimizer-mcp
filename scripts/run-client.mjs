@@ -20,6 +20,11 @@ import { claudeRoute } from './claude-routing.mjs';
 import { sessionRouting } from './session-routing.mjs';
 import { claudeManagedRouting } from './managed-policy.mjs';
 import { projectRootFor } from '../hooks-core/wiki.mjs';
+import {
+  clientForCommand,
+  proxyEnvFor,
+  upstreamFor,
+} from '../hooks-core/capabilities.mjs';
 import { launcherMarker } from './windows-commands.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,8 +52,14 @@ export function executable(command, env) {
           join(dir, `${command}.exe`),
           join(dir, `${command}.cmd`),
         ]);
-  const path = candidates.find((candidate) => existsSync(candidate) &&
-    !(candidate.toLowerCase().endsWith('.cmd') && readFileSync(candidate, 'utf8').includes(launcherMarker)));
+  const path = candidates.find(
+    (candidate) =>
+      existsSync(candidate) &&
+      !(
+        candidate.toLowerCase().endsWith('.cmd') &&
+        readFileSync(candidate, 'utf8').includes(launcherMarker)
+      )
+  );
   if (!path) throw new Error(`Cannot find ${command} on PATH.`);
   if (!path.endsWith('.cmd')) return { command: path, prefix: [] };
   // npm's standard shim is a known Node entrypoint. Do not pass user prompts
@@ -184,13 +195,14 @@ export async function runClient(
   args,
   { env = process.env, command = client } = {}
 ) {
-  if (!['claude', 'codex', 'opencode'].includes(client))
+  // `client` is the command the user typed, which is not always the client id: Continue ships `cn`.
+  const clientId = clientForCommand(client);
+  if (!clientId)
     throw new Error(
-      'Managed launch currently supports claude, codex and opencode.'
+      `Managed launch does not support ${client}; run it directly instead.`
     );
   const childEnv = { ...env };
-  childEnv.TOKEN_OPTIMIZER_CLIENT =
-    client === 'claude' ? 'claude-code' : client;
+  childEnv.TOKEN_OPTIMIZER_CLIENT = clientId;
   let proxy;
   let routing;
   let settingsDirectory;
@@ -290,10 +302,24 @@ export async function runClient(
       childEnv.OPENCODE_CONFIG_CONTENT = JSON.stringify(config);
     }
     if (enabled) {
-      const route = client === 'codex' ? codexRoute(args, env) : claude;
+      // Claude and Codex resolve their upstream from their own configuration, which is why each has
+      // a resolver above. Every other managed client names its endpoint in one environment variable,
+      // so the generic route is that variable's value -- or, for a client with exactly one provider,
+      // that provider. A client whose endpoint we cannot know keeps native routing: routing it would
+      // mean guessing which company receives its credentials.
+      const route =
+        client === 'codex'
+          ? codexRoute(args, env)
+          : client === 'claude'
+            ? claude
+            : { upstream: upstreamFor(clientId, env) };
       if (route.native) {
         process.stderr.write(
           '[token-optimizer] Account routing cannot be determined before launch (login/keyring); preserving native routing. MCP remains available.\n'
+        );
+      } else if (!route.upstream) {
+        process.stderr.write(
+          `[token-optimizer] ${client}: no provider endpoint is configured, so its traffic is left untouched. Set ${proxyEnvFor(clientId) || 'its base URL'} to the endpoint you already use to compress this client.\n`
         );
       } else {
         const upstream = new URL(route.upstream);
@@ -353,6 +379,16 @@ export async function runClient(
               ? `--settings=${settingsPath}`
               : settingsPath;
           else forwarded.push('--settings', settingsPath);
+        } else if (client !== 'codex') {
+          // One variable, and it is the one the client actually reads -- CLIENT_PROXY_ENV records
+          // which, including the cases where the obvious guess is wrong (Copilot reads
+          // COPILOT_API_URL, not OPENAI_BASE_URL). A client with no variable never reaches here.
+          const variable = proxyEnvFor(clientId);
+          if (!variable)
+            throw new Error(
+              `${client} has no supported base-URL setting to redirect.`
+            );
+          childEnv[variable] = base;
         } else {
           childEnv.OPENAI_BASE_URL = base;
           // Override only transport properties. Keep credentials and custom
@@ -404,11 +440,19 @@ export async function runClient(
         );
         // Codex filters inherited MCP environment variables. Forward the
         // non-secret routing state explicitly instead of relying on inheritance.
-        for (const name of ['TOKEN_OPTIMIZER_CLIENT', 'TOKEN_OPTIMIZER_PROXY', 'TOKEN_OPTIMIZER_MODE', ...(proxy ? ['OPENAI_BASE_URL'] : [])]) {
+        for (const name of [
+          'TOKEN_OPTIMIZER_CLIENT',
+          'TOKEN_OPTIMIZER_PROXY',
+          'TOKEN_OPTIMIZER_MODE',
+          ...(proxy ? ['OPENAI_BASE_URL'] : []),
+        ]) {
           if (childEnv[name] !== undefined)
-            forwarded.push('-c', `mcp_servers.token-optimizer.env.${name}=${literal(childEnv[name])}`);
+            forwarded.push(
+              '-c',
+              `mcp_servers.token-optimizer.env.${name}=${literal(childEnv[name])}`
+            );
         }
-      } else {
+      } else if (client === 'claude') {
         forwarded.push(
           '--mcp-config',
           JSON.stringify({
@@ -421,6 +465,9 @@ export async function runClient(
           })
         );
       }
+      // Other clients configure MCP in their own files and reject an unknown flag outright, which
+      // would turn a launch into a usage error. Their MCP registration is the installer's job; this
+      // wrapper only routes them.
     }
     // No shell string: user prompts, quotes and metacharacters stay argv data.
     // CLI flags must precede an explicit end-of-options delimiter.

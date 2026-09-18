@@ -17,6 +17,9 @@ const stop = () => {
   // The state file names routes that die with this process; leaving it would tell the next reader
   // to use ports nothing is listening on.
   try {
+    // Sync because this runs inside a signal handler that ends with process.exit: an awaited
+    // removal would not finish, and the stale file is exactly what we are here to prevent.
+    // eslint-disable-next-line n/no-sync -- see above
     rmSync(supervisorStateFile(), { force: true });
   } catch {
     /* best effort */

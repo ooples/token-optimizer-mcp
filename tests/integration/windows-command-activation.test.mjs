@@ -9,7 +9,10 @@ import { repairCodexStartup } from '../../scripts/codex-startup.mjs';
 function fixture(fn) {
   const directory = fs.mkdtempSync(join(tmpdir(), 'optimizer-command-'));
   let path = 'existing;other';
-  const options = { root: resolve('.'), directory, platform: 'win32', env: {}, registry: {
+  // Which clients get a launcher is now detected from PATH, so a fixture that wants a fixed set has
+  // to name it; otherwise these assertions would depend on what is installed on the machine.
+  const options = { root: resolve('.'), directory, platform: 'win32',
+    env: { TOKEN_OPTIMIZER_MANAGED_CLIENTS: 'claude,codex,opencode' }, registry: {
     read: () => path, write: (value) => { path = value; },
   } };
   try { fn(options); } finally { fs.rmSync(directory, { recursive: true, force: true }); }

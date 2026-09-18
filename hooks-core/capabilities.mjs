@@ -147,8 +147,7 @@ export function optimizerToolEvidence(raw = {}, env = process.env) {
     env,
     'TOKEN_OPTIMIZER_MCP_CAPABILITIES'
   );
-  if (proven)
-    addInventoryValue(env.TOKEN_OPTIMIZER_MCP_CAPABILITIES, names);
+  if (proven) addInventoryValue(env.TOKEN_OPTIMIZER_MCP_CAPABILITIES, names);
   return { proven, names };
 }
 
@@ -251,6 +250,85 @@ export const CLIENT_PROXY_ENV = Object.freeze({
 });
 
 /**
+ * The clients we can launch for the user, and what upstream each one talks to.
+ *
+ * WHY A DEFAULT UPSTREAM IS A SAFETY DECISION, not a convenience. The proxy forwards to exactly one
+ * endpoint, so routing a client means naming the provider it was already going to use. Name the
+ * wrong one and this ships that client's credentials to a different company -- so a default appears
+ * here only for a client with ONE provider, and every other client is routed only when the user has
+ * already told us their endpoint through its own variable.
+ *
+ * `command` is the binary the user types, which is not always the client id: Continue ships `cn`.
+ * It matches the harvest table below, which was verified against the installed CLIs.
+ */
+export const MANAGED_CLIENTS = Object.freeze({
+  // Anthropic is Claude Code's provider unless ANTHROPIC_BASE_URL says otherwise, and that is
+  // already this proxy's own default upstream.
+  'claude-code': Object.freeze({
+    command: 'claude',
+    defaultUpstream: 'https://api.anthropic.com',
+  }),
+  // Codex resolves its own upstream from ~/.codex/config.toml, including the ChatGPT and API-key
+  // split; runClient asks that resolver rather than assuming one here.
+  codex: Object.freeze({ command: 'codex', defaultUpstream: null }),
+  // Single-provider CLI: the Gemini API base is documented as generativelanguage.googleapis.com.
+  gemini: Object.freeze({
+    command: 'gemini',
+    defaultUpstream: 'https://generativelanguage.googleapis.com',
+  }),
+  // MULTI-PROVIDER CLIENTS. Each picks its provider in its own configuration, so there is no single
+  // endpoint to assume: they are routed when their variable already names one, and left alone when
+  // it does not. Adding a default here later needs evidence per client, not a plausible guess.
+  opencode: Object.freeze({ command: 'opencode', defaultUpstream: null }),
+  qwen: Object.freeze({ command: 'qwen', defaultUpstream: null }),
+  crush: Object.freeze({ command: 'crush', defaultUpstream: null }),
+  droid: Object.freeze({ command: 'droid', defaultUpstream: null }),
+  continue: Object.freeze({ command: 'cn', defaultUpstream: null }),
+  copilot: Object.freeze({ command: 'copilot', defaultUpstream: null }),
+  amp: Object.freeze({ command: 'amp', defaultUpstream: null }),
+});
+
+/** The client ids we can launch, in a stable order. */
+export function managedClientIds() {
+  return Object.keys(MANAGED_CLIENTS);
+}
+
+/** The client id behind a command name, or null. `claude` is Claude Code. */
+export function clientForCommand(command) {
+  const wanted = String(command || '').toLowerCase();
+  for (const [id, entry] of Object.entries(MANAGED_CLIENTS)) {
+    if (entry.command === wanted) return id;
+  }
+  return null;
+}
+
+/**
+ * The endpoint a client is already using, or null when we cannot know it.
+ *
+ * A value that already points at loopback is one of our own routes from an earlier session: it is
+ * not an upstream, and forwarding to it would make the proxy talk to itself.
+ */
+export function upstreamFor(client, env = process.env) {
+  const entry = MANAGED_CLIENTS[client];
+  if (!entry) return null;
+  const variable = CLIENT_PROXY_ENV[client];
+  const configured = variable ? String(env[variable] || '').trim() : '';
+  if (!configured) return entry.defaultUpstream;
+  try {
+    const host = new URL(configured).hostname
+      .replace(/^\[|\]$/g, '')
+      .toLowerCase();
+    const loopback =
+      host === 'localhost' ||
+      host === '::1' ||
+      /^127[.]\d{1,3}[.]\d{1,3}[.]\d{1,3}$/.test(host);
+    return loopback ? entry.defaultUpstream : configured;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * How each client's own CLI can be driven headlessly, when it has one.
  *
  * THE HARVEST MODEL IS THE HOST ITSELF. Semantic extraction has always
@@ -305,8 +383,17 @@ export const CLIENT_PROXY_ENV = Object.freeze({
  * wrong DOCUMENTED row fails loudly through `harvestFailure()` and doctor
  * rather than silently producing nothing.
  */
-const harvestCli = (command, args, { delivery = 'stdin', verified = false } = {}) =>
-  Object.freeze({ command, args: Object.freeze([...args]), delivery, verified });
+const harvestCli = (
+  command,
+  args,
+  { delivery = 'stdin', verified = false } = {}
+) =>
+  Object.freeze({
+    command,
+    args: Object.freeze([...args]),
+    delivery,
+    verified,
+  });
 
 export const CLIENT_HARVEST_CLI = Object.freeze({
   // VERIFIED: `claude -p` with the payload on stdin returned the exact array
@@ -454,7 +541,9 @@ export function harvestCliFor(client, env = process.env) {
   // harvestCliFor('constructor') returned a function, whose `command` is
   // undefined, which runHostCli would have handed straight to spawn.
   const key = String(client || '').toLowerCase();
-  return Object.hasOwn(CLIENT_HARVEST_CLI, key) ? CLIENT_HARVEST_CLI[key] : null;
+  return Object.hasOwn(CLIENT_HARVEST_CLI, key)
+    ? CLIENT_HARVEST_CLI[key]
+    : null;
 }
 export const CLIENT_CAPABILITIES = Object.freeze({
   'claude-code': native({
