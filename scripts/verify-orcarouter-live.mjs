@@ -118,6 +118,9 @@ if (chat.status === 'live' && blended.length === 0) {
  * defect in the provider path, so the check walks the catalog until one model answers and reports
  * which it used. A run where nothing answers is a real failure.
  */
+/** Per-model ceiling. The check tries several models, so this bounds each attempt, not the run. */
+const COMPLETION_TIMEOUT_MS = 60_000;
+
 const attempts = [];
 let reply = '';
 let calledModel = '';
@@ -133,6 +136,10 @@ for (const candidate of ids) {
         max_tokens: 16,
       },
       env,
+      // BOUNDED, because this walks every candidate model. sendProviderRequest already forwards a
+      // signal to fetch; nothing was passing one, so a single model that accepts the connection and
+      // never answers hangs the whole live check with no output and no timeout above it.
+      signal: AbortSignal.timeout(COMPLETION_TIMEOUT_MS),
     });
     const choice = response.json?.choices?.[0];
     const content = String(choice?.message?.content ?? '').trim();

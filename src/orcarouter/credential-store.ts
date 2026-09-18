@@ -139,36 +139,79 @@ export interface SaveCredentialInput {
  * The generation is per account and monotonic, so a request issued under generation 3 that fails
  * after generation 4 was stored cannot mark 4 as broken.
  */
+/**
+ * One mutation at a time per store file.
+ *
+ * Every mutation here is read-modify-rename: it reads the whole file, edits its own snapshot, and
+ * renames a replacement over the top. The rename is atomic, so a reader never sees a torn file --
+ * but atomicity of the WRITE is not serialization of the SEQUENCE. Two overlapping mutations both
+ * read state A; the second one's rename lands last and silently discards the first one's change.
+ *
+ * That is reachable in normal use, not a theoretical interleaving: the dashboard's key route and
+ * the PKCE completion route can be in flight together, and the provider's 401 path calls
+ * `markNeedsReauth` from a third place. The user-visible outcomes are losing a credential they
+ * just saved, or continuing to use one the upstream already rejected.
+ *
+ * Scope, stated honestly: this serializes within one process, which is where the races above live
+ * (all three callers are the dashboard server). It is NOT an interprocess file lock, so a second
+ * process writing the same store concurrently can still clobber.
+ */
+const storeMutations = new Map<string, Promise<unknown>>();
+
+function withStoreLock<T>(
+  env: NodeJS.ProcessEnv,
+  mutate: () => Promise<T>
+): Promise<T> {
+  const path = credentialStorePath(env);
+  const previous = storeMutations.get(path) ?? Promise.resolve();
+  // `mutate` runs whether the previous mutation resolved or rejected: one failure must not wedge
+  // every later mutation behind a permanently rejected promise.
+  const result = previous.then(mutate, mutate);
+  // The queue holds a settled-normalized promise so an unhandled rejection cannot escape from it.
+  const settled = result.then(
+    () => undefined,
+    () => undefined
+  );
+  storeMutations.set(path, settled);
+  void settled.then(() => {
+    if (storeMutations.get(path) === settled) storeMutations.delete(path);
+  });
+  return result;
+}
+
 export async function saveCredential(
   input: SaveCredentialInput,
   env: NodeJS.ProcessEnv = process.env
 ): Promise<StoredOrcaCredential> {
-  const file = await readCredentialFile(env);
-  const accountId = String(input.accountId ?? '').trim() || input.source;
-  const previous = file.credentials.filter(
-    (entry) => entry.accountId === accountId && entry.source === input.source
-  );
-  const generation =
-    previous.reduce(
-      (highest, entry) => Math.max(highest, entry.generation),
-      0
-    ) + 1;
-  const record: StoredOrcaCredential = {
-    source: input.source,
-    key: input.key,
-    accountId,
-    generation,
-    scope: input.scope ?? null,
-    createdAt: new Date().toISOString(),
-    needsReauth: false,
-    reauthReason: null,
-  };
-  const credentials = file.credentials.filter(
-    (entry) => !(entry.accountId === accountId && entry.source === input.source)
-  );
-  credentials.push(record);
-  await writeCredentialFile({ schema: 1, credentials }, env);
-  return record;
+  return withStoreLock(env, async () => {
+    const file = await readCredentialFile(env);
+    const accountId = String(input.accountId ?? '').trim() || input.source;
+    const previous = file.credentials.filter(
+      (entry) => entry.accountId === accountId && entry.source === input.source
+    );
+    const generation =
+      previous.reduce(
+        (highest, entry) => Math.max(highest, entry.generation),
+        0
+      ) + 1;
+    const record: StoredOrcaCredential = {
+      source: input.source,
+      key: input.key,
+      accountId,
+      generation,
+      scope: input.scope ?? null,
+      createdAt: new Date().toISOString(),
+      needsReauth: false,
+      reauthReason: null,
+    };
+    const credentials = file.credentials.filter(
+      (entry) =>
+        !(entry.accountId === accountId && entry.source === input.source)
+    );
+    credentials.push(record);
+    await writeCredentialFile({ schema: 1, credentials }, env);
+    return record;
+  });
 }
 
 /** Remove every stored credential for a source. Used by "clear" and by explicit sign-out. */
@@ -176,14 +219,16 @@ export async function clearCredentials(
   source: OrcaCredentialSource | null = null,
   env: NodeJS.ProcessEnv = process.env
 ): Promise<number> {
-  const file = await readCredentialFile(env);
-  const kept = source
-    ? file.credentials.filter((entry) => entry.source !== source)
-    : [];
-  const removed = file.credentials.length - kept.length;
-  if (removed > 0)
-    await writeCredentialFile({ schema: 1, credentials: kept }, env);
-  return removed;
+  return withStoreLock(env, async () => {
+    const file = await readCredentialFile(env);
+    const kept = source
+      ? file.credentials.filter((entry) => entry.source !== source)
+      : [];
+    const removed = file.credentials.length - kept.length;
+    if (removed > 0)
+      await writeCredentialFile({ schema: 1, credentials: kept }, env);
+    return removed;
+  });
 }
 
 /**
@@ -219,9 +264,19 @@ export async function resolveCredential(
     };
   }
   const file = await readCredentialFile(env);
+  // TIE-BROKEN, because `createdAt` is milliseconds and two adapters can save inside the same one.
+  // `Array#sort` is stable, so an untied comparator keeps INSERTION order and hands back the OLDEST
+  // of the tied entries -- the exact opposite of the documented "most recently saved wins", and the
+  // user silently keeps using the credential they just replaced. Later array position is newer,
+  // since `saveCredential` pushes, so position descending is the tie-break.
   const usable = file.credentials
-    .filter((entry) => !entry.needsReauth)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => !entry.needsReauth)
+    .sort(
+      (a, b) =>
+        b.entry.createdAt.localeCompare(a.entry.createdAt) || b.index - a.index
+    )
+    .map(({ entry }) => entry);
   const chosen = usable[0];
   if (!chosen) return null;
   return {
@@ -249,19 +304,21 @@ export async function markNeedsReauth(
   reason: string,
   env: NodeJS.ProcessEnv = process.env
 ): Promise<ReauthOutcome> {
-  const file = await readCredentialFile(env);
-  const index = file.credentials.findIndex(
-    (entry) => entry.accountId === rejected.accountId
-  );
-  if (index < 0) return 'unknown-account';
-  const entry = file.credentials[index];
-  if (entry.generation !== rejected.generation) return 'stale-generation';
-  const credentials = [...file.credentials];
-  credentials[index] = {
-    ...entry,
-    needsReauth: true,
-    reauthReason: reason,
-  };
-  await writeCredentialFile({ schema: 1, credentials }, env);
-  return 'marked';
+  return withStoreLock(env, async () => {
+    const file = await readCredentialFile(env);
+    const index = file.credentials.findIndex(
+      (entry) => entry.accountId === rejected.accountId
+    );
+    if (index < 0) return 'unknown-account';
+    const entry = file.credentials[index];
+    if (entry.generation !== rejected.generation) return 'stale-generation';
+    const credentials = [...file.credentials];
+    credentials[index] = {
+      ...entry,
+      needsReauth: true,
+      reauthReason: reason,
+    };
+    await writeCredentialFile({ schema: 1, credentials }, env);
+    return 'marked';
+  });
 }

@@ -30,7 +30,6 @@
 
 ---
 
-
 ## Why it wins
 
 Providers cache the prompt prefix: cached tokens re-read at **0.1x**, rewritten
@@ -70,8 +69,8 @@ guard we hold ourselves to.
 turn by turn and prices each the way a provider does. Four independent sessions,
 whole request including system prompt and tool schema, against no proxy:
 
-| conversation length | **ours** | cheaper on |
-| ------------------- | -------- | ---------- |
+| conversation length | **ours**   | cheaper on |
+| ------------------- | ---------- | ---------- |
 | 10 turns            | **0.953x** | **4 of 4** |
 | 20 turns            | **0.915x** | **4 of 4** |
 
@@ -444,14 +443,14 @@ arithmetic: a cached prefix is re-read at 0.1x and a rewritten one is charged at
 HeadRoom-style arm removes a larger share of every workload and loses on
 cache-weighted effective tokens on all of them:
 
-| workload         | raw reduction, ours / theirs | effective tokens, ours / theirs |
-| ---------------- | ---------------------------- | ------------------------------- |
-| code search      | 85.0% / **96.8%**            | **859** / 1,068                 |
-| SRE debugging    | 86.2% / **97.2%**            | **1,783** / 2,141               |
-| issue triage     | 90.7% / **98.0%**            | **439** / 557                   |
-| grep output      | 47.1% / **53.4%**            | **6,896** / 8,971               |
-| raw build log    | 50.1% / **55.0%**            | **15,937** / 17,943             |
-| browser session  | 20.3% / 20.3%                | **18,407** / 18,539             |
+| workload        | raw reduction, ours / theirs | effective tokens, ours / theirs |
+| --------------- | ---------------------------- | ------------------------------- |
+| code search     | 85.0% / **96.8%**            | **859** / 1,068                 |
+| SRE debugging   | 86.2% / **97.2%**            | **1,783** / 2,141               |
+| issue triage    | 90.7% / **98.0%**            | **439** / 557                   |
+| grep output     | 47.1% / **53.4%**            | **6,896** / 8,971               |
+| raw build log   | 50.1% / **55.0%**            | **15,937** / 17,943             |
+| browser session | 20.3% / 20.3%                | **18,407** / 18,539             |
 
 The competitor arm is this repository's own reimplementation of their published
 design -- opaque hash markers, history compressed, a retrieval tool and system
@@ -478,12 +477,12 @@ these are offline estimates, not results from their shipped proxy.
 recorded in commit `f712b4ec` used `bench/live/ab.sh`, rotated each arm through
 every position, and re-ran pytest independently after each task:
 
-| arm | mean weighted input tokens | tests passed |
-| --- | ---: | ---: |
-| uncompressed control | 134,706 | 4/4 |
-| Token Optimizer, previous 1,500-character deferral floor | 100,818 | 4/4 |
-| Token Optimizer, zero floor (now the default) | 49,053 | 4/4 |
-| HeadRoom shipped proxy | 48,626 | 4/4 |
+| arm                                                      | mean weighted input tokens | tests passed |
+| -------------------------------------------------------- | -------------------------: | -----------: |
+| uncompressed control                                     |                    134,706 |          4/4 |
+| Token Optimizer, previous 1,500-character deferral floor |                    100,818 |          4/4 |
+| Token Optimizer, zero floor (now the default)            |                     49,053 |          4/4 |
+| HeadRoom shipped proxy                                   |                     48,626 |          4/4 |
 
 Weighted input is `input + 1.25 * cache_creation + 0.1 * cache_read`; it excludes
 output cost. Both zero-floor Token Optimizer and HeadRoom reduced that measure
@@ -499,11 +498,11 @@ at equal correctness rather than accuracy. HeadRoom ran in `--mode token`, its
 compression-first setting, not the `cache` default that exists to freeze the
 cache hit rate.
 
-| arm | mean input tokens | of which cached | output | requests | agent seconds |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| uncompressed control | 55,632 | 43,079 | 200 | 3.0 | 19.1 |
-| Token Optimizer | 42,468 | 33,052 | 189 | 3.0 | 17.3 |
-| HeadRoom 0.37.0, `--mode token` | 71,626 | 51,897 | 285 | 4.3 | 27.3 |
+| arm                             | mean input tokens | of which cached | output | requests | agent seconds |
+| ------------------------------- | ----------------: | --------------: | -----: | -------: | ------------: |
+| uncompressed control            |            55,632 |          43,079 |    200 |      3.0 |          19.1 |
+| Token Optimizer                 |            42,468 |          33,052 |    189 |      3.0 |          17.3 |
+| HeadRoom 0.37.0, `--mode token` |            71,626 |          51,897 |    285 |      4.3 |          27.3 |
 
 Input reduction against the control was 22.7% on the log task, 34.3% on the JSON
 task and 11.5% on the code search; against HeadRoom, 54.9%, 10.0% and 42.2%.
@@ -596,7 +595,6 @@ lower, and input was 15.9% lower. These development runs retain every original
 loss; cache and model variation also affect results. See the [case-by-case audit,
 fixes, exact replay, and live evidence](bench/live/evidence/cost-losses-2026-09-16/README.md).
 
-
 **Local proxy performance (2026-09-16).** Against installed HeadRoom 0.37.0,
 2,160 completed local-upstream requests covered repeated and unique logs, JSON,
 and code-search output in three rotated arm orders. Our mean latency and process
@@ -612,11 +610,11 @@ and installed HeadRoom 0.37.0 completed a balanced 27-run campaign. All three
 arms passed all nine tasks; every initial read was complete, and all provider
 ledger totals matched Codex's reported usage.
 
-| workload | mean input, ours | mean input, HeadRoom | reduction vs HeadRoom |
-| --- | ---: | ---: | ---: |
-| JSON outlier lookup | 39,318 | 44,043 | 10.7% |
-| code search | 44,427 | 82,697 | 46.3% |
-| log diagnosis | 39,203 | 84,308 | 53.5% |
+| workload            | mean input, ours | mean input, HeadRoom | reduction vs HeadRoom |
+| ------------------- | ---------------: | -------------------: | --------------------: |
+| JSON outlier lookup |           39,318 |               44,043 |                 10.7% |
+| code search         |           44,427 |               82,697 |                 46.3% |
+| log diagnosis       |           39,203 |               84,308 |                 53.5% |
 
 These counts include cached input and extra retrieval turns; they are not raw
 compression percentages or dollar costs. Output tokens did not improve on every
@@ -629,7 +627,6 @@ measured 35.5%, 43.5%, and 16.6% less total input than installed HeadRoom for re
 bug fixes, multi-file refactors, and configuration refreshes. These are small
 synthetic repositories with natural tool selection. Uncached input and latency
 have separate results; see the [workflow evidence and limitations](bench/live/evidence/codex-workflows-2026-09-15/README.md).
-
 
 The proxy is enabled by default and binds loopback only.
 
@@ -1061,10 +1058,10 @@ a plan and deleted nothing.
 routes many providers behind one endpoint. It is wired here as a first-class
 provider for the optimizer's own model calls, with **two independent ways in**:
 
-| Choice            | Provider id         | What it does                                                    |
-| ----------------- | ------------------- | --------------------------------------------------------------- |
-| `OrcaRouter - API`  | `orcarouter`        | You paste an `sk-orca-…` key you already hold. Nothing opens.    |
-| `OrcaRouter - Auth` | `orcarouter-oauth`  | OAuth 2.0 + PKCE: a browser asks for consent and issues you a key. |
+| Choice              | Provider id        | What it does                                                       |
+| ------------------- | ------------------ | ------------------------------------------------------------------ |
+| `OrcaRouter - API`  | `orcarouter`       | You paste an `sk-orca-…` key you already hold. Nothing opens.      |
+| `OrcaRouter - Auth` | `orcarouter-oauth` | OAuth 2.0 + PKCE: a browser asks for consent and issues you a key. |
 
 Both produce the same ordinary OrcaRouter API key, and everything downstream —
 the Bearer header, the endpoint, model discovery, `401` recovery — is identical
@@ -1108,10 +1105,10 @@ durable key grants such as OrcaRouter are reused until the provider revokes them
 Authentication and inference are **different hosts**, and neither is derived from
 the other:
 
-| Purpose                        | Default                            |
-| ------------------------------ | ---------------------------------- |
-| Consent screen and code exchange | `https://www.orcarouter.ai`      |
-| Inference and model discovery  | `https://api.orcarouter.ai/v1`     |
+| Purpose                          | Default                        |
+| -------------------------------- | ------------------------------ |
+| Consent screen and code exchange | `https://www.orcarouter.ai`    |
+| Inference and model discovery    | `https://api.orcarouter.ai/v1` |
 
 `https://api.orcarouter.ai/v1/auth/keys` is a 404 — the auth endpoints are not
 under the relay. Self-hosted installs can set `ORCA_BASE_URL` for a single shared
@@ -1140,12 +1137,12 @@ such (`openai/gpt-5.5`, `anthropic/claude-opus-4.8`, `google/gemini-3.5-flash`,
 reasoning-effort metadata intact. A successful live result is authoritative and
 never has the fallback mixed into it.
 
-| Text entry point | After switching to images |
-| --- | --- |
+| Text entry point                                                                                    | After switching to images                                                                                                                           |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![The model listbox open on the live chat catalog](./docs/media/orcarouter/text-model-dropdown.png) | ![The model listbox after switching to images, holding only models that declare image input](./docs/media/orcarouter/multimodal-model-dropdown.png) |
 
 The second capture is after the entry point is switched to images: the text-only
-selection is cleared, and only the two models whose catalog entry declares image
+selection is cleared, and only models whose catalog entry declares image
 input remain.
 
 `npm run evidence:orcarouter` regenerates the screenshots and assertions for the

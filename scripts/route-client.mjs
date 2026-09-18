@@ -103,11 +103,15 @@ async function routeOrcaRouter(args) {
     if (result.degradedReason) console.log(`reason:  ${result.degradedReason}`);
     for (const model of result.models) {
       const meta = [
-        model.contextLength ? `${Math.round(model.contextLength / 1000)}k` : null,
+        model.contextLength
+          ? `${Math.round(model.contextLength / 1000)}k`
+          : null,
         model.inputModalities.filter((m) => m !== 'text').join('+') || null,
         model.fromSeed ? 'verified fallback' : null,
       ].filter(Boolean);
-      console.log(`  ${model.id}${meta.length ? `  (${meta.join(', ')})` : ''}`);
+      console.log(
+        `  ${model.id}${meta.length ? `  (${meta.join(', ')})` : ''}`
+      );
     }
     return 0;
   }
@@ -123,7 +127,10 @@ async function routeOrcaRouter(args) {
     } else {
       console.log('Paste the code shown on that page:');
       const { createInterface } = await import('node:readline/promises');
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      const rl = createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
       const code = await rl.question('Code: ');
       rl.close();
       manager.submitCode(started.attemptId, code);

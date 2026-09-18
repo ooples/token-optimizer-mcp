@@ -37,10 +37,15 @@ const saved: Record<string, string | undefined> = {};
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-summarizer-'));
   env = { TOKEN_OPTIMIZER_HOME: home };
+  // TOKEN_OPTIMIZER_HOME is in this list because the tests below ASSIGN it. Leaving it out left it
+  // pointing at a temp directory this file had already deleted, and a jest worker runs several
+  // files per process -- so a later file calling optimizerHome() picked up the dead path and failed
+  // depending on file order.
   for (const key of [
     'ANTHROPIC_API_KEY',
     'GOOGLE_AI_API_KEY',
     'TOKEN_OPTIMIZER_ORCA_MODEL',
+    'TOKEN_OPTIMIZER_HOME',
   ])
     saved[key] = process.env[key];
   delete process.env.ANTHROPIC_API_KEY;

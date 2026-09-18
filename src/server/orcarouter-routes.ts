@@ -19,7 +19,10 @@
  */
 
 import type { Express, Request, Response } from 'express';
-import { resolveOrigins } from '../orcarouter/endpoints.js';
+import {
+  resolveOrigins,
+  OrcaRouterConfigError,
+} from '../orcarouter/endpoints.js';
 import {
   ApiKeyCredentialAdapter,
   PkceCredentialAdapter,
@@ -37,7 +40,34 @@ import {
   type CatalogCapability,
   type InputModality,
 } from '../orcarouter/catalog.js';
-import { discoverModels, resolveProvider } from '../orcarouter/provider.js';
+import {
+  discoverModels,
+  resolveProvider,
+  OrcaProviderError,
+} from '../orcarouter/provider.js';
+
+/**
+ * The message a caller is allowed to see.
+ *
+ * The three Orca* errors are raised deliberately by this feature and their text is written FOR the
+ * user -- "That key was rejected", "No code was submitted". Anything else reaching a catch here is
+ * unexpected, and unexpected on these routes means the credential store: an ENOENT or EACCES whose
+ * `message` carries the absolute path of the file holding a billable key. That is CWE-209, and it
+ * is returned over a CORS-wildcard localhost API, so it is readable by any page the user visits.
+ *
+ * The detail is not discarded -- it goes to the server log, where the operator can see it and a
+ * remote caller cannot.
+ */
+function safeMessage(error: unknown, fallback: string): string {
+  if (
+    error instanceof OrcaConnectError ||
+    error instanceof OrcaProviderError ||
+    error instanceof OrcaRouterConfigError
+  )
+    return error.message;
+  console.error('[orcarouter] unexpected failure on a provider route:', error);
+  return fallback;
+}
 
 /**
  * One manager for the life of the server.
@@ -157,7 +187,7 @@ export function registerOrcaRouterRoutes(app: Express): void {
       await new ApiKeyCredentialAdapter().save(String(key ?? ''));
     } catch (error) {
       return res.status(400).json({
-        error: error instanceof Error ? error.message : 'Invalid key.',
+        error: safeMessage(error, 'Invalid key.'),
       });
     }
     return res.json(await providerStatus(process.env));
@@ -202,10 +232,7 @@ export function registerOrcaRouterRoutes(app: Express): void {
       });
     } catch (error) {
       res.status(502).json({
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Could not start the OrcaRouter connection.',
+        error: safeMessage(error, 'Could not start the OrcaRouter connection.'),
       });
     }
   });
@@ -258,10 +285,7 @@ export function registerOrcaRouterRoutes(app: Express): void {
                   ? 408
                   : 502;
         return res.status(status).json({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'The OrcaRouter connection failed.',
+          error: safeMessage(error, 'The OrcaRouter connection failed.'),
           kind,
         });
       }
@@ -279,8 +303,7 @@ export function registerOrcaRouterRoutes(app: Express): void {
         res.json({ accepted: true });
       } catch (error) {
         res.status(400).json({
-          error:
-            error instanceof Error ? error.message : 'No code was submitted.',
+          error: safeMessage(error, 'No code was submitted.'),
         });
       }
     }
@@ -336,8 +359,7 @@ export function registerOrcaRouterRoutes(app: Express): void {
       });
     } catch (error) {
       res.status(502).json({
-        error:
-          error instanceof Error ? error.message : 'Model discovery failed.',
+        error: safeMessage(error, 'Model discovery failed.'),
       });
     }
   });

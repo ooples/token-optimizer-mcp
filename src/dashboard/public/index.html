@@ -171,7 +171,11 @@
           </div>
           <span class="source-chip" id="provider-price-coverage">Loading</span>
         </div>
-        <div class="accounting-grid" id="provider-accounting-grid" role="status">
+        <div
+          class="accounting-grid"
+          id="provider-accounting-grid"
+          role="status"
+        >
           <p>Loading native provider usage&hellip;</p>
         </div>
         <div class="table-scroll">
@@ -195,9 +199,10 @@
 
       <!-- The model provider the optimizer's own calls go through. Two
            independent ways in, because they serve different users: a key you
-           already hold, or a browser sign-in that issues one. The key never
-           reaches this page -- it is posted to the local server and only a
-           redacted form comes back. -->
+           already hold, or a browser sign-in that issues one. The user types the
+           key into the field below, so it does pass through this page once; what
+           the page never does is PERSIST it or read it back -- it is posted to
+           the local server and only a redacted form is ever returned. -->
       <section
         class="card provider-connect"
         id="orcarouter-card"
@@ -241,7 +246,9 @@
           <div class="connect-choice" id="orcarouter-choice-api">
             <p class="connect-choice-title">
               OrcaRouter &ndash; API
-              <span class="choice-flag" id="orcarouter-flag-api" hidden>In use</span>
+              <span class="choice-flag" id="orcarouter-flag-api" hidden
+                >In use</span
+              >
             </p>
             <p class="connect-choice-sub">
               Paste a key you already hold. Nothing opens.
@@ -273,7 +280,9 @@
           <div class="connect-choice" id="orcarouter-choice-auth">
             <p class="connect-choice-title">
               OrcaRouter &ndash; Auth
-              <span class="choice-flag" id="orcarouter-flag-auth" hidden>In use</span>
+              <span class="choice-flag" id="orcarouter-flag-auth" hidden
+                >In use</span
+              >
             </p>
             <p class="connect-choice-sub">
               Sign in with your OrcaRouter account. No key to copy.
@@ -283,7 +292,11 @@
               key comes back to this machine; no client secret is involved.
             </p>
             <div class="connect-actions">
-              <button class="btn btn-primary" id="orcarouter-connect" type="button">
+              <button
+                class="btn btn-primary"
+                id="orcarouter-connect"
+                type="button"
+              >
                 Connect with OrcaRouter
               </button>
               <button class="btn" id="orcarouter-cancel" type="button" hidden>
@@ -309,7 +322,11 @@
                 Use this code
               </button>
             </div>
-            <p class="connect-status" id="orcarouter-auth-status" role="status"></p>
+            <p
+              class="connect-status"
+              id="orcarouter-auth-status"
+              role="status"
+            ></p>
           </div>
         </div>
 
@@ -355,7 +372,10 @@
                   role="listbox"
                   aria-labelledby="orcarouter-model-label"
                 ></ul>
-                <p class="model-panel-note" id="orcarouter-model-panel-note"></p>
+                <p
+                  class="model-panel-note"
+                  id="orcarouter-model-panel-note"
+                ></p>
               </div>
             </div>
             <p class="connect-hint" id="orcarouter-model-hint">

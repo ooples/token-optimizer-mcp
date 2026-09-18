@@ -9,7 +9,14 @@
  * appears in no log, no error and no URL.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  jest,
+} from '@jest/globals';
 import { mkdtempSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -72,10 +79,54 @@ describe('credential store', () => {
     expect(await resolveCredential(env)).toBeNull();
   });
 
-  it('writes the file owner-only, because it holds a billable credential', async () => {
-    await saveCredential({ source: 'api-key', key: FAKE_KEY }, env);
-    const mode = statSync(credentialStorePath(env)).mode & 0o777;
-    expect(mode).toBe(0o600);
+  // POSIX ONLY, deliberately. Node's `chmod` on Windows toggles the read-only bit and nothing else,
+  // so the mode reads back 0o666 there no matter what was requested. Asserting 0o600 everywhere
+  // turns a platform limitation into a red test and teaches people to ignore it; skipping it
+  // silently would instead claim a guarantee nobody checks. This states which platform it holds on.
+  const posixOnly = process.platform === 'win32' ? it.skip : it;
+  posixOnly(
+    'writes the file owner-only on POSIX, because it holds a billable credential',
+    async () => {
+      await saveCredential({ source: 'api-key', key: FAKE_KEY }, env);
+      const mode = statSync(credentialStorePath(env)).mode & 0o777;
+      expect(mode).toBe(0o600);
+    }
+  );
+
+  it('does not lose a credential when two saves overlap', async () => {
+    // READ-MODIFY-RENAME, TWICE, CONCURRENTLY. Both saves read the same snapshot; without a lock
+    // the later rename discards the earlier credential entirely and the user loses the one they
+    // just added. Distinct sources, so neither is meant to replace the other.
+    await Promise.all([
+      saveCredential({ source: 'api-key', key: FAKE_KEY }, env),
+      saveCredential(
+        { source: 'oauth-pkce', key: FAKE_KEY_2, accountId: 'acct' },
+        env
+      ),
+    ]);
+    const file = await readCredentialFile(env);
+    expect(file.credentials.map((entry) => entry.source).sort()).toEqual([
+      'api-key',
+      'oauth-pkce',
+    ]);
+  });
+
+  it('keeps the newest credential when two share a millisecond', async () => {
+    // `createdAt` is millisecond resolution and `Array#sort` is stable, so an untied comparator
+    // returns the OLDEST of a tie -- the opposite of the documented precedence.
+    const iso = '2026-09-18T00:00:00.000Z';
+    const spy = jest.spyOn(Date.prototype, 'toISOString').mockReturnValue(iso);
+    try {
+      await saveCredential({ source: 'api-key', key: FAKE_KEY }, env);
+      await saveCredential(
+        { source: 'oauth-pkce', key: FAKE_KEY_2, accountId: 'acct' },
+        env
+      );
+    } finally {
+      spy.mockRestore();
+    }
+    const resolved = await resolveCredential(env);
+    expect(resolved?.key).toBe(FAKE_KEY_2);
   });
 
   it('bumps the generation on every save for the same account', async () => {

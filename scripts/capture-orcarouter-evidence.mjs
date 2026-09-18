@@ -202,6 +202,10 @@ async function main() {
         false,
         `${BASE}/api/health never answered`
       );
+      // EXIT NON-ZERO. This `return` skips the block at the end that sets process.exitCode, so
+      // without this the command recorded a failed check and still exited 0 -- a capture run that
+      // produced no evidence looked exactly like one that produced all of it.
+      process.exitCode = 1;
       return;
     }
 
