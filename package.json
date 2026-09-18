@@ -12,7 +12,8 @@
     "token-optimizer-doctor": "./scripts/doctor.mjs",
     "token-optimizer-diagnostics": "./scripts/export-diagnostics.mjs",
     "token-optimizer-proxy": "./dist/proxy/cli.js",
-    "token-optimizer-run": "./scripts/run-client.mjs"
+    "token-optimizer-run": "./scripts/run-client.mjs",
+    "token-optimizer-route": "./scripts/route-client.mjs"
   },
   "files": [
     "dist/**/*",

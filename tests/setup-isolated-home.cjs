@@ -90,3 +90,15 @@ process.env.TOKEN_OPTIMIZER_HARVEST_STATE = join(
 // green. Tests assert the default posture unless they set a mode themselves, which they still can:
 // beforeEach and per-spawn env run after this.
 delete process.env.TOKEN_OPTIMIZER_MODE;
+
+// NO TEST MAY START A BACKGROUND SERVICE, OR REACH THE DEVELOPER'S OWN CLIENT.
+//
+// The MCP server ensures the compression route at startup, and several suites spawn that server for
+// real. On this machine that left a detached supervisor running after `npm test` and wrote a route
+// into the developer's actual ~/.claude/settings.json -- which the next run then healed back out,
+// so the only visible trace was a settings file that had quietly changed twice.
+//
+// Autostart off is enough to stop both: every routing entry point answers null without a supervisor,
+// and nothing is written unless a route was really served. A suite that tests the supervisor starts
+// one itself, in-process, on a port of its own.
+process.env.TOKEN_OPTIMIZER_PROXY_AUTOSTART = '0';

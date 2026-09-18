@@ -639,6 +639,22 @@ and expose no documented redirect. Everything else -- the optimizer tools, the
 graph, the hooks -- still applies to them, and the doctor states the limitation
 instead of counting it as a failure.
 
+`token-optimizer-route` shows what is running and what configuration has been
+written on your behalf. Zed is the one client that can be routed and cannot be
+routed for you -- its provider is a named entry you pick inside the editor, and
+only you know which endpoint and model it should use:
+
+```bash
+token-optimizer-route                                                  # what is routed right now
+token-optimizer-route zed --upstream https://api.openai.com/v1 --model gpt-4o
+token-optimizer-route zed --remove
+```
+
+Zed's provider schema here comes from its published settings documentation and
+has not been exercised against an installed Zed in this repository. It is
+written into a file the command can take back out, and nothing is written unless
+the route is already being served.
+
 Existing custom provider authentication stays in the client, and your own
 endpoint stays yours: the proxy is inserted in front of whatever you configured,
 never in place of it. `TOKEN_OPTIMIZER_PROXY=0` disables routing and

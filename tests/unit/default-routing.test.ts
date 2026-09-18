@@ -118,6 +118,16 @@ describe('routing a client we did not launch', () => {
     expect(read()).toEqual({ model: 'opus' });
   });
 
+  it('keeps an empty env object the user already had', async () => {
+    // Found on a real machine: the settings file had `"env": {}`, we added our variable, the route
+    // later became unservable, and tidying away the now-empty object removed a key the user wrote.
+    // Removal has to return the file to what it was, or the record is not worth anything.
+    write({ model: 'opus', env: {} });
+    await applyDefaultRouting(route, env);
+    removeDefaultRouting(env);
+    expect(read()).toEqual({ model: 'opus', env: {} });
+  });
+
   it('will not touch a client already pointed at somebody else’s local proxy', async () => {
     // Replacing it would silently take that tool out of the path, and forwarding to it could as
     // easily be forwarding to ourselves.

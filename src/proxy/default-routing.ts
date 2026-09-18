@@ -42,6 +42,8 @@ export interface RoutingEntry {
   readonly value: string;
   /** What the file said before we ever touched it; absent when the variable was not set. */
   readonly previous?: string;
+  /** Whether the settings file had no `env` object at all before we wrote one. */
+  readonly createdEnv?: boolean;
   readonly upstream: string;
   readonly writtenAt: string;
 }
@@ -247,7 +249,11 @@ export function removeDefaultRouting(
   if (settings.env) {
     if (recorded.previous === undefined) delete settings.env[VARIABLE];
     else settings.env[VARIABLE] = recorded.previous;
-    if (Object.keys(settings.env).length === 0) delete settings.env;
+    // Only tidy away an `env` object we created. Deleting one the user already had -- even an empty
+    // one -- would mean removal did not return the file to what it was, and this file is the whole
+    // reason to trust the feature.
+    if (recorded.createdEnv && Object.keys(settings.env).length === 0)
+      delete settings.env;
     saveSettings(path, settings);
   }
   record(env, null);
@@ -301,11 +307,15 @@ export async function applyDefaultRouting(
   if (settings.env?.[VARIABLE] === url && recorded?.value === url)
     return { status: 'unchanged', path, url, upstream };
 
+  const createdEnv = recorded
+    ? recorded.createdEnv
+    : settings.env === undefined;
   settings.env = { ...settings.env, [VARIABLE]: url };
   saveSettings(path, settings);
   record(env, {
     variable: VARIABLE,
     value: url,
+    createdEnv,
     // What the file said before we ever touched it, captured before the write above. Re-deriving it
     // on a later pass would record our own route as the thing to restore.
     previous: original,
