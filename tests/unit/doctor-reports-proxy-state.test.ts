@@ -1,5 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
 import { createServer } from 'node:http';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { probeProxy, probeSupervisor } from '../../hooks-core/doctor.mjs';
 import {
   proxyEnvFor,
@@ -21,7 +24,8 @@ const detailOf = (checks: Array<Record<string, unknown>>): string =>
 describe('probeProxy', () => {
   it('uses the MCP handshake identity when the client environment was filtered', () => {
     const checks = probeProxy({}, { clientName: 'codex-mcp' });
-    expect(checks[0].pass).toBe(false);
+    // WHAT THIS PINS IS THE IDENTITY, not the severity. Severity moved when routing stopped being
+    // opt-in: see 'a plain plugin install...' below for the case that owns that question now.
     expect(detailOf(checks)).toContain('OPENAI_BASE_URL');
     expect(detailOf(checks)).toContain('token-optimizer-run codex');
     expect(detailOf(checks)).not.toContain('no supported way');
@@ -29,8 +33,77 @@ describe('probeProxy', () => {
 
   it('does not classify an unidentified MCP host as an unsupported client', () => {
     const checks = probeProxy({});
-    expect(checks[0].pass).toBe(false);
     expect(detailOf(checks)).toContain('routing is unverified');
+    expect(detailOf(checks)).not.toContain('no supported way');
+  });
+
+  it('a plain plugin install is not reported as a broken installation', () => {
+    // THE GUARANTEE #398 ADDED, KEPT, BUT DELIVERED BY THE MECHANISM THAT NOW EXISTS. Its reasoning
+    // was that routing is opt-in, so a default install could never be routed and failing it told
+    // every documented user "Something above is broken". Routing is no longer opt-in: the MCP server
+    // writes the endpoint into the client's own configuration at startup, and the client reads that
+    // at ITS startup -- so the one session in between is unrouted and nothing is wrong.
+    //
+    // That session is what this pins. A recorded route plus an unrouted session is a warning; the
+    // next start picks it up.
+    const home = mkdtempSync(join(tmpdir(), 'doctor-routing-'));
+    try {
+      writeFileSync(
+        join(home, 'default-routing.json'),
+        JSON.stringify({
+          schema: 1,
+          entries: {
+            's.json': {
+              variable: 'ANTHROPIC_BASE_URL',
+              value: 'http://127.0.0.1:45712',
+            },
+          },
+        })
+      );
+      for (const client of ['claude-code', 'codex', 'opencode']) {
+        const checks = probeProxy(
+          { TOKEN_OPTIMIZER_HOME: home },
+          { clientName: client }
+        );
+        expect(checks[0].pass).toBe(true);
+        expect(checks[0].warn).toBe(true);
+        expect(detailOf(checks)).toContain('started before the route');
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('FAILS when nothing has been routed and nothing is waiting to be', () => {
+    // The other half, and the reason the warning above is not simply the answer everywhere: with no
+    // route recorded and none active, this client is talking straight to the provider and will keep
+    // doing so. That is a real deficiency with a remedy that ends it.
+    const checks = probeProxy(
+      { TOKEN_OPTIMIZER_HOME: mkdtempSync(join(tmpdir(), 'doctor-empty-')) },
+      { clientName: 'claude-code' }
+    );
+    expect(checks[0].pass).toBe(false);
+    expect(detailOf(checks)).toContain('token-optimizer-install');
+  });
+
+  it('a whitespace-only TOKEN_OPTIMIZER_CLIENT does not become a client name', () => {
+    // Read raw it is falsy for "did someone ask for routing" and truthy as a name, so the lookup
+    // found no variable and the report blamed the client instead of the missing route.
+    const checks = probeProxy(
+      { TOKEN_OPTIMIZER_CLIENT: '   ' },
+      { clientName: 'codex' }
+    );
+    expect(detailOf(checks)).toContain('OPENAI_BASE_URL');
+    expect(detailOf(checks)).not.toContain('no supported way');
+  });
+
+  it('accepts a configured client whatever its spacing or case', () => {
+    const checks = probeProxy({
+      TOKEN_OPTIMIZER_CLIENT: '  Claude-Code  ',
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:8123',
+    });
+    expect(checks[0].pass).toBe(true);
+    expect(checks[0].warn).toBeFalsy();
   });
 
   it('does not disclose upstream credentials in diagnostic output', () => {
@@ -64,6 +137,7 @@ describe('probeProxy', () => {
       TOKEN_OPTIMIZER_CLIENT: 'claude-code',
     });
     expect(checks[0].pass).toBe(false);
+    expect(checks[0].warn).toBeFalsy();
     expect(detailOf(checks)).toContain('ANTHROPIC_BASE_URL');
     expect(detailOf(checks)).toContain('straight to the provider');
   });

@@ -567,6 +567,35 @@ function clientFrom(env, clientName) {
   );
 }
 
+/**
+ * Have we already written this machine's routing, so an unrouted session is merely an old one?
+ *
+ * WHY THIS IS A WARNING AND NOT A FAILURE. The client reads its endpoint at startup, and the MCP
+ * server writes that endpoint while starting. A session running when the route was first installed
+ * therefore reports unrouted and is right to -- but nothing is broken, and the next start picks it
+ * up. Reporting it as a failure would tell a correctly-installed user their install is broken, once,
+ * for one session, which is exactly the false alarm this whole report exists to avoid.
+ *
+ * Read as a plain file rather than through the compiled module, because this file is copied into
+ * eleven client integrations that do not ship `dist/`.
+ */
+function routingPending(env = process.env) {
+  try {
+    const home =
+      env.TOKEN_OPTIMIZER_HOME || join(homedir(), '.token-optimizer');
+    const manifest = JSON.parse(
+      readFileSync(join(home, 'default-routing.json'), 'utf8')
+    );
+    if (manifest?.schema !== 1) return false;
+    return Object.values(manifest.entries || {}).some((entry) =>
+      pointsAtLoopback(entry?.value)
+    );
+  } catch {
+    // No manifest, or one we cannot read, means nothing has been written for us to be waiting on.
+    return false;
+  }
+}
+
 export function probeProxy(env = process.env, { clientName } = {}) {
   // NORMALISED THE WAY THE RUNTIME NORMALISES IT. `policy.mode()` trims and
   // lowercases, so `OFF` and ` off ` genuinely turn the product off -- while a raw
@@ -624,8 +653,10 @@ export function probeProxy(env = process.env, { clientName } = {}) {
   const loopback = pointsAtLoopback(pointed);
   if (!loopback) {
     return [
-      bad(
-        'the compression proxy is on but nothing is routed through it',
+      (routingPending(env) ? warn : bad)(
+        routingPending(env)
+          ? 'this session started before the route was configured'
+          : 'the compression proxy is on but nothing is routed through it',
         variable +
           ' is ' +
           (pointed ? 'not a loopback URL' : 'not set') +
