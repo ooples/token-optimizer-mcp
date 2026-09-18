@@ -552,8 +552,13 @@ function portAnswers(url) {
  */
 function clientFrom(env, clientName) {
   const reported = String(clientName || '').toLowerCase();
+  // NORMALISED, because read raw a whitespace-only value is truthy as a client name: proxyEnvFor(' ')
+  // then finds nothing and the report says the client cannot be served -- about a client the MCP
+  // handshake had already identified by name.
   return (
-    env.TOKEN_OPTIMIZER_CLIENT ||
+    String(env.TOKEN_OPTIMIZER_CLIENT || '')
+      .trim()
+      .toLowerCase() ||
     (/^(codex|codex[_-](cli|mcp|desktop))$/.test(reported)
       ? 'codex'
       : /^(claude-code|claude)$/.test(reported)

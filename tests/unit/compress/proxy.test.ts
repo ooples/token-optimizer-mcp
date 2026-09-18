@@ -685,10 +685,17 @@ describe('what the proxy refuses to buffer or forward', () => {
 
   it('still forwards a body under the limit', async () => {
     // The control: a limit that rejected everything would pass the test above.
+    //
+    // KNOWLEDGE OFF, because this asserts the body arrives BYTE FOR BYTE and injection is on by
+    // default. It passed only while this repository's own graph held nothing worth injecting: the
+    // moment a finding was recorded here, the proxy added a `system` block and the comparison failed
+    // on a developer machine while CI, with no graph, stayed green. What is under test is
+    // forwarding, not what the graph happens to contain.
     const { url, seen } = await upstream();
     const { server, port } = await startProxy({
       upstream: url,
       maxBodyBytes: 4096,
+      knowledge: false,
     });
     servers.push(server);
 
