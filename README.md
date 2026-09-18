@@ -492,6 +492,50 @@ This small arithmetic repair task does not establish superiority across tasks,
 compression quality, or total cost. Rotation balances run position, but does
 not guarantee that shared provider-cache effects disappear.
 
+**Codex three-task comparison against HeadRoom 0.37.0 (2026-09-18).** Three
+synthetic controlled-read tasks, three repetitions, three arms, every arm in
+every position. All 27 runs returned the correct answer, so this compares cost
+at equal correctness rather than accuracy. HeadRoom ran in `--mode token`, its
+compression-first setting, not the `cache` default that exists to freeze the
+cache hit rate.
+
+| arm | mean input tokens | of which cached | output | requests | agent seconds |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| uncompressed control | 55,632 | 43,079 | 200 | 3.0 | 19.1 |
+| Token Optimizer | 42,468 | 33,052 | 189 | 3.0 | 17.3 |
+| HeadRoom 0.37.0, `--mode token` | 71,626 | 51,897 | 285 | 4.3 | 27.3 |
+
+Input reduction against the control was 22.7% on the log task, 34.3% on the JSON
+task and 11.5% on the code search; against HeadRoom, 54.9%, 10.0% and 42.2%.
+Every task favoured this proxy on both comparisons, and the JSON column is where
+HeadRoom is strongest and the margin thinnest.
+
+The mechanism is visible in two numbers that move independently. Mean input per
+REQUEST was 14,156 here against HeadRoom's 16,529 and the control's 18,544 --
+both proxies compress, and this one compresses harder. Mean requests per RUN was
+3.0, the same as the control, against HeadRoom's 4.3. A compressor that elides
+content the agent then has to read back spends a turn recovering it, and on
+these workloads a turn costs more than the elision saved; that is the failure
+this project's own deferral floor exists to avoid, and it is what the extra
+1.3 requests are.
+
+WHAT THIS DOES NOT SHOW. These are token counts, not dollar costs, and
+`bench/live/report-codex.mjs` deliberately declines to price them. Three short
+synthetic workloads do not establish a universal win. Each task ran in a fresh
+temporary workspace with no knowledge graph, so graph injection contributed
+nothing and this measures compression alone. Cached tokens are a subset of the
+input column, not an additional charge. HeadRoom's compression is scored from
+provider usage rather than byte counts recorded at our own listener.
+
+Reproduce with `HEADROOM_MODE=token node bench/live/codex.mjs`, then
+`node bench/live/report-codex.mjs <evidence-dir>`; the figures above were read
+only after that reporter returned `valid: true` with `balanced: true` and no
+failures. Four earlier campaigns were discarded rather than published: one ran
+without HeadRoom's `[proxy]` extra so every HeadRoom run errored before
+readiness, one ran HeadRoom in its `cache` default, one was voided by the
+reporter for an incomplete request capture, and one died on `ENOSPC` with the
+host disk full.
+
 The subsequent Claude Code default-versus-aggressive confirmation hit Claude's
 weekly usage limit and is incomplete. Its missing usage cannot count as a win.
 Codex validation runs independently through the Responses API.
