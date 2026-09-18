@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.1.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.0.1...v7.1.0) (2026-09-18)
+
+
+### Features
+
+* compression on by default for every client that can be routed ([#399](https://github.com/ooples/token-optimizer-mcp/issues/399)) ([388916f](https://github.com/ooples/token-optimizer-mcp/commit/388916f1907a6421412c5cb6fee6dc91a1d3871e))
+
+
+### Bug Fixes
+
+* **doctor:** an unrouted compression proxy is a warning, not a broken install ([#398](https://github.com/ooples/token-optimizer-mcp/issues/398)) ([8e0537e](https://github.com/ooples/token-optimizer-mcp/commit/8e0537e7b25609e2e1507fb5e7deb96c7ee66b93))
+* serve the plugin's own version, retry failed refreshes, and gate releases on a live launch ([#396](https://github.com/ooples/token-optimizer-mcp/issues/396)) ([8e0f9da](https://github.com/ooples/token-optimizer-mcp/commit/8e0f9daa0e1256f8ce26c0cfcb54282b7d733523))
+
+
+### CI/CD
+
+* test that a release installs and runs before publishing it ([#400](https://github.com/ooples/token-optimizer-mcp/issues/400)) ([be4df9a](https://github.com/ooples/token-optimizer-mcp/commit/be4df9a66a29cafe42e5b2448e84acf9ec9c8d39))
+
 ## [7.0.1](https://github.com/ooples/token-optimizer-mcp/compare/v7.0.0...v7.0.1) (2026-09-17)
 
 
