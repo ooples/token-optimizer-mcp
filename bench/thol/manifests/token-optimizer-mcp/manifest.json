@@ -1,17 +1,14 @@
 {
   "name": "token-optimizer-mcp",
   "display_name": "Token Optimizer MCP",
-  "verified": false,
+  "verified": true,
   "version_pin": "7.1.0",
   "version_checked": "2026-09-18",
   "upstream": "https://github.com/ooples/token-optimizer-mcp",
-  "install_doc": "README 'Quick start' -> Claude Code (https://github.com/ooples/token-optimizer-mcp#quick-start): '/plugin marketplace add ooples/token-optimizer-mcp', '/plugin install token-optimizer@token-optimizer', '/reload-plugins'. Those are interactive slash commands inside a running Claude Code session, so per CONTRIBUTING rule 1 they are not run in the harness. Instead setup_commands runs the package's own documented non-interactive installer, `token-optimizer-install`, which wires exactly the hooks the plugin installs into the sandboxed HOME's settings.json (scripts/install-cli.mjs -> wire-hooks.mjs, writing $HOME/.claude/settings.json). That installer does not register the MCP server, which the plugin install does, so the `mcp` block below is transcribed verbatim from plugin/.mcp.json with ${CLAUDE_PLUGIN_ROOT} resolved to the global npm install path. Nothing else is altered and no harness special-casing is required.",
+  "install_doc": "README 'Quick start' -> Claude Code (https://github.com/ooples/token-optimizer-mcp#quick-start): '/plugin marketplace add ooples/token-optimizer-mcp', '/plugin install token-optimizer@token-optimizer', '/reload-plugins'. Those are interactive slash commands inside a running Claude Code session, so per CONTRIBUTING rule 1 they are not run in the harness. The package is installed host-side by setup/install_competitors.sh (npm install -g @ooples/token-optimizer-mcp@7.1.0), which is why token-optimizer-install is declared in `requires` and checked before setup_commands -- the same shape as squeez, whose binary is a host prerequisite and whose setup_commands only wire it per run. setup_commands then runs the package's own documented non-interactive installer, which writes exactly the hooks the plugin installs into the sandboxed HOME (scripts/install-cli.mjs -> wire-hooks.mjs, $HOME/.claude/settings.json). That installer does not register the MCP server, which the plugin install does, so the `mcp` block below is transcribed verbatim from plugin/.mcp.json with ${CLAUDE_PLUGIN_ROOT} resolved to the global install path. A global npm install cannot live in setup_commands: those run per-run as the unprivileged sandbox user, which cannot write /usr/local/lib/node_modules -- measured, it fails with setup command failed.",
   "notes": "MCP server + five Claude Code lifecycle hooks. The hooks are the product: the README states that adding the bare MCP server alone 'just gives the model tools it can ignore'. SessionStart injects the project's knowledge graph; PreToolUse routes Read/Grep/Glob/Edit/Write/Bash/WebFetch/WebSearch toward the compressing smart_* equivalents and can rewrite a command via updatedInput rather than refusing it; PreCompact optimizes the transcript before the client compacts; PostToolUse records edits and compacts noisy command output; Stop harvests durable findings into the graph for the next session. VERSION PINNING: plugin/launch.mjs normally tracks the `latest` dist-tag and re-resolves it per cold runtime, which under THOL's throwaway HOME would let the measured version drift mid-campaign. TOKEN_OPTIMIZER_VERSION is the shipped, documented exact-version pin for precisely this case: it refuses anything that is not an exact version, installs that version, and disables the background refresh. It is a product feature, not a harness deviation. DEFAULT POSTURE: 7.1.0 ships `assist` (hooks-core/policy.mjs mode() returns MODE_ASSIST when TOKEN_OPTIMIZER_MODE is unset). Earlier versions referenced in setup/install_competitors.sh (5.0.1) shipped `enforce`, a materially different and worse-measuring posture; this entry measures what a user installs today.",
-  "requires": ["node"],
-  "setup_commands": [
-    "npm install -g @ooples/token-optimizer-mcp@7.1.0",
-    "token-optimizer-install"
-  ],
+  "requires": ["node", "token-optimizer-install"],
+  "setup_commands": ["token-optimizer-install"],
   "mcp": {
     "mcpServers": {
       "token-optimizer": {
@@ -31,5 +28,6 @@
       "TOKEN_OPTIMIZER_VERSION": "7.1.0"
     }
   },
-  "tool_prefixes": ["mcp__token-optimizer__"]
+  "tool_prefixes": ["mcp__token-optimizer__"],
+  "verified_note": "Validated 2026-09-18 with THOL CONTRIBUTING pre-PR steps against the pinned upstream harness: runner.py selftest PASSED, then one run of code-bugfix-py at reps=1 -> ok, score=1.0, 12 turns, $0.190, 40s, mcp-health OK with 19 tools. The rig resolved version 7.1.0 through TOKEN_OPTIMIZER_VERSION even though its runtime cache was pre-seeded with 6.0.2, so the pin holds against a conflicting cache."
 }
