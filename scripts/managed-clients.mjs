@@ -12,7 +12,7 @@
  * look installed from then on.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { homedir } from 'node:os';
 import {
@@ -55,7 +55,25 @@ export function commandExists(
         entry &&
         entry.replaceAll('/', '\\').replace(/\\+$/, '').toLowerCase() !== ours
     )
-    .some((entry) => names.some((name) => existsSync(join(entry, name))));
+    .some((entry) => names.some((name) => usable(join(entry, name), platform)));
+}
+
+/**
+ * Is this candidate something we could actually launch?
+ *
+ * EXISTENCE IS NOT ENOUGH ON POSIX. A directory, or a non-executable file that happens to carry the
+ * client's name, would otherwise count as installed -- and the launcher we then write for it fails
+ * at the moment the user types the command. Windows decides executability by extension, which the
+ * caller has already applied.
+ */
+function usable(candidate, platform) {
+  try {
+    if (platform === 'win32') return existsSync(candidate);
+    const info = statSync(candidate);
+    return info.isFile() && (info.mode & 0o111) !== 0;
+  } catch {
+    return false;
+  }
 }
 
 /**

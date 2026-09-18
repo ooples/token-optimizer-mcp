@@ -162,7 +162,9 @@ describe('the proxy supervisor', () => {
     await supervisor!.close();
     supervisor = await runSupervisor(env);
     expect(await ensureRoute(upstreamUrl, env)).toBe(first);
-    expect(first).toBe(`http://127.0.0.1:${routePort(upstreamUrl, env)}`);
+    // The port is DERIVED, so it survives the restart. Asserting the derived value for a bare
+    // upstream would pin the key shape instead of the property; routePort has its own test.
+    expect(first).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
   }, 30_000);
 
   it('derives a route port that is stable, in range, and specific to the upstream', () => {
@@ -180,12 +182,11 @@ describe('the proxy supervisor', () => {
   /**
    * A request body shaped so injection would really fire.
    *
-   * A short body proves nothing: the first version of this test sent 48 bytes and passed with
-   * injection deliberately switched ON, because the block is only added to a request that carries a
-   * `system` field and is large enough to be worth rewriting. A control arm that cannot fail is not
-   * a control arm.
+   * A short body proves nothing: an earlier version sent 48 bytes and passed with injection
+   * deliberately switched ON, because the block is only added to a request carrying a `system`
+   * field that is large enough to be worth rewriting. A control arm that cannot fail is not one.
    */
-  const askFrom = (workingDirectory: string | null): string =>
+  const ask = (): string =>
     JSON.stringify({
       system: 'You are a coding agent.',
       messages: [
@@ -194,10 +195,7 @@ describe('the proxy supervisor', () => {
           content: [
             {
               type: 'text',
-              text:
-                (workingDirectory
-                  ? `Primary working directory: ${workingDirectory}\n`
-                  : '') + 'context line\n'.repeat(600),
+              text: 'context line' + String.fromCharCode(10).repeat(600),
             },
           ],
         },
@@ -225,61 +223,99 @@ describe('the proxy supervisor', () => {
     });
   };
 
-  it('injects the findings of the project the request came from', async () => {
-    // THE POINT OF THE WHOLE GRAPH. A session working in a project gets that project's own lessons
-    // placed in the cached prefix, so the agent does not re-derive what was already worked out.
-    //
-    // The working directory is read from the request because this daemon has no project of its own,
-    // and the marker is the one a real Claude Code request carries -- verified by pointing a live
-    // `claude -p` at a recorder and reading the 177KB body it sent.
-    //
-    // This repository's own graph is the fixture: it is populated, so a regression that stopped
-    // resolving the project would show up here as an empty prefix rather than as silence.
-    supervisor = await runSupervisor(env);
-    const route = await ensureRoute(upstreamUrl, env);
-    await post(route!, askFrom(process.cwd()));
+  /** A throwaway project with one verified finding, so this suite never reads the ambient graph. */
+  async function seededProject(): Promise<string> {
+    const root = mkdtempSync(join(tmpdir(), 'supervisor-project-'));
+    const wiki = await import('../../hooks-core/wiki.mjs');
+    const dir = join(root, '.token-optimizer', 'wiki');
+    wiki.putNode(dir, {
+      kind: 'finding',
+      key: 'seeded-marker',
+      claim: 'SEEDED_PROJECT_MARKER is the finding this test looks for.',
+      type: 'failure',
+      confidence: 0.95,
+      confidenceLabel: 'verified',
+      scope: 'project',
+    });
+    return root;
+  }
 
-    expect(seen).toContain('/v1/messages');
-    const forwarded = bodies.join('');
-    expect(forwarded).toContain('Already established');
-    expect(String(JSON.parse(forwarded).system)).toContain(
-      'You are a coding agent.'
-    );
+  it('injects the findings of the project the CALLER named', async () => {
+    // THE POINT OF THE GRAPH: a session working in a project gets that project's own lessons in the
+    // cached prefix. The project arrives over the loopback control API from a launcher started in
+    // that directory -- a trusted caller -- and never from the request body.
+    const project = await seededProject();
+    try {
+      supervisor = await runSupervisor(env);
+      const route = await ensureRoute(upstreamUrl, env, project);
+      await post(route!, ask());
+      expect(seen).toContain('/v1/messages');
+      expect(bodies.join('')).toContain('SEEDED_PROJECT_MARKER');
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
   }, 30_000);
 
-  it('injects nothing when it cannot tell which project the request is from', async () => {
-    // THE FAILURE THIS REPLACED. Falling back to the daemon's own cwd would serve one project's
-    // findings to every other project, under the heading "Already established in this project" --
-    // measured in bench/thol/manifests/token-optimizer-proxy-knowledge at 69% wrong-project advice,
-    // charged to the cached prefix and re-read every turn.
-    //
-    // A `project`-scoped claim is a statement about one tree, so there is no safe guess: not knowing
-    // the project means injecting nothing, and the request is forwarded as the caller wrote it.
+  it('injects nothing when the caller named no project', async () => {
+    // The default-routing path has no trusted project identity, so it must add nothing. Falling back
+    // to the daemon's own cwd is the wrong-project failure this design exists to prevent.
     supervisor = await runSupervisor(env);
     const route = await ensureRoute(upstreamUrl, env);
-    const body = askFrom(null);
+    const body = ask();
     await post(route!, body);
-
     const forwarded = bodies.join('');
     expect(forwarded).not.toContain('Already established');
     expect(JSON.parse(forwarded).system).toBe('You are a coding agent.');
     expect(JSON.parse(forwarded).messages).toEqual(JSON.parse(body).messages);
   }, 30_000);
 
-  it('does not serve one project’s findings to a different project', async () => {
-    // The two cases above are each consistent with a proxy that ignores the request entirely, so
-    // this is the one that separates them: a directory that exists and is NOT this repository must
-    // not receive this repository's findings.
-    supervisor = await runSupervisor(env);
-    const route = await ensureRoute(upstreamUrl, env);
-    await post(route!, askFrom(tmpdir()));
+  it('gives two projects two listeners on one upstream', async () => {
+    const a = await seededProject();
+    const b = await seededProject();
+    try {
+      supervisor = await runSupervisor(env);
+      const ra = await ensureRoute(upstreamUrl, env, a);
+      const rb = await ensureRoute(upstreamUrl, env, b);
+      expect(ra).not.toBeNull();
+      expect(rb).not.toBeNull();
+      // One listener binds one graph, so two projects cannot share a route.
+      expect(ra).not.toBe(rb);
+    } finally {
+      rmSync(a, { recursive: true, force: true });
+      rmSync(b, { recursive: true, force: true });
+    }
+  }, 30_000);
 
-    // The temp directory is a real directory with no graph of its own, so the only findings that
-    // could appear here are this repository's -- which is exactly what the old, cwd-bound behaviour
-    // would have sent.
-    const forwarded = bodies.join('');
-    expect(forwarded).not.toContain('Already established');
-    expect(JSON.parse(forwarded).system).toBe('You are a coding agent.');
+  it('refuses a control request a browser could have sent', async () => {
+    // text/plain is a simple request type, so a page the user visits could POST here without any
+    // CORS permission and make us bind loopback proxies until the machine runs out.
+    supervisor = await runSupervisor(env);
+    const port = controlPort(env);
+    const send = (headers: Record<string, string>) =>
+      new Promise<number>((resolve, reject) => {
+        const req = request(
+          {
+            host: '127.0.0.1',
+            port,
+            path: '/__token-optimizer/route',
+            method: 'POST',
+            headers,
+          },
+          (res) => {
+            res.on('data', () => {});
+            res.on('end', () => resolve(res.statusCode ?? 0));
+          }
+        );
+        req.on('error', reject);
+        req.end(JSON.stringify({ upstream: upstreamUrl }));
+      });
+    expect(await send({ 'content-type': 'text/plain' })).toBe(415);
+    expect(
+      await send({
+        'content-type': 'application/json',
+        origin: 'https://evil.example',
+      })
+    ).toBe(403);
   }, 30_000);
 
   it('records what it serves where the doctor can read it', async () => {

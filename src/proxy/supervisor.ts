@@ -62,10 +62,23 @@ export function controlPort(env: NodeJS.ProcessEnv = process.env): number {
   return port;
 }
 
+/** Ceilings for the control API. Small: our own client sends one short JSON object per launch. */
+const MAX_CONTROL_BODY = 8 * 1024;
+const MAX_ROUTES = 32;
+
 export interface SupervisorRoute {
   readonly upstream: string;
   readonly url: string;
   readonly port: number;
+  /**
+   * The project this route serves knowledge for, or null.
+   *
+   * TRUSTED BECAUSE THE CALLER IS OURS. It arrives over the loopback control API from a launcher
+   * that was started inside that directory; it is never read out of a model request. A request can
+   * say anything, and a request that could choose a project could read another project's findings
+   * into its own prompt and send them to the provider.
+   */
+  readonly project: string | null;
 }
 
 /**
@@ -85,14 +98,18 @@ export function routePort(
   upstream: string,
   env: NodeJS.ProcessEnv = process.env
 ): number {
-  const base = controlPort(env) + 2;
+  // CLAMPED, because controlPort accepts up to 65535: base would then exceed the port range and
+  // `base + hash % span` would derive an unlistenable port. Backing off leaves a usable window
+  // below the ceiling wherever the control port sits.
+  const ceiling = 65535;
+  const span = 1000;
+  const base = Math.min(controlPort(env) + 2, ceiling - span);
   // FNV-1a: a few lines, stable across Node versions, and nothing here is security-sensitive.
   let hash = 0x811c9dc5;
   for (const character of upstream) {
     hash ^= character.charCodeAt(0);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  const span = Math.min(1000, 65535 - base);
   return base + (hash % span);
 }
 
@@ -241,14 +258,19 @@ export async function runSupervisor(
       env
     );
 
-  // One in-flight start per upstream, so two callers asking at once get one listener.
+  // Keyed by upstream AND project, because those are two different listeners: the graph a proxy
+  // serves is bound when it starts, so one route cannot answer for two projects.
+  const keyOf = (upstream: string, project: string | null) =>
+    JSON.stringify([upstream, project]);
   const starting = new Map<string, Promise<SupervisorRoute | null>>();
   const routeFor = async (
-    upstream: string
+    upstream: string,
+    project: string | null
   ): Promise<SupervisorRoute | null> => {
-    const existing = routes.get(upstream);
+    const key = keyOf(upstream, project);
+    const existing = routes.get(key);
     if (existing) return existing;
-    const pending = starting.get(upstream);
+    const pending = starting.get(key);
     if (pending) return pending;
     const attempt = (async () => {
       try {
@@ -258,34 +280,32 @@ export async function runSupervisor(
         //
         // Probed with a bare listener rather than by letting startProxy fail, because a startProxy
         // that rejects has already created its spill directory and has no close event to remove it.
-        const preferred = routePort(upstream, env);
+        const preferred = routePort(key, env);
         const { server: listener, port } = await startProxy({
           upstream,
           port: (await portIsFree(preferred)) ? preferred : 0,
-          // THE PROJECT COMES FROM THE REQUEST, because this daemon has none of its own.
+          // THE PROJECT IS THE CALLER'S, OR THERE IS NONE.
           //
-          // `startProxy` otherwise resolves the graph root once, from `projectRoot` or
-          // `process.cwd()`, and holds it for the life of the listener. That is right for a
-          // per-session proxy the launcher starts inside the user's project, and wrong here: one
-          // detached daemon serving every project on the machine, whose cwd is whatever directory
-          // happened to spawn it. Left alone it would inject one project's findings into every
-          // other project's sessions, under the heading "Already established in this project" --
-          // measured in bench/thol/manifests/token-optimizer-proxy-knowledge at 69% wrong-project
-          // advice, paid for in the cached prefix and re-read every turn.
+          // `startProxy` binds the graph root once, from `projectRoot` or `process.cwd()`. The cwd
+          // of a detached daemon is whatever directory happened to spawn it, so without a project
+          // from the caller this listener must inject nothing: one project's findings in every other
+          // project's sessions was measured at 69% wrong-project advice in
+          // bench/thol/manifests/token-optimizer-proxy-knowledge, charged to the cached prefix and
+          // re-read every turn.
           //
-          // So each request is scoped to the project it actually came from, and a request whose
-          // project cannot be determined gets no project-scoped findings at all. That keeps the
-          // graph working where it helps -- your own project's lessons, in your own project's
-          // sessions -- without the failure that would make it cost tokens to be wrong.
-          scopeToRequestProject: true,
+          // Reading the project out of the request body was tried and removed. A model request is
+          // not an authority on which project it belongs to: any prompt naming another checkout on
+          // this machine would have had that project's findings loaded and sent to the provider.
+          ...(project ? { projectRoot: project } : { knowledge: false }),
         });
         listeners.add(listener);
         const route: SupervisorRoute = {
           upstream,
           url: `http://127.0.0.1:${port}`,
           port,
+          project,
         };
-        routes.set(upstream, route);
+        routes.set(key, route);
         publish();
         return route;
       } catch {
@@ -293,10 +313,10 @@ export async function runSupervisor(
         // stays up for the upstreams that do work.
         return null;
       } finally {
-        starting.delete(upstream);
+        starting.delete(key);
       }
     })();
-    starting.set(upstream, attempt);
+    starting.set(key, attempt);
     return attempt;
   };
 
@@ -319,18 +339,55 @@ export async function runSupervisor(
         });
       }
       if (path === '/__token-optimizer/route' && req.method === 'POST') {
+        // A PAGE IN A BROWSER CAN POST HERE WITHOUT CORS PERMISSION. `text/plain` is a simple
+        // request type, so no preflight protects this listener: any site the user visits could ask
+        // us to stand up loopback proxies until the machine runs out of ports or disk. Three cheap
+        // conditions close that, and our own client already satisfies all of them:
+        //   - an `Origin` header means a browser sent it, and nothing of ours ever sets one;
+        //   - `application/json` is not a simple content type, so a cross-site POST must preflight;
+        //   - a bounded body means a crafted upstream string cannot be unbounded either.
+        if (req.headers.origin !== undefined)
+          return reply(403, {
+            error: 'cross-origin requests are not accepted',
+          });
+        const contentType = String(req.headers['content-type'] || '')
+          .split(';')[0]
+          .trim()
+          .toLowerCase();
+        if (contentType !== 'application/json')
+          return reply(415, { error: 'content-type must be application/json' });
+
         const chunks: Buffer[] = [];
-        for await (const chunk of req) chunks.push(chunk as Buffer);
+        let size = 0;
+        for await (const chunk of req) {
+          size += (chunk as Buffer).length;
+          if (size > MAX_CONTROL_BODY)
+            return reply(413, { error: 'request body is too large' });
+          chunks.push(chunk as Buffer);
+        }
         let upstream = '';
+        let project: string | null = null;
         try {
-          upstream = String(
-            JSON.parse(Buffer.concat(chunks).toString('utf8'))?.upstream ?? ''
-          );
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          upstream = String(body?.upstream ?? '');
+          project =
+            typeof body?.project === 'string' && body.project.trim()
+              ? body.project
+              : null;
         } catch {
           return reply(400, { error: 'body must be JSON naming an upstream' });
         }
         if (!upstream) return reply(400, { error: 'upstream is required' });
-        const route = await routeFor(upstream);
+        // Counted WITH the in-flight starts, or a burst of distinct upstreams races past the cap
+        // while each one is still binding its listener.
+        const key = keyOf(upstream, project);
+        if (
+          !routes.has(key) &&
+          !starting.has(key) &&
+          routes.size + starting.size >= MAX_ROUTES
+        )
+          return reply(429, { error: 'too many upstreams are already routed' });
+        const route = await routeFor(upstream, project);
         return route
           ? reply(200, route)
           : reply(502, { error: `cannot serve ${upstream}` });
@@ -410,13 +467,14 @@ export async function ensureSupervisor(
  */
 export async function ensureRoute(
   upstream: string,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  project: string | null = null
 ): Promise<string | null> {
   if (!upstream) return null;
   if (!(await ensureSupervisor(env))) return null;
   const route = await control<SupervisorRoute>(
     '/__token-optimizer/route',
-    { upstream },
+    { upstream, ...(project ? { project } : {}) },
     env,
     15000
   );

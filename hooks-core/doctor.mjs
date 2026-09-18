@@ -33,7 +33,11 @@ import { connect } from 'node:net';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { harvestMode, harvestFailure } from './harvest.mjs';
-import { proxyEnvFor } from './capabilities.mjs';
+import {
+  proxyEnvFor,
+  MANAGED_CLIENTS,
+  clientForCommand,
+} from './capabilities.mjs';
 import { mode } from './policy.mjs';
 import {
   readManifest,
@@ -158,9 +162,13 @@ export function detectInstall({ pluginsDir, root } = {}) {
 
   const installedVersion = record?.version ?? null;
   const availableVersion = marketplace?.version ?? null;
-  const pluginHooks = record?.installPath
-    ? join(record.installPath, 'hooks')
-    : null;
+  // A STRING, OR NOTHING. installed_plugins.json is not written by us, and join() throws on a
+  // truthy non-string -- which would end the whole report rather than describe one broken record.
+  const installPath =
+    typeof record?.installPath === 'string' && record.installPath.trim()
+      ? record.installPath
+      : null;
+  const pluginHooks = installPath ? join(installPath, 'hooks') : null;
 
   // WHICH BUILD IS ACTUALLY BEING DIAGNOSED?
   //
@@ -561,10 +569,22 @@ function clientFrom(env, clientName) {
       ? 'codex'
       : /^(claude-code|claude)$/.test(reported)
         ? 'claude-code'
-        : reported === 'opencode'
-          ? 'opencode'
-          : '')
+        : managedClientFor(reported))
   );
+}
+
+/**
+ * The managed client a reported handshake name refers to, or ''.
+ *
+ * READ FROM THE REGISTRY, NOT A SECOND HAND-KEPT LIST. Three names were spelled out here while
+ * MANAGED_CLIENTS grew to ten, so a Gemini or Qwen session that did not set TOKEN_OPTIMIZER_CLIENT
+ * resolved to no client at all and was reported as "routing is unverified" before its route was ever
+ * examined. The registry also carries each client's command, which is how `cn` reaches Continue.
+ */
+function managedClientFor(reported) {
+  if (!reported) return '';
+  if (Object.hasOwn(MANAGED_CLIENTS, reported)) return reported;
+  return clientForCommand(reported) || '';
 }
 
 /**

@@ -74,12 +74,27 @@ async function launch(command, env) {
 const loopback = /^http:\/\/127\.0\.0\.1:\d+/;
 
 describe('managed launch beyond the first three clients', () => {
-  it('routes Gemini through its own variable, because it has exactly one provider', async () => {
+  it('leaves Gemini alone until its own variable names an endpoint', async () => {
+    // CHANGED DELIBERATELY. This asserted that Gemini has one provider and could be routed by
+    // default. It has three transports: a Gemini API key talks to generativelanguage.googleapis.com,
+    // a Google login talks to the Code Assist endpoint through CODE_ASSIST_ENDPOINT, and Vertex
+    // reads GOOGLE_VERTEX_BASE_URL. GOOGLE_GEMINI_BASE_URL governs only the first, so a default
+    // would route API-key sessions and silently miss the other two.
     const launched = await launch('gemini', cleanEnv());
     expect(launched.code).toBe(0);
-    expect(launched.env.GOOGLE_GEMINI_BASE_URL).toMatch(loopback);
+    expect(launched.env.GOOGLE_GEMINI_BASE_URL).toBeUndefined();
     // The identity the MCP server and hooks see has to be the client id, not the command.
     expect(launched.env.TOKEN_OPTIMIZER_CLIENT).toBe('gemini');
+  }, 30_000);
+
+  it('routes Gemini once its endpoint is known', async () => {
+    const launched = await launch(
+      'gemini',
+      cleanEnv({
+        GOOGLE_GEMINI_BASE_URL: 'https://generativelanguage.googleapis.com',
+      })
+    );
+    expect(launched.env.GOOGLE_GEMINI_BASE_URL).toMatch(loopback);
   }, 30_000);
 
   it('never hands a non-Claude client Claude’s MCP flag', async () => {
