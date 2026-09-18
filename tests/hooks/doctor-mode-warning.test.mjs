@@ -116,14 +116,19 @@ describe('the rendered report', () => {
     expect(text).toContain('To enable it: remove it.');
   });
 
-  test('an enabled install reports no warning', async () => {
+  test('an enabled install reports no mode warning', async () => {
+    // Other checks may warn about their own state (an unrouted compression proxy, for one), so this
+    // is about the MODE check specifically rather than the warning count.
     delete process.env.TOKEN_OPTIMIZER_MODE;
     const result = await diagnose({
       root: ROOT, workspace, graphDir: join(workspace, 'wiki'),
       settingsPath: settingsWith({}), skipServer: true,
     });
-    expect(result.warnings).toBe(0);
-    expect(renderDiagnosis(result)).toMatch(/^\d+\/\d+ checks passed\./);
-    expect(renderDiagnosis(result)).not.toContain('WARN');
+    const mode = result.checks.find((c) => c.name === 'effective optimization mode');
+    expect(mode.pass).toBe(true);
+    expect(mode.warn).toBeFalsy();
+    const text = renderDiagnosis(result);
+    expect(text).not.toContain('WARN  effective optimization mode');
+    expect(text).not.toContain('Optimization is disabled');
   }, 60_000);
 });

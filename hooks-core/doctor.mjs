@@ -357,18 +357,28 @@ export function probeProxy(env = process.env, { clientName } = {}) {
     ];
   }
 
+  // ROUTING IS OPT-IN, SO NOT ROUTING IS NOT A FAULT. `token-optimizer-run` is what sets
+  // TOKEN_OPTIMIZER_CLIENT, so its presence means the user asked for routed traffic and not having
+  // it is broken. A plain `/plugin` install never sets it: reporting that as a failure told every
+  // default user "Something above is broken" about the documented way to install this product.
+  // NORMALISED ONCE, AND USED FOR BOTH DECISIONS. Read raw, a whitespace-only value is falsy for
+  // `optedIn` and truthy as a client name, so proxyEnvFor(' ') finds nothing and the report claims
+  // the client cannot be served -- for a client the handshake had already identified.
+  const configuredClient = String(env.TOKEN_OPTIMIZER_CLIENT || '').trim().toLowerCase();
+  const optedIn = Boolean(configuredClient);
+  const unrouted = optedIn ? bad : warn;
   const reported = String(clientName || '').toLowerCase();
-  const client = env.TOKEN_OPTIMIZER_CLIENT ||
+  const client = configuredClient ||
     (/^(codex|codex[_-](cli|mcp|desktop))$/.test(reported) ? 'codex' :
       /^(claude-code|claude)$/.test(reported) ? 'claude-code' :
         reported === 'opencode' ? 'opencode' : '');
-  if (!client) return [bad('compression proxy routing is unverified',
+  if (!client) return [unrouted('compression proxy routing is unverified',
     'The MCP client did not identify a supported client; MCP connectivity alone does not prove model routing.',
     'Launch with token-optimizer-run codex, token-optimizer-run claude, or token-optimizer-run opencode.')];
   const variable = proxyEnvFor(client);
   if (!variable) {
     return [
-      bad('the compression proxy cannot serve this client',
+      unrouted('the compression proxy cannot serve this client',
         client +
           ' exposes no supported way to redirect its model traffic',
         'use token-optimizer-run with a supported client, or set TOKEN_OPTIMIZER_PROXY=0'),
@@ -379,7 +389,7 @@ export function probeProxy(env = process.env, { clientName } = {}) {
   const loopback = pointsAtLoopback(pointed);
   if (!loopback) {
     return [
-      bad('the compression proxy is on but nothing is routed through it',
+      unrouted('request compression is available but this session is not routed through it',
         variable + ' is ' + (pointed ? 'not a loopback URL' : 'not set') +
           ', so this client talks straight to the provider',
         'Launch through token-optimizer-run ' + (client === 'claude-code' ? 'claude' : client) +
