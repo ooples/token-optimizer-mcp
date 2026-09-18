@@ -44,6 +44,21 @@ describe('probeProxy', () => {
     }
   });
 
+  it('a whitespace-only TOKEN_OPTIMIZER_CLIENT does not become a client name', () => {
+    // Read raw it is falsy for "did someone ask for routing" and truthy as a name, so the lookup
+    // found no variable and the report blamed the client instead of the missing route.
+    const checks = probeProxy({ TOKEN_OPTIMIZER_CLIENT: '   ' }, { clientName: 'codex' });
+    expect(checks[0].warn).toBe(true);
+    expect(detailOf(checks)).toContain('OPENAI_BASE_URL');
+    expect(detailOf(checks)).not.toContain('no supported way');
+  });
+
+  it('accepts a configured client whatever its spacing or case', () => {
+    const checks = probeProxy({ TOKEN_OPTIMIZER_CLIENT: '  Claude-Code  ', ANTHROPIC_BASE_URL: 'http://127.0.0.1:8123' });
+    expect(checks[0].pass).toBe(true);
+    expect(checks[0].warn).toBeFalsy();
+  });
+
   it('does not disclose upstream credentials in diagnostic output', () => {
     const checks = probeProxy({ TOKEN_OPTIMIZER_CLIENT: 'codex', OPENAI_BASE_URL: 'https://secret@example.com/?key=private' });
     expect(checks[0].pass).toBe(false);

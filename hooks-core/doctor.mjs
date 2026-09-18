@@ -361,10 +361,14 @@ export function probeProxy(env = process.env, { clientName } = {}) {
   // TOKEN_OPTIMIZER_CLIENT, so its presence means the user asked for routed traffic and not having
   // it is broken. A plain `/plugin` install never sets it: reporting that as a failure told every
   // default user "Something above is broken" about the documented way to install this product.
-  const optedIn = Boolean(String(env.TOKEN_OPTIMIZER_CLIENT || '').trim());
+  // NORMALISED ONCE, AND USED FOR BOTH DECISIONS. Read raw, a whitespace-only value is falsy for
+  // `optedIn` and truthy as a client name, so proxyEnvFor(' ') finds nothing and the report claims
+  // the client cannot be served -- for a client the handshake had already identified.
+  const configuredClient = String(env.TOKEN_OPTIMIZER_CLIENT || '').trim().toLowerCase();
+  const optedIn = Boolean(configuredClient);
   const unrouted = optedIn ? bad : warn;
   const reported = String(clientName || '').toLowerCase();
-  const client = env.TOKEN_OPTIMIZER_CLIENT ||
+  const client = configuredClient ||
     (/^(codex|codex[_-](cli|mcp|desktop))$/.test(reported) ? 'codex' :
       /^(claude-code|claude)$/.test(reported) ? 'claude-code' :
         reported === 'opencode' ? 'opencode' : '');
