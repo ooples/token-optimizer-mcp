@@ -8,7 +8,11 @@ name: Release
 #      Conventional Commits since the last release.
 #   2. Merging that release PR makes release-please cut the git tag and the
 #      GitHub Release.
-#   3. That release triggers `publish-npm`, which builds and publishes to npm.
+#   3. That release triggers `verify-release-candidate`, which installs the tarball
+#      that would be published and speaks MCP to it, on ubuntu and windows.
+#   4. Only if both pass does `publish-npm` build and publish to npm.
+#   5. `verify-published` re-checks the real registry artifact afterwards, which is
+#      the one thing that cannot be tested before publishing.
 #
 # npm auth (publish-npm) is OIDC-first:
 #   - Preferred: npm **trusted publishing** via GitHub OIDC (no secret). Once the
@@ -53,11 +57,69 @@ jobs:
           # config-file / manifest-file default to the repo-root files:
           #   release-please-config.json + .release-please-manifest.json
 
+  # 2) BEFORE ANYTHING IS PUBLISHED: does this release actually work?
+  #
+  #    Nothing used to answer that. `verify:package-contents` reads the tarball's file list, and the
+  #    unit suite imports from the working tree -- neither installs anything, so the pipeline
+  #    published artifacts that had never been installed. That is the defect class behind v7.0.0
+  #    (tagged, no npm package) and 7.0.1 (on npm, would not start), both found by users.
+  #
+  #    This packs the tarball `npm publish` would upload, installs it into a throwaway prefix, runs
+  #    the real postinstall, imports every entry point from the installed tree, drives the
+  #    documented recovery command, and then speaks MCP to the installed server and asks for its
+  #    tools. On both platforms people run it on.
+  #
+  #    `npm pack` produces the exact bytes `npm publish` uploads, so this tests the release itself
+  #    rather than a stand-in -- and it does so while failing is still free. A red platform here
+  #    means no publish happened at all: there is nothing to unpublish, and no version number is
+  #    burned, because npm only refuses to reuse a version that was actually published.
+  verify-release-candidate:
+    name: Verify the release installs and runs (${{ matrix.os }})
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      # Both platforms report. Stopping the matrix at the first failure would hide whether the
+      # release is broken everywhere or only on one OS, which is the first thing to know.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+    steps:
+      - name: Checkout the released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
 
-  # 2) On an actual release, build and publish to npm.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # THE SAME STAMP AND BUILD THE PUBLISH JOB PERFORMS, in the same order, from the same tag.
+      # Skipping either would test a tarball that differs from the published one in exactly the
+      # place (the version stamped into the packaged hooks) that has broken releases before.
+      - name: Stamp the shipped version into the packaged hooks
+        run: npm run stamp:version
+
+      - name: Build project
+        run: npm run build
+
+      # No prepack hook exists, so `npm pack` ships whatever dist/ holds: this must follow the build.
+      - name: Install the packed tarball and speak MCP to it
+        run: npm run verify:install
+
+  # 3) On an actual release, build and publish to npm.
   publish-npm:
     name: Publish to npm
-    needs: release-please
+    needs: [release-please, verify-release-candidate]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20

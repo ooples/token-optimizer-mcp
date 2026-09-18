@@ -17,7 +17,7 @@
  * is what makes this safe to run on every change rather than only before a release.
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
   mkdtempSync,
   mkdirSync,
@@ -261,6 +261,115 @@ try {
   check(
     !existsSync(join(sandbox, 'home', 'proxy-supervisor.json')),
     'installation started no background service'
+  );
+
+  // INSTALLING IS NOT WORKING. Everything above proves the files arrived and load; none of it
+  // proves the server starts and answers, which is the only thing a user actually needs. So this
+  // speaks MCP to the installed copy over stdio -- the same transport a client uses -- and asks it
+  // to list its tools.
+  //
+  // It runs here rather than against the registry because `npm pack` produces the exact bytes
+  // `npm publish` uploads: testing the tarball is testing the release, and it can be done BEFORE
+  // publishing rather than after, when a bad version is already the one people get.
+  const REQUIRED_TOOLS = [
+    'smart_read',
+    'smart_grep',
+    'smart_edit',
+    'install_doctor',
+  ];
+  const mcp = await new Promise((resolve) => {
+    const child = spawn(
+      process.execPath,
+      [join(installed, 'dist', 'server', 'index.js')],
+      { env, stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    const outcome = {
+      server: null,
+      tools: [],
+      stderr: '',
+      timedOut: false,
+      // NON-JSON LINES ARE A DEFECT, NOT NOISE. MCP's stdio transport reserves stdout for
+      // newline-delimited JSON-RPC and nothing else, so a banner printed there is a protocol
+      // violation a conforming client may reject outright. Skipping such a line quietly -- which
+      // is what this did first -- would let exactly the kind of release this job exists to stop
+      // walk straight through the gate. They are collected and asserted on instead.
+      junk: [],
+    };
+    const timer = setTimeout(() => {
+      outcome.timedOut = true;
+      child.kill();
+    }, 120_000);
+    let buffer = '';
+    child.stderr.on('data', (chunk) => {
+      outcome.stderr += chunk;
+    });
+    child.stdout.on('data', (chunk) => {
+      buffer += chunk;
+      for (let nl; (nl = buffer.indexOf('\n')) !== -1; ) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        let message;
+        try {
+          message = JSON.parse(line);
+        } catch {
+          if (line) outcome.junk.push(line);
+          continue;
+        }
+        if (message.id === 1) {
+          outcome.server = message.result?.serverInfo ?? null;
+          child.stdin.write(
+            `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`
+          );
+          child.stdin.write(
+            `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })}\n`
+          );
+        } else if (message.id === 2) {
+          outcome.tools = (message.result?.tools ?? []).map((t) => t.name);
+          child.kill();
+        }
+      }
+    });
+    child.on('error', (error) => {
+      outcome.stderr += String(error);
+    });
+    child.on('exit', () => {
+      clearTimeout(timer);
+      resolve(outcome);
+    });
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'fresh-install-verification', version: '0' },
+        },
+      })}\n`
+    );
+  });
+
+  check(
+    !mcp.timedOut,
+    'the installed server answered within two minutes',
+    mcp.stderr.slice(-200)
+  );
+  check(
+    mcp.server !== null,
+    'the installed server completed an MCP initialize',
+    mcp.stderr.slice(-200)
+  );
+  check(
+    mcp.junk.length === 0,
+    'the installed server wrote only JSON-RPC to stdout',
+    mcp.junk.slice(0, 3).join(' | ').slice(0, 200)
+  );
+  const missingTools = REQUIRED_TOOLS.filter((t) => !mcp.tools.includes(t));
+  check(
+    mcp.tools.length > 0 && missingTools.length === 0,
+    `tools/list served the core tools (${mcp.tools.length} total)`,
+    missingTools.length ? `missing ${missingTools.join(', ')}` : ''
   );
 } catch (error) {
   check(

@@ -18,29 +18,55 @@ version or edit `CHANGELOG.md` by hand — both are derived from the
    `CHANGELOG.md`.
 3. **You merge the release PR** when you want to ship. release-please then cuts
    the git tag (`vX.Y.Z`) and the GitHub Release.
-4. The release triggers the **`publish-npm`** job, which builds and runs
+4. The release triggers **`verify-release-candidate`** on ubuntu **and** windows:
+   it stamps and builds exactly as the publish job does, packs the tarball
+   `npm publish` would upload, installs it into a throwaway prefix, runs the real
+   postinstall, and then speaks MCP to the installed server and lists its tools.
+5. **Only if both platforms pass** does **`publish-npm`** run
    `npm publish --provenance --access public`.
-5. The **`notify`** job fans the version info out to every configured channel.
+6. **`verify-published`** re-checks the real registry artifact through
+   `plugin/launch.mjs`, and opens an issue if it fails.
+7. The **`notify`** job fans the version info out to every configured channel.
+
+### Why the check is before the publish
+
+`npm pack` produces the exact bytes `npm publish` uploads, so installing the
+packed tarball **is** testing the release — and it can be done while failing is
+still free. A red platform in step 4 means nothing was published: there is
+nothing to unpublish, and no version number is burned, because npm only refuses
+to reuse a version that actually went out.
+
+Before this existed, nothing in the pipeline ever installed anything.
+`verify:package-contents` reads the tarball's _file list_; the unit suite imports
+from the working tree. A package could pass both and still fail on a clean
+machine — a missing `files` entry, a script that assumes the repo layout, an
+import that only resolves from source. That is the defect class behind **v7.0.0**
+(tagged, never reached npm) and **7.0.1** (on npm, would not start), both found by
+users rather than by us.
+
+Step 6 stays because one thing genuinely cannot be tested beforehand: how the
+launcher resolves and caches the _published_ version. It is a detector, not a
+gate.
 
 ### Version bump rules
 
-| Commit type | Release |
-|-------------|---------|
-| `fix:`, `perf:`, `revert:` | patch |
-| `feat:` | minor |
-| `feat!:` / `BREAKING CHANGE:` | major |
-| `docs:`, `refactor:`, `style:`, `chore:`, `test:`, `build:`, `ci:` | none |
+| Commit type                                                        | Release |
+| ------------------------------------------------------------------ | ------- |
+| `fix:`, `perf:`, `revert:`                                         | patch   |
+| `feat:`                                                            | minor   |
+| `feat!:` / `BREAKING CHANGE:`                                      | major   |
+| `docs:`, `refactor:`, `style:`, `chore:`, `test:`, `build:`, `ci:` | none    |
 
 The baseline is pinned in `.release-please-manifest.json` (currently `5.0.1`,
 the last published version); the first release PR bumps from there.
 
 ### Config files
 
-| File | Purpose |
-| --- | --- |
-| `.github/workflows/release.yml` | The `Release` workflow (release-please + publish + notify) |
-| `release-please-config.json` | release-please config (`release-type: node`, changelog sections) |
-| `.release-please-manifest.json` | Current released version per package (source of truth) |
+| File                            | Purpose                                                          |
+| ------------------------------- | ---------------------------------------------------------------- |
+| `.github/workflows/release.yml` | The `Release` workflow (release-please + publish + notify)       |
+| `release-please-config.json`    | release-please config (`release-type: node`, changelog sections) |
+| `.release-please-manifest.json` | Current released version per package (source of truth)           |
 
 ## npm authentication
 
@@ -84,14 +110,14 @@ Each channel is optional and **skipped silently when not configured**, so the
 core release never fails because a channel is missing. Set these under
 **Settings → Secrets and variables → Actions**.
 
-| Channel | Configuration |
-|---------|---------------|
-| **GitHub Release** + watcher emails | Built-in (release-please creates the Release). |
-| **npm publish email** | Built-in (npm emails the maintainer on publish). |
-| **PR/issue comments** | Built-in (`notify` job comments resolved issues). |
-| **Email** | Repo **variable** `RELEASE_EMAIL_TO` + SMTP **secrets** (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, optional `SMTP_FROM`). |
-| **Discord** | Repo **variable** `DISCORD_WEBHOOK_URL`. |
-| **Slack** | Repo **variable** `SLACK_WEBHOOK_URL`. |
+| Channel                             | Configuration                                                                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GitHub Release** + watcher emails | Built-in (release-please creates the Release).                                                                                              |
+| **npm publish email**               | Built-in (npm emails the maintainer on publish).                                                                                            |
+| **PR/issue comments**               | Built-in (`notify` job comments resolved issues).                                                                                           |
+| **Email**                           | Repo **variable** `RELEASE_EMAIL_TO` + SMTP **secrets** (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, optional `SMTP_FROM`). |
+| **Discord**                         | Repo **variable** `DISCORD_WEBHOOK_URL`.                                                                                                    |
+| **Slack**                           | Repo **variable** `SLACK_WEBHOOK_URL`.                                                                                                      |
 
 ## Notes
 
