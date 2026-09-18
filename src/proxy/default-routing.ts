@@ -26,6 +26,14 @@
  *   restore.
  */
 
+/* eslint-disable n/no-sync -- SYNCHRONOUS THROUGHOUT, ON PURPOSE, for the reason supervisor.ts and
+ * accounting.ts record. This module decides whether a client's own settings file names a live route,
+ * and it is called from three places that cannot await it usefully: a doctor that reports
+ * synchronously, an installer that must finish before it prints, and the MCP server's startup path
+ * where an interleaved write is the failure mode. The payloads are a settings file and a manifest of
+ * a few hundred bytes, and the one write that matters is write-then-rename, which is what makes a
+ * reader see either the old file or the new one and never half of one. Awaiting these would buy no
+ * concurrency and would let two passes interleave mid-write. */
 import {
   copyFileSync,
   existsSync,
