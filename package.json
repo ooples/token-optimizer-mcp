@@ -139,7 +139,8 @@
     "verify:onnx": "node scripts/verify-onnx-adapter.mjs",
     "proxy": "node dist/proxy/cli.js",
     "bench:screen:knowledge": "bash bench/thol/screen-knowledge.sh",
-    "verify:install": "node scripts/verify-fresh-install.mjs"
+    "verify:install": "node scripts/verify-fresh-install.mjs",
+    "bench:ledger:provenance": "node bench/ledger/verify-provenance.mjs"
   },
   "repository": {
     "type": "git",
