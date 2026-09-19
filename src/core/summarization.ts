@@ -1,4 +1,9 @@
 import { Message } from './session.js';
+import {
+  OrcaRouterSummarizer,
+  configuredOrcaModel,
+} from '../orcarouter/summarizer.js';
+import { hasOrcaRouterCredential } from '../orcarouter/credential-presence.js';
 
 /**
  * Pluggable summarization — part of issue #121.
@@ -254,15 +259,30 @@ export class GoogleAISummarizer implements ISummarizer {
 
 /**
  * Pick an ISummarizer based on available credentials:
- *   1. ANTHROPIC_API_KEY → AnthropicSummarizer
- *   2. GOOGLE_AI_API_KEY → GoogleAISummarizer
- *   3. fallback        → TruncatingSummarizer (no network, no key)
+ *   1. OrcaRouter credential + a selected model → OrcaRouterSummarizer
+ *   2. ANTHROPIC_API_KEY → AnthropicSummarizer
+ *   3. GOOGLE_AI_API_KEY → GoogleAISummarizer
+ *   4. fallback        → TruncatingSummarizer (no network, no key)
  *
- * Anthropic sits first because this project is Claude-adjacent; users
+ * Anthropic sits second because this project is Claude-adjacent; users
  * who prefer Gemini can either unset ANTHROPIC_API_KEY or construct
  * GoogleAISummarizer directly.
+ *
+ * ORCAROUTER IS OPT-IN, not a fallback. It is selected only when the user has
+ * both connected an OrcaRouter credential AND chosen a model for optimizer
+ * calls, so a machine that merely happens to have a key in its environment
+ * does not silently start routing summaries through a gateway nobody selected.
+ * The credential itself is resolved by the shared seam, so a pasted key and a
+ * PKCE-issued one behave identically here.
  */
 export function createSummarizerFromEnv(): ISummarizer {
+  if (hasOrcaRouterCredential() && configuredOrcaModel()) {
+    try {
+      return new OrcaRouterSummarizer();
+    } catch {
+      // Fall through to next option.
+    }
+  }
   if (process.env.ANTHROPIC_API_KEY) {
     try {
       return new AnthropicSummarizer();

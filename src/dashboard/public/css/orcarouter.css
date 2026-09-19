@@ -1,0 +1,319 @@
+/* ------------------------------------------------------- OrcaRouter card -- */
+
+/* Two authentication choices, side by side, deliberately equal in weight. A
+   card that leads with one and hides the other is how an integration ends up
+   with one usable path and one that exists only in the markup. */
+.provider-connect {
+  display: block;
+}
+
+.provider-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.provider-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--graph-dim);
+  color: var(--graph);
+  flex: none;
+}
+
+.connect-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--gap);
+  margin-top: 18px;
+}
+
+.connect-choice {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connect-choice-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--ink);
+  margin: 0;
+}
+
+.connect-choice-sub {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+
+.connect-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+
+.connect-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line-bright);
+  border-radius: var(--radius-sm);
+  padding: 8px 11px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+select.connect-input {
+  cursor: pointer;
+}
+
+.connect-input:focus-visible {
+  outline: 2px solid var(--saved);
+  outline-offset: 1px;
+}
+
+.connect-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.connect-hint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.connect-hint code {
+  font-family: var(--mono);
+  color: var(--ink-2);
+}
+
+.connect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn-primary {
+  background: var(--graph-dim);
+  border-color: var(--graph);
+  color: var(--ink);
+}
+
+.btn-primary:hover {
+  background: rgba(122, 162, 247, 0.3);
+}
+
+.btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.connect-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line-bright);
+}
+
+.connect-status {
+  margin: 0;
+  min-height: 18px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.connect-status[data-tone='error'] {
+  color: var(--bad);
+}
+
+.connect-status[data-tone='ok'] {
+  color: var(--ok);
+}
+
+.connect-status[data-tone='busy'] {
+  color: var(--warn);
+}
+
+.model-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) minmax(180px, 1fr) auto;
+  gap: var(--gap);
+  align-items: end;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.model-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* A listbox the page owns, so the panel's background, its border and its
+   alignment to the trigger are all real, measurable, screenshot-able DOM. */
+.model-combobox {
+  position: relative;
+}
+
+.model-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.model-caret {
+  color: var(--ink-3);
+  flex: none;
+}
+
+.model-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--surface-3);
+  border: 1px solid var(--line-bright);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 340px;
+}
+
+/* `display: flex` above would otherwise beat the `hidden` attribute, leaving a
+   panel that is closed in the DOM and open on screen. */
+.model-panel[hidden] {
+  display: none;
+}
+
+.model-search {
+  flex: none;
+}
+
+.model-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  max-height: 240px;
+}
+
+.model-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+.model-option:hover,
+.model-option.is-selected,
+/* The keyboard's active option. `:hover` is not enough: the pointer is not on the
+   list when the user is arrowing through it, and an unmarked active row makes
+   Enter unpredictable. */
+.model-option.is-active {
+  background: var(--graph-dim);
+}
+
+.model-option.is-active {
+  outline: 1px solid var(--line-bright);
+  outline-offset: -1px;
+}
+
+.model-option-name {
+  color: var(--ink);
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-option-id {
+  grid-column: 1;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-option-meta {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--ink-2);
+  font-size: 10.5px;
+  text-align: right;
+  max-width: 190px;
+}
+
+.model-option.is-empty {
+  color: var(--ink-3);
+  cursor: default;
+  font-style: italic;
+}
+
+.model-panel-note {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+/*
+ * Which of the two choices is currently supplying inference.
+ *
+ * Shown as a flag next to the choice's own title rather than as a sentence, so a user with both
+ * configured can see at a glance which one a provider request will use.
+ */
+.choice-flag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+.choice-flag[hidden] {
+  display: none;
+}
+
+@media (max-width: 780px) {
+  .model-row {
+    grid-template-columns: 1fr;
+  }
+}

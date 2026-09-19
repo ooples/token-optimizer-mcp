@@ -41,6 +41,137 @@ import {
 const PROVIDER = 'token-optimizer';
 
 /**
+ * `token-optimizer-route orcarouter` -- the two ways into the OrcaRouter provider, from a terminal.
+ *
+ * WHY A COMMAND AND NOT ONLY THE DASHBOARD. A user on a machine where the dashboard is not running
+ * still needs both choices. `--connect` runs the OAuth 2.0 + PKCE flow (a browser, then a key), and
+ * the key can equally be pasted into `ORCAROUTER_API_KEY` or saved from the dashboard. All three end
+ * at the same credential store and the same provider, which is the point of the seam.
+ *
+ * NOTHING HERE PRINTS A KEY. `--status` shows the redacted form, the origins in use, and the two
+ * provider ids; the connect flow reports the account and the granted scope, never the credential.
+ */
+async function routeOrcaRouter(args) {
+  const {
+    ApiKeyCredentialAdapter,
+    PkceCredentialAdapter,
+    ORCA_KEY_DASHBOARD_URL,
+  } = await import('../dist/orcarouter/credentials.js');
+  const { OrcaConnectManager } = await import('../dist/orcarouter/connect.js');
+  const { resolveOrigins } = await import('../dist/orcarouter/endpoints.js');
+  const { discoverModels } = await import('../dist/orcarouter/provider.js');
+
+  const origins = resolveOrigins();
+
+  if (args.includes('--status') || args.length === 0) {
+    const apiAdapter = new ApiKeyCredentialAdapter();
+    const pkceAdapter = new PkceCredentialAdapter();
+    const api = await apiAdapter.status();
+    const pkce = await pkceAdapter.status();
+    console.log(`auth origin: ${origins.authBase}`);
+    console.log(`api origin:  ${origins.apiBase}`);
+    console.log('');
+    console.log(`  ${apiAdapter.label} (${apiAdapter.id})`);
+    console.log(
+      `    ${api.configured ? `configured: ${api.masked}` : 'not configured -- paste a key in the dashboard, or set ORCAROUTER_API_KEY'}`
+    );
+    console.log(`  ${pkceAdapter.label} (${pkceAdapter.id})`);
+    console.log(
+      `    ${pkce.configured ? `configured: ${pkce.masked} (account ${pkce.accountId})` : 'not configured -- run: token-optimizer-route orcarouter --connect'}`
+    );
+    console.log('');
+    console.log(`manage or revoke keys: ${ORCA_KEY_DASHBOARD_URL}`);
+    return 0;
+  }
+
+  if (args.includes('--clear')) {
+    const removed = [
+      (await new ApiKeyCredentialAdapter().clear()) ? 'api key' : null,
+      (await new PkceCredentialAdapter().clear()) ? 'authorization' : null,
+    ].filter(Boolean);
+    console.log(
+      removed.length
+        ? `removed the stored OrcaRouter ${removed.join(' and ')}.`
+        : 'nothing was stored, so nothing was removed.'
+    );
+    return 0;
+  }
+
+  if (args.includes('--models')) {
+    const result = await discoverModels({ capability: 'chat' });
+    console.log(`catalog: ${result.status} (${result.sourceUrl})`);
+    if (result.degradedReason) console.log(`reason:  ${result.degradedReason}`);
+    for (const model of result.models) {
+      const meta = [
+        model.contextLength
+          ? `${Math.round(model.contextLength / 1000)}k`
+          : null,
+        model.inputModalities.filter((m) => m !== 'text').join('+') || null,
+        model.fromSeed ? 'verified fallback' : null,
+      ].filter(Boolean);
+      console.log(
+        `  ${model.id}${meta.length ? `  (${meta.join(', ')})` : ''}`
+      );
+    }
+    return 0;
+  }
+
+  if (args.includes('--connect')) {
+    const mode = args.includes('--oob') ? 'oob' : 'loopback';
+    const manager = new OrcaConnectManager();
+    const started = await manager.start({ mode, origins });
+    console.log('Open this URL to authorize OrcaRouter:\n');
+    console.log(`  ${started.authorizeUrl}\n`);
+    if (mode === 'loopback') {
+      console.log('Waiting for approval in the browser...');
+    } else {
+      console.log('Paste the code shown on that page:');
+      const { createInterface } = await import('node:readline/promises');
+      const rl = createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+      const code = await rl.question('Code: ');
+      rl.close();
+      manager.submitCode(started.attemptId, code);
+    }
+    try {
+      const outcome = await manager.complete(started.attemptId);
+      if (!manager.mayInstall(started.attemptId)) {
+        console.error(
+          'That attempt was cancelled before it finished, so nothing was stored.'
+        );
+        return 1;
+      }
+      const saved = await new PkceCredentialAdapter().save(outcome.key, {
+        accountId: outcome.accountId,
+        scope: outcome.scope,
+      });
+      console.log(`\nConnected as account ${saved.accountId}.`);
+      if (outcome.scopeDowngraded) {
+        console.log(
+          `Note: the workspace granted "${outcome.scope || 'a narrower scope'}" rather than "api".`
+        );
+      }
+      console.log(
+        'Select a model with TOKEN_OPTIMIZER_ORCA_MODEL, or in the dashboard.'
+      );
+      return 0;
+    } catch (error) {
+      console.error(`\n${error?.message || error}`);
+      return 1;
+    } finally {
+      manager.cancelAll();
+    }
+  }
+
+  console.error(
+    'usage: token-optimizer-route orcarouter [--status | --connect [--oob] | --clear | --models]'
+  );
+  return 2;
+}
+
+/**
  * Zed's settings file.
  *
  * Windows placement is checked rather than assumed: Zed has shipped both `%APPDATA%\Zed` and
@@ -222,6 +353,7 @@ export async function run(argv = process.argv.slice(2)) {
   try {
     if (!command || command === 'status') return await status();
     if (command === 'zed') return await routeZed(rest);
+    if (command === 'orcarouter') return await routeOrcaRouter(rest);
   } catch (error) {
     // A refusal is an outcome, not a crash. loadZed throws to stop a file being rewritten through a
     // parser that cannot read it, and the caller needs the reason and a status, the same as the CLI.
@@ -229,7 +361,8 @@ export async function run(argv = process.argv.slice(2)) {
     return 1;
   }
   console.error(
-    'usage: token-optimizer-route [status | zed --upstream <url> --model <id>]'
+    'usage: token-optimizer-route [status | zed --upstream <url> --model <id> | ' +
+      'orcarouter [--connect [--oob] | --status | --clear | --models]]'
   );
   return 2;
 }

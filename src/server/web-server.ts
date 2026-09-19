@@ -15,6 +15,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { registerWikiRoutes } from './wiki-routes.js';
 import { registerUcrRoutes } from './ucr-routes.js';
+import { registerOrcaRouterRoutes } from './orcarouter-routes.js';
 import {
   readHookDiagnosticEvents,
   summarizeHookDiagnostics,
@@ -24,6 +25,14 @@ import {
   summarizeMcpDiagnostics,
 } from './mcp-diagnostics.js';
 import { isValidSessionId } from '../utils/session-id.js';
+import {
+  corsOrigin,
+  dashboardHost,
+  hostGuard,
+  injectToken,
+  isExposed,
+  requireCapability,
+} from './dashboard-guard.js';
 import {
   readDashboardAnalytics,
   readDashboardProviderUsage,
@@ -58,14 +67,47 @@ const limiter = rateLimit({
 
 // Middleware
 app.use(limiter);
-app.use(cors());
+// ORDER MATTERS. The host allowlist runs before anything reads the request, so a rebound hostname
+// is refused before a route can act on it; the capability check runs before the body is trusted.
+app.use(hostGuard());
+// NOT `cors()`. Its wildcard let any site read every response this server produces, the provider
+// status among them, which names the account a stored key belongs to.
+app.use(cors({ origin: corsOrigin(), credentials: false }));
 app.use(express.json());
+app.use(requireCapability());
 const dashboardPublicDirectory = path.join(
   __dirname,
   '..',
   'dashboard',
   'public'
 );
+// EVERY HTML PAGE, not just the index. The first version injected the token only in the `/` route,
+// so wiki.html -- served straight off the static middleware -- got a page with no token and every
+// mutating call from it came back 403. This sits AHEAD of express.static so the pages it owns are
+// injected rather than streamed from disk.
+const dashboardPages = new Map<string, string>();
+for (const file of ['index.html', 'wiki.html']) {
+  try {
+    dashboardPages.set(
+      file,
+      fs.readFileSync(path.join(dashboardPublicDirectory, file), 'utf8')
+    );
+  } catch {
+    // Absent in this build; the static middleware will answer (or 404) as it did before.
+  }
+}
+
+app.get(/^\/(?:([\w.-]+\.html))?$/, (req, res, next) => {
+  const requested = req.params[0] ?? 'index.html';
+  const page = dashboardPages.get(requested);
+  if (page === undefined) {
+    next();
+    return;
+  }
+  // `req` decides whether the token goes in: a remote viewer gets the page without it.
+  res.type('html').send(injectToken(page, process.env, req));
+});
+
 app.use(express.static(dashboardPublicDirectory));
 
 // Compatibility storage used only by the legacy Claude hook/session APIs.
@@ -647,6 +689,9 @@ app.get('/api/health', (_req, res) => {
 // graph from plain ESM under hooks-core/ rather than from this build.
 registerWikiRoutes(app);
 registerUcrRoutes(app);
+// The OrcaRouter provider API. Server-side because the browser must never hold an OrcaRouter key:
+// the dashboard posts a secret in and reads a redacted status back. See the module header.
+registerOrcaRouterRoutes(app);
 
 // Serve the wiki graph browser through the same static middleware that already
 // serves /wiki.html reliably in globally installed packages. Express sendFile
@@ -657,13 +702,25 @@ app.get('/wiki', (_req, res) => {
 });
 
 // Serve index.html for root route
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(dashboardPublicDirectory, 'index.html'));
-});
-
-// Start server
+// READ AND INJECTED, not sent as a file: the page needs the capability token, and this response is
+// the one place it can safely be handed over -- a cross-origin page cannot read it.
+// READ ONCE, AT LOAD. The page needs the capability token injected, and this response is the only
+// place it can safely be handed over -- a cross-origin page cannot read it. Reading per request
+// would re-read an unchanging file on every hit; module scope is also where a blocking read is
+// correct, because nothing is being served yet.
 export function startWebServer() {
-  const server = app.listen(PORT, () => {
+  const host = dashboardHost();
+  // SAID OUT LOUD. Binding beyond loopback also turns off the host allowlist and the CORS
+  // restriction, because a real hostname is then the point -- so the one remaining defence is the
+  // capability token. Someone who set this deserves to know what it cost them.
+  if (isExposed()) {
+    console.warn(
+      `[dashboard] listening on ${host}, not loopback: reachable from the network. ` +
+        'Host and origin checks are disabled. Remote clients get a read-only page: the capability ' +
+        'token is never served off-box and mutating requests from off-box are refused.'
+    );
+  }
+  const server = app.listen(PORT, host, () => {
     console.log(
       `Token Optimizer Dashboard running on http://localhost:${PORT}`
     );
