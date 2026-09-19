@@ -262,10 +262,28 @@ jobs:
             sleep 20
           done
 
-      - name: Install mcp-publisher
+      # PINNED AND CHECKSUMMED, because this job holds `id-token: write`. Fetching the mutable
+      # `releases/latest` tarball and executing it means whatever upstream publishes next runs
+      # inside a job carrying our publishing identity, and can push MCP metadata under
+      # io.github.ooples/token-optimizer-mcp. An exact tag plus a digest we committed ourselves
+      # turns a silent substitution into a failed build.
+      #
+      # The digest below is upstream's own published value for this asset -- it was cross-checked
+      # against registry_1.8.1_checksums.txt rather than taken from a local download, so the
+      # comparison is against what the project released, not against whatever arrived here.
+      #
+      # linux_amd64 specifically, not `uname` detection: this job pins runs-on to ubuntu-latest, and
+      # a checksum cannot be pinned for a platform that is chosen at run time.
+      - name: Install mcp-publisher (pinned, checksum-verified)
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.1
+          MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
         run: |
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz"             | tar xz mcp-publisher
-          ./mcp-publisher --version || true
+          asset=mcp-publisher_linux_amd64.tar.gz
+          curl -fsSL --retry 3             "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${asset}"             -o "$asset"
+          echo "${MCP_PUBLISHER_SHA256}  ${asset}" | sha256sum --check --strict -
+          tar xzf "$asset" mcp-publisher
+          ./mcp-publisher --version
 
       - name: Publish server.json over GitHub OIDC
         run: |
