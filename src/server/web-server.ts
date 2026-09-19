@@ -81,6 +81,33 @@ const dashboardPublicDirectory = path.join(
   'dashboard',
   'public'
 );
+// EVERY HTML PAGE, not just the index. The first version injected the token only in the `/` route,
+// so wiki.html -- served straight off the static middleware -- got a page with no token and every
+// mutating call from it came back 403. This sits AHEAD of express.static so the pages it owns are
+// injected rather than streamed from disk.
+const dashboardPages = new Map<string, string>();
+for (const file of ['index.html', 'wiki.html']) {
+  try {
+    dashboardPages.set(
+      file,
+      fs.readFileSync(path.join(dashboardPublicDirectory, file), 'utf8')
+    );
+  } catch {
+    // Absent in this build; the static middleware will answer (or 404) as it did before.
+  }
+}
+
+app.get(/^\/(?:([\w.-]+\.html))?$/, (req, res, next) => {
+  const requested = req.params[0] ?? 'index.html';
+  const page = dashboardPages.get(requested);
+  if (page === undefined) {
+    next();
+    return;
+  }
+  // `req` decides whether the token goes in: a remote viewer gets the page without it.
+  res.type('html').send(injectToken(page, process.env, req));
+});
+
 app.use(express.static(dashboardPublicDirectory));
 
 // Compatibility storage used only by the legacy Claude hook/session APIs.
@@ -681,26 +708,6 @@ app.get('/wiki', (_req, res) => {
 // place it can safely be handed over -- a cross-origin page cannot read it. Reading per request
 // would re-read an unchanging file on every hit; module scope is also where a blocking read is
 // correct, because nothing is being served yet.
-let dashboardIndexHtml: string | null = null;
-try {
-  dashboardIndexHtml = fs.readFileSync(
-    path.join(dashboardPublicDirectory, 'index.html'),
-    'utf8'
-  );
-} catch {
-  // Left null; the route answers 500 rather than serving a page with no token in it.
-}
-
-app.get('/', (req, res) => {
-  if (dashboardIndexHtml === null) {
-    res.status(500).type('text').send('Dashboard assets are missing.');
-    return;
-  }
-  // `req` decides whether the token goes in: a remote viewer gets the page without it.
-  res.type('html').send(injectToken(dashboardIndexHtml, process.env, req));
-});
-
-// Start server
 export function startWebServer() {
   const host = dashboardHost();
   // SAID OUT LOUD. Binding beyond loopback also turns off the host allowlist and the CORS

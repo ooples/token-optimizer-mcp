@@ -35,6 +35,10 @@ import { createServer } from 'node:http';
 import { app } from '../../src/server/web-server.js';
 import { orcaConnectManager } from '../../src/server/orcarouter-routes.js';
 import {
+  TOKEN_HEADER,
+  capabilityToken,
+} from '../../src/server/dashboard-guard.js';
+import {
   ORCA_API_KEY_PROVIDER_ID,
   ORCA_PKCE_PROVIDER_ID,
   credentialStorePath,
@@ -162,8 +166,17 @@ afterEach(() => {
 
 async function api(path: string, init?: RequestInit) {
   const response = await fetch(`${baseUrl}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    // MERGED, not defaulted. Spreading `init` last used to REPLACE these headers wholesale, so a
+    // case that set its own Origin silently lost the content type. It also has to carry the
+    // dashboard capability token, which the real page gets injected into its HTML and which
+    // mutating routes now require -- added here so a case written later cannot forget it. The
+    // cases that assert a 403 still get one: the origin guard runs independently of this.
+    headers: {
+      'Content-Type': 'application/json',
+      ...((init?.headers as Record<string, string> | undefined) ?? {}),
+      [TOKEN_HEADER]: capabilityToken(process.env),
+    },
   });
   const body = await response.json().catch(() => null);
   return { status: response.status, body };
