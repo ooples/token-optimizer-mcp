@@ -21,6 +21,7 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
+import { organise } from './rank.mjs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -69,7 +70,7 @@ const GROUPS = [
     stores: ['largecontext'],
     rows: 364,
     cells: 12,
-    rowsPerCell: 30,
+    usablePerCell: 30,
     backs: 'RESULTS-LARGECONTEXT.md',
   },
   {
@@ -115,18 +116,26 @@ for (const group of GROUPS) {
       : ''
   );
 
-  // ROWS PER CELL, which is the claim the README actually makes ("30 real reps in every one of 12
-  // cells"). Checked as rows and not as distinct `rep` values on purpose: the older stores carry
-  // repeated rep NUMBERING from a resumption bug that restarted the count, and the README is
-  // explicit about that. Repeated numbering on distinct measurements is a labelling defect; a cell
-  // holding more or fewer measurements than published is an evidence defect, and only the second
-  // one moves a published ratio.
+  // THE ROWS THE ANALYSIS ACTUALLY SEES, obtained by calling `organise()` rather than
+  // reimplementing it. Raw row counts are the wrong instrument and I had it wrong twice before
+  // landing here: rows-per-cell ignores that harness failures are bucketed out, and distinct-`rep`
+  // counts flag a labelling quirk that cannot move a number. `organise()` is the front of the real
+  // report path, so asserting on its output cannot drift from what gets published.
+  //
+  // It applies two reductions. Harness failures are separated -- an infrastructure fault is not a
+  // measurement. Then rows sharing (build, arm, track, task, rep) collapse to the newest by
+  // `started_at`, which exists so a redone warm rep does not get counted alongside the partial self
+  // it replaced. That second rule assumes cold reps are uniquely numbered, and in a store written
+  // before the `nextRep` fix they are not: a top-up restarted at 1 over labels already in use, so
+  // supersession silently discards the OLDER paid run. RESULTS-LARGECONTEXT.md discloses this and
+  // puts it at three shadowed runs in one cell.
+  const organised = organise(rows);
   const cells = new Map();
-  for (const row of rows) {
-    const cell = `${row.arm}|${row.task}`;
-    if (!cells.has(cell)) cells.set(cell, []);
-    cells.get(cell).push(row);
-  }
+  for (const [track, arms] of organised.tracks)
+    for (const [arm, tasks] of arms)
+      for (const [task, cellRows] of tasks)
+        cells.set(`${track}|${arm}|${task}`, cellRows.length);
+
   if (group.cells !== undefined) {
     check(
       cells.size === group.cells,
@@ -134,26 +143,20 @@ for (const group of GROUPS) {
       cells.size === group.cells ? '' : `found ${cells.size}`
     );
   }
-  if (group.rowsPerCell !== undefined) {
+  if (group.usablePerCell !== undefined) {
     const off = [...cells.entries()].filter(
-      ([, cellRows]) => cellRows.length !== group.rowsPerCell
+      ([, n]) => n !== group.usablePerCell
     );
     check(
       off.length === 0,
-      `${label}: ${group.rowsPerCell} rows in every cell, as published`,
-      off.map(([cell, r]) => `${cell}=${r.length}`).join(', ')
+      `${label}: ${group.usablePerCell} usable rows in every cell, as published`,
+      off.map(([cell, n]) => `${cell}=${n}`).join(', ')
     );
   }
 
-  // Reported, not enforced: the historical numbering defect the README already discloses.
-  const relabelled = [...cells.entries()].filter(
-    ([, cellRows]) =>
-      new Set(cellRows.map((row) => row.rep)).size !== cellRows.length
+  notes.push(
+    `${label}: ${organised.harnessFailures.length} harness failure(s) excluded, ${organised.superseded} row(s) superseded by a newer row at the same (build, arm, track, task, rep)`
   );
-  if (relabelled.length)
-    notes.push(
-      `${label}: ${relabelled.length} cell(s) carry repeated rep NUMBERING from the pre-fix resumption bug; the rows themselves are distinct (checked above)`
-    );
 }
 
 // The README's own numbers must match the declared groups, so editing one without the other fails.
