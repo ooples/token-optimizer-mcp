@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.2.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.1.0...v7.2.0) (2026-09-19)
+
+
+### Features
+
+* **orcarouter:** add api-key and pkce login with live model discovery ([#402](https://github.com/ooples/token-optimizer-mcp/issues/402)) ([6581714](https://github.com/ooples/token-optimizer-mcp/commit/65817144d0b7c7675f885b263959f2073d462a2b))
+
+
+### CI/CD
+
+* publish server.json to the mcp registry on release ([#403](https://github.com/ooples/token-optimizer-mcp/issues/403)) ([ae5e591](https://github.com/ooples/token-optimizer-mcp/commit/ae5e59108207d3d4d62f69d9fceb49a5e6d4ddc1))
+
 ## [7.1.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.0.1...v7.1.0) (2026-09-18)
 
 
