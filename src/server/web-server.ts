@@ -26,6 +26,14 @@ import {
 } from './mcp-diagnostics.js';
 import { isValidSessionId } from '../utils/session-id.js';
 import {
+  corsOrigin,
+  dashboardHost,
+  hostGuard,
+  injectToken,
+  isExposed,
+  requireCapability,
+} from './dashboard-guard.js';
+import {
   readDashboardAnalytics,
   readDashboardProviderUsage,
 } from './dashboard-analytics.js';
@@ -59,8 +67,14 @@ const limiter = rateLimit({
 
 // Middleware
 app.use(limiter);
-app.use(cors());
+// ORDER MATTERS. The host allowlist runs before anything reads the request, so a rebound hostname
+// is refused before a route can act on it; the capability check runs before the body is trusted.
+app.use(hostGuard());
+// NOT `cors()`. Its wildcard let any site read every response this server produces, the provider
+// status among them, which names the account a stored key belongs to.
+app.use(cors({ origin: corsOrigin(), credentials: false }));
 app.use(express.json());
+app.use(requireCapability());
 const dashboardPublicDirectory = path.join(
   __dirname,
   '..',
@@ -661,13 +675,43 @@ app.get('/wiki', (_req, res) => {
 });
 
 // Serve index.html for root route
+// READ AND INJECTED, not sent as a file: the page needs the capability token, and this response is
+// the one place it can safely be handed over -- a cross-origin page cannot read it.
+// READ ONCE, AT LOAD. The page needs the capability token injected, and this response is the only
+// place it can safely be handed over -- a cross-origin page cannot read it. Reading per request
+// would re-read an unchanging file on every hit; module scope is also where a blocking read is
+// correct, because nothing is being served yet.
+let dashboardIndexHtml: string | null = null;
+try {
+  dashboardIndexHtml = fs.readFileSync(
+    path.join(dashboardPublicDirectory, 'index.html'),
+    'utf8'
+  );
+} catch {
+  // Left null; the route answers 500 rather than serving a page with no token in it.
+}
+
 app.get('/', (_req, res) => {
-  res.sendFile(path.join(dashboardPublicDirectory, 'index.html'));
+  if (dashboardIndexHtml === null) {
+    res.status(500).type('text').send('Dashboard assets are missing.');
+    return;
+  }
+  res.type('html').send(injectToken(dashboardIndexHtml));
 });
 
 // Start server
 export function startWebServer() {
-  const server = app.listen(PORT, () => {
+  const host = dashboardHost();
+  // SAID OUT LOUD. Binding beyond loopback also turns off the host allowlist and the CORS
+  // restriction, because a real hostname is then the point -- so the one remaining defence is the
+  // capability token. Someone who set this deserves to know what it cost them.
+  if (isExposed()) {
+    console.warn(
+      `[dashboard] listening on ${host}, not loopback: reachable from the network. ` +
+        'Host and origin checks are disabled; the capability token is the only remaining guard.'
+    );
+  }
+  const server = app.listen(PORT, host, () => {
     console.log(
       `Token Optimizer Dashboard running on http://localhost:${PORT}`
     );
