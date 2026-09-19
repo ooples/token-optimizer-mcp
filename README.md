@@ -1,5 +1,9 @@
 [![MCP Toplist](https://mcptoplist.com/badge/io.github.ooples%2Ftoken-optimizer-mcp.svg)](https://mcptoplist.com/server/io.github.ooples%2Ftoken-optimizer-mcp)
 
+<p align="center">
+  <img src="docs/assets/logo-400.png" alt="Token Optimizer" width="96" height="96">
+</p>
+
 <h1 align="center">Token Optimizer MCP</h1>
 
 <p align="center">
