@@ -24,7 +24,16 @@
  * unfalsifiable, a failing assertion is not.
  */
 
-import { median, ratioCI, ratioOfTotalsCI, significant, samplingVerdict, holm, permutationP, rng } from './stats.mjs';
+import {
+  median,
+  ratioCI,
+  ratioOfTotalsCI,
+  significant,
+  samplingVerdict,
+  holm,
+  permutationP,
+  rng,
+} from './stats.mjs';
 import { assertSingleBuild, rowProblem, buildKey } from './provenance.mjs';
 // ONE DEFINITION, SHARED. See the note above the re-export below.
 import { isHarnessFailure } from './store.mjs';
@@ -71,13 +80,32 @@ export function organise(rows) {
   // it was written, and the newest row wins because it is the one whose
   // sequence actually completed. Cold rows are unaffected -- their reps are
   // unique by construction since resumption continues the numbering.
+  // WARM ONLY. The rule above describes a warm rep superseding its partial self, and says cold rows
+  // are unaffected "since resumption continues the numbering". That premise is false for any store
+  // written before the nextRep fix: a top-up run from a commit where `coldArm` passed no `startRep`
+  // relabelled itself 1,2,3 over labels already in use, so keying on `rep` made a NEW cold row
+  // shadow an OLDER PAID one. It is not a double count -- the rows differ in started_at and in
+  // cost, so they are two runs that both happened and both got billed.
+  //
+  // largecontext lost 49 rows that way, leaving 5 of 12 cells at 15-26 against a published n of 30,
+  // and the damage was not confined to the count: with no cell reaching 30, `precision.fixedReps:
+  // 30` could not converge anything and the published pipeline returned NaN on its own store.
+  //
+  // So supersession is applied where it was designed to apply. A cold row is never superseded.
   const newest = new Map();
+  const cold = [];
   for (const row of good) {
+    if (row.track !== 'warm') {
+      cold.push(row);
+      continue;
+    }
     const key = `${buildKey(row)}|${row.arm}|${row.track}|${row.task}|${row.rep}`;
     const held = newest.get(key);
-    if (!held || String(row.started_at) > String(held.started_at)) newest.set(key, row);
+    if (!held || String(row.started_at) > String(held.started_at))
+      newest.set(key, row);
   }
-  const superseded = good.length - newest.size;
+  const superseded = good.length - cold.length - newest.size;
+  for (const row of cold) newest.set(`cold|${newest.size}`, row);
 
   const tracks = new Map();
   for (const row of newest.values()) {
@@ -144,8 +172,14 @@ function metricOf(row, endpoint) {
  * because a reader deciding whether to adopt a tool needs to see a cheap tool
  * that fails a third of the time for what it is.
  */
-export function taskResult(rows, { completionThreshold = 0.999, precision, endpoint = 'usd' } = {}) {
-  const usable = endpoint === 'usd' ? rows : rows.filter((r) => Number.isFinite(metricOf(r, endpoint)));
+export function taskResult(
+  rows,
+  { completionThreshold = 0.999, precision, endpoint = 'usd' } = {}
+) {
+  const usable =
+    endpoint === 'usd'
+      ? rows
+      : rows.filter((r) => Number.isFinite(metricOf(r, endpoint)));
   if (!usable.length) {
     return {
       n: 0,
@@ -168,7 +202,9 @@ export function taskResult(rows, { completionThreshold = 0.999, precision, endpo
   // Runs that delivered nothing are included at their full cost via `spend`,
   // and contribute no denominator -- so a task an arm never completes has an
   // infinite unit cost, which is the honest answer rather than a missing row.
-  const perRun = rows.map((r) => (r.score > 0 ? metricOf(r, endpoint) / r.score : Infinity));
+  const perRun = rows.map((r) =>
+    r.score > 0 ? metricOf(r, endpoint) / r.score : Infinity
+  );
   const finite = perRun.filter(Number.isFinite);
 
   return {
@@ -176,7 +212,8 @@ export function taskResult(rows, { completionThreshold = 0.999, precision, endpo
     spend,
     delivered,
     costPerUnit: delivered > 0 ? spend / delivered : Infinity,
-    completion: rows.filter((r) => r.score >= completionThreshold).length / rows.length,
+    completion:
+      rows.filter((r) => r.score >= completionThreshold).length / rows.length,
     medianUnitCost: finite.length ? median(finite) : Infinity,
     sampling: samplingVerdict(finite.length ? finite : usd, precision),
     turns: median(rows.map((r) => r.turns)),
@@ -254,11 +291,14 @@ export function compareArm(armTasks, controlTasks, options = {}) {
     // thing as `unresolved` as far as a published number is concerned; the two
     // differ only in whether more reps would help.
     const settled =
-      arm.sampling.state === 'converged' && control.sampling.state === 'converged';
+      arm.sampling.state === 'converged' &&
+      control.sampling.state === 'converged';
     if (settled) perTask.push(entry);
     else {
       entry.samplingState =
-        arm.sampling.state === 'converged' ? control.sampling.state : arm.sampling.state;
+        arm.sampling.state === 'converged'
+          ? control.sampling.state
+          : arm.sampling.state;
       unresolved.push(entry);
     }
   }
@@ -283,7 +323,9 @@ export function compareArm(armTasks, controlTasks, options = {}) {
   const share = total ? unresolved.length / total : 0;
 
   const geo = usable.length
-    ? Math.exp(usable.reduce((s, e) => s + Math.log(e.ratio), 0) / usable.length)
+    ? Math.exp(
+        usable.reduce((s, e) => s + Math.log(e.ratio), 0) / usable.length
+      )
     : NaN;
 
   // THE HEADLINE NEEDS ITS OWN INTERVAL, and shipping it without one was this
@@ -331,8 +373,13 @@ export function compareArm(armTasks, controlTasks, options = {}) {
  * Seeded, like everything else here, so a published headline can be recomputed
  * from the published rows.
  */
-export function geometricRatioCI(perTask, { resamples = 2000, alpha = 0.05, seed = 0xf00d } = {}) {
-  const usable = perTask.filter((e) => e.armUnits?.length && e.controlUnits?.length);
+export function geometricRatioCI(
+  perTask,
+  { resamples = 2000, alpha = 0.05, seed = 0xf00d } = {}
+) {
+  const usable = perTask.filter(
+    (e) => e.armUnits?.length && e.controlUnits?.length
+  );
   if (!usable.length) return { low: NaN, high: NaN };
 
   const next = rng(seed);
@@ -368,7 +415,10 @@ export function geometricRatioCI(perTask, { resamples = 2000, alpha = 0.05, seed
   if (!draws.length) return { low: NaN, high: NaN };
   draws.sort((x, y) => x - y);
   const lo = Math.floor((alpha / 2) * draws.length);
-  const hi = Math.min(draws.length - 1, Math.ceil((1 - alpha / 2) * draws.length) - 1);
+  const hi = Math.min(
+    draws.length - 1,
+    Math.ceil((1 - alpha / 2) * draws.length) - 1
+  );
   return { low: draws[lo], high: draws[hi] };
 }
 
@@ -396,7 +446,10 @@ export function report(rows, options = {}) {
     const baselineTasks = arms.get(baseline);
     out.tracks[track] = { control: Boolean(baselineTasks), baseline, arms: {} };
     if (!baselineTasks) continue;
-    assertSingleBuild([...baselineTasks.values()].flat(), `${track}/${baseline}`);
+    assertSingleBuild(
+      [...baselineTasks.values()].flat(),
+      `${track}/${baseline}`
+    );
 
     for (const [arm, tasks] of arms) {
       if (arm === baseline) continue;
@@ -438,7 +491,8 @@ export function correctForFamilySize(armsByName, alpha = 0.05) {
   const adjusted = holm(family.map((e) => e.permutationP ?? NaN));
   family.forEach((entry, i) => {
     entry.adjustedP = adjusted[i];
-    entry.survivesCorrection = Number.isFinite(adjusted[i]) && adjusted[i] < alpha;
+    entry.survivesCorrection =
+      Number.isFinite(adjusted[i]) && adjusted[i] < alpha;
     entry.familyNote = `${family.length} tests on this track`;
   });
   for (const cmp of Object.values(armsByName)) {
