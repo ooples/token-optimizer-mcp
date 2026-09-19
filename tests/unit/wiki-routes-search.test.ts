@@ -13,6 +13,10 @@ import { pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { app } from '../../src/server/web-server.js';
+import {
+  TOKEN_HEADER,
+  capabilityToken,
+} from '../../src/server/dashboard-guard.js';
 import { putNodeWithEdges, load, nodeId } from '../../hooks-core/wiki.mjs';
 import { registerProject } from '../../hooks-core/projects.mjs';
 
@@ -98,7 +102,8 @@ function registerIsolatedProject(): string {
     graphDir: tempGraphDir,
     client: 'test',
   });
-  if (!project) throw new Error('registerProject failed to register the fixture');
+  if (!project)
+    throw new Error('registerProject failed to register the fixture');
   return project.id;
 }
 
@@ -206,47 +211,50 @@ describe('/api/wiki/search (the route itself)', () => {
   it.each([
     ['a single space', ' '],
     ['punctuation only', '!!! ,,, ???'],
-  ])('treats a query that tokenizes to nothing (%s) the same as no query at all', async (_label, q) => {
-    const scope = registerIsolatedProject();
-    if (!tempGraphDir) throw new Error('fixture graph directory missing');
+  ])(
+    'treats a query that tokenizes to nothing (%s) the same as no query at all',
+    async (_label, q) => {
+      const scope = registerIsolatedProject();
+      if (!tempGraphDir) throw new Error('fixture graph directory missing');
 
-    putNodeWithEdges(tempGraphDir, {
-      kind: 'finding',
-      key: 'low-confidence',
-      claim: 'an unrelated finding about caching',
-      confidence: 0.3,
-    });
-    putNodeWithEdges(tempGraphDir, {
-      kind: 'finding',
-      key: 'high-confidence',
-      claim: 'a different finding about retries',
-      confidence: 0.95,
-    });
+      putNodeWithEdges(tempGraphDir, {
+        kind: 'finding',
+        key: 'low-confidence',
+        claim: 'an unrelated finding about caching',
+        confidence: 0.3,
+      });
+      putNodeWithEdges(tempGraphDir, {
+        kind: 'finding',
+        key: 'high-confidence',
+        claim: 'a different finding about retries',
+        confidence: 0.95,
+      });
 
-    const blankResponse = await fetch(
-      `${baseUrl}/api/wiki/search?${new URLSearchParams({ q, scope, limit: '50' })}`
-    );
-    const noQueryResponse = await fetch(
-      `${baseUrl}/api/wiki/search?${new URLSearchParams({ scope, limit: '50' })}`
-    );
-    expect(blankResponse.status).toBe(200);
-    const blankBody = (await blankResponse.json()) as {
-      total: number;
-      items: Array<{ key: string }>;
-    };
-    const noQueryBody = (await noQueryResponse.json()) as {
-      total: number;
-      items: Array<{ key: string }>;
-    };
+      const blankResponse = await fetch(
+        `${baseUrl}/api/wiki/search?${new URLSearchParams({ q, scope, limit: '50' })}`
+      );
+      const noQueryResponse = await fetch(
+        `${baseUrl}/api/wiki/search?${new URLSearchParams({ scope, limit: '50' })}`
+      );
+      expect(blankResponse.status).toBe(200);
+      const blankBody = (await blankResponse.json()) as {
+        total: number;
+        items: Array<{ key: string }>;
+      };
+      const noQueryBody = (await noQueryResponse.json()) as {
+        total: number;
+        items: Array<{ key: string }>;
+      };
 
-    // Not empty, and identical to the no-query response: both surfaces of
-    // "nothing meaningful to search for" must agree.
-    expect(blankBody.items.map((item) => item.key)).toEqual([
-      'high-confidence',
-      'low-confidence',
-    ]);
-    expect(blankBody).toEqual(noQueryBody);
-  });
+      // Not empty, and identical to the no-query response: both surfaces of
+      // "nothing meaningful to search for" must agree.
+      expect(blankBody.items.map((item) => item.key)).toEqual([
+        'high-confidence',
+        'low-confidence',
+      ]);
+      expect(blankBody).toEqual(noQueryBody);
+    }
+  );
 });
 
 /**
@@ -259,13 +267,21 @@ describe('/api/wiki/search (the route itself)', () => {
  * the case EXISTS; only a request proves it works.
  */
 describe('/api/wiki/curate (contradict)', () => {
-  /** The dashboard's own header, which rejectsCrossSite requires of any POST. */
+  /**
+   * The two headers a real POST from the dashboard carries.
+   *
+   * `x-token-optimizer` is the static marker rejectsCrossSite has always required. The capability
+   * token is the newer one: it is injected into the page the server serves, and mutating routes
+   * refuse anything without it, so a test that omits it gets a 403 rather than the status it is
+   * actually asserting.
+   */
   const curate = (body: Record<string, unknown>, scope: string) =>
     fetch(`${baseUrl}/api/wiki/curate`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         'x-token-optimizer': 'dashboard',
+        [TOKEN_HEADER]: capabilityToken(process.env),
       },
       body: JSON.stringify({ ...body, projectId: scope }),
     });
@@ -302,7 +318,9 @@ describe('/api/wiki/curate (contradict)', () => {
     // contradictOR is the source, so a route that swapped key and byKey would
     // record the established claim disputing the new one.
     const graph = load(tempGraphDir);
-    const edges = graph.edges.filter((e: { edge: string }) => e.edge === 'contradicts');
+    const edges = graph.edges.filter(
+      (e: { edge: string }) => e.edge === 'contradicts'
+    );
     expect(edges).toHaveLength(1);
     expect(edges[0].from).toBe(nodeId('finding', 'new'));
     expect(edges[0].to).toBe(nodeId('finding', 'old'));
@@ -320,7 +338,9 @@ describe('/api/wiki/curate (contradict)', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'byKey required' });
     expect(
-      load(tempGraphDir).edges.some((e: { edge: string }) => e.edge === 'contradicts')
+      load(tempGraphDir).edges.some(
+        (e: { edge: string }) => e.edge === 'contradicts'
+      )
     ).toBe(false);
   });
 
@@ -338,7 +358,9 @@ describe('/api/wiki/curate (contradict)', () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: 'no such finding' });
     expect(
-      load(tempGraphDir).edges.some((e: { edge: string }) => e.edge === 'contradicts')
+      load(tempGraphDir).edges.some(
+        (e: { edge: string }) => e.edge === 'contradicts'
+      )
     ).toBe(false);
   });
 });
