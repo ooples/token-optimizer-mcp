@@ -216,6 +216,105 @@ jobs:
   #     platforms users run it on. v7.0.0 shipped a tag with no npm package and 7.0.1 reached npm
   #     while installed plugins kept serving 6.0.2; both were found by users. A failure here opens
   #     an issue immediately instead.
+  # 2c) The official MCP registry, which nothing has ever published to.
+  #
+  #     server.json is version-stamped by release-please on every release (it is in
+  #     release-please-config.json's extra-files) and then goes nowhere: no workflow and no npm
+  #     script has ever run a publisher. The registry therefore serves 5.1.1 while npm serves
+  #     7.1.0 -- two majors of drift, and the kind of gap nobody notices because the file in the
+  #     repo always looks current.
+  #
+  #     No secret is needed. The registry maps a GitHub OIDC token to the `io.github.<owner>/*`
+  #     namespace, and server.json is named io.github.ooples/token-optimizer-mcp, so the OIDC
+  #     subject already proves the right to publish it. package.json carries the `mcpName`
+  #     ownership marker the registry checks against the npm package.
+  publish-mcp-registry:
+    name: Publish to the MCP registry
+    needs: [release-please, publish-npm]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # the OIDC token IS the credential here
+    steps:
+      - name: Checkout the released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
+
+      # THE REGISTRY VALIDATES THAT THE NPM PACKAGE EXISTS, and npm's own publish is eventually
+      # consistent -- it answers "being processed and may take a few minutes to become available".
+      # Publishing straight after `npm publish` therefore races, and the failure is a rejection of
+      # a version that is perfectly fine seconds later.
+      - name: Wait for npm to serve the released version
+        env:
+          RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          deadline=$(( $(date +%s) + 600 ))
+          until [ "$(npm view "@ooples/token-optimizer-mcp@$RELEASE_VERSION" version --prefer-online 2>/dev/null)" = "$RELEASE_VERSION" ]; do
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::npm is not serving $RELEASE_VERSION after 10 minutes; not publishing to the registry"
+              exit 1
+            fi
+            echo "waiting for @ooples/token-optimizer-mcp@$RELEASE_VERSION on npm..."
+            sleep 20
+          done
+
+      # PINNED AND CHECKSUMMED, because this job holds `id-token: write`. Fetching the mutable
+      # `releases/latest` tarball and executing it means whatever upstream publishes next runs
+      # inside a job carrying our publishing identity, and can push MCP metadata under
+      # io.github.ooples/token-optimizer-mcp. An exact tag plus a digest we committed ourselves
+      # turns a silent substitution into a failed build.
+      #
+      # The digest below is upstream's own published value for this asset -- it was cross-checked
+      # against registry_1.8.1_checksums.txt rather than taken from a local download, so the
+      # comparison is against what the project released, not against whatever arrived here.
+      #
+      # linux_amd64 specifically, not `uname` detection: this job pins runs-on to ubuntu-latest, and
+      # a checksum cannot be pinned for a platform that is chosen at run time.
+      - name: Install mcp-publisher (pinned, checksum-verified)
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.1
+          MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          asset=mcp-publisher_linux_amd64.tar.gz
+          curl -fsSL --retry 3             "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${asset}"             -o "$asset"
+          echo "${MCP_PUBLISHER_SHA256}  ${asset}" | sha256sum --check --strict -
+          tar xzf "$asset" mcp-publisher
+          ./mcp-publisher --version
+
+      - name: Publish server.json over GitHub OIDC
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+
+      # READ IT BACK. A publish that reports success while the registry still serves the old
+      # version is the documented failure here: a description over 100 characters returns 422 and
+      # projects have sat on a phantom version for months without noticing.
+      - name: Confirm the registry serves the new version
+        env:
+          RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          served=$(curl -fsSL "https://registry.modelcontextprotocol.io/v0/servers?search=token-optimizer-mcp"             | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          rows = d.get('servers', d.get('data', []))
+          ours = [s for s in rows if 'io.github.ooples/token-optimizer-mcp' in json.dumps(s)]
+          def ver(s):
+              return s.get('version') or s.get('server', {}).get('version', '0')
+          # Numeric compare: max() over strings makes '9.0.0' beat '10.0.0'.
+          def key(v):
+              return tuple(int(p) for p in v.split('.') if p.isdigit())
+          print(max((ver(s) for s in ours), key=key, default='none'))
+          ")
+          echo "registry highest version for our server: $served (released $RELEASE_VERSION)"
+          [ "$served" = "$RELEASE_VERSION" ] || {
+            echo "::error::registry serves $served, not $RELEASE_VERSION"
+            exit 1
+          }
+
   verify-published:
     name: Verify published release (${{ matrix.os }})
     needs: [release-please, publish-npm]
