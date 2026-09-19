@@ -1,0 +1,26 @@
+# Smithery deployment config.
+#
+# Kept deliberately thin and derived from server.json, which is the manifest the official MCP
+# registry serves: same package, same transport, same single optional environment variable. A
+# second place to state how this server launches is a second place for it to drift, so this one
+# restates nothing it does not have to.
+#
+# stdio, not http: the server is an stdio MCP server, and the plugin's own launcher spawns it the
+# same way (see plugin/.mcp.json).
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    additionalProperties: false
+    properties:
+      cacheDir:
+        type: string
+        description: >-
+          Directory path for cache storage. Optional; defaults to ~/.token-optimizer-mcp.
+    required: []
+  commandFunction: |
+    (config) => ({
+      command: 'npx',
+      args: ['-y', '@ooples/token-optimizer-mcp@latest'],
+      env: config.cacheDir ? { TOKEN_OPTIMIZER_CACHE_DIR: config.cacheDir } : {},
+    })
