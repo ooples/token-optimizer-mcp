@@ -691,12 +691,13 @@ try {
   // Left null; the route answers 500 rather than serving a page with no token in it.
 }
 
-app.get('/', (_req, res) => {
+app.get('/', (req, res) => {
   if (dashboardIndexHtml === null) {
     res.status(500).type('text').send('Dashboard assets are missing.');
     return;
   }
-  res.type('html').send(injectToken(dashboardIndexHtml));
+  // `req` decides whether the token goes in: a remote viewer gets the page without it.
+  res.type('html').send(injectToken(dashboardIndexHtml, process.env, req));
 });
 
 // Start server
@@ -708,7 +709,8 @@ export function startWebServer() {
   if (isExposed()) {
     console.warn(
       `[dashboard] listening on ${host}, not loopback: reachable from the network. ` +
-        'Host and origin checks are disabled; the capability token is the only remaining guard.'
+        'Host and origin checks are disabled. Remote clients get a read-only page: the capability ' +
+        'token is never served off-box and mutating requests from off-box are refused.'
     );
   }
   const server = app.listen(PORT, host, () => {

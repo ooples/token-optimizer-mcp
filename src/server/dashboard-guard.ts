@@ -58,6 +58,25 @@ const ALLOWED_HOSTS = new Set([
   '0.0.0.0',
 ]);
 
+/**
+ * Is the peer on this machine?
+ *
+ * THE BIND ADDRESS IS NOT THE QUESTION. An earlier version of this module keyed the token on
+ * `isExposed()`, i.e. on how the socket was opened, which meant that the moment someone set
+ * TOKEN_OPTIMIZER_DASHBOARD_HOST the page -- token and all -- was served to anybody who asked for
+ * it. The token is a capability; handing it to an unauthenticated network client defeats every
+ * other defence here, and it defeated the one the startup warning claimed was still standing.
+ *
+ * So the question is who is CONNECTING, answered per request from the socket rather than from
+ * configuration. IPv4-mapped IPv6 (`::ffff:127.0.0.1`) is how a dual-stack listener reports a
+ * loopback peer, so it counts too.
+ */
+export function isLoopbackPeer(req: Request): boolean {
+  const address = req.socket?.remoteAddress ?? '';
+  const bare = address.startsWith('::ffff:') ? address.slice(7) : address;
+  return bare === '127.0.0.1' || bare === '::1' || bare === 'localhost';
+}
+
 /** Methods that can change something. GET and HEAD are readable and carry no token requirement. */
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -178,6 +197,16 @@ export function requireCapability(env: NodeJS.ProcessEnv = process.env) {
       next();
       return;
     }
+    // REMOTE IS READ-ONLY, always. A token that leaked to another machine is still refused, and an
+    // exposed listener cannot be administered from off-box. Anyone who needs that has ssh.
+    if (!isLoopbackPeer(req)) {
+      res.status(403).json({
+        error:
+          'This dashboard can be read remotely but only changed from the machine it runs on.',
+        code: 'local-only',
+      });
+      return;
+    }
     if (sameToken(req.headers[TOKEN_HEADER], capabilityToken(env))) {
       next();
       return;
@@ -232,8 +261,12 @@ export function corsOrigin(env: NodeJS.ProcessEnv = process.env) {
  */
 export function injectToken(
   html: string,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  req?: Request
 ): string {
+  // NOT SERVED OFF-BOX. Without this the page is a token-delivery endpoint for anyone who can
+  // reach the port, which is precisely the hole that keying on the bind address left open.
+  if (req && !isLoopbackPeer(req)) return html;
   const token = capabilityToken(env);
   const block = `<script>(function(){var t=${JSON.stringify(token)};window.__TOKEN_OPTIMIZER_DASHBOARD_TOKEN=t;var f=window.fetch;window.fetch=function(input,init){var url=typeof input==='string'?input:(input&&input.url)||'';var local=url.charAt(0)==='/'||url.indexOf(window.location.origin)===0;if(local){init=Object.assign({},init);var h=new Headers((init&&init.headers)||(typeof input!=='string'&&input&&input.headers)||{});h.set(${JSON.stringify(TOKEN_HEADER)},t);init.headers=h;}return f.call(this,input,init);};})();</script>`;
   if (html.includes('</head>'))

@@ -18,6 +18,7 @@ import {
   hostGuard,
   injectToken,
   isExposed,
+  isLoopbackPeer,
   requireCapability,
   resetCapabilityToken,
   tokenPath,
@@ -38,7 +39,11 @@ afterEach(() => {
 });
 
 /** A request/response pair that records what the middleware did to it. */
-function exchange(method: string, headers: Record<string, string>) {
+function exchange(
+  method: string,
+  headers: Record<string, string>,
+  remoteAddress = '127.0.0.1'
+) {
   const res = {
     statusCode: 0,
     body: null as unknown,
@@ -53,7 +58,7 @@ function exchange(method: string, headers: Record<string, string>) {
   };
   let passed = false;
   return {
-    req: { method, headers } as unknown as Request,
+    req: { method, headers, socket: { remoteAddress } } as unknown as Request,
     res: res as unknown as Response,
     next: () => {
       passed = true;
@@ -189,5 +194,68 @@ describe('cross-origin reads', () => {
   it('allows a request with no Origin at all, which is not a page', async () => {
     // curl, the CLI, a test. CORS protects a PAGE from reading a response; there is no page here.
     await expect(decide(undefined)).resolves.toBe(true);
+  });
+});
+
+describe('an exposed listener does not hand out the capability', () => {
+  // THE HOLE THIS CLOSES. Keying the token on the BIND address meant that the moment anyone set
+  // TOKEN_OPTIMIZER_DASHBOARD_HOST, GET / served the page -- token included -- to any network
+  // client, who could then mutate freely. The bind address says nothing about who is connecting.
+  const exposed = () => ({
+    TOKEN_OPTIMIZER_HOME: home,
+    TOKEN_OPTIMIZER_DASHBOARD_HOST: '0.0.0.0',
+  });
+
+  it('withholds the token from a remote client asking for the page', () => {
+    const remote = {
+      socket: { remoteAddress: '192.168.1.50' },
+    } as unknown as Request;
+    const page = '<html><head></head><body></body></html>';
+    const html = injectToken(page, exposed(), remote);
+    // POSITIVE FIRST: the page comes back byte-for-byte, which is what "nothing was injected"
+    // actually means. The negatives below would also pass if this threw or returned undefined.
+    expect(html).toBe(page);
+    expect(html).not.toContain(capabilityToken(exposed()));
+    expect(html).not.toContain(TOKEN_HEADER);
+  });
+
+  it('still gives it to the browser on the machine itself', () => {
+    const local = {
+      socket: { remoteAddress: '::ffff:127.0.0.1' },
+    } as unknown as Request;
+    const html = injectToken(
+      '<html><head></head><body></body></html>',
+      exposed(),
+      local
+    );
+    expect(html).toContain(capabilityToken(exposed()));
+  });
+
+  it('refuses a remote mutation even when it presents a valid token', () => {
+    // Belt and braces: a token that leaked by some other route is still not usable off-box.
+    const x = exchange(
+      'POST',
+      { host: 'box.lan:3100', [TOKEN_HEADER]: capabilityToken(exposed()) },
+      '192.168.1.50'
+    );
+    requireCapability(exposed())(x.req, x.res, x.next);
+    expect(x.passed).toBe(false);
+    expect(x.status).toBe(403);
+    expect(x.body?.code).toBe('local-only');
+  });
+
+  it('recognises loopback however the socket reports it', () => {
+    for (const address of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) {
+      expect(
+        isLoopbackPeer({
+          socket: { remoteAddress: address },
+        } as unknown as Request)
+      ).toBe(true);
+    }
+    expect(
+      isLoopbackPeer({
+        socket: { remoteAddress: '10.0.0.4' },
+      } as unknown as Request)
+    ).toBe(false);
   });
 });
