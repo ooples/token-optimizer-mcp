@@ -16,7 +16,8 @@ startCommand:
       cacheDir:
         type: string
         description: >-
-          Directory path for cache storage. Optional; defaults to ~/.token-optimizer-mcp.
+          Directory path for cache storage. Optional; defaults to ~/.token-optimizer-cache
+          (src/core/cache-engine.ts).
     required: []
   commandFunction: |
     (config) => ({

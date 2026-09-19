@@ -17,7 +17,7 @@
       },
       "environmentVariables": [
         {
-          "description": "Directory path for cache storage (optional, defaults to ~/.token-optimizer-mcp)",
+          "description": "Directory path for cache storage (optional, defaults to ~/.token-optimizer-cache)",
           "isRequired": false,
           "format": "string",
           "isSecret": false,
