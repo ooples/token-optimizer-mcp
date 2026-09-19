@@ -221,57 +221,21 @@ export class OrcaConnectManager {
           response.end('not found');
           return;
         }
-        response.writeHead(200, {
+        this.closeListener(attempt);
+
+        // VALIDATE FIRST, THEN ANSWER. The page the user is looking at has to describe what actually
+        // happened: telling someone "Connected" for a state mismatch, a denial or a missing code is
+        // the one lie this flow can tell, and it sends them back to a tool that holds no credential
+        // while believing otherwise. So the outcome is decided here and only then rendered.
+        const outcome = this.readCallback(attempt, url);
+        if (outcome.kind === 'code') this.deliverCode(attempt, outcome.code);
+        else this.failAttempt(attempt, outcome.error);
+
+        response.writeHead(outcome.page.status, {
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'no-store',
         });
-        response.end(
-          '<!doctype html><meta charset="utf-8"><title>OrcaRouter</title>' +
-            '<p>Connected. You can close this tab and return to Token Optimizer.</p>'
-        );
-        this.closeListener(attempt);
-
-        // STATE FIRST. It is the only thing standing between this listener and a code that some
-        // other page dropped on it, so nothing else in the callback is read until it matches.
-        if (!stateMatches(attempt.pkce.state, url.searchParams.get('state'))) {
-          this.failAttempt(
-            attempt,
-            new OrcaConnectError(
-              'state-mismatch',
-              'The authorization response did not match this login attempt, so it was discarded. Start the connection again.'
-            )
-          );
-          return;
-        }
-        const error = url.searchParams.get('error');
-        if (error) {
-          this.failAttempt(
-            attempt,
-            error === 'access_denied'
-              ? new OrcaConnectError(
-                  'denied',
-                  'Authorization was denied in the browser. Nothing was stored.'
-                )
-              : new OrcaConnectError(
-                  'exchange-rejected',
-                  `Authorization failed with "${error}". Start the connection again.`,
-                  { detail: error }
-                )
-          );
-          return;
-        }
-        const code = url.searchParams.get('code');
-        if (!code) {
-          this.failAttempt(
-            attempt,
-            new OrcaConnectError(
-              'exchange-rejected',
-              'The authorization response carried no code. Start the connection again.'
-            )
-          );
-          return;
-        }
-        this.deliverCode(attempt, code);
+        response.end(outcome.page.html);
       });
 
       server.on('error', (error: Error) => {
@@ -296,6 +260,129 @@ export class OrcaConnectManager {
   private closeListener(attempt: Attempt): void {
     attempt.server?.close();
     attempt.server = null;
+  }
+
+  /**
+   * Read one callback and decide both its failure and the page to show for it.
+   *
+   * The order is the security property, not a style choice: STATE FIRST, before the code and before
+   * the `error` parameter. The listener is reachable by anything that can reach loopback, so a code
+   * dropped on it by some other page must be discarded without being read, and a denial forged by
+   * that page must not be allowed to end a real attempt either.
+   *
+   * Every branch returns a page, including the ones that carry a failure, because a browser is
+   * sitting on this URL and a blank response reads as a broken tool.
+   */
+  private readCallback(
+    attempt: Attempt,
+    url: URL
+  ):
+    | { kind: 'code'; code: string; page: CallbackPage }
+    | { kind: 'error'; error: OrcaConnectError; page: CallbackPage } {
+    if (attempt.cancelled) {
+      const error = new OrcaConnectError(
+        'cancelled',
+        'The connection attempt was cancelled. Nothing was stored.'
+      );
+      return {
+        kind: 'error',
+        error,
+        page: callbackPage(
+          'cancelled',
+          'This sign-in was cancelled',
+          'Nothing was stored. You can close this tab and start the connection again from Token Optimizer.'
+        ),
+      };
+    }
+    // A second delivery cannot change the outcome, and saying "Connected" again for a code that was
+    // already redeemed would be the same untruth in a quieter form.
+    if (attempt.delivered) {
+      return {
+        kind: 'error',
+        error: new OrcaConnectError(
+          'exchange-rejected',
+          'That authorization response had already been received. Start the connection again.'
+        ),
+        page: callbackPage(
+          'already-received',
+          'This sign-in was already received',
+          'Token Optimizer is already using the response from this attempt. You can close this tab.'
+        ),
+      };
+    }
+
+    if (!stateMatches(attempt.pkce.state, url.searchParams.get('state'))) {
+      const error = new OrcaConnectError(
+        'state-mismatch',
+        'The authorization response did not match this login attempt, so it was discarded. Start the connection again.'
+      );
+      return {
+        kind: 'error',
+        error,
+        page: callbackPage(
+          'state-mismatch',
+          'This response did not match your sign-in',
+          'Token Optimizer discarded it and nothing was stored. Close this tab and start the connection again from the dashboard.'
+        ),
+      };
+    }
+
+    const error = url.searchParams.get('error');
+    if (error) {
+      const denied = error === 'access_denied';
+      const failure = denied
+        ? new OrcaConnectError(
+            'denied',
+            'Authorization was denied in the browser. Nothing was stored.'
+          )
+        : new OrcaConnectError(
+            'exchange-rejected',
+            `Authorization failed with "${error}". Start the connection again.`,
+            { detail: error }
+          );
+      return {
+        kind: 'error',
+        error: failure,
+        page: denied
+          ? callbackPage(
+              'denied',
+              'Authorization was denied',
+              'Nothing was stored and no key was issued. You can close this tab and start the connection again if that was not what you meant.'
+            )
+          : callbackPage(
+              'failed',
+              'Authorization did not complete',
+              'Nothing was stored. Close this tab and start the connection again from the dashboard.'
+            ),
+      };
+    }
+
+    const code = url.searchParams.get('code');
+    if (!code) {
+      const failure = new OrcaConnectError(
+        'exchange-rejected',
+        'The authorization response carried no code. Start the connection again.'
+      );
+      return {
+        kind: 'error',
+        error: failure,
+        page: callbackPage(
+          'no-code',
+          'No authorization code was returned',
+          'Nothing was stored. Close this tab and start the connection again from the dashboard.'
+        ),
+      };
+    }
+
+    return {
+      kind: 'code',
+      code,
+      page: callbackPage(
+        'connected',
+        'Connected to OrcaRouter',
+        'You can close this tab and return to Token Optimizer.'
+      ),
+    };
   }
 
   /**
@@ -355,15 +442,34 @@ export class OrcaConnectManager {
   }
 
   /**
-   * Did this attempt finish its exchange, and may its credential be installed?
+   * Install this attempt's credential, unless a newer attempt has taken over in the meantime.
    *
-   * Checked AFTER the exchange returns, so the two conditions that matter are both covered: the
-   * attempt was not cancelled, and no newer attempt has started in the meantime.
+   * WHY THE CHECK AND THE WRITE ARE ONE OPERATION. A caller that asks "may I install?" and then
+   * awaits the store before writing has left a window between the two, and that window is reachable
+   * in normal use: `start()` is a separate HTTP request, so a second sign-in can arrive and move the
+   * generation while the first one's `saveCredential` is in flight. The older attempt then installs a
+   * key the user already replaced, and the store's own lock does not help -- it serializes the
+   * writes, not the decision that precedes them.
+   *
+   * So the manager owns the whole decision. The generation is re-read synchronously, immediately
+   * before `install` is invoked, and nothing in this process can start a new attempt in between:
+   * JavaScript runs this callback to its first await without yielding, and `start()` is synchronous
+   * up to the point where it bumps the generation. An attempt that has been superseded or cancelled
+   * gets `'superseded'` and its credential is never written.
    */
-  public mayInstall(attemptId: string): boolean {
+  public async installIfCurrent<T>(
+    attemptId: string,
+    install: () => Promise<T>
+  ): Promise<
+    | { installed: true; value: T }
+    | { installed: false; reason: 'unknown' | 'superseded' }
+  > {
     const attempt = this.attempts.get(attemptId);
-    if (!attempt) return false;
-    return !attempt.cancelled && !attempt.superseded;
+    if (!attempt) return { installed: false, reason: 'unknown' };
+    if (attempt.cancelled || attempt.superseded) {
+      return { installed: false, reason: 'superseded' };
+    }
+    return { installed: true, value: await install() };
   }
 
   /**
@@ -389,7 +495,8 @@ export class OrcaConnectManager {
     } finally {
       // Releasing the listener and the timer happens on every path, including the ones that throw.
       // The attempt itself stays in the map: its outcome still has to be attributable, and
-      // `mayInstall` is what refuses a credential for an attempt that was cancelled or superseded.
+      // `installIfCurrent` is what refuses a credential for an attempt that was cancelled or
+      // superseded.
       this.releaseResources(attempt);
     }
 
@@ -560,6 +667,39 @@ export class OrcaConnectManager {
       scopeDowngraded: scope !== REQUESTED_SCOPE,
     };
   }
+}
+
+/** One rendered browser page: an HTTP status and the HTML that describes the outcome. */
+interface CallbackPage {
+  readonly status: number;
+  readonly html: string;
+}
+
+/**
+ * The page the browser is left on.
+ *
+ * Static strings only -- no query parameter, no code and no error text from the request is
+ * interpolated into this markup. A callback URL is attacker-reachable by construction (that is what
+ * the state comparison is for), so echoing anything from it would turn the consent redirect into a
+ * reflected-content surface.
+ */
+function callbackPage(
+  kind: string,
+  heading: string,
+  detail: string
+): CallbackPage {
+  const status = kind === 'connected' ? 200 : kind === 'cancelled' ? 409 : 400;
+  return {
+    status,
+    html:
+      '<!doctype html><meta charset="utf-8">' +
+      `<title>OrcaRouter — ${heading}</title>` +
+      '<main style="font:14px/1.5 system-ui,sans-serif;max-width:34rem;margin:12vh auto;padding:0 1.5rem">' +
+      `<h1 style="font-size:1.15rem;margin:0 0 .5rem">${heading}</h1>` +
+      `<p style="margin:0;color:#555">${detail}</p>` +
+      `<p style="margin:1rem 0 0;color:#888;font-size:12px">Outcome: ${kind}</p>` +
+      '</main>',
+  };
 }
 
 function exchangeError(status: number): OrcaConnectError {

@@ -236,8 +236,17 @@ select.connect-input {
 }
 
 .model-option:hover,
-.model-option.is-selected {
+.model-option.is-selected,
+/* The keyboard's active option. `:hover` is not enough: the pointer is not on the
+   list when the user is arrowing through it, and an unmarked active row makes
+   Enter unpredictable. */
+.model-option.is-active {
   background: var(--graph-dim);
+}
+
+.model-option.is-active {
+  outline: 1px solid var(--line-bright);
+  outline-offset: -1px;
 }
 
 .model-option-name {

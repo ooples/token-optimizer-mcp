@@ -115,12 +115,19 @@ async function deliverToLoopback(
   redirectUri: string,
   params: Record<string, string>
 ): Promise<number> {
+  return (await deliverToLoopbackWithBody(redirectUri, params)).status;
+}
+
+/** The same delivery, keeping the page so a test can read what the user was told. */
+async function deliverToLoopbackWithBody(
+  redirectUri: string,
+  params: Record<string, string>
+): Promise<{ status: number; body: string }> {
   const url = new URL(redirectUri);
   for (const [key, value] of Object.entries(params))
     url.searchParams.set(key, value);
   const response = await fetch(url.toString());
-  await response.text();
-  return response.status;
+  return { status: response.status, body: await response.text() };
 }
 
 let fake: FakeAuth | null = null;
@@ -396,6 +403,96 @@ describe('connect flow through the real adapter', () => {
     expect(fake.exchangeRequests).toHaveLength(0);
   });
 
+  /*
+   * THE PAGE HAS TO MATCH THE OUTCOME. The listener used to answer 200 with "Connected" before it
+   * looked at anything, so a state mismatch, a denial and a missing code all told the user the same
+   * false thing and sent them back to a tool holding no credential.
+   */
+  it('renders a failure page, not a success page, for a state mismatch', async () => {
+    fake = await startFakeAuth();
+    const manager = newManager();
+    const started = await manager.start({
+      mode: 'loopback',
+      origins: { authBase: fake.authBase, apiBase: DEFAULT_API_BASE },
+    });
+    const completing = manager.complete(started.attemptId);
+    const rejection = expect(completing).rejects.toMatchObject({
+      kind: 'state-mismatch',
+    });
+    const delivered = await deliverToLoopbackWithBody(started.redirectUri!, {
+      code: 'attacker-code',
+      state: 'not-the-state-we-sent',
+    });
+    await rejection;
+    expect(delivered.status).toBe(400);
+    expect(delivered.body).toMatch(/did not match your sign-in/i);
+    expect(delivered.body).not.toMatch(/Connected to OrcaRouter/i);
+    // Nothing from the request is reflected into the page.
+    expect(delivered.body).not.toContain('attacker-code');
+    expect(delivered.body).not.toContain('not-the-state-we-sent');
+  });
+
+  it('renders a denial page that says nothing was stored', async () => {
+    fake = await startFakeAuth();
+    const manager = newManager();
+    const started = await manager.start({
+      mode: 'loopback',
+      origins: { authBase: fake.authBase, apiBase: DEFAULT_API_BASE },
+    });
+    const completing = manager.complete(started.attemptId);
+    const rejection = expect(completing).rejects.toMatchObject({
+      kind: 'denied',
+    });
+    const authorize = new URL(started.authorizeUrl);
+    const delivered = await deliverToLoopbackWithBody(started.redirectUri!, {
+      error: 'access_denied',
+      state: authorize.searchParams.get('state')!,
+    });
+    await rejection;
+    expect(delivered.status).toBe(400);
+    expect(delivered.body).toMatch(/Authorization was denied/i);
+    expect(delivered.body).not.toMatch(/Connected to OrcaRouter/i);
+  });
+
+  it('renders a failure page when the callback carries no code', async () => {
+    fake = await startFakeAuth();
+    const manager = newManager();
+    const started = await manager.start({
+      mode: 'loopback',
+      origins: { authBase: fake.authBase, apiBase: DEFAULT_API_BASE },
+    });
+    const completing = manager.complete(started.attemptId);
+    const rejection = expect(completing).rejects.toMatchObject({
+      kind: 'exchange-rejected',
+    });
+    const authorize = new URL(started.authorizeUrl);
+    const delivered = await deliverToLoopbackWithBody(started.redirectUri!, {
+      state: authorize.searchParams.get('state')!,
+    });
+    await rejection;
+    expect(delivered.status).toBe(400);
+    expect(delivered.body).toMatch(/No authorization code/i);
+    expect(delivered.body).not.toMatch(/Connected to OrcaRouter/i);
+  });
+
+  it('renders the success page only for a valid callback', async () => {
+    fake = await startFakeAuth();
+    const manager = newManager();
+    const started = await manager.start({
+      mode: 'loopback',
+      origins: { authBase: fake.authBase, apiBase: DEFAULT_API_BASE },
+    });
+    const completing = manager.complete(started.attemptId);
+    const authorize = new URL(started.authorizeUrl);
+    const delivered = await deliverToLoopbackWithBody(started.redirectUri!, {
+      code: 'good-code',
+      state: authorize.searchParams.get('state')!,
+    });
+    await completing;
+    expect(delivered.status).toBe(200);
+    expect(delivered.body).toMatch(/Connected to OrcaRouter/i);
+  });
+
   it('maps 400, 403 and 429 to distinct, actionable failures without retrying', async () => {
     for (const [status, kind] of [
       [400, 'exchange-rejected'],
@@ -554,6 +651,72 @@ describe('connect flow through the real adapter', () => {
     expect(rendered).not.toContain('secret-code-value');
     expect(rendered).not.toContain(challenge);
     expect(rendered).not.toMatch(/sk-orca-/);
+  });
+
+  /*
+   * THE CHECK AND THE INSTALL ARE ONE OPERATION. A caller that asks "may I install?" and then awaits
+   * a store write has left a window in which a second sign-in -- its own HTTP request -- can move the
+   * generation, and the older attempt then installs a key the user already replaced.
+   */
+  it('installs a credential for the current attempt and refuses one that was superseded', async () => {
+    fake = await startFakeAuth();
+    const manager = newManager();
+    const first = await manager.start({
+      mode: 'oob',
+      origins: { authBase: fake.authBase, apiBase: DEFAULT_API_BASE },
+    });
+
+    let writes = 0;
+    const installed = await manager.installIfCurrent(
+      first.attemptId,
+      async () => {
+        writes += 1;
+        return 'stored';
+      }
+    );
+    expect(installed).toEqual({ installed: true, value: 'stored' });
+    expect(writes).toBe(1);
+
+    // A second attempt starts, which supersedes the first.
+    await manager.start({
+      mode: 'oob',
+      origins: { authBase: fake.authBase, apiBase: DEFAULT_API_BASE },
+    });
+    const refused = await manager.installIfCurrent(
+      first.attemptId,
+      async () => {
+        writes += 1;
+        return 'should not happen';
+      }
+    );
+    expect(refused).toEqual({ installed: false, reason: 'superseded' });
+    // The install callback was never invoked, so no credential was written.
+    expect(writes).toBe(1);
+  });
+
+  it('refuses to install for a cancelled attempt or an unknown one', async () => {
+    fake = await startFakeAuth();
+    const manager = newManager();
+    const started = await manager.start({
+      mode: 'oob',
+      origins: { authBase: fake.authBase, apiBase: DEFAULT_API_BASE },
+    });
+    manager.cancel(started.attemptId);
+    let invoked = false;
+    const cancelled = await manager.installIfCurrent(
+      started.attemptId,
+      async () => {
+        invoked = true;
+        return 'nope';
+      }
+    );
+    // `cancel` removes the attempt outright, so a cancelled id is an unknown id by the time the
+    // install is asked for. Either way the callback does not run and no credential is written.
+    expect(cancelled).toEqual({ installed: false, reason: 'unknown' });
+    expect(
+      await manager.installIfCurrent('no-such-attempt', async () => 'x')
+    ).toEqual({ installed: false, reason: 'unknown' });
+    expect(invoked).toBe(false);
   });
 
   it('guards generations so a superseded attempt cannot report itself as current', async () => {

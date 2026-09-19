@@ -28,6 +28,7 @@ import {
   PkceCredentialAdapter,
   apiKeyAdapter,
   pkceAdapter,
+  CredentialInputError,
   ORCA_KEY_DASHBOARD_URL,
 } from '../orcarouter/credentials.js';
 import {
@@ -49,11 +50,17 @@ import {
 /**
  * The message a caller is allowed to see.
  *
- * The three Orca* errors are raised deliberately by this feature and their text is written FOR the
- * user -- "That key was rejected", "No code was submitted". Anything else reaching a catch here is
- * unexpected, and unexpected on these routes means the credential store: an ENOENT or EACCES whose
- * `message` carries the absolute path of the file holding a billable key. That is CWE-209, and it
- * is returned over a CORS-wildcard localhost API, so it is readable by any page the user visits.
+ * The Orca* errors are raised deliberately by this feature and their text is written FOR the user --
+ * "That key was rejected", "No code was submitted", "Keys start with sk-orca-". Anything else
+ * reaching a catch here is unexpected, and unexpected on these routes means the credential store: an
+ * ENOENT or EACCES whose `message` carries the absolute path of the file holding a billable key.
+ * That is CWE-209, and it is returned over a CORS-wildcard localhost API, so it is readable by any
+ * page the user visits.
+ *
+ * `CredentialInputError` belongs on the allowed list for the same reason the others do: it is raised
+ * by the adapter itself, about the value the user just typed, and contains nothing but an
+ * instruction. Treating it as unexpected both hid that instruction behind "Invalid key." and logged
+ * a caller's typo as a server fault.
  *
  * The detail is not discarded -- it goes to the server log, where the operator can see it and a
  * remote caller cannot.
@@ -62,7 +69,8 @@ function safeMessage(error: unknown, fallback: string): string {
   if (
     error instanceof OrcaConnectError ||
     error instanceof OrcaProviderError ||
-    error instanceof OrcaRouterConfigError
+    error instanceof OrcaRouterConfigError ||
+    error instanceof CredentialInputError
   )
     return error.message;
   console.error('[orcarouter] unexpected failure on a provider route:', error);
@@ -79,6 +87,37 @@ const connectManager = new OrcaConnectManager();
 
 export function orcaConnectManager(): OrcaConnectManager {
   return connectManager;
+}
+
+/**
+ * Refuse a cross-origin request to a route that installs, deletes or mints a credential.
+ *
+ * THE APP IS MOUNTED WITH A WILDCARD CORS POLICY AND BINDS ALL INTERFACES. That is pre-existing debt
+ * this change does not take on. What it does take on is that these are the first routes on that
+ * surface which touch a billable credential: `express.json()` forces a preflight, but a bare `cors()`
+ * answers preflights permissively, so without this any page the user visits could POST a key, DELETE
+ * one, or start an OAuth flow and read the result.
+ *
+ * WHY THE COMPARISON IS AGAINST THE REQUEST'S OWN ORIGIN rather than "any Origin at all". A browser
+ * adds `Origin` to every non-GET request, including a same-origin one -- so the dashboard's own
+ * `POST /api/orcarouter/key` and its `pagehide` `DELETE` both carry it, and rejecting on presence
+ * would break the feature it is protecting. What distinguishes an attacker is that its Origin is a
+ * different host, so that is what is checked. `src/proxy/supervisor.ts` can use the stricter
+ * presence rule because its control endpoint has no browser caller; this one does.
+ *
+ * A non-browser client (the CLI, curl, a test) sends no Origin and is unaffected, and a request with
+ * `Origin: null` -- a sandboxed frame -- matches nothing and is refused.
+ *
+ * This is a guard, not the fix: the wildcard policy and the bind address remain the maintainers' call.
+ */
+function rejectCrossOrigin(req: Request, res: Response): boolean {
+  const origin = req.headers.origin;
+  if (origin === undefined) return false;
+  const host = req.headers.host;
+  if (host && (origin === `http://${host}` || origin === `https://${host}`))
+    return false;
+  res.status(403).json({ error: 'cross-origin requests are not accepted' });
+  return true;
 }
 
 const CAPABILITIES: readonly CatalogCapability[] = [
@@ -182,6 +221,7 @@ export function registerOrcaRouterRoutes(app: Express): void {
    * into a log by accident.
    */
   app.post('/api/orcarouter/key', async (req: Request, res: Response) => {
+    if (rejectCrossOrigin(req, res)) return;
     const key = (req.body as { key?: unknown } | undefined)?.key;
     try {
       await new ApiKeyCredentialAdapter().save(String(key ?? ''));
@@ -193,19 +233,18 @@ export function registerOrcaRouterRoutes(app: Express): void {
     return res.json(await providerStatus(process.env));
   });
 
-  app.delete('/api/orcarouter/key', async (_req: Request, res: Response) => {
+  app.delete('/api/orcarouter/key', async (req: Request, res: Response) => {
+    if (rejectCrossOrigin(req, res)) return;
     await apiKeyAdapter.clear();
     res.json(await providerStatus(process.env));
   });
 
   /** The other adapter's clear, so each choice can be removed independently. */
-  app.delete(
-    '/api/orcarouter/connect',
-    async (_req: Request, res: Response) => {
-      await new PkceCredentialAdapter().clear();
-      res.json(await providerStatus(process.env));
-    }
-  );
+  app.delete('/api/orcarouter/connect', async (req: Request, res: Response) => {
+    if (rejectCrossOrigin(req, res)) return;
+    await new PkceCredentialAdapter().clear();
+    res.json(await providerStatus(process.env));
+  });
 
   /**
    * Start a login.
@@ -214,6 +253,7 @@ export function registerOrcaRouterRoutes(app: Express): void {
    * successful exchange, so an abandoned login leaves no half-state behind.
    */
   app.post('/api/orcarouter/connect', async (req: Request, res: Response) => {
+    if (rejectCrossOrigin(req, res)) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
     try {
       const started = await connectManager.start({
@@ -247,22 +287,29 @@ export function registerOrcaRouterRoutes(app: Express): void {
   app.post(
     '/api/orcarouter/connect/:attemptId/complete',
     async (req: Request, res: Response) => {
+      if (rejectCrossOrigin(req, res)) return;
       const attemptId = String(req.params.attemptId);
       try {
         const outcome = await connectManager.complete(attemptId);
-        // The guard runs AFTER the exchange, so it covers both ways an attempt stops being the
-        // current one: an explicit cancel, and a newer attempt having started while this one waited.
-        // A credential from an attempt the user replaced must not be installed.
-        if (!connectManager.mayInstall(attemptId)) {
+        // THE GUARD AND THE SAVE ARE ONE MANAGER OPERATION, not a check followed by an await. A
+        // separate `mayInstall()` call leaves a window in which a second sign-in -- which is its own
+        // HTTP request -- can move the generation while this attempt's store write is in flight, and
+        // the older attempt then installs a key the user already replaced. `installIfCurrent`
+        // re-reads the generation synchronously immediately before invoking the save, so no new
+        // attempt can begin between the two.
+        const installed = await connectManager.installIfCurrent(attemptId, () =>
+          pkceAdapter.save(outcome.key, {
+            accountId: outcome.accountId,
+            scope: outcome.scope,
+          })
+        );
+        if (!installed.installed) {
           return res.status(409).json({
             error: 'That login attempt was superseded or cancelled.',
             kind: 'cancelled',
           });
         }
-        const saved = await pkceAdapter.save(outcome.key, {
-          accountId: outcome.accountId,
-          scope: outcome.scope,
-        });
+        const saved = installed.value;
         return res.json({
           status: await providerStatus(process.env),
           scope: saved.scope,
@@ -296,6 +343,7 @@ export function registerOrcaRouterRoutes(app: Express): void {
   app.post(
     '/api/orcarouter/connect/:attemptId/code',
     (req: Request, res: Response) => {
+      if (rejectCrossOrigin(req, res)) return;
       const attemptId = String(req.params.attemptId);
       const code = (req.body as { code?: unknown } | undefined)?.code;
       try {
@@ -319,6 +367,7 @@ export function registerOrcaRouterRoutes(app: Express): void {
   app.delete(
     '/api/orcarouter/connect/:attemptId',
     (req: Request, res: Response) => {
+      if (rejectCrossOrigin(req, res)) return;
       const cancelled = connectManager.cancel(String(req.params.attemptId));
       res.json({ cancelled });
     }

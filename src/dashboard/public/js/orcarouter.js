@@ -24,12 +24,22 @@
  * EVERY ASYNC RESPONSE CHECKS ITS GENERATION before it is allowed to install a
  * credential or change the card, so a late reply from a superseded login cannot
  * appear under the current one.
+ *
+ * THERE ARE TWO GENERATIONS, AND THEY ARE NOT INTERCHANGEABLE. `orcaGeneration`
+ * covers authentication and credential operations -- a login attempt, a key save,
+ * a disconnect. `orcaModelGeneration` covers model-catalog requests. One counter
+ * for both meant a model-only change invalidated the pending credential work: an
+ * authorization completing afterwards hit the guard, returned, and never cleared
+ * `orcaAttemptId` or `orcaBusy`, so the card stayed busy over a request the server
+ * had already answered.
  */
 
 const ORCA = '/api/orcarouter';
 
-/* One generation for the whole card, bumped by every state-changing action. */
+/* Authentication and credential generation. Bumped by connect, cancel and disconnect. */
 let orcaGeneration = 0;
+/* Model-catalog generation. Bumped by every catalog request and by a modality change. */
+let orcaModelGeneration = 0;
 let orcaAttemptId = null;
 let orcaAuthorizeUrl = null;
 let orcaBusy = false;
@@ -139,15 +149,24 @@ function orcaRenderStatus(status) {
 let orcaModels = [];
 let orcaSelectedModel = '';
 
-function orcaRenderModelList() {
-  const list = orcaEl('orcarouter-model-list');
-  const trigger = orcaEl('orcarouter-model-value');
-  const note = orcaEl('orcarouter-model-panel-note');
-  if (!list) return;
+/*
+ * Keyboard navigation over the options.
+ *
+ * The options are `<li role="option">`, which is not focusable, so a keyboard
+ * user could open the panel and type a filter but had no way to pick anything:
+ * selection existed only as a click handler. Focus stays in the search field --
+ * that is where the user is already typing -- and the active option is tracked
+ * separately and marked with `aria-activedescendant`, which is the pattern a
+ * combobox over a listbox is supposed to use.
+ */
+let orcaActiveModelId = '';
+
+/** The options the current filter leaves visible, in render order. */
+function orcaShownModels() {
   const query = (orcaEl('orcarouter-model-search')?.value || '')
     .trim()
     .toLowerCase();
-  const shown = orcaModels.filter(
+  return orcaModels.filter(
     (model) =>
       !query ||
       model.id.toLowerCase().includes(query) ||
@@ -155,6 +174,61 @@ function orcaRenderModelList() {
         .toLowerCase()
         .includes(query)
   );
+}
+
+function orcaModelOptionId(id) {
+  return `orca-model-${String(id).replace(/[^A-Za-z0-9_-]/g, '-')}`;
+}
+
+/** Mark one option active, scrolling it into view, and tell assistive tech. */
+function orcaSetActiveModel(id) {
+  orcaActiveModelId = id || '';
+  const list = orcaEl('orcarouter-model-list');
+  const search = orcaEl('orcarouter-model-search');
+  if (search) {
+    if (orcaActiveModelId)
+      search.setAttribute(
+        'aria-activedescendant',
+        orcaModelOptionId(orcaActiveModelId)
+      );
+    else search.removeAttribute('aria-activedescendant');
+  }
+  for (const node of list?.querySelectorAll('.model-option') ?? []) {
+    const active = node.dataset.value === orcaActiveModelId;
+    node.classList.toggle('is-active', active);
+    if (active) node.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+/** Move the active option by `step`, clamped to the visible list. */
+function orcaMoveActiveModel(step) {
+  const shown = orcaShownModels();
+  if (!shown.length) return;
+  const current = shown.findIndex((model) => model.id === orcaActiveModelId);
+  const next =
+    current < 0
+      ? step > 0
+        ? 0
+        : shown.length - 1
+      : Math.min(shown.length - 1, Math.max(0, current + step));
+  orcaSetActiveModel(shown[next].id);
+}
+
+/** Choose a model, from a click or from the keyboard. One path, so they cannot drift. */
+function orcaChooseModel(id) {
+  if (!orcaModels.some((model) => model.id === id)) return;
+  orcaSelectedModel = id;
+  orcaCloseModelPanel();
+  orcaRenderModelList();
+  orcaSetStatus('', null);
+}
+
+function orcaRenderModelList() {
+  const list = orcaEl('orcarouter-model-list');
+  const trigger = orcaEl('orcarouter-model-value');
+  const note = orcaEl('orcarouter-model-panel-note');
+  if (!list) return;
+  const shown = orcaShownModels();
 
   list.innerHTML = '';
   if (!shown.length) {
@@ -168,7 +242,7 @@ function orcaRenderModelList() {
   for (const model of shown) {
     const item = document.createElement('li');
     item.className = 'model-option';
-    item.id = `orca-model-${model.id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+    item.id = orcaModelOptionId(model.id);
     item.setAttribute('role', 'option');
     item.setAttribute('aria-selected', String(model.id === orcaSelectedModel));
     item.dataset.value = model.id;
@@ -197,14 +271,17 @@ function orcaRenderModelList() {
       item.append(metaNode);
     }
 
-    item.addEventListener('click', () => {
-      orcaSelectedModel = model.id;
-      orcaCloseModelPanel();
-      orcaRenderModelList();
-      orcaSetStatus('', null);
-    });
+    // The active option is highlighted on hover too, so a pointer user and a
+    // keyboard user see the same thing before they commit.
+    item.addEventListener('mousemove', () => orcaSetActiveModel(model.id));
+    item.addEventListener('click', () => orcaChooseModel(model.id));
     list.append(item);
   }
+
+  // An option that the filter removed must not stay active, or Enter would pick
+  // something the user can no longer see.
+  if (orcaActiveModelId && !shown.some((m) => m.id === orcaActiveModelId))
+    orcaSetActiveModel('');
 
   if (trigger) trigger.textContent = orcaSelectedModel || 'Not selected';
   if (note)
@@ -218,6 +295,8 @@ function orcaOpenModelPanel() {
   panel.hidden = false;
   trigger.setAttribute('aria-expanded', 'true');
   orcaEl('orcarouter-model-search')?.focus();
+  // Open with something active, so the first ArrowDown or Enter does what it says.
+  orcaSetActiveModel(orcaSelectedModel || orcaShownModels()[0]?.id || '');
 }
 
 function orcaCloseModelPanel() {
@@ -228,6 +307,7 @@ function orcaCloseModelPanel() {
   trigger.setAttribute('aria-expanded', 'false');
   const search = orcaEl('orcarouter-model-search');
   if (search) search.value = '';
+  orcaSetActiveModel('');
 }
 
 function orcaModelPanelOpen() {
@@ -235,7 +315,11 @@ function orcaModelPanelOpen() {
 }
 
 async function orcaLoadModels({ reason } = {}) {
-  const generation = orcaGeneration;
+  // Its own generation, bumped here so a second catalog request invalidates this
+  // one -- and only this one. Sharing the credential generation meant a model
+  // refresh cancelled a sign-in that was still in flight.
+  orcaModelGeneration += 1;
+  const generation = orcaModelGeneration;
   const count = orcaEl('orcarouter-model-count');
   const modality = orcaEl('orcarouter-modality')?.value || 'text';
   if (reason === 'refresh' && count)
@@ -244,7 +328,7 @@ async function orcaLoadModels({ reason } = {}) {
   const query = new URLSearchParams({ capability: 'chat' });
   if (modality !== 'text') query.set('inputModality', modality);
   const result = await orcaRequest(`/models?${query.toString()}`);
-  if (generation !== orcaGeneration) return;
+  if (generation !== orcaModelGeneration) return;
 
   if (!result.ok || !result.body) {
     // Fail closed and say so. The list keeps its previous options rather than
@@ -454,9 +538,10 @@ function orcaWire() {
     void orcaLoadModels({ reason: 'refresh' });
   });
   // Switching what this entry point will send changes which models are
-  // compatible, so the list is recomputed rather than filtered in place.
+  // compatible, so the list is recomputed rather than filtered in place. It
+  // invalidates catalog requests only: a pending sign-in is not about models and
+  // must survive this.
   orcaEl('orcarouter-modality')?.addEventListener('change', () => {
-    orcaGeneration += 1;
     void orcaLoadModels();
   });
   orcaEl('orcarouter-key')?.addEventListener('keydown', (event) => {
@@ -477,7 +562,25 @@ function orcaWire() {
   orcaEl('orcarouter-model-search')?.addEventListener('input', () => {
     orcaRenderModelList();
   });
+  // ARROW KEYS AND ENTER, from the field the user is already typing in. Without
+  // these the listbox was mouse-only: the options are not focusable, so there was
+  // no other way to reach them.
   orcaEl('orcarouter-model-search')?.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      orcaMoveActiveModel(1);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      orcaMoveActiveModel(-1);
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      orcaChooseModel(orcaActiveModelId);
+      return;
+    }
     if (event.key === 'Escape') {
       orcaCloseModelPanel();
       modelTrigger?.focus();

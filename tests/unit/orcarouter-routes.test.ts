@@ -24,6 +24,7 @@ import {
   afterEach,
   beforeAll,
   afterAll,
+  jest,
 } from '@jest/globals';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -219,14 +220,25 @@ describe('provider registry over HTTP', () => {
   });
 
   it('rejects a malformed key with an instruction and stores nothing', async () => {
-    const result = await api('/api/orcarouter/key', {
-      method: 'POST',
-      body: JSON.stringify({ key: 'not-a-key' }),
-    });
-    expect(result.status).toBe(400);
-    expect(result.body.error).toMatch(/sk-orca-/);
-    const status = await api('/api/orcarouter/status');
-    expect(status.body.ready).toBe(false);
+    // The adapter's own input error is written for the user and must survive `safeMessage`, which
+    // otherwise replaces it with a generic string -- the fix for CWE-209 hid this instruction.
+    const spy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    try {
+      const result = await api('/api/orcarouter/key', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'not-a-key' }),
+      });
+      expect(result.status).toBe(400);
+      expect(result.body.error).toMatch(/sk-orca-/);
+      // A caller's typo is not a server fault, so nothing is logged as one.
+      expect(spy).not.toHaveBeenCalled();
+      const status = await api('/api/orcarouter/status');
+      expect(status.body.ready).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('clears the stored key without touching the other choice', async () => {
@@ -243,6 +255,67 @@ describe('provider registry over HTTP', () => {
         (a: { id: string }) => a.id === ORCA_PKCE_PROVIDER_ID
       ).configured
     ).toBe(false);
+  });
+});
+
+describe('the credential routes reject cross-origin callers', () => {
+  /**
+   * The dashboard is same-origin, and a browser sends `Origin` on every non-GET request -- so the
+   * allowed case has to be exercised too, or the guard would look correct while breaking the feature.
+   */
+  it('accepts the dashboard\u2019s own origin and refuses a different one', async () => {
+    const sameOrigin = await api('/api/orcarouter/key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: baseUrl },
+      body: JSON.stringify({ key: FAKE_KEY }),
+    });
+    expect(sameOrigin.status).toBe(200);
+    expect(sameOrigin.body.ready).toBe(true);
+
+    const foreign = await api('/api/orcarouter/key', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://evil.example',
+      },
+      body: JSON.stringify({ key: FAKE_KEY_2 }),
+    });
+    expect(foreign.status).toBe(403);
+    // The key that arrived cross-origin was not stored, and the previous one is untouched.
+    const status = await api('/api/orcarouter/status');
+    expect(JSON.stringify(status.body)).not.toContain(FAKE_KEY_2);
+    expect(status.body.masked).toBe('sk-orca-…aaaa');
+  });
+
+  it('refuses cross-origin deletes and connect starts, and allows a client with no Origin', async () => {
+    const foreignDelete = await api('/api/orcarouter/key', {
+      method: 'DELETE',
+      headers: { Origin: 'https://evil.example' },
+    });
+    expect(foreignDelete.status).toBe(403);
+
+    const foreignConnect = await api('/api/orcarouter/connect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://evil.example',
+      },
+      body: JSON.stringify({ mode: 'loopback' }),
+    });
+    expect(foreignConnect.status).toBe(403);
+    // No listener was bound for the refused request.
+    expect(orcaConnectManager().activeCount).toBe(0);
+
+    // `Origin: null` (a sandboxed frame) matches nothing and is refused too.
+    const nullOrigin = await api('/api/orcarouter/key', {
+      method: 'DELETE',
+      headers: { Origin: 'null' },
+    });
+    expect(nullOrigin.status).toBe(403);
+
+    // The CLI and curl send no Origin at all, and must keep working.
+    const cliDelete = await api('/api/orcarouter/key', { method: 'DELETE' });
+    expect(cliDelete.status).toBe(200);
   });
 });
 
@@ -461,6 +534,38 @@ describe('the connect flow over HTTP', () => {
     expect(upstreamCalls.some((call) => call.path === EXCHANGE_PATH)).toBe(
       false
     );
+  });
+
+  it('does not install a credential for an attempt a newer login superseded', async () => {
+    const first = await api('/api/orcarouter/connect', {
+      method: 'POST',
+      body: JSON.stringify({ mode: 'oob' }),
+    });
+    const completing = api(
+      `/api/orcarouter/connect/${first.body.attemptId}/complete`,
+      { method: 'POST', body: JSON.stringify({}) }
+    );
+    // A second login starts while the first is still waiting for its code. This is what the
+    // route-level window looked like: the supersession check and the store write were separate.
+    const second = await api('/api/orcarouter/connect', {
+      method: 'POST',
+      body: JSON.stringify({ mode: 'oob' }),
+    });
+    expect(second.status).toBe(200);
+    await api(`/api/orcarouter/connect/${first.body.attemptId}/code`, {
+      method: 'POST',
+      body: JSON.stringify({ code: 'late-code' }),
+    });
+    const result = await completing;
+    expect(result.status).toBe(409);
+    expect(result.body.kind).toBe('cancelled');
+    // Nothing was stored by the superseded attempt.
+    const status = await api('/api/orcarouter/status');
+    expect(status.body.ready).toBe(false);
+    expect(JSON.stringify(status.body)).not.toContain(FAKE_KEY_2);
+    await api(`/api/orcarouter/connect/${second.body.attemptId}`, {
+      method: 'DELETE',
+    });
   });
 
   it('releases the login lock on the pagehide cancel, and a second login can start', async () => {

@@ -462,6 +462,74 @@ async function main() {
     await shoot(page, card, 'multimodal-model-dropdown.png');
     await page.keyboard.press('Escape');
 
+    // --- the listbox is usable without a mouse --------------------------------
+    /*
+     * The options are `<li role="option">`, which is not focusable, so keyboard selection has to be
+     * driven from the search field. This asserts the real interaction rather than the presence of a
+     * handler: arrow down, arrow up, and Enter choosing the option that is marked active.
+     */
+    await page.selectOption('#orcarouter-modality', 'text');
+    await trigger.click();
+    await panel.waitFor({ state: 'visible' });
+    await page.locator('#orcarouter-model-search').focus();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    const activeId = await page.evaluate(
+      () =>
+        document.querySelector('#orcarouter-model-list .model-option.is-active')
+          ?.dataset.value ?? ''
+    );
+    const described = await page.getAttribute(
+      '#orcarouter-model-search',
+      'aria-activedescendant'
+    );
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    const keyboardPicked = await page.innerText('#orcarouter-model-value');
+    check(
+      'keyboard_selection',
+      activeId.length > 0 &&
+        described ===
+          `orca-model-${activeId.replace(/[^A-Za-z0-9_-]/g, '-')}` &&
+        keyboardPicked.trim() === activeId &&
+        (await panel.isHidden()),
+      `active "${activeId}", Enter selected "${keyboardPicked.trim()}"`
+    );
+
+    // --- a model-only change does not invalidate a pending sign-in ------------
+    /*
+     * `orcaGeneration` covers authentication; catalog requests have their own generation. When they
+     * shared one, a modality change invalidated the in-flight login, and the authorization that
+     * completed afterwards returned at its guard without clearing the attempt id or the busy flag --
+     * leaving the card stuck busy over a request the server had already answered.
+     */
+    const modelDuringLogin = await page.evaluate(async () => {
+      const state = { busy: false, stillBusy: false, cleared: false };
+      document.getElementById('orcarouter-connect').click();
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      state.busy = !document.getElementById('orcarouter-cancel').hidden;
+      // A model-only change while the login is waiting for approval.
+      const modality = document.getElementById('orcarouter-modality');
+      modality.value = 'image';
+      modality.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      state.stillBusy = !document.getElementById('orcarouter-cancel').hidden;
+      document.getElementById('orcarouter-cancel').click();
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      state.cleared =
+        document.getElementById('orcarouter-cancel').hidden &&
+        document.getElementById('orcarouter-connect').disabled === false;
+      return state;
+    });
+    check(
+      'model_change_does_not_cancel_login',
+      modelDuringLogin.busy &&
+        modelDuringLogin.stillBusy &&
+        modelDuringLogin.cleared,
+      JSON.stringify(modelDuringLogin)
+    );
+
     // --- pagehide releases the login lock without a remount -------------------
     const pagehide = await page.evaluate(async () => {
       const state = { before: false, after: false, secondStart: false };
