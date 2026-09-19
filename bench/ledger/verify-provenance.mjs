@@ -68,6 +68,7 @@ const buildOf = (row) => `${row.commit_sha ?? '?'}@${row.image_digest ?? '?'}`;
 const GROUPS = [
   {
     stores: ['largecontext'],
+    readmeStores: '`largecontext.jsonl`',
     rows: 364,
     cells: 12,
     usablePerCell: 30,
@@ -75,6 +76,7 @@ const GROUPS = [
   },
   {
     stores: ['confirmatory', 'confirmatory-build2'],
+    readmeStores: '`confirmatory*.jsonl`',
     rows: 329,
     backs: 'RESULTS.md',
   },
@@ -154,18 +156,57 @@ for (const group of GROUPS) {
     );
   }
 
+  // A REJECTED ROW IS INVISIBLE TO EVERY OTHER CHECK HERE. `rowProblem()` drops rows with missing
+  // or invalid fields, and `organise()` parks them in `rejected` rather than in `tracks` -- so a
+  // single malformed row keeps the raw count, the duplicate check and the README check all green
+  // while quietly not being in the analysis. The confirmatory group declares no per-cell
+  // expectation, so nothing else here would notice at all.
+  check(
+    organised.rejected.length === 0,
+    `${label}: every row is well-formed enough to be organised`,
+    organised.rejected.map(({ problem }) => problem).join(', ')
+  );
+
   notes.push(
     `${label}: ${organised.harnessFailures.length} harness failure(s) excluded, ${organised.superseded} row(s) superseded by a newer row at the same (build, arm, track, task, rep)`
   );
 }
 
-// The README's own numbers must match the declared groups, so editing one without the other fails.
+// THE README ROW, MATCHED, not merely searched for. `readme.includes(\`| ${rows} |\`)` passed as long
+// as the number appeared ANYWHERE in the table -- so largecontext's row could change to 300 and the
+// check would still find 364 in another row and stay green. Each group is now tied to its own row,
+// and the store list, the count and the results file it backs are all validated together.
 const readme = readFileSync(join(here, 'README.md'), 'utf8');
+const tableRows = readme
+  .split(/\r?\n/)
+  .filter((line) => line.startsWith('| ') && line.endsWith(' |'))
+  .map((line) =>
+    line
+      .slice(1, -1)
+      .split('|')
+      .map((cell) => cell.trim())
+  );
+
 for (const group of GROUPS) {
+  const row = tableRows.find((cells) => cells[0] === group.readmeStores);
+  if (!row) {
+    check(
+      false,
+      `README has a row for ${group.readmeStores}`,
+      'no matching row'
+    );
+    continue;
+  }
+  const [, backs, count] = row;
   check(
-    readme.includes(`| ${group.rows} |`),
-    `README still publishes ${group.rows} rows for ${group.backs}`,
-    'the table and this checker disagree'
+    count === String(group.rows),
+    `README row for ${group.readmeStores} publishes ${group.rows} rows`,
+    `the row says ${count}`
+  );
+  check(
+    backs.includes(group.backs),
+    `README row for ${group.readmeStores} still backs ${group.backs}`,
+    `the row says ${backs}`
   );
 }
 
