@@ -1,7 +1,20 @@
-# Competitive gap analysis
+# Competitive gap analysis — alexgreensh/token-optimizer
 
 Against `alexgreensh/token-optimizer` (1.7k stars, PolyForm Noncommercial), read
 from its README and documentation site rather than from memory.
+
+> **This is not the HeadRoom analysis.** It keeps being cited as though it
+> were. HeadRoom (`headroomlabs-ai/headroom`, 73,347 stars) is a different
+> competitor on a different axis, and lives in
+> [`COMPETITOR_HEADROOM.md`](./COMPETITOR_HEADROOM.md).
+
+> **Six gaps below are closed and one claim is false.** Built since this was
+> written: progressive disclosure with named cuts and an `expand` store
+> (gap 3), prompt-cache economics attributed to a line (gap 5),
+> outcome-based model routing (gap 6), waste detection that becomes a
+> ratchet (gap 4), `fleet_audit` across projects (gap 12), and the
+> `token_audit` surface (gap 7). The false claim is the control arm — see
+> the savings-measurement row and the paragraph under the table.
 
 ## A correction I owe first
 
@@ -37,13 +50,16 @@ ours refuses and answers in the refusal. Both are zero-turn.
 | ----------------------- | -------------------------------------------- | ------------------------------------------------------ |
 | **License**             | MIT                                          | PolyForm **Noncommercial** — unusable at work          |
 | Clients                 | 15                                           | 6                                                      |
-| Savings measurement     | **withheld control arm**                     | counterfactual baseline + metered receipts, no control |
+| Savings measurement     | withheld control arm                         | counterfactual baseline + metered receipts, no control |
 | Operational tooling     | ~100 MCP tools (git, build, db, API, search) | none — it is not an MCP server                         |
 | Cross-session knowledge | anchored graph with computed staleness       | decision extraction, capped at 10/session              |
 | Enforcement             | refusal with the replacement named           | nudges and transparent rewriting                       |
 
 The licence is still the single most decisive line for anyone using this at
-work, and the control-arm measurement is a claim they cannot make. The MCP tool
+work. **The control arm is no longer a differentiator**: HeadRoom ships one
+(`HEADROOM_OUTPUT_HOLDOUT=0.1` flips their dashboard's savings card from
+`estimated` to `measured`, with a band), so a withheld control is table
+stakes rather than something only we can claim. The MCP tool
 surface is a different product axis they do not compete on at all.
 
 ## The gaps, ranked by how much they cost us
