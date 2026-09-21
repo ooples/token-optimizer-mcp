@@ -272,6 +272,17 @@ function withPendingApplied(dir, graph) {
  * measurement holdout -- in which case the caller must behave exactly as if the
  * graph were empty, or the experiment measures nothing.
  */
+/**
+ * Scopes a graph that spans projects may still vouch for.
+ *
+ * Mirrors TRANSFERABLE_SCOPES in src/compress/knowledge.ts deliberately: the
+ * proxy's knowledge block and the hooks' injection are two delivery paths for
+ * one graph, and they must agree about how far a claim travels. An ABSENT
+ * scope reads as `project` -- the conservative reading, because claims written
+ * before scope existed say nothing about how far they travel.
+ */
+const TRANSFERABLE_SCOPES = new Set(['global', 'organization']);
+
 export function forTouch(
   dir,
   graph,
@@ -286,8 +297,12 @@ export function forTouch(
   // repeatedly -- which is the normal shape of working on it -- would otherwise
   // re-serve the same findings on every single touch, which is both a token
   // cost per call and the fastest way to train a model to skim past them.
+  const sharedHere = isSharedDir(dir);
   const candidates = findingsFor(graph, anchorId, { limit: 30 })
-    .filter((f) => !alreadyInjected.has(f.key));
+    .filter((f) => !alreadyInjected.has(f.key))
+    .filter(
+      (f) => !sharedHere || TRANSFERABLE_SCOPES.has(f.scope || 'project')
+    );
   if (!candidates.length) return null;
 
   // STRATIFIED BY FILE AND EPOCH, which is the documented design here: the
@@ -492,10 +507,22 @@ export function forCommand(
   if (!command) return null;
   graph = withPendingApplied(dir, graph);
 
+  // A SHARED GRAPH CANNOT VOUCH FOR A PROJECT CLAIM. Unlike forTouch,
+  // this path has no anchor into the current tree -- it matches on the
+  // command's text -- so on a graph that spans projects a project-scoped
+  // finding from an unrelated repository is a candidate for every command
+  // run here. forRepeatedAct and forSharedCommand refuse a shared graph
+  // outright; filtering instead keeps global and organization claims,
+  // which are the ones worth carrying across trees.
+  const sharedHere = isSharedDir(dir);
+
   const candidates = [];
   for (const node of graph.nodes.values()) {
     if (node.kind !== 'finding' || node.retired) continue;
     if (alreadyInjected.has(node.key)) continue;
+    if (sharedHere && !TRANSFERABLE_SCOPES.has(node.scope || 'project')) {
+      continue;
+    }
     if (!appliesToCommand(node, command)) continue;
     candidates.push(node);
   }
