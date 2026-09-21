@@ -70,8 +70,16 @@ const ROWS_URL =
 
 /** SQuAD v2 validation rows, answerable ones only, unauthenticated. */
 async function fetchItems(want) {
+  // Deliberately over-fetch. The split is ordered BY ARTICLE, so the first
+  // `want` answerable rows are `want` paragraphs about one subject -- and
+  // then the distractor slots fill with paragraphs from that same article,
+  // several of which state the answer. That inflates both arms and hides
+  // exactly what this eval is for. Selection below takes one item per
+  // article, round robin, so a distractor is always off-subject.
   const items = [];
   let offset = 0;
+  const want_ = want;
+  want = Math.max(want * 12, 240);
   while (items.length < want && offset < want * 20 + 400) {
     const res = await fetch(`${ROWS_URL}&offset=${offset}&length=100`);
     if (!res.ok) throw new Error(`datasets-server ${res.status}`);
@@ -92,10 +100,39 @@ async function fetchItems(want) {
     }
     offset += 100;
   }
-  if (items.length < want) {
-    throw new Error(`only ${items.length} answerable items available, wanted ${want}`);
+  // One per article first, then a second pass, and so on -- so a short run
+  // is maximally diverse and a long one degrades gracefully.
+  const byTitle = new Map();
+  for (const it of items) {
+    if (!byTitle.has(it.title)) byTitle.set(it.title, []);
+    byTitle.get(it.title).push(it);
   }
-  return items;
+  const buckets = [...byTitle.values()];
+  const chosen = [];
+  for (let round = 0; chosen.length < want_; round += 1) {
+    let added = 0;
+    for (const b of buckets) {
+      if (b.length > round && chosen.length < want_) {
+        chosen.push(b[round]);
+        added += 1;
+      }
+    }
+    if (!added) break;
+  }
+  if (chosen.length < want_) {
+    throw new Error(
+      `only ${chosen.length} answerable items available, wanted ${want_}`
+    );
+  }
+  if (buckets.length < 2) {
+    throw new Error(
+      'every item came from one article, so no distractor can be off-subject'
+    );
+  }
+  console.log(
+    `corpus: ${chosen.length} items drawn from ${buckets.length} distinct articles`
+  );
+  return chosen;
 }
 
 /**
@@ -124,9 +161,18 @@ function payloadFor(item, index, pool) {
     blocks.push({ title: candidate.title, text: candidate.context });
   }
 
-  return blocks
-    .map((b, i) => `[doc ${i + 1}] ${b.title}\n${b.text}`)
-    .join('\n\n');
+  // SHAPE MATTERS MORE THAN SIZE, and this line is why the first version of
+  // this eval measured 0.0% reduction and then reported a meaningless
+  // baseline 1.000 / ours 1.000. Our engine engages on a pretty-printed JSON
+  // array -- 94.6% on a 300-row log -- and is completely inert on the very
+  // same rows emitted as JSON-lines, 0.0% at 55KB. A search API returning
+  // documents is legitimately the former, so that is the shape used here,
+  // rather than a bracketed text dump that no detector claims.
+  return JSON.stringify(
+    blocks.map((b, i) => ({ doc: i + 1, title: b.title, text: b.text })),
+    null,
+    2
+  );
 }
 
 function compress(text, question) {
