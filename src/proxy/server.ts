@@ -349,7 +349,17 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
  * would let a conversation switch arms mid-flight and pollute both.
  */
 function conversationKeyFor(parsed: Record<string, unknown>): string | undefined {
-  const system = parsed.system;
+  // A RESPONSES CONTINUATION CARRIES NEITHER. A turn holding only
+  // `function_call_output` has no system text and no user item, so this
+  // returned undefined and inHoldout() then treated every such turn as
+  // shaped -- quietly emptying the control arm of exactly the resumption
+  // turns effort routing acts on. Both fields below identify a conversation
+  // outright, and responses-knowledge.ts already branches on the second.
+  for (const field of ['conversation', 'previous_response_id']) {
+    const value = parsed[field];
+    if (typeof value === 'string' && value.length) return value;
+  }
+  const system = parsed.system ?? parsed.instructions;
   const systemText =
     typeof system === 'string'
       ? system
@@ -382,7 +392,10 @@ export function compressBody(
     body,
     summary: {
       beforeBytes: before,
-      afterBytes: before,
+      // NOT `before`: shaping may have replaced the buffer further down, and
+      // this path forwards whatever it holds. Reporting `before` would claim a
+      // size the proxy did not send.
+      afterBytes: body.length,
       compressed: false,
       reason,
     },
@@ -725,7 +738,8 @@ export function compressBody(
       body,
       summary: {
         beforeBytes: before,
-        afterBytes: before,
+        // Shaped bytes, if shaping ran -- see the note in `unchanged`.
+        afterBytes: body.length,
         compressed: false,
         reason:
           saved > 0

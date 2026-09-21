@@ -133,7 +133,19 @@ function steerVerbosity(
   body: Record<string, unknown>,
   wireFormat: WireFormat
 ): Record<string, unknown> | null {
-  if (wireFormat === 'messages' || wireFormat === 'responses') {
+  // THE RESPONSES DIALECT IS NOT THE MESSAGES DIALECT. It carries its
+  // system text in `instructions` as a plain string, which this branch
+  // originally conflated with `system` -- so shaping silently did nothing
+  // on that wire format. Verified against this repo's own handler:
+  // responses-knowledge.ts both reads and appends to request.instructions.
+  if (wireFormat === 'responses') {
+    const instructions = body.instructions;
+    if (typeof instructions !== 'string' || !instructions.length) return null;
+    if (instructions.includes(TERSE_NOTE)) return null;
+    return { ...body, instructions: `${instructions}\n\n${TERSE_NOTE}` };
+  }
+
+  if (wireFormat === 'messages') {
     const system = body.system;
     if (typeof system === 'string' && system.length) {
       if (system.includes(TERSE_NOTE)) return null;
@@ -170,7 +182,22 @@ function routeEffort(
   body: Record<string, unknown>,
   wireFormat: WireFormat
 ): Record<string, unknown> | null {
-  if (wireFormat === 'chat-completions' || wireFormat === 'responses') {
+  // Responses nests effort under `reasoning`, and the rest of that object
+  // must survive -- it can carry a summary setting and, on a continuation,
+  // encrypted reasoning this proxy is careful never to disturb.
+  if (wireFormat === 'responses') {
+    const reasoning = body.reasoning;
+    if (!reasoning || typeof reasoning !== 'object') return null;
+    const block = reasoning as Record<string, unknown>;
+    const level = block.effort;
+    if (typeof level !== 'string') return null;
+    const at = EFFORT_ORDER.indexOf(level as (typeof EFFORT_ORDER)[number]);
+    const floor = EFFORT_ORDER.indexOf(RESUMPTION_EFFORT);
+    if (at === -1 || at <= floor) return null;
+    return { ...body, reasoning: { ...block, effort: RESUMPTION_EFFORT } };
+  }
+
+  if (wireFormat === 'chat-completions') {
     const current = body.reasoning_effort;
     // Only narrow what the client already asked for. An absent field means the
     // provider default, and guessing at that is how a clamp becomes a raise.
