@@ -283,6 +283,26 @@ function withPendingApplied(dir, graph) {
  */
 const TRANSFERABLE_SCOPES = new Set(['global', 'organization']);
 
+/**
+ * May this finding be delivered from a graph that spans projects?
+ *
+ * PROVENANCE, NOT SCOPE ALONE. `wikiDir()` falls back to one machine-level
+ * graph for any directory with no repository marker, so on that graph
+ * "project-scoped" is the default state of every ordinary finding and
+ * withholding them all silences the graph completely -- which is what the
+ * first version of this did, taking six suites and 21 tests with it.
+ *
+ * What actually leaks is a finding PROMOTED into the shared graph from a
+ * named repository: promoteToShared stamps it with `sourceProject`
+ * (hooks-core/harvest-write.mjs), and that stamp is what says the claim is
+ * about some other tree. A finding with no stamp was written where we are
+ * working and is ours to serve.
+ */
+function travelsHere(node) {
+  if (TRANSFERABLE_SCOPES.has(node.scope || 'project')) return true;
+  return !node.sourceProject;
+}
+
 export function forTouch(
   dir,
   graph,
@@ -300,9 +320,7 @@ export function forTouch(
   const sharedHere = isSharedDir(dir);
   const candidates = findingsFor(graph, anchorId, { limit: 30 })
     .filter((f) => !alreadyInjected.has(f.key))
-    .filter(
-      (f) => !sharedHere || TRANSFERABLE_SCOPES.has(f.scope || 'project')
-    );
+    .filter((f) => !sharedHere || travelsHere(f));
   if (!candidates.length) return null;
 
   // STRATIFIED BY FILE AND EPOCH, which is the documented design here: the
@@ -520,9 +538,7 @@ export function forCommand(
   for (const node of graph.nodes.values()) {
     if (node.kind !== 'finding' || node.retired) continue;
     if (alreadyInjected.has(node.key)) continue;
-    if (sharedHere && !TRANSFERABLE_SCOPES.has(node.scope || 'project')) {
-      continue;
-    }
+    if (sharedHere && !travelsHere(node)) continue;
     if (!appliesToCommand(node, command)) continue;
     candidates.push(node);
   }
