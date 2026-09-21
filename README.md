@@ -387,8 +387,7 @@ payload cost. **Reading avoided** stays `Collecting` or `Not measured` until at
 least 20 treated file touches and 5 holdouts exist with a downstream join; the
 dashboard does not manufacture a savings estimate from missing data.
 
-See [the causal evidence protocol](docs/EVIDENCE_PROTOCOL.md), the
-[cross-client capability contract](docs/CLIENT_SUPPORT.md), and the
+See the [cross-client capability contract](docs/CLIENT_SUPPORT.md) and the
 [live evaluation suite](evals/README.md).
 
 ### Cross-client lifecycle diagnostics
