@@ -250,23 +250,38 @@ check('B7', 'the false control-arm claim is gone', () => {
   if (!g.includes('HEADROOM_OUTPUT_HOLDOUT')) {
     return fail('the correction does not name their holdout');
   }
-  if (!/COMPETITOR_HEADROOM\.md/.test(g)) {
-    return fail('nothing points a reader at the actual HeadRoom analysis');
+  // NO CROSS-REFERENCE IS REQUIRED, and one must not be added: the analysis
+  // it used to name is intentionally absent from this public repository.
+  if (/COMPETITOR_HEADROOM\.md/.test(g)) {
+    return fail(
+      'links to COMPETITOR_HEADROOM.md, which is deliberately not in this repo'
+    );
   }
-  return pass('false line removed, their holdout named, cross-reference in place');
+  return pass('false line removed and their holdout named');
 });
 
 // ---------------------------------------------------------------- B8
 check('B8', 'the retracted competitor caveat is retracted where it is read', () => {
+  // ONLY THE IN-REPO SURFACE IS CHECKABLE FROM HERE, by design. The
+  // competitive analysis is deliberately not in this repository -- it is a
+  // public one, and the analysis is for us rather than for them -- so the
+  // second half of this check was removed rather than pointed at a file
+  // that must not exist. fixtures.mjs is the surface that matters anyway:
+  // it is what the next person to run the competitor arm will read.
   const f = read('bench/compression/fixtures.mjs');
   if (!f.includes('CORRECTION, 2026-09-21')) {
     return fail('fixtures.mjs still presents the warning as a setup error');
   }
-  const doc = read('docs/COMPETITOR_HEADROOM.md');
-  if (!doc.includes('RETRACTED')) {
-    return fail('the report still hands a reader the withdrawn caveat');
+  // Case-insensitive on purpose: the note writes COLD in caps for emphasis,
+  // and a check that fails on the emphasis rather than the substance is the
+  // spelling-not-behaviour error over again.
+  if (!/cold/i.test(f) || !f.includes('ensure_background_load')) {
+    return fail(
+      'the correction does not explain WHY the warning is not a setup error, ' +
+        'so a reader will try to fix it again'
+    );
   }
-  return pass('corrected in the fixtures and retracted in place in the report');
+  return pass('corrected in the fixtures, with the reason, where a benchmarker reads it');
 });
 
 // ---------------------------------------------------------------- B9

@@ -4,9 +4,9 @@ Against `alexgreensh/token-optimizer` (1.7k stars, PolyForm Noncommercial), read
 from its README and documentation site rather than from memory.
 
 > **This is not the HeadRoom analysis.** It keeps being cited as though it
-> were. HeadRoom (`headroomlabs-ai/headroom`, 73,347 stars) is a different
-> competitor on a different axis, and lives in
-> [`COMPETITOR_HEADROOM.md`](./COMPETITOR_HEADROOM.md).
+> were; they are different competitors on different axes. The HeadRoom
+> analysis is kept outside this repository on purpose and is not linked
+> from here.
 
 > **Six gaps below are closed and one claim is false.** Built since this was
 > written: progressive disclosure with named cuts and an `expand` store
