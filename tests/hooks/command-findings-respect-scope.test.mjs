@@ -91,15 +91,27 @@ describe('forCommand respects where a shared finding came from', () => {
     }
   });
 
-  it('withholds a project claim promoted from another repository', () => {
+  it('withholds a promoted claim while still delivering a local one', () => {
+    // A POSITIVE CONTROL IN THE SAME DELIVERY. Asserting only that the
+    // foreign claim is absent cannot tell exclusion from an empty result --
+    // this repo's local/no-vacuous-assertions rule rejects the test for
+    // exactly that. Seeding a local finding beside it and requiring that one
+    // to arrive proves the exclusion is selective rather than total.
     seed(shared, {
       key: 'other-project-only',
       claim: 'FOREIGNCLAIM run the suite through the wrapper',
       scope: 'project',
       sourceProject: join(tmpdir(), 'some-other-checkout'),
     });
+    seed(shared, {
+      key: 'written-in-place',
+      claim: 'LOCALCLAIM the suite needs the experimental modules flag',
+      scope: 'project',
+    });
 
-    expect(deliveredText(shared)).not.toContain('FOREIGNCLAIM');
+    const served = deliveredText(shared);
+    expect(served).toContain('LOCALCLAIM');
+    expect(served).not.toContain('FOREIGNCLAIM');
   });
 
   it('delivers a global claim, so the gate is not a blanket refusal', () => {
