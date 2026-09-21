@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import { compressCode } from '../../../src/compress/code.js';
 import { compressProse } from '../../../src/compress/prose.js';
 import { DEFAULT_TUNING } from '../../../src/compress/options.js';
+import { expandLog } from '../../helpers/expand-log.js';
 
 /**
  * THE LOSSY PATH, held to the promise its marker makes.
@@ -181,5 +182,26 @@ describe('a lossy elision delivers what its marker promises', () => {
     expect(result.text).toBe(PROSE);
     expect(result.lossless).toBe(true);
     expect(result.elisions).toHaveLength(0);
+  });
+
+  it('the lossless decoder refuses to reconstruct a lossy output', () => {
+    // expandLog is the oracle the lossless gate trusts. Handed output that
+    // recovers through a PATH, it must refuse rather than hand back a
+    // string: every marker it cannot rebuild is content it never restored,
+    // and passing one through as a literal line reports a successful
+    // reconstruction that did not happen. This is the one crossing point
+    // between the two gates, so it is tested from real engine output.
+    const lossy = compressCode(CODE, {
+      sourcePath: SOURCE,
+      tuning: DEFAULT_TUNING,
+    });
+    expect(lossy.lossless).toBe(false);
+    expect(lossy.text).toContain(`-> ${SOURCE}:`);
+    expect(() => expandLog(lossy.text)).toThrow(/unrecognised marker/);
+
+    // The positive control: the same decoder on output it CAN rebuild.
+    // Without this the assertion above passes on a decoder that throws on
+    // everything, which would be no oracle at all.
+    expect(expandLog('alpha\nbeta')).toBe('alpha\nbeta');
   });
 });

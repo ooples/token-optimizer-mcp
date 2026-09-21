@@ -84,6 +84,14 @@ export function expandLog(text: string): string {
           )
         );
       }
+    } else if (line.trimStart().startsWith('[... ')) {
+      // FAIL CLOSED. A marker this decoder does not know is not a line,
+      // and passing it through as one silently reports a successful
+      // reconstruction of content it never restored. Two cases reach here:
+      // a new marker family nobody taught it, and the LOSSY form
+      // `[... what went -> path]`, which by construction cannot be
+      // rebuilt from the output alone -- the path is the whole point.
+      throw new Error(`expandLog: unrecognised marker ${JSON.stringify(line)}`);
     } else result.push(line);
   }
   return result.join('\n');
