@@ -118,18 +118,29 @@ check('B3', 'the published table is reproducible by its harness', () => {
 });
 
 // ---------------------------------------------------------------- B4 / B5
-check('B4', 'codebase-exploration is stated as parity', () => {
+check('B4', 'codebase-exploration is not claimed as a win', () => {
   const r = read('README.md');
-  if (/codebase-exploration.*\|\s*ours\s*\|/i.test(r)) {
-    return fail('still sits in a win column');
+  // THE PROPERTY, NOT THE VERDICT. This first asserted the row reads
+  // "parity", which was true of the branch this work began on and false on
+  // master, where the figure is 46.0% against their 47.4%. A check pinned to
+  // one verdict breaks on an honest re-measurement, so it pins the two things
+  // that hold whichever way the number moves: the row is never in the win
+  // column, and the tally is never counted over workloads.
+  const row = r.match(/^\|\s*codebase-exploration\s*\|.*$/im);
+  if (!row) return fail('the row is not in the table at all');
+  if (/\|\s*ours\s*\|/i.test(row[0])) {
+    return fail(`claimed as a win: ${row[0].trim()}`);
   }
-  if (!/codebase-exploration[^\n]*parity/i.test(r)) {
-    return fail('the row does not say parity');
+  if (!/\|\s*(parity|theirs)\s*\|/i.test(row[0])) {
+    return fail(`verdict is neither parity nor theirs: ${row[0].trim()}`);
   }
   if (/ours on 7 of 8|ours on 8 of 8/.test(r)) {
     return fail('the old over-workload tally is still published');
   }
-  return pass('row reads parity; the tally reads over comparators');
+  if (!/published comparators/.test(r)) {
+    return fail('the tally does not say it counts over comparators');
+  }
+  return pass(`not a win (${row[0].trim()}); tally reads over comparators`);
 });
 
 check('B5', 'every reduction claim carries the retention claim', () => {

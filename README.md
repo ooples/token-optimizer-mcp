@@ -52,14 +52,21 @@ open compressor's published design, `node bench/compression/proof.mjs`:
 | code-search          |  17765 |  92.1% |  97.6% | ours    |
 | sre-debugging        |  65694 |  92.2% |  98.4% | ours    |
 | issue-triage         |  54174 |  72.8% |  97.3% | ours    |
-| codebase-exploration |  78502 |  47.4% |  48.2% | parity  |
+| codebase-exploration |  78502 |  47.4% |  46.0% | theirs  |
 
 <!-- PROOF-TABLE:END -->
 
 Four workloads, because those are the four with a published comparator. The
 harness reports twelve; the other eight are ours alone and are not a
-head-to-head. `codebase-exploration` is **parity**, not a win — 0.8 of a point,
-and an earlier version of this table overstated it by 13.9.
+head-to-head.
+
+**`codebase-exploration` is theirs, by 1.4 points.** An earlier version of this
+table claimed 61.3% for us on that row, and a later one claimed parity; both
+were figures from a branch rather than from here. Measured on this tree it is
+46.0% against their 47.4%, and it is published as a loss because that is what
+it is. A number in prose is a fact about the tree it was measured on, which is
+why `bench/compression/readme-table.check.mjs` re-derives every figure in the
+block above from the harness rather than trusting it.
 
 **Reduction is not the only column, and the other one goes to them.** Scored
 symmetrically on their own fixtures, of 3,793 retention units they keep **1,890**
@@ -68,7 +75,7 @@ reduction partly by eliding harder, into a spill about 0.94x the size of the
 input. Nothing is unrecoverably lost on our side, and a retrieval costs a turn.
 Both numbers belong in any quote of either.
 
-Against the four published comparators: **ours on 3, parity on 1, theirs on 0.**
+Against the four published comparators: **ours on 3, theirs on 1.**
 The tally is over comparators, not over workloads -- the harness runs twelve
 and eight of them have nothing to compare against.
 
