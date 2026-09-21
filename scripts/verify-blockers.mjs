@@ -10,10 +10,12 @@
  *
  *   node scripts/verify-blockers.mjs
  *
- * Exits non-zero naming every item it cannot prove. Checks that would cost
- * minutes or money (the full jest suite, the paid accuracy run) are reported as
- * DEFERRED with the command that settles them, rather than silently skipped --
- * a skipped check that prints nothing is how a checklist starts lying.
+ * Exits non-zero naming every item it cannot prove, AND every item it merely
+ * deferred. Checks that would cost minutes or money are reported as DEFERRED
+ * with the command that settles them, rather than silently skipped -- but a
+ * deferred item is still an unproved one, so CI must not be able to accept a
+ * run that contains any. Pass --allow-deferred for a local run that
+ * deliberately does not pay for them.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -102,11 +104,27 @@ check('B2', 'the cache-weighted gate is green and not vacuous', () => {
     'GATE PASSED on all workloads',
   ].filter((g) => !proof.out.includes(g));
   if (gates.length) return fail(`missing: ${gates.join(', ')}`);
-  const src = read('bench/compression/proof.mjs');
-  if (!src.includes('strictWins')) {
-    return fail('the relaxed comparison has no strict-win guard, so it can pass on an inert engine');
+  // THE BEHAVIOUR, NOT THE SPELLING. This first asserted the source
+  // contained the identifier `strictWins`, which survives deleting the
+  // branch that enforces it. The harness now reports the count it counted,
+  // so a run with only ties cannot satisfy this.
+  const wins = proof.out.match(/strict wins:\s*(\d+)/);
+  if (!wins) {
+    return fail(
+      'the harness did not report a strict-win count, so the tie relaxation ' +
+        'is unaccounted for'
+    );
   }
-  return pass('all five gates pass; the tie relaxation is paid for by a strict-win guard');
+  if (Number(wins[1]) < 1) {
+    return fail(
+      'the harness reports 0 strict wins -- every workload tied, so the gate ' +
+        'cannot tell a cache-respecting engine from an inert one'
+    );
+  }
+  return pass(
+    `all five gates pass; ${wins[1]} strict win(s) reported, so the tie ` +
+      'relaxation is paid for'
+  );
 });
 
 // ---------------------------------------------------------------- B3
@@ -169,9 +187,46 @@ check('B6', 'task accuracy is measured against a baseline arm', () => {
   if (needs.length) {
     return fail(`harness lacks: ${needs.map(([n]) => n).join(', ')}`);
   }
-  return deferred(
-    'harness present with all four safeguards. Last measured n=30: 53.8% mean ' +
-      'reduction, baseline 0.933, ours 0.967. Re-run: node bench/accuracy/squad-eval.mjs --n 30'
+  // COMMITTED EVIDENCE, NOT A PROMISE. This returned DEFERRED, which meant a
+  // green run could coexist with task accuracy never having been measured.
+  // Re-running a paid 30-item evaluation on every verification is not the
+  // answer either, so the measurement is committed and checked here.
+  const RESULT = 'bench/accuracy/results/squad-v2-n30.json';
+  if (!existsSync(join(ROOT, RESULT))) {
+    return fail(
+      `no committed measurement at ${RESULT} -- run ` +
+        `node bench/accuracy/squad-eval.mjs --n 30 --json ${RESULT}`
+    );
+  }
+  let m;
+  try {
+    m = JSON.parse(read(RESULT));
+  } catch (err) {
+    return fail(`${RESULT} is not readable json: ${err.message}`);
+  }
+  // Provenance first: an undated measurement cannot be known to be stale.
+  if (!m.measuredAt || !m.harnessSha || m.harnessSha === 'unknown') {
+    return fail(`${RESULT} carries no measuredAt/harnessSha stamp`);
+  }
+  if (!(m.scored >= 30)) {
+    return fail(`only ${m.scored} items scored; this arm is quoted at n=30`);
+  }
+  // The same floor the harness enforces on itself: below it the two arms are
+  // one experiment run twice and the accuracy pair means nothing.
+  if (!(m.meanReduction >= 0.15)) {
+    return fail(
+      `mean reduction ${(m.meanReduction * 100).toFixed(1)}% is below the ` +
+        'vacuity floor, so the recorded accuracy compares nothing'
+    );
+  }
+  // BOTH arms, because a compressed-only score is unreadable.
+  if (typeof m.baseAcc !== 'number' || typeof m.oursAcc !== 'number') {
+    return fail(`${RESULT} does not record both arms`);
+  }
+  return pass(
+    `n=${m.scored} at ${(m.meanReduction * 100).toFixed(1)}% reduction: ` +
+      `baseline ${m.baseAcc.toFixed(3)}, ours ${m.oursAcc.toFixed(3)} ` +
+      `(measured ${String(m.measuredAt).slice(0, 10)} @ ${String(m.harnessSha).slice(0, 8)})`
   );
 });
 
@@ -217,8 +272,16 @@ check('B9', 'the frozen comparators carry provenance', () => {
 check('B10', 'ndjson is compressed, and damaged json still refused', () => {
   const probe = `
     import('./dist/compress/json.js').then(j => {
-      const rows = Array.from({length:300},(_,i)=>({ts:'t'+i,level:i===7?'ERROR':'INFO',
-        logger:'scheduler',message:'job_'+i,service:'bench',host:'w'+(i%8),trace:'tr'+i}));
+      // ONE UNIQUELY IDENTIFIABLE ERROR RECORD. Checking only that the
+      // string ERROR survived passes on output that keeps the marker and
+      // drops the record it belonged to, or its host -- which is the
+      // answer to the query being asked.
+      const rows = Array.from({length:300},(_,i)=>(i===7
+        ? {ts:'t7',level:'ERROR',logger:'scheduler',
+           message:'disk full on w7 while writing shard 41',
+           service:'bench',host:'w7',trace:'tr7'}
+        : {ts:'t'+i,level:'INFO',logger:'scheduler',message:'job_'+i,
+           service:'bench',host:'w'+(i%8),trace:'tr'+i}));
       const nd = rows.map(r=>JSON.stringify(r)).join('\\n');
       const spill = (c,h) => '.spill/'+h;
       const out = j.compressJson(nd, { spill, query:'which host errored?' });
@@ -226,7 +289,12 @@ check('B10', 'ndjson is compressed, and damaged json still refused', () => {
       const lines = nd.split('\\n'); lines[57] = '{"ts":"broken';
       const damaged = lines.join('\\n');
       const refused = j.compressJson(damaged,{spill,query:'x'}).text === damaged;
-      console.log(JSON.stringify({ ratio, kept: out.text.includes('ERROR'), refused }));
+      // Every part of the record the question needs: the level, the host
+      // that answers "which host errored?", and the message that says why.
+      const kept = out.text.includes('ERROR')
+        && out.text.includes('w7')
+        && out.text.includes('disk full on w7 while writing shard 41');
+      console.log(JSON.stringify({ ratio, kept, refused }));
     });`;
   const r = run(process.execPath, ['-e', probe]);
   if (!r.ok) return fail(`probe failed: ${r.out.slice(0, 200)}`);
@@ -234,7 +302,12 @@ check('B10', 'ndjson is compressed, and damaged json still refused', () => {
   if (!m) return fail(`probe printed nothing usable: ${r.out.slice(0, 200)}`);
   const { ratio, kept, refused } = JSON.parse(m[0]);
   if (ratio < 0.5) return fail(`ndjson reduction only ${(ratio * 100).toFixed(1)}%`);
-  if (!kept) return fail('the anomalous ERROR row was destroyed');
+  if (!kept) {
+    return fail(
+      'the anomalous record did not survive intact -- level, host or message ' +
+        'is missing, so the answer to the query was compressed away'
+    );
+  }
   if (!refused) return fail('a damaged document was rewritten — the guard is gone');
   return pass(
     `ndjson ${(ratio * 100).toFixed(1)}% reduction, ERROR row kept, damaged document refused`
@@ -287,4 +360,15 @@ console.log(
 console.log(
   'Not covered here, because it needs the whole suite: run `npm test` and require zero failures.'
 );
-if (failures.length) process.exitCode = 1;
+// A DEFERRED ITEM IS AN UNPROVED ITEM. Exiting zero on one let a green CI
+// run coexist with task accuracy never having been measured, which is the
+// gap this script exists to close.
+const allowDeferred = process.argv.includes('--allow-deferred');
+if (defers.length && !allowDeferred) {
+  console.error(
+    `\n${defers.length} item(s) are DEFERRED and therefore unproved: ` +
+      `${defers.map((d) => d.id).join(', ')}. Run the commands above, or pass ` +
+      '--allow-deferred to accept this deliberately.'
+  );
+}
+if (failures.length || (defers.length && !allowDeferred)) process.exitCode = 1;

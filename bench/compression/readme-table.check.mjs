@@ -79,6 +79,12 @@ if (!figures.length) {
 }
 
 let out;
+// A DEGRADED PROOF RUN MAY NOT CERTIFY A PUBLISHED TABLE. The comparison
+// below still runs on whatever a failing harness printed, because knowing
+// WHICH figures moved is the useful diagnostic -- but the exit status is
+// set here and never cleared, so "the figures match" can never be reported
+// as success on numbers that came out of a red gate.
+let proofFailed = false;
 try {
   out = execFileSync(process.execPath, [PROOF], {
     cwd: repo,
@@ -86,13 +92,11 @@ try {
     maxBuffer: 64 * 1024 * 1024,
   });
 } catch (err) {
-  // A failing gate still prints its numbers, and the table check is about
-  // agreement rather than about the gates. Use whatever it managed to emit,
-  // but say so -- a red harness is not a healthy source for a published table.
+  proofFailed = true;
   out = `${err.stdout || ''}${err.stderr || ''}`;
-  console.warn(
-    'readme-table.check: proof.mjs exited non-zero; comparing against the ' +
-      'output it produced anyway.'
+  console.error(
+    'readme-table.check: proof.mjs EXITED NON-ZERO. Its output is compared ' +
+      'below for diagnosis, but this check fails regardless of agreement.'
   );
   if (!out.trim()) {
     console.error('readme-table.check: ...and it produced nothing. Cannot check.');
@@ -100,14 +104,53 @@ try {
   }
 }
 
-const missing = figures.filter(({ figure }) => !out.includes(figure));
+/**
+ * The harness output, split into one chunk per workload.
+ *
+ * WHOLE-OUTPUT MATCHING IS NOT A CHECK. Testing each figure as a substring
+ * of everything proof.mjs printed passes a stale value whenever the same
+ * digits appear anywhere else -- another workload, or another metric on the
+ * same workload. `47.4%` and `46.0%` both occur several times across twelve
+ * workloads and six arms, so the loosest possible match is also the one
+ * most likely to be satisfied by coincidence.
+ */
+const sections = new Map();
+{
+  let current = null;
+  for (const line of out.split(/\r?\n/)) {
+    const head = line.match(/^===\s*(\S+)/);
+    if (head) {
+      current = head[1];
+      sections.set(current, []);
+      continue;
+    }
+    if (current) sections.get(current).push(line);
+  }
+}
+
+const missing = figures.filter(({ workload, figure }) => {
+  const body = sections.get(workload);
+  // No section at all is a miss, not a pass: a row naming a workload the
+  // harness does not run is exactly the drift this exists to catch.
+  if (!body) return true;
+  return !body.join('\n').includes(figure);
+});
 
 console.log(
   `readme-table.check: ${figures.length} figures across ${dataRows.length} rows.`
 );
 
+if (proofFailed) {
+  console.error(
+    '\nreadme-table.check FAILED: the harness that produces these figures is red.'
+  );
+  process.exitCode = 1;
+}
+
 if (missing.length) {
-  console.error('README TABLE DRIFT -- these figures are not in the harness output:');
+  console.error(
+    'README TABLE DRIFT -- these figures are absent from their own workload:'
+  );
   for (const { workload, figure } of missing) {
     console.error(`  ${workload}: ${figure}`);
   }
@@ -118,4 +161,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log('README TABLE AGREES with the harness.');
+if (!proofFailed) console.log('README TABLE AGREES with the harness.');

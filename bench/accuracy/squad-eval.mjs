@@ -46,9 +46,10 @@
  *    bank half the set.
  */
 
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { compressBlock } from '../../dist/compress/router.js';
 
@@ -147,17 +148,28 @@ function payloadFor(item, index, pool) {
   const blocks = [];
   const goldSlot = index % (DISTRACTORS + 1);
   let taken = 0;
+  const offSubject = pool.filter((p) => p.title !== item.title);
   for (let slot = 0; slot <= DISTRACTORS; slot += 1) {
     if (slot === goldSlot) {
       blocks.push({ title: item.title, text: item.context });
       continue;
     }
-    // Skip the item's own article, or a "distractor" would carry the answer.
-    let candidate;
-    do {
-      candidate = pool[(index * 7 + taken * 13 + 1) % pool.length];
-      taken += 1;
-    } while (candidate.title === item.title && taken < pool.length * 2);
+    // A DISTRACTOR THAT SHARES THE GOLD TITLE CARRIES THE ANSWER, so it is
+    // not a distractor. The first version walked the pool with a stride and
+    // gave up after a bounded number of attempts, falling through with
+    // whatever it held -- and a stride of 13 against a 13-entry pool
+    // re-selects one index forever, so on a small run every slot could hold
+    // the gold article and lift BOTH arms. Draw from the off-subject
+    // entries only, and fail loudly rather than quietly degrade: a corpus
+    // that cannot be built is not a result.
+    if (!offSubject.length) {
+      throw new Error(
+        `no off-subject distractor available for "${item.title}" -- the pool ` +
+          `holds only that article, so every slot would carry the answer`
+      );
+    }
+    const candidate = offSubject[(index * 7 + taken) % offSubject.length];
+    taken += 1;
     blocks.push({ title: candidate.title, text: candidate.context });
   }
 
@@ -192,14 +204,47 @@ const PROMPT = (context, question) =>
   `--- documents ---\n${context}\n--- end documents ---\n\n` +
   `Question: ${question}\nAnswer:`;
 
-/** One subscription-backed model call. */
+/**
+ * One subscription-backed model call, with nothing inherited.
+ *
+ * THE CORPUS IS UNTRUSTED. `fetchItems` pulls it unauthenticated from a
+ * public dataset endpoint and `PROMPT` splices it into the model's input,
+ * where the `--- documents ---` fences are formatting and not a security
+ * boundary. A poisoned row can therefore contain instructions, and if the
+ * call inherited this machine's settings those instructions could reach
+ * real tools. Nothing here needs a tool: the task is to read text and
+ * answer, so everything is shut off rather than merely narrowed.
+ *
+ * Flags checked against `claude --help` on this install, not assumed.
+ */
 function ask(prompt) {
   try {
-    return execFileSync('claude', ['-p', prompt], {
-      encoding: 'utf8',
-      maxBuffer: 32 * 1024 * 1024,
-      timeout: 180_000,
-    }).trim();
+    return execFileSync(
+      'claude',
+      [
+        '--tools',
+        '',
+        '--disallowed-tools',
+        'mcp__*',
+        '--strict-mcp-config',
+        '--permission-mode',
+        'default',
+        '--permission-prompts',
+        'none',
+        '--settings',
+        '{}',
+        '-p',
+        prompt,
+      ],
+      {
+        encoding: 'utf8',
+        maxBuffer: 32 * 1024 * 1024,
+        timeout: 180_000,
+        // An empty directory, so a prompt that does reach a tool finds
+        // nothing of this repository to read or write.
+        cwd: mkdtempSync(join(tmpdir(), 'squad-eval-sandbox-')),
+      }
+    ).trim();
   } catch (err) {
     // A failed call is not a wrong answer, and must never be scored as one.
     return null;
@@ -301,7 +346,29 @@ async function main() {
     writeFileSync(
       resolve(JSON_OUT),
       JSON.stringify(
-        { n: N, distractors: DISTRACTORS, meanReduction, baseAcc, oursAcc, scored, errors, rows },
+        {
+          // STAMPED, because a committed measurement with no date cannot be
+          // known to be stale -- the same lesson the frozen competitor
+          // comparators in bench/compression/fixtures.mjs had to learn.
+          measuredAt: new Date().toISOString(),
+          harnessSha: (() => {
+            try {
+              return execFileSync('git', ['rev-parse', 'HEAD'], {
+                encoding: 'utf8',
+              }).trim();
+            } catch {
+              return 'unknown';
+            }
+          })(),
+          n: N,
+          distractors: DISTRACTORS,
+          meanReduction,
+          baseAcc,
+          oursAcc,
+          scored,
+          errors,
+          rows,
+        },
         null,
         2
       )

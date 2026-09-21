@@ -577,7 +577,11 @@ function main() {
     process.exitCode = 1;
     return;
   }
-  console.log('GATE PASSED on all workloads.');
+  // REPORTED, so a verifier can require the behaviour rather than the
+  // spelling of a variable. A checker that greps for `strictWins` still
+  // passes if the enforcing branch is deleted and the declaration is left
+  // behind; this line can only be produced by counting real wins.
+  console.log(`GATE PASSED on all workloads. strict wins: ${strictWins}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)

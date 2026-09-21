@@ -45,12 +45,16 @@ selected; `compressJson` then fails its whole-text `JSON.parse` and returns
 the input untouched. NDJSON is what docker, k8s, structured loggers and
 `jq -c` emit, so this is a live gap in the core claim, and it is invisible to
 `head-to-head.mjs` because HeadRoom's dumped fixtures are pretty-printed
-arrays. **This is the highest-value thing found today and it is not fixed.**
+arrays. **It is the highest-value thing found today, and it is now fixed:**
+46,707 -> 3,212 (93.1%) with the anomalous `ERROR` record kept whole, while a
+damaged line and an unprofitably short document still come back byte for byte.
 
 Also closed: the README table is generated and gated
 (`bench/compression/readme-table.check.mjs`, proven by mutating `48.2%` to
 the `61.3%` that once shipped and watching it fail); `codebase-exploration`
-reads parity; the retention column travels with every reduction claim; the
+is published as **theirs by 1.4 points** on this base, 47.4% against our
+46.0%, the earlier "parity" having been a figure from another branch; the
+retention column travels with every reduction claim; the
 false control-arm line is struck from `COMPETITIVE_GAPS.md`; the frozen
 comparators carry provenance; and `npm test` no longer runs 31 of the
 competitor's own suites.
@@ -424,6 +428,14 @@ make."** They can; see §3.
 ---
 
 ## 5. Follow-up plan, ranked
+
+> **Items 1-3 as originally written are done and have been removed from this
+> list.** The scope leak is closed (by provenance, not scope -- see the
+> addendum), `proof.mjs` is green with a strict-win guard and its table is
+> generated and drift-gated, and the accuracy arm exists and has measured
+> n=30 at 53.8% reduction with baseline 0.933 against ours 0.967. What remains
+> of item 3 is scale and wiring, kept below. The retention column is published,
+> so that item is gone too.
 
 Ordered by evidence-value per unit of work, not by size.
 

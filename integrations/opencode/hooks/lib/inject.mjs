@@ -283,6 +283,18 @@ function withPendingApplied(dir, graph) {
  */
 const TRANSFERABLE_SCOPES = new Set(['global', 'organization']);
 
+/** How many anchored findings a touch will weigh before the budget decides. */
+const TOUCH_CANDIDATES = 30;
+
+/**
+ * Headroom requested on a shared graph, where some candidates are ineligible.
+ *
+ * Bounded rather than unlimited on purpose: this runs on every touch, and the
+ * machine-level graph is the large one. Ten times the cap covers an anchor
+ * whose top ranks are entirely foreign without walking the whole graph.
+ */
+const TOUCH_OVERFETCH = 10;
+
 /**
  * May this finding be delivered from a graph that spans projects?
  *
@@ -318,9 +330,19 @@ export function forTouch(
   // re-serve the same findings on every single touch, which is both a token
   // cost per call and the fastest way to train a model to skim past them.
   const sharedHere = isSharedDir(dir);
-  const candidates = findingsFor(graph, anchorId, { limit: 30 })
+  // CAP AFTER FILTERING, NOT BEFORE. findingsFor ranks and slices to its
+  // limit, so filtering provenance afterwards spends the whole budget on
+  // candidates that are then thrown away: 30 higher-ranked foreign findings
+  // on one anchor would leave an eligible local or global finding at rank 31
+  // unconsidered, and the touch delivers nothing. Ask for headroom on a
+  // shared graph and take the first TOUCH_CANDIDATES that survive. This
+  // changes how many ranked results are considered, never their order.
+  const candidates = findingsFor(graph, anchorId, {
+    limit: sharedHere ? TOUCH_CANDIDATES * TOUCH_OVERFETCH : TOUCH_CANDIDATES,
+  })
     .filter((f) => !alreadyInjected.has(f.key))
-    .filter((f) => !sharedHere || travelsHere(f));
+    .filter((f) => !sharedHere || travelsHere(f))
+    .slice(0, TOUCH_CANDIDATES);
   if (!candidates.length) return null;
 
   // STRATIFIED BY FILE AND EPOCH, which is the documented design here: the
