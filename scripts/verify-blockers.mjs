@@ -244,20 +244,27 @@ check('B6', 'task accuracy is measured against a baseline arm', () => {
 });
 
 // ---------------------------------------------------------------- B7
-check('B7', 'the false control-arm claim is gone', () => {
-  const g = read('docs/COMPETITIVE_GAPS.md');
-  if (g.includes('claim they cannot make')) return fail('the false line is still there');
-  if (!g.includes('HEADROOM_OUTPUT_HOLDOUT')) {
-    return fail('the correction does not name their holdout');
+check('B7', 'no competitor analysis lives in this public repo', () => {
+  // THE BLOCKER MOVED. B7 was "the false control-arm claim is gone", a fix
+  // applied inside docs/COMPETITIVE_GAPS.md. That document is competitive
+  // analysis and this repository is public, so the analysis -- corrected or
+  // not -- does not belong here at all. Correcting a claim in a file that
+  // should not exist is the smaller half of the problem.
+  //
+  // Both documents now live outside the repo. This checks the property that
+  // replaced the old one: they are absent, and nothing links to them.
+  const banned = ['docs/COMPETITIVE_GAPS.md', 'docs/COMPETITOR_HEADROOM.md'];
+  const present = banned.filter((f) => existsSync(join(ROOT, f)));
+  if (present.length) {
+    return fail(`competitive analysis is committed here: ${present.join(', ')}`);
   }
-  // NO CROSS-REFERENCE IS REQUIRED, and one must not be added: the analysis
-  // it used to name is intentionally absent from this public repository.
-  if (/COMPETITOR_HEADROOM\.md/.test(g)) {
-    return fail(
-      'links to COMPETITOR_HEADROOM.md, which is deliberately not in this repo'
-    );
+  // A dangling link advertises what was removed and where it went.
+  const readme = read('README.md');
+  const linked = banned.filter((f) => readme.includes(f.replace('docs/', '')));
+  if (linked.length) {
+    return fail(`README still links removed analysis: ${linked.join(', ')}`);
   }
-  return pass('false line removed and their holdout named');
+  return pass('both analyses are out of the repo and unlinked');
 });
 
 // ---------------------------------------------------------------- B8
