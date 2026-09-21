@@ -204,6 +204,19 @@ check('B6', 'task accuracy is measured against a baseline arm', () => {
   } catch (err) {
     return fail(`${RESULT} is not readable json: ${err.message}`);
   }
+  // JSON.parse ACCEPTS null, AND A SCALAR, AND AN ARRAY. Each of those
+  // reaches the field reads below and dies on a property access, which the
+  // check() wrapper does catch -- so the script survives and the other
+  // blockers still run -- but it reports "check threw: Cannot read
+  // properties of null", a stack artefact rather than a diagnosis. Anyone
+  // reading that has to open this file to learn what was wrong with theirs.
+  if (m === null || typeof m !== 'object' || Array.isArray(m)) {
+    return fail(
+      `${RESULT} parsed as ${Array.isArray(m) ? 'an array' : String(m === null ? 'null' : typeof m)}, ` +
+        'not a measurement object -- regenerate it with ' +
+        'node bench/accuracy/squad-eval.mjs --n 30 --json ' + RESULT
+    );
+  }
   // Provenance first: an undated measurement cannot be known to be stale.
   if (!m.measuredAt || !m.harnessSha || m.harnessSha === 'unknown') {
     return fail(`${RESULT} carries no measuredAt/harnessSha stamp`);
