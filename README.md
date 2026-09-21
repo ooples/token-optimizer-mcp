@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/measured-on%20two%20harnesses-2ea043" alt="Measured on two independent harnesses">
   <img src="https://img.shields.io/badge/clients-16-8b5cf6" alt="16 clients">
   <img src="https://img.shields.io/badge/direct%20savings-before%20%2F%20actual%20return-3b82f6" alt="Direct savings measured before and after">
-  <img src="https://img.shields.io/badge/telemetry-none-2ea043" alt="No telemetry">
+  <img src="https://img.shields.io/badge/telemetry-opt--in-2ea043" alt="Telemetry is opt-in and off by default">
   <img src="https://img.shields.io/badge/commercial%20use-MIT%2C%20allowed-0d9488" alt="MIT, commercial use allowed">
 </p>
 
