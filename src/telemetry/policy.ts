@@ -77,7 +77,16 @@ export function beaconEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 /** Why transmission is or is not permitted, for `doctor` and for tests. */
 export function describePolicy(env: NodeJS.ProcessEnv = process.env): string {
   if (doNotTrack(env)) return 'off: DO_NOT_TRACK is set';
-  if (!localTelemetryEnabled(env)) return 'off: local telemetry is opt-in and unset';
+  if (!localTelemetryEnabled(env)) {
+    // AN EXPLICIT ZERO IS A DECISION, NOT AN OMISSION. Reporting it as
+    // "unset" invites an operator to set what they already set, and in a
+    // doctor output that reads as the tool not having noticed. Only an absent
+    // or unrecognised value is genuinely unset.
+    const raw = (env.TOKEN_OPTIMIZER_TELEMETRY ?? '').trim();
+    return raw
+      ? `off: local telemetry is explicitly disabled (${raw})`
+      : 'off: local telemetry is opt-in and unset';
+  }
   if (!beaconEnabled(env)) return 'local only: upload is opt-in and unset';
   return 'local and upload: both explicitly enabled';
 }

@@ -86,6 +86,25 @@ describe('do-not-track wins over an explicit yes', () => {
   });
 });
 
+describe('the diagnostic distinguishes a decision from an omission', () => {
+  it('reports an explicit zero as disabled rather than unset', () => {
+    // Raised in review on #412: telling an operator their explicit 0 is
+    // "unset" reads as the tool not having noticed, and invites them to set
+    // what they already set.
+    const said = describePolicy({ TOKEN_OPTIMIZER_TELEMETRY: '0' });
+    expect(said).toContain('explicitly disabled');
+    expect(said).not.toContain('unset');
+  });
+
+  it('still reports a genuinely absent value as unset', () => {
+    expect(describePolicy({})).toContain('unset');
+  });
+
+  it('reports an unrecognised value as unset, since it was not understood', () => {
+    expect(describePolicy({ TOKEN_OPTIMIZER_TELEMETRY: 'maybe' })).toContain('maybe');
+  });
+});
+
 describe('the payload cannot carry content', () => {
   it('drops every string, which is what prompts and paths are', () => {
     const out = sanitiseProperties({
