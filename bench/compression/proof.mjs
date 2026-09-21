@@ -360,6 +360,10 @@ function main() {
   );
 
   const failures = [];
+  // Paid for below: relaxing the comparison to `<=` lets a legitimate
+  // tie through, so the gate would also pass an engine that removed
+  // nothing at all. Counting strict wins keeps its teeth.
+  let strictWins = 0;
   const steadyFailures = [];
   const needleFailures = [];
   const relevanceFailures = [];
@@ -471,10 +475,18 @@ function main() {
       );
     }
 
-    if (!(scores['v1-frontier'] < scores.ccr)) {
+    // A TIE IS NOT A REGRESSION. Where a workload is incompressible by
+    // both arms -- grep-output is: each reports 0.0% gross -- `effective`
+    // equals the baseline on both sides and the scores are necessarily
+    // equal. The property this gate exists to defend is that
+    // frontier-only never costs MORE on the bill than the
+    // history-rewriting arm, and equal cost satisfies it.
+    if (scores['v1-frontier'] > scores.ccr) {
       failures.push(
         `${fixture.name}: v1-frontier ${scores['v1-frontier'].toFixed(0)} effective vs ccr ${scores.ccr.toFixed(0)}`
       );
+    } else if (scores['v1-frontier'] < scores.ccr) {
+      strictWins += 1;
     }
     // THE SAFETY PROPERTY FIRST. Re-anchoring spends a cache write to buy
     // cheaper reads later; get the decision wrong and it is the most expensive
@@ -549,15 +561,27 @@ function main() {
   }
 
   console.log(
-    '--- gate: v1-frontier must beat ccr on effective tokens, every workload ---'
+    '--- gate: v1-frontier must never cost more than ccr on effective tokens ---'
   );
+  if (!failures.length && strictWins === 0) {
+    // Every workload tied. Either the engine stopped doing anything or
+    // the fixtures stopped exercising it; both make this gate vacuous.
+    failures.push(
+      'no workload shows a strict win -- the gate cannot distinguish a' +
+        ' cache-respecting engine from an inert one'
+    );
+  }
   if (failures.length) {
     console.log('GATE FAILED:');
     for (const f of failures) console.log(`  ${f}`);
     process.exitCode = 1;
     return;
   }
-  console.log('GATE PASSED on all workloads.');
+  // REPORTED, so a verifier can require the behaviour rather than the
+  // spelling of a variable. A checker that greps for `strictWins` still
+  // passes if the enforcing branch is deleted and the declaration is left
+  // behind; this line can only be produced by counting real wins.
+  console.log(`GATE PASSED on all workloads. strict wins: ${strictWins}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)

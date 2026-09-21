@@ -47,6 +47,12 @@ export default {
     '/node_modules/',
     '/dist/',
     '<rootDir>/worktrees/',
+    // A competitor's checkout, kept for head-to-head measurement. It ships
+    // its own TypeScript suites, and discovering them ran 31 foreign,
+    // uniformly failing suites on every local `npm test` -- hiding ours
+    // inside the noise. CI never saw it, because .codex/ is gitignored,
+    // so the cost fell entirely on whoever read a local run.
+    '<rootDir>/.codex/',
   ],
   // Points file backups at a temp directory for every worker, so no test can
   // write into the developer's real ~/.token-optimizer/backups. See the file

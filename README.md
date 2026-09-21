@@ -43,18 +43,41 @@ multiplier. This one optimises the bill.
 **It wins both columns.** Against a faithful reimplementation of the leading
 open compressor's published design, `node bench/compression/proof.mjs`:
 
-| workload        | bytes left, ours vs theirs | cache-weighted cost, ours vs theirs |
-| --------------- | -------------------------- | ----------------------------------- |
-| code search     | **936** vs 948             | **859** vs 1,068 (−20%)             |
-| SRE debugging   | **1,889** vs 1,901         | **1,783** vs 2,141 (−17%)           |
-| issue triage    | **482** vs 494             | **439** vs 557 (−21%)               |
-| grep output     | **8,478** vs 8,494         | **6,896** vs 8,971 (−23%)           |
-| raw build log   | **17,450** vs 17,467       | **15,937** vs 17,943 (−11%)         |
-| relevance probe | **253** vs 265             | **264** vs 295 (−11%)               |
-| browser session | **21,986** vs 21,994       | **18,407** vs 18,539                |
-| repeated reads  | 5,917 vs **5,866**         | **3,791** vs 6,590 (−42%)           |
+<!-- PROOF-TABLE:START -- every figure below must appear in the output of
+     `node bench/compression/proof.mjs`. Guarded by
+     `node bench/compression/readme-table.check.mjs`; do not hand-edit. -->
 
-Raw removal: ours on 7 of 8. Cache-weighted cost: **ours on 8 of 8.**
+| workload             | payload | theirs | ours   | verdict |
+| -------------------- | ------: | -----: | -----: | ------- |
+| code-search          |  17765 |  92.1% |  97.6% | ours    |
+| sre-debugging        |  65694 |  92.2% |  98.4% | ours    |
+| issue-triage         |  54174 |  72.8% |  97.3% | ours    |
+| codebase-exploration |  78502 |  47.4% |  46.0% | theirs  |
+
+<!-- PROOF-TABLE:END -->
+
+Four workloads, because those are the four with a published comparator. The
+harness reports twelve; the other eight are ours alone and are not a
+head-to-head.
+
+**`codebase-exploration` is theirs, by 1.4 points.** An earlier version of this
+table claimed 61.3% for us on that row, and a later one claimed parity; both
+were figures from a branch rather than from here. Measured on this tree it is
+46.0% against their 47.4%, and it is published as a loss because that is what
+it is. A number in prose is a fact about the tree it was measured on, which is
+why `bench/compression/readme-table.check.mjs` re-derives every figure in the
+block above from the harness rather than trusting it.
+
+**Reduction is not the only column, and the other one goes to them.** Scored
+symmetrically on their own fixtures, of 3,793 retention units they keep **1,890**
+directly visible in the text they send and we keep **345** — we reach a higher
+reduction partly by eliding harder, into a spill about 0.94x the size of the
+input. Nothing is unrecoverably lost on our side, and a retrieval costs a turn.
+Both numbers belong in any quote of either.
+
+Against the four published comparators: **ours on 3, theirs on 1.**
+The tally is over comparators, not over workloads -- the harness runs twelve
+and eight of them have nothing to compare against.
 
 The two columns come from different arms of the same engine, and that is the
 point. `v3-history` compresses history too and matches them byte for byte;
@@ -364,8 +387,7 @@ payload cost. **Reading avoided** stays `Collecting` or `Not measured` until at
 least 20 treated file touches and 5 holdouts exist with a downstream join; the
 dashboard does not manufacture a savings estimate from missing data.
 
-See [the causal evidence protocol](docs/EVIDENCE_PROTOCOL.md), the
-[cross-client capability contract](docs/CLIENT_SUPPORT.md), and the
+See the [cross-client capability contract](docs/CLIENT_SUPPORT.md) and the
 [live evaluation suite](evals/README.md).
 
 ### Cross-client lifecycle diagnostics
@@ -1699,11 +1721,6 @@ you to remove — we do not rewrite your `settings.json`.
 ## Technical reference
 
 The detailed operational material below is intentionally retained for users who want to understand the complete tool surface, hooks pipeline, performance controls, analytics, and troubleshooting behavior.
-
-The proposed category-level successor architecture, its 18 required
-workstreams, and the evidence gates for claiming a universal cognitive runtime
-are documented in
-[`docs/UNIVERSAL_COGNITIVE_RUNTIME_PROGRAM.md`](docs/UNIVERSAL_COGNITIVE_RUNTIME_PROGRAM.md).
 
 ### Complete Tool Reference (74 Total)
 

@@ -1,0 +1,708 @@
+{
+  "measuredAt": "2026-09-21T16:23:10.755Z",
+  "harnessSha": "b0fda8e4d7c37b8d2abd42e3d634c9a13b88972c",
+  "n": 30,
+  "distractors": 12,
+  "meanReduction": 0.5446930524592403,
+  "baseAcc": 0.9666666666666667,
+  "oursAcc": 1,
+  "scored": 30,
+  "errors": 0,
+  "rows": [
+    {
+      "id": "56ddde6b9a695914005b9628",
+      "question": "In what country is Normandy located?",
+      "gold": [
+        "France",
+        "France",
+        "France",
+        "France"
+      ],
+      "chars": {
+        "before": 8447,
+        "after": 4115
+      },
+      "reduction": 0.5128447969693382,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "France",
+        "correct": true
+      },
+      "ours": {
+        "reply": "France",
+        "correct": true
+      }
+    },
+    {
+      "id": "56e16182e3433e1400422e28",
+      "question": "What branch of theoretical computer science deals with broadly classifying computational problems by difficulty and class of relationship?",
+      "gold": [
+        "Computational complexity theory",
+        "Computational complexity theory",
+        "Computational complexity theory"
+      ],
+      "chars": {
+        "before": 9375,
+        "after": 4187
+      },
+      "reduction": 0.5533866666666667,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Computational complexity theory",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Computational complexity theory",
+        "correct": true
+      }
+    },
+    {
+      "id": "5705e26d75f01819005e76d4",
+      "question": "What is Southern California often abbreviated as?",
+      "gold": [
+        "SoCal",
+        "SoCal",
+        "SoCal"
+      ],
+      "chars": {
+        "before": 9603,
+        "after": 5416
+      },
+      "reduction": 0.43600958033947723,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "SoCal",
+        "correct": true
+      },
+      "ours": {
+        "reply": "SoCal",
+        "correct": true
+      }
+    },
+    {
+      "id": "56ddde6b9a695914005b9629",
+      "question": "When were the Normans in Normandy?",
+      "gold": [
+        "10th and 11th centuries",
+        "in the 10th and 11th centuries",
+        "10th and 11th centuries",
+        "10th and 11th centuries"
+      ],
+      "chars": {
+        "before": 8647,
+        "after": 3681
+      },
+      "reduction": 0.5743032265525616,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "10th and 11th centuries",
+        "correct": true
+      },
+      "ours": {
+        "reply": "10th and 11th centuries",
+        "correct": true
+      }
+    },
+    {
+      "id": "56e16182e3433e1400422e29",
+      "question": "By what main attribute are computational problems classified utilizing computational complexity theory? ",
+      "gold": [
+        "inherent difficulty",
+        "their inherent difficulty",
+        "inherent difficulty"
+      ],
+      "chars": {
+        "before": 9064,
+        "after": 4757
+      },
+      "reduction": 0.47517652250661957,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Their inherent difficulty.",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Their inherent difficulty",
+        "correct": true
+      }
+    },
+    {
+      "id": "5705e26d75f01819005e76d5",
+      "question": "Despite being traditionall described as \"eight counties\", how many counties does this region actually have?",
+      "gold": [
+        "10 counties",
+        "10",
+        "10"
+      ],
+      "chars": {
+        "before": 8922,
+        "after": 4291
+      },
+      "reduction": 0.5190540237614885,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "10",
+        "correct": true
+      },
+      "ours": {
+        "reply": "10",
+        "correct": true
+      }
+    },
+    {
+      "id": "56ddde6b9a695914005b962a",
+      "question": "From which countries did the Norse originate?",
+      "gold": [
+        "Denmark, Iceland and Norway",
+        "Denmark, Iceland and Norway",
+        "Denmark, Iceland and Norway",
+        "Denmark, Iceland and Norway"
+      ],
+      "chars": {
+        "before": 8336,
+        "after": 3170
+      },
+      "reduction": 0.619721689059501,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Denmark, Iceland and Norway",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Denmark, Iceland and Norway",
+        "correct": true
+      }
+    },
+    {
+      "id": "56e16182e3433e1400422e2a",
+      "question": "What is the term for a task that generally lends itself to being solved by a computer?",
+      "gold": [
+        "computational problems",
+        "A computational problem",
+        "computational problem"
+      ],
+      "chars": {
+        "before": 9064,
+        "after": 4508
+      },
+      "reduction": 0.502647837599294,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "computational problem",
+        "correct": true
+      },
+      "ours": {
+        "reply": "A computational problem",
+        "correct": true
+      }
+    },
+    {
+      "id": "5705e26d75f01819005e76d6",
+      "question": "What is a major importance of Southern California in relation to California and the United States?",
+      "gold": [
+        "economic center",
+        "major economic center",
+        "economic center"
+      ],
+      "chars": {
+        "before": 8922,
+        "after": 4193
+      },
+      "reduction": 0.5300381080475229,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "It is a major economic center for the state of California and the United States.",
+        "correct": true
+      },
+      "ours": {
+        "reply": "It is a major economic center for the state of California and the United States.",
+        "correct": true
+      }
+    },
+    {
+      "id": "56ddde6b9a695914005b962b",
+      "question": "Who was the Norse leader?",
+      "gold": [
+        "Rollo",
+        "Rollo",
+        "Rollo",
+        "Rollo"
+      ],
+      "chars": {
+        "before": 8536,
+        "after": 3682
+      },
+      "reduction": 0.5686504217432052,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Rollo",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Rollo",
+        "correct": true
+      }
+    },
+    {
+      "id": "56e16839cd28a01900c67887",
+      "question": "What measure of a computational problem broadly defines the inherent difficulty of the solution?",
+      "gold": [
+        "if its solution requires significant resources",
+        "its solution requires significant resources",
+        "if its solution requires significant resources"
+      ],
+      "chars": {
+        "before": 9264,
+        "after": 4997
+      },
+      "reduction": 0.4606001727115717,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "The amount of resources required to solve it, such as time and storage.",
+        "correct": false
+      },
+      "ours": {
+        "reply": "If its solution requires significant resources, whatever the algorithm used.",
+        "correct": true
+      }
+    },
+    {
+      "id": "5705e26d75f01819005e76d7",
+      "question": "What are the ties that best described what the \"eight counties\" are based on?",
+      "gold": [
+        "demographics and economic ties",
+        "economic",
+        "demographics and economic"
+      ],
+      "chars": {
+        "before": 9313,
+        "after": 3841
+      },
+      "reduction": 0.5875657682808977,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "demographics and economic ties",
+        "correct": true
+      },
+      "ours": {
+        "reply": "economic ties",
+        "correct": true
+      }
+    },
+    {
+      "id": "56ddde6b9a695914005b962c",
+      "question": "What century did the Normans first gain their separate identity?",
+      "gold": [
+        "10th century",
+        "the first half of the 10th century",
+        "10th",
+        "10th"
+      ],
+      "chars": {
+        "before": 8225,
+        "after": 3049
+      },
+      "reduction": 0.6293009118541033,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "10th century",
+        "correct": true
+      },
+      "ours": {
+        "reply": "The 10th century",
+        "correct": true
+      }
+    },
+    {
+      "id": "56e16839cd28a01900c67888",
+      "question": "What method is used to intuitively assess or quantify the amount of resources required to solve a computational problem?",
+      "gold": [
+        "mathematical models of computation",
+        "mathematical models of computation",
+        "mathematical models of computation"
+      ],
+      "chars": {
+        "before": 8583,
+        "after": 4004
+      },
+      "reduction": 0.5334964464639403,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Mathematical models of computation",
+        "correct": true
+      },
+      "ours": {
+        "reply": "mathematical models of computation",
+        "correct": true
+      }
+    },
+    {
+      "id": "5705e26d75f01819005e76d8",
+      "question": "The reasons for the las two counties to be added are based on what?",
+      "gold": [
+        "historical political divisions",
+        "historical political divisions",
+        "historical political divisions"
+      ],
+      "chars": {
+        "before": 9220,
+        "after": 3708
+      },
+      "reduction": 0.5978308026030369,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Historical political divisions",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Historical political divisions",
+        "correct": true
+      }
+    },
+    {
+      "id": "56dddf4066d3e219004dad5f",
+      "question": "Who was the duke in the battle of Hastings?",
+      "gold": [
+        "William the Conqueror",
+        "William the Conqueror",
+        "William the Conqueror"
+      ],
+      "chars": {
+        "before": 9199,
+        "after": 4023
+      },
+      "reduction": 0.5626698554190672,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "William the Conqueror",
+        "correct": true
+      },
+      "ours": {
+        "reply": "William the Conqueror",
+        "correct": true
+      }
+    },
+    {
+      "id": "56e16839cd28a01900c67889",
+      "question": "What are two basic primary resources used to guage complexity?",
+      "gold": [
+        "time and storage",
+        "time and storage",
+        "time and storage"
+      ],
+      "chars": {
+        "before": 8894,
+        "after": 5317
+      },
+      "reduction": 0.4021812457836744,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "time and storage",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Time and storage",
+        "correct": true
+      }
+    },
+    {
+      "id": "5705e33f52bb89140068964c",
+      "question": "What is the name of the region that is not defined by the eight or 10 county definitions?",
+      "gold": [
+        "Southern California Megaregion",
+        "the greater Southern California Megaregion",
+        "Southern California Megaregion"
+      ],
+      "chars": {
+        "before": 9981,
+        "after": 4308
+      },
+      "reduction": 0.5683799218515179,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Southern California Megaregion",
+        "correct": true
+      },
+      "ours": {
+        "reply": "the greater Southern California Megaregion",
+        "correct": true
+      }
+    },
+    {
+      "id": "56dddf4066d3e219004dad60",
+      "question": "Who ruled the duchy of Normandy",
+      "gold": [
+        "Richard I",
+        "Richard I",
+        "Richard I"
+      ],
+      "chars": {
+        "before": 8888,
+        "after": 4251
+      },
+      "reduction": 0.5217146714671468,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Richard I of Normandy",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Richard I of Normandy",
+        "correct": true
+      }
+    },
+    {
+      "id": "56e16839cd28a01900c6788a",
+      "question": "What unit is measured to determine circuit complexity?",
+      "gold": [
+        "number of gates in a circuit",
+        "number of gates in a circuit",
+        "number of gates"
+      ],
+      "chars": {
+        "before": 8213,
+        "after": 4004
+      },
+      "reduction": 0.5124802142944114,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "The number of gates in a circuit",
+        "correct": true
+      },
+      "ours": {
+        "reply": "The number of gates in a circuit",
+        "correct": true
+      }
+    },
+    {
+      "id": "5705e33f52bb89140068964d",
+      "question": "How many megaregions are there in the United States?",
+      "gold": [
+        "11",
+        "11",
+        "11"
+      ],
+      "chars": {
+        "before": 9888,
+        "after": 5744
+      },
+      "reduction": 0.41909385113268605,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "11",
+        "correct": true
+      },
+      "ours": {
+        "reply": "11",
+        "correct": true
+      }
+    },
+    {
+      "id": "56dddf4066d3e219004dad61",
+      "question": "What religion were the Normans",
+      "gold": [
+        "Catholic",
+        "Catholic orthodoxy",
+        "Catholic"
+      ],
+      "chars": {
+        "before": 8981,
+        "after": 5493
+      },
+      "reduction": 0.3883754593029729,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Catholic (Catholic orthodoxy)",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Catholic",
+        "correct": true
+      }
+    },
+    {
+      "id": "56e16839cd28a01900c6788b",
+      "question": "What practical role does defining the complexity of problems play in everyday computing?",
+      "gold": [
+        "determine the practical limits on what computers can and cannot do",
+        "what computers can and cannot do",
+        "determine the practical limits on what computers can and cannot do"
+      ],
+      "chars": {
+        "before": 8524,
+        "after": 3925
+      },
+      "reduction": 0.5395354293758798,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "It determines the practical limits on what computers can and cannot do.",
+        "correct": true
+      },
+      "ours": {
+        "reply": "It determines the practical limits on what computers can and cannot do.",
+        "correct": true
+      }
+    },
+    {
+      "id": "5705e33f52bb89140068964e",
+      "question": "What is the name of the state that the megaregion expands to in the east?",
+      "gold": [
+        "Nevada",
+        "Nevada",
+        "Nevada"
+      ],
+      "chars": {
+        "before": 10569,
+        "after": 4016
+      },
+      "reduction": 0.6200208155927713,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Nevada",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Nevada",
+        "correct": true
+      }
+    },
+    {
+      "id": "56dde0379a695914005b9636",
+      "question": "What is the original meaning of the word Norman?",
+      "gold": [
+        "Viking",
+        "Norseman, Viking",
+        "Norseman, Viking"
+      ],
+      "chars": {
+        "before": 7598,
+        "after": 4855
+      },
+      "reduction": 0.3610160568570676,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "\"Norseman, Viking\"",
+        "correct": true
+      },
+      "ours": {
+        "reply": "\"Norseman, Viking\"",
+        "correct": true
+      }
+    },
+    {
+      "id": "56e17644e3433e1400422f40",
+      "question": "What two fields of theoretical computer science closely mirror computational complexity theory?",
+      "gold": [
+        "analysis of algorithms and computability theory",
+        "analysis of algorithms and computability theory",
+        "analysis of algorithms and computability theory"
+      ],
+      "chars": {
+        "before": 7936,
+        "after": 2241
+      },
+      "reduction": 0.7176159274193548,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Analysis of algorithms and computability theory",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Analysis of algorithms and computability theory",
+        "correct": true
+      }
+    },
+    {
+      "id": "5705e33f52bb89140068964f",
+      "question": "Which border does the megaregion extend over?",
+      "gold": [
+        "Mexican",
+        "Mexican",
+        "Mexican"
+      ],
+      "chars": {
+        "before": 10769,
+        "after": 3294
+      },
+      "reduction": 0.6941220169003621,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "The Mexican border",
+        "correct": true
+      },
+      "ours": {
+        "reply": "the Mexican border",
+        "correct": true
+      }
+    },
+    {
+      "id": "56dde0379a695914005b9637",
+      "question": "When was the Latin version of the word Norman first recorded?",
+      "gold": [
+        "9th century",
+        "9th century",
+        "9th century"
+      ],
+      "chars": {
+        "before": 7398,
+        "after": 2658
+      },
+      "reduction": 0.6407137064071371,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "9th century",
+        "correct": true
+      },
+      "ours": {
+        "reply": "9th century",
+        "correct": true
+      }
+    },
+    {
+      "id": "56e17644e3433e1400422f41",
+      "question": "What field of computer science analyzes the resource requirements of a specific algorithm isolated unto itself within a given problem?",
+      "gold": [
+        "analysis of algorithms",
+        "analysis of algorithms",
+        "analysis of algorithms"
+      ],
+      "chars": {
+        "before": 8247,
+        "after": 2945
+      },
+      "reduction": 0.6429004486479932,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "analysis of algorithms",
+        "correct": true
+      },
+      "ours": {
+        "reply": "analysis of algorithms",
+        "correct": true
+      }
+    },
+    {
+      "id": "5705e33f52bb891400689650",
+      "question": "What is the name of the area past the border that the megaregion extends into?",
+      "gold": [
+        "Tijuana",
+        "Tijuana",
+        "Tijuana"
+      ],
+      "chars": {
+        "before": 11450,
+        "after": 4015
+      },
+      "reduction": 0.6493449781659388,
+      "spilledCount": 1,
+      "baseline": {
+        "reply": "Tijuana",
+        "correct": true
+      },
+      "ours": {
+        "reply": "Tijuana",
+        "correct": true
+      }
+    }
+  ]
+}

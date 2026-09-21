@@ -270,6 +270,49 @@ function withPendingApplied(dir, graph) {
  * measurement holdout -- in which case the caller must behave exactly as if the
  * graph were empty, or the experiment measures nothing.
  */
+/**
+ * Scopes a graph that spans projects may still vouch for.
+ *
+ * Mirrors TRANSFERABLE_SCOPES in src/compress/knowledge.ts deliberately: the
+ * proxy's knowledge block and the hooks' injection are two delivery paths for
+ * one graph, and they must agree about how far a claim travels. An ABSENT
+ * scope reads as `project` -- the conservative reading, because claims written
+ * before scope existed say nothing about how far they travel.
+ */
+const TRANSFERABLE_SCOPES = new Set(['global', 'organization']);
+
+/** How many anchored findings a touch will weigh before the budget decides. */
+const TOUCH_CANDIDATES = 30;
+
+/**
+ * Headroom requested on a shared graph, where some candidates are ineligible.
+ *
+ * Bounded rather than unlimited on purpose: this runs on every touch, and the
+ * machine-level graph is the large one. Ten times the cap covers an anchor
+ * whose top ranks are entirely foreign without walking the whole graph.
+ */
+const TOUCH_OVERFETCH = 10;
+
+/**
+ * May this finding be delivered from a graph that spans projects?
+ *
+ * PROVENANCE, NOT SCOPE ALONE. `wikiDir()` falls back to one machine-level
+ * graph for any directory with no repository marker, so on that graph
+ * "project-scoped" is the default state of every ordinary finding and
+ * withholding them all silences the graph completely -- which is what the
+ * first version of this did, taking six suites and 21 tests with it.
+ *
+ * What actually leaks is a finding PROMOTED into the shared graph from a
+ * named repository: promoteToShared stamps it with `sourceProject`
+ * (hooks-core/harvest-write.mjs), and that stamp is what says the claim is
+ * about some other tree. A finding with no stamp was written where we are
+ * working and is ours to serve.
+ */
+function travelsHere(node) {
+  if (TRANSFERABLE_SCOPES.has(node.scope || 'project')) return true;
+  return !node.sourceProject;
+}
+
 export function forTouch(
   dir,
   graph,
@@ -284,8 +327,20 @@ export function forTouch(
   // repeatedly -- which is the normal shape of working on it -- would otherwise
   // re-serve the same findings on every single touch, which is both a token
   // cost per call and the fastest way to train a model to skim past them.
-  const candidates = findingsFor(graph, anchorId, { limit: 30 })
-    .filter((f) => !alreadyInjected.has(f.key));
+  const sharedHere = isSharedDir(dir);
+  // CAP AFTER FILTERING, NOT BEFORE. findingsFor ranks and slices to its
+  // limit, so filtering provenance afterwards spends the whole budget on
+  // candidates that are then thrown away: 30 higher-ranked foreign findings
+  // on one anchor would leave an eligible local or global finding at rank 31
+  // unconsidered, and the touch delivers nothing. Ask for headroom on a
+  // shared graph and take the first TOUCH_CANDIDATES that survive. This
+  // changes how many ranked results are considered, never their order.
+  const candidates = findingsFor(graph, anchorId, {
+    limit: sharedHere ? TOUCH_CANDIDATES * TOUCH_OVERFETCH : TOUCH_CANDIDATES,
+  })
+    .filter((f) => !alreadyInjected.has(f.key))
+    .filter((f) => !sharedHere || travelsHere(f))
+    .slice(0, TOUCH_CANDIDATES);
   if (!candidates.length) return null;
 
   // STRATIFIED BY FILE AND EPOCH, which is the documented design here: the
@@ -490,10 +545,20 @@ export function forCommand(
   if (!command) return null;
   graph = withPendingApplied(dir, graph);
 
+  // A SHARED GRAPH CANNOT VOUCH FOR A PROJECT CLAIM. Unlike forTouch,
+  // this path has no anchor into the current tree -- it matches on the
+  // command's text -- so on a graph that spans projects a project-scoped
+  // finding from an unrelated repository is a candidate for every command
+  // run here. forRepeatedAct and forSharedCommand refuse a shared graph
+  // outright; filtering instead keeps global and organization claims,
+  // which are the ones worth carrying across trees.
+  const sharedHere = isSharedDir(dir);
+
   const candidates = [];
   for (const node of graph.nodes.values()) {
     if (node.kind !== 'finding' || node.retired) continue;
     if (alreadyInjected.has(node.key)) continue;
+    if (sharedHere && !travelsHere(node)) continue;
     if (!appliesToCommand(node, command)) continue;
     candidates.push(node);
   }
