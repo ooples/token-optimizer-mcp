@@ -52,12 +52,35 @@ function seedVersion(root, version) {
   );
 }
 
+/**
+ * The inherited environment with every TOKEN_OPTIMIZER_* variable removed.
+ *
+ * WITHOUT THIS THE SUITE IS NOT HERMETIC, whatever the docstring says. A
+ * developer shell with TOKEN_OPTIMIZER_VERSION set -- 7.0.0 on the machine
+ * where this was found -- turned the "without a pin" test into a pinned one:
+ * the shim tried to npm-install 7.0.0, npm answered ETARGET, and stdout was
+ * empty. The assertion then reported a resolution-rule failure, which is not
+ * what had happened. CI never saw it, because CI's environment is clean, so
+ * it failed only where the result actually gets read.
+ *
+ * Stripping the whole prefix rather than the one variable is deliberate:
+ * this shim reads several, and the next one added would reintroduce the bug
+ * silently.
+ */
+function scrubbedEnv() {
+  const out = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (!k.startsWith('TOKEN_OPTIMIZER_')) out[k] = v;
+  }
+  return out;
+}
+
 function launch(env) {
   return spawnSync(process.execPath, [LAUNCH], {
     encoding: 'utf8',
     timeout: 60_000,
     env: {
-      ...process.env,
+      ...scrubbedEnv(),
       TOKEN_OPTIMIZER_RUNTIME: runtime,
       // Large enough that the background refresh can never be what makes a
       // test pass or fail.
@@ -192,6 +215,25 @@ describe('an explicit version pin decides what is served', () => {
     // Well inside the 60s budget: proves it polled and noticed rather than
     // waiting the loop out.
     expect(Date.now() - started).toBeLessThan(20_000);
+  });
+
+  test('an inherited pin from the developer shell does not reach the shim', () => {
+    // THE REGRESSION GUARD FOR THIS SUITE'S OWN HERMETICITY. With
+    // ...process.env spread into the child, a shell that exported
+    // TOKEN_OPTIMIZER_VERSION made the unpinned test below run pinned, fail
+    // on an npm ETARGET, and report it as a resolution-rule error. Setting
+    // the variable here proves the scrub, rather than trusting it.
+    const prior = process.env.TOKEN_OPTIMIZER_VERSION;
+    process.env.TOKEN_OPTIMIZER_VERSION = '7.0.0';
+    try {
+      seedVersion(join(runtime, 'versions', '9.9.8'), '9.9.8');
+      writeFileSync(join(runtime, 'current'), '9.9.8');
+      const r = launch({});
+      expect(r.stdout).toContain('SERVED 9.9.8');
+    } finally {
+      if (prior === undefined) delete process.env.TOKEN_OPTIMIZER_VERSION;
+      else process.env.TOKEN_OPTIMIZER_VERSION = prior;
+    }
   });
 
   test('without a pin the runtime `current` marker still decides', () => {
