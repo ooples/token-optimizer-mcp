@@ -781,6 +781,12 @@ export function fixtures() {
       // path is inert and every number flatters us. Their harness logs
       // "Kompress model not ready" when that is the case -- treat it as a
       // configuration failure, never as a result.
+      // CORRECTION, 2026-09-21: that warning is NOT a setup error. Their
+      // content_router calls ensure_background_load() and routes around the
+      // deep path until is_ready(), so a one-shot process always measures
+      // their COLD behaviour. Downloading the model and installing optimum
+      // changed nothing -- byte-identical totals. Their warm persistent
+      // proxy is a separate, still-unmeasured arm.
       theirs: { before: 17765, after: 1408 },
       // Needles must survive this one; see needles below.
       needles: true,
