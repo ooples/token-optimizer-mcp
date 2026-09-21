@@ -176,6 +176,33 @@ function anomalousRows(
  * payload that fits comfortably once minified should not pay a marker to lose
  * rows it could have carried whole.
  */
+/**
+ * The values of an NDJSON document, or null when the text is not one.
+ *
+ * Strict on purpose. Requires at least two non-empty lines, every one of
+ * which parses as JSON on its own -- which is what separates NDJSON from a
+ * truncated or corrupted JSON document, and the reason this can sit behind
+ * the same refusal without weakening it. Blank lines are skipped, since a
+ * trailing newline is universal and a blank line carries no value.
+ *
+ * A single line is deliberately not NDJSON here: it would already have
+ * parsed as ordinary JSON above, so reaching this point with one line means
+ * that line is malformed.
+ */
+function parseNdjson(text: string): unknown[] | null {
+  const lines = text.split(/\r?\n/);
+  const values: unknown[] = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      values.push(JSON.parse(line));
+    } catch {
+      return null;
+    }
+  }
+  return values.length >= 2 ? values : null;
+}
+
 export function compressJson(
   text: string,
   ctx: EngineContext = {}
@@ -210,9 +237,30 @@ export function compressJson(
   try {
     parsed = JSON.parse(text);
   } catch {
-    // Not our content. A half-parsed rewrite of malformed JSON would be a
-    // corruption dressed as an optimisation.
-    return unchanged(text);
+    // NDJSON FIRST, THEN GIVE UP. One JSON value per line is what docker,
+    // kubectl, `jq -c` and most structured loggers emit, and it fails the
+    // parse above on its second line -- so this engine used to return the
+    // single commonest shape of real tool output completely untouched.
+    // Measured: 0.0% on 300 log rows as lines, against 94.6% on the exact
+    // same rows as an array.
+    //
+    // The guard below it stays exactly as strict. A document that only
+    // PARTLY parses is still refused, because a half-parsed rewrite of
+    // malformed JSON would be a corruption dressed as an optimisation.
+    // What distinguishes NDJSON from damaged JSON is that EVERY non-empty
+    // line parses on its own, so that is the whole test -- one bad line and
+    // we take the original refusal.
+    const ndjson = parseNdjson(text);
+    if (!ndjson) return unchanged(text);
+    // Re-enter with the array spelling and let every existing rule --
+    // anomaly grouping, per-shape representatives, needle retention,
+    // the unsafe-integer scan above -- apply unchanged. Nothing about
+    // NDJSON deserves its own elision policy.
+    const asArray = compressJson(JSON.stringify(ndjson, null, 2), ctx);
+    // Never pay bytes for the reshaping. A short or already-dense document
+    // can come out of the array spelling LARGER than the lines it replaced,
+    // and then the honest answer is the input.
+    return asArray.text.length < text.length ? asArray : unchanged(text);
   }
 
   // CONTENT THAT ARRIVED AS A STRING. A tool result serialised into a

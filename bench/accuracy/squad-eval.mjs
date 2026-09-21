@@ -48,7 +48,7 @@
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compressBlock } from '../../dist/compress/router.js';
 
@@ -294,9 +294,12 @@ async function main() {
   console.log(`delta               ${(oursAcc - baseAcc >= 0 ? '+' : '')}${(oursAcc - baseAcc).toFixed(3)}`);
 
   if (JSON_OUT) {
-    mkdirSync(dirname(join(process.cwd(), JSON_OUT)), { recursive: true });
+    // resolve(), not join(cwd, ...): an ABSOLUTE --json path joined onto the
+    // working directory becomes C:\repo\C:\tmp\..., which threw ENOENT after
+    // a completed 30-item run and discarded the machine-readable copy of it.
+    mkdirSync(dirname(resolve(JSON_OUT)), { recursive: true });
     writeFileSync(
-      JSON_OUT,
+      resolve(JSON_OUT),
       JSON.stringify(
         { n: N, distractors: DISTRACTORS, meanReduction, baseAcc, oursAcc, scored, errors, rows },
         null,
