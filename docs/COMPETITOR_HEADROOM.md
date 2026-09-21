@@ -108,20 +108,24 @@ Every number below is labelled with how it was obtained. Three tiers:
   harness, not regenerated today.
 - **READ** — read from their source tree or README, not executed.
 
-Their code is a real clone at `.codex/headroom-research`, `headroom-ai` **0.37.0**,
-commit `35b1156` (2026-09-15), **15 commits behind `origin/main`**. The newest
-upstream commit we do not have is
-`feat(beacon): schema v2 — routing/compression training signal, gzip transport (#3253)`,
-which matters for §4.
+Their code is a real clone at `.codex/headroom-research`, `headroom-ai` **0.37.0**.
+It was 15 commits behind when this was written and has since been
+fast-forwarded to `67eb910` (2026-09-19), which brings in
+`feat(beacon): schema v2 — routing/compression training signal, gzip transport (#3253)`
+— the commit that matters for §4. The measurements in §2 were taken both
+before and after that fast-forward and are identical.
 
 Two configuration caveats on their arm, stated up front because both **flatter
 us**:
 
-1. **`Kompress model not ready`** — their HuggingFace text compressor
-   (`kompress-v2-base`) never loaded, so their prose path was inert. Their
-   `rag-conversation` score of **0.1%** is a missing model, not a capability
-   limit, and their `agentic-conversation` 36.7% is understated by an unknown
-   amount.
+1. ~~**`Kompress model not ready`** — their text compressor never loaded, so
+   their `rag-conversation` 0.1% is a missing model rather than a capability
+   limit.~~ **RETRACTED — see the addendum.** The model was downloaded and
+   `optimum` installed; the warning still fired and the totals were
+   byte-identical. Their `content_router` loads it in the background and
+   routes around the deep path until ready, so a one-shot process measures
+   their cold behaviour by design. The figures stand for a cold process.
+   Their warm persistent proxy is a separate, still-unmeasured arm.
 2. Their native Magika/ONNX content detector is disabled by default on Windows,
    so content detection ran on the pure-Python fallback.
 
