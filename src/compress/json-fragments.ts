@@ -264,15 +264,26 @@ function compressRecords(
               n++;
             suffix = n;
           }
-          // Keep booleans, numbers and short categorical strings explicit.
-          // Only substantial shared string prefixes justify another template.
-          if (
-            (!value.startsWith('"') && !value.startsWith('\\"')) ||
-            start < 8
-          ) {
-            start = 0;
-            suffix = 0;
-          }
+          // Keep booleans and numbers explicit: a number's digits ARE its
+          // content, and factoring them yields nothing a reader can use.
+          const quoted = value.startsWith('"') || value.startsWith('\\"');
+
+          // PREFIX AND SUFFIX ARE JUDGED SEPARATELY, and by whether they pay.
+          // They used to share one `start < 8` test, so a seven-character
+          // common prefix zeroed a SIXTEEN-character common suffix along with
+          // itself. On ninety rows of `"line N priced by hand"` the prefix
+          // `\"line ` is exactly seven, one short, and the whole ` priced by
+          // hand\"` tail was then repeated on every row -- about 2,500 bytes
+          // thrown away by an off-by-one in a magic number.
+          //
+          // The honest test is arithmetic rather than a constant: hoisting
+          // N characters out of R rows saves N * R and costs N once in the
+          // template, so it pays whenever R > 1 and N is not trivial. Two is
+          // the smallest run worth the indirection.
+          const pays = (shared: number): boolean =>
+            quoted && shared >= 2 && shared * (group.length - 1) > shared;
+          if (!pays(start)) start = 0;
+          if (!pays(suffix)) suffix = 0;
           template.push(literal + value.slice(0, start), columns.length);
           columns.push({ col, start, end: suffix });
           literal = suffix ? value.slice(-suffix) : '';
