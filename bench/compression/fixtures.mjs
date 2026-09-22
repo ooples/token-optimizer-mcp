@@ -726,6 +726,54 @@ function reasoning(r, lines) {
 }
 
 /** The four workloads. */
+/**
+ * Hand-authored JSON, which no other workload here contains.
+ *
+ * WHY THIS IS WRITTEN OUT BY HAND rather than generated. Every other fixture
+ * builds its JSON with `JSON.stringify`, so every number in this corpus is
+ * already in canonical form -- 5,255 distinct numeric lexemes across eleven
+ * workloads and not one the parser would rewrite. That made the corpus
+ * structurally unable to see a whole defect class: JSON minification was
+ * canonicalising `19.90` to `19.9` and `0.0500` to `0.05` while reporting
+ * `lossless: true`, and no benchmark figure moved, because no fixture had a
+ * number written the way a person writes one.
+ *
+ * Real payloads are not generated. Prices carry their cents, rates carry
+ * their significant figures, timeouts are written `60.00` because a human
+ * lined them up in a config file. This workload is that shape.
+ */
+function humanAuthoredJson() {
+  return [
+    `{
+  \"service\": \"checkout\",
+  \"replicas\": 3,
+  \"timeoutSeconds\": 30.0,
+  \"errorBudget\": 0.0500,
+  \"canaryShare\": 0.10,
+  \"retry\": { \"attempts\": 5, \"backoffMultiplier\": 2.0, \"maxDelaySeconds\": 60.00 },
+  \"limits\": { \"cpu\": \"500m\", \"memory\": \"512Mi\" },
+  \"owner\": null
+}`,
+    `[
+  { \"sku\": \"A-1\", \"price\": 19.90, \"currency\": \"USD\", \"taxRate\": 0.0825 },
+  { \"sku\": \"B-2\", \"price\": 5.00, \"currency\": \"USD\", \"taxRate\": 0.0825 },
+  { \"sku\": \"C-3\", \"price\": 100.0, \"currency\": \"EUR\", \"vatIncluded\": true },
+  { \"sku\": \"D-4\", \"price\": 2.50, \"currency\": \"USD\", \"taxRate\": 0.0600 },
+  { \"sku\": \"E-5\", \"price\": 1e3, \"currency\": \"JPY\" }
+]`,
+    `{
+  \"window\": \"5m\",
+  \"p50\": 12.0,
+  \"p95\": 148.50,
+  \"p99\": 1e3,
+  \"errorRate\": 0.00100,
+  \"byRoute\": {
+    \"/checkout\": { \"p50\": 30.0, \"count\": 1200 },
+    \"/cart\": { \"p50\": 8.50, \"count\": 9400 }
+  }
+}`,
+  ];
+}
 export function fixtures() {
   const r = rng(20260909);
   return [
@@ -827,6 +875,21 @@ export function fixtures() {
         'You are triaging issues.',
         [issueJson(r, 20), 'Grouping by root cause.'],
         [issueJson(r, 220)]
+      ),
+    },
+    {
+      // The corpus had no hand-authored JSON at all, so a defect that only
+      // touches numbers written the way people write them was invisible to
+      // every figure here. No competitor number: this is our own gap.
+      name: 'human-authored-json',
+      theirs: null,
+      request: request(
+        'You are reviewing a service configuration.',
+        [
+          ...humanAuthoredJson(),
+          'Check the retry budget against the error budget.',
+        ],
+        [...humanAuthoredJson()]
       ),
     },
     {
