@@ -132,11 +132,91 @@ export function compressJsonArray(
   return compressRecords(text, found, true, minimumRows < 32);
 }
 
+/**
+ * An OBJECT MAP of flat records -- `{"/route-0": {..}, "/route-1": {..}}`.
+ *
+ * The array encoder cannot see this shape: it requires `Array.isArray`, so a
+ * map of forty identical-shaped entries fell through to plain minification at
+ * 20.8% while the same forty records in an ARRAY reach the seventies. Keyed
+ * maps are how route tables, per-host metrics and config-by-name are written,
+ * so the gap is a common shape rather than an exotic one.
+ *
+ * THE KEY IS JUST COLUMN ZERO. Once each entry is split into literal chunks
+ * and varying values with the key first, `compressRecords` does the rest --
+ * grouping by shape, factoring shared prefixes and suffixes per column, and
+ * emitting one template with a row per entry. Nothing here re-implements that.
+ *
+ * EVERY ENTRY SURVIVES. The competitor's `lossless_only=True` on this shape
+ * returns valid JSON holding 15 of 40 keys with no marker of any kind -- their
+ * own info string reads `object:adaptive(40->15 keys)` -- so a reader cannot
+ * tell anything was removed. This keeps all forty and says how to rebuild them.
+ */
+export function compressJsonObjectMap(
+  text: string,
+  minimumEntries = 8
+): CompressionResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return unchanged(text);
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+    return unchanged(text);
+  // NO TOP-LEVEL ENTRY COUNT. A map is usually nested -- `byRoute` inside a
+  // metrics document -- and comparing against `Object.entries(parsed)` counts
+  // the WRAPPER's three properties against the forty entries actually found,
+  // so every nested map was rejected. The entry regex already matches at any
+  // depth, and the split below is purely lexical: chunks and values
+  // concatenate back to the matched bytes exactly, so correctness does not
+  // depend on where in the document the entries were found. Parsing the whole
+  // text is still required, because a template over damaged JSON would
+  // present a repair as a reconstruction.
+  const entry =
+    // THE SEPARATOR IS PART OF THE MATCH. compressRecords only groups records
+    // that are CONTIGUOUS (`found[end].start === found[end - 1].end`), so an
+    // entry regex stopping at the closing brace leaves `,\n  ` between every
+    // pair and nothing ever groups -- the encoder silently returns its input.
+    /("(?:\\.|[^"\\])*")(\s*:\s*)(\{(?:"(?:\\.|[^"\\])*"|[^{}"])*\})(\s*,?\s*)/g;
+  const field =
+    /"(?:\\.|[^"\\])*"\s*:\s*("(?:\\.|[^"\\])*"|true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+  const found: RecordParts[] = [];
+  for (const match of text.matchAll(entry)) {
+    const [raw, key, separator, body, tail] = match;
+    const chunks: string[] = [''];
+    const values: string[] = [key];
+    let cursor = 0;
+    let literal = separator;
+    for (const value of body.matchAll(field)) {
+      const start = value.index! + value[0].length - value[1].length;
+      chunks.push(literal + body.slice(cursor, start));
+      values.push(value[1]);
+      literal = '';
+      cursor = start + value[1].length;
+    }
+    if (values.length < 2) continue;
+    chunks.push(body.slice(cursor) + tail);
+    found.push({
+      start: match.index!,
+      end: match.index! + raw.length,
+      chunks,
+      values,
+      shape: JSON.stringify(chunks),
+    });
+  }
+  if (found.length < minimumEntries) return unchanged(text);
+  // Entries must be contiguous to group, which compressRecords enforces; a
+  // scatter of unrelated `"k": {...}` pairs simply fails to pay and the
+  // input comes back.
+  return compressRecords(text, found, true, false, 'entries');
+}
 function compressRecords(
   text: string,
   found: RecordParts[],
   complete: boolean,
-  shortHeader = false
+  shortHeader = false,
+  /** What the rows ARE, so a keyed map is not announced as an array. */
+  noun = 'records'
 ): CompressionResult {
   const elisions: Elision[] = [];
   let result = '',
@@ -204,7 +284,7 @@ function compressRecords(
         (shortHeader
           ? `[All ${found.length} JSON records; join template strings and row[integer] verbatim. Template: `
           : (complete
-              ? `[JSON array records; ALL ${found.length} records preserved. `
+              ? `[JSON ${noun === 'entries' ? 'object map' : 'array records'}; ALL ${found.length} ${noun} preserved. `
               : '[JSON fragment records; missing records remain unknown. ') +
             'Join template parts, replacing numeric slots with verbatim text fragments from each row. Template: ') +
         JSON.stringify(template) +

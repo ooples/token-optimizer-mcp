@@ -36,7 +36,7 @@
 
 import { count, inlineMarker } from './annotate.js';
 import { numericExtrema } from './json-numeric.js';
-import { compressJsonArray } from './json-fragments.js';
+import { compressJsonArray, compressJsonObjectMap } from './json-fragments.js';
 import {
   booleanFacts,
   nullFacts,
@@ -377,6 +377,15 @@ export function compressJson(
   // Compared against each candidate answer rather than against the first
   // one that happened to be beaten.
   let exact: CompressionResult | null = null;
+  // A KEYED MAP IS THE SAME REDUNDANCY AS AN ARRAY, and it was reaching
+  // minification at 20.8% because the array encoder requires Array.isArray.
+  // Route tables, per-host metrics and config-by-name are all written this
+  // way, so it is a common shape rather than an exotic one. Tried here as
+  // another candidate; `best` keeps whichever answer is smaller.
+  {
+    const asMap = compressJsonObjectMap(text);
+    if (asMap.text.length < text.length) exact = asMap;
+  }
   /** Whichever is smaller: this answer, or the exact lossless encoding. */
   const best = (candidate: CompressionResult): CompressionResult =>
     exact && exact.text.length < candidate.text.length ? exact : candidate;
