@@ -265,14 +265,34 @@ test('small lexical tables reconstruct escapes, nulls and oversized integers exa
   const compact = compressJsonArray(original, 3);
   expect(compact.text.length).toBeLessThan(original.length);
   const expanded = compact.text.replace(
-    /\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: (\[[^\n]+\])\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
-    (_all, encoded: string, data: string) => {
+    /\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: (\[[^\n]+?\])(?:; slots ([^\]\n]+) count from 0)?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
+    (_all, encoded: string, slots: string | undefined, data: string) => {
       const template = JSON.parse(encoded) as (string | number)[];
+      // A column stated as a rule is omitted from every row; the cells that
+      // remain arrive in slot order, so the two streams interleave by slot.
+      const rules = new Map<number, { first: number; step: number }>();
+      for (const part of (slots ?? '').split(' ').filter(Boolean)) {
+        const parsed = /^(\d+)=(-?\d+)\+(-?\d+)n$/.exec(part);
+        if (!parsed) throw new Error(`unreadable run clause ${part}`);
+        rules.set(Number(parsed[1]), {
+          first: Number(parsed[2]),
+          step: Number(parsed[3]),
+        });
+      }
       return data
         .trim()
         .split('\n')
-        .map((line) => {
-          const row = JSON.parse(line) as string[];
+        .map((line, index) => {
+          const present = JSON.parse(line) as string[];
+          const width = present.length + rules.size;
+          const row: string[] = [];
+          let next = 0;
+          for (let slot = 0; slot < width; slot += 1) {
+            const rule = rules.get(slot);
+            row.push(
+              rule ? String(rule.first + rule.step * index) : present[next++]
+            );
+          }
           return template
             .map((part) => (typeof part === 'number' ? row[part] : part))
             .join('');

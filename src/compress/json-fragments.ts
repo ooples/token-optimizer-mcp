@@ -210,6 +210,10 @@ export function compressJsonObjectMap(
   // input comes back.
   return compressRecords(text, found, true, false, 'entries');
 }
+/** A closing quote, as it appears raw and as it appears escaped. */
+const QUOTE = String.fromCharCode(34);
+const ESCAPED_QUOTE = String.fromCharCode(92, 34);
+
 function compressRecords(
   text: string,
   found: RecordParts[],
@@ -238,6 +242,30 @@ function compressRecords(
       );
       const template: (string | number)[] = [],
         columns: { col: number; start: number; end: number }[] = [];
+      const runOf = (
+        col: number,
+        head: number,
+        tail: number
+      ): { first: number; step: number } | null => {
+        if (group.length < 4) return null;
+        const nums: number[] = [];
+        for (const row of group) {
+          // THE REMAINDER IS WHAT THE ROW CARRIES. Reading the whole value
+          // here made a factored column ineligible, which is backwards: once
+          // `/route-` is hoisted into the template the rows hold 0..39, and
+          // that is a cleaner run than the original strings ever were.
+          const raw = row.values[col].slice(head, tail ? -tail : undefined);
+          if (!/^-?(?:0|[1-9]\d*)$/.test(raw)) return null;
+          const n = Number(raw);
+          if (!Number.isSafeInteger(n) || String(n) !== raw) return null;
+          nums.push(n);
+        }
+        const step = nums[1] - nums[0];
+        for (let i = 2; i < nums.length; i += 1)
+          if (nums[i] - nums[i - 1] !== step) return null;
+        // A zero step is a constant column, which the template already hoists.
+        return step === 0 ? null : { first: nums[0], step };
+      };
       let literal = first.chunks[0];
       first.values.forEach((value, col) => {
         if (varying[col]) {
@@ -284,6 +312,32 @@ function compressRecords(
             quoted && shared >= 2 && shared * (group.length - 1) > shared;
           if (!pays(start)) start = 0;
           if (!pays(suffix)) suffix = 0;
+
+          // A KEY COLUMN ENDS IN ITS CLOSING QUOTE -- one character -- and the
+          // `shared >= 2` floor above rejects it, leaving the row holding `0"`
+          // rather than `0`, so /route-0../route-39 was not read as the run it
+          // plainly is. One character is not worth hoisting on its own, which
+          // is why the floor exists; it IS worth hoisting when it turns a whole
+          // column into a rule. That judgement needs the run test, so it
+          // happens here rather than in `pays` -- and before the template is
+          // emitted, because widening the tail afterwards would leave the quote
+          // in neither the template nor the row.
+          if (!runOf(col, start, suffix))
+            for (const wider of [suffix + 1, suffix + 2]) {
+              const shared = group.every((row) => {
+                const v = row.values[col];
+                if (v.length - start - wider <= 0) return false;
+                const cut = v.slice(
+                  v.length - wider,
+                  suffix ? v.length - suffix : undefined
+                );
+                return cut === QUOTE || cut === ESCAPED_QUOTE;
+              });
+              if (shared && runOf(col, start, wider)) {
+                suffix = wider;
+                break;
+              }
+            }
           template.push(literal + value.slice(0, start), columns.length);
           columns.push({ col, start, end: suffix });
           literal = suffix ? value.slice(-suffix) : '';
@@ -307,26 +361,11 @@ function compressRecords(
       // json-anomaly-completeness guards. Here the guard is structural: a run
       // requires every value to be a SAFE integer, so an unsafe id can never
       // enter one.
-      const runOf = (col: number): { first: number; step: number } | null => {
-        if (group.length < 4) return null;
-        const nums: number[] = [];
-        for (const row of group) {
-          const raw = row.values[col];
-          if (!/^-?(?:0|[1-9]\d*)$/.test(raw)) return null;
-          const n = Number(raw);
-          if (!Number.isSafeInteger(n) || String(n) !== raw) return null;
-          nums.push(n);
-        }
-        const step = nums[1] - nums[0];
-        for (let i = 2; i < nums.length; i += 1)
-          if (nums[i] - nums[i - 1] !== step) return null;
-        // A zero step is a constant column, which the template already hoists.
-        return step === 0 ? null : { first: nums[0], step };
-      };
       const runs = new Map<number, { first: number; step: number }>();
-      columns.forEach(({ col, start, end }, slot) => {
-        if (start || end) return; // a factored column is no longer a number
-        const run = runOf(col);
+      columns.forEach((column, slot) => {
+        const { col, start } = column;
+        let { end } = column;
+        const run = runOf(col, start, end);
         if (run) runs.set(slot, run);
       });
 
