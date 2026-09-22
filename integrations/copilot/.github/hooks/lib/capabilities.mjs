@@ -335,11 +335,11 @@ export function upstreamFor(client, env = process.env) {
     // our own route meant a user running their own local gateway had it replaced by the provider's
     // public endpoint -- we would route around the very thing they put in front of the provider.
     // Ours is recognised by the manifest; anything else is somebody's real upstream and is kept.
-    const recorded = ourRoute(configured, client, env);
-    return recorded ? recorded.upstream || recorded.previous || entry.defaultUpstream : configured;
   } catch {
     return null;
   }
+  const recorded = ourRoute(configured, client, env);
+  return recorded ? recorded.upstream || recorded.previous : configured;
 }
 
 /**
@@ -357,10 +357,23 @@ function ourRoute(value, client, env) {
     );
     if (manifest?.schema !== 1) return false;
     const variable = CLIENT_PROXY_ENV[client];
-    return Object.values(manifest.entries || {}).find(
+    const matches = Object.values(manifest.entries || {}).filter(
       (entry) => entry?.value === value && entry?.variable === variable
     );
-  } catch {
+    if (!matches.length) return false;
+    const upstreams = new Set(
+      matches.map((entry) => entry.upstream || entry.previous)
+    );
+    if (upstreams.size !== 1 || ![...upstreams][0]) {
+      const error = new Error(
+        'Ambiguous proxy ownership; restore the provider endpoint before launching.'
+      );
+      error.code = 'AMBIGUOUS_PROXY_OWNERSHIP';
+      throw error;
+    }
+    return matches[0];
+  } catch (error) {
+    if (error.code === 'AMBIGUOUS_PROXY_OWNERSHIP') throw error;
     // No record means we did not write it, so it is not ours to replace.
     return false;
   }

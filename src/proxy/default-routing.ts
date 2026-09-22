@@ -108,7 +108,8 @@ export function claudeSettingsFile(
   env: NodeJS.ProcessEnv = process.env
 ): string {
   return (
-    env.TOKEN_OPTIMIZER_SETTINGS || join(homedir(), '.claude', 'settings.json')
+    env.TOKEN_OPTIMIZER_SETTINGS ||
+    join(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json')
   );
 }
 
@@ -314,6 +315,7 @@ export async function applyDefaultRouting(
   }
   // Starting a supervisor yields to other processes. Hook migration or a user edit may have
   // changed settings while we waited; merge into the current file, not the earlier snapshot.
+  if (!existsSync(path)) return { status: 'user-owned', path };
   const { settings: latest, unreadable: changedUnreadable } =
     loadSettings(path);
   if (changedUnreadable) return { status: 'unreadable', path };
@@ -354,11 +356,18 @@ export function originalUpstream(
   env: NodeJS.ProcessEnv = process.env
 ): string | undefined {
   if (!value) return value;
-  const recorded = Object.values(readRoutingManifest(env).entries).find(
-    (entry) => entry.value === value
+  const recorded = Object.values(readRoutingManifest(env).entries).filter(
+    (entry) => entry?.value === value
   );
-  if (!recorded) return value;
-  return recorded.upstream || recorded.previous || DEFAULT_UPSTREAM;
+  if (!recorded.length) return value;
+  const upstreams = new Set(
+    recorded.map((entry) => entry.upstream || entry.previous)
+  );
+  if (upstreams.size !== 1 || ![...upstreams][0])
+    throw new Error(
+      'Ambiguous proxy ownership; restore the provider endpoint before launching.'
+    );
+  return [...upstreams][0];
 }
 
 /**

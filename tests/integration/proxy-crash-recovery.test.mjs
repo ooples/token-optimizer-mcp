@@ -1,10 +1,17 @@
 import { describe, it, expect } from '@jest/globals';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  existsSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { CLIENT_CAPABILITIES } from '../../hooks-core/capabilities.mjs';
 
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 async function until(check, timeout = 20000) {
@@ -27,9 +34,20 @@ async function listen(server) {
 const close = (server) => new Promise((done) => server.close(done));
 
 describe('a connected MCP session survives a dead background proxy', () => {
-  it.each(['SIGKILL', 'SIGTERM'])(
-    'recovers after %s without reconnecting MCP',
-    async (signal) => {
+  it.each([
+    ...['SIGKILL', 'SIGTERM'].map((signal) => ({
+      signal,
+      client: 'codex',
+      hasClaude: true,
+    })),
+    ...Object.keys(CLIENT_CAPABILITIES).map((client) => ({
+      signal: 'SIGKILL',
+      client,
+      hasClaude: false,
+    })),
+  ])(
+    '$client recovers after $signal without reconnecting MCP (Claude settings: $hasClaude)',
+    async ({ signal, client, hasClaude }) => {
       const home = mkdtempSync(join(tmpdir(), 'proxy-crash-'));
       const upstream = createServer((req, res) => {
         req.resume();
@@ -70,6 +88,29 @@ describe('a connected MCP session survives a dead background proxy', () => {
       const daemonPids = new Set();
       const state = () =>
         JSON.parse(readFileSync(join(home, 'proxy-supervisor.json'), 'utf8'));
+      if (!hasClaude) {
+        rmSync(settings);
+        rmSync(join(home, 'default-routing.json'));
+        const routeProbe = createServer();
+        const routePort = await listen(routeProbe);
+        await close(routeProbe);
+        writeFileSync(
+          join(home, 'proxy-supervisor.json'),
+          JSON.stringify({
+            schema: 1,
+            pid: 0,
+            controlUrl: `http://127.0.0.1:${port}`,
+            routes: [
+              {
+                upstream: upstreamUrl,
+                project: null,
+                port: routePort,
+                url: `http://127.0.0.1:${routePort}`,
+              },
+            ],
+          })
+        );
+      }
       const child = spawn(
         process.execPath,
         [
@@ -90,7 +131,7 @@ describe('a connected MCP session survives a dead background proxy', () => {
             TOKEN_OPTIMIZER_PROXY: '1',
             TOKEN_OPTIMIZER_MODE: 'assist',
             TOKEN_OPTIMIZER_WIKI_DIR: join(home, 'wiki'),
-            TOKEN_OPTIMIZER_CLIENT: 'codex',
+            TOKEN_OPTIMIZER_CLIENT: client,
             TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify([profile]),
             TOKEN_OPTIMIZER_AUTO_REPAIR: '1',
             TOKEN_OPTIMIZER_VERSION: '',
@@ -104,21 +145,22 @@ describe('a connected MCP session survives a dead background proxy', () => {
       });
       child.stderr.resume();
       child.stdin.write(
-        `${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'recovery-test', version: '1' } } })}\n`
+        `${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: client, version: '1' } } })}\n`
       );
       try {
         await until(() => output.includes('"id":1'));
         const first = await until(() => {
           const value = state();
-          return value.routes.length && value;
+          return value.pid > 0 && value.routes.length && value;
         });
         daemonPids.add(first.pid);
         const url = first.routes[0].url;
-        await until(
-          () =>
-            JSON.parse(readFileSync(settings, 'utf8')).env
-              .ANTHROPIC_BASE_URL === url
-        );
+        if (hasClaude)
+          await until(
+            () =>
+              JSON.parse(readFileSync(settings, 'utf8')).env
+                .ANTHROPIC_BASE_URL === url
+          );
         const request = () =>
           fetch(`${url}/v1/messages`, {
             method: 'POST',
@@ -140,6 +182,17 @@ describe('a connected MCP session survives a dead background proxy', () => {
         expect(recovered.routes[0].url).toBe(url);
         expect(await request()).toEqual({ recovered: true });
         expect(child.exitCode).toBe(null);
+        child.stdin.write(
+          `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`
+        );
+        await until(() => output.includes('"id":2'));
+        const response = output
+          .split('\n')
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+          .find((message) => message.id === 2);
+        expect(response.result.tools.length).toBeGreaterThan(0);
+        if (!hasClaude) expect(existsSync(settings)).toBe(false);
         await until(() =>
           readFileSync(profile, 'utf8').includes(
             resolve('.').replaceAll('\\', '/')

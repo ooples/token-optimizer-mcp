@@ -8,9 +8,83 @@ import opencodePlugin from '../../scripts/opencode-plugin.mjs';
 import {
   MANAGED_CLIENTS,
   CLIENT_PROXY_ENV,
+  upstreamFor,
 } from '../../hooks-core/capabilities.mjs';
 
 describe('every supported managed CLI recovers a recorded stale proxy endpoint', () => {
+  it.each(Object.keys(MANAGED_CLIENTS))(
+    '%s refuses ambiguous recorded providers',
+    async (id) => {
+      const home = mkdtempSync(join(tmpdir(), 'ambiguous-route-'));
+      const value = 'http://127.0.0.1:12345';
+      const variable = CLIENT_PROXY_ENV[id];
+      try {
+        writeFileSync(
+          join(home, 'default-routing.json'),
+          JSON.stringify({
+            schema: 1,
+            entries: {
+              a: { value, variable, upstream: 'https://first.example' },
+              b: { value, variable, upstream: 'https://second.example' },
+            },
+          })
+        );
+        expect(() =>
+          upstreamFor(id, { TOKEN_OPTIMIZER_HOME: home, [variable]: value })
+        ).toThrow(/ambiguous/i);
+        const env = {
+          ...process.env,
+          TOKEN_OPTIMIZER_HOME: home,
+          TOKEN_OPTIMIZER_PROXY: '1',
+          TOKEN_OPTIMIZER_MODE: 'assist',
+          TOKEN_OPTIMIZER_MANAGED_MCP: '0',
+          CODEX_HOME: home,
+          CLAUDE_CONFIG_DIR: home,
+          [variable]: value,
+        };
+        writeFileSync(
+          join(home, 'config.toml'),
+          `model_provider="custom"\n[model_providers.custom]\nbase_url="${value}"\n`
+        );
+        if (id === 'opencode') {
+          const previous = process.env.TOKEN_OPTIMIZER_HOME;
+          const hooks = await opencodePlugin({ directory: home });
+          try {
+            process.env.TOKEN_OPTIMIZER_HOME = home;
+            await expect(
+              hooks.config({
+                provider: {
+                  test: {
+                    npm: '@ai-sdk/openai-compatible',
+                    options: { baseURL: value },
+                  },
+                },
+              })
+            ).rejects.toThrow(/ambiguous/i);
+          } finally {
+            if (previous === undefined) delete process.env.TOKEN_OPTIMIZER_HOME;
+            else process.env.TOKEN_OPTIMIZER_HOME = previous;
+            await hooks.dispose();
+          }
+        } else {
+          const script = join(home, 'client.mjs');
+          writeFileSync(script, 'process.exit(99)');
+          await expect(
+            runClient(
+              MANAGED_CLIENTS[id].command,
+              [
+                script,
+                ...(id === 'claude-code' ? ['--setting-sources', ''] : []),
+              ],
+              { command: process.execPath, env }
+            )
+          ).rejects.toThrow(/ambiguous/i);
+        }
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+    }
+  );
   it.each(Object.entries(MANAGED_CLIENTS))(
     '%s reaches its original provider instead of the dead proxy',
     async (id, { command }) => {

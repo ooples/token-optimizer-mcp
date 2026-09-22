@@ -45,8 +45,9 @@ export default async function tokenOptimizer({ directory }) {
           )
             continue;
           let url;
+          const original = originalUpstream(options.baseURL);
           try {
-            url = new URL(originalUpstream(options.baseURL));
+            url = new URL(original);
           } catch {
             continue;
           }

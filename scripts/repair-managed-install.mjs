@@ -25,7 +25,7 @@ export function repairManagedInstall({
     'bin'
   ),
   settingsPath = env.TOKEN_OPTIMIZER_SETTINGS ||
-    join(homedir(), '.claude', 'settings.json'),
+    join(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json'),
 } = {}) {
   // A version pin is an explicit choice. Do not turn it into a global migration.
   if (
@@ -147,6 +147,8 @@ export function repairManagedInstall({
             /^node "(.+[/\\]plugin[/\\]hooks[/\\](session-start|pretooluse-router|post-tool|precompact-optimize|stop)\.mjs)" --token-optimizer-hook$/
           );
           if (!match) continue;
+          if (/["%'`$\r\n]/.test(root) || /["%'`$\r\n]/.test(match[1]))
+            continue;
           const next = upgrade(match[1], `plugin/hooks/${match[2]}.mjs`);
           if (next === match[1]) continue;
           hook.command = `node "${next}" --token-optimizer-hook`;

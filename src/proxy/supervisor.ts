@@ -171,9 +171,11 @@ async function control<T>(
 ): Promise<T | null> {
   return new Promise<T | null>((resolve) => {
     let settled = false;
+    let deadline: NodeJS.Timeout;
     const done = (value: T | null) => {
       if (!settled) {
         settled = true;
+        clearTimeout(deadline);
         resolve(value);
       }
     };
@@ -195,7 +197,16 @@ async function control<T>(
       },
       (res) => {
         const chunks: Buffer[] = [];
-        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        let size = 0;
+        res.on('error', () => done(null));
+        res.on('aborted', () => done(null));
+        res.on('data', (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > MAX_CONTROL_BODY * MAX_ROUTES) {
+            req.destroy();
+            done(null);
+          } else chunks.push(chunk);
+        });
         res.on('end', () => {
           if (res.statusCode !== 200) return done(null);
           try {
@@ -206,6 +217,11 @@ async function control<T>(
         });
       }
     );
+    // A trickling or aborted response must not stall every subsequent maintenance tick.
+    deadline = setTimeout(() => {
+      req.destroy();
+      done(null);
+    }, timeoutMs);
     req.on('error', () => done(null));
     req.on('timeout', () => {
       req.destroy();
@@ -220,11 +236,17 @@ async function control<T>(
 export async function supervisorHealth(
   env: NodeJS.ProcessEnv = process.env
 ): Promise<{ ok: true; pid: number; routes: SupervisorRoute[] } | null> {
-  return control<{ ok: true; pid: number; routes: SupervisorRoute[] }>(
-    '/__token-optimizer/health',
-    undefined,
-    env
-  );
+  const health = await control<{
+    ok: true;
+    pid: number;
+    routes: SupervisorRoute[];
+  }>('/__token-optimizer/health', undefined, env);
+  return health?.ok === true &&
+    Number.isInteger(health.pid) &&
+    health.pid > 0 &&
+    Array.isArray(health.routes)
+    ? health
+    : null;
 }
 
 /**
@@ -244,6 +266,9 @@ export async function runSupervisor(
 
   const saved = readSupervisorState(env);
   let restoring = true;
+  let stopped = false;
+  let retryTimer: NodeJS.Timeout | undefined;
+  const waiting = new Map<string, SupervisorRoute>();
   const routes = new Map<string, SupervisorRoute>();
   // Held so shutdown can close them. Without this the listeners outlive every caller: a test run
   // never exits, and a supervisor asked to stop keeps the ports bound.
@@ -256,7 +281,7 @@ export async function runSupervisor(
         pid: process.pid,
         startedAt: new Date().toISOString(),
         controlUrl: `http://127.0.0.1:${controlPort(env)}`,
-        routes: [...routes.values()],
+        routes: [...waiting.values(), ...routes.values()],
       },
       env
     );
@@ -284,10 +309,15 @@ export async function runSupervisor(
         //
         // Probed with a bare listener rather than by letting startProxy fail, because a startProxy
         // that rejects has already created its spill directory and has no close event to remove it.
-        const preferred = savedPort ?? routePort(key, env);
+        const preferred =
+          savedPort ?? waiting.get(key)?.port ?? routePort(key, env);
+        const free = await portIsFree(preferred);
+        // Existing clients have already loaded this URL. Retain it until we can bind it.
+        if (stopped || (!free && (savedPort !== undefined || waiting.has(key))))
+          return null;
         const { server: listener, port } = await startProxy({
           upstream,
-          port: (await portIsFree(preferred)) ? preferred : 0,
+          port: free ? preferred : 0,
           // THE PROJECT IS THE CALLER'S, OR THERE IS NONE.
           //
           // `startProxy` binds the graph root once, from `projectRoot` or `process.cwd()`. The cwd
@@ -309,6 +339,7 @@ export async function runSupervisor(
           port,
           project,
         };
+        waiting.delete(key);
         routes.set(key, route);
         publish();
         return route;
@@ -389,7 +420,9 @@ export async function runSupervisor(
         if (
           !routes.has(key) &&
           !starting.has(key) &&
-          routes.size + starting.size >= MAX_ROUTES
+          !waiting.has(key) &&
+          new Set([...routes.keys(), ...waiting.keys(), ...starting.keys()])
+            .size >= MAX_ROUTES
         )
           return reply(429, { error: 'too many upstreams are already routed' });
         const route = await routeFor(upstream, project);
@@ -423,13 +456,32 @@ export async function runSupervisor(
         route.url !== `http://127.0.0.1:${route.port}`
       )
         continue;
+      const key = keyOf(route.upstream, route.project);
+      if (routes.has(key) || waiting.has(key)) continue;
+      waiting.set(key, route);
       await routeFor(route.upstream, route.project, route.port);
     }
   }
   restoring = false;
   publish();
 
+  const retry = async () => {
+    for (const route of waiting.values()) {
+      if (stopped) break;
+      await routeFor(route.upstream, route.project, route.port);
+    }
+    if (!stopped) {
+      retryTimer = setTimeout(() => void retry(), 1000);
+      retryTimer.unref();
+    }
+  };
+  retryTimer = setTimeout(() => void retry(), 1000);
+  retryTimer.unref();
+
   const close = async () => {
+    stopped = true;
+    clearTimeout(retryTimer);
+    await Promise.allSettled(starting.values());
     const all = [server, ...listeners];
     listeners.clear();
     routes.clear();
@@ -463,6 +515,7 @@ export async function ensureSupervisor(
 ): Promise<boolean> {
   if (await supervisorHealth(env)) return true;
   if (!autostartAllowed(env)) return false;
+  let spawnFailed = false;
   try {
     const entry = join(
       dirname(fileURLToPath(import.meta.url)),
@@ -474,6 +527,9 @@ export async function ensureSupervisor(
       env: { ...env },
       windowsHide: true,
     });
+    child.once('error', () => {
+      spawnFailed = true;
+    });
     child.unref();
   } catch {
     return false;
@@ -481,6 +537,7 @@ export async function ensureSupervisor(
   const deadline = Date.now() + waitMs;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 150));
+    if (spawnFailed) return false;
     if (await supervisorHealth(env)) return true;
   }
   return false;

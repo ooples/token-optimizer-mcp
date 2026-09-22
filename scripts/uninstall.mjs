@@ -34,7 +34,10 @@ import { removeDefaultRouting } from '../dist/proxy/default-routing.js';
 /** The settings file this machine actually uses. */
 const settingsPath =
   process.env.TOKEN_OPTIMIZER_SETTINGS ||
-  join(homedir(), '.claude', 'settings.json');
+  join(
+    process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'),
+    'settings.json'
+  );
 
 const apply = process.argv.includes('--apply');
 for (const path of activateWindowsCommands({ remove: true, apply })) {

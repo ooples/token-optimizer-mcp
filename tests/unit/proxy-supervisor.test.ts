@@ -35,6 +35,58 @@ let supervisor: { server: Server; close: () => Promise<void> } | null;
 let home: string;
 let env: NodeJS.ProcessEnv;
 
+it('retains an occupied saved port and retries it without client registration', async () => {
+  supervisor = await runSupervisor(env);
+  const url = await ensureRoute(upstreamUrl, env);
+  const port = Number(new URL(url!).port);
+  await supervisor!.close();
+  supervisor = null;
+  const blocker = createServer();
+  await new Promise<void>((done) => blocker.listen(port, '127.0.0.1', done));
+  try {
+    supervisor = await runSupervisor(env);
+    expect(readSupervisorState(env)?.routes[0].url).toBe(url);
+    expect(await ensureRoute(upstreamUrl, env)).toBeNull();
+  } finally {
+    await new Promise<void>((done) => blocker.close(() => done()));
+  }
+  const deadline = Date.now() + 8000;
+  while (!(await supervisorHealth(env))?.routes.length && Date.now() < deadline)
+    await new Promise((done) => setTimeout(done, 100));
+  expect((await supervisorHealth(env))?.routes[0]?.url).toBe(url);
+  expect((await get(url!, '/v1/messages')).status).toBe(200);
+}, 15000);
+
+it('does not mistake unrelated HTTP JSON for a healthy supervisor', async () => {
+  const other = createServer((_req, res) => res.end('{}'));
+  await new Promise<void>((done) =>
+    other.listen(controlPort(env), '127.0.0.1', done)
+  );
+  try {
+    expect(await supervisorHealth(env)).toBeNull();
+  } finally {
+    await new Promise<void>((done) => other.close(() => done()));
+  }
+});
+
+it('bounds a control response that keeps trickling bytes', async () => {
+  const other = createServer((_req, res) => {
+    res.writeHead(200);
+    res.write('{');
+    const timer = setInterval(() => res.write(' '), 20);
+    res.on('close', () => clearInterval(timer));
+  });
+  await new Promise<void>((done) =>
+    other.listen(controlPort(env), '127.0.0.1', done)
+  );
+  try {
+    expect(await supervisorHealth(env)).toBeNull();
+  } finally {
+    other.closeAllConnections();
+    await new Promise<void>((done) => other.close(() => done()));
+  }
+}, 5000);
+
 /** A free port, released before it is handed out -- good enough for a test's own control port. */
 async function freePort(): Promise<number> {
   const probe = createServer();

@@ -75,6 +75,27 @@ function fixture(fn, command = 'claude') {
 }
 
 describe('automatic repair after a plugin upgrade', () => {
+  it.each(['$', '%', "'"])(
+    'preserves hooks when the new path contains shell metacharacter %s',
+    (character) =>
+      fixture(({ options, root, settingsPath }) => {
+        const unsafeRoot = `${root}${character}path`;
+        fs.renameSync(root, unsafeRoot);
+        const before = read(settingsPath);
+        repairManagedInstall({ ...options, root: unsafeRoot });
+        expect(read(settingsPath)).toBe(before);
+      })
+  );
+  it('repairs hooks in CLAUDE_CONFIG_DIR', () =>
+    fixture(({ options, home, settingsPath }) => {
+      expect(
+        repairManagedInstall({
+          ...options,
+          settingsPath: undefined,
+          env: { CLAUDE_CONFIG_DIR: home },
+        })
+      ).toContain(settingsPath);
+    }));
   it.each(Object.values(MANAGED_CLIENTS).map((entry) => entry.command))(
     'repairs both launcher forms for %s',
     (command) =>

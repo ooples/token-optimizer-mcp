@@ -4,7 +4,9 @@ MCP connectivity and provider proxy connectivity are separate. A connected MCP s
 have a dead provider proxy. Every MCP host now runs the same background recovery loop: it checks
 existing proxy routes every five seconds, restarts an unavailable supervisor, and restores the
 recorded routes and ports. This includes routes that originally needed an alternative port because
-their preferred port was busy. Recovery does not block the MCP handshake.
+their preferred port was busy. If a recorded port is temporarily occupied during recovery, the
+supervisor retains it and retries every second rather than moving active clients to a new URL.
+Recovery does not block the MCP handshake. Control requests have bounded durations and response sizes.
 
 The loop runs while at least one MCP session is connected. After a reboot, opening a client starts
 it again. An interrupted provider request may fail before recovery finishes; the client's next
@@ -26,7 +28,8 @@ proxy.
 Session proxies live with their launcher or client process and do not write their temporary URLs
 into permanent provider configuration. The shared supervisor restores all of its routes, irrespective
 of which client originally requested them. User-owned local gateways remain upstreams; loopback
-addresses alone are not treated as optimizer-owned.
+addresses alone are not treated as optimizer-owned. Conflicting provider records for the same URL
+stop the managed launch with an explicit error rather than guessing where to send credentials.
 
 ## Upgrades
 
@@ -36,6 +39,8 @@ installed Claude hooks that still point at an older package. It can repair a rem
 It creates no new client registrations or shell wrappers, does not change PATH, and preserves hook
 options, profile encoding, unrelated settings, edited launchers, newer installations, and explicit
 version pins. Existing terminals need to reload their profile to use updated shell functions.
+Claude settings routing, repair, installation, diagnostics, and removal honor `CLAUDE_CONFIG_DIR`
+(`TOKEN_OPTIMIZER_SETTINGS` takes precedence). Settings deleted while routing starts stay deleted.
 
 `TOKEN_OPTIMIZER_AUTO_REPAIR=0` disables installation repair. `TOKEN_OPTIMIZER_PROXY=0` or
 `TOKEN_OPTIMIZER_MODE=off` disables proxy recovery. `TOKEN_OPTIMIZER_PROXY_AUTOSTART=0` prevents
@@ -46,8 +51,9 @@ commands: a deliberately pinned registration must first be upgraded by its owner
 
 - Real HTTP requests through all ten managed CLI routing paths, starting with a dead recorded proxy.
 - Shell and Windows launcher upgrades for every managed CLI, including preservation and uninstall checks.
-- A real MCP server remains connected while its supervisor is killed or terminated; the same provider
-  URL works again, and startup also repairs a stale Codex launcher.
+- A real MCP process for each of the sixteen registered host identities recovers a killed supervisor
+  without Claude settings present. The same provider URL works again and MCP still answers tools/list.
+  Separate cases cover Claude settings and graceful termination. Startup repairs a stale launcher.
 - Multiple persistent routes and a collision-assigned port survive supervisor restart without clients
   registering again; maintenance also works without a Claude settings file.
 
