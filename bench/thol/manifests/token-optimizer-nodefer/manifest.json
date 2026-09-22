@@ -1,0 +1,81 @@
+{
+  "name": "token-optimizer-nodefer",
+  "display_name": "Token Optimizer (proxy, tool deferral OFF)",
+  "verified": false,
+  "version_pin": "6.0.2",
+  "version_checked": "2026-09-10",
+  "upstream": "https://github.com/ooples/token-optimizer-mcp",
+  "install_doc": "ISOLATES WHAT TOOL DEFERRAL CONTRIBUTES. Identical to token-optimizer-proxy except TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS=0. Deferral is ON by default in the shipped build, decided on a campaign where the proxy was cheaper than control on 11 of 16 tasks against 4 of 16 without it, at identical scores and a median 33% turn reduction. Tool definitions are the largest single share of a real request, so this arm is how we tell whether the compression work or the deferral is carrying the cost result -- running only the default arm cannot separate them.",
+  "requires": [
+    "node"
+  ],
+  "settings": {
+    "env": {
+      "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",
+      "TOKEN_OPTIMIZER_RUNTIME": "/opt/token-optimizer-runtime",
+      "TOKEN_OPTIMIZER_MODE": "assist",
+      "TOKEN_OPTIMIZER_MCP_CAPABILITIES": "",
+      "TOKEN_OPTIMIZER_PROXY": "1",
+      "TOKEN_OPTIMIZER_PROXY_KNOWLEDGE": "",
+      "ANTHROPIC_BASE_URL": "http://127.0.0.1:8787",
+      "TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS": "0"
+    },
+    "hooks": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/session-start.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreToolUse": [
+        {
+          "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/pretooluse-router.mjs\""
+            }
+          ]
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/precompact-optimize.mjs\""
+            }
+          ]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "matcher": "Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/post-tool.mjs\""
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "node \"/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/stop.mjs\""
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "tool_prefixes": [
+    "mcp__token-optimizer__"
+  ]
+}

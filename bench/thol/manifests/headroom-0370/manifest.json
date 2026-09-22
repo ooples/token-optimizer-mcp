@@ -1,0 +1,24 @@
+{
+  "name": "headroom-0370",
+  "display_name": "Headroom 0.37.0 (current release)",
+  "upstream": "https://github.com/headroomlabs-ai/headroom",
+  "version_pin": "0.37.0",
+  "version_checked": "2026-09-22",
+  "verified": false,
+  "install_doc": "THOL's own `headroom` arm pins 0.27.0, which is ten minor versions behind what a user installs today. This arm installs the current release into its own uv tool directory so both can run in one campaign: the pinned arm keeps our numbers comparable to THOL's published board, this one measures what someone would actually get. Installed by bench/thol/Dockerfile.headroom037.",
+  "notes": "Same entry point and mode as THOL's pinned arm -- `headroom wrap claude` starts the proxy and sets ANTHROPIC_BASE_URL so all API traffic is compacted with no agent opt-in. Only the version differs, which is the point: any difference between this arm and `headroom` is ten minors of their work, not a configuration choice of ours.",
+  "requires": [
+    "headroom037"
+  ],
+  "bash_command_markers": [
+    "headroom037 "
+  ],
+  "claude_wrap": [
+    "headroom037",
+    "wrap",
+    "claude",
+    "-p",
+    "${PORT}",
+    "--"
+  ]
+}

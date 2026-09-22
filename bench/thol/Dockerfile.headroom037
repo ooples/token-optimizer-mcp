@@ -1,0 +1,54 @@
+# Adds the competitor's CURRENT release beside THOL's pinned one.
+#
+# WHY BOTH ARMS EXIST. THOL's `headroom` competitor pins 0.27.0, verified against
+# their 2.1.183 campaign. That pin is what makes our numbers comparable to THOL's
+# published board, so it stays. But a user installing today gets 0.37.0, and a
+# cost claim measured only against a build ten minor versions old is the kind of
+# comparison that does not survive an audit -- their compression, their routing
+# and their CCR store have all moved in that window.
+#
+# So this installs 0.37.0 into ITS OWN uv tool directory under a distinct binary
+# name, `headroom037`, and leaves the pinned install untouched. Both arms then run
+# in one campaign against the same tasks, and any difference between them is ten
+# minors of their work rather than a configuration choice of ours.
+#
+# Built on top of the existing rig so nothing in the toolchain is re-resolved:
+#   docker build -f bench/thol/Dockerfile.headroom037 -t thol-rig:local bench/
+FROM thol-rig:local
+
+USER root
+
+# A separate UV_TOOL_DIR and UV_TOOL_BIN_DIR keep this install from colliding with
+# the pinned one; uv would otherwise treat it as an upgrade of the same tool and
+# the `headroom` arm would silently start measuring 0.37.0 too -- one arm
+# overwriting another is exactly the failure this file exists to avoid.
+ENV HEADROOM037_HOME=/usr/local/uv-tools-headroom037
+RUN set -eux; \
+    mkdir -p "$HEADROOM037_HOME"; \
+    UV_PYTHON_INSTALL_DIR="$HEADROOM037_HOME/python" \
+    UV_TOOL_DIR="$HEADROOM037_HOME/tools" \
+    UV_TOOL_BIN_DIR="$HEADROOM037_HOME/bin" \
+    uv tool install --python 3.12 "headroom-ai[all]==0.37.0"; \
+    ln -sf "$HEADROOM037_HOME/bin/headroom" /usr/local/bin/headroom037; \
+    chmod -R a+rX "$HEADROOM037_HOME"; \
+    chmod -R a+rx "$HEADROOM037_HOME"; \
+    find "$HEADROOM037_HOME" -type d -exec chmod a+rx {} +
+
+# ASSERTED AS THE USER THAT WILL RUN IT, not as root. The first version of
+# this check ran as root, which ignores file permissions, so it passed while
+# `bench` got `headroom037: Permission denied` -- `chmod -R a+rX` grants
+# execute on directories and on files that are ALREADY executable, and a fresh
+# uv tool install leaves its binaries root-only. An install check that cannot
+# fail the way the run will fail is not a check.
+USER bench
+RUN set -eux; \
+    v037="$(/usr/local/bin/headroom037 --version 2>&1)"; \
+    echo "headroom037 reports: $v037"; \
+    echo "$v037" | grep -q '0\.37\.0' || { echo "headroom037 is not 0.37.0"; exit 1; }; \
+    /usr/local/bin/headroom --version 2>&1 | grep -q '0\.27\.0' \
+      || { echo "the pinned headroom arm is no longer 0.27.0"; exit 1; }
+
+USER root
+COPY --chown=bench:bench thol/manifests/ /home/bench/manifests/
+
+USER bench
