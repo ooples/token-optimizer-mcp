@@ -52,4 +52,11 @@ USER bench
 # Provenance travels with the product, or the image cannot be attributed to a tree.
 COPY thol/pkg/provenance.json /opt/optimizer-provenance.json
 COPY --chown=bench:bench thol/entrypoint.sh /home/bench/scripts/entrypoint.sh
+# ordered_campaign.py is a RIG FILE too, and leaving it out of this Dockerfile
+# while thol/Dockerfile and Dockerfile.rigfiles both copy it meant a reinstall
+# build silently produced an image that passes its selftest, starts its proxies,
+# writes provenance and only then dies with
+#   python3: can't open file '/home/bench/scripts/ordered_campaign.py'
+# after the fixture work is already paid for.
+COPY --chown=bench:bench thol/ordered_campaign.py /home/bench/scripts/ordered_campaign.py
 COPY --chown=bench:bench thol/manifests/ /home/bench/manifests/
