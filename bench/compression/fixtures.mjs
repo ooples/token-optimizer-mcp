@@ -743,37 +743,46 @@ function reasoning(r, lines) {
  * lined them up in a config file. This workload is that shape.
  */
 function humanAuthoredJson() {
+  // SIZED TO WHAT AN AGENT ACTUALLY PASTES. At a few hundred tokens the
+  // anchoring overhead dominates every ratio, and the steady gate then fails
+  // for a reason that is about the fixture rather than about the engine.
+  const price = (i) =>
+    ['19.90', '5.00', '100.0', '2.50', '1e3', '0.0600', '149.99', '7.250'][
+      i % 8
+    ];
+  const services = [];
+  for (let s = 0; s < 12; s += 1)
+    services.push(
+      [
+        '{',
+        `  "service": "checkout-${s}",`,
+        '  "replicas": 3,',
+        '  "timeoutSeconds": 30.0,',
+        '  "errorBudget": 0.0500,',
+        '  "canaryShare": 0.10,',
+        '  "retry": { "attempts": 5, "backoffMultiplier": 2.0, "maxDelaySeconds": 60.00 },',
+        '  "limits": { "cpu": "500m", "memory": "512Mi" },',
+        '  "owner": null',
+        '}',
+      ].join('\n')
+    );
+  const skus = [];
+  for (let i = 0; i < 90; i += 1)
+    skus.push(
+      `  { "sku": "A-${i}", "price": ${price(i)}, "currency": "USD", "taxRate": 0.0825, "note": "line ${i} priced by hand" }`
+    );
+  const routes = [];
+  for (let i = 0; i < 40; i += 1)
+    routes.push(
+      `    "/route-${i}": { "p50": ${(i % 9) + 1}.0, "p95": 148.50, "count": ${1000 + i} }`
+    );
   return [
-    `{
-  \"service\": \"checkout\",
-  \"replicas\": 3,
-  \"timeoutSeconds\": 30.0,
-  \"errorBudget\": 0.0500,
-  \"canaryShare\": 0.10,
-  \"retry\": { \"attempts\": 5, \"backoffMultiplier\": 2.0, \"maxDelaySeconds\": 60.00 },
-  \"limits\": { \"cpu\": \"500m\", \"memory\": \"512Mi\" },
-  \"owner\": null
-}`,
-    `[
-  { \"sku\": \"A-1\", \"price\": 19.90, \"currency\": \"USD\", \"taxRate\": 0.0825 },
-  { \"sku\": \"B-2\", \"price\": 5.00, \"currency\": \"USD\", \"taxRate\": 0.0825 },
-  { \"sku\": \"C-3\", \"price\": 100.0, \"currency\": \"EUR\", \"vatIncluded\": true },
-  { \"sku\": \"D-4\", \"price\": 2.50, \"currency\": \"USD\", \"taxRate\": 0.0600 },
-  { \"sku\": \"E-5\", \"price\": 1e3, \"currency\": \"JPY\" }
-]`,
-    `{
-  \"window\": \"5m\",
-  \"p50\": 12.0,
-  \"p95\": 148.50,
-  \"p99\": 1e3,
-  \"errorRate\": 0.00100,
-  \"byRoute\": {
-    \"/checkout\": { \"p50\": 30.0, \"count\": 1200 },
-    \"/cart\": { \"p50\": 8.50, \"count\": 9400 }
-  }
-}`,
+    ...services,
+    `[\n${skus.join(',\n')}\n]`,
+    `{\n  "window": "5m",\n  "errorRate": 0.00100,\n  "byRoute": {\n${routes.join(',\n')}\n  }\n}`,
   ];
 }
+
 export function fixtures() {
   const r = rng(20260909);
   return [
