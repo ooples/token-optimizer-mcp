@@ -6,7 +6,7 @@
   "version_checked": "2026-09-22",
   "verified": false,
   "install_doc": "Installs the competitor release a user actually gets today, into its own uv tool directory under the binary name headroom037, by bench/thol/Dockerfile.headroom037. This is the arm any cost comparison should use: comparing against an older pinned build measures work they have already superseded and tells us nothing about the product a user would install.",
-  "notes": "Runs their own entry point and primary mode -- `headroom wrap claude` starts their proxy and sets ANTHROPIC_BASE_URL so all API traffic is compacted with no agent opt-in, which is their strongest configuration rather than a default we chose for them.",
+  "notes": "Runs their own entry point and primary mode -- `headroom wrap claude` starts their proxy and sets ANTHROPIC_BASE_URL so all API traffic is compacted with no agent opt-in. NOTE the port flag: 0.27.0 accepted `-p`, 0.37.0 accepts only `--port`. Passing `-p` here is not a harmless no-op -- `wrap claude` forwards unrecognised options through [CLAUDE_ARGS] to claude, where -p IS THE PROMPT FLAG, so the agent receives the port number as its entire task and answers \"you sent just a number\" in one turn. It also leaves their proxy on its default 8787, which collides with our own proxy arm.",
   "requires": [
     "headroom037"
   ],
@@ -17,7 +17,7 @@
     "headroom037",
     "wrap",
     "claude",
-    "-p",
+    "--port",
     "${PORT}",
     "--"
   ]
