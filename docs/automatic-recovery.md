@@ -42,6 +42,11 @@ version pins. Existing terminals need to reload their profile to use updated she
 Claude settings routing, repair, installation, diagnostics, and removal honor `CLAUDE_CONFIG_DIR`
 (`TOKEN_OPTIMIZER_SETTINGS` takes precedence). Settings deleted while routing starts stay deleted.
 
+When the enabled, installed Claude plugin provides an event, installation and repair remove the
+equivalent unmodified manual registration. This avoids running the same hook twice. Disabled,
+missing, or unverified plugins and customized manual hooks are preserved. Existing Claude sessions
+may cache hook commands and need a restart after a broken registration is corrected.
+
 `TOKEN_OPTIMIZER_AUTO_REPAIR=0` disables installation repair. `TOKEN_OPTIMIZER_PROXY=0` or
 `TOKEN_OPTIMIZER_MODE=off` disables proxy recovery. `TOKEN_OPTIMIZER_PROXY_AUTOSTART=0` prevents
 starting a background supervisor. Installation repair does not rewrite arbitrary user-maintained MCP
@@ -59,3 +64,17 @@ commands: a deliberately pinned registration must first be upgraded by its owner
 
 The CLI tests use synthetic client processes and local providers. They verify the configuration and
 transport contracts without claiming to exercise every vendor's installed CLI or authentication flow.
+
+### Test isolation incident and correction
+
+During adversarial review, the custom Claude directory regression was run before its fix. Its
+fallback resolved the developer's real home and rewrote a manual Stop hook to a temporary fixture.
+Deleting that fixture caused Claude to report `MODULE_NOT_FOUND`. Passing transport tests did not
+detect this configuration damage or prove that Stop hooks were healthy.
+
+Jest now sets native home and client configuration directories before workers are created, including
+for spawned processes. The custom-directory regression checks that a sentinel in the isolated
+fallback home remains unchanged, and refuses to run without native home isolation. A separate test
+checks worker and child-process home resolution. Merely setting opt-out flags in `setupFiles` was
+insufficient: an explicit test environment could omit them, and Jest's virtual `process.env` did not
+isolate native `os.homedir()`.

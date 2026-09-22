@@ -1,15 +1,53 @@
 import { describe, it, expect } from '@jest/globals';
 import fs from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { tmpdir, homedir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { repairManagedInstall } from '../../scripts/repair-managed-install.mjs';
 import { activateWindowsCommands } from '../../scripts/windows-commands.mjs';
 import { MANAGED_CLIENTS } from '../../hooks-core/capabilities.mjs';
+import { dedupeClaudePluginHooks } from '../../scripts/claude-hook-ownership.mjs';
 
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const read = (path) => fs.readFileSync(path, 'utf8');
+function installPlugin(home, settingsPath) {
+  const root = join(home, 'plugins', 'optimizer');
+  fs.mkdirSync(join(root, '.claude-plugin'), { recursive: true });
+  fs.mkdirSync(join(root, 'hooks'), { recursive: true });
+  fs.writeFileSync(
+    join(root, '.claude-plugin', 'plugin.json'),
+    JSON.stringify({ name: 'token-optimizer' })
+  );
+  fs.copyFileSync(
+    resolve('plugin/hooks/hooks.json'),
+    join(root, 'hooks', 'hooks.json')
+  );
+  fs.writeFileSync(join(root, 'hooks', 'stop.mjs'), '');
+  fs.writeFileSync(
+    join(home, 'plugins', 'installed_plugins.json'),
+    JSON.stringify({
+      version: 2,
+      plugins: {
+        'token-optimizer@token-optimizer': [
+          { scope: 'user', installPath: root },
+        ],
+      },
+    })
+  );
+  const settings = JSON.parse(read(settingsPath));
+  settings.enabledPlugins = { 'token-optimizer@token-optimizer': true };
+  fs.writeFileSync(settingsPath, JSON.stringify(settings));
+  return root;
+}
 function fixture(fn, command = 'claude') {
+  // Refuse to run any mutation test without the native-home boundary. In
+  // particular a broken CLAUDE_CONFIG_DIR resolver must only touch a sentinel.
+  if (
+    !process.env.TOKEN_OPTIMIZER_TEST_HOME ||
+    resolve(homedir()) !== resolve(process.env.TOKEN_OPTIMIZER_TEST_HOME)
+  )
+    throw new Error('Native test home is not isolated');
   const home = fs.mkdtempSync(join(tmpdir(), 'optimizer upgrade résumé '));
   const old = join(home, 'old');
   const root = join(home, 'new');
@@ -75,6 +113,67 @@ function fixture(fn, command = 'claude') {
 }
 
 describe('automatic repair after a plugin upgrade', () => {
+  it('removes duplicate manual Stop registration while preserving the plugin and user hooks', () =>
+    fixture(({ options, home, settingsPath }) => {
+      installPlugin(home, settingsPath);
+      expect(repairManagedInstall(options)).toContain(settingsPath);
+      const settings = JSON.parse(read(settingsPath));
+      expect(settings.hooks.Stop[0].hooks).toEqual([
+        { type: 'command', command: 'echo user hook' },
+      ]);
+      expect(settings.enabledPlugins['token-optimizer@token-optimizer']).toBe(
+        true
+      );
+      expect(repairManagedInstall(options)).toEqual([]);
+    }));
+
+  it.each([
+    'disabled',
+    'missing-entry',
+    'unknown-metadata',
+    'custom-command',
+    'custom-timeout',
+  ])('preserves manual hooks for %s', (reason) =>
+    fixture(({ home, settingsPath }) => {
+      const root = installPlugin(home, settingsPath);
+      const settings = JSON.parse(read(settingsPath));
+      if (reason === 'disabled')
+        settings.enabledPlugins['token-optimizer@token-optimizer'] = false;
+      if (reason === 'missing-entry')
+        fs.unlinkSync(join(root, 'hooks', 'stop.mjs'));
+      if (reason === 'unknown-metadata')
+        fs.unlinkSync(join(home, 'plugins', 'installed_plugins.json'));
+      if (reason === 'custom-command')
+        settings.hooks.Stop[0].hooks[0].command += ' --custom';
+      if (reason === 'custom-timeout')
+        settings.hooks.Stop[0].hooks[0].timeout = 30;
+      expect(dedupeClaudePluginHooks(settings, settingsPath)).toEqual({
+        settings,
+        removed: 0,
+      });
+    })
+  );
+
+  it('the installer also avoids manual plus plugin duplication', () =>
+    fixture(({ home, root, settingsPath }) => {
+      installPlugin(home, settingsPath);
+      execFileSync(
+        process.execPath,
+        [
+          resolve('scripts/wire-hooks.mjs'),
+          settingsPath,
+          join(root, 'plugin/hooks'),
+        ],
+        { windowsHide: true }
+      );
+      const settings = JSON.parse(read(settingsPath));
+      expect(
+        settings.hooks.Stop.flatMap((group) => group.hooks).filter((hook) =>
+          hook.command.includes('--token-optimizer-hook')
+        )
+      ).toHaveLength(0);
+      expect(settings.hooks.Stop[0].hooks[0].command).toBe('echo user hook');
+    }));
   it.each(['$', '%', "'"])(
     'preserves hooks when the new path contains shell metacharacter %s',
     (character) =>
@@ -88,13 +187,26 @@ describe('automatic repair after a plugin upgrade', () => {
   );
   it('repairs hooks in CLAUDE_CONFIG_DIR', () =>
     fixture(({ options, home, settingsPath }) => {
-      expect(
-        repairManagedInstall({
-          ...options,
-          settingsPath: undefined,
-          env: { CLAUDE_CONFIG_DIR: home },
-        })
-      ).toContain(settingsPath);
+      const fallback = join(homedir(), '.claude', 'settings.json');
+      fs.mkdirSync(join(homedir(), '.claude'), { recursive: true });
+      const previous = fs.existsSync(fallback)
+        ? fs.readFileSync(fallback)
+        : null;
+      const sentinel = fs.readFileSync(settingsPath);
+      fs.writeFileSync(fallback, sentinel);
+      try {
+        expect(
+          repairManagedInstall({
+            ...options,
+            settingsPath: undefined,
+            env: { CLAUDE_CONFIG_DIR: home },
+          })
+        ).toContain(settingsPath);
+        expect(fs.readFileSync(fallback)).toEqual(sentinel);
+      } finally {
+        if (previous) fs.writeFileSync(fallback, previous);
+        else fs.unlinkSync(fallback);
+      }
     }));
   it.each(Object.values(MANAGED_CLIENTS).map((entry) => entry.command))(
     'repairs both launcher forms for %s',

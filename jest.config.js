@@ -58,6 +58,8 @@ export default {
   // write into the developer's real ~/.token-optimizer/backups. See the file
   // for why this is not left to individual tests to remember.
   setupFiles: ['<rootDir>/tests/setup-isolated-home.cjs'],
+  globalSetup: '<rootDir>/tests/global-isolated-home.cjs',
+  globalTeardown: '<rootDir>/tests/teardown-isolated-home.cjs',
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/**/*.test.ts'],
   // Coverage thresholds disabled for initial release
   // Will be gradually increased as test coverage improves

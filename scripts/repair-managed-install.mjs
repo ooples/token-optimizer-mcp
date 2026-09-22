@@ -6,6 +6,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { decodeProfile, replaceProfile } from './profile-file.mjs';
 import { shellProfiles } from './managed-shell.mjs';
+import { dedupeClaudePluginHooks } from './claude-hook-ownership.mjs';
 
 const digest = (text) => createHash('sha256').update(text).digest('hex');
 const json = (path) => JSON.parse(readFileSync(path, 'utf8'));
@@ -135,8 +136,12 @@ export function repairManagedInstall({
   attempt(() => {
     if (!existsSync(settingsPath)) return;
     const before = readFileSync(settingsPath);
-    const settings = JSON.parse(before.toString('utf8'));
-    let edited = false;
+    const deduped = dedupeClaudePluginHooks(
+      JSON.parse(before.toString('utf8')),
+      settingsPath
+    );
+    const settings = deduped.settings;
+    let edited = deduped.removed > 0;
     for (const groups of Object.values(settings.hooks || {})) {
       if (!Array.isArray(groups)) continue;
       for (const group of groups)
