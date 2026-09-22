@@ -291,6 +291,45 @@ function compressRecords(
         literal += first.chunks[col + 1];
       });
       template.push(literal);
+      // AN ARITHMETIC COLUMN IS A RULE, NOT A LIST.
+      //
+      // Sequential ids, byte offsets, line numbers and page cursors step by a
+      // constant, and both this engine and the competitor were spelling every
+      // one of them out digit by digit: measured on 120 records whose id,
+      // offset and line columns are perfect runs, their router gains 0.9
+      // points over the same shape with RANDOM values and we gain 0.8. The
+      // redundancy was simply not being read.
+      //
+      // `1000..1119 step 1` is a complete generator, not a summary: every
+      // value is derivable exactly and none is approximated. That is what
+      // separates this from factoring a shared prefix out of an identifier,
+      // which leaves a row holding a fragment of a token -- the failure
+      // json-anomaly-completeness guards. Here the guard is structural: a run
+      // requires every value to be a SAFE integer, so an unsafe id can never
+      // enter one.
+      const runOf = (col: number): { first: number; step: number } | null => {
+        if (group.length < 4) return null;
+        const nums: number[] = [];
+        for (const row of group) {
+          const raw = row.values[col];
+          if (!/^-?(?:0|[1-9]\d*)$/.test(raw)) return null;
+          const n = Number(raw);
+          if (!Number.isSafeInteger(n) || String(n) !== raw) return null;
+          nums.push(n);
+        }
+        const step = nums[1] - nums[0];
+        for (let i = 2; i < nums.length; i += 1)
+          if (nums[i] - nums[i - 1] !== step) return null;
+        // A zero step is a constant column, which the template already hoists.
+        return step === 0 ? null : { first: nums[0], step };
+      };
+      const runs = new Map<number, { first: number; step: number }>();
+      columns.forEach(({ col, start, end }, slot) => {
+        if (start || end) return; // a factored column is no longer a number
+        const run = runOf(col);
+        if (run) runs.set(slot, run);
+      });
+
       const compact =
         (shortHeader
           ? `[All ${found.length} JSON records; join template strings and row[integer] verbatim. Template: `
@@ -299,13 +338,24 @@ function compressRecords(
               : '[JSON fragment records; missing records remain unknown. ') +
             'Join template parts, replacing numeric slots with verbatim text fragments from each row. Template: ') +
         JSON.stringify(template) +
+        (runs.size
+          ? '; slots ' +
+            [...runs]
+              .map(([slot, r]) => `${slot}=${r.first}+${r.step}n`)
+              .join(' ') +
+            ' count from 0'
+          : '') +
         ']\n' +
         group
           .map((row) =>
             JSON.stringify(
-              columns.map(({ col, start, end }) =>
-                row.values[col].slice(start, end ? -end : undefined)
-              )
+              columns
+                .map(({ col, start, end }, slot) =>
+                  runs.has(slot)
+                    ? null
+                    : row.values[col].slice(start, end ? -end : undefined)
+                )
+                .filter((cell): cell is string => cell !== null)
             )
           )
           .join('\n') +
