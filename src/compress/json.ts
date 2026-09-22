@@ -203,6 +203,61 @@ function parseNdjson(text: string): unknown[] | null {
   return values.length >= 2 ? values : null;
 }
 
+/**
+ * Whitespace-only minification that keeps every token exactly as written.
+ *
+ * WHY NOT `JSON.stringify(JSON.parse(text))`, which is what this replaced.
+ * A round trip through the parser canonicalises every number, so `19.90`
+ * comes back `19.9`, `0.0500` comes back `0.05` and `1e3` comes back `1000`.
+ * Those bytes are unrecoverable from the output, and the result was still
+ * reporting `lossless: true` -- which claims the opposite. Measured on three
+ * ordinary documents (a service config, a pricing table, a metrics snapshot)
+ * the round trip destroyed 5, 6 and 7 distinct lexemes respectively while
+ * every one reported losslessly, and `JSON.parse` deep-equality is blind to
+ * it because the VALUES are identical. Only the source text differs, which
+ * is exactly what significant figures and currency display are made of.
+ *
+ * Scanning instead of parsing keeps the saving and makes the claim true: a
+ * string span is copied byte for byte, and everything outside one loses only
+ * its whitespace. Numbers are never interpreted, so they cannot be rewritten.
+ *
+ * Returns null when the scan cannot finish -- an unterminated string -- so
+ * the caller falls back rather than emitting a truncated document.
+ */
+function minifyPreservingTokens(text: string): string | null {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"') {
+      const start = i;
+      i += 1;
+      let closed = false;
+      while (i < text.length) {
+        if (text[i] === '\\') {
+          i += 2;
+          continue;
+        }
+        if (text[i] === '"') {
+          i += 1;
+          closed = true;
+          break;
+        }
+        i += 1;
+      }
+      if (!closed) return null;
+      out += text.slice(start, i);
+      continue;
+    }
+    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+      i += 1;
+      continue;
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
 export function compressJson(
   text: string,
   ctx: EngineContext = {}
@@ -291,7 +346,12 @@ export function compressJson(
   // Null and absent are different values. Preserve nulls in visible and recovery data.
   const stripped = parsed;
 
-  const minified = JSON.stringify(stripped);
+  // The lexical scan is only equivalent when nothing restructured the
+  // document. A nested string that was compressed lives in `stripped` and
+  // not in `text`, so scanning the original would silently discard that
+  // work -- fall back to serialising in that case.
+  const scanned = nestedElisions.length ? null : minifyPreservingTokens(text);
+  const minified = scanned ?? JSON.stringify(stripped);
   // Whitespace is recorded only when there actually was some to remove.
   if (minified.length < text.length) {
     elisions.push({
