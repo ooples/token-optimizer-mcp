@@ -258,6 +258,36 @@ function minifyPreservingTokens(text: string): string | null {
   }
   return out;
 }
+/** Numbers, excluding digits that belong to an identifier or a key. */
+const NUMBER_LEXEME = /(?<![\w."])-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?(?![\w.])/g;
+
+/**
+ * Did every number survive as WRITTEN, not merely as valued?
+ *
+ * The runtime half of the guarantee. `minifyPreservingTokens` makes the
+ * common path safe by construction, but the serialising fallback still
+ * canonicalises, and a future edit could route more content through it. A
+ * claim of losslessness that nothing checks is how this defect shipped in the
+ * first place, so the claim is now conditioned on a check rather than on the
+ * author having remembered.
+ *
+ * Only lexemes the parser WOULD rewrite are considered, so ordinary integers
+ * -- almost every number in machine-generated JSON -- cost one comparison and
+ * never reach the output scan.
+ */
+function numbersKeptVerbatim(original: string, output: string): boolean {
+  for (const lexeme of original.match(NUMBER_LEXEME) ?? []) {
+    let canonical: string;
+    try {
+      canonical = String(JSON.parse(lexeme));
+    } catch {
+      continue;
+    }
+    if (canonical === lexeme) continue;
+    if (!output.includes(lexeme)) return false;
+  }
+  return true;
+}
 export function compressJson(
   text: string,
   ctx: EngineContext = {}
@@ -285,7 +315,7 @@ export function compressJson(
   }
   let parsed: unknown;
   let nestedElisions: readonly Elision[] = [];
-  // Set when a nested string was compressed lossily. Every `lossless: !nestedLossy`
+  // Set when a nested string was compressed lossily. Every `lossless: !nestedLossy && lexemeSafe`
   // return below is conditioned on it, because a document is only lossless if
   // its nested values were too.
   let nestedLossy = false;
@@ -352,6 +382,9 @@ export function compressJson(
   // work -- fall back to serialising in that case.
   const scanned = nestedElisions.length ? null : minifyPreservingTokens(text);
   const minified = scanned ?? JSON.stringify(stripped);
+  // Cheap on the scanned path, which cannot rewrite a number at all; the
+  // scan only runs when we fell back to serialising.
+  const lexemeSafe = scanned !== null || numbersKeptVerbatim(text, minified);
   // Whitespace is recorded only when there actually was some to remove.
   if (minified.length < text.length) {
     elisions.push({
@@ -432,7 +465,7 @@ export function compressJson(
     if (dropped < tuning.minRowsToElide - tuning.keepRows) {
       // Almost everything is exceptional, so there is no redundant tail to
       // remove and eliding a handful of rows would not pay for the marker.
-      return { text: minified, elisions, lossless: !nestedLossy };
+      return { text: minified, elisions, lossless: !nestedLossy && lexemeSafe };
     }
 
     // NO HOME MEANS NO ELISION. Without a spill the rows would be gone with
@@ -441,7 +474,8 @@ export function compressJson(
     // to avoid. The minified document is still a real saving, so keep it and
     // keep the rows.
     const recoverAt = spillFor(ctx, JSON.stringify(stripped), 'rows.json');
-    if (!recoverAt) return { text: minified, elisions, lossless: !nestedLossy };
+    if (!recoverAt)
+      return { text: minified, elisions, lossless: !nestedLossy && lexemeSafe };
     const kept = [...keep].sort((a, b) => a - b).map((i) => stripped[i]);
     const sample = stripped.find((_row, i) => !keep.has(i));
     const keptText = JSON.stringify(kept);
@@ -476,5 +510,5 @@ export function compressJson(
     };
   }
 
-  return { text: minified, elisions, lossless: !nestedLossy };
+  return { text: minified, elisions, lossless: !nestedLossy && lexemeSafe };
 }
