@@ -315,10 +315,13 @@ export async function applyDefaultRouting(
   }
   // Starting a supervisor yields to other processes. Hook migration or a user edit may have
   // changed settings while we waited; merge into the current file, not the earlier snapshot.
-  if (!existsSync(path)) return { status: 'user-owned', path };
-  const { settings: latest, unreadable: changedUnreadable } =
-    loadSettings(path);
+  const {
+    settings: latest,
+    existed: stillExists,
+    unreadable: changedUnreadable,
+  } = loadSettings(path);
   if (changedUnreadable) return { status: 'unreadable', path };
+  if (!stillExists) return { status: 'user-owned', path };
   if (latest.env?.[VARIABLE] !== settings.env?.[VARIABLE])
     return { status: 'user-owned', path };
   if (latest.env?.[VARIABLE] === url && recorded?.value === url)
