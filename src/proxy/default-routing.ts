@@ -312,14 +312,19 @@ export async function applyDefaultRouting(
       ? { ...removeDefaultRouting(env), status: 'healed' }
       : { status: 'unavailable' };
   }
-  if (settings.env?.[VARIABLE] === url && recorded?.value === url)
+  // Starting a supervisor yields to other processes. Hook migration or a user edit may have
+  // changed settings while we waited; merge into the current file, not the earlier snapshot.
+  const { settings: latest, unreadable: changedUnreadable } =
+    loadSettings(path);
+  if (changedUnreadable) return { status: 'unreadable', path };
+  if (latest.env?.[VARIABLE] !== settings.env?.[VARIABLE])
+    return { status: 'user-owned', path };
+  if (latest.env?.[VARIABLE] === url && recorded?.value === url)
     return { status: 'unchanged', path, url, upstream };
 
-  const createdEnv = recorded
-    ? recorded.createdEnv
-    : settings.env === undefined;
-  settings.env = { ...settings.env, [VARIABLE]: url };
-  saveSettings(path, settings);
+  const createdEnv = recorded ? recorded.createdEnv : latest.env === undefined;
+  latest.env = { ...latest.env, [VARIABLE]: url };
+  saveSettings(path, latest);
   record(env, {
     variable: VARIABLE,
     value: url,
@@ -349,9 +354,11 @@ export function originalUpstream(
   env: NodeJS.ProcessEnv = process.env
 ): string | undefined {
   if (!value) return value;
-  const recorded = readRoutingManifest(env).entries[claudeSettingsFile(env)];
-  if (!recorded || recorded.value !== value) return value;
-  return recorded.previous ?? DEFAULT_UPSTREAM;
+  const recorded = Object.values(readRoutingManifest(env).entries).find(
+    (entry) => entry.value === value
+  );
+  if (!recorded) return value;
+  return recorded.upstream || recorded.previous || DEFAULT_UPSTREAM;
 }
 
 /**

@@ -52,6 +52,37 @@ beforeEach(() => {
 afterEach(() => rmSync(home, { recursive: true, force: true }));
 
 describe('routing a client we did not launch', () => {
+  it('preserves hook upgrades and removed settings while the supervisor starts', async () => {
+    write({ model: 'old', obsolete: true });
+    const result = await applyDefaultRouting(async () => {
+      write({
+        model: 'new',
+        hooks: { Stop: [{ hooks: [{ command: 'updated hook' }] }] },
+      });
+      return served;
+    }, env);
+    expect(result.status).toBe('written');
+    expect(read()).toEqual({
+      model: 'new',
+      hooks: { Stop: [{ hooks: [{ command: 'updated hook' }] }] },
+      env: { ANTHROPIC_BASE_URL: served },
+    });
+  });
+
+  it('does not overwrite a provider changed while the supervisor starts', async () => {
+    write({});
+    const changed = { env: { ANTHROPIC_BASE_URL: 'https://chosen.example' } };
+    expect(
+      (
+        await applyDefaultRouting(async () => {
+          write(changed);
+          return served;
+        }, env)
+      ).status
+    ).toBe('user-owned');
+    expect(read()).toEqual(changed);
+    expect(readRoutingManifest(env).entries).toEqual({});
+  });
   it('points Claude Code at the route and leaves the rest of the file alone', async () => {
     write({
       model: 'opus',

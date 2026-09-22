@@ -15,6 +15,7 @@ import { dirname, join, resolve, delimiter, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import TOML from '@iarna/toml';
 import { startProxy, proxyEnabled } from '../dist/proxy/server.js';
+import { originalUpstream } from '../dist/proxy/default-routing.js';
 import { captureDir, captureNotice } from '../dist/proxy/capture.js';
 import { claudeRoute } from './claude-routing.mjs';
 import { sessionRouting } from './session-routing.mjs';
@@ -179,6 +180,7 @@ export function codexRoute(args, env) {
     }
     provider.requires_openai_auth ??= true;
   }
+  upstream = originalUpstream(upstream, env);
   if (!upstream)
     throw new Error(
       `Cannot determine upstream for Codex provider ${id}; configure its base_url.`

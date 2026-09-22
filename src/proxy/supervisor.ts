@@ -242,11 +242,14 @@ export async function runSupervisor(
 } | null> {
   if (await supervisorHealth(env)) return null;
 
+  const saved = readSupervisorState(env);
+  let restoring = true;
   const routes = new Map<string, SupervisorRoute>();
   // Held so shutdown can close them. Without this the listeners outlive every caller: a test run
   // never exits, and a supervisor asked to stop keeps the ports bound.
   const listeners = new Set<Server>();
-  const publish = () =>
+  const publish = () => {
+    if (restoring) return;
     writeState(
       {
         schema: 1,
@@ -257,7 +260,7 @@ export async function runSupervisor(
       },
       env
     );
-
+  };
   // Keyed by upstream AND project, because those are two different listeners: the graph a proxy
   // serves is bound when it starts, so one route cannot answer for two projects.
   const keyOf = (upstream: string, project: string | null) =>
@@ -265,7 +268,8 @@ export async function runSupervisor(
   const starting = new Map<string, Promise<SupervisorRoute | null>>();
   const routeFor = async (
     upstream: string,
-    project: string | null
+    project: string | null,
+    savedPort?: number
   ): Promise<SupervisorRoute | null> => {
     const key = keyOf(upstream, project);
     const existing = routes.get(key);
@@ -280,7 +284,7 @@ export async function runSupervisor(
         //
         // Probed with a bare listener rather than by letting startProxy fail, because a startProxy
         // that rejects has already created its spill directory and has no close event to remove it.
-        const preferred = routePort(key, env);
+        const preferred = savedPort ?? routePort(key, env);
         const { server: listener, port } = await startProxy({
           upstream,
           port: (await portIsFree(preferred)) ? preferred : 0,
@@ -331,6 +335,7 @@ export async function runSupervisor(
         });
         res.end(text);
       };
+      if (restoring) return reply(503, { error: 'restoring proxy routes' });
       if (path === '/__token-optimizer/health') {
         return reply(200, {
           ok: true,
@@ -401,6 +406,27 @@ export async function runSupervisor(
     // LOOPBACK ONLY. This forwards provider credentials; it must never be reachable off-box.
     server.listen(controlPort(env), '127.0.0.1', resolve);
   });
+  // Restore every client's routes, including ports allocated after a collision. Active clients
+  // have already loaded these URLs; recomputing a port or restoring Claude alone strands them.
+  if (
+    saved?.controlUrl === `http://127.0.0.1:${controlPort(env)}` &&
+    Array.isArray(saved.routes)
+  ) {
+    for (const route of saved.routes.slice(0, MAX_ROUTES)) {
+      if (
+        !route ||
+        typeof route.upstream !== 'string' ||
+        (route.project !== null && typeof route.project !== 'string') ||
+        !Number.isInteger(route.port) ||
+        route.port < 1024 ||
+        route.port > 65535 ||
+        route.url !== `http://127.0.0.1:${route.port}`
+      )
+        continue;
+      await routeFor(route.upstream, route.project, route.port);
+    }
+  }
+  restoring = false;
   publish();
 
   const close = async () => {

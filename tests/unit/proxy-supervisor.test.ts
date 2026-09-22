@@ -153,6 +153,44 @@ describe('the proxy supervisor', () => {
     }
   }, 30_000);
 
+  it('restores every route and a collision-assigned port before clients register again', async () => {
+    let occupied = createServer();
+    let project = home;
+    let preferred = 0;
+    // Windows reserves some derived ports. Find one we can occupy rather than assuming a
+    // particular hash lands outside its excluded ranges, and handle listen errors explicitly.
+    for (let attempt = 0; attempt < 64; attempt++) {
+      project = join(home, `collision-${attempt}`);
+      preferred = routePort(JSON.stringify([upstreamUrl, project]), env);
+      occupied = createServer();
+      const bound = await new Promise<boolean>((done) => {
+        occupied.once('error', () => done(false));
+        occupied.listen(preferred, '127.0.0.1', () => done(true));
+      });
+      if (bound) break;
+    }
+    expect(occupied.listening).toBe(true);
+    try {
+      supervisor = await runSupervisor(env);
+      const first = await ensureRoute(upstreamUrl, env, project);
+      const other = await ensureRoute(upstreamUrl, env, home);
+      expect(first).not.toBe(`http://127.0.0.1:${preferred}`);
+      await supervisor!.close();
+      supervisor = null;
+      await new Promise<void>((done) => occupied.close(() => done()));
+      supervisor = await runSupervisor(env);
+      // No ensureRoute calls: both already-running clients keep their original URLs.
+      expect(
+        (await supervisorHealth(env))?.routes.map((route) => route.url).sort()
+      ).toEqual([first, other].sort());
+      expect((await get(first!, '/v1/messages')).status).toBe(200);
+      expect((await get(other!, '/v1/messages')).status).toBe(200);
+    } finally {
+      if (occupied.listening)
+        await new Promise<void>((done) => occupied.close(() => done()));
+    }
+  }, 30000);
+
   it('serves an upstream on the same port after a restart', async () => {
     // A client's own configuration names this URL and outlives the supervisor. An ephemeral port
     // would therefore leave that client pointed at nothing after a reboot -- unable to reach its

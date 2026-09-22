@@ -6,6 +6,7 @@ import {
 import { sessionRouting } from './session-routing.mjs';
 import { projectRootFor } from '../hooks-core/wiki.mjs';
 import { join } from 'node:path';
+import { originalUpstream } from '../dist/proxy/default-routing.js';
 const configured = new WeakSet();
 
 /** OpenCode owns resolved configuration and project scope. Do not monkey-patch
@@ -45,7 +46,7 @@ export default async function tokenOptimizer({ directory }) {
             continue;
           let url;
           try {
-            url = new URL(options.baseURL);
+            url = new URL(originalUpstream(options.baseURL));
           } catch {
             continue;
           }

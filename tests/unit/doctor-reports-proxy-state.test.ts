@@ -1,9 +1,12 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, afterAll } from '@jest/globals';
 import { createServer } from 'node:http';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { probeProxy, probeSupervisor } from '../../hooks-core/doctor.mjs';
+import {
+  probeProxy as probeProxyActual,
+  probeSupervisor,
+} from '../../hooks-core/doctor.mjs';
 import {
   proxyEnvFor,
   CLIENT_PROXY_ENV,
@@ -20,6 +23,12 @@ import {
 
 const detailOf = (checks: Array<Record<string, unknown>>): string =>
   checks.map((c) => JSON.stringify(c)).join(' ');
+
+// A developer's installed route must not change the severity expected by synthetic probes.
+const isolatedHome = mkdtempSync(join(tmpdir(), 'doctor-proxy-state-'));
+afterAll(() => rmSync(isolatedHome, { recursive: true, force: true }));
+const probeProxy = (env: NodeJS.ProcessEnv = {}, options = {}) =>
+  probeProxyActual({ TOKEN_OPTIMIZER_HOME: isolatedHome, ...env }, options);
 
 describe('probeProxy', () => {
   it('uses the MCP handshake identity when the client environment was filtered', () => {

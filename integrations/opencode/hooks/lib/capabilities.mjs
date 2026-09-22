@@ -335,9 +335,8 @@ export function upstreamFor(client, env = process.env) {
     // our own route meant a user running their own local gateway had it replaced by the provider's
     // public endpoint -- we would route around the very thing they put in front of the provider.
     // Ours is recognised by the manifest; anything else is somebody's real upstream and is kept.
-    return ourRoute(configured, client, env)
-      ? entry.defaultUpstream
-      : configured;
+    const recorded = ourRoute(configured, client, env);
+    return recorded ? recorded.upstream || recorded.previous || entry.defaultUpstream : configured;
   } catch {
     return null;
   }
@@ -358,7 +357,7 @@ function ourRoute(value, client, env) {
     );
     if (manifest?.schema !== 1) return false;
     const variable = CLIENT_PROXY_ENV[client];
-    return Object.values(manifest.entries || {}).some(
+    return Object.values(manifest.entries || {}).find(
       (entry) => entry?.value === value && entry?.variable === variable
     );
   } catch {
