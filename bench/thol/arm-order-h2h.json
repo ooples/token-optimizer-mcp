@@ -3,7 +3,6 @@
     "control",
     "token-optimizer-proxy",
     "token-optimizer-nodefer",
-    "headroom",
     "headroom-0370"
   ],
   "orders": [
@@ -11,19 +10,16 @@
       "control",
       "token-optimizer-proxy",
       "token-optimizer-nodefer",
-      "headroom",
       "headroom-0370"
     ],
     [
       "token-optimizer-proxy",
       "token-optimizer-nodefer",
-      "headroom",
       "headroom-0370",
       "control"
     ],
     [
       "token-optimizer-nodefer",
-      "headroom",
       "headroom-0370",
       "control",
       "token-optimizer-proxy"

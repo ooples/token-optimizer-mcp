@@ -5,7 +5,7 @@
   "version_pin": "6.0.2",
   "version_checked": "2026-09-10",
   "upstream": "https://github.com/ooples/token-optimizer-mcp",
-  "install_doc": "ISOLATES WHAT TOOL DEFERRAL CONTRIBUTES. Identical to token-optimizer-proxy except TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS=0. Deferral is ON by default in the shipped build, decided on a campaign where the proxy was cheaper than control on 11 of 16 tasks against 4 of 16 without it, at identical scores and a median 33% turn reduction. Tool definitions are the largest single share of a real request, so this arm is how we tell whether the compression work or the deferral is carrying the cost result -- running only the default arm cannot separate them.",
+  "install_doc": "ISOLATES WHAT TOOL DEFERRAL CONTRIBUTES. Identical to token-optimizer-proxy except TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS=0. Deferral is ON by default in the shipped build, decided on a campaign where the proxy was cheaper than control on 11 of 16 tasks against 4 of 16 without it, at identical scores and a median 33% turn reduction. Tool definitions are the largest single share of a real request, so this arm is how we tell whether the compression work or the deferral is carrying the cost result -- running only the default arm cannot separate them. PORT 8789 IS DELIBERATE: entrypoint.sh start_proxies dedupes arms BY PORT, so an arm sharing 8787 with token-optimizer-proxy would not get its own proxy process -- only one would start, carrying whichever manifest readdirSync reached first, and both arms would then measure that single configuration. Sharing a port makes two arms silently identical.",
   "requires": [
     "node"
   ],
@@ -17,7 +17,7 @@
       "TOKEN_OPTIMIZER_MCP_CAPABILITIES": "",
       "TOKEN_OPTIMIZER_PROXY": "1",
       "TOKEN_OPTIMIZER_PROXY_KNOWLEDGE": "",
-      "ANTHROPIC_BASE_URL": "http://127.0.0.1:8787",
+      "ANTHROPIC_BASE_URL": "http://127.0.0.1:8789",
       "TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS": "0"
     },
     "hooks": {

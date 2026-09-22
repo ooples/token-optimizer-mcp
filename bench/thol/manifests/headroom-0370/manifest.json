@@ -1,12 +1,12 @@
 {
   "name": "headroom-0370",
-  "display_name": "Headroom 0.37.0 (current release)",
+  "display_name": "Headroom (current release)",
   "upstream": "https://github.com/headroomlabs-ai/headroom",
   "version_pin": "0.37.0",
   "version_checked": "2026-09-22",
   "verified": false,
-  "install_doc": "THOL's own `headroom` arm pins 0.27.0, which is ten minor versions behind what a user installs today. This arm installs the current release into its own uv tool directory so both can run in one campaign: the pinned arm keeps our numbers comparable to THOL's published board, this one measures what someone would actually get. Installed by bench/thol/Dockerfile.headroom037.",
-  "notes": "Same entry point and mode as THOL's pinned arm -- `headroom wrap claude` starts the proxy and sets ANTHROPIC_BASE_URL so all API traffic is compacted with no agent opt-in. Only the version differs, which is the point: any difference between this arm and `headroom` is ten minors of their work, not a configuration choice of ours.",
+  "install_doc": "Installs the competitor release a user actually gets today, into its own uv tool directory under the binary name headroom037, by bench/thol/Dockerfile.headroom037. This is the arm any cost comparison should use: comparing against an older pinned build measures work they have already superseded and tells us nothing about the product a user would install.",
+  "notes": "Runs their own entry point and primary mode -- `headroom wrap claude` starts their proxy and sets ANTHROPIC_BASE_URL so all API traffic is compacted with no agent opt-in, which is their strongest configuration rather than a default we chose for them.",
   "requires": [
     "headroom037"
   ],
