@@ -111,7 +111,12 @@ export function compressJsonArray(
   // flat-object scanner only after validating the entire array and every row.
   // This keeps original numeric and string spellings, including large integers.
   if (
-    minimumRows < 32 &&
+    // THE ROW COUNT WAS NEVER THE SAFETY CONDITION. This used to require
+    // `minimumRows < 32`, false on the default call compressJson makes, so
+    // the lexical scanner was unreachable from the router and a one-line-
+    // per-record array -- what `jq -c` emits -- compressed 12.9% where the
+    // same rows over several lines reach 77%. What makes it safe is the
+    // validation below plus the exact-count check after it, both unchanged.
     found.length !== parsed.length &&
     parsed.every(
       (row: unknown) =>

@@ -373,6 +373,14 @@ export function compressJson(
 
   const elisions: Elision[] = [...nestedElisions];
 
+  // The lossless whole-array encoding, when one was worth computing.
+  // Compared against each candidate answer rather than against the first
+  // one that happened to be beaten.
+  let exact: CompressionResult | null = null;
+  /** Whichever is smaller: this answer, or the exact lossless encoding. */
+  const best = (candidate: CompressionResult): CompressionResult =>
+    exact && exact.text.length < candidate.text.length ? exact : candidate;
+
   // Null and absent are different values. Preserve nulls in visible and recovery data.
   const stripped = parsed;
 
@@ -430,8 +438,16 @@ export function compressJson(
       !categories.keep.size &&
       !nestedElisions.length
     ) {
-      const exact = compressJsonArray(text);
-      if (exact.text.length < minified.length * 0.7) return exact;
+      // HELD, NOT RETURNED. Returning here the moment the exact encoding
+      // beat MINIFIED compared it against the wrong alternative: further
+      // down, the row elision can put 85 of 90 rows in a spill and come out
+      // far smaller still. Measured, making the exact path reachable for
+      // one-line records took a block from 12.9% to 50.9% on its own and
+      // simultaneously took v3-history from 73.3% to 60.4% on the
+      // conversation, because the better lossless encoding preempted a much
+      // better lossy one. So the candidate is carried to every exit and the
+      // smaller answer wins there.
+      exact = compressJsonArray(text);
     }
     for (const i of categories.keep) keep.add(i);
     // 1. Content that a reader would come back for -- identifiers, failure
@@ -465,7 +481,11 @@ export function compressJson(
     if (dropped < tuning.minRowsToElide - tuning.keepRows) {
       // Almost everything is exceptional, so there is no redundant tail to
       // remove and eliding a handful of rows would not pay for the marker.
-      return { text: minified, elisions, lossless: !nestedLossy && lexemeSafe };
+      return best({
+        text: minified,
+        elisions,
+        lossless: !nestedLossy && lexemeSafe,
+      });
     }
 
     // NO HOME MEANS NO ELISION. Without a spill the rows would be gone with
@@ -475,7 +495,11 @@ export function compressJson(
     // keep the rows.
     const recoverAt = spillFor(ctx, JSON.stringify(stripped), 'rows.json');
     if (!recoverAt)
-      return { text: minified, elisions, lossless: !nestedLossy && lexemeSafe };
+      return best({
+        text: minified,
+        elisions,
+        lossless: !nestedLossy && lexemeSafe,
+      });
     const kept = [...keep].sort((a, b) => a - b).map((i) => stripped[i]);
     const sample = stripped.find((_row, i) => !keep.has(i));
     const keptText = JSON.stringify(kept);
@@ -494,7 +518,7 @@ export function compressJson(
         recoverAt
       ) +
       ']';
-    return {
+    return best({
       text: body,
       elisions: [
         ...elisions,
@@ -507,8 +531,12 @@ export function compressJson(
       // The repeating tail is gone from the text; only a spill makes it
       // recoverable, and even then it is a lookup rather than a reconstruction.
       lossless: false,
-    };
+    });
   }
 
-  return { text: minified, elisions, lossless: !nestedLossy && lexemeSafe };
+  return best({
+    text: minified,
+    elisions,
+    lossless: !nestedLossy && lexemeSafe,
+  });
 }
