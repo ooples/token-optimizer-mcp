@@ -440,11 +440,20 @@ export async function applyDefaultRouting(
     if (takeBack && latest.env) {
       delete latest.env[TOOL_SEARCH];
       saveSettings(path, latest);
+    } else if (addToolSearch && latest.env?.[TOOL_SEARCH] === undefined) {
+      // AND THE REASON CAN OUTLIVE THE FLAG. A route installed by a build that predates this
+      // feature leaves the entry missing for ever, because the only other place we write it is
+      // the branch that runs when the route MOVES -- and upgrading does not move the port.
+      // Absent means writable here for the same reason it does in `scripts/claude-routing.mjs`,
+      // which reads `ENABLE_TOOL_SEARCH === undefined` as permission to set it: switching
+      // deferral off is done by giving the key a value, and a value is what `ours` protects.
+      latest.env = { ...latest.env, [TOOL_SEARCH]: 'true' };
+      saveSettings(path, latest);
     }
     // OWNERSHIP IS RECONCILED EVEN WHEN NOTHING WAS WRITTEN. A user who edits the flag to
     // something other than what we wrote has taken it over, and leaving `toolSearchAdded` true
     // would have `removeDefaultRouting` delete their value later on our behalf.
-    const stillOurs = ours && appropriate;
+    const stillOurs = addToolSearch || (ours && appropriate);
     if (recorded && recorded.toolSearchAdded !== stillOurs)
       record(env, { ...recorded, toolSearchAdded: stillOurs });
     return { status: 'unchanged', path, url, upstream };

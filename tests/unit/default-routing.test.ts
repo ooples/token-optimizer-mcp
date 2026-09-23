@@ -439,6 +439,23 @@ describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
     expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
   });
 
+  it('restores the flag on an unchanged route when the entry has gone missing', async () => {
+    // The only other place we write it is the branch that runs when the route MOVES, and
+    // upgrading does not move the port -- so a route installed by a build that predates this
+    // feature would never gain the entry. An absent key is writable, exactly as
+    // `scripts/claude-routing.mjs` treats it; turning deferral off means giving it a value.
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+
+    const settled = read();
+    delete settled.env.ENABLE_TOOL_SEARCH;
+    write(settled);
+
+    const result = await applyDefaultRouting(route, env);
+    expect(result.status).toBe('unchanged');
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+    expect(owns()).toBe(true);
+  });
   it('sees a flag edit made while the supervisor was starting', async () => {
     // #426 re-reads the file after the await because starting a supervisor yields, and a user
     // edit lands in between. Who owns the tool-search flag has to be answered from that re-read
