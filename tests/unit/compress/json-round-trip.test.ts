@@ -251,6 +251,17 @@ describe('rehydrate refuses what it cannot rebuild', () => {
     ).toThrow(/unconsumed marker/);
   });
 
+  it('refuses a tap marker no grammar consumed', () => {
+    // A SECOND FAMILY, REGISTERED, STILL HAS TO FAIL CLOSED ON ITS UNKNOWN
+    // VARIANTS. `[TAP timing records: ...]` is not the shape expandTapRecords
+    // inverts, and a decoder that returns it as a line of text reports a
+    // reconstruction it never performed.
+    expect(() =>
+      rehydrate(
+        'ok 1 - a\n[TAP timing records: mean 4ms]\n[/TAP timing records]'
+      )
+    ).toThrow(/unconsumed marker/);
+  });
   it('passes ordinary text through untouched', () => {
     const text = '{"a":1,"b":[2,3]}\nnot a marker [at all]\n';
     expect(rehydrate(text)).toBe(text);

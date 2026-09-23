@@ -74,8 +74,40 @@ export function expandJsonRecords(text: string): string {
   );
 }
 
+/**
+ * Rebuilds the original from the TAP records encoding.
+ *
+ * Node's leaf-test records are stated once as a template with `{name}`, `{id}`
+ * and `{ms}` holes plus one JSON row per record. Only byte-identical
+ * diagnostics share a template, so every failure still carries its own row --
+ * which is what makes this invertible rather than merely compact.
+ *
+ * This grammar lived inside `tap.test.ts`, which is the arrangement this module
+ * exists to end: a decoder beside the one test that uses it is free to drift
+ * into being more forgiving than the encoder, and a forgiving decoder passes
+ * everything.
+ */
+export function expandTapRecords(text: string): string {
+  return text.replace(
+    /\[TAP (?:passing|failing) records: JSON rows \[name,id,ms\]; substitute into template ("[^\n]+")\]\r?\n([\s\S]*?)\[\/TAP (?:passing|failing) records\]\r?\n/g,
+    (_all, encoded: string, rows: string) => {
+      const template = JSON.parse(encoded) as string;
+      return rows
+        .trim()
+        .split(/\r?\n/)
+        .map((row) => {
+          const [name, id, ms] = JSON.parse(row) as string[];
+          return template.replace(
+            /\{(name|id|ms)\}/g,
+            (_s, key: string) => ({ name, id, ms })[key as 'name' | 'id' | 'ms']
+          );
+        })
+        .join('');
+    }
+  );
+}
 /** Markers this module must consume rather than pass through as text. */
-const UNCONSUMED = /^\s*\[(?:JSON |All \d+ JSON )/;
+const UNCONSUMED = /^\s*\[\/?(?:JSON |All \d+ JSON |TAP )/;
 
 /**
  * Applies every registered grammar, then refuses anything left over.
@@ -85,7 +117,7 @@ const UNCONSUMED = /^\s*\[(?:JSON |All \d+ JSON )/;
  * would otherwise survive as ordinary-looking lines.
  */
 export function rehydrate(text: string): string {
-  const out = expandLog(expandJsonRecords(text));
+  const out = expandLog(expandTapRecords(expandJsonRecords(text)));
   for (const line of out.split('\n'))
     if (UNCONSUMED.test(line))
       throw new Error(`rehydrate: unconsumed marker ${JSON.stringify(line)}`);

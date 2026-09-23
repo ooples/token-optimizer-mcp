@@ -30,9 +30,11 @@ function assertStrict(input: string, result: CompressionResult): void {
   }
   expect(result.text).not.toBe(input);
   // THE PER-ELISION FLAG IS THE ONE THE REGISTRY READS, and the result-level
-  // assertion above cannot see it. registry.ts:183 rejects an elision that has
-  // no `recoverAt` only when it admits `lossless: false`, so one   // elision lying there drops bytes with no route back while the result stays   // honest -- which is why both engines carry a second `lossless` literal,   // inside the elision itself.
-  // is why both engines have a second lossless literal, inside the elision.
+  // assertion above cannot see it. registry.ts:183 rejects an elision with no
+  // `recoverAt` only when that elision admits `lossless: false`, so one elision
+  // lying there drops bytes with no route back while the result stays honest --
+  // which is why both engines carry a second `lossless` literal, inside the
+  // elision itself.
   for (const elision of result.elisions) {
     expect(elision.lossless).toBe(false);
     expect(elision.recoverAt).not.toBeNull();
