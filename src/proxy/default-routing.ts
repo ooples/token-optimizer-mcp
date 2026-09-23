@@ -141,7 +141,20 @@ function toolSearchAppropriate(
     )
   );
   if (external) return false;
-  return upstream === DEFAULT_UPSTREAM;
+  // BY ORIGIN, NOT BY STRING. `https://api.anthropic.com/` is the same endpoint
+  // written with the trailing slash a URL bar adds, and a string comparison
+  // calls it a gateway -- which would not merely decline to add the flag, it
+  // would take an existing one of ours back out. `scripts/claude-routing.mjs`
+  // already decides this by origin; this is the same rule.
+  return sameOrigin(upstream, DEFAULT_UPSTREAM);
+}
+
+function sameOrigin(a: string, b: string): boolean {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
 }
 
 function shouldPreserveToolSearch(
@@ -411,8 +424,14 @@ export async function applyDefaultRouting(
     if (takeBack && settings.env) {
       delete settings.env[TOOL_SEARCH];
       saveSettings(path, settings);
-      record(env, { ...recorded, toolSearchAdded: false });
     }
+    // OWNERSHIP IS RECONCILED EVEN WHEN NOTHING WAS WRITTEN. A user who edits
+    // the flag to something other than what we wrote has taken it over, and
+    // leaving `toolSearchAdded` true would have `removeDefaultRouting` delete
+    // their value later on our behalf.
+    const stillOurs = ours && appropriate;
+    if (recorded.toolSearchAdded !== stillOurs)
+      record(env, { ...recorded, toolSearchAdded: stillOurs });
     return { status: 'unchanged', path, url, upstream };
   }
 

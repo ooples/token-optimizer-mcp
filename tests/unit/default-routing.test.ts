@@ -347,6 +347,33 @@ describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
     ).toBe(true);
   });
 
+  it('reads the anthropic endpoint with a trailing slash as the anthropic endpoint', async () => {
+    // A string comparison against 'https://api.anthropic.com' calls this a gateway, which does
+    // not merely decline the flag -- it makes the value inappropriate, so a pass would take an
+    // existing one of ours back out. `scripts/claude-routing.mjs` already decides by origin.
+    write({ env: { ANTHROPIC_BASE_URL: 'https://api.anthropic.com/' } });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+    expect(owns()).toBe(true);
+  });
+
+  it('gives the flag up when the user edits it and the route has not moved', async () => {
+    // Nothing is written on this path, so ownership has to be reconciled anyway: leaving the
+    // manifest claiming the value would have removal delete the user's choice on our behalf.
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(owns()).toBe(true);
+
+    const settled = read();
+    settled.env.ENABLE_TOOL_SEARCH = 'auto';
+    write(settled);
+    await applyDefaultRouting(route, env);
+    expect(owns()).toBe(false);
+
+    removeDefaultRouting(env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+  });
+
   it('still takes it back under the launcher when a backend arrives', async () => {
     // The gate above is about precedence, not about appropriateness: a third-party backend still
     // means our value is wrong, whoever else is also setting the variable.
