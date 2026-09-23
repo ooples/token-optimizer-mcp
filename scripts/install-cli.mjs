@@ -24,7 +24,10 @@ import { maintainDefaultRouting } from '../dist/proxy/default-routing.js';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const settings =
   process.env.TOKEN_OPTIMIZER_SETTINGS ||
-  join(homedir(), '.claude', 'settings.json');
+  join(
+    process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'),
+    'settings.json'
+  );
 const hooksDir = join(root, 'plugin', 'hooks');
 
 const run = (script, args) =>

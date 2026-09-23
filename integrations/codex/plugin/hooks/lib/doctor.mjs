@@ -41,6 +41,7 @@ import {
   proxyEnvFor,
   MANAGED_CLIENTS,
   clientForCommand,
+  hookInstallFor,
 } from './capabilities.mjs';
 import { mode } from './policy.mjs';
 import {
@@ -146,7 +147,13 @@ function compareVersions(a, b) {
  * shipped one advisory hook, so a stale install is present, listed in /mcp, and
  * saving nothing.
  */
-export function detectInstall({ pluginsDir, root, client, codexHome } = {}) {
+export function detectInstall({
+  pluginsDir,
+  root,
+  client,
+  codexHome,
+  cwd,
+} = {}) {
   // DIAGNOSE THE INSTALL THAT IS ASKING. Everything below reads Claude Code's registry, which
   // is the right answer for Claude Code and the wrong one for every other client on the machine.
   if (client === 'codex') {
@@ -200,6 +207,52 @@ export function detectInstall({ pluginsDir, root, client, codexHome } = {}) {
     record?.installPath && root && resolve(record.installPath) === resolve(root)
   );
 
+  // WHOSE RECORD IS THIS, THOUGH? installed_plugins.json is Claude Code's registry and nobody
+  // else's, so a client we have positively identified as something other than Claude Code cannot
+  // own what is in it. #408 is a Codex user told "install method: Claude Code plugin 6.0.0" while
+  // Codex's own entry points went unexercised. That was fixed for a Codex install that EXISTS;
+  // the same misreport still stood for Codex with no cache yet, and for the eight other managed
+  // clients, none of which had a branch here. An unidentified client still falls through on
+  // purpose: when we do not know who is asking, the machine's registered plugin is the best
+  // answer there is.
+  if (client && client !== 'claude-code') {
+    // FIRST, THE CLIENT'S OWN HOOKS, WHERE THE REGISTRY SAYS THEY LAND. Refusing the Claude
+    // record stops the lie; it does not supply a diagnosis. CLIENT_HOOK_INSTALLS carries the
+    // destination each integration documents, so the probes below can run THIS client's entry
+    // points -- which is the whole point of a doctor that opens the tap instead of reading config.
+    const own = detectClientHooks({ client, cwd });
+    if (own)
+      return {
+        method: client + ' hooks',
+        foreign: true,
+        packageVersion,
+        sameTree: false,
+        hooksDir: own.dir,
+        installPath: own.dir,
+        // NO VERSION. Hooks are copied files with no stamp on them; claiming a number here would
+        // be the same fabrication as reporting Claude's, one indirection later.
+        installedVersion: null,
+        availableVersion: null,
+        entries: own.entries,
+      };
+
+    // Otherwise say so, and say nothing more. The Claude record is not discarded: returning
+    // anything but `plugin` is what makes diagnose() re-read it as `crossClient`, where it is
+    // reported as another client's state rather than as this one's.
+    return {
+      method: verifyManifest(readManifest()) ? 'script' : 'unknown',
+      foreign: true,
+      packageVersion,
+      sameTree: false,
+      hooksDir: packageHooks,
+      installPath: null,
+      // NULL, NOT CLAUDE'S NUMBERS. Reporting them here is the misattribution itself: the
+      // checklist would compare this package against a version belonging to a different client.
+      installedVersion: null,
+      availableVersion: null,
+    };
+  }
+
   // A record whose installPath has gone missing is a broken plugin install, not
   // a script install -- saying "script" there would send the user to the wrong
   // remedy entirely.
@@ -235,17 +288,38 @@ export function detectInstall({ pluginsDir, root, client, codexHome } = {}) {
 
 /**
  * The hook entry files an install actually ships.
+ * NAMED BY THE INSTALL ITSELF WHERE IT KNOWS THEM. A client detected through
+ * CLIENT_HOOK_INSTALLS carries its own entry filenames, which is what lets Cline -- whose
+ * wrappers are extensionless and named after the event -- be checked at all.
  *
  * Claude Code loads a single PreToolUse router; the Codex plugin ships one file per event. The
  * checklist and both spawning probes used to name the Claude files unconditionally, so pointing
  * them at a Codex install would have reported its present, working hooks as missing.
  */
 export function entriesFor(install) {
+  if (install?.entries) return install.entries;
   return install?.method === 'codex plugin'
     ? { preTool: 'pre-tool.mjs', sessionStart: 'session-start.mjs' }
     : { preTool: 'pretooluse-router.mjs', sessionStart: 'session-start.mjs' };
 }
 
+/**
+ * This client's hooks, if they are where its integration says they are installed.
+ *
+ * EVERY ENTRY, NOT ANY. A directory holding some of our files is a half-copied install, and
+ * reporting that as installed is exactly how a broken install passes for a working one -- the
+ * failure this whole module exists to catch.
+ */
+function detectClientHooks({ client, cwd, home }) {
+  const entry = hookInstallFor(client);
+  if (!entry?.dir) return null;
+  const base = entry.base === 'home' ? home || homedir() : cwd || process.cwd();
+  const dir = join(base, ...entry.dir.split('/'));
+  const names = Object.values(entry.entries || {});
+  if (!names.length || !names.every((name) => existsSync(join(dir, name))))
+    return null;
+  return { dir, entries: entry.entries };
+}
 /** Directory entries of `dir`, or [] -- this module must diagnose, not crash. */
 function subdirectories(dir) {
   try {
@@ -270,24 +344,35 @@ function subdirectories(dir) {
  * carrying a readable .codex-plugin/plugin.json wins, which is the one Codex loads.
  */
 export function detectCodexInstall({ codexHome, root } = {}) {
-  const cache = join(codexHome || join(homedir(), '.codex'), 'plugins', 'cache');
+  const cache = join(
+    codexHome || join(homedir(), '.codex'),
+    'plugins',
+    'cache'
+  );
   let best = null;
   for (const marketplace of subdirectories(cache)) {
     const pluginRoot = join(cache, marketplace, PLUGIN_NAME);
     for (const version of subdirectories(pluginRoot)) {
       const installPath = join(pluginRoot, version);
-      const manifest = readJson(join(installPath, '.codex-plugin', 'plugin.json'));
+      const manifest = readJson(
+        join(installPath, '.codex-plugin', 'plugin.json')
+      );
       if (!manifest) continue;
       const installedVersion = manifest.version || version;
-      if (best && compareVersions(installedVersion, best.installedVersion) <= 0) continue;
+      if (best && compareVersions(installedVersion, best.installedVersion) <= 0)
+        continue;
       best = { installPath, installedVersion };
     }
   }
   if (!best) return null;
 
-  const packageVersion = readJson(join(root || '.', 'package.json'))?.version ?? null;
+  const packageVersion =
+    readJson(join(root || '.', 'package.json'))?.version ?? null;
   return {
     method: 'codex plugin',
+    // NOT CLAUDE CODE'S. See checklist(): Claude's settings.json and the install-hooks
+    // manifest are evidence about a Claude install and about nothing else.
+    foreign: true,
     packageVersion,
     // The Codex cache is never this package's own tree: it is a copy Codex unpacked for itself.
     sameTree: false,
@@ -502,7 +587,10 @@ export function pointsAtLoopback(value) {
  * Spoken over plain http rather than through the compiled client, because this file is copied into
  * eleven client integrations that do not ship `dist/`.
  */
-export async function probeSupervisor(env = process.env, { clientName } = {}) {
+export async function probeSupervisor(
+  env = process.env,
+  { clientName, client: requested } = {}
+) {
   if (
     String(env.TOKEN_OPTIMIZER_MODE || '')
       .trim()
@@ -589,7 +677,8 @@ export async function probeSupervisor(env = process.env, { clientName } = {}) {
   // that same variable and can only see that it LOOKS routed, so on its own it would report a
   // healthy install while the client cannot reach its provider at all -- the one failure this
   // feature can cause, and the only one a report built from our own state file would miss.
-  const pointed = env[proxyEnvFor(clientFrom(env, clientName)) || ''];
+  const pointed =
+    env[proxyEnvFor(clientFrom(env, clientName, requested)) || ''];
   if (pointsAtLoopback(pointed) && !(await portAnswers(pointed))) {
     checks.push(
       bad(
@@ -637,21 +726,36 @@ function portAnswers(url) {
  * Shared with probeProxy so the two cannot disagree about whose variable they are reading -- a
  * disagreement would have one of them reporting on a client the other is not looking at.
  */
-function clientFrom(env, clientName) {
-  const reported = String(clientName || '').toLowerCase();
-  // NORMALISED, because read raw a whitespace-only value is truthy as a client name: proxyEnvFor(' ')
-  // then finds nothing and the report says the client cannot be served -- about a client the MCP
-  // handshake had already identified by name.
+function clientFrom(env, clientName, explicit) {
+  // AN EXPLICIT REQUEST OUTRANKS THE AMBIENT ONE. TOKEN_OPTIMIZER_CLIENT is set by whatever
+  // launched this process, so it names the session -- not necessarily the install the user is
+  // asking about. A caller who names a client in the tool call has already answered the question
+  // the variable is a guess at, so the answer wins (#408).
+  const asked = managedName(explicit);
+  if (asked) return asked;
   return (
     String(env.TOKEN_OPTIMIZER_CLIENT || '')
       .trim()
-      .toLowerCase() ||
-    (/^(codex|codex[_-](cli|mcp|desktop))$/.test(reported)
-      ? 'codex'
-      : /^(claude-code|claude)$/.test(reported)
-        ? 'claude-code'
-        : managedClientFor(reported))
+      .toLowerCase() || managedName(clientName)
   );
+}
+
+/**
+ * A reported name as the registry spells it, or '' when it names nothing we manage.
+ *
+ * NORMALISED, because read raw a whitespace-only value is truthy as a client name: proxyEnvFor(' ')
+ * then finds nothing and the report says the client cannot be served -- about a client the MCP
+ * handshake had already identified by name.
+ */
+function managedName(name) {
+  const reported = String(name || '')
+    .trim()
+    .toLowerCase();
+  return /^(codex|codex[_-](cli|mcp|desktop))$/.test(reported)
+    ? 'codex'
+    : /^(claude-code|claude)$/.test(reported)
+      ? 'claude-code'
+      : managedClientFor(reported);
 }
 
 /**
@@ -697,7 +801,10 @@ function routingPending(env = process.env) {
   }
 }
 
-export function probeProxy(env = process.env, { clientName } = {}) {
+export function probeProxy(
+  env = process.env,
+  { clientName, client: requested } = {}
+) {
   // NORMALISED THE WAY THE RUNTIME NORMALISES IT. `policy.mode()` trims and
   // lowercases, so `OFF` and ` off ` genuinely turn the product off -- while a raw
   // comparison here read them as "on" and reported proxy failures against a
@@ -719,7 +826,7 @@ export function probeProxy(env = process.env, { clientName } = {}) {
     ];
   }
 
-  const client = clientFrom(env, clientName);
+  const client = clientFrom(env, clientName, requested);
   if (!client)
     return [
       bad(
@@ -1020,7 +1127,12 @@ export function checklist({ root, settingsPath, install }) {
   // injecting the policy at that very moment. Likewise the manifest: only
   // install-hooks.* writes one. Two guaranteed failures on a healthy install
   // taught the user to ignore the score.
-  if (resolved.method !== 'plugin') {
+  // AND A FOREIGN INSTALL IS NOT A SCRIPT INSTALL EITHER. settingsPath is Claude Code's
+  // settings.json and the manifest is written only by install-hooks.*, so neither is evidence
+  // about a Cursor, Codex or Copilot install. Asking anyway reproduces #408 one level down: a
+  // Claude Code machine reports its own wiring as the caller's, and a machine without one fails
+  // a check the caller could not have passed by any means.
+  if (!resolved.foreign && resolved.method !== 'plugin') {
     if (settingsPath && existsSync(settingsPath)) {
       try {
         const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
@@ -1955,6 +2067,8 @@ export async function diagnose({
   cacheDegradedReason = null,
   codexHome,
   clientName,
+  client: clientRequested,
+  cwd,
 } = {}) {
   // Resolved ONCE and threaded through, so every check reasons about the same
   // install. Detecting per-probe is how the checklist and the enforcement probe
@@ -1963,11 +2077,14 @@ export async function diagnose({
   // THE CLIENT DECIDES WHICH INSTALL IS THE SUBJECT. Read through the same clientFrom() the
   // proxy checks use, so the report cannot diagnose one client's install while describing
   // another's routing (#408).
+  const client = clientFrom(process.env, clientName, clientRequested);
+
   const install = detectInstall({
     pluginsDir,
     root,
-    client: clientFrom(process.env, clientName),
+    client,
     codexHome,
+    cwd,
   });
 
   // THE THREE SPAWNING PROBES RUN CONCURRENTLY. Each is a separate Node
@@ -1988,7 +2105,7 @@ export async function diagnose({
       probeSessionStart({ root, workspace, install }),
       skipServer ? Promise.resolve([]) : probeServer({ root }),
       // One loopback request with a short timeout; it shares no state with the others.
-      probeSupervisor(process.env, { clientName }),
+      probeSupervisor(process.env, { clientName, client: clientRequested }),
     ]);
 
   const checks = [
@@ -1997,7 +2114,7 @@ export async function diagnose({
     ...probeVersion({ install, crossClient }),
     ...probeHarvest(),
     ...supervisor,
-    ...probeProxy(process.env, { clientName }),
+    ...probeProxy(process.env, { clientName, client: clientRequested }),
     ...enforcement,
     ...sessionStart,
     ...probeGraph({ dir: graphDir }),

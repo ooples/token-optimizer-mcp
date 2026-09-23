@@ -19,10 +19,13 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 
@@ -90,7 +93,9 @@ check('B1', 'project findings cannot leak across repos', () => {
   if (!vendored.includes('TRANSFERABLE_SCOPES')) {
     return fail('the vendored core does not carry the gate');
   }
-  return pass('gate present in hooks-core and every vendored copy; sync check clean');
+  return pass(
+    'gate present in hooks-core and every vendored copy; sync check clean'
+  );
 });
 
 // ---------------------------------------------------------------- B2
@@ -131,7 +136,8 @@ check('B2', 'the cache-weighted gate is green and not vacuous', () => {
 check('B3', 'the published table is reproducible by its harness', () => {
   const t = run(process.execPath, ['bench/compression/readme-table.check.mjs']);
   if (!t.ok) return fail('README figures disagree with the harness');
-  if (!t.out.includes('README TABLE AGREES')) return fail('check did not confirm agreement');
+  if (!t.out.includes('README TABLE AGREES'))
+    return fail('check did not confirm agreement');
   return pass(t.out.trim().split('\n').slice(-2).join(' | '));
 });
 
@@ -169,7 +175,9 @@ check('B5', 'every reduction claim carries the retention claim', () => {
     return fail('the retention counts are not beside it');
   }
   if (!/0\.94x/.test(r)) return fail('the spill size is not disclosed');
-  return pass('retention counts and spill size published next to the reduction');
+  return pass(
+    'retention counts and spill size published next to the reduction'
+  );
 });
 
 // ---------------------------------------------------------------- B6
@@ -214,7 +222,8 @@ check('B6', 'task accuracy is measured against a baseline arm', () => {
     return fail(
       `${RESULT} parsed as ${Array.isArray(m) ? 'an array' : String(m === null ? 'null' : typeof m)}, ` +
         'not a measurement object -- regenerate it with ' +
-        'node bench/accuracy/squad-eval.mjs --n 30 --json ' + RESULT
+        'node bench/accuracy/squad-eval.mjs --n 30 --json ' +
+        RESULT
     );
   }
   // Provenance first: an undated measurement cannot be known to be stale.
@@ -256,7 +265,9 @@ check('B7', 'no competitor analysis lives in this public repo', () => {
   const banned = ['docs/COMPETITIVE_GAPS.md', 'docs/COMPETITOR_HEADROOM.md'];
   const present = banned.filter((f) => existsSync(join(ROOT, f)));
   if (present.length) {
-    return fail(`competitive analysis is committed here: ${present.join(', ')}`);
+    return fail(
+      `competitive analysis is committed here: ${present.join(', ')}`
+    );
   }
   // A dangling link advertises what was removed and where it went.
   const readme = read('README.md');
@@ -268,28 +279,34 @@ check('B7', 'no competitor analysis lives in this public repo', () => {
 });
 
 // ---------------------------------------------------------------- B8
-check('B8', 'the retracted competitor caveat is retracted where it is read', () => {
-  // ONLY THE IN-REPO SURFACE IS CHECKABLE FROM HERE, by design. The
-  // competitive analysis is deliberately not in this repository -- it is a
-  // public one, and the analysis is for us rather than for them -- so the
-  // second half of this check was removed rather than pointed at a file
-  // that must not exist. fixtures.mjs is the surface that matters anyway:
-  // it is what the next person to run the competitor arm will read.
-  const f = read('bench/compression/fixtures.mjs');
-  if (!f.includes('CORRECTION, 2026-09-21')) {
-    return fail('fixtures.mjs still presents the warning as a setup error');
-  }
-  // Case-insensitive on purpose: the note writes COLD in caps for emphasis,
-  // and a check that fails on the emphasis rather than the substance is the
-  // spelling-not-behaviour error over again.
-  if (!/cold/i.test(f) || !f.includes('ensure_background_load')) {
-    return fail(
-      'the correction does not explain WHY the warning is not a setup error, ' +
-        'so a reader will try to fix it again'
+check(
+  'B8',
+  'the retracted competitor caveat is retracted where it is read',
+  () => {
+    // ONLY THE IN-REPO SURFACE IS CHECKABLE FROM HERE, by design. The
+    // competitive analysis is deliberately not in this repository -- it is a
+    // public one, and the analysis is for us rather than for them -- so the
+    // second half of this check was removed rather than pointed at a file
+    // that must not exist. fixtures.mjs is the surface that matters anyway:
+    // it is what the next person to run the competitor arm will read.
+    const f = read('bench/compression/fixtures.mjs');
+    if (!f.includes('CORRECTION, 2026-09-21')) {
+      return fail('fixtures.mjs still presents the warning as a setup error');
+    }
+    // Case-insensitive on purpose: the note writes COLD in caps for emphasis,
+    // and a check that fails on the emphasis rather than the substance is the
+    // spelling-not-behaviour error over again.
+    if (!/cold/i.test(f) || !f.includes('ensure_background_load')) {
+      return fail(
+        'the correction does not explain WHY the warning is not a setup error, ' +
+          'so a reader will try to fix it again'
+      );
+    }
+    return pass(
+      'corrected in the fixtures, with the reason, where a benchmarker reads it'
     );
   }
-  return pass('corrected in the fixtures, with the reason, where a benchmarker reads it');
-});
+);
 
 // ---------------------------------------------------------------- B9
 check('B9', 'the frozen comparators carry provenance', () => {
@@ -299,7 +316,8 @@ check('B9', 'the frozen comparators carry provenance', () => {
     return fail('provenance does not admit the unknown capture date');
   }
   const seen = (f.match(/`theirs` provenance: see the note/g) || []).length;
-  if (seen < 3) return fail(`only ${seen} of the other comparators point at it`);
+  if (seen < 3)
+    return fail(`only ${seen} of the other comparators point at it`);
   return pass('provenance block plus pointers on every other comparator');
 });
 
@@ -336,34 +354,161 @@ check('B10', 'ndjson is compressed, and damaged json still refused', () => {
   const m = r.out.match(/\{.*\}/);
   if (!m) return fail(`probe printed nothing usable: ${r.out.slice(0, 200)}`);
   const { ratio, kept, refused } = JSON.parse(m[0]);
-  if (ratio < 0.5) return fail(`ndjson reduction only ${(ratio * 100).toFixed(1)}%`);
+  if (ratio < 0.5)
+    return fail(`ndjson reduction only ${(ratio * 100).toFixed(1)}%`);
   if (!kept) {
     return fail(
       'the anomalous record did not survive intact -- level, host or message ' +
         'is missing, so the answer to the query was compressed away'
     );
   }
-  if (!refused) return fail('a damaged document was rewritten — the guard is gone');
+  if (!refused)
+    return fail('a damaged document was rewritten — the guard is gone');
   return pass(
     `ndjson ${(ratio * 100).toFixed(1)}% reduction, ERROR row kept, damaged document refused`
   );
 });
 
 // ---------------------------------------------------------------- B11
-check('B11', "the competitor clone is out of our test run", () => {
-  const cfg = read('jest.config.js');
-  if (!cfg.includes('.codex/')) return fail('.codex/ is not ignored by jest');
-  return pass('<rootDir>/.codex/ is in testPathIgnorePatterns');
+check('B11', 'the competitor clone is out of our test run', () => {
+  // THE ARRAY, NOT THE FILE’S PROSE. Searching the source text for
+  // '.codex/' also matches the comment above the pattern explaining why it
+  // is there, so deleting the live entry and keeping the explanation left
+  // this green while the competitor clone came back into the test run.
+  let cfg;
+  try {
+    cfg = require(join(ROOT, 'jest.config.js'));
+  } catch (err) {
+    return fail(`jest.config.js does not load: ${err.message}`);
+  }
+  // jest.config.js is ESM (export default), so require hands back the module
+  // namespace and the config sits under .default.
+  const config = cfg?.default ?? cfg;
+  const ignored = config?.testPathIgnorePatterns;
+  if (!Array.isArray(ignored))
+    return fail(`jest.config.js declares no testPathIgnorePatterns array`);
+  const hit = ignored.find((p) => typeof p === 'string' && p.includes('.codex/'));
+  if (!hit)
+    return fail(`.codex/ is not in testPathIgnorePatterns: ${JSON.stringify(ignored)}`);
+  return pass(`${hit} is in testPathIgnorePatterns`);
 });
 
 // ---------------------------------------------------------------- B12
+// ---------------------------------------------------------------- B13
+check('B13', 'info retention is measured on their corpus', () => {
+  const HARNESS = 'bench/accuracy/info-retention-eval.mjs';
+  if (!existsSync(join(ROOT, HARNESS)))
+    return fail('no info-retention harness');
+  const src = read(HARNESS);
+
+  // THEIR FIXTURES, OR THE NUMBER IS NOT COMPARABLE. A retention figure on a
+  // corpus we invented is dismissible, and our own fixtures have already lost
+  // us one argument. These four probes are the ones their generator plants.
+  const needs = [
+    ['their generator cited', 'compression_only.py'],
+    ['error-code probe', 'ERR-'],
+    ['alert-status probe', "'critical'"],
+    ['anomalous-value probe', "'98.7'"],
+    ['named-server probe', 'prod-server-'],
+    ['a vacuity floor', 'MIN_MEAN_REDUCTION'],
+  ].filter(([, token]) => !src.includes(token));
+  if (needs.length)
+    return fail(`harness lacks: ${needs.map(([n]) => n).join(', ')}`);
+
+  const RESULT = 'bench/accuracy/results/info-retention.json';
+  const REGEN = `node ${HARNESS} --n 30 --json ${RESULT}`;
+  if (!existsSync(join(ROOT, RESULT)))
+    return fail(`no committed measurement at ${RESULT} -- run ${REGEN}`);
+
+  let m;
+  try {
+    m = JSON.parse(read(RESULT));
+  } catch (err) {
+    return fail(`${RESULT} is not readable json: ${err.message}`);
+  }
+  if (m === null || typeof m !== 'object' || Array.isArray(m))
+    return fail(`${RESULT} is not a measurement object -- run ${REGEN}`);
+  if (!m.measuredAt || !m.harnessSha || m.harnessSha === 'unknown')
+    return fail(`${RESULT} carries no measuredAt/harnessSha stamp`);
+
+  // THE STAMP MUST NAME THIS HARNESS, NOT MERELY A COMMIT. A sha that is not
+  // the string "unknown" was the whole test, so a result measured against an
+  // older generator -- different probes, different corpus, different floor --
+  // satisfied it for as long as nobody looked. Compare the CONTENT at that
+  // sha with the file on disk. Deliberately not a check that the result was
+  // committed in the same commit as the run: rerunning the benchmark without
+  // touching the harness is legitimate and must stay so.
+  let measuredHarness;
+  try {
+    measuredHarness = execFileSync('git', ['show', `${m.harnessSha}:${HARNESS}`], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+  } catch {
+    return fail(`${RESULT} stamps ${m.harnessSha.slice(0, 12)}, which has no ${HARNESS}`);
+  }
+  // NORMALISE THE LINE ENDINGS BEFORE COMPARING. git show hands back the blob
+  // as stored, which is LF, while the working file on Windows is CRLF -- 236
+  // carriage returns of difference in a file that is otherwise identical. A raw
+  // comparison therefore passes on Linux CI and fails only on a Windows
+  // checkout, which is the worst shape a verifier failure can take.
+  const normalise = (text) => text.replace(/\r\n/g, '\n');
+  if (normalise(measuredHarness) !== normalise(src))
+    return fail(
+      `${RESULT} was measured with a different ${HARNESS} ` +
+        `(stamped ${m.harnessSha.slice(0, 12)}) -- run ${REGEN}`
+    );
+
+  // INVARIANTS THE VERIFIER OWNS, NOT ONES THE MEASUREMENT SUPPLIES.
+  // Reading the floor out of the artifact let the artifact set its own bar:
+  // meanReduction 0 against minMeanReduction 0 passed, which is the inert
+  // engine this blocker exists to catch, wearing the result of a real run.
+  // The floor is read back out of the harness source instead, so the two
+  // cannot drift apart silently either.
+  const floor = /const MIN_MEAN_REDUCTION = ([0-9.]+);/.exec(src);
+  if (!floor) return fail(`${HARNESS} no longer declares MIN_MEAN_REDUCTION`);
+  const required = Number(floor[1]);
+  if (!(required > 0)) return fail(`${HARNESS} declares a floor of ${required}`);
+
+  if (m.dataset !== 'info-retention')
+    return fail(`${RESULT} is for dataset ${JSON.stringify(m.dataset)}`);
+  if (m.source !== 'headroom/evals/runners/compression_only.py')
+    return fail(`${RESULT} cites ${JSON.stringify(m.source)}, not their generator`);
+  if (m.probes !== m.cases * 4)
+    return fail(`${RESULT} has ${m.probes} probes for ${m.cases} cases, not four each`);
+  if (m.literalSurvival !== 1)
+    return fail(`${RESULT} literal survival ${m.literalSurvival}, below their oracle`);
+  if (m.lost !== 0) return fail(`${RESULT} lost ${m.lost} probe fact(s)`);
+
+  // A RETENTION NUMBER WITHOUT A REDUCTION NUMBER IS MEANINGLESS. An engine
+  // that returns its input unchanged retains everything -- squad-eval was
+  // measured reporting exactly that, 1.000 at 0.0%.
+  if (!(m.meanReduction >= required))
+    return fail(
+      `${RESULT} reduced ${(m.meanReduction * 100).toFixed(1)}%, below the ` +
+        `${(required * 100).toFixed(1)}% vacuity floor in ${HARNESS} -- the engine was inert`
+    );
+  if (m.retention !== 1)
+    return fail(`${RESULT} lost ${m.lost} probe fact(s) of ${m.probes}`);
+
+  return pass(
+    `${m.cases} cases, ${m.probes} probes, retention ${m.retention.toFixed(3)} ` +
+      `at ${(m.meanReduction * 100).toFixed(1)}% reduction`
+  );
+});
 check('B12', 'the launch suite is hermetic and green', () => {
   const src = read('tests/hooks/launch-version-pin.test.mjs');
   if (!src.includes('scrubbedEnv')) {
     return fail('the suite still inherits TOKEN_OPTIMIZER_* from the shell');
   }
-  if (!src.includes('an inherited pin from the developer shell does not reach the shim')) {
-    return fail('nothing guards the hermeticity, so the leak can return unnoticed');
+  if (
+    !src.includes(
+      'an inherited pin from the developer shell does not reach the shim'
+    )
+  ) {
+    return fail(
+      'nothing guards the hermeticity, so the leak can return unnoticed'
+    );
   }
   // Run it WITH the leak present, which is the condition that used to fail.
   // jest directly, with the flag package.json's `test` script passes --
@@ -374,15 +519,163 @@ check('B12', 'the launch suite is hermetic and green', () => {
     'tests/hooks/launch-version-pin.test.mjs',
   ]);
   if (!r.ok) return fail(`the suite is red: ${r.out.slice(-300)}`);
-  return pass('green, with a guard that exports a pin and requires it to be ignored');
+  return pass(
+    'green, with a guard that exports a pin and requires it to be ignored'
+  );
 });
+
+// ---------------------------------------------------------------- B14
+check(
+  'B14',
+  'every competitive claim is backed by a re-runnable measurement',
+  () => {
+    const PROBE = 'bench/competitive/probe-headroom.py';
+    const RESULT = 'bench/competitive/results/claims.json';
+    const REGEN = `python ${PROBE} ${RESULT}`;
+
+    // THREE CLAIMS ABOUT THEM WERE MADE FROM READING SOURCE AND EACH WAS WRONG:
+    // a function tested with one flag generalised to a capability they have; a
+    // result object read through the wrong field, reporting their output as
+    // larger than their input; and a substring oracle run against a CSV
+    // encoding, reporting total loss where there was none. Every one would have
+    // shipped. So a claim is a measurement with a producer, or it is not a
+    // claim.
+    if (!existsSync(join(ROOT, PROBE)))
+      return fail(`no claim probe at ${PROBE}`);
+    if (!existsSync(join(ROOT, RESULT)))
+      return deferred(`no committed measurement at ${RESULT} -- run ${REGEN}`);
+
+    let m;
+    try {
+      m = JSON.parse(read(RESULT));
+    } catch (err) {
+      return fail(`${RESULT} is not readable json: ${err.message}`);
+    }
+    if (!m?.measuredAt || !m?.harnessSha || !m?.competitorVersion)
+      return fail(
+        `${RESULT} carries no measuredAt/harnessSha/competitorVersion`
+      );
+
+    // The probe writes 'unknown' when git rev-parse fails, which is truthy and
+    // therefore satisfied a presence check while naming no revision at all. A
+    // measurement that cannot say which tree produced it is not one anyone can
+    // re-run.
+    if (m.harnessSha === 'unknown')
+      return fail(`${RESULT} was measured outside a git checkout -- run ${REGEN}`);
+
+    // A CONTENT HASH, BECAUSE A SHA DOES NOT SEE UNCOMMITTED EDITS.
+    // harnessSha records the commit the probe ran at, which says nothing
+    // about whether the probe on disk is still that probe -- an edited but
+    // uncommitted probe keeps the old stamp and every claim below keeps
+    // passing against a measurement it no longer produces.
+    const probeHash = createHash('sha256')
+      .update(read(PROBE).replace(/\r\n/g, '\n'), 'utf8')
+      .digest('hex');
+    if (!m.probeSha256)
+      return fail(`${RESULT} carries no probeSha256 -- run ${REGEN}`);
+    if (m.probeSha256 !== probeHash)
+      return fail(
+        `${RESULT} was measured with a different ${PROBE} ` +
+          `(${m.probeSha256.slice(0, 12)} vs ${probeHash.slice(0, 12)}) -- run ${REGEN}`
+      );
+
+    const c = m.claims ?? {};
+    const problems = [];
+
+    // 'their lossless mode is not lossless'
+    const lossless = c.losslessModeDropsKeys;
+    if (!lossless) problems.push('losslessModeDropsKeys not measured');
+    else {
+      if (!(lossless.keysOut < lossless.keysIn))
+        problems.push(
+          `lossless mode kept ${lossless.keysOut} of ${lossless.keysIn} keys -- ` +
+            'it no longer drops any, so the claim is retired, not failing'
+        );
+      if (lossless.outputParsesAsJson !== true)
+        problems.push(
+          'lossless output no longer parses, so "silent" is unproven'
+        );
+      if ((lossless.recoveryMarkers ?? []).length)
+        problems.push(
+          `lossless output now carries ${JSON.stringify(lossless.recoveryMarkers)} -- ` +
+            'the drop is marked, so "no marker of any kind" is false'
+        );
+    }
+
+    // 'their marker dies with the store'
+    const ccr = c.ccrMarkerDiesWithTheStore;
+    if (!ccr) problems.push('ccrMarkerDiesWithTheStore not measured');
+    else {
+      if (!(ccr.hashesInOutput > 0 && ccr.resolveWhileWarm > 0))
+        problems.push(
+          'nothing resolved even warm, so the probe proves nothing'
+        );
+      if (ccr.storeCleared !== true)
+        problems.push(
+          'the store could not be cleared, so the cold case is untested'
+        );
+      else if (ccr.resolveAfterClear !== 0)
+        problems.push(
+          `${ccr.resolveAfterClear} hash(es) still resolve after clearing -- ` +
+            'the marker survives, so the claim is false'
+        );
+      if (!(ccr.rowsVisible < ccr.rowsIn))
+        problems.push(
+          'no rows were removed, so nothing depended on the marker'
+        );
+    }
+
+    // 'their code marker names no location, ours does'
+    const code = c.codeMarkerCarriesNoLocation;
+    if (!code) problems.push('codeMarkerCarriesNoLocation not measured');
+    else {
+      if (code.elidesBodies !== true)
+        problems.push(
+          'they no longer elide bodies, so the comparison is not like for like'
+        );
+      // MEASURED FALSE, NOT MERELY NOT-TRUE. `undefined === true` is false,
+      // so a result carrying only {"elidesBodies": true} satisfied this and
+      // the comparison below, where two missing counts compare equal. The
+      // claim is about what their marker does, so it needs the observation.
+      if (code.markerCarriesLocation !== false)
+        problems.push(
+          `markerCarriesLocation is ${JSON.stringify(code.markerCarriesLocation)}, ` +
+            'so the claim is either false or unmeasured'
+        );
+      const counted = (v) => Number.isInteger(v) && v > 0;
+      if (!counted(code.signaturesIn) || !counted(code.signaturesOut))
+        problems.push(
+          `signature counts are ${JSON.stringify(code.signaturesIn)}/` +
+            `${JSON.stringify(code.signaturesOut)} -- the probe found no signatures ` +
+            'to compare, so retention is unmeasured'
+        );
+      else if (code.signaturesOut !== code.signaturesIn)
+        problems.push(
+          `they kept ${code.signaturesOut} of ${code.signaturesIn} signatures -- ` +
+            'retention differs, so a ratio comparison needs that caveat'
+        );
+    }
+
+    if (problems.length) return fail(problems.join('; '));
+    return pass(
+      `3 claims re-measured against ${m.competitorVersion}: ` +
+        `${lossless.keysOut}/${lossless.keysIn} keys kept unmarked, ` +
+        `${ccr.resolveAfterClear} of ${ccr.hashesInOutput} hashes resolve cold, ` +
+        `their code marker located=${code.markerCarriesLocation}`
+    );
+  }
+);
 
 // ---------------------------------------------------------------- report
 const w = Math.max(...results.map((r) => r.what.length));
 console.log('Pre-plan blockers — verification\n');
 for (const r of results) {
   const tag =
-    r.state === 'PASS' ? 'PASS    ' : r.state === 'FAIL' ? 'FAIL    ' : 'DEFERRED';
+    r.state === 'PASS'
+      ? 'PASS    '
+      : r.state === 'FAIL'
+        ? 'FAIL    '
+        : 'DEFERRED';
   console.log(`${tag}  ${r.id.padEnd(4)} ${r.what.padEnd(w)}  ${r.detail}`);
 }
 

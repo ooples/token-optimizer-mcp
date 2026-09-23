@@ -1,0 +1,14 @@
+{
+  "dataset": "info-retention",
+  "source": "headroom/evals/runners/compression_only.py",
+  "measuredAt": "2026-09-23T11:49:06.549Z",
+  "harnessSha": "15e4eca78f9c62da73ca2c6fe7a662fdf4656105",
+  "cases": 30,
+  "probes": 120,
+  "literalSurvival": 1,
+  "retention": 1,
+  "lost": 0,
+  "meanReduction": 0.32718708435969085,
+  "minMeanReduction": 0.15,
+  "passed": true
+}

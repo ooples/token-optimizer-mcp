@@ -35,12 +35,19 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci
+      # --prefer-offline, BECAUSE THIS JOB'S COST IS npm, NOT OUR CODE. Measured on two
+      # green windows-2022 runs of the same commit range: npm ci took 85s and 196s, the npm@12
+      # compatibility step 48s and 79s, and the tarball install 127s and 135s -- 410s of a 525s
+      # job, varying 2.3x run to run. setup-node has already restored ~/.npm, so every one of
+      # those packages is on disk; --prefer-offline stops npm revalidating each against the
+      # registry and only reaches the network for something genuinely missing. --no-audit and
+      # --no-fund drop two more registry round-trips that report nothing this job reads.
+      - run: npm ci --prefer-offline --no-audit --no-fund
       - run: npm run sync:hooks:check
       - run: npm run build
       - run: npm run verify:package-contents
       - name: Verify package report compatibility with publishing npm
-        run: npx --yes npm@12.0.2 run verify:package-contents
+        run: npx --yes --prefer-offline npm@12.0.2 run verify:package-contents
       # THE ONE GATE THAT PERFORMS AN INSTALLATION. verify:package-contents reads the tarball's file
       # list; this packs that tarball, installs it into a throwaway prefix, runs the installer from
       # the installed tree and drives the doctor. Two releases in a row shipped to fix installation
@@ -67,6 +74,13 @@ jobs:
           tests/integration/postinstall-defaults.test.mjs
           tests/integration/review387-regressions.test.mjs
           tests/integration/proxy-install-path.test.mjs
+          tests/integration/all-cli-proxy-recovery.test.mjs
+          tests/integration/automatic-install-repair.test.mjs
+          tests/integration/native-home-isolation.test.mjs
+          tests/integration/proxy-crash-recovery.test.mjs
+          tests/unit/routing-maintenance.test.ts
+          tests/unit/proxy-supervisor.test.ts
+          tests/unit/default-routing.test.ts
           tests/unit/compress/proxy.test.ts
           tests/unit/compress/proxy-cli.test.ts
           tests/unit/compress/responses-knowledge.test.ts

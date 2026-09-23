@@ -215,6 +215,8 @@ describe('managed client installation', () => {
           command: process.execPath,
           env: {
             ...process.env,
+            CLAUDE_CONFIG_DIR: dir,
+            TOKEN_OPTIMIZER_HOME: dir,
             ANTHROPIC_BASE_URL: `http://127.0.0.1:${server.address().port}/provider`,
             TOKEN_OPTIMIZER_PROXY: '1',
           },

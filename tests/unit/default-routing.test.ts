@@ -25,6 +25,7 @@ import {
   readRoutingManifest,
   claudeSettingsFile,
   defaultRoutingAllowed,
+  originalUpstream,
 } from '../../src/proxy/default-routing.js';
 
 let home;
@@ -52,6 +53,70 @@ beforeEach(() => {
 afterEach(() => rmSync(home, { recursive: true, force: true }));
 
 describe('routing a client we did not launch', () => {
+  it('honors the Claude configuration directory', () => {
+    expect(claudeSettingsFile({ CLAUDE_CONFIG_DIR: home })).toBe(
+      join(home, 'settings.json')
+    );
+  });
+
+  it('does not recreate settings deleted during startup', async () => {
+    write({});
+    const result = await applyDefaultRouting(async () => {
+      rmSync(settings);
+      return served;
+    }, env);
+    expect(result.status).toBe('user-owned');
+    expect(existsSync(settings)).toBe(false);
+  });
+
+  it('rejects conflicting provider ownership for one URL', () => {
+    mkdirSync(env.TOKEN_OPTIMIZER_HOME, { recursive: true });
+    writeFileSync(
+      join(env.TOKEN_OPTIMIZER_HOME, 'default-routing.json'),
+      JSON.stringify({
+        schema: 1,
+        entries: {
+          a: { value: served, upstream: 'https://provider-a.example' },
+          b: { value: served, upstream: 'https://provider-b.example' },
+        },
+      })
+    );
+    expect(() => originalUpstream(served, env)).toThrow(/ambiguous/i);
+  });
+  it('preserves hook upgrades and removed settings while the supervisor starts', async () => {
+    write({ model: 'old', obsolete: true });
+    const result = await applyDefaultRouting(async () => {
+      write({
+        model: 'new',
+        hooks: { Stop: [{ hooks: [{ command: 'updated hook' }] }] },
+      });
+      return served;
+    }, env);
+    expect(result.status).toBe('written');
+    expect(read()).toEqual({
+      model: 'new',
+      hooks: { Stop: [{ hooks: [{ command: 'updated hook' }] }] },
+      // The flag comes with the route on this branch: the upstream is the Anthropic default, so
+      // installing the route is exactly when tool deferral has to be kept switched on. The shape
+      // stays exhaustive so a stray key still fails here.
+      env: { ANTHROPIC_BASE_URL: served, ENABLE_TOOL_SEARCH: 'true' },
+    });
+  });
+
+  it('does not overwrite a provider changed while the supervisor starts', async () => {
+    write({});
+    const changed = { env: { ANTHROPIC_BASE_URL: 'https://chosen.example' } };
+    expect(
+      (
+        await applyDefaultRouting(async () => {
+          write(changed);
+          return served;
+        }, env)
+      ).status
+    ).toBe('user-owned');
+    expect(read()).toEqual(changed);
+    expect(readRoutingManifest(env).entries).toEqual({});
+  });
   it('points Claude Code at the route and leaves the rest of the file alone', async () => {
     write({
       model: 'opus',
@@ -372,6 +437,28 @@ describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
 
     removeDefaultRouting(env);
     expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+  });
+
+  it('sees a flag edit made while the supervisor was starting', async () => {
+    // #426 re-reads the file after the await because starting a supervisor yields, and a user
+    // edit lands in between. Who owns the tool-search flag has to be answered from that re-read
+    // too: deciding it from the pre-await snapshot would read the user's new value as ours and
+    // overwrite it with `true`.
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(owns()).toBe(true);
+
+    const result = await applyDefaultRouting(async () => {
+      write({
+        model: 'opus',
+        env: { ANTHROPIC_BASE_URL: served, ENABLE_TOOL_SEARCH: 'auto' },
+      });
+      return 'http://127.0.0.1:45713';
+    }, env);
+
+    expect(result.status).toBe('written');
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+    expect(owns()).toBe(false);
   });
 
   it('still takes it back under the launcher when a backend arrives', async () => {

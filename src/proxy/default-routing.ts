@@ -197,7 +197,8 @@ export function claudeSettingsFile(
   env: NodeJS.ProcessEnv = process.env
 ): string {
   return (
-    env.TOKEN_OPTIMIZER_SETTINGS || join(homedir(), '.claude', 'settings.json')
+    env.TOKEN_OPTIMIZER_SETTINGS ||
+    join(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json')
   );
 }
 
@@ -405,46 +406,58 @@ export async function applyDefaultRouting(
       ? { ...removeDefaultRouting(env), status: 'healed' }
       : { status: 'unavailable' };
   }
-  const ours = toolSearchIsOurs(settings, recorded);
+  // Starting a supervisor yields to other processes. Hook migration or a user edit may have
+  // changed settings while we waited; merge into the current file, not the earlier snapshot.
+  const {
+    settings: latest,
+    existed: stillExists,
+    unreadable: changedUnreadable,
+  } = loadSettings(path);
+  if (changedUnreadable) return { status: 'unreadable', path };
+  if (!stillExists) return { status: 'user-owned', path };
+  if (latest.env?.[VARIABLE] !== settings.env?.[VARIABLE])
+    return { status: 'user-owned', path };
+
+  // READ FROM `latest` FOR THE SAME REASON THE WRITE GOES THERE. The snapshot taken before the
+  // await describes a file somebody may have edited since, and who owns the tool-search flag is
+  // exactly the kind of thing such an edit changes.
+  const ours = toolSearchIsOurs(latest, recorded);
   // TWO DIFFERENT REASONS NOT TO WRITE IT, and only one of them is a reason to take it back.
   // "We must not assert this" -- a third-party backend, or a route forwarding to a gateway --
   // means a flag of ours in the file is wrong and has to go. "Someone else is already asserting
   // it" does not: `scripts/run-client.mjs` puts ENABLE_TOOL_SEARCH in the environment of the
   // Claude it launches, so an MCP server running inside that child sees it set and would
   // otherwise delete the settings entry that serves every OTHER way the user starts Claude.
-  const appropriate = toolSearchAppropriate(settings, upstream, env);
-  const addToolSearch = shouldPreserveToolSearch(settings, upstream, env, ours);
+  const appropriate = toolSearchAppropriate(latest, upstream, env);
+  const addToolSearch = shouldPreserveToolSearch(latest, upstream, env, ours);
   const takeBack = ours && !appropriate;
 
-  if (settings.env?.[VARIABLE] === url && recorded && recorded.value === url) {
+  if (latest.env?.[VARIABLE] === url && recorded?.value === url) {
     // OUR FLAG CAN OUTLIVE THE REASON FOR IT. The route has not moved, so there is nothing to
     // write -- but a later session may have turned on Bedrock, Vertex or Foundry, and nothing
     // else would ever take the flag back out: removal only runs when routing is switched off
     // altogether, and a third-party backend does not switch routing off.
-    if (takeBack && settings.env) {
-      delete settings.env[TOOL_SEARCH];
-      saveSettings(path, settings);
+    if (takeBack && latest.env) {
+      delete latest.env[TOOL_SEARCH];
+      saveSettings(path, latest);
     }
-    // OWNERSHIP IS RECONCILED EVEN WHEN NOTHING WAS WRITTEN. A user who edits
-    // the flag to something other than what we wrote has taken it over, and
-    // leaving `toolSearchAdded` true would have `removeDefaultRouting` delete
-    // their value later on our behalf.
+    // OWNERSHIP IS RECONCILED EVEN WHEN NOTHING WAS WRITTEN. A user who edits the flag to
+    // something other than what we wrote has taken it over, and leaving `toolSearchAdded` true
+    // would have `removeDefaultRouting` delete their value later on our behalf.
     const stillOurs = ours && appropriate;
-    if (recorded.toolSearchAdded !== stillOurs)
+    if (recorded && recorded.toolSearchAdded !== stillOurs)
       record(env, { ...recorded, toolSearchAdded: stillOurs });
     return { status: 'unchanged', path, url, upstream };
   }
 
-  const createdEnv = recorded
-    ? recorded.createdEnv
-    : settings.env === undefined;
-  settings.env = { ...settings.env, [VARIABLE]: url };
+  const createdEnv = recorded ? recorded.createdEnv : latest.env === undefined;
+  latest.env = { ...latest.env, [VARIABLE]: url };
   // Written when we want it, taken out when it is ours and asserting it has become wrong, and
   // otherwise carried through by the spread. Never touched when it is the user’s: that is the
   // whole of `ours`.
-  if (addToolSearch) settings.env[TOOL_SEARCH] = 'true';
-  else if (takeBack) delete settings.env[TOOL_SEARCH];
-  saveSettings(path, settings);
+  if (addToolSearch) latest.env[TOOL_SEARCH] = 'true';
+  else if (takeBack) delete latest.env[TOOL_SEARCH];
+  saveSettings(path, latest);
   record(env, {
     variable: VARIABLE,
     value: url,
@@ -477,9 +490,18 @@ export function originalUpstream(
   env: NodeJS.ProcessEnv = process.env
 ): string | undefined {
   if (!value) return value;
-  const recorded = readRoutingManifest(env).entries[claudeSettingsFile(env)];
-  if (!recorded || recorded.value !== value) return value;
-  return recorded.previous ?? DEFAULT_UPSTREAM;
+  const recorded = Object.values(readRoutingManifest(env).entries).filter(
+    (entry) => entry?.value === value
+  );
+  if (!recorded.length) return value;
+  const upstreams = new Set(
+    recorded.map((entry) => entry.upstream || entry.previous)
+  );
+  if (upstreams.size !== 1 || ![...upstreams][0])
+    throw new Error(
+      'Ambiguous proxy ownership; restore the provider endpoint before launching.'
+    );
+  return [...upstreams][0];
 }
 
 /**

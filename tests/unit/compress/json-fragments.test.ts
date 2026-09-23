@@ -7,14 +7,31 @@ import { compressResponses } from '../../../src/proxy/responses.js';
 
 function expand(text: string): string {
   return text.replace(
-    /\[JSON fragment records; missing records remain unknown\. Join template parts, replacing numeric slots with (?:raw JSON lexemes|verbatim text fragments) from each row\. Template: (\[[^\n]+\])\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
-    (_all, encoded: string, rows: string) => {
+    /\[JSON fragment records; missing records remain unknown\. Join template parts, replacing numeric slots with (?:raw JSON lexemes|verbatim text fragments) from each row\. Template: (\[[^\n]+?\])(?:; slots ([^\]\n]+) count from 0)?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
+    (_all, encoded: string, slots: string | undefined, rows: string) => {
       const template = JSON.parse(encoded) as (number | string)[];
+      // A column stated as a rule is omitted from every row; the remaining
+      // cells arrive in slot order, so the two streams interleave by slot.
+      const rules = new Map<number, { first: number; step: number }>();
+      for (const part of (slots ?? '').split(' ').filter(Boolean)) {
+        const m = /^(\d+)=(-?\d+)\+(-?\d+)n$/.exec(part);
+        if (!m) throw new Error(`unreadable run clause ${part}`);
+        rules.set(Number(m[1]), { first: Number(m[2]), step: Number(m[3]) });
+      }
       return rows
         .trim()
         .split('\n')
-        .map((row) => {
-          const values = JSON.parse(row) as string[];
+        .map((row, index) => {
+          const present = JSON.parse(row) as string[];
+          const width = present.length + rules.size;
+          const values: string[] = [];
+          let next = 0;
+          for (let slot = 0; slot < width; slot += 1) {
+            const rule = rules.get(slot);
+            values.push(
+              rule ? String(rule.first + rule.step * index) : present[next++]
+            );
+          }
           return template
             .map((part) => (typeof part === 'number' ? values[part] : part))
             .join('');
@@ -80,7 +97,7 @@ test.each(['\n', '\r\n'])(
     expect(out.text).toContain('ALL 120 records preserved');
     expect(out.text.length).toBeLessThan(input.length * 0.5);
     const normalized = out.text.replace(
-      /\[JSON array records; ALL \d+ records preserved\./g,
+      /\[JSON array records; ALL \d+ records preserved(?:, \d+ encoded here)?\./g,
       '[JSON fragment records; missing records remain unknown.'
     );
     expect(expand(normalized)).toBe(input);

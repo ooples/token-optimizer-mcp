@@ -130,9 +130,18 @@ function startMCPServer(): void {
     process.exit(1);
   }
 
-  mcpProcess = spawn('node', [serverPath], {
+  // THE NODE THAT IS ALREADY RUNNING US, AND NO CONSOLE WINDOW.
+  //
+  // Resolving the bare string "node" walks PATH, so the daemon could hand the
+  // server a different runtime than its own -- or fail outright when the host
+  // launched us without Node on PATH. And with no windowsHide, Windows
+  // allocates a console for the child whenever the daemon has none of its own,
+  // which is every time it is started by a client rather than from a terminal:
+  // a blank window per start, for the life of the daemon (#409).
+  mcpProcess = spawn(process.execPath, [serverPath], {
     stdio: ['pipe', 'pipe', 'pipe'],
     env: process.env,
+    windowsHide: true,
   });
 
   console.error(`[DAEMON] MCP server started (PID: ${mcpProcess.pid})`);
