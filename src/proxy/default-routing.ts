@@ -118,11 +118,18 @@ const TOOL_SEARCH = 'ENABLE_TOOL_SEARCH';
  * Three conditions, all of them about not overriding a deliberate choice: a third-party backend
  * is not ours to touch, an explicit value is the user’s, and a route that forwards somewhere
  * other than Anthropic’s API is a gateway whose behaviour we should not assume.
+ *
+ * OWNERSHIP IS A SEPARATE QUESTION FROM ELIGIBILITY, and collapsing the two is what made this
+ * wrong. "An explicit value is the user’s" reads OUR OWN flag as the user’s on the second pass,
+ * so a route rewrite recorded `toolSearchAdded: false` while the spread carried the flag
+ * forward -- removal then left our value behind for good. `ours` is the answer to the other
+ * question, from the manifest, and it suspends only the presence check.
  */
 function shouldPreserveToolSearch(
   settings: Settings,
   upstream: string,
-  env: NodeJS.ProcessEnv
+  env: NodeJS.ProcessEnv,
+  ours: boolean
 ): boolean {
   const external = [
     'CLAUDE_CODE_USE_BEDROCK',
@@ -135,9 +142,25 @@ function shouldPreserveToolSearch(
     )
   );
   if (external) return false;
-  if (settings.env?.[TOOL_SEARCH] !== undefined) return false;
+  if (!ours && settings.env?.[TOOL_SEARCH] !== undefined) return false;
   if (env[TOOL_SEARCH] !== undefined) return false;
   return upstream === DEFAULT_UPSTREAM;
+}
+
+/**
+ * Is the flag in the file still the one we wrote?
+ *
+ * The same test removal uses (`toolSearchAdded` and the value untouched), because the two have to
+ * agree: anything this calls ours is something removal will take back out, and anything it does
+ * not is a value we must leave exactly where it is.
+ */
+function toolSearchIsOurs(
+  settings: Settings,
+  recorded: RoutingEntry | undefined
+): boolean {
+  return (
+    recorded?.toolSearchAdded === true && settings.env?.[TOOL_SEARCH] === 'true'
+  );
 }
 
 const disabled = (value: unknown): boolean =>
@@ -360,18 +383,30 @@ export async function applyDefaultRouting(
       ? { ...removeDefaultRouting(env), status: 'healed' }
       : { status: 'unavailable' };
   }
-  if (settings.env?.[VARIABLE] === url && recorded?.value === url)
+  const ours = toolSearchIsOurs(settings, recorded);
+  const addToolSearch = shouldPreserveToolSearch(settings, upstream, env, ours);
+
+  if (settings.env?.[VARIABLE] === url && recorded && recorded.value === url) {
+    // OUR FLAG CAN OUTLIVE THE REASON FOR IT. The route has not moved, so there is nothing to
+    // write -- but a later session may have turned on Bedrock, Vertex or Foundry, and nothing
+    // else would ever take the flag back out: removal only runs when routing is switched off
+    // altogether, and a third-party backend does not switch routing off.
+    if (ours && !addToolSearch && settings.env) {
+      delete settings.env[TOOL_SEARCH];
+      saveSettings(path, settings);
+      record(env, { ...recorded, toolSearchAdded: false });
+    }
     return { status: 'unchanged', path, url, upstream };
+  }
 
   const createdEnv = recorded
     ? recorded.createdEnv
     : settings.env === undefined;
-  const addToolSearch = shouldPreserveToolSearch(settings, upstream, env);
-  settings.env = {
-    ...settings.env,
-    [VARIABLE]: url,
-    ...(addToolSearch ? { [TOOL_SEARCH]: 'true' } : {}),
-  };
+  settings.env = { ...settings.env, [VARIABLE]: url };
+  // Written when we want it, taken out when it is ours and we no longer do. Never touched when
+  // it is the user’s: that is the whole of `ours`.
+  if (addToolSearch) settings.env[TOOL_SEARCH] = 'true';
+  else if (ours) delete settings.env[TOOL_SEARCH];
   saveSettings(path, settings);
   record(env, {
     variable: VARIABLE,

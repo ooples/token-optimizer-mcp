@@ -245,4 +245,87 @@ describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
     await applyDefaultRouting(route, env);
     expect(read().env.ENABLE_TOOL_SEARCH).toBeUndefined();
   });
+
+  const moved = async () => 'http://127.0.0.1:45713';
+  const owns = () =>
+    readRoutingManifest(env).entries[claudeSettingsFile(env)].toolSearchAdded;
+
+  it('still owns the flag after the route moves', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(owns()).toBe(true);
+
+    // THE SECOND PASS READS OUR OWN FLAG AS THE USER'S. "An explicit value is the user's" was
+    // the only presence test there was, so a rewrite recorded `toolSearchAdded: false` while the
+    // spread carried the flag forward -- and removal, which asks the manifest, then left our
+    // value in a file we promise to restore exactly.
+    await applyDefaultRouting(moved, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+    expect(owns()).toBe(true);
+
+    removeDefaultRouting(env);
+    expect(read().env?.ENABLE_TOOL_SEARCH).toBeUndefined();
+  });
+
+  it('gives up the flag when the value changed between passes', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    const settled = read();
+    settled.env.ENABLE_TOOL_SEARCH = 'auto';
+    write(settled);
+
+    // Carrying ownership forward must not mean carrying it over an edit.
+    await applyDefaultRouting(moved, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+    expect(owns()).toBe(false);
+
+    removeDefaultRouting(env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+  });
+
+  it('takes the flag back out when a backend arrives and the route has not moved', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+
+    const settled = read();
+    settled.env.CLAUDE_CODE_USE_BEDROCK = '1';
+    write(settled);
+
+    // NOTHING ELSE WOULD EVER CLEAR IT. Removal runs only when routing is switched off, and a
+    // third-party backend does not switch routing off -- so without this the flag we wrote stays
+    // asserted against a backend we said we would not touch, for as long as the install lasts.
+    const result = await applyDefaultRouting(route, env);
+    expect(result.status).toBe('unchanged');
+    expect(read().env.ENABLE_TOOL_SEARCH).toBeUndefined();
+    expect(read().env.ANTHROPIC_BASE_URL).toBe(served);
+    expect(owns()).toBe(false);
+  });
+
+  it('takes the flag back out when a backend arrives and the route moves', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    const settled = read();
+    settled.env.CLAUDE_CODE_USE_VERTEX = 'true';
+    write(settled);
+
+    await applyDefaultRouting(moved, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBeUndefined();
+    expect(read().env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:45713');
+    expect(owns()).toBe(false);
+  });
+
+  it('leaves a user value alone when a backend arrives', async () => {
+    // The clearing above is ours to do only because we wrote the value. A user who set it keeps
+    // it, backend or no backend.
+    write({ env: { ENABLE_TOOL_SEARCH: 'true' } });
+    await applyDefaultRouting(route, env);
+    expect(owns()).toBe(false);
+
+    const settled = read();
+    settled.env.CLAUDE_CODE_USE_BEDROCK = '1';
+    write(settled);
+    await applyDefaultRouting(moved, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+  });
 });
