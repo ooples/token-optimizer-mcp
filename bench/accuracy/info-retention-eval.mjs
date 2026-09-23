@@ -48,18 +48,60 @@ const JSON_OUT = arg('json', null);
 const MIN_MEAN_REDUCTION = 0.15;
 
 /**
- * Port of `generate_info_retention_cases`, field for field.
+ * Python float spelling, because the corpus is compared by BYTE COUNT.
  *
- * `json.dumps(..., indent=2)` is `JSON.stringify(..., null, 2)`; the one
- * difference that matters is that Python writes `42.5` where JSON.stringify
- * writes `42.5` too, so the probe values are byte-comparable.
+ * json.dumps writes a float's repr, so an integral float is `12.0`, `5.0`,
+ * `20.0`, `40.0`. JSON.stringify writes `12`, `5`, `20`, `40`. Every number
+ * in this corpus is a Python float -- `40 + j * 0.5` and `60 + j * 0.3` are
+ * float because 0.5 and 0.3 are -- so each integral one is four bytes short
+ * per occurrence in a straight port, and the reduction this benchmark reports
+ * would be measured against a corpus that is not theirs.
+ *
+ * Non-integral values need no help: both languages print the shortest
+ * round-tripping decimal, so 45.2, 98.7 and even 60 + 3 * 0.3, which is
+ * 60.89999999999999 in both, already agree.
+ */
+function pyFloat(n) {
+  if (!Number.isFinite(n)) throw new Error(`not a finite float: ${n}`);
+  return Number.isInteger(n) ? `${n}.0` : String(n);
+}
+
+/**
+ * `json.dumps(value, indent=2)`, for the shapes this corpus uses.
+ *
+ * Layout matches JSON.stringify(value, null, 2) -- two-space indent, `: `
+ * after a key, no trailing space after a comma -- so only the number
+ * spelling differs, and that is what pyFloat supplies.
+ */
+function pyDumps(value, indent = 0) {
+  const pad = ' '.repeat(indent);
+  const inner = ' '.repeat(indent + 2);
+  if (value === null) return 'null';
+  if (typeof value === 'number') return pyFloat(value);
+  if (typeof value === 'string' || typeof value === 'boolean')
+    return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+    const items = value.map((v) => inner + pyDumps(v, indent + 2)).join(',\n');
+    return `[\n${items}\n${pad}]`;
+  }
+  const entries = Object.entries(value);
+  if (entries.length === 0) return '{}';
+  const body = entries
+    .map(([k, v]) => `${inner}${JSON.stringify(k)}: ${pyDumps(v, indent + 2)}`)
+    .join(',\n');
+  return `{\n${body}\n${pad}}`;
+}
+
+/**
+ * Port of `generate_info_retention_cases`, field for field.
  */
 function caseFor(i) {
   const errorCode = `ERR-${1000 + i}`;
   const metricValue = 42.5 + i;
   const serverName = `prod-server-${String(i).padStart(3, '0')}`;
 
-  const content = JSON.stringify(
+  const content = pyDumps(
     [
       { server: serverName, cpu: 45.2, memory: 72.1, status: 'healthy' },
       { server: `staging-${i}`, cpu: 12.0, memory: 30.5, status: 'healthy' },
@@ -78,9 +120,7 @@ function caseFor(i) {
         memory: 60 + j * 0.3,
         status: 'healthy',
       })),
-    ],
-    null,
-    2
+    ]
   );
 
   return {

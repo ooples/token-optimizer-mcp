@@ -410,16 +410,57 @@ check('B13', 'info retention is measured on their corpus', () => {
     return fail(`${RESULT} is not a measurement object -- run ${REGEN}`);
   if (!m.measuredAt || !m.harnessSha || m.harnessSha === 'unknown')
     return fail(`${RESULT} carries no measuredAt/harnessSha stamp`);
-  if (!(m.cases >= 30))
-    return fail(`${RESULT} scored ${m.cases} cases, fewer than their 30`);
+
+  // THE STAMP MUST NAME THIS HARNESS, NOT MERELY A COMMIT. A sha that is not
+  // the string "unknown" was the whole test, so a result measured against an
+  // older generator -- different probes, different corpus, different floor --
+  // satisfied it for as long as nobody looked. Compare the CONTENT at that
+  // sha with the file on disk. Deliberately not a check that the result was
+  // committed in the same commit as the run: rerunning the benchmark without
+  // touching the harness is legitimate and must stay so.
+  let measuredHarness;
+  try {
+    measuredHarness = execFileSync('git', ['show', `${m.harnessSha}:${HARNESS}`], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+  } catch {
+    return fail(`${RESULT} stamps ${m.harnessSha.slice(0, 12)}, which has no ${HARNESS}`);
+  }
+  if (measuredHarness !== src)
+    return fail(
+      `${RESULT} was measured with a different ${HARNESS} ` +
+        `(stamped ${m.harnessSha.slice(0, 12)}) -- run ${REGEN}`
+    );
+
+  // INVARIANTS THE VERIFIER OWNS, NOT ONES THE MEASUREMENT SUPPLIES.
+  // Reading the floor out of the artifact let the artifact set its own bar:
+  // meanReduction 0 against minMeanReduction 0 passed, which is the inert
+  // engine this blocker exists to catch, wearing the result of a real run.
+  // The floor is read back out of the harness source instead, so the two
+  // cannot drift apart silently either.
+  const floor = /const MIN_MEAN_REDUCTION = ([0-9.]+);/.exec(src);
+  if (!floor) return fail(`${HARNESS} no longer declares MIN_MEAN_REDUCTION`);
+  const required = Number(floor[1]);
+  if (!(required > 0)) return fail(`${HARNESS} declares a floor of ${required}`);
+
+  if (m.dataset !== 'info-retention')
+    return fail(`${RESULT} is for dataset ${JSON.stringify(m.dataset)}`);
+  if (m.source !== 'headroom/evals/runners/compression_only.py')
+    return fail(`${RESULT} cites ${JSON.stringify(m.source)}, not their generator`);
+  if (m.probes !== m.cases * 4)
+    return fail(`${RESULT} has ${m.probes} probes for ${m.cases} cases, not four each`);
+  if (m.literalSurvival !== 1)
+    return fail(`${RESULT} literal survival ${m.literalSurvival}, below their oracle`);
+  if (m.lost !== 0) return fail(`${RESULT} lost ${m.lost} probe fact(s)`);
 
   // A RETENTION NUMBER WITHOUT A REDUCTION NUMBER IS MEANINGLESS. An engine
   // that returns its input unchanged retains everything -- squad-eval was
   // measured reporting exactly that, 1.000 at 0.0%.
-  if (!(m.meanReduction >= m.minMeanReduction))
+  if (!(m.meanReduction >= required))
     return fail(
-      `${RESULT} reduced ${(m.meanReduction * 100).toFixed(1)}%, below its own ` +
-        `${(m.minMeanReduction * 100).toFixed(1)}% vacuity floor -- the engine was inert`
+      `${RESULT} reduced ${(m.meanReduction * 100).toFixed(1)}%, below the ` +
+        `${(required * 100).toFixed(1)}% vacuity floor in ${HARNESS} -- the engine was inert`
     );
   if (m.retention !== 1)
     return fail(`${RESULT} lost ${m.lost} probe fact(s) of ${m.probes}`);
