@@ -1,22 +1,11 @@
 import { describe, expect, it } from '@jest/globals';
 import { compressLogPeriods } from '../../../src/compress/log-periods.js';
-
 // Independent reconstruction uses only the emitted text, never original input.
-function expand(text: string): string {
-  const restored: string[] = [];
-  for (const line of text.split('\n')) {
-    const match =
-      /^\[\.\.\. previous (\d+) log lines repeat (\d+) more times, verbatim and in order\]$/.exec(
-        line
-      );
-    if (!match) restored.push(line);
-    else {
-      const block = restored.slice(-Number(match[1]));
-      for (let n = 0; n < Number(match[2]); n++) restored.push(...block);
-    }
-  }
-  return restored.join('\n');
-}
+// The shared decoder rather than a local copy: it knows this marker already, and
+// unlike a private expander it REFUSES an unrecognised one instead of passing it
+// through as a line of text.
+import { rehydrate } from '../../support/rehydrate.js';
+
 const protectedLine = (line: string) => /ERROR|AssertionError/.test(line);
 
 describe('exact periodic logs', () => {
@@ -39,7 +28,7 @@ describe('exact periodic logs', () => {
       expect(result.lossless).toBe(true);
       expect(result.text.length).toBeLessThan(input.length / 2);
       expect(result.text).toContain(rare);
-      expect(expand(result.text)).toBe(input);
+      expect(rehydrate(result.text)).toBe(input);
     }
   );
 

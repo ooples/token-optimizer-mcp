@@ -552,7 +552,18 @@ export function compressJson(
     // no way back, which is the dangling-reference failure this design exists
     // to avoid. The minified document is still a real saving, so keep it and
     // keep the rows.
-    const recoverAt = spillFor(ctx, JSON.stringify(stripped), 'rows.json');
+    // RE-SERIALISING THE PARSED ROWS IS NOT A RECOVERY. `1.0` parses to 1 and
+    // stringifies back as `1`, so a spill built from the values hands back a
+    // document the source never contained -- and the spill is the only place
+    // the dropped rows still exist. `scanned` is the same array with its
+    // whitespace removed and every lexeme as the source wrote it, so prefer
+    // it; it is null exactly when a nested string was compressed, and then the
+    // values are what survived and serialising them is the honest answer.
+    const recoverAt = spillFor(
+      ctx,
+      scanned ?? JSON.stringify(stripped),
+      'rows.json'
+    );
     if (!recoverAt)
       return best({
         text: minified,

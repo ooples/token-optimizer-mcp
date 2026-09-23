@@ -99,6 +99,62 @@ function opening(text: string): string {
 }
 
 /**
+ * The head of a block as a reader scanning the payload reads it: the same
+ * window `opening` quotes from, with its line breaks flattened.
+ *
+ * `opening`'s short form is always a prefix of this, because collapsing the
+ * whitespace of the whole window and collapsing the whitespace of its first
+ * line agree until that line ends.
+ */
+function readerHead(text: string): string {
+  return text.slice(0, 400).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * How far a quote may be widened before the reference is given up on.
+ *
+ * Past this the marker costs more than the block it replaces is worth, and a
+ * pair of blocks that agree for two hundred characters is better served by
+ * being sent twice than by a quote nobody would read.
+ */
+const MAX_QUOTE_CHARS = 200;
+
+/**
+ * A quote that names exactly ONE block above, or null when none does.
+ *
+ * FORTY CHARACTERS IS NOT A KEY, and treating it as one is how `lossless: true`
+ * became a claim the payload could not keep. Two blocks that open on the same
+ * license header, the same shebang or the same timestamped prefix quote
+ * identically, so a marker naming that opening names both, and a reader
+ * following it cannot tell which bytes were removed. The elision still said
+ * `recoverAt: null` -- there is nothing to look up -- which is only true while
+ * the thing it points at is singular.
+ *
+ * So the quote is widened until it separates the referent from every other
+ * block a reader can see above it, and the common case is untouched: no rival
+ * shares the opening, the first test passes, and the marker is the same forty
+ * characters it always was. Only a genuine collision pays, and it pays in
+ * characters rather than in a wrong answer.
+ */
+function quoteFor(referent: string, above: ReadonlySet<string>): string | null {
+  const rivals: string[] = [];
+  for (const text of above)
+    if (text !== referent) rivals.push(readerHead(text));
+
+  const short = opening(referent);
+  const needle = short.endsWith('...') ? short.slice(0, -3) : short;
+  if (!rivals.some((rival) => rival.startsWith(needle))) return short;
+
+  const full = readerHead(referent);
+  const limit = Math.min(MAX_QUOTE_CHARS, full.length);
+  for (let width = needle.length + 1; width <= limit; width += 1) {
+    const wider = full.slice(0, width);
+    if (!rivals.some((rival) => rival.startsWith(wider))) return `${wider}...`;
+  }
+  return null;
+}
+
+/**
  * The back-reference written where the repeat used to be.
  *
  * THE PRICE OF BEING LEGIBLE, stated plainly: this runs about 100 characters
@@ -121,10 +177,10 @@ function opening(text: string): string {
  */
 function labelledReference(
   bytes: number,
-  referent: string,
+  quote: string,
   label: number
 ): string {
-  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${opening(referent)}" (#${label})]`;
+  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}" (#${label})]`;
 }
 
 /**
@@ -146,8 +202,8 @@ function repeatReference(bytes: number, label: number): string {
   return `[... ${bytes.toLocaleString('en-US')} bytes, as #${label} above]`;
 }
 
-function backReference(bytes: number, referent: string): string {
-  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${opening(referent)}"]`;
+function backReference(bytes: number, quote: string): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}"]`;
 }
 
 /**
@@ -181,7 +237,13 @@ function backReference(bytes: number, referent: string): string {
 /** A position in the output: either literal text, or a reference to be worded. */
 type Slot =
   | { readonly kind: 'text'; readonly text: string }
-  | { readonly kind: 'ref'; readonly bytes: number; readonly referent: string };
+  | {
+      readonly kind: 'ref';
+      readonly bytes: number;
+      readonly referent: string;
+      /** Widened past `opening` only where a rival above shares it. */
+      readonly quote: string;
+    };
 
 export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
   // COLLECTED BEFORE THEY ARE WORDED. How a reference should be phrased depends
@@ -200,6 +262,11 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
   // same thing, whatever their sources were.
   const byOutput = new Map<string, string>();
 
+  // EVERY literal above, not just the ones eligible to be pointed at. A block
+  // under the floor is never a referent, but it is still text on the reader's
+  // screen that a quote can land on, so it counts as a rival.
+  const emitted = new Set<string>();
+
   const remember = (block: DedupBlock): void => {
     if (
       !block.touchable &&
@@ -216,6 +283,7 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     // rewritten, so it arrives byte-identical no matter what.
     if (!block.touchable) {
       remember(block);
+      emitted.add(block.text);
       slots.push({ kind: 'text', text: block.text });
       continue;
     }
@@ -244,11 +312,18 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
         ? byOutput.get(block.text)
         : undefined);
 
-    if (earlier !== undefined) {
+    // A REFERENCE NOBODY CAN FOLLOW IS WORSE THAN THE BYTES IT SAVES. When no
+    // quote within reach separates the referent from the other blocks above,
+    // the honest move is to send the block, not to emit a marker that points
+    // at two places and call the elision lossless.
+    const quote = earlier === undefined ? null : quoteFor(earlier, emitted);
+
+    if (earlier !== undefined && quote !== null) {
       slots.push({
         kind: 'ref',
         bytes: block.original.length,
         referent: earlier,
+        quote,
       });
       elisions.push({
         removed: `${block.original.length.toLocaleString('en-US')} bytes already shown earlier in this conversation`,
@@ -261,6 +336,7 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     }
 
     remember(block);
+    emitted.add(block.text);
     slots.push({ kind: 'text', text: block.text });
   }
 
@@ -288,11 +364,11 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
   const texts = slots.map((slot) => {
     if (slot.kind === 'text') return slot.text;
     const label = labels.get(slot.referent);
-    if (label === undefined) return backReference(slot.bytes, slot.referent);
+    if (label === undefined) return backReference(slot.bytes, slot.quote);
     if (spelledOut.has(slot.referent))
       return repeatReference(slot.bytes, label);
     spelledOut.add(slot.referent);
-    return labelledReference(slot.bytes, slot.referent, label);
+    return labelledReference(slot.bytes, slot.quote, label);
   });
 
   return { texts, elisions };

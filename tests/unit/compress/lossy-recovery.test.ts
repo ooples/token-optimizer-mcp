@@ -1,8 +1,11 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressCode } from '../../../src/compress/code.js';
 import { compressProse } from '../../../src/compress/prose.js';
+import { compressJson } from '../../../src/compress/json.js';
+import { foldRepeatedSegments } from '../../../src/compress/segments.js';
 import { DEFAULT_TUNING } from '../../../src/compress/options.js';
 import { expandLog } from '../../helpers/expand-log.js';
+import { rehydrate } from '../../support/rehydrate.js';
 
 /**
  * THE LOSSY PATH, held to the promise its marker makes.
@@ -203,5 +206,177 @@ describe('a lossy elision delivers what its marker promises', () => {
     // Without this the assertion above passes on a decoder that throws on
     // everything, which would be no oracle at all.
     expect(expandLog('alpha\nbeta')).toBe('alpha\nbeta');
+  });
+});
+
+/**
+ * A repetitive document: `segment` needs MIN_SEGMENTS parts and a duplicate
+ * share high enough that folding pays for the note it adds.
+ */
+const SECTIONS = [
+  'alpha block with enough text in it to be worth folding away entirely',
+  'beta block with enough text in it to be worth folding away entirely',
+  'alpha block with enough text in it to be worth folding away entirely',
+  'gamma block with enough text in it to be worth folding away entirely',
+  'alpha block with enough text in it to be worth folding away entirely',
+  'beta block with enough text in it to be worth folding away entirely',
+  'delta block with enough text in it to be worth folding away entirely',
+  'beta block with enough text in it to be worth folding away entirely',
+].join('\n\n');
+
+/**
+ * Uniform rows carrying a number lexeme `JSON.stringify` cannot produce, so a
+ * spill re-serialised from the parsed values is visibly not the source.
+ */
+const LEXEMES = `[${Array.from(
+  { length: 60 },
+  (_, i) =>
+    `{"id":${i},"region":"us-east-1","status":"ok","ratio":1.0,"latencyMs":${20 + (i % 7)}}`
+).join(',')}]`;
+
+const ROWS = JSON.stringify(
+  Array.from({ length: 60 }, (_, i) => ({
+    id: i,
+    region: 'us-east-1',
+    status: 'ok',
+    latencyMs: 20 + (i % 7),
+  }))
+);
+
+describe('the spill is the only way back, so it must hold what went', () => {
+  it('segments spills the original, not the folded result', () => {
+    const sink = recordingSpill();
+    const result = foldRepeatedSegments(SECTIONS, { spill: sink.spill });
+
+    // An engine that declined would satisfy the recovery assertions for free.
+    expect(result.text.length).toBeLessThan(SECTIONS.length);
+    expect(result.lossless).toBe(false);
+    expect(sink.files.size).toBe(1);
+
+    const [path, content] = [...sink.files][0];
+    expect(result.elisions.map((e) => e.recoverAt)).toEqual([path]);
+    // THE NOTE NAMES A COUNT, NEVER WHICH SECTION STOOD WHERE, so `A B A` and
+    // `A A B` fold identically. The spill is the whole original precisely
+    // because the output cannot say that, and a spill holding only the folded
+    // copies would leave the order gone with nowhere to look.
+    expect(content).toBe(SECTIONS);
+  });
+
+  it('segments prefers a real source path and then writes no spill', () => {
+    const sink = recordingSpill();
+    const result = foldRepeatedSegments(SECTIONS, {
+      sourcePath: 'docs/guide.md',
+      spill: sink.spill,
+    });
+
+    expect(result.elisions.map((e) => e.recoverAt)).toEqual(['docs/guide.md']);
+    // A spill written and never named is a file nobody will read and bytes
+    // nobody asked for.
+    expect(sink.files.size).toBe(0);
+  });
+
+  it('segments declines rather than folding into a sink that failed', () => {
+    const result = foldRepeatedSegments(SECTIONS, { spill: failingSpill });
+    expect(result.text).toBe(SECTIONS);
+    expect(result.lossless).toBe(true);
+    expect(result.elisions).toHaveLength(0);
+  });
+
+  it('the json tail spill holds every row, kept and dropped alike', () => {
+    const sink = recordingSpill();
+    const result = compressJson(ROWS, {
+      spill: sink.spill,
+      tuning: DEFAULT_TUNING,
+    });
+
+    expect(result.text.length).toBeLessThan(ROWS.length);
+    expect(result.lossless).toBe(false);
+    expect(sink.files.size).toBe(1);
+
+    const [path, content] = [...sink.files][0];
+    const lossy = result.elisions.filter((e) => !e.lossless);
+    expect(lossy).not.toHaveLength(0);
+    for (const elision of lossy) expect(elision.recoverAt).toBe(path);
+
+    // EVERY ROW, not just the dropped ones. The marker says "N more rows" and
+    // names one path; an agent that reads it has no offset to apply, so a
+    // spill holding only the tail would answer a question nobody can ask.
+    expect(JSON.parse(content)).toEqual(JSON.parse(ROWS));
+  });
+
+  it('the json tail spill keeps the lexemes the source wrote', () => {
+    const sink = recordingSpill();
+    const result = compressJson(LEXEMES, {
+      spill: sink.spill,
+      tuning: DEFAULT_TUNING,
+    });
+
+    // Without this the assertion below would be about nothing: a lossless
+    // answer spills no rows, so there would be no spill to be wrong.
+    expect(result.lossless).toBe(false);
+    expect(sink.files.size).toBe(1);
+
+    const [, content] = [...sink.files][0];
+    // A SPILL BUILT FROM THE PARSED VALUES IS NOT THE SOURCE. `1.0` parses to
+    // 1 and stringifies back as `1`, and the spill is the only place the
+    // dropped rows still exist -- so an agent recovering from it would read a
+    // number the document never spelled that way. Deep-equality is blind to
+    // this, which is why the lexeme is named here.
+    expect(content).toContain('"ratio":1.0');
+    expect(JSON.parse(content)).toEqual(JSON.parse(LEXEMES));
+  });
+
+  it('json keeps the minification and the rows when the sink fails', () => {
+    // INDENTED ON PURPOSE. `ROWS` is already minified, so a fallback that
+    // returned its input untouched would pass this test without compressing
+    // anything.
+    const padded = JSON.stringify(JSON.parse(ROWS), null, 2);
+    const result = compressJson(padded, {
+      spill: failingSpill,
+      tuning: DEFAULT_TUNING,
+    });
+
+    // Declining the ELISION is not declining the engine: the lossless
+    // encodings lose nothing, so they survive the refusal. Since #423 the
+    // engine picks whichever of them is smaller, and for uniform rows that is
+    // the records template rather than plain minification -- so the rows are
+    // read back through the decoder, which is the only thing that can see
+    // them. `JSON.parse` on the emitted text used to work here only because
+    // minification was the sole outcome.
+    expect(result.elisions.every((e) => e.lossless)).toBe(true);
+    expect(result.lossless).toBe(true);
+    expect(result.text.length).toBeLessThan(padded.length);
+    expect(JSON.parse(rehydrate(result.text))).toEqual(JSON.parse(ROWS));
+  });
+
+  it('code with no source path recovers through the block it spilled', () => {
+    const sink = recordingSpill();
+    const result = compressCode(CODE, {
+      spill: sink.spill,
+      tuning: DEFAULT_TUNING,
+    });
+
+    expect(result.text.length).toBeLessThan(CODE.length);
+    expect(result.lossless).toBe(false);
+    expect(sink.files.size).toBe(1);
+
+    // THE HALF OF `code` THAT HAD NO GATE. The range test above supplies a
+    // sourcePath, which is the branch a grep hit or a pasted excerpt never
+    // takes -- and `anchorPath` reaches for the spill exactly then. The line
+    // numbers are the original block's either way, so the same reconstruction
+    // applies with the spilled file standing in for the source.
+    const [path, content] = [...sink.files][0];
+    expect(content).toBe(CODE);
+    expect(followRanges(result.text, content, path)).toBe(CODE);
+  });
+
+  it('code declines rather than pointing markers at a sink that failed', () => {
+    const result = compressCode(CODE, {
+      spill: failingSpill,
+      tuning: DEFAULT_TUNING,
+    });
+    expect(result.text).toBe(CODE);
+    expect(result.lossless).toBe(true);
+    expect(result.elisions).toHaveLength(0);
   });
 });

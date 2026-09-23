@@ -1,28 +1,10 @@
 import { test, expect } from '@jest/globals';
 import { compressTap, looksLikeTap } from '../../../src/compress/tap.js';
 import { compressResponses } from '../../../src/proxy/responses.js';
+import { rehydrate } from '../../support/rehydrate.js';
 
 function pass(i: number, nl = '\n', name = `case ${i}`): string {
   return `# Subtest: ${name}${nl}ok ${i} - ${name}${nl}  ---${nl}  duration_ms: ${i}.001${nl}  type: 'test'${nl}  ...${nl}`;
-}
-function expand(text: string): string {
-  return text.replace(
-    /\[TAP (?:passing|failing) records: JSON rows \[name,id,ms\]; substitute into template ("[^\n]+")\]\r?\n([\s\S]*?)\[\/TAP (?:passing|failing) records\]\r?\n/g,
-    (_all, encoded: string, rows: string) => {
-      const template = JSON.parse(encoded) as string;
-      return rows
-        .trim()
-        .split(/\r?\n/)
-        .map((row) => {
-          const [name, id, ms] = JSON.parse(row) as string[];
-          return template.replace(
-            /\{(name|id|ms)\}/g,
-            (_s, key: string) => ({ name, id, ms })[key as 'name' | 'id' | 'ms']
-          );
-        })
-        .join('');
-    }
-  );
 }
 
 test('actual Responses JSON envelope reaches TAP compression and preserves failure evidence', () => {
@@ -49,7 +31,7 @@ test('actual Responses JSON envelope reaches TAP compression and preserves failu
   const decoded = JSON.parse(result.body.toString());
   const out = JSON.parse(decoded.input[0].output[0].text);
   expect(out.exit_code).toBe(0);
-  expect(expand(out.output)).toBe(tap);
+  expect(rehydrate(out.output)).toBe(tap);
 });
 test.each(['\n', '\r\n'])(
   'TAP table reconstructs all bytes including wrapper and newline style %j',
@@ -64,7 +46,7 @@ test.each(['\n', '\r\n'])(
     const result = compressTap(input);
     expect(result.lossless).toBe(true);
     expect(result.text.length).toBeLessThan(input.length * 0.6);
-    expect(expand(result.text)).toBe(input);
+    expect(rehydrate(result.text)).toBe(input);
   }
 );
 test('failure diagnostics, nested tests and skipped tests survive between passing groups', () => {
@@ -76,7 +58,7 @@ test('failure diagnostics, nested tests and skipped tests survive between passin
   const input = group + failure + unusual + group;
   const result = compressTap(input);
   expect(result.text).toContain(failure + unusual);
-  expect(expand(result.text)).toBe(input);
+  expect(rehydrate(result.text)).toBe(input);
 });
 test('short, truncated or unfamiliar records do not grow or change', () => {
   for (const input of [
@@ -87,7 +69,7 @@ test('short, truncated or unfamiliar records do not grow or change', () => {
       .join('')
       .trimEnd(),
   ])
-    expect(expand(compressTap(input).text)).toBe(input);
+    expect(rehydrate(compressTap(input).text)).toBe(input);
 });
 
 test('repeated failures retain every identity and exact diagnostic; changed failures stay distinct', () => {
@@ -103,5 +85,5 @@ test('repeated failures retain every identity and exact diagnostic; changed fail
   const result = compressTap(input);
   expect(result.text).toContain('TAP failing records');
   expect(result.text).toContain('actual: 500');
-  expect(expand(result.text)).toBe(input);
+  expect(rehydrate(result.text)).toBe(input);
 });
