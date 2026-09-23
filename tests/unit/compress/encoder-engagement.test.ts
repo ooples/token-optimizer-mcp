@@ -144,8 +144,13 @@ describe('every encoder engages on the shape it exists for', () => {
       '  "b": { "x": 2 },\n  "other": 7,\n  "c": { "x": 3 }\n}';
     const result = compressJsonObjectMap(scattered, 3);
     expect(result.lossless).toBe(true);
-    // Either it declined, or whatever it emitted is genuinely smaller.
-    if (result.text !== scattered)
-      expect(result.text.length).toBeLessThan(scattered.length);
+    // DECLINED OUTRIGHT, ASSERTED DIRECTLY. The disjunction this replaces --
+    // `either it declined, or what it emitted is smaller` -- had no failing
+    // case: compressRecords groups on contiguity, these three entries are
+    // separated by unrelated properties, so it returns its input and the
+    // branch was never taken. Naming the fail-closed result makes the test
+    // able to notice an encoder that starts emitting a template spanning
+    // entries it did not match.
+    expect(result.text).toBe(scattered);
   });
 });

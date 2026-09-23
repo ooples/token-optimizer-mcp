@@ -97,7 +97,7 @@ test.each(['\n', '\r\n'])(
     expect(out.text).toContain('ALL 120 records preserved');
     expect(out.text.length).toBeLessThan(input.length * 0.5);
     const normalized = out.text.replace(
-      /\[JSON array records; ALL \d+ records preserved\./g,
+      /\[JSON array records; ALL \d+ records preserved(?:, \d+ encoded here)?\./g,
       '[JSON fragment records; missing records remain unknown.'
     );
     expect(expand(normalized)).toBe(input);

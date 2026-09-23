@@ -369,11 +369,19 @@ function compressRecords(
         if (run) runs.set(slot, run);
       });
 
+      // THE COUNT BELONGS TO THIS MARKER, NOT TO THE DOCUMENT. Each marker
+      // encodes one contiguous `group`; `found` is every record in the
+      // document. With two or more groups -- which is what a keyed map with
+      // unrelated properties between its entries produces -- every marker
+      // announced the document-wide total, so a reader counting rows under
+      // one marker found fewer than it claimed.
+      const whole = group.length === found.length;
+      const label = noun === 'entries' ? 'object map' : 'array records';
       const compact =
         (shortHeader
-          ? `[All ${found.length} JSON records; join template strings and row[integer] verbatim. Template: `
+          ? `[All ${group.length} JSON records; join template strings and row[integer] verbatim. Template: `
           : (complete
-              ? `[JSON ${noun === 'entries' ? 'object map' : 'array records'}; ALL ${found.length} ${noun} preserved. `
+              ? `[JSON ${label}; ALL ${found.length} ${noun} preserved${whole ? '' : `, ${group.length} encoded here`}. `
               : '[JSON fragment records; missing records remain unknown. ') +
             'Join template parts, replacing numeric slots with verbatim text fragments from each row. Template: ') +
         JSON.stringify(template) +

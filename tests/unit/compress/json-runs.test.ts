@@ -20,7 +20,7 @@ import { compressJsonArray } from '../../../src/compress/json-fragments.js';
 /** Rebuilds the original from the emitted text alone, rule included. */
 function expand(text: string): string {
   return text.replace(
-    /\[JSON array records; ALL \d+ records preserved\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: (\[[^\n]+?\])(; slots ([^\]\n]+) count from 0)?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
+    /\[JSON array records; ALL \d+ records preserved(?:, \d+ encoded here)?\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: (\[[^\n]+?\])(; slots ([^\]\n]+) count from 0)?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
     (
       _all,
       encoded: string,
