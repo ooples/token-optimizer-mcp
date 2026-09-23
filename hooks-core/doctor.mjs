@@ -435,7 +435,10 @@ export async function probeSupervisor(env = process.env, { clientName } = {}) {
     return [];
 
   const port = Number(
-    (env.TOKEN_OPTIMIZER_PROXY_CONTROL_PORT || '').trim() || 45710
+    // KEEP IN STEP WITH controlPort() IN src/proxy/supervisor.ts. Moved off 45710 because that
+    // sat inside the range the kernel allocates outbound source ports from; the doctor probing
+    // the old port would report a healthy supervisor as absent.
+    (env.TOKEN_OPTIMIZER_PROXY_CONTROL_PORT || '').trim() || 16999
   );
   const health = await new Promise((resolve) => {
     let settled = false;
