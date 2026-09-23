@@ -22,6 +22,7 @@ import { execFile, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import {
   existsSync,
+  readdirSync,
   statSync,
   readFileSync,
   writeFileSync,
@@ -142,7 +143,14 @@ function compareVersions(a, b) {
  * shipped one advisory hook, so a stale install is present, listed in /mcp, and
  * saving nothing.
  */
-export function detectInstall({ pluginsDir, root } = {}) {
+export function detectInstall({ pluginsDir, root, client, codexHome } = {}) {
+  // DIAGNOSE THE INSTALL THAT IS ASKING. Everything below reads Claude Code's registry, which
+  // is the right answer for Claude Code and the wrong one for every other client on the machine.
+  if (client === 'codex') {
+    const codex = detectCodexInstall({ codexHome, root });
+    if (codex) return codex;
+  }
+
   const dir = pluginsDir || join(homedir(), '.claude', 'plugins');
   const packageHooks = join(root || '.', 'plugin', 'hooks');
 
@@ -219,6 +227,73 @@ export function detectInstall({ pluginsDir, root } = {}) {
     installPath: null,
     installedVersion,
     availableVersion,
+  };
+}
+
+/**
+ * The hook entry files an install actually ships.
+ *
+ * Claude Code loads a single PreToolUse router; the Codex plugin ships one file per event. The
+ * checklist and both spawning probes used to name the Claude files unconditionally, so pointing
+ * them at a Codex install would have reported its present, working hooks as missing.
+ */
+export function entriesFor(install) {
+  return install?.method === 'codex plugin'
+    ? { preTool: 'pre-tool.mjs', sessionStart: 'session-start.mjs' }
+    : { preTool: 'pretooluse-router.mjs', sessionStart: 'session-start.mjs' };
+}
+
+/** Directory entries of `dir`, or [] -- this module must diagnose, not crash. */
+function subdirectories(dir) {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * THE CODEX PLUGIN INSTALL, WHEN CODEX IS THE CLIENT ASKING.
+ *
+ * detectInstall reads ~/.claude/plugins, which is Claude Code's registry and nobody else's. Run
+ * from a Codex session it therefore reported on whatever Claude Code happened to have on the
+ * same machine -- #408 is a user told `install method: Claude Code plugin 6.0.0` while asking
+ * from Codex 7.1.0, whose own entry points were never exercised at all.
+ *
+ * Codex keeps its plugins at ~/.codex/plugins/cache/<marketplace>/<name>/<version>/, so the
+ * marketplace half is whatever the user added it from and cannot be pinned. The highest version
+ * carrying a readable .codex-plugin/plugin.json wins, which is the one Codex loads.
+ */
+export function detectCodexInstall({ codexHome, root } = {}) {
+  const cache = join(codexHome || join(homedir(), '.codex'), 'plugins', 'cache');
+  let best = null;
+  for (const marketplace of subdirectories(cache)) {
+    const pluginRoot = join(cache, marketplace, PLUGIN_NAME);
+    for (const version of subdirectories(pluginRoot)) {
+      const installPath = join(pluginRoot, version);
+      const manifest = readJson(join(installPath, '.codex-plugin', 'plugin.json'));
+      if (!manifest) continue;
+      const installedVersion = manifest.version || version;
+      if (best && compareVersions(installedVersion, best.installedVersion) <= 0) continue;
+      best = { installPath, installedVersion };
+    }
+  }
+  if (!best) return null;
+
+  const packageVersion = readJson(join(root || '.', 'package.json'))?.version ?? null;
+  return {
+    method: 'codex plugin',
+    packageVersion,
+    // The Codex cache is never this package's own tree: it is a copy Codex unpacked for itself.
+    sameTree: false,
+    hooksDir: join(best.installPath, 'hooks'),
+    installPath: best.installPath,
+    installedVersion: best.installedVersion,
+    // Codex publishes no marketplace manifest beside the cache, so there is no newer version to
+    // compare against. Claiming one would be inventing it.
+    availableVersion: null,
   };
 }
 
@@ -706,7 +781,7 @@ export function probeProxy(env = process.env, { clientName } = {}) {
   ];
 }
 
-export function probeVersion({ install }) {
+export function probeVersion({ install, crossClient } = {}) {
   const {
     method,
     installedVersion,
@@ -731,6 +806,28 @@ export function probeVersion({ install }) {
         'package under examination',
         `@ooples/token-optimizer-mcp ${packageVersion}`
       )
+    );
+  }
+
+  // ANOTHER CLIENT'S CACHE IS INFORMATION, NOT THIS CLIENT'S VERDICT.
+  //
+  // When the subject is a Codex install, a stale Claude Code cache on the same machine says
+  // nothing about whether Codex's hooks work -- and #408 is a Codex user whose report FAILED on
+  // exactly that, about a client they were not using. It is still worth saying, because two
+  // clients on different builds is a real split-brain, so it is a warning that names whose it is.
+  if (crossClient?.installedVersion && packageVersion) {
+    checks.push(
+      crossClient.installedVersion === packageVersion
+        ? ok(
+            'other clients agree with this package',
+            `Claude Code plugin ${crossClient.installedVersion}; this package ${packageVersion}`
+          )
+        : warn(
+            'other clients agree with this package',
+            `the Claude Code plugin cache holds ${crossClient.installedVersion}, but this package ` +
+              `is ${packageVersion}. This run diagnosed the ${method}, not that cache`,
+            'run /plugin in Claude Code and update token-optimizer if you use it there too'
+          )
     );
   }
 
@@ -875,6 +972,7 @@ export function checklist({ root, settingsPath, install }) {
   // holding; "Claude Code plugin 5.5.0, hooks from <cache>" reads as what it is
   // -- another client's install, on the same machine (#307).
   const pluginLabel = resolved.sameTree ? 'plugin' : 'Claude Code plugin';
+  const entries = entriesFor(resolved);
   checks.push(
     ok(
       'install method',
@@ -885,8 +983,8 @@ export function checklist({ root, settingsPath, install }) {
     )
   );
 
-  const router = join(hooksDir, 'pretooluse-router.mjs');
-  const sessionStart = join(hooksDir, 'session-start.mjs');
+  const router = join(hooksDir, entries.preTool);
+  const sessionStart = join(hooksDir, entries.sessionStart);
 
   checks.push(
     existsSync(router)
@@ -1022,7 +1120,7 @@ export async function probeEnforcement({ root, workspace, hooksDir, install }) {
   // this probe passed for the copy nobody was executing.
   const binary = join(
     hooksDirFor({ hooksDir, install, root }),
-    'pretooluse-router.mjs'
+    entriesFor(install).preTool
   );
   if (!existsSync(binary)) {
     return [
@@ -1145,7 +1243,7 @@ export async function probeSessionStart({
 }) {
   const binary = join(
     hooksDirFor({ hooksDir, install, root }),
-    'session-start.mjs'
+    entriesFor(install).sessionStart
   );
   if (!existsSync(binary)) {
     return [
@@ -1812,7 +1910,16 @@ export async function diagnose({
   // Resolved ONCE and threaded through, so every check reasons about the same
   // install. Detecting per-probe is how the checklist and the enforcement probe
   // ended up describing two different builds in the same report.
-  const install = detectInstall({ pluginsDir, root });
+  //
+  // THE CLIENT DECIDES WHICH INSTALL IS THE SUBJECT. Read through the same clientFrom() the
+  // proxy checks use, so the report cannot diagnose one client's install while describing
+  // another's routing (#408).
+  const install = detectInstall({
+    pluginsDir,
+    root,
+    client: clientFrom(process.env, clientName),
+    codexHome,
+  });
 
   // THE THREE SPAWNING PROBES RUN CONCURRENTLY. Each is a separate Node
   // process and the cost is almost entirely that process's own startup, so
@@ -1821,6 +1928,11 @@ export async function diagnose({
   // itself, probeSessionStart creates the workspace itself rather than relying
   // on another check having run first, and probeServer spawns a separate
   // server. Order is restored below, so the report reads exactly as before.
+  // The Claude Code record, when it is NOT the subject: reported beside the verdict as another
+  // client's state rather than as this one's.
+  const crossClient =
+    install.method === 'plugin' ? null : detectInstall({ pluginsDir, root });
+
   const [enforcement, sessionStart, serverChecks, supervisor] =
     await Promise.all([
       probeEnforcement({ root, workspace, install }),
@@ -1833,7 +1945,7 @@ export async function diagnose({
   const checks = [
     ...probeMode({ settingsPath }),
     ...checklist({ root, settingsPath, install }),
-    ...probeVersion({ install }),
+    ...probeVersion({ install, crossClient }),
     ...probeHarvest(),
     ...supervisor,
     ...probeProxy(process.env, { clientName }),
