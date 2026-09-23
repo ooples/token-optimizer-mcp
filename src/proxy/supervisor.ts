@@ -44,19 +44,51 @@ export function supervisorStateFile(
 }
 
 /**
+ * The first port the operating system may hand out as an OUTBOUND source port.
+ *
+ * Linux defaults to 32768-60999 and Windows and macOS to 49152-65535, so 32768 is the lowest
+ * floor any supported platform uses. Every port this module chooses to LISTEN on has to sit
+ * below it -- see routePort.
+ */
+const EPHEMERAL_FLOOR = 32768;
+
+/**
+ * The window route ports are derived from.
+ *
+ * BELOW EPHEMERAL_FLOOR, ABOVE THE WELL-KNOWN AND COMMON DEVELOPMENT PORTS. 17000-17999 is
+ * unregistered, clear of 3000/5000/8000/8080/9000 and their neighbours, and clear of the range
+ * the kernel allocates outbound source ports from.
+ */
+const ROUTE_BASE = 17000;
+const ROUTE_SPAN = 1000;
+
+/**
  * The control port.
  *
  * FIXED, because a caller has to find the supervisor without being told where it is, and an
- * ephemeral port would put that answer only in a file a stale reader could mis-read. 45710 sits in
- * the IANA dynamic range and is not a registered service.
+ * ephemeral port would put that answer only in a file a stale reader could mis-read.
+ *
+ * 16999 -- immediately below ROUTE_BASE, and below EPHEMERAL_FLOOR for the reason routePort
+ * records. The previous default, 45710, was chosen because it "sits in the IANA dynamic range";
+ * that is the range the kernel allocates outbound source ports from, so it was the defect rather
+ * than the justification.
  */
 export function controlPort(env: NodeJS.ProcessEnv = process.env): number {
   const raw = (env.TOKEN_OPTIMIZER_PROXY_CONTROL_PORT || '').trim();
-  if (!raw) return 45710;
+  if (!raw) return 16999;
   const port = Number(raw);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(
       `TOKEN_OPTIMIZER_PROXY_CONTROL_PORT must be a port number, not '${raw}'`
+    );
+  }
+  // REFUSED RATHER THAN SILENTLY DEGRADED. Route ports no longer follow the control port, so a
+  // control port inside the route window is a real collision: whichever bound first would take
+  // it, and the loser would fall back to an ephemeral port -- the stable URL lost to a setting
+  // the user could simply have chosen differently. Cheaper to say so at startup.
+  if (port >= ROUTE_BASE && port < ROUTE_BASE + ROUTE_SPAN) {
+    throw new Error(
+      `TOKEN_OPTIMIZER_PROXY_CONTROL_PORT must not be ${ROUTE_BASE}-${ROUTE_BASE + ROUTE_SPAN - 1}, which is reserved for proxy routes`
     );
   }
   return port;
@@ -90,20 +122,30 @@ export interface SupervisorRoute {
  * listening on -- the one failure mode worse than saving nothing, because the client cannot reach
  * its provider at all.
  *
- * Derived rather than assigned so it survives the state file being lost, and taken from the IANA
- * dynamic range just above the control port. A collision with something else on the machine is
- * handled by the caller, which falls back to any free port and republishes.
+ * Derived rather than assigned so it survives the state file being lost.
+ *
+ * WHY NOT JUST ABOVE THE CONTROL PORT, WHICH IS WHAT THIS USED TO DO. With the old 45710 default
+ * that put route ports at 45712-46711, inside the range the kernel hands out as outbound source
+ * ports on every supported platform. A route port the kernel had transiently assigned to some
+ * unrelated outbound socket -- established, or merely in TIME_WAIT -- made portIsFree answer
+ * false, and the route was demoted to an ephemeral port: exactly the failure the paragraph above
+ * says must not happen. It surfaced as a Linux-only flake in the restart test, because the
+ * derived port was inside Linux's 32768-60999 but outside Windows' 49152-65535.
+ *
+ * So the window is FIXED at ROUTE_BASE, below EPHEMERAL_FLOOR, and no longer follows the control
+ * port. A collision with something else on the machine is handled by the caller, which retries
+ * the derived port before falling back to any free port and republishing.
  */
 export function routePort(
   upstream: string,
-  env: NodeJS.ProcessEnv = process.env
+  // Accepted so call sites and tests can keep pinning an environment; the window no longer
+  // depends on it.
+  _env: NodeJS.ProcessEnv = process.env
 ): number {
-  // CLAMPED, because controlPort accepts up to 65535: base would then exceed the port range and
-  // `base + hash % span` would derive an unlistenable port. Backing off leaves a usable window
-  // below the ceiling wherever the control port sits.
-  const ceiling = 65535;
-  const span = 1000;
-  const base = Math.min(controlPort(env) + 2, ceiling - span);
+  // The window must END below the floor, not merely start below it, or its top would be back
+  // inside the range the kernel allocates from.
+  const base = Math.min(ROUTE_BASE, EPHEMERAL_FLOOR - ROUTE_SPAN);
+  const span = ROUTE_SPAN;
   // FNV-1a: a few lines, stable across Node versions, and nothing here is security-sensitive.
   let hash = 0x811c9dc5;
   for (const character of upstream) {
@@ -120,6 +162,31 @@ function portIsFree(port: number): Promise<boolean> {
     probe.once('error', () => resolve(false));
     probe.listen(port, '127.0.0.1', () => probe.close(() => resolve(true)));
   });
+}
+
+/**
+ * The derived port, once it is free, or null if it stayed taken.
+ *
+ * WHY RETRY AT ALL, NOW THAT ROUTE_BASE IS OUTSIDE THE EPHEMERAL RANGE. Moving the window removed
+ * the cause that made this common -- the kernel's own outbound allocations -- but not every one.
+ * A supervisor restarted immediately after serving traffic can still meet its own previous
+ * listener in TIME_WAIT, and anything else on the machine may hold the port for a moment. Falling
+ * back on the FIRST refusal spends the stable URL, which is the whole point of deriving a port,
+ * to save less than a second of waiting.
+ *
+ * Bounded, because a port held by a real long-lived service will never come free, and a route on
+ * some other port still compresses. ~1s total: short next to the TIME_WAIT that usually clears
+ * it, and short enough that a genuinely occupied port does not delay a client's first request.
+ */
+async function derivedPortIfFree(port: number): Promise<number | null> {
+  const attempts = 5;
+  const gapMs = 200;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (await portIsFree(port)) return port;
+    if (attempt < attempts - 1)
+      await new Promise((resolve) => setTimeout(resolve, gapMs));
+  }
+  return null;
 }
 
 export interface SupervisorState {
@@ -283,7 +350,7 @@ export async function runSupervisor(
         const preferred = routePort(key, env);
         const { server: listener, port } = await startProxy({
           upstream,
-          port: (await portIsFree(preferred)) ? preferred : 0,
+          port: (await derivedPortIfFree(preferred)) ?? 0,
           // THE PROJECT IS THE CALLER'S, OR THERE IS NONE.
           //
           // `startProxy` binds the graph root once, from `projectRoot` or `process.cwd()`. The cwd

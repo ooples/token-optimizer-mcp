@@ -394,6 +394,136 @@ check('B11', 'the competitor clone is out of our test run', () => {
 });
 
 // ---------------------------------------------------------------- B12
+// ---------------------------------------------------------------- B13
+check('B13', 'info retention is measured on their corpus', () => {
+  const HARNESS = 'bench/accuracy/info-retention-eval.mjs';
+  if (!existsSync(join(ROOT, HARNESS)))
+    return fail('no info-retention harness');
+  const src = read(HARNESS);
+
+  // THEIR FIXTURES, OR THE NUMBER IS NOT COMPARABLE. A retention figure on a
+  // corpus we invented is dismissible, and our own fixtures have already lost
+  // us one argument. These four probes are the ones their generator plants.
+  const needs = [
+    ['their generator cited', 'compression_only.py'],
+    ['error-code probe', 'ERR-'],
+    ['alert-status probe', "'critical'"],
+    ['anomalous-value probe', "'98.7'"],
+    ['named-server probe', 'prod-server-'],
+    ['a vacuity floor', 'MIN_MEAN_REDUCTION'],
+  ].filter(([, token]) => !src.includes(token));
+  if (needs.length)
+    return fail(`harness lacks: ${needs.map(([n]) => n).join(', ')}`);
+
+  const RESULT = 'bench/accuracy/results/info-retention.json';
+  const REGEN = `node ${HARNESS} --n 30 --json ${RESULT}`;
+  if (!existsSync(join(ROOT, RESULT)))
+    return fail(`no committed measurement at ${RESULT} -- run ${REGEN}`);
+
+  let m;
+  try {
+    m = JSON.parse(read(RESULT));
+  } catch (err) {
+    return fail(`${RESULT} is not readable json: ${err.message}`);
+  }
+  if (m === null || typeof m !== 'object' || Array.isArray(m))
+    return fail(`${RESULT} is not a measurement object -- run ${REGEN}`);
+  if (!m.measuredAt || !m.harnessSha || m.harnessSha === 'unknown')
+    return fail(`${RESULT} carries no measuredAt/harnessSha stamp`);
+
+  // THE STAMP MUST NAME THIS HARNESS, NOT MERELY A COMMIT. A sha that is not
+  // the string "unknown" was the whole test, so a result measured against an
+  // older generator -- different probes, different corpus, different floor --
+  // satisfied it for as long as nobody looked. Compare the CONTENT at that
+  // sha with the file on disk. Deliberately not a check that the result was
+  // committed in the same commit as the run: rerunning the benchmark without
+  // touching the harness is legitimate and must stay so.
+  let measuredHarness;
+  try {
+    measuredHarness = execFileSync('git', ['show', `${m.harnessSha}:${HARNESS}`], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+  } catch {
+    return fail(`${RESULT} stamps ${m.harnessSha.slice(0, 12)}, which has no ${HARNESS}`);
+  }
+  // NORMALISE THE LINE ENDINGS BEFORE COMPARING. git show hands back the blob
+  // as stored, which is LF, while the working file on Windows is CRLF -- 236
+  // carriage returns of difference in a file that is otherwise identical. A raw
+  // comparison therefore passes on Linux CI and fails only on a Windows
+  // checkout, which is the worst shape a verifier failure can take.
+  const normalise = (text) => text.replace(/\r\n/g, '\n');
+  if (normalise(measuredHarness) !== normalise(src))
+    return fail(
+      `${RESULT} was measured with a different ${HARNESS} ` +
+        `(stamped ${m.harnessSha.slice(0, 12)}) -- run ${REGEN}`
+    );
+
+  // INVARIANTS THE VERIFIER OWNS, NOT ONES THE MEASUREMENT SUPPLIES.
+  // Reading the floor out of the artifact let the artifact set its own bar:
+  // meanReduction 0 against minMeanReduction 0 passed, which is the inert
+  // engine this blocker exists to catch, wearing the result of a real run.
+  // The floor is read back out of the harness source instead, so the two
+  // cannot drift apart silently either.
+  const floor = /const MIN_MEAN_REDUCTION = ([0-9.]+);/.exec(src);
+  if (!floor) return fail(`${HARNESS} no longer declares MIN_MEAN_REDUCTION`);
+  const required = Number(floor[1]);
+  if (!(required > 0)) return fail(`${HARNESS} declares a floor of ${required}`);
+
+  if (m.dataset !== 'info-retention')
+    return fail(`${RESULT} is for dataset ${JSON.stringify(m.dataset)}`);
+  if (m.source !== 'headroom/evals/runners/compression_only.py')
+    return fail(`${RESULT} cites ${JSON.stringify(m.source)}, not their generator`);
+  if (m.probes !== m.cases * 4)
+    return fail(`${RESULT} has ${m.probes} probes for ${m.cases} cases, not four each`);
+  if (m.literalSurvival !== 1)
+    return fail(`${RESULT} literal survival ${m.literalSurvival}, below their oracle`);
+  if (m.lost !== 0) return fail(`${RESULT} lost ${m.lost} probe fact(s)`);
+
+  // A RETENTION NUMBER WITHOUT A REDUCTION NUMBER IS MEANINGLESS. An engine
+  // that returns its input unchanged retains everything -- squad-eval was
+  // measured reporting exactly that, 1.000 at 0.0%.
+  if (!(m.meanReduction >= required))
+    return fail(
+      `${RESULT} reduced ${(m.meanReduction * 100).toFixed(1)}%, below the ` +
+        `${(required * 100).toFixed(1)}% vacuity floor in ${HARNESS} -- the engine was inert`
+    );
+  if (m.retention !== 1)
+    return fail(`${RESULT} lost ${m.lost} probe fact(s) of ${m.probes}`);
+
+  return pass(
+    `${m.cases} cases, ${m.probes} probes, retention ${m.retention.toFixed(3)} ` +
+      `at ${(m.meanReduction * 100).toFixed(1)}% reduction`
+  );
+});
+check('B12', 'the launch suite is hermetic and green', () => {
+  const src = read('tests/hooks/launch-version-pin.test.mjs');
+  if (!src.includes('scrubbedEnv')) {
+    return fail('the suite still inherits TOKEN_OPTIMIZER_* from the shell');
+  }
+  if (
+    !src.includes(
+      'an inherited pin from the developer shell does not reach the shim'
+    )
+  ) {
+    return fail(
+      'nothing guards the hermeticity, so the leak can return unnoticed'
+    );
+  }
+  // Run it WITH the leak present, which is the condition that used to fail.
+  // jest directly, with the flag package.json's `test` script passes --
+  // without it more than half this repo's suites cannot even load.
+  const r = run(process.execPath, [
+    '--experimental-vm-modules',
+    join('node_modules', 'jest', 'bin', 'jest.js'),
+    'tests/hooks/launch-version-pin.test.mjs',
+  ]);
+  if (!r.ok) return fail(`the suite is red: ${r.out.slice(-300)}`);
+  return pass(
+    'green, with a guard that exports a pin and requires it to be ignored'
+  );
+});
+
 // ---------------------------------------------------------------- B14
 check(
   'B14',
@@ -535,33 +665,6 @@ check(
     );
   }
 );
-check('B12', 'the launch suite is hermetic and green', () => {
-  const src = read('tests/hooks/launch-version-pin.test.mjs');
-  if (!src.includes('scrubbedEnv')) {
-    return fail('the suite still inherits TOKEN_OPTIMIZER_* from the shell');
-  }
-  if (
-    !src.includes(
-      'an inherited pin from the developer shell does not reach the shim'
-    )
-  ) {
-    return fail(
-      'nothing guards the hermeticity, so the leak can return unnoticed'
-    );
-  }
-  // Run it WITH the leak present, which is the condition that used to fail.
-  // jest directly, with the flag package.json's `test` script passes --
-  // without it more than half this repo's suites cannot even load.
-  const r = run(process.execPath, [
-    '--experimental-vm-modules',
-    join('node_modules', 'jest', 'bin', 'jest.js'),
-    'tests/hooks/launch-version-pin.test.mjs',
-  ]);
-  if (!r.ok) return fail(`the suite is red: ${r.out.slice(-300)}`);
-  return pass(
-    'green, with a guard that exports a pin and requires it to be ignored'
-  );
-});
 
 // ---------------------------------------------------------------- report
 const w = Math.max(...results.map((r) => r.what.length));
