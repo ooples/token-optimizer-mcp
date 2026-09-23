@@ -198,6 +198,31 @@ export function detectInstall({ pluginsDir, root, client, codexHome } = {}) {
     record?.installPath && root && resolve(record.installPath) === resolve(root)
   );
 
+  // WHOSE RECORD IS THIS, THOUGH? installed_plugins.json is Claude Code's registry and nobody
+  // else's, so a client we have positively identified as something other than Claude Code cannot
+  // own what is in it. #408 is a Codex user told "install method: Claude Code plugin 6.0.0" while
+  // Codex's own entry points went unexercised. That was fixed for a Codex install that EXISTS;
+  // the same misreport still stood for Codex with no cache yet, and for the eight other managed
+  // clients, none of which has a branch above. An unidentified client still falls through on
+  // purpose: when we do not know who is asking, the machine's registered plugin is the best
+  // answer there is.
+  //
+  // The Claude record is not discarded -- returning anything but `plugin` here is what makes
+  // runDoctor re-read it as `crossClient`, where it is reported as another client's state.
+  if (client && client !== 'claude-code') {
+    return {
+      method: verifyManifest(readManifest()) ? 'script' : 'unknown',
+      packageVersion,
+      sameTree: false,
+      hooksDir: packageHooks,
+      installPath: null,
+      // NULL, NOT CLAUDE'S NUMBERS. Reporting them here is the misattribution itself: the
+      // checklist would compare this package against a version belonging to a different client.
+      installedVersion: null,
+      availableVersion: null,
+    };
+  }
+
   // A record whose installPath has gone missing is a broken plugin install, not
   // a script install -- saying "script" there would send the user to the wrong
   // remedy entirely.
@@ -268,22 +293,30 @@ function subdirectories(dir) {
  * carrying a readable .codex-plugin/plugin.json wins, which is the one Codex loads.
  */
 export function detectCodexInstall({ codexHome, root } = {}) {
-  const cache = join(codexHome || join(homedir(), '.codex'), 'plugins', 'cache');
+  const cache = join(
+    codexHome || join(homedir(), '.codex'),
+    'plugins',
+    'cache'
+  );
   let best = null;
   for (const marketplace of subdirectories(cache)) {
     const pluginRoot = join(cache, marketplace, PLUGIN_NAME);
     for (const version of subdirectories(pluginRoot)) {
       const installPath = join(pluginRoot, version);
-      const manifest = readJson(join(installPath, '.codex-plugin', 'plugin.json'));
+      const manifest = readJson(
+        join(installPath, '.codex-plugin', 'plugin.json')
+      );
       if (!manifest) continue;
       const installedVersion = manifest.version || version;
-      if (best && compareVersions(installedVersion, best.installedVersion) <= 0) continue;
+      if (best && compareVersions(installedVersion, best.installedVersion) <= 0)
+        continue;
       best = { installPath, installedVersion };
     }
   }
   if (!best) return null;
 
-  const packageVersion = readJson(join(root || '.', 'package.json'))?.version ?? null;
+  const packageVersion =
+    readJson(join(root || '.', 'package.json'))?.version ?? null;
   return {
     method: 'codex plugin',
     packageVersion,
@@ -500,7 +533,10 @@ export function pointsAtLoopback(value) {
  * Spoken over plain http rather than through the compiled client, because this file is copied into
  * eleven client integrations that do not ship `dist/`.
  */
-export async function probeSupervisor(env = process.env, { clientName } = {}) {
+export async function probeSupervisor(
+  env = process.env,
+  { clientName, client: requested } = {}
+) {
   if (
     String(env.TOKEN_OPTIMIZER_MODE || '')
       .trim()
@@ -587,7 +623,8 @@ export async function probeSupervisor(env = process.env, { clientName } = {}) {
   // that same variable and can only see that it LOOKS routed, so on its own it would report a
   // healthy install while the client cannot reach its provider at all -- the one failure this
   // feature can cause, and the only one a report built from our own state file would miss.
-  const pointed = env[proxyEnvFor(clientFrom(env, clientName)) || ''];
+  const pointed =
+    env[proxyEnvFor(clientFrom(env, clientName, requested)) || ''];
   if (pointsAtLoopback(pointed) && !(await portAnswers(pointed))) {
     checks.push(
       bad(
@@ -635,21 +672,36 @@ function portAnswers(url) {
  * Shared with probeProxy so the two cannot disagree about whose variable they are reading -- a
  * disagreement would have one of them reporting on a client the other is not looking at.
  */
-function clientFrom(env, clientName) {
-  const reported = String(clientName || '').toLowerCase();
-  // NORMALISED, because read raw a whitespace-only value is truthy as a client name: proxyEnvFor(' ')
-  // then finds nothing and the report says the client cannot be served -- about a client the MCP
-  // handshake had already identified by name.
+function clientFrom(env, clientName, explicit) {
+  // AN EXPLICIT REQUEST OUTRANKS THE AMBIENT ONE. TOKEN_OPTIMIZER_CLIENT is set by whatever
+  // launched this process, so it names the session -- not necessarily the install the user is
+  // asking about. A caller who names a client in the tool call has already answered the question
+  // the variable is a guess at, so the answer wins (#408).
+  const asked = managedName(explicit);
+  if (asked) return asked;
   return (
     String(env.TOKEN_OPTIMIZER_CLIENT || '')
       .trim()
-      .toLowerCase() ||
-    (/^(codex|codex[_-](cli|mcp|desktop))$/.test(reported)
-      ? 'codex'
-      : /^(claude-code|claude)$/.test(reported)
-        ? 'claude-code'
-        : managedClientFor(reported))
+      .toLowerCase() || managedName(clientName)
   );
+}
+
+/**
+ * A reported name as the registry spells it, or '' when it names nothing we manage.
+ *
+ * NORMALISED, because read raw a whitespace-only value is truthy as a client name: proxyEnvFor(' ')
+ * then finds nothing and the report says the client cannot be served -- about a client the MCP
+ * handshake had already identified by name.
+ */
+function managedName(name) {
+  const reported = String(name || '')
+    .trim()
+    .toLowerCase();
+  return /^(codex|codex[_-](cli|mcp|desktop))$/.test(reported)
+    ? 'codex'
+    : /^(claude-code|claude)$/.test(reported)
+      ? 'claude-code'
+      : managedClientFor(reported);
 }
 
 /**
@@ -695,7 +747,10 @@ function routingPending(env = process.env) {
   }
 }
 
-export function probeProxy(env = process.env, { clientName } = {}) {
+export function probeProxy(
+  env = process.env,
+  { clientName, client: requested } = {}
+) {
   // NORMALISED THE WAY THE RUNTIME NORMALISES IT. `policy.mode()` trims and
   // lowercases, so `OFF` and ` off ` genuinely turn the product off -- while a raw
   // comparison here read them as "on" and reported proxy failures against a
@@ -717,7 +772,7 @@ export function probeProxy(env = process.env, { clientName } = {}) {
     ];
   }
 
-  const client = clientFrom(env, clientName);
+  const client = clientFrom(env, clientName, requested);
   if (!client)
     return [
       bad(
@@ -1953,6 +2008,7 @@ export async function diagnose({
   cacheDegradedReason = null,
   codexHome,
   clientName,
+  client: clientRequested,
 } = {}) {
   // Resolved ONCE and threaded through, so every check reasons about the same
   // install. Detecting per-probe is how the checklist and the enforcement probe
@@ -1961,10 +2017,12 @@ export async function diagnose({
   // THE CLIENT DECIDES WHICH INSTALL IS THE SUBJECT. Read through the same clientFrom() the
   // proxy checks use, so the report cannot diagnose one client's install while describing
   // another's routing (#408).
+  const client = clientFrom(process.env, clientName, clientRequested);
+
   const install = detectInstall({
     pluginsDir,
     root,
-    client: clientFrom(process.env, clientName),
+    client,
     codexHome,
   });
 
@@ -1986,7 +2044,7 @@ export async function diagnose({
       probeSessionStart({ root, workspace, install }),
       skipServer ? Promise.resolve([]) : probeServer({ root }),
       // One loopback request with a short timeout; it shares no state with the others.
-      probeSupervisor(process.env, { clientName }),
+      probeSupervisor(process.env, { clientName, client: clientRequested }),
     ]);
 
   const checks = [
@@ -1995,7 +2053,7 @@ export async function diagnose({
     ...probeVersion({ install, crossClient }),
     ...probeHarvest(),
     ...supervisor,
-    ...probeProxy(process.env, { clientName }),
+    ...probeProxy(process.env, { clientName, client: clientRequested }),
     ...enforcement,
     ...sessionStart,
     ...probeGraph({ dir: graphDir }),

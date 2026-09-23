@@ -23,17 +23,23 @@ function coreUrl(name: string): string {
   return pathToFileURL(path.join(here, '..', '..', 'hooks-core', name)).href;
 }
 
-let cached: { doctor: any; wiki: any; manifest: any } | null = null;
+let cached: {
+  doctor: any;
+  wiki: any;
+  manifest: any;
+  capabilities: any;
+} | null = null;
 
 async function modules() {
   if (cached) return cached;
   try {
-    const [doctor, wiki, manifest] = await Promise.all([
+    const [doctor, wiki, manifest, capabilities] = await Promise.all([
       import(coreUrl('doctor.mjs')),
       import(coreUrl('wiki.mjs')),
       import(coreUrl('manifest.mjs')),
+      import(coreUrl('capabilities.mjs')),
     ]);
-    cached = { doctor, wiki, manifest };
+    cached = { doctor, wiki, manifest, capabilities };
     return cached;
   } catch {
     return null;
@@ -48,6 +54,16 @@ const say = (body: string, isError = false) => ({
 export async function installDoctor(input: {
   uninstallPlan?: boolean;
   clientName?: string;
+  /**
+   * Diagnose this client instead of the one that opened the session.
+   *
+   * The handshake name is right for nearly every call, but it is not always
+   * sent, and it is not always the install the user is asking about: a Codex
+   * session debugging a Claude Code install had no way to say so, and a host
+   * that sends no name at all falls back to the machine's registered plugin
+   * -- which is how #408 read a Codex problem as a Claude version regression.
+   */
+  client?: string;
   /**
    * Set by the server when its cache fell back to memory. Passed in rather than
    * detected here because it is a property of THIS process, not of the files on
@@ -67,6 +83,21 @@ export async function installDoctor(input: {
 
   const root = path.join(here, '..', '..');
   const cwd = process.cwd();
+
+  // A NAME WE MANAGE, OR A LIST OF THE ONES WE DO. Read from the registry rather than a second
+  // hand-kept enum: the last copy of that list went stale at three entries while MANAGED_CLIENTS
+  // grew to ten, and a rejected-but-supported name here would be indistinguishable from a
+  // genuinely unsupported client.
+  const requested = String(input?.client || '')
+    .trim()
+    .toLowerCase();
+  const managed: string[] = mods.capabilities.managedClientIds();
+  if (requested && !managed.includes(requested)) {
+    return say(
+      `Unknown client "${requested}". Diagnosable clients: ${managed.join(', ')}.`,
+      true
+    );
+  }
 
   if (input?.uninstallPlan) {
     const plan = mods.manifest.removalPlan();
@@ -105,6 +136,7 @@ export async function installDoctor(input: {
     // We ARE the server. Spawning another copy to ask it questions deadlocks.
     skipServer: true,
     clientName: input?.clientName,
+    client: requested || null,
     cacheDegradedReason: input?.cacheDegradedReason ?? null,
   });
 
@@ -124,6 +156,12 @@ export const DOCTOR_TOOL = {
       uninstallPlan: {
         type: 'boolean',
         description: 'Show what uninstall would remove, changing nothing',
+      },
+      client: {
+        type: 'string',
+        description:
+          'Diagnose this client instead of the one that opened the session (for example "codex"). ' +
+          'Defaults to the client named in the MCP handshake.',
       },
     },
   },
