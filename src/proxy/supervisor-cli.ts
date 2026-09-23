@@ -7,23 +7,14 @@
  * owns the control port, so a race between two clients starting at once settles itself.
  */
 
-import { runSupervisor, supervisorStateFile } from './supervisor.js';
-import { rmSync } from 'node:fs';
+import { runSupervisor } from './supervisor.js';
 
 const started = await runSupervisor();
 if (!started) process.exit(0);
 
 const stop = () => {
-  // The state file names routes that die with this process; leaving it would tell the next reader
-  // to use ports nothing is listening on.
-  try {
-    // Sync because this runs inside a signal handler that ends with process.exit: an awaited
-    // removal would not finish, and the stale file is exactly what we are here to prevent.
-    // eslint-disable-next-line n/no-sync -- see above
-    rmSync(supervisorStateFile(), { force: true });
-  } catch {
-    /* best effort */
-  }
+  // Keep the route registry so connected clients can recover their exact ports after any exit.
+  // A state file is not a liveness claim: callers must probe the control endpoint.
   process.exit(0);
 };
 

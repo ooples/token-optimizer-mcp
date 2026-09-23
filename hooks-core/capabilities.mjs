@@ -309,6 +309,133 @@ export function clientForCommand(command) {
 }
 
 /**
+ * Where each client's hooks are installed, and what they are called there.
+ *
+ * ONE TABLE, READ BY BOTH SIDES. These destinations existed only as English inside
+ * scripts/generate-client-configs.mjs -- "copy hooks/ to .cursor/hooks/token-optimizer/" -- which
+ * is a fine thing to print and a useless thing to check against. The doctor could therefore
+ * examine exactly two installs, Claude Code's and Codex's, and every other client fell through to
+ * whatever detectInstall found in Claude Code's registry (#408). A destination that is written
+ * down once can be printed by the installer AND looked for by the diagnosis, and the drift gate in
+ * that generator now fails if the two disagree.
+ *
+ * `base` is what `dir` is relative to: 'home' for a client that installs hooks once per machine,
+ * 'project' for one that reads them from the repository it is opened in. `entries` names the files
+ * by role, because the roles are shared and the filenames are not: Cline alone uses extensionless
+ * wrappers named after the event.
+ *
+ * A NULL `dir` IS AN ANSWER, NOT A GAP. Gemini and Qwen install through their own extension
+ * mechanism, which picks the directory itself; nowhere in this repository records what it picks.
+ * Writing a plausible path here would make the doctor report a missing install for every user of
+ * those two clients, which is worse than saying we do not know.
+ */
+export const CLIENT_HOOK_INSTALLS = Object.freeze({
+  codex: Object.freeze({
+    source: 'integrations/codex/hooks',
+    base: 'home',
+    dir: '.codex/hooks',
+    entries: Object.freeze({
+      sessionStart: 'session-start.mjs',
+      preTool: 'pre-tool.mjs',
+      postTool: 'post-tool.mjs',
+      stop: 'stop.mjs',
+    }),
+  }),
+  copilot: Object.freeze({
+    source: 'integrations/copilot/.github/hooks',
+    base: 'project',
+    dir: '.github/hooks',
+    entries: Object.freeze({
+      sessionStart: 'session-start.mjs',
+      preTool: 'pre-tool.mjs',
+      postTool: 'post-tool.mjs',
+      stop: 'stop.mjs',
+    }),
+  }),
+  opencode: Object.freeze({
+    source: 'integrations/opencode/hooks',
+    base: 'project',
+    dir: '.opencode/hooks/token-optimizer',
+    entries: Object.freeze({
+      sessionStart: 'session-start.mjs',
+      preTool: 'pre-tool.mjs',
+      postTool: 'post-tool.mjs',
+    }),
+  }),
+  cursor: Object.freeze({
+    source: 'integrations/cursor/hooks',
+    base: 'project',
+    dir: '.cursor/hooks/token-optimizer',
+    entries: Object.freeze({
+      sessionStart: 'session-start.mjs',
+      preTool: 'pre-tool.mjs',
+      postTool: 'post-tool.mjs',
+      stop: 'stop.mjs',
+    }),
+  }),
+  windsurf: Object.freeze({
+    source: 'integrations/windsurf/hooks',
+    base: 'project',
+    dir: '.windsurf/hooks/token-optimizer',
+    entries: Object.freeze({
+      preTool: 'pre-tool.mjs',
+      postTool: 'post-tool.mjs',
+    }),
+  }),
+  kilo: Object.freeze({
+    source: 'integrations/kilo/hooks',
+    base: 'project',
+    dir: '.kilo/hooks/token-optimizer',
+    entries: Object.freeze({
+      sessionStart: 'session-start.mjs',
+      preTool: 'pre-tool.mjs',
+      postTool: 'post-tool.mjs',
+    }),
+  }),
+  // THE ONE CLIENT THAT DOES NOT USE OUR FILENAMES. Cline dispatches on the event name, so the
+  // wrappers are extensionless and named after the event, with .ps1 siblings for Windows.
+  cline: Object.freeze({
+    source: 'integrations/cline/hooks',
+    base: 'project',
+    dir: '.clinerules/hooks',
+    entries: Object.freeze({
+      sessionStart: 'TaskStart',
+      preTool: 'PreToolUse',
+      postTool: 'PostToolUse',
+    }),
+  }),
+  gemini: Object.freeze({
+    source: 'integrations/gemini/hooks',
+    base: null,
+    dir: null,
+    why: 'installed by gemini extensions install, which chooses the extension directory itself; this repository has never recorded that path, so the doctor must not guess at one',
+    entries: Object.freeze({
+      sessionStart: 'session-start.mjs',
+      preTool: 'pre-tool.mjs',
+      postTool: 'post-tool.mjs',
+      stop: 'stop.mjs',
+    }),
+  }),
+  qwen: Object.freeze({
+    source: 'integrations/qwen/hooks',
+    base: null,
+    dir: null,
+    why: 'installed through Qwen Code settings, which records the extension location itself; this repository has never recorded that path, so the doctor must not guess at one',
+    entries: Object.freeze({
+      sessionStart: 'session-start.mjs',
+      preTool: 'pre-tool.mjs',
+      postTool: 'post-tool.mjs',
+      stop: 'stop.mjs',
+    }),
+  }),
+});
+
+/** Where this client's hooks live, or null when it has no hook integration at all. */
+export function hookInstallFor(client) {
+  return CLIENT_HOOK_INSTALLS[String(client || '').toLowerCase()] || null;
+}
+
+/**
  * The endpoint a client is already using, or null when we cannot know it.
  *
  * A value that already points at loopback is one of our own routes from an earlier session: it is
@@ -333,12 +460,11 @@ export function upstreamFor(client, env = process.env) {
     // our own route meant a user running their own local gateway had it replaced by the provider's
     // public endpoint -- we would route around the very thing they put in front of the provider.
     // Ours is recognised by the manifest; anything else is somebody's real upstream and is kept.
-    return ourRoute(configured, client, env)
-      ? entry.defaultUpstream
-      : configured;
   } catch {
     return null;
   }
+  const recorded = ourRoute(configured, client, env);
+  return recorded ? recorded.upstream || recorded.previous : configured;
 }
 
 /**
@@ -356,10 +482,23 @@ function ourRoute(value, client, env) {
     );
     if (manifest?.schema !== 1) return false;
     const variable = CLIENT_PROXY_ENV[client];
-    return Object.values(manifest.entries || {}).some(
+    const matches = Object.values(manifest.entries || {}).filter(
       (entry) => entry?.value === value && entry?.variable === variable
     );
-  } catch {
+    if (!matches.length) return false;
+    const upstreams = new Set(
+      matches.map((entry) => entry.upstream || entry.previous)
+    );
+    if (upstreams.size !== 1 || ![...upstreams][0]) {
+      const error = new Error(
+        'Ambiguous proxy ownership; restore the provider endpoint before launching.'
+      );
+      error.code = 'AMBIGUOUS_PROXY_OWNERSHIP';
+      throw error;
+    }
+    return matches[0];
+  } catch (error) {
+    if (error.code === 'AMBIGUOUS_PROXY_OWNERSHIP') throw error;
     // No record means we did not write it, so it is not ours to replace.
     return false;
   }

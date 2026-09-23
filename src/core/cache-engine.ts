@@ -5,6 +5,10 @@ import fs from 'fs';
 import os from 'os';
 import { IEmbeddingGenerator } from '../interfaces/IEmbeddingGenerator.js';
 import { IVectorStore } from '../interfaces/IVectorStore.js';
+import {
+  registerDatabaseOwner,
+  unregisterDatabaseOwner,
+} from './database-registry.js';
 
 /**
  * Whether an error from opening/initializing SQLite indicates the database file
@@ -301,6 +305,9 @@ export class CacheEngine {
         semanticConfig?.enabled ??
         (embeddingGenerator !== undefined && vectorStore !== undefined),
     };
+
+    // LAST, so a constructor that threw never leaves a half-built engine in the registry.
+    registerDatabaseOwner(this);
   }
 
   /**
@@ -728,6 +735,7 @@ export class CacheEngine {
    * Close database connection
    */
   close(): void {
+    unregisterDatabaseOwner(this);
     this.db.close();
   }
 }

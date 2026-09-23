@@ -74,6 +74,13 @@ jobs:
           tests/integration/postinstall-defaults.test.mjs
           tests/integration/review387-regressions.test.mjs
           tests/integration/proxy-install-path.test.mjs
+          tests/integration/all-cli-proxy-recovery.test.mjs
+          tests/integration/automatic-install-repair.test.mjs
+          tests/integration/native-home-isolation.test.mjs
+          tests/integration/proxy-crash-recovery.test.mjs
+          tests/unit/routing-maintenance.test.ts
+          tests/unit/proxy-supervisor.test.ts
+          tests/unit/default-routing.test.ts
           tests/unit/compress/proxy.test.ts
           tests/unit/compress/proxy-cli.test.ts
           tests/unit/compress/responses-knowledge.test.ts

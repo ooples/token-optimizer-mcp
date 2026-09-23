@@ -21,6 +21,7 @@ import { contentMatches, readIfExists, writeIfChanged } from './lib/text.mjs';
 import {
   capabilityFor,
   CAPABILITY_TIERS,
+  hookInstallFor,
 } from '../hooks-core/capabilities.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -231,6 +232,22 @@ for (const client of CLIENTS) {
   if (Boolean(client.nativeHooks) !== registrySaysNative) {
     throw new Error(
       `capability drift for ${client.key}: generator and registry disagree`
+    );
+  }
+
+  // AND THE DESTINATION AGREES WITH THE ONE THE DOCTOR LOOKS IN. hookInstall is the sentence a
+  // user follows by hand; CLIENT_HOOK_INSTALLS is the path the diagnosis checks. They were the
+  // same fact kept in two places, which is the arrangement that let every client but two be
+  // diagnosed against Claude Code's registry. Stated twice is fine; disagreeing is not.
+  const hooks = hookInstallFor(client.key);
+  if (client.hookInstall && !hooks?.dir) {
+    throw new Error(
+      `hook drift for ${client.key}: the generator gives a destination but CLIENT_HOOK_INSTALLS has no dir`
+    );
+  }
+  if (hooks?.dir && !client.hookInstall?.includes(hooks.dir)) {
+    throw new Error(
+      `hook drift for ${client.key}: registry says ${hooks.dir}, generator says ${client.hookInstall}`
     );
   }
 }
