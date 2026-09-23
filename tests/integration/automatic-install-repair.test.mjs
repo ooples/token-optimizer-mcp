@@ -65,7 +65,19 @@ function fixture(fn, command = 'claude') {
       JSON.stringify({ name: '@ooples/token-optimizer-mcp', version })
     );
     fs.writeFileSync(join(dir, 'scripts/run-client.mjs'), '');
-    fs.writeFileSync(join(dir, 'plugin/hooks/stop.mjs'), '');
+    // EVERY HOOK THE WIRING NAMES, because since #427 the installer refuses to wire an
+    // event whose file is not in the directory it was pointed at -- correctly: that
+    // refusal is what stops a half-copied install being registered as a working one.
+    // A fixture holding only stop.mjs therefore modelled an install that cannot exist,
+    // and the refusal it earned had nothing to do with what this test is asserting.
+    for (const hook of [
+      'session-start.mjs',
+      'pretooluse-router.mjs',
+      'post-tool.mjs',
+      'precompact-optimize.mjs',
+      'stop.mjs',
+    ])
+      fs.writeFileSync(join(dir, 'plugin/hooks', hook), '');
   }
   const body = `function global:${command} { & 'node' '${join(old, 'scripts/run-client.mjs')}' ${command} @args }`;
   const block = `# >>> token-optimizer managed clients >>>\n${body}\n# token-optimizer sha256: ${hash(body)}\n# <<< token-optimizer managed clients <<<`;
