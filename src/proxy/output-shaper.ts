@@ -78,7 +78,9 @@ export function shaperEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 
 /** The unshaped fraction. Invalid or absent means none. */
 export function holdoutFraction(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = Number.parseFloat((env.TOKEN_OPTIMIZER_OUTPUT_HOLDOUT ?? '').trim());
+  const raw = Number.parseFloat(
+    (env.TOKEN_OPTIMIZER_OUTPUT_HOLDOUT ?? '').trim()
+  );
   if (!Number.isFinite(raw) || raw <= 0) return 0;
   return raw >= 1 ? 1 : raw;
 }
@@ -101,7 +103,10 @@ export function inHoldout(key: string | undefined, fraction: number): boolean {
 }
 
 /** Is this turn only the model resuming after a tool result? */
-export function isResumption(body: Record<string, unknown>, wireFormat: WireFormat): boolean {
+export function isResumption(
+  body: Record<string, unknown>,
+  wireFormat: WireFormat
+): boolean {
   const list = wireFormat === 'responses' ? body.input : body.messages;
   if (!Array.isArray(list) || !list.length) return false;
   const last = list[list.length - 1] as Record<string, unknown> | undefined;
@@ -153,13 +158,20 @@ function steerVerbosity(
     }
     if (Array.isArray(system) && system.length) {
       const blocks = system as Record<string, unknown>[];
-      if (blocks.some((b) => typeof b?.text === 'string' && b.text.includes(TERSE_NOTE)))
+      if (
+        blocks.some(
+          (b) => typeof b?.text === 'string' && b.text.includes(TERSE_NOTE)
+        )
+      )
         return null;
       // A NEW TRAILING BLOCK, never an edit of an existing one. The client may
       // have put a cache_control breakpoint on the last block; appending after
       // it leaves every cached block byte-identical, where rewriting one would
       // invalidate it and everything behind it.
-      return { ...body, system: [...blocks, { type: 'text', text: TERSE_NOTE }] };
+      return {
+        ...body,
+        system: [...blocks, { type: 'text', text: TERSE_NOTE }],
+      };
     }
     return null;
   }
@@ -167,10 +179,13 @@ function steerVerbosity(
   // Chat Completions keeps the system prompt as the first message.
   if (!Array.isArray(body.messages)) return null;
   const messages = body.messages as Record<string, unknown>[];
-  const index = messages.findIndex((m) => m?.role === 'system' || m?.role === 'developer');
+  const index = messages.findIndex(
+    (m) => m?.role === 'system' || m?.role === 'developer'
+  );
   if (index === -1) return null;
   const current = messages[index];
-  if (typeof current.content !== 'string' || !current.content.length) return null;
+  if (typeof current.content !== 'string' || !current.content.length)
+    return null;
   if (current.content.includes(TERSE_NOTE)) return null;
   const copy = messages.slice();
   copy[index] = { ...current, content: `${current.content}\n\n${TERSE_NOTE}` };
@@ -228,7 +243,8 @@ export function shapeOutput(
   opts: ShaperOptions
 ): ShaperResult {
   if (!opts.enabled) return { body, labels: [], skipped: 'shaper off' };
-  if (!body || typeof body !== 'object') return { body, labels: [], skipped: 'not an object' };
+  if (!body || typeof body !== 'object')
+    return { body, labels: [], skipped: 'not an object' };
 
   const fraction = opts.holdout ?? 0;
   if (inHoldout(opts.conversationKey, fraction))

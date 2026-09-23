@@ -348,7 +348,9 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
  * user message. The holdout arm depends on it -- a key that moved per turn
  * would let a conversation switch arms mid-flight and pollute both.
  */
-function conversationKeyFor(parsed: Record<string, unknown>): string | undefined {
+function conversationKeyFor(
+  parsed: Record<string, unknown>
+): string | undefined {
   // A RESPONSES CONTINUATION CARRIES NEITHER. A turn holding only
   // `function_call_output` has no system text and no user item, so this
   // returned undefined and inHoldout() then treated every such turn as
@@ -374,7 +376,9 @@ function conversationKeyFor(parsed: Record<string, unknown>): string | undefined
     : undefined;
   const firstText = first ? JSON.stringify(first.content ?? '') : '';
   if (!systemText && !firstText) return undefined;
-  return createHash('sha256').update(`${systemText}\u0000${firstText}`).digest('hex');
+  return createHash('sha256')
+    .update(`${systemText}\u0000${firstText}`)
+    .digest('hex');
 }
 
 export function compressBody(
