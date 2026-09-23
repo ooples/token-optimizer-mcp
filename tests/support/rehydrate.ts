@@ -106,8 +106,117 @@ export function expandTapRecords(text: string): string {
     }
   );
 }
+/**
+ * The path pattern from `src/compress/search.ts#HIT`, kept in step with it.
+ *
+ * A header only looks like a header when its first field looks like a path.
+ * Without the constraint `18:10-20 INFO up` reads as a hunk of eleven lines
+ * and a decoder eats the next eleven lines of an unrelated log.
+ */
+const SEARCH_PATH =
+  '(?:[A-Za-z]:[\\\\/][^\\s:]*|[^\\s:]*[\\\\/][^\\s:]*|[^\\s:]+\\.[A-Za-z0-9]+)';
+
+/**
+ * `path:start-end` plus the two optional suffixes the encoder can append.
+ *
+ * THE RANGE ALWAYS HAS TWO ENDS. `flush` restores any hunk below
+ * MIN_HUNK_LINES with its original per-line prefixes, so a header is only ever
+ * written for two or more contiguous lines and `start === previous` -- the
+ * single-number range -- is unreachable. Matching it anyway would claim every
+ * bare `path:12` in the surrounding text.
+ */
+const SEARCH_HEADER = new RegExp(
+  `^(${SEARCH_PATH}):(\\d+)-(\\d+)` +
+    '( \\(context\\)| \\(matched [\\d,-]+\\))?' +
+    '(?: \\[exact declaration rows: name<TAB>rhs; concatenate template ' +
+    '(\\[.*\\]) around the two fields; source line = range start ' +
+    '\\+ zero-based row index\\])?$'
+);
+
+/** The line numbers a header says matched, as `matchNote` said them. */
+function matchedLines(
+  marks: string | undefined,
+  start: number,
+  end: number
+): Set<number> {
+  const all = (from: number, to: number): number[] =>
+    Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  // No note at all means every line in the range matched: the range says it.
+  if (marks === undefined) return new Set(all(start, end));
+  if (marks === ' (context)') return new Set();
+  const listed = /^ \(matched (.+)\)$/.exec(marks);
+  if (!listed) throw new Error(`rehydrate: unreadable match note ${marks}`);
+  const span = /^(\d+)-(\d+)$/.exec(listed[1]);
+  if (span) return new Set(all(Number(span[1]), Number(span[2])));
+  return new Set(listed[1].split(',').map(Number));
+}
+
+/**
+ * Rebuilds the original from the search-hunk encoding.
+ *
+ * REPLACES A DECODER THAT ONLY READ THE RARE HALF OF THE FORMAT.
+ * `search-declarations.test.ts` carried a `reconstruct` that returned any
+ * header without `[exact declaration rows:` unchanged, as a line of text --
+ * and the declaration table needs 64 uniform lines, so the engine's ordinary
+ * output, a path stated once over a hunk of content, was never reconstructed
+ * by anything. The round trip it appeared to prove was the one case the
+ * encoder is least likely to reach.
+ *
+ * Both halves are read here. The separator is not stored per line, so it is
+ * derived the way the encoder wrote it: `:` for a line the header calls
+ * matched, `-` for one it does not.
+ */
+export function expandSearchHunks(text: string): string {
+  const newline = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(newline);
+  const out: string[] = [];
+  for (let cursor = 0; cursor < lines.length; cursor += 1) {
+    const header = SEARCH_HEADER.exec(lines[cursor]);
+    if (!header) {
+      out.push(lines[cursor]);
+      continue;
+    }
+    const [, path, first, last, marks, encoded] = header;
+    const start = Number(first);
+    const end = Number(last);
+    const count = end - start + 1;
+    const body = lines.slice(cursor + 1, cursor + 1 + count);
+    if (body.length < count)
+      throw new Error(
+        `rehydrate: hunk ${path}:${start}-${end} claims ${count} lines but ${body.length} follow`
+      );
+    const matched = matchedLines(marks, start, end);
+    const template = encoded ? (JSON.parse(encoded) as string[]) : null;
+    body.forEach((row, offset) => {
+      const line = start + offset;
+      let content = row;
+      if (template) {
+        const fields = row.split('\t');
+        if (fields.length !== 2)
+          throw new Error(
+            `rehydrate: declaration row is not two fields: ${row}`
+          );
+        content =
+          template[0] + fields[0] + template[1] + fields[1] + template[2];
+      }
+      out.push(`${path}:${line}${matched.has(line) ? ':' : '-'}${content}`);
+    });
+    cursor += count;
+  }
+  return out.join(newline);
+}
+
 /** Markers this module must consume rather than pass through as text. */
 const UNCONSUMED = /^\s*\[\/?(?:JSON |All \d+ JSON |TAP )/;
+
+/**
+ * The search engine's markers sit at the END of a header line, not the start,
+ * so the line-prefix refusal above cannot see them. A declaration note that
+ * survived expansion means `expandSearchHunks` declined the header carrying
+ * it -- a variant it does not invert -- and the body lines under it are still
+ * missing their path and line number.
+ */
+const UNCONSUMED_SUFFIX = /\[exact declaration rows:/;
 
 /**
  * Applies every registered grammar, then refuses anything left over.
@@ -117,9 +226,14 @@ const UNCONSUMED = /^\s*\[\/?(?:JSON |All \d+ JSON |TAP )/;
  * would otherwise survive as ordinary-looking lines.
  */
 export function rehydrate(text: string): string {
-  const out = expandLog(expandTapRecords(expandJsonRecords(text)));
+  // Search first: its grammar is line-structural rather than delimited, so it
+  // has to see the hunk bodies before any other grammar rewrites a line inside
+  // one.
+  const out = expandLog(
+    expandTapRecords(expandJsonRecords(expandSearchHunks(text)))
+  );
   for (const line of out.split('\n'))
-    if (UNCONSUMED.test(line))
+    if (UNCONSUMED.test(line) || UNCONSUMED_SUFFIX.test(line))
       throw new Error(`rehydrate: unconsumed marker ${JSON.stringify(line)}`);
   return out;
 }

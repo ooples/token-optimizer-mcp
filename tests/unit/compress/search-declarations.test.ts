@@ -3,45 +3,12 @@ import {
   looksLikeSearchResults,
 } from '../../../src/compress/search.js';
 
-// Independent decoder checks all original bytes, not just one retained needle.
-function reconstruct(table: string): string {
-  const newline = table.includes('\r\n') ? '\r\n' : '\n';
-  const lines = table.split(newline);
-  const output: string[] = [];
-  for (let cursor = 0; cursor < lines.length; cursor++) {
-    const header = lines[cursor];
-    const parsed =
-      /^(.*):(\d+)-(\d+)(.*?) \[exact declaration rows: .*?concatenate template (\[.*\]) around/.exec(
-        header
-      );
-    if (!parsed) {
-      output.push(header);
-      continue;
-    }
-    const [, path, first, last, marks, encoded] = parsed;
-    const template = JSON.parse(encoded) as string[];
-    const matched = /\(matched ([^)]+)\)/.exec(marks)?.[1];
-    const matches = matched?.split(',').flatMap((range) => {
-      const [start, end = start] = range.split('-').map(Number);
-      return Array.from(
-        { length: end - start + 1 },
-        (_, index) => start + index
-      );
-    });
-    for (let line = Number(first); line <= Number(last); line++) {
-      const row = lines[++cursor].split('\t');
-      expect(row).toHaveLength(2);
-      const sep =
-        marks.includes('(context)') || (matches && !matches.includes(line))
-          ? '-'
-          : ':';
-      output.push(
-        `${path}:${line}${sep}${template[0]}${row[0]}${template[1]}${row[1]}${template[2]}`
-      );
-    }
-  }
-  return output.join(newline);
-}
+// Independent reconstruction uses only the emitted text, never the original
+// input. The shared decoder rather than the local one this file used to carry:
+// that one returned any header without `[exact declaration rows:` unchanged,
+// so the plain path-prefix hunk -- everything the engine emits below 64
+// uniform lines -- was never reconstructed by it at all.
+import { rehydrate } from '../../support/rehydrate.js';
 
 function fixture(
   path = 'src/settings.ts',
@@ -74,7 +41,7 @@ describe('exact declaration rows in search output', () => {
           'SETTING_71\t"opaque-{name}-sk-example-0123456789;\\t"'
         );
         expect(result.lossless).toBe(true);
-        expect(reconstruct(result.text)).toBe(input);
+        expect(rehydrate(result.text)).toBe(input);
       }
     }
   );
@@ -85,7 +52,7 @@ describe('exact declaration rows in search output', () => {
       '\n' +
       fixture('\\\\server\\share\\config.ts');
     expect(looksLikeSearchResults(input)).toBe(true);
-    expect(reconstruct(compressSearchResults(input).text)).toBe(input);
+    expect(rehydrate(compressSearchResults(input).text)).toBe(input);
   });
 
   it('retains all declarations when values contain a real tab or syntax differs', () => {
