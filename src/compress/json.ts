@@ -258,8 +258,65 @@ function minifyPreservingTokens(text: string): string | null {
   }
   return out;
 }
-/** Numbers, excluding digits that belong to an identifier or a key. */
-const NUMBER_LEXEME = /(?<![\w."])-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?(?![\w.])/g;
+/**
+ * The number lexemes of a document, in order, ignoring anything inside a string.
+ *
+ * OUTSIDE STRINGS, AND POSITIONAL. The first version asked whether each
+ * rewritten lexeme still appeared ANYWHERE in the output, which a string
+ * containing the same text satisfies for free: in
+ * `{"n":1e3,"note":"value 1e3"}` the serialising fallback rewrites n to 1000,
+ * yet `1e3` survives inside the note, so a substring test reports the
+ * document unchanged and the result claims losslessness it does not have.
+ *
+ * The string-skipping here is deliberately the same shape as
+ * minifyPreservingTokens above: a span opened by a quote is consumed whole,
+ * with a backslash swallowing the character after it.
+ */
+function numberLexemes(text: string): string[] | null {
+  const found: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"') {
+      i += 1;
+      let closed = false;
+      while (i < text.length) {
+        if (text[i] === '\\') {
+          i += 2;
+          continue;
+        }
+        if (text[i] === '"') {
+          i += 1;
+          closed = true;
+          break;
+        }
+        i += 1;
+      }
+      // An unterminated string means the scan cannot be trusted; say so
+      // rather than returning a prefix that would compare as equal.
+      if (!closed) return null;
+      continue;
+    }
+    if (ch === '-' || (ch >= '0' && ch <= '9')) {
+      const start = i;
+      if (ch === '-') i += 1;
+      while (i < text.length && text[i] >= '0' && text[i] <= '9') i += 1;
+      if (text[i] === '.') {
+        i += 1;
+        while (i < text.length && text[i] >= '0' && text[i] <= '9') i += 1;
+      }
+      if (text[i] === 'e' || text[i] === 'E') {
+        i += 1;
+        if (text[i] === '+' || text[i] === '-') i += 1;
+        while (i < text.length && text[i] >= '0' && text[i] <= '9') i += 1;
+      }
+      found.push(text.slice(start, i));
+      continue;
+    }
+    i += 1;
+  }
+  return found;
+}
 
 /**
  * Did every number survive as WRITTEN, not merely as valued?
@@ -271,22 +328,15 @@ const NUMBER_LEXEME = /(?<![\w."])-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?(?![\w.])/g;
  * first place, so the claim is now conditioned on a check rather than on the
  * author having remembered.
  *
- * Only lexemes the parser WOULD rewrite are considered, so ordinary integers
- * -- almost every number in machine-generated JSON -- cost one comparison and
- * never reach the output scan.
+ * Compared as SEQUENCES, position by position, so a rewrite cannot be masked
+ * by the same text appearing elsewhere in the document.
  */
 function numbersKeptVerbatim(original: string, output: string): boolean {
-  for (const lexeme of original.match(NUMBER_LEXEME) ?? []) {
-    let canonical: string;
-    try {
-      canonical = String(JSON.parse(lexeme));
-    } catch {
-      continue;
-    }
-    if (canonical === lexeme) continue;
-    if (!output.includes(lexeme)) return false;
-  }
-  return true;
+  const before = numberLexemes(original);
+  const after = numberLexemes(output);
+  if (before === null || after === null) return false;
+  if (before.length !== after.length) return false;
+  return before.every((lexeme, at) => lexeme === after[at]);
 }
 export function compressJson(
   text: string,
