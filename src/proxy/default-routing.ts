@@ -125,11 +125,10 @@ const TOOL_SEARCH = 'ENABLE_TOOL_SEARCH';
  * forward -- removal then left our value behind for good. `ours` is the answer to the other
  * question, from the manifest, and it suspends only the presence check.
  */
-function shouldPreserveToolSearch(
+function toolSearchAppropriate(
   settings: Settings,
   upstream: string,
-  env: NodeJS.ProcessEnv,
-  ours: boolean
+  env: NodeJS.ProcessEnv
 ): boolean {
   const external = [
     'CLAUDE_CODE_USE_BEDROCK',
@@ -142,9 +141,19 @@ function shouldPreserveToolSearch(
     )
   );
   if (external) return false;
+  return upstream === DEFAULT_UPSTREAM;
+}
+
+function shouldPreserveToolSearch(
+  settings: Settings,
+  upstream: string,
+  env: NodeJS.ProcessEnv,
+  ours: boolean
+): boolean {
+  if (!toolSearchAppropriate(settings, upstream, env)) return false;
   if (!ours && settings.env?.[TOOL_SEARCH] !== undefined) return false;
   if (env[TOOL_SEARCH] !== undefined) return false;
-  return upstream === DEFAULT_UPSTREAM;
+  return true;
 }
 
 /**
@@ -384,14 +393,22 @@ export async function applyDefaultRouting(
       : { status: 'unavailable' };
   }
   const ours = toolSearchIsOurs(settings, recorded);
+  // TWO DIFFERENT REASONS NOT TO WRITE IT, and only one of them is a reason to take it back.
+  // "We must not assert this" -- a third-party backend, or a route forwarding to a gateway --
+  // means a flag of ours in the file is wrong and has to go. "Someone else is already asserting
+  // it" does not: `scripts/run-client.mjs` puts ENABLE_TOOL_SEARCH in the environment of the
+  // Claude it launches, so an MCP server running inside that child sees it set and would
+  // otherwise delete the settings entry that serves every OTHER way the user starts Claude.
+  const appropriate = toolSearchAppropriate(settings, upstream, env);
   const addToolSearch = shouldPreserveToolSearch(settings, upstream, env, ours);
+  const takeBack = ours && !appropriate;
 
   if (settings.env?.[VARIABLE] === url && recorded && recorded.value === url) {
     // OUR FLAG CAN OUTLIVE THE REASON FOR IT. The route has not moved, so there is nothing to
     // write -- but a later session may have turned on Bedrock, Vertex or Foundry, and nothing
     // else would ever take the flag back out: removal only runs when routing is switched off
     // altogether, and a third-party backend does not switch routing off.
-    if (ours && !addToolSearch && settings.env) {
+    if (takeBack && settings.env) {
       delete settings.env[TOOL_SEARCH];
       saveSettings(path, settings);
       record(env, { ...recorded, toolSearchAdded: false });
@@ -403,16 +420,19 @@ export async function applyDefaultRouting(
     ? recorded.createdEnv
     : settings.env === undefined;
   settings.env = { ...settings.env, [VARIABLE]: url };
-  // Written when we want it, taken out when it is ours and we no longer do. Never touched when
-  // it is the user’s: that is the whole of `ours`.
+  // Written when we want it, taken out when it is ours and asserting it has become wrong, and
+  // otherwise carried through by the spread. Never touched when it is the user’s: that is the
+  // whole of `ours`.
   if (addToolSearch) settings.env[TOOL_SEARCH] = 'true';
-  else if (ours) delete settings.env[TOOL_SEARCH];
+  else if (takeBack) delete settings.env[TOOL_SEARCH];
   saveSettings(path, settings);
   record(env, {
     variable: VARIABLE,
     value: url,
     createdEnv,
-    toolSearchAdded: addToolSearch,
+    // Ownership survives a pass that did not write, as long as the value is still ours and still
+    // right; it is given up the moment we stop being the one asserting it.
+    toolSearchAdded: addToolSearch || (ours && appropriate),
     // What the file said before we ever touched it, captured before the write above. Re-deriving it
     // on a later pass would record our own route as the thing to restore.
     previous: original,

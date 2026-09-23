@@ -328,4 +328,36 @@ describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
     await applyDefaultRouting(moved, env);
     expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
   });
+
+  it('leaves the file flag alone when our own launcher set the variable', async () => {
+    // `scripts/run-client.mjs` puts ENABLE_TOOL_SEARCH in the environment of the Claude it
+    // launches, so an MCP server running inside that child sees it set. That is someone already
+    // asserting the flag, not a reason the flag is wrong -- and the settings entry is what serves
+    // every other way the user starts Claude, so it has to survive the visit.
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+
+    const launched = { ...env, ENABLE_TOOL_SEARCH: 'true' };
+    await applyDefaultRouting(moved, launched);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+    expect(
+      readRoutingManifest(launched).entries[claudeSettingsFile(launched)]
+        .toolSearchAdded
+    ).toBe(true);
+  });
+
+  it('still takes it back under the launcher when a backend arrives', async () => {
+    // The gate above is about precedence, not about appropriateness: a third-party backend still
+    // means our value is wrong, whoever else is also setting the variable.
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    const settled = read();
+    settled.env.CLAUDE_CODE_USE_VERTEX = 'true';
+    write(settled);
+
+    const launched = { ...env, ENABLE_TOOL_SEARCH: 'true' };
+    await applyDefaultRouting(moved, launched);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBeUndefined();
+  });
 });
