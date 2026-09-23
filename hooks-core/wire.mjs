@@ -140,7 +140,7 @@ export function entrypointOf(command) {
   return '';
 }
 
-const isOurs = (entry) => {
+export const isOurs = (entry) => {
   const hooks = Array.isArray(entry?.hooks) ? entry.hooks : [];
   if (!hooks.length) return false;
 

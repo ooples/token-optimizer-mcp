@@ -18,7 +18,7 @@
  * complaint.
  */
 
-import { entrypointOf, hasOwnershipFlag } from './wire.mjs';
+import { entrypointOf, isOurs } from './wire.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import {
@@ -954,7 +954,14 @@ export function checklist({ root, settingsPath, install }) {
           for (const entry of Array.isArray(entries) ? entries : []) {
             for (const hook of entry?.hooks || []) {
               const command = hook?.command || '';
-              if (!hasOwnershipFlag(command)) continue;
+              // OURS BY EITHER TEST, NOT JUST THE FLAG. Entries we wrote
+              // before the flag existed carry no flag, so a flag-only
+              // check skipped exactly the legacy hooks most likely to
+              // point at a script that has since moved. isOurs applies
+              // the flag test first and falls back to the path shape, so
+              // an unrelated /workspace/token-optimizer/stop.mjs is still
+              // not claimed.
+              if (!isOurs({ hooks: [hook] })) continue;
               const script = entrypointOf(command);
               if (script && !existsSync(script)) stale.push(script);
             }
