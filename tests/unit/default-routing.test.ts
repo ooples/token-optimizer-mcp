@@ -190,3 +190,59 @@ describe('routing a client we did not launch', () => {
     });
   });
 });
+
+describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
+  /*
+   * WHY THIS IS PART OF ROUTING AT ALL. Pointed at any non-Anthropic base URL, Claude Code stops
+   * deferring its tool schemas and sends every one inline. Schemas are roughly half a real
+   * request, so installing the route costs that on every turn before compression does anything,
+   * and the client had been doing the deferral for free. The launcher path already preserved it;
+   * this is the settings path, which is how most installs are routed.
+   */
+  it('sets the flag alongside the route', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+  });
+
+  it('takes it back out with the route', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    // Present first, or the assertions below pass on a flag that was never written.
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+
+    removeDefaultRouting(env);
+    const after = read();
+    expect(after.env?.ENABLE_TOOL_SEARCH).toBeUndefined();
+    expect(after.env?.ANTHROPIC_BASE_URL).toBeUndefined();
+  });
+
+  it('never overrides a value the user already set', async () => {
+    write({ env: { ENABLE_TOOL_SEARCH: 'false' } });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('false');
+
+    // And removal must not take away what it did not add.
+    removeDefaultRouting(env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('false');
+  });
+
+  it('leaves a value adopted after we wrote it', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    const settled = read();
+    expect(settled.env.ENABLE_TOOL_SEARCH).toBe('true');
+    settled.env.ENABLE_TOOL_SEARCH = 'auto';
+    write(settled);
+
+    // We added it, but it is no longer what we wrote, so the edit stands.
+    removeDefaultRouting(env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+  });
+
+  it('stays out of the way of a third-party backend', async () => {
+    write({ env: { CLAUDE_CODE_USE_BEDROCK: '1' } });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBeUndefined();
+  });
+});

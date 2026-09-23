@@ -52,6 +52,13 @@ export interface RoutingEntry {
   readonly previous?: string;
   /** Whether the settings file had no `env` object at all before we wrote one. */
   readonly createdEnv?: boolean;
+  /**
+   * Whether WE added ENABLE_TOOL_SEARCH alongside the route.
+   *
+   * Recorded rather than inferred so removal undoes exactly what it did: a user who set the
+   * flag themselves must keep it, and we must not leave ours behind.
+   */
+  readonly toolSearchAdded?: boolean;
   readonly upstream: string;
   readonly writtenAt: string;
 }
@@ -95,6 +102,43 @@ export interface RoutingResult {
 
 const DEFAULT_UPSTREAM = 'https://api.anthropic.com';
 const VARIABLE = 'ANTHROPIC_BASE_URL';
+const TOOL_SEARCH = 'ENABLE_TOOL_SEARCH';
+
+/**
+ * Loopback routing must not turn off Claude Code’s own tool deferral.
+ *
+ * POINTED AT ANY NON-ANTHROPIC BASE URL, Claude Code stops deferring its tool schemas and sends
+ * every one inline. Tool schemas are roughly half a real request, so installing our route costs
+ * that much payload on every turn before we have compressed anything -- and the client had been
+ * doing the deferral for free. `ENABLE_TOOL_SEARCH` keeps it on through the route.
+ *
+ * The same decision already exists in scripts/claude-routing.mjs for the launcher path; this is
+ * the settings path, which is how most installs are actually routed, and it had no equivalent.
+ *
+ * Three conditions, all of them about not overriding a deliberate choice: a third-party backend
+ * is not ours to touch, an explicit value is the user’s, and a route that forwards somewhere
+ * other than Anthropic’s API is a gateway whose behaviour we should not assume.
+ */
+function shouldPreserveToolSearch(
+  settings: Settings,
+  upstream: string,
+  env: NodeJS.ProcessEnv
+): boolean {
+  const external = [
+    'CLAUDE_CODE_USE_BEDROCK',
+    'CLAUDE_CODE_USE_VERTEX',
+    'CLAUDE_CODE_USE_FOUNDRY',
+    'CLAUDE_CODE_USE_ANTHROPIC_AWS',
+  ].some((key) =>
+    /^(1|true|yes|on)$/i.test(
+      String(settings.env?.[key] ?? env[key] ?? '').trim()
+    )
+  );
+  if (external) return false;
+  if (settings.env?.[TOOL_SEARCH] !== undefined) return false;
+  if (env[TOOL_SEARCH] !== undefined) return false;
+  return upstream === DEFAULT_UPSTREAM;
+}
 
 const disabled = (value: unknown): boolean =>
   /^(0|false|no|off)$/i.test(String(value || '').trim());
@@ -257,6 +301,10 @@ export function removeDefaultRouting(
   if (settings.env) {
     if (recorded.previous === undefined) delete settings.env[VARIABLE];
     else settings.env[VARIABLE] = recorded.previous;
+    // Ours to remove only if we added it AND nobody has changed it since. A user who edited the
+    // value in between has adopted it, and removal must leave their choice alone.
+    if (recorded.toolSearchAdded && settings.env[TOOL_SEARCH] === 'true')
+      delete settings.env[TOOL_SEARCH];
     // Only tidy away an `env` object we created. Deleting one the user already had -- even an empty
     // one -- would mean removal did not return the file to what it was, and this file is the whole
     // reason to trust the feature.
@@ -318,12 +366,18 @@ export async function applyDefaultRouting(
   const createdEnv = recorded
     ? recorded.createdEnv
     : settings.env === undefined;
-  settings.env = { ...settings.env, [VARIABLE]: url };
+  const addToolSearch = shouldPreserveToolSearch(settings, upstream, env);
+  settings.env = {
+    ...settings.env,
+    [VARIABLE]: url,
+    ...(addToolSearch ? { [TOOL_SEARCH]: 'true' } : {}),
+  };
   saveSettings(path, settings);
   record(env, {
     variable: VARIABLE,
     value: url,
     createdEnv,
+    toolSearchAdded: addToolSearch,
     // What the file said before we ever touched it, captured before the write above. Re-deriving it
     // on a later pass would record our own route as the thing to restore.
     previous: original,
