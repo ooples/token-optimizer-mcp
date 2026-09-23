@@ -98,8 +98,21 @@ try {
   console.log(
     'installing it into a throwaway prefix (runs the real postinstall)...'
   );
+  // --prefer-offline DOES NOT WEAKEN THIS GATE. The subject under test is `tarball`, a local
+  // path npm never caches, so it is read fresh every time; the flag only decides whether its
+  // DEPENDENCIES come from ~/.npm or from another registry round-trip, and resolution and the
+  // postinstall are identical either way. On windows-2022 this step measured 127-135s, most of
+  // it revalidating packages `npm ci` had already put on disk earlier in the same job.
   const log = runNpm(
-    ['install', '--prefix', prefix, '--no-audit', '--no-fund', tarball],
+    [
+      'install',
+      '--prefix',
+      prefix,
+      '--prefer-offline',
+      '--no-audit',
+      '--no-fund',
+      tarball,
+    ],
     { cwd: sandbox, encoding: 'utf8', env, stdio: 'pipe' }
   );
   check(true, 'npm install completed without throwing');
@@ -305,7 +318,7 @@ try {
     });
     child.stdout.on('data', (chunk) => {
       buffer += chunk;
-      for (let nl; (nl = buffer.indexOf('\n')) !== -1; ) {
+      for (let nl; (nl = buffer.indexOf('\n')) !== -1;) {
         const line = buffer.slice(0, nl).trim();
         buffer = buffer.slice(nl + 1);
         let message;
