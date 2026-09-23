@@ -86,6 +86,30 @@ function atRisk(text: string): string[] {
   });
 }
 
+/** Number lexemes outside strings, scanned independently of the implementation. */
+function numbersOutsideStrings(text: string): string[] {
+  const found: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"') {
+      i += 1;
+      while (i < text.length && text[i] !== '"') i += text[i] === '\\' ? 2 : 1;
+      i += 1;
+      continue;
+    }
+    if (ch === '-' || (ch >= '0' && ch <= '9')) {
+      const start = i;
+      i += 1;
+      while (i < text.length && /[0-9.eE+-]/.test(text[i])) i += 1;
+      found.push(text.slice(start, i));
+      continue;
+    }
+    i += 1;
+  }
+  return found;
+}
+
 describe('a lossless JSON result keeps every number exactly as written', () => {
   it.each(FIXTURES)('$name', ({ text }) => {
     // A fixture carrying nothing the parser would rewrite cannot detect the
@@ -97,7 +121,11 @@ describe('a lossless JSON result keeps every number exactly as written', () => {
     // An inert engine satisfies the lexeme assertion by doing nothing at all.
     expect(result.text.length).toBeLessThan(text.length);
 
-    if (!result.lossless) return;
+    // NOT AN ESCAPE HATCH. Returning early when the result is lossy lets a
+    // regression satisfy this test by rewriting 19.90 to 19.9 and lowering
+    // the flag. These fixtures are all minifiable -- the assertion above
+    // requires it -- so losslessness is a requirement here, not a condition.
+    expect(result.lossless).toBe(true);
     for (const lexeme of atRisk(text)) expect(result.text).toContain(lexeme);
   });
 
@@ -110,5 +138,42 @@ describe('a lossless JSON result keeps every number exactly as written', () => {
     );
     expect(canonical).not.toContain('0.0500');
     expect(atRisk(SERVICE_CONFIG)).toContain('0.0500');
+  });
+
+  it('never claims losslessness while a number outside a string was rewritten', () => {
+    /*
+     * A FORWARD GUARD, AND SAID PLAINLY: no input reachable through
+     * compressBlock today can break this.
+     *
+     * The substring form of this check could be fooled by a document like
+     * `{"n":1e3,"note":"value 1e3"}` IF the serialising fallback ran, because
+     * `1e3` survives inside the note while n becomes 1000. That fallback is
+     * taken only when a nested string was compressed, and every nested shape
+     * measured -- json arrays, csv rows, key=value lines, 100 to 1200 entries,
+     * and log lines -- either leaves the nested string alone (whitespace is
+     * the only elision) or compresses it lossily, which lowers the flag on its
+     * own. So this asserts the invariant rather than reproducing a live bug,
+     * and it starts earning its place the moment that routing changes.
+     */
+    const payloads = [
+      JSON.stringify(
+        Array.from({ length: 200 }, (_, i) => ({ id: i, ok: true }))
+      ),
+      Array.from({ length: 200 }, (_, i) => `${i},row ${i},200,ok`).join('\n'),
+      'the quick brown fox jumps over the lazy dog. '.repeat(60),
+    ];
+
+    for (const payload of payloads) {
+      const text = JSON.stringify(
+        { n: 1e3, note: 'value 1e3', payload },
+        null,
+        2
+      ).replace('"n": 1000', '"n": 1e3');
+      const result = compressBlock(text, { tuning: DEFAULT_TUNING });
+      if (!result.lossless) continue;
+      expect(numbersOutsideStrings(result.text)).toEqual(
+        numbersOutsideStrings(text)
+      );
+    }
   });
 });

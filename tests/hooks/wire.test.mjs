@@ -278,3 +278,42 @@ describe('what we install says so, rather than being recognised by its path', ()
     expect(wiredEntries(unwire(legacy))).toHaveLength(0);
   });
 });
+
+describe('a wired command has to name a file that is there', () => {
+  // An upgrade wired its own staging directory. That directory existed at the
+  // moment it was written, so nothing complained; the OS cleaned it up later and
+  // every turn then died with MODULE_NOT_FOUND against a settings file that still
+  // read as correctly wired.
+  it('refuses a directory that does not hold the hook, naming the file and the directory', () => {
+    expect(() => wire({}, '/install/somewhere', { exists: () => false })).toThrow(
+      /no [\w.-]+\.mjs in \/install\/somewhere/,
+    );
+  });
+
+  it('accepts ANY directory that does hold the hooks', () => {
+    // Deliberately a temp-looking path: where a user installs is their business,
+    // and a rule about location would break CI checkouts and deliberate installs
+    // under /tmp while still missing a staging directory somewhere else.
+    const wired = wire({}, '/tmp/build-7f3a/hooks', { exists: () => true });
+    expect(wired.hooks.Stop[0].hooks[0].command).toContain('/tmp/build-7f3a/hooks');
+  });
+
+  it('stays pure when no predicate is supplied, so the vendored copies keep working', () => {
+    // hooks-core carries no node:fs import; the installer injects existsSync at
+    // the edge. Callers that pass nothing must behave exactly as before.
+    expect(() => wire({}, '/never/looked/at')).not.toThrow();
+  });
+
+  it('checks every event, not just the first', () => {
+    const seen = [];
+    expect(() =>
+      wire({}, '/d', {
+        exists: (p) => {
+          seen.push(p);
+          return !p.endsWith('stop.mjs');
+        },
+      }),
+    ).toThrow(/stop\.mjs/);
+    expect(seen.length).toBeGreaterThan(1);
+  });
+});

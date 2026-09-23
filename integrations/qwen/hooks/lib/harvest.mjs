@@ -723,6 +723,12 @@ async function runHostCli(cli, system, digest, timeoutMs) {
         // The command line was built above where it needed cmd.exe, so Node
         // must not rebuild it: `shell: true` would join argv unquoted.
         windowsVerbatimArguments: verbatim,
+        // WITHOUT THIS, every host-CLI harvest flashes a blank black console onto the
+        // desktop and leaves it there until the CLI exits. The Stop hook starts the
+        // harvest worker hidden, so the worker owns no console, and Windows hands this
+        // cmd.exe child a brand-new visible one. Measured: 1 window without the flag,
+        // 0 with it, same harvest result either way.
+        windowsHide: true,
         env: {
           ...process.env,
           TOKEN_OPTIMIZER_MODE: 'off',
