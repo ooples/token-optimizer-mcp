@@ -427,7 +427,13 @@ check('B13', 'info retention is measured on their corpus', () => {
   } catch {
     return fail(`${RESULT} stamps ${m.harnessSha.slice(0, 12)}, which has no ${HARNESS}`);
   }
-  if (measuredHarness !== src)
+  // NORMALISE THE LINE ENDINGS BEFORE COMPARING. git show hands back the blob
+  // as stored, which is LF, while the working file on Windows is CRLF -- 236
+  // carriage returns of difference in a file that is otherwise identical. A raw
+  // comparison therefore passes on Linux CI and fails only on a Windows
+  // checkout, which is the worst shape a verifier failure can take.
+  const normalise = (text) => text.replace(/\r\n/g, '\n');
+  if (normalise(measuredHarness) !== normalise(src))
     return fail(
       `${RESULT} was measured with a different ${HARNESS} ` +
         `(stamped ${m.harnessSha.slice(0, 12)}) -- run ${REGEN}`
