@@ -34,7 +34,7 @@ import {
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
@@ -59,6 +59,12 @@ import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import { captureDir, captureRequest } from './capture.js';
 import { compressResponses } from './responses.js';
 import { compressChatCompletions } from './chat-completions.js';
+import {
+  shapeOutput,
+  shaperEnabled,
+  holdoutFraction,
+  type WireFormat,
+} from './output-shaper.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
@@ -334,6 +340,47 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
  * bytes. A token optimizer that wedges the agent is worse than one that saves
  * nothing -- the same rule the hook path has followed since it was written.
  */
+/**
+ * A key that is stable across the turns of one conversation.
+ *
+ * Nothing on the wire identifies a conversation, so this hashes the two
+ * parts that do not change as one grows: the system prompt and the first
+ * user message. The holdout arm depends on it -- a key that moved per turn
+ * would let a conversation switch arms mid-flight and pollute both.
+ */
+function conversationKeyFor(
+  parsed: Record<string, unknown>
+): string | undefined {
+  // A RESPONSES CONTINUATION CARRIES NEITHER. A turn holding only
+  // `function_call_output` has no system text and no user item, so this
+  // returned undefined and inHoldout() then treated every such turn as
+  // shaped -- quietly emptying the control arm of exactly the resumption
+  // turns effort routing acts on. Both fields below identify a conversation
+  // outright, and responses-knowledge.ts already branches on the second.
+  for (const field of ['conversation', 'previous_response_id']) {
+    const value = parsed[field];
+    if (typeof value === 'string' && value.length) return value;
+  }
+  const system = parsed.system ?? parsed.instructions;
+  const systemText =
+    typeof system === 'string'
+      ? system
+      : Array.isArray(system)
+        ? (system as Record<string, unknown>[])
+            .map((b) => (typeof b?.text === 'string' ? b.text : ''))
+            .join('')
+        : '';
+  const list = Array.isArray(parsed.input) ? parsed.input : parsed.messages;
+  const first = Array.isArray(list)
+    ? (list as Record<string, unknown>[]).find((m) => m?.role === 'user')
+    : undefined;
+  const firstText = first ? JSON.stringify(first.content ?? '') : '';
+  if (!systemText && !firstText) return undefined;
+  return createHash('sha256')
+    .update(`${systemText}\u0000${firstText}`)
+    .digest('hex');
+}
+
 export function compressBody(
   body: Buffer,
   spill: (content: string, hint: string) => string,
@@ -349,7 +396,10 @@ export function compressBody(
     body,
     summary: {
       beforeBytes: before,
-      afterBytes: before,
+      // NOT `before`: shaping may have replaced the buffer further down, and
+      // this path forwards whatever it holds. Reporting `before` would claim a
+      // size the proxy did not send.
+      afterBytes: body.length,
       compressed: false,
       reason,
     },
@@ -438,6 +488,30 @@ export function compressBody(
   }
   if (!parsed || typeof parsed !== 'object')
     return unchanged('not a request object');
+
+  // OUTPUT SHAPING, BEFORE THE DIALECT DISPATCH so every wire format gets
+  // it, and before the compressors so they see the bytes that will actually
+  // be sent. It is independent of compression: reassigning `body` here means
+  // a shaped request still forwards shaped even when compression declines.
+  // Note it can only ADD a little input -- the terse note -- to remove more
+  // output, and `before` was captured above so the input figure stays honest.
+  const asRecord = parsed as unknown as Record<string, unknown>;
+  const shapeFormat: WireFormat =
+    wireFormat === 'chat-completions'
+      ? 'chat-completions'
+      : Array.isArray(parsed.input)
+        ? 'responses'
+        : 'messages';
+  const shaped = shapeOutput(asRecord, {
+    wireFormat: shapeFormat,
+    enabled: shaperEnabled(),
+    holdout: holdoutFraction(),
+    conversationKey: conversationKeyFor(asRecord),
+  });
+  if (shaped.body !== asRecord) {
+    parsed = shaped.body as unknown as ProviderRequest;
+    body = Buffer.from(JSON.stringify(parsed), 'utf8');
+  }
   if (wireFormat === 'chat-completions' && Array.isArray(parsed.messages)) {
     try {
       return compressChatCompletions(
@@ -668,7 +742,8 @@ export function compressBody(
       body,
       summary: {
         beforeBytes: before,
-        afterBytes: before,
+        // Shaped bytes, if shaping ran -- see the note in `unchanged`.
+        afterBytes: body.length,
         compressed: false,
         reason:
           saved > 0
