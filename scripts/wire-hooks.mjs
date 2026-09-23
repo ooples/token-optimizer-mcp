@@ -51,7 +51,13 @@ if (existsSync(settingsPath)) {
 const plan = remove ? null : wirePlan(settings, hooksDir);
 const next = remove
   ? unwire(settings)
-  : dedupeClaudePluginHooks(wire(settings, hooksDir), settingsPath).settings;
+  : dedupeClaudePluginHooks(
+      // existsSync is supplied HERE, at the edge: hooks-core stays free of
+      // node:fs because it is vendored into every client integration, while
+      // the real install path still refuses a directory without the hooks.
+      wire(settings, hooksDir, { exists: existsSync }),
+      settingsPath
+    ).settings;
 
 /**
  * What the FILE ends up registering, which is not always what we planned.

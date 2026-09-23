@@ -265,8 +265,15 @@ describe('the proxy supervisor', () => {
       routePort('https://generativelanguage.googleapis.com', env)
     );
     const port = routePort('https://api.anthropic.com', env);
-    expect(port).toBeGreaterThan(controlPort(env));
-    expect(port).toBeLessThanOrEqual(65535);
+    // NOT "above the control port", which is what this asserted until the derivation moved.
+    // That invariant was satisfied by putting route ports inside the kernel's own outbound
+    // allocation range, which is what made the restart test above fail on Linux and pass on
+    // Windows. What has to hold is that the port is one the kernel will never hand out from
+    // under us: below the lowest ephemeral floor of any supported platform, which is Linux's
+    // 32768. Windows and macOS start at 49152.
+    expect(port).toBeLessThan(32768);
+    expect(port).toBeGreaterThan(1023);
+    expect(port).not.toBe(controlPort(env));
   });
 
   /**
@@ -469,6 +476,16 @@ describe('the proxy supervisor', () => {
     expect(() =>
       controlPort({ TOKEN_OPTIMIZER_PROXY_CONTROL_PORT: 'http://x' })
     ).toThrow(/must be a port number/);
-    expect(controlPort({})).toBe(45710);
+    expect(controlPort({})).toBe(16999);
+    // The default has to be outside the route window as well, or the supervisor would collide
+    // with its own first route.
+    expect(
+      routePort('https://api.anthropic.com', { ...env })
+    ).not.toBe(16999);
+    // And a user who points the control port INTO the route window is told, rather than quietly
+    // losing the derived port for one upstream.
+    expect(() =>
+      controlPort({ TOKEN_OPTIMIZER_PROXY_CONTROL_PORT: '17500' })
+    ).toThrow(/reserved for proxy routes/);
   });
 });

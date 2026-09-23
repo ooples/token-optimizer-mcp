@@ -114,7 +114,20 @@ function tokenize(command) {
   );
 }
 
-function entrypointOf(command) {
+/**
+ * Does this command carry our ownership flag as a WHOLE argument?
+ *
+ * Shared rather than private so a second caller cannot reintroduce the
+ * substring bug the comment below describes. doctor.mjs asked
+ * `command.includes(OWNERSHIP_FLAG)`, which accepts a user's
+ * `--token-optimizer-hook-debug` as ours and then reports their missing
+ * script as a token-optimizer failure.
+ */
+export function hasOwnershipFlag(command) {
+  return typeof command === 'string' && tokenize(command).includes(OWNERSHIP_FLAG);
+}
+
+export function entrypointOf(command) {
   const tokens = tokenize(command);
 
   const nodeAt = tokens.findIndex((token) =>
@@ -129,7 +142,7 @@ function entrypointOf(command) {
   return '';
 }
 
-const isOurs = (entry) => {
+export const isOurs = (entry) => {
   const hooks = Array.isArray(entry?.hooks) ? entry.hooks : [];
   if (!hooks.length) return false;
 
@@ -144,7 +157,7 @@ const isOurs = (entry) => {
     // because it could be imitated, recognising a longer flag as ours would
     // reintroduce the same class of mistake through the mechanism meant to end
     // it.
-    if (tokenize(command).includes(OWNERSHIP_FLAG)) return true;
+    if (hasOwnershipFlag(command)) return true;
 
     const script = entrypointOf(command).split('\\').join('/');
     if (!script) return false;
@@ -180,11 +193,30 @@ const isOurs = (entry) => {
  * directly, which is what puts the marker into the settings file and therefore
  * what makes this removable later.
  */
-export function wire(settings, hooksDir) {
+export function wire(settings, hooksDir, { exists } = {}) {
   const next = { ...(settings || {}) };
   const hooks = { ...(next.hooks || {}) };
 
   for (const { event, file, matcher } of WIRING) {
+    // A command written into settings.json outlives this process, so the file it
+    // names has to be there. Wiring a directory that does not hold the hooks
+    // produces a settings file that looks correct and fails on every turn with
+    // MODULE_NOT_FOUND, long after the installer that caused it has exited --
+    // which is exactly how an upgrade that wired its own staging directory went
+    // unnoticed until the OS cleaned that directory up.
+    //
+    // Deliberately NOT a rule about WHERE the directory is. Any folder is
+    // legitimate -- /tmp, a CI workspace, anywhere the user chose to install --
+    // so this asks only whether the hook is present. `exists` is injected rather
+    // than imported to keep this module free of node:fs, because it is vendored
+    // into every client integration and tested as pure logic.
+    if (typeof exists === 'function' && !exists(`${hooksDir}/${file}`)) {
+      throw new Error(
+        `[token-optimizer-mcp] refusing to wire ${event}: no ${file} in ${hooksDir}. ` +
+          'Point the installer at the directory that holds the installed hooks.',
+      );
+    }
+
     const existing = Array.isArray(hooks[event]) ? hooks[event] : [];
     // Drop only OUR previous entries, so re-running the installer does not
     // stack duplicates and does not touch anyone else's.

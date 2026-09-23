@@ -127,13 +127,40 @@ describe('regexes on the hook path are linear', () => {
 
     for (const { literal, regex } of regexLiterals(readFileSync(path, 'utf8'))) {
       for (const input of attacks(32_000)) {
-        const started = process.hrtime.bigint();
-        try {
-          regex.test(input);
-        } catch {
-          continue;
+        /*
+         * THE FASTEST OF THREE, NOT THE FIRST.
+         *
+         * A linear pattern here runs in a fraction of a millisecond -- the
+         * slowest on the hook path measured 0.23ms cold on these 64,001
+         * characters -- so this budget sits about a thousandfold above it. A
+         * breach at the margin therefore cannot be scanning cost; it is the
+         * measurement absorbing a scheduling stall or a GC pause on a shared
+         * runner. That is what failed hooks-core/adapter.mjs at 256ms against
+         * 250ms in CI while the identical pattern passed everywhere else and
+         * measured 0.2ms locally.
+         *
+         * This keeps the threshold exactly where it was and removes only the
+         * false positive: a stall does not recur three times, while a
+         * quadratic pattern exceeds the budget on every attempt -- the four
+         * known offenders each take over a second at this input size.
+         */
+        let ms = Infinity;
+        let threw = false;
+        for (let attempt = 0; attempt < 3 && ms > BUDGET_MS; attempt += 1) {
+          // test() advances lastIndex on a global or sticky pattern, so a
+          // second attempt would otherwise start mid-input and measure less
+          // work than the first.
+          regex.lastIndex = 0;
+          const started = process.hrtime.bigint();
+          try {
+            regex.test(input);
+          } catch {
+            threw = true;
+            break;
+          }
+          ms = Math.min(ms, Number(process.hrtime.bigint() - started) / 1e6);
         }
-        const ms = Number(process.hrtime.bigint() - started) / 1e6;
+        if (threw) continue;
 
         if (ms > BUDGET_MS) {
           offenders.push(`${ms.toFixed(0)}ms on ${input.length} chars: ${literal.slice(0, 90)}`);
