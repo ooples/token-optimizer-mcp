@@ -174,7 +174,9 @@ describe('automatic repair after a plugin upgrade', () => {
       ).toHaveLength(0);
       expect(settings.hooks.Stop[0].hooks[0].command).toBe('echo user hook');
     }));
-  it.each(['$', '%', "'"])(
+  // An apostrophe is NOT in this list. The command repair writes is double-quoted,
+  // so a single quote is literal inside it -- see the case below.
+  it.each(['$', '%'])(
     'preserves hooks when the new path contains shell metacharacter %s',
     (character) =>
       fixture(({ options, root, settingsPath }) => {
@@ -185,6 +187,18 @@ describe('automatic repair after a plugin upgrade', () => {
         expect(read(settingsPath)).toBe(before);
       })
   );
+  // C:\Users\O'Brien is an ordinary Windows home. Refusing it skipped the migration
+  // for those users entirely, which is the one thing repair exists to do.
+  it('migrates a hook path containing an apostrophe', () =>
+    fixture(({ options, root, settingsPath }) => {
+      const apostropheRoot = `${root}O'Brien`;
+      fs.renameSync(root, apostropheRoot);
+      repairManagedInstall({ ...options, root: apostropheRoot });
+      const hooks = JSON.parse(read(settingsPath)).hooks.Stop[0].hooks;
+      expect(hooks[0].command).toContain(apostropheRoot.replaceAll('\\', '/'));
+      expect(hooks[1].command).toBe('echo user hook');
+    }));
+
   it('repairs hooks in CLAUDE_CONFIG_DIR', () =>
     fixture(({ options, home, settingsPath }) => {
       const fallback = join(homedir(), '.claude', 'settings.json');
