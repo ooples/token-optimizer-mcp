@@ -19,10 +19,13 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 
@@ -368,9 +371,26 @@ check('B10', 'ndjson is compressed, and damaged json still refused', () => {
 
 // ---------------------------------------------------------------- B11
 check('B11', 'the competitor clone is out of our test run', () => {
-  const cfg = read('jest.config.js');
-  if (!cfg.includes('.codex/')) return fail('.codex/ is not ignored by jest');
-  return pass('<rootDir>/.codex/ is in testPathIgnorePatterns');
+  // THE ARRAY, NOT THE FILE’S PROSE. Searching the source text for
+  // '.codex/' also matches the comment above the pattern explaining why it
+  // is there, so deleting the live entry and keeping the explanation left
+  // this green while the competitor clone came back into the test run.
+  let cfg;
+  try {
+    cfg = require(join(ROOT, 'jest.config.js'));
+  } catch (err) {
+    return fail(`jest.config.js does not load: ${err.message}`);
+  }
+  // jest.config.js is ESM (export default), so require hands back the module
+  // namespace and the config sits under .default.
+  const config = cfg?.default ?? cfg;
+  const ignored = config?.testPathIgnorePatterns;
+  if (!Array.isArray(ignored))
+    return fail(`jest.config.js declares no testPathIgnorePatterns array`);
+  const hit = ignored.find((p) => typeof p === 'string' && p.includes('.codex/'));
+  if (!hit)
+    return fail(`.codex/ is not in testPathIgnorePatterns: ${JSON.stringify(ignored)}`);
+  return pass(`${hit} is in testPathIgnorePatterns`);
 });
 
 // ---------------------------------------------------------------- B12
@@ -404,6 +424,22 @@ check(
     if (!m?.measuredAt || !m?.harnessSha || !m?.competitorVersion)
       return fail(
         `${RESULT} carries no measuredAt/harnessSha/competitorVersion`
+      );
+
+    // A CONTENT HASH, BECAUSE A SHA DOES NOT SEE UNCOMMITTED EDITS.
+    // harnessSha records the commit the probe ran at, which says nothing
+    // about whether the probe on disk is still that probe -- an edited but
+    // uncommitted probe keeps the old stamp and every claim below keeps
+    // passing against a measurement it no longer produces.
+    const probeHash = createHash('sha256')
+      .update(read(PROBE).replace(/\r\n/g, '\n'), 'utf8')
+      .digest('hex');
+    if (!m.probeSha256)
+      return fail(`${RESULT} carries no probeSha256 -- run ${REGEN}`);
+    if (m.probeSha256 !== probeHash)
+      return fail(
+        `${RESULT} was measured with a different ${PROBE} ` +
+          `(${m.probeSha256.slice(0, 12)} vs ${probeHash.slice(0, 12)}) -- run ${REGEN}`
       );
 
     const c = m.claims ?? {};
@@ -460,11 +496,23 @@ check(
         problems.push(
           'they no longer elide bodies, so the comparison is not like for like'
         );
-      if (code.markerCarriesLocation === true)
+      // MEASURED FALSE, NOT MERELY NOT-TRUE. `undefined === true` is false,
+      // so a result carrying only {"elidesBodies": true} satisfied this and
+      // the comparison below, where two missing counts compare equal. The
+      // claim is about what their marker does, so it needs the observation.
+      if (code.markerCarriesLocation !== false)
         problems.push(
-          'their marker now carries a location, so the claim is false'
+          `markerCarriesLocation is ${JSON.stringify(code.markerCarriesLocation)}, ` +
+            'so the claim is either false or unmeasured'
         );
-      if (code.signaturesOut !== code.signaturesIn)
+      const counted = (v) => Number.isInteger(v) && v > 0;
+      if (!counted(code.signaturesIn) || !counted(code.signaturesOut))
+        problems.push(
+          `signature counts are ${JSON.stringify(code.signaturesIn)}/` +
+            `${JSON.stringify(code.signaturesOut)} -- the probe found no signatures ` +
+            'to compare, so retention is unmeasured'
+        );
+      else if (code.signaturesOut !== code.signaturesIn)
         problems.push(
           `they kept ${code.signaturesOut} of ${code.signaturesIn} signatures -- ` +
             'retention differs, so a ratio comparison needs that caveat'

@@ -22,6 +22,7 @@ Run:  python bench/competitive/probe-headroom.py bench/competitive/results/claim
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -173,9 +174,19 @@ def main() -> int:
     except Exception:
         sha = "unknown"
 
+    # A CONTENT HASH OF THIS FILE, ALONGSIDE THE COMMIT.
+    #
+    # harnessSha records the commit the probe ran at, which does not notice
+    # an edited-but-uncommitted probe: the stamp stays valid while the file
+    # that produced these numbers has changed underneath it. Newlines are
+    # normalised so a Windows checkout and a Linux one agree.
+    probe_source = Path(__file__).read_text(encoding="utf-8").replace("\r\n", "\n")
+    probe_hash = hashlib.sha256(probe_source.encode("utf-8")).hexdigest()
+
     payload = {
         "measuredAt": datetime.now(timezone.utc).isoformat(),
         "harnessSha": sha,
+        "probeSha256": probe_hash,
         "competitorVersion": getattr(headroom, "__version__", "unknown"),
         "claims": {},
     }
