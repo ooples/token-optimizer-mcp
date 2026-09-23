@@ -52,6 +52,13 @@ export interface RoutingEntry {
   readonly previous?: string;
   /** Whether the settings file had no `env` object at all before we wrote one. */
   readonly createdEnv?: boolean;
+  /**
+   * Whether WE added ENABLE_TOOL_SEARCH alongside the route.
+   *
+   * Recorded rather than inferred so removal undoes exactly what it did: a user who set the
+   * flag themselves must keep it, and we must not leave ours behind.
+   */
+  readonly toolSearchAdded?: boolean;
   readonly upstream: string;
   readonly writtenAt: string;
 }
@@ -95,6 +102,88 @@ export interface RoutingResult {
 
 const DEFAULT_UPSTREAM = 'https://api.anthropic.com';
 const VARIABLE = 'ANTHROPIC_BASE_URL';
+const TOOL_SEARCH = 'ENABLE_TOOL_SEARCH';
+
+/**
+ * Loopback routing must not turn off Claude Code’s own tool deferral.
+ *
+ * POINTED AT ANY NON-ANTHROPIC BASE URL, Claude Code stops deferring its tool schemas and sends
+ * every one inline. Tool schemas are roughly half a real request, so installing our route costs
+ * that much payload on every turn before we have compressed anything -- and the client had been
+ * doing the deferral for free. `ENABLE_TOOL_SEARCH` keeps it on through the route.
+ *
+ * The same decision already exists in scripts/claude-routing.mjs for the launcher path; this is
+ * the settings path, which is how most installs are actually routed, and it had no equivalent.
+ *
+ * Three conditions, all of them about not overriding a deliberate choice: a third-party backend
+ * is not ours to touch, an explicit value is the user’s, and a route that forwards somewhere
+ * other than Anthropic’s API is a gateway whose behaviour we should not assume.
+ *
+ * OWNERSHIP IS A SEPARATE QUESTION FROM ELIGIBILITY, and collapsing the two is what made this
+ * wrong. "An explicit value is the user’s" reads OUR OWN flag as the user’s on the second pass,
+ * so a route rewrite recorded `toolSearchAdded: false` while the spread carried the flag
+ * forward -- removal then left our value behind for good. `ours` is the answer to the other
+ * question, from the manifest, and it suspends only the presence check.
+ */
+function toolSearchAppropriate(
+  settings: Settings,
+  upstream: string,
+  env: NodeJS.ProcessEnv
+): boolean {
+  const external = [
+    'CLAUDE_CODE_USE_BEDROCK',
+    'CLAUDE_CODE_USE_VERTEX',
+    'CLAUDE_CODE_USE_FOUNDRY',
+    'CLAUDE_CODE_USE_ANTHROPIC_AWS',
+  ].some((key) =>
+    /^(1|true|yes|on)$/i.test(
+      String(settings.env?.[key] ?? env[key] ?? '').trim()
+    )
+  );
+  if (external) return false;
+  // BY ORIGIN, NOT BY STRING. `https://api.anthropic.com/` is the same endpoint
+  // written with the trailing slash a URL bar adds, and a string comparison
+  // calls it a gateway -- which would not merely decline to add the flag, it
+  // would take an existing one of ours back out. `scripts/claude-routing.mjs`
+  // already decides this by origin; this is the same rule.
+  return sameOrigin(upstream, DEFAULT_UPSTREAM);
+}
+
+function sameOrigin(a: string, b: string): boolean {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
+}
+
+function shouldPreserveToolSearch(
+  settings: Settings,
+  upstream: string,
+  env: NodeJS.ProcessEnv,
+  ours: boolean
+): boolean {
+  if (!toolSearchAppropriate(settings, upstream, env)) return false;
+  if (!ours && settings.env?.[TOOL_SEARCH] !== undefined) return false;
+  if (env[TOOL_SEARCH] !== undefined) return false;
+  return true;
+}
+
+/**
+ * Is the flag in the file still the one we wrote?
+ *
+ * The same test removal uses (`toolSearchAdded` and the value untouched), because the two have to
+ * agree: anything this calls ours is something removal will take back out, and anything it does
+ * not is a value we must leave exactly where it is.
+ */
+function toolSearchIsOurs(
+  settings: Settings,
+  recorded: RoutingEntry | undefined
+): boolean {
+  return (
+    recorded?.toolSearchAdded === true && settings.env?.[TOOL_SEARCH] === 'true'
+  );
+}
 
 const disabled = (value: unknown): boolean =>
   /^(0|false|no|off)$/i.test(String(value || '').trim());
@@ -258,6 +347,10 @@ export function removeDefaultRouting(
   if (settings.env) {
     if (recorded.previous === undefined) delete settings.env[VARIABLE];
     else settings.env[VARIABLE] = recorded.previous;
+    // Ours to remove only if we added it AND nobody has changed it since. A user who edited the
+    // value in between has adopted it, and removal must leave their choice alone.
+    if (recorded.toolSearchAdded && settings.env[TOOL_SEARCH] === 'true')
+      delete settings.env[TOOL_SEARCH];
     // Only tidy away an `env` object we created. Deleting one the user already had -- even an empty
     // one -- would mean removal did not return the file to what it was, and this file is the whole
     // reason to trust the feature.
@@ -324,16 +417,63 @@ export async function applyDefaultRouting(
   if (!stillExists) return { status: 'user-owned', path };
   if (latest.env?.[VARIABLE] !== settings.env?.[VARIABLE])
     return { status: 'user-owned', path };
-  if (latest.env?.[VARIABLE] === url && recorded?.value === url)
+
+  // READ FROM `latest` FOR THE SAME REASON THE WRITE GOES THERE. The snapshot taken before the
+  // await describes a file somebody may have edited since, and who owns the tool-search flag is
+  // exactly the kind of thing such an edit changes.
+  const ours = toolSearchIsOurs(latest, recorded);
+  // TWO DIFFERENT REASONS NOT TO WRITE IT, and only one of them is a reason to take it back.
+  // "We must not assert this" -- a third-party backend, or a route forwarding to a gateway --
+  // means a flag of ours in the file is wrong and has to go. "Someone else is already asserting
+  // it" does not: `scripts/run-client.mjs` puts ENABLE_TOOL_SEARCH in the environment of the
+  // Claude it launches, so an MCP server running inside that child sees it set and would
+  // otherwise delete the settings entry that serves every OTHER way the user starts Claude.
+  const appropriate = toolSearchAppropriate(latest, upstream, env);
+  const addToolSearch = shouldPreserveToolSearch(latest, upstream, env, ours);
+  const takeBack = ours && !appropriate;
+
+  if (latest.env?.[VARIABLE] === url && recorded?.value === url) {
+    // OUR FLAG CAN OUTLIVE THE REASON FOR IT. The route has not moved, so there is nothing to
+    // write -- but a later session may have turned on Bedrock, Vertex or Foundry, and nothing
+    // else would ever take the flag back out: removal only runs when routing is switched off
+    // altogether, and a third-party backend does not switch routing off.
+    if (takeBack && latest.env) {
+      delete latest.env[TOOL_SEARCH];
+      saveSettings(path, latest);
+    } else if (addToolSearch && latest.env?.[TOOL_SEARCH] === undefined) {
+      // AND THE REASON CAN OUTLIVE THE FLAG. A route installed by a build that predates this
+      // feature leaves the entry missing for ever, because the only other place we write it is
+      // the branch that runs when the route MOVES -- and upgrading does not move the port.
+      // Absent means writable here for the same reason it does in `scripts/claude-routing.mjs`,
+      // which reads `ENABLE_TOOL_SEARCH === undefined` as permission to set it: switching
+      // deferral off is done by giving the key a value, and a value is what `ours` protects.
+      latest.env = { ...latest.env, [TOOL_SEARCH]: 'true' };
+      saveSettings(path, latest);
+    }
+    // OWNERSHIP IS RECONCILED EVEN WHEN NOTHING WAS WRITTEN. A user who edits the flag to
+    // something other than what we wrote has taken it over, and leaving `toolSearchAdded` true
+    // would have `removeDefaultRouting` delete their value later on our behalf.
+    const stillOurs = addToolSearch || (ours && appropriate);
+    if (recorded && recorded.toolSearchAdded !== stillOurs)
+      record(env, { ...recorded, toolSearchAdded: stillOurs });
     return { status: 'unchanged', path, url, upstream };
+  }
 
   const createdEnv = recorded ? recorded.createdEnv : latest.env === undefined;
   latest.env = { ...latest.env, [VARIABLE]: url };
+  // Written when we want it, taken out when it is ours and asserting it has become wrong, and
+  // otherwise carried through by the spread. Never touched when it is the user’s: that is the
+  // whole of `ours`.
+  if (addToolSearch) latest.env[TOOL_SEARCH] = 'true';
+  else if (takeBack) delete latest.env[TOOL_SEARCH];
   saveSettings(path, latest);
   record(env, {
     variable: VARIABLE,
     value: url,
     createdEnv,
+    // Ownership survives a pass that did not write, as long as the value is still ours and still
+    // right; it is given up the moment we stop being the one asserting it.
+    toolSearchAdded: addToolSearch || (ours && appropriate),
     // What the file said before we ever touched it, captured before the write above. Re-deriving it
     // on a later pass would record our own route as the thing to restore.
     previous: original,

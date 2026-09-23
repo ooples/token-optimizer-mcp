@@ -96,7 +96,10 @@ describe('routing a client we did not launch', () => {
     expect(read()).toEqual({
       model: 'new',
       hooks: { Stop: [{ hooks: [{ command: 'updated hook' }] }] },
-      env: { ANTHROPIC_BASE_URL: served },
+      // The flag comes with the route on this branch: the upstream is the Anthropic default, so
+      // installing the route is exactly when tool deferral has to be kept switched on. The shape
+      // stays exhaustive so a stray key still fails here.
+      env: { ANTHROPIC_BASE_URL: served, ENABLE_TOOL_SEARCH: 'true' },
     });
   });
 
@@ -250,5 +253,242 @@ describe('routing a client we did not launch', () => {
     expect(JSON.parse(readFileSync(`${settings}.backup`, 'utf8'))).toEqual({
       model: 'opus',
     });
+  });
+});
+
+describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
+  /*
+   * WHY THIS IS PART OF ROUTING AT ALL. Pointed at any non-Anthropic base URL, Claude Code stops
+   * deferring its tool schemas and sends every one inline. Schemas are roughly half a real
+   * request, so installing the route costs that on every turn before compression does anything,
+   * and the client had been doing the deferral for free. The launcher path already preserved it;
+   * this is the settings path, which is how most installs are routed.
+   */
+  it('sets the flag alongside the route', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+  });
+
+  it('takes it back out with the route', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    // Present first, or the assertions below pass on a flag that was never written.
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+
+    removeDefaultRouting(env);
+    const after = read();
+    expect(after.env?.ENABLE_TOOL_SEARCH).toBeUndefined();
+    expect(after.env?.ANTHROPIC_BASE_URL).toBeUndefined();
+  });
+
+  it('never overrides a value the user already set', async () => {
+    write({ env: { ENABLE_TOOL_SEARCH: 'false' } });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('false');
+
+    // And removal must not take away what it did not add.
+    removeDefaultRouting(env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('false');
+  });
+
+  it('leaves a value adopted after we wrote it', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    const settled = read();
+    expect(settled.env.ENABLE_TOOL_SEARCH).toBe('true');
+    settled.env.ENABLE_TOOL_SEARCH = 'auto';
+    write(settled);
+
+    // We added it, but it is no longer what we wrote, so the edit stands.
+    removeDefaultRouting(env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+  });
+
+  it('stays out of the way of a third-party backend', async () => {
+    write({ env: { CLAUDE_CODE_USE_BEDROCK: '1' } });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBeUndefined();
+  });
+
+  const moved = async () => 'http://127.0.0.1:45713';
+  const owns = () =>
+    readRoutingManifest(env).entries[claudeSettingsFile(env)].toolSearchAdded;
+
+  it('still owns the flag after the route moves', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(owns()).toBe(true);
+
+    // THE SECOND PASS READS OUR OWN FLAG AS THE USER'S. "An explicit value is the user's" was
+    // the only presence test there was, so a rewrite recorded `toolSearchAdded: false` while the
+    // spread carried the flag forward -- and removal, which asks the manifest, then left our
+    // value in a file we promise to restore exactly.
+    await applyDefaultRouting(moved, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+    expect(owns()).toBe(true);
+
+    removeDefaultRouting(env);
+    expect(read().env?.ENABLE_TOOL_SEARCH).toBeUndefined();
+  });
+
+  it('gives up the flag when the value changed between passes', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    const settled = read();
+    settled.env.ENABLE_TOOL_SEARCH = 'auto';
+    write(settled);
+
+    // Carrying ownership forward must not mean carrying it over an edit.
+    await applyDefaultRouting(moved, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+    expect(owns()).toBe(false);
+
+    removeDefaultRouting(env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+  });
+
+  it('takes the flag back out when a backend arrives and the route has not moved', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+
+    const settled = read();
+    settled.env.CLAUDE_CODE_USE_BEDROCK = '1';
+    write(settled);
+
+    // NOTHING ELSE WOULD EVER CLEAR IT. Removal runs only when routing is switched off, and a
+    // third-party backend does not switch routing off -- so without this the flag we wrote stays
+    // asserted against a backend we said we would not touch, for as long as the install lasts.
+    const result = await applyDefaultRouting(route, env);
+    expect(result.status).toBe('unchanged');
+    expect(read().env.ENABLE_TOOL_SEARCH).toBeUndefined();
+    expect(read().env.ANTHROPIC_BASE_URL).toBe(served);
+    expect(owns()).toBe(false);
+  });
+
+  it('takes the flag back out when a backend arrives and the route moves', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    const settled = read();
+    settled.env.CLAUDE_CODE_USE_VERTEX = 'true';
+    write(settled);
+
+    await applyDefaultRouting(moved, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBeUndefined();
+    expect(read().env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:45713');
+    expect(owns()).toBe(false);
+  });
+
+  it('leaves a user value alone when a backend arrives', async () => {
+    // The clearing above is ours to do only because we wrote the value. A user who set it keeps
+    // it, backend or no backend.
+    write({ env: { ENABLE_TOOL_SEARCH: 'true' } });
+    await applyDefaultRouting(route, env);
+    expect(owns()).toBe(false);
+
+    const settled = read();
+    settled.env.CLAUDE_CODE_USE_BEDROCK = '1';
+    write(settled);
+    await applyDefaultRouting(moved, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+  });
+
+  it('leaves the file flag alone when our own launcher set the variable', async () => {
+    // `scripts/run-client.mjs` puts ENABLE_TOOL_SEARCH in the environment of the Claude it
+    // launches, so an MCP server running inside that child sees it set. That is someone already
+    // asserting the flag, not a reason the flag is wrong -- and the settings entry is what serves
+    // every other way the user starts Claude, so it has to survive the visit.
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+
+    const launched = { ...env, ENABLE_TOOL_SEARCH: 'true' };
+    await applyDefaultRouting(moved, launched);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+    expect(
+      readRoutingManifest(launched).entries[claudeSettingsFile(launched)]
+        .toolSearchAdded
+    ).toBe(true);
+  });
+
+  it('reads the anthropic endpoint with a trailing slash as the anthropic endpoint', async () => {
+    // A string comparison against 'https://api.anthropic.com' calls this a gateway, which does
+    // not merely decline the flag -- it makes the value inappropriate, so a pass would take an
+    // existing one of ours back out. `scripts/claude-routing.mjs` already decides by origin.
+    write({ env: { ANTHROPIC_BASE_URL: 'https://api.anthropic.com/' } });
+    await applyDefaultRouting(route, env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+    expect(owns()).toBe(true);
+  });
+
+  it('gives the flag up when the user edits it and the route has not moved', async () => {
+    // Nothing is written on this path, so ownership has to be reconciled anyway: leaving the
+    // manifest claiming the value would have removal delete the user's choice on our behalf.
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(owns()).toBe(true);
+
+    const settled = read();
+    settled.env.ENABLE_TOOL_SEARCH = 'auto';
+    write(settled);
+    await applyDefaultRouting(route, env);
+    expect(owns()).toBe(false);
+
+    removeDefaultRouting(env);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+  });
+
+  it('restores the flag on an unchanged route when the entry has gone missing', async () => {
+    // The only other place we write it is the branch that runs when the route MOVES, and
+    // upgrading does not move the port -- so a route installed by a build that predates this
+    // feature would never gain the entry. An absent key is writable, exactly as
+    // `scripts/claude-routing.mjs` treats it; turning deferral off means giving it a value.
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+
+    const settled = read();
+    delete settled.env.ENABLE_TOOL_SEARCH;
+    write(settled);
+
+    const result = await applyDefaultRouting(route, env);
+    expect(result.status).toBe('unchanged');
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
+    expect(owns()).toBe(true);
+  });
+  it('sees a flag edit made while the supervisor was starting', async () => {
+    // #426 re-reads the file after the await because starting a supervisor yields, and a user
+    // edit lands in between. Who owns the tool-search flag has to be answered from that re-read
+    // too: deciding it from the pre-await snapshot would read the user's new value as ours and
+    // overwrite it with `true`.
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect(owns()).toBe(true);
+
+    const result = await applyDefaultRouting(async () => {
+      write({
+        model: 'opus',
+        env: { ANTHROPIC_BASE_URL: served, ENABLE_TOOL_SEARCH: 'auto' },
+      });
+      return 'http://127.0.0.1:45713';
+    }, env);
+
+    expect(result.status).toBe('written');
+    expect(read().env.ENABLE_TOOL_SEARCH).toBe('auto');
+    expect(owns()).toBe(false);
+  });
+
+  it('still takes it back under the launcher when a backend arrives', async () => {
+    // The gate above is about precedence, not about appropriateness: a third-party backend still
+    // means our value is wrong, whoever else is also setting the variable.
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    const settled = read();
+    settled.env.CLAUDE_CODE_USE_VERTEX = 'true';
+    write(settled);
+
+    const launched = { ...env, ENABLE_TOOL_SEARCH: 'true' };
+    await applyDefaultRouting(moved, launched);
+    expect(read().env.ENABLE_TOOL_SEARCH).toBeUndefined();
   });
 });
