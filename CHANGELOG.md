@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.3.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.2.0...v7.3.0) (2026-09-23)
+
+
+### Features
+
+* add opt-in telemetry with an enforced content-free payload ([#412](https://github.com/ooples/token-optimizer-mcp/issues/412)) ([de9a646](https://github.com/ooples/token-optimizer-mcp/commit/de9a646d73d797d7059742f704b0e46fa78fcfb2))
+* **compress:** choose the smaller of the exact and lossy json encodings ([#423](https://github.com/ooples/token-optimizer-mcp/issues/423)) ([e264f05](https://github.com/ooples/token-optimizer-mcp/commit/e264f05e8c1926b0ce23adf751955547f5a8478e))
+* reduce output tokens with verbosity steering and effort routing ([#411](https://github.com/ooples/token-optimizer-mcp/issues/411)) ([dbcedc5](https://github.com/ooples/token-optimizer-mcp/commit/dbcedc5761ae470629018aeb929d7ee876f59227))
+
+
+### Bug Fixes
+
+* clear the pre-plan blockers before the competitive programme ([#410](https://github.com/ooples/token-optimizer-mcp/issues/410)) ([5e8c7b2](https://github.com/ooples/token-optimizer-mcp/commit/5e8c7b27d92d975009b0cec716b56097c5777824))
+* **compress:** keep number source text when minifying json ([#418](https://github.com/ooples/token-optimizer-mcp/issues/418)) ([d5a884d](https://github.com/ooples/token-optimizer-mcp/commit/d5a884d9e3c796351ae8986aeabebb96a6f3d0df))
+* **doctor:** diagnose the install the calling client actually loads ([#431](https://github.com/ooples/token-optimizer-mcp/issues/431)) ([03a4651](https://github.com/ooples/token-optimizer-mcp/commit/03a46519cb1e1b91c7b1baa04ea816f86792caf2)), closes [#408](https://github.com/ooples/token-optimizer-mcp/issues/408)
+* **hooks:** hide the host-cli child so no blank console appears ([#430](https://github.com/ooples/token-optimizer-mcp/issues/430)) ([cd8e98f](https://github.com/ooples/token-optimizer-mcp/commit/cd8e98f39076413177a9b23d21019f53b9d1c18f)), closes [#409](https://github.com/ooples/token-optimizer-mcp/issues/409)
+* **hooks:** refuse to wire a hook path that is not there, and report one that vanished ([#427](https://github.com/ooples/token-optimizer-mcp/issues/427)) ([8e0fc18](https://github.com/ooples/token-optimizer-mcp/commit/8e0fc18d810cfbed4f69148a23e851866eae4952))
+* **proxy:** derive route ports from outside the ephemeral range ([#429](https://github.com/ooples/token-optimizer-mcp/issues/429)) ([e4c0d5c](https://github.com/ooples/token-optimizer-mcp/commit/e4c0d5c9d91fa11c38f08b820dd2a7213f475714))
+* **proxy:** keep claude code's tool deferral on when we install the route ([#434](https://github.com/ooples/token-optimizer-mcp/issues/434)) ([af03586](https://github.com/ooples/token-optimizer-mcp/commit/af0358640f00ee6ae9c112f7f5688af970d7dc99))
+* recover proxy connections and managed installs across clients ([#426](https://github.com/ooples/token-optimizer-mcp/issues/426)) ([b995511](https://github.com/ooples/token-optimizer-mcp/commit/b9955114c025cd5ef17cae0ebd71367423d3846b))
+
+
+### Performance
+
+* **ci:** stop release verification revalidating packages it already has ([#433](https://github.com/ooples/token-optimizer-mcp/issues/433)) ([eeda7c2](https://github.com/ooples/token-optimizer-mcp/commit/eeda7c2e85d477e0e0a7a2a4d1a082d3369e996f))
+
 ## [7.2.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.1.0...v7.2.0) (2026-09-19)
 
 
