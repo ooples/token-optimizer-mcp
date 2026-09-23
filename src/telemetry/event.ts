@@ -44,7 +44,10 @@ export interface TelemetryEvent {
  */
 export function machineIdHash(): string {
   const raw = `${hostname()}\u0000${platform()}\u0000${arch()}`;
-  return createHash('sha256').update(`token-optimizer/v1\u0000${raw}`).digest('hex').slice(0, 32);
+  return createHash('sha256')
+    .update(`token-optimizer/v1\u0000${raw}`)
+    .digest('hex')
+    .slice(0, 32);
 }
 
 /**
@@ -60,7 +63,8 @@ export function sanitiseProperties(
   const out: Record<string, SafeValue> = {};
   for (const [key, value] of Object.entries(input ?? {})) {
     if (typeof value === 'boolean') out[key] = value;
-    else if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
+    else if (typeof value === 'number' && Number.isFinite(value))
+      out[key] = value;
   }
   return out;
 }

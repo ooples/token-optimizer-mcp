@@ -55,7 +55,9 @@ export function doNotTrack(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /** Is local aggregation permitted? Fail-closed: an unrecognised value is off. */
-export function localTelemetryEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+export function localTelemetryEnabled(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
   if (doNotTrack(env)) return false;
   return explicit(env.TOKEN_OPTIMIZER_TELEMETRY) ?? LOCAL_DEFAULT_ON;
 }
