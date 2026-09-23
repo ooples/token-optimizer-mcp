@@ -84,16 +84,22 @@ const touchable = (blocks: readonly unknown[]) =>
 
 describe('an image back-reference resolves to the image it replaced', () => {
   it('numbers by distinct image, not by block position', () => {
-    // Text blocks between the images make block index and image ordinal
-    // disagree, so a scheme that used either would be visibly wrong here.
+    // BLOCK POSITION AND IMAGE ORDINAL MUST DISAGREE FOR EVERY IMAGE HERE.
+    // Text blocks alone are not enough: with the repeat placed after the
+    // first BETA, BETA was both the second image block AND the second
+    // distinct image, so an implementation numbering by image-block position
+    // produced the same #2 and passed. Putting the ALPHA repeat first makes
+    // BETA the THIRD image block but still the SECOND distinct image, and
+    // GAMMA the fourth block but the third image, so the two schemes can no
+    // longer agree anywhere.
     const blocks = [
       text('first screenshot'),
-      image(ALPHA),
+      image(ALPHA), // image block 1, distinct image 1
       text('some analysis'),
-      image(BETA),
+      image(ALPHA), // image block 2, still distinct image 1 -- repeat of the FIRST
       text('more analysis'),
-      image(ALPHA), // repeat of the FIRST distinct image
-      image(GAMMA),
+      image(BETA), // image block 3, distinct image 2
+      image(GAMMA), // image block 4, distinct image 3
       image(BETA), // repeat of the SECOND
     ];
 
