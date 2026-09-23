@@ -17,7 +17,8 @@
       "TOKEN_OPTIMIZER_MCP_CAPABILITIES": "",
       "TOKEN_OPTIMIZER_PROXY": "1",
       "TOKEN_OPTIMIZER_PROXY_KNOWLEDGE": "",
-      "ANTHROPIC_BASE_URL": "http://127.0.0.1:8787"
+      "ANTHROPIC_BASE_URL": "http://127.0.0.1:8787",
+      "ENABLE_TOOL_SEARCH": "true"
     },
     "hooks": {
       "SessionStart": [
