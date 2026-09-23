@@ -35,6 +35,89 @@ let supervisor: { server: Server; close: () => Promise<void> } | null;
 let home: string;
 let env: NodeJS.ProcessEnv;
 
+it('retains an occupied saved port and retries it without client registration', async () => {
+  supervisor = await runSupervisor(env);
+  const url = await ensureRoute(upstreamUrl, env);
+  const port = Number(new URL(url!).port);
+  await supervisor!.close();
+  supervisor = null;
+  const blocker = createServer();
+  await new Promise<void>((done) => blocker.listen(port, '127.0.0.1', done));
+  try {
+    supervisor = await runSupervisor(env);
+    expect(readSupervisorState(env)?.routes[0].url).toBe(url);
+    expect(await ensureRoute(upstreamUrl, env)).toBeNull();
+  } finally {
+    await new Promise<void>((done) => blocker.close(() => done()));
+  }
+  const deadline = Date.now() + 8000;
+  while (!(await supervisorHealth(env))?.routes.length && Date.now() < deadline)
+    await new Promise((done) => setTimeout(done, 100));
+  expect((await supervisorHealth(env))?.routes[0]?.url).toBe(url);
+  expect((await get(url!, '/v1/messages')).status).toBe(200);
+}, 15000);
+
+// A PORT THAT FREES MID-RETRY IS WHAT SEPARATES ONE PROBE FROM TWO.
+// The test above holds the blocker for the whole call, so all five attempts
+// fail and a supervisor that probes once and one that probes twice both answer
+// null -- it cannot tell them apart. Release the port between attempts instead.
+// The retry then succeeds, and only a version whose guard reads THAT result
+// keeps the route: a version that guards on its own earlier probe has already
+// seen the first failure and abandons a port that is free by the time it binds.
+it('keeps a saved port that comes free between retry attempts', async () => {
+  supervisor = await runSupervisor(env);
+  const url = await ensureRoute(upstreamUrl, env);
+  const port = Number(new URL(url!).port);
+  await supervisor!.close();
+  supervisor = null;
+
+  const blocker = createServer();
+  await new Promise<void>((done) => blocker.listen(port, '127.0.0.1', done));
+  supervisor = await runSupervisor(env);
+  expect(readSupervisorState(env)?.routes[0].url).toBe(url);
+
+  // Attempts run 200ms apart, so releasing at 300ms lands between the second
+  // and third with margin on both sides.
+  let released = false;
+  setTimeout(() => blocker.close(() => (released = true)), 300);
+
+  const again = await ensureRoute(upstreamUrl, env);
+  // Without this the test would still pass if the port were never occupied.
+  expect(released).toBe(true);
+  expect(again).toBe(url);
+}, 15000);
+
+
+it('does not mistake unrelated HTTP JSON for a healthy supervisor', async () => {
+  const other = createServer((_req, res) => res.end('{}'));
+  await new Promise<void>((done) =>
+    other.listen(controlPort(env), '127.0.0.1', done)
+  );
+  try {
+    expect(await supervisorHealth(env)).toBeNull();
+  } finally {
+    await new Promise<void>((done) => other.close(() => done()));
+  }
+});
+
+it('bounds a control response that keeps trickling bytes', async () => {
+  const other = createServer((_req, res) => {
+    res.writeHead(200);
+    res.write('{');
+    const timer = setInterval(() => res.write(' '), 20);
+    res.on('close', () => clearInterval(timer));
+  });
+  await new Promise<void>((done) =>
+    other.listen(controlPort(env), '127.0.0.1', done)
+  );
+  try {
+    expect(await supervisorHealth(env)).toBeNull();
+  } finally {
+    other.closeAllConnections();
+    await new Promise<void>((done) => other.close(() => done()));
+  }
+}, 5000);
+
 /** A free port, released before it is handed out -- good enough for a test's own control port. */
 async function freePort(): Promise<number> {
   const probe = createServer();
@@ -152,6 +235,44 @@ describe('the proxy supervisor', () => {
       await new Promise<void>((resolve) => second.close(() => resolve()));
     }
   }, 30_000);
+
+  it('restores every route and a collision-assigned port before clients register again', async () => {
+    let occupied = createServer();
+    let project = home;
+    let preferred = 0;
+    // Windows reserves some derived ports. Find one we can occupy rather than assuming a
+    // particular hash lands outside its excluded ranges, and handle listen errors explicitly.
+    for (let attempt = 0; attempt < 64; attempt++) {
+      project = join(home, `collision-${attempt}`);
+      preferred = routePort(JSON.stringify([upstreamUrl, project]), env);
+      occupied = createServer();
+      const bound = await new Promise<boolean>((done) => {
+        occupied.once('error', () => done(false));
+        occupied.listen(preferred, '127.0.0.1', () => done(true));
+      });
+      if (bound) break;
+    }
+    expect(occupied.listening).toBe(true);
+    try {
+      supervisor = await runSupervisor(env);
+      const first = await ensureRoute(upstreamUrl, env, project);
+      const other = await ensureRoute(upstreamUrl, env, home);
+      expect(first).not.toBe(`http://127.0.0.1:${preferred}`);
+      await supervisor!.close();
+      supervisor = null;
+      await new Promise<void>((done) => occupied.close(() => done()));
+      supervisor = await runSupervisor(env);
+      // No ensureRoute calls: both already-running clients keep their original URLs.
+      expect(
+        (await supervisorHealth(env))?.routes.map((route) => route.url).sort()
+      ).toEqual([first, other].sort());
+      expect((await get(first!, '/v1/messages')).status).toBe(200);
+      expect((await get(other!, '/v1/messages')).status).toBe(200);
+    } finally {
+      if (occupied.listening)
+        await new Promise<void>((done) => occupied.close(() => done()));
+    }
+  }, 30000);
 
   it('serves an upstream on the same port after a restart', async () => {
     // A client's own configuration names this URL and outlives the supervisor. An ephemeral port

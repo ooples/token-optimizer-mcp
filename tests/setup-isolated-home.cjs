@@ -102,3 +102,6 @@ delete process.env.TOKEN_OPTIMIZER_MODE;
 // and nothing is written unless a route was really served. A suite that tests the supervisor starts
 // one itself, in-process, on a port of its own.
 process.env.TOKEN_OPTIMIZER_PROXY_AUTOSTART = '0';
+// Startup migration has its own isolated integration coverage; ordinary server probes must
+// never inspect or update the developer's actual launchers and shell profiles.
+process.env.TOKEN_OPTIMIZER_AUTO_REPAIR = '0';

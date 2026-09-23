@@ -23,7 +23,12 @@ const result = await diagnose({
   root,
   workspace: join(tmpdir(), 'token-optimizer-doctor'),
   graphDir: wikiDir(process.cwd()),
-  settingsPath: process.env.TOKEN_OPTIMIZER_SETTINGS || join(homedir(), '.claude', 'settings.json'),
+  settingsPath:
+    process.env.TOKEN_OPTIMIZER_SETTINGS ||
+    join(
+      process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'),
+      'settings.json'
+    ),
 });
 
 console.log(renderDiagnosis(result));
@@ -31,28 +36,36 @@ const hookHealth = hookHealthSummary({ includeLogDirectory: true });
 console.log('');
 console.log('Lifecycle diagnostics (last 24 hours):');
 if (hookHealth.total === 0) {
-  console.log(`  No hook runs recorded yet. Log directory: ${hookHealth.logDirectory}`);
+  console.log(
+    `  No hook runs recorded yet. Log directory: ${hookHealth.logDirectory}`
+  );
 } else {
   console.log(
     `  ${hookHealth.total} runs; ${hookHealth.failures} failures; ` +
-    `${hookHealth.timeouts} timeouts; ${hookHealth.blocked} policy blocks; ` +
-    `${hookHealth.abandoned} abandoned; ${hookHealth.skipped} skipped; ` +
-    `p95 ${hookHealth.p95DurationMs ?? 'n/a'} ms.`
+      `${hookHealth.timeouts} timeouts; ${hookHealth.blocked} policy blocks; ` +
+      `${hookHealth.abandoned} abandoned; ${hookHealth.skipped} skipped; ` +
+      `p95 ${hookHealth.p95DurationMs ?? 'n/a'} ms.`
   );
   for (const [client, counts] of Object.entries(hookHealth.byClient)) {
     console.log(
       `  ${client}: ${counts.total} runs, ${counts.failures} failures, ` +
-      `${counts.timeouts} timeouts, ${counts.blocked || 0} policy blocks, ` +
-      `${counts.skipped || 0} skipped; surfaces: ` +
-      `${counts.hookEvents?.join(', ') || 'unknown'}.`
+        `${counts.timeouts} timeouts, ${counts.blocked || 0} policy blocks, ` +
+        `${counts.skipped || 0} skipped; surfaces: ` +
+        `${counts.hookEvents?.join(', ') || 'unknown'}.`
     );
   }
 }
 console.log('');
-console.log('Verify the release itself with `npm audit signatures` (provenance attestation),');
+console.log(
+  'Verify the release itself with `npm audit signatures` (provenance attestation),'
+);
 console.log('or `sha256sum -c CHECKSUMS.sha256` for an offline check.');
-console.log('Export a bounded summary with `npm run diagnostics -- --hours 24`.');
-console.log('Add `--include-events --limit 100` only when event-level evidence is required.');
+console.log(
+  'Export a bounded summary with `npm run diagnostics -- --hours 24`.'
+);
+console.log(
+  'Add `--include-events --limit 100` only when event-level evidence is required.'
+);
 
 // A broken install should fail a script that asks whether it is broken.
 process.exit(result.healthy ? 0 : 1);

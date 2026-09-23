@@ -7,6 +7,10 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 import type { AnalyticsEntry, AnalyticsStorage } from './analytics-types.js';
+import {
+  registerDatabaseOwner,
+  unregisterDatabaseOwner,
+} from '../core/database-registry.js';
 
 /**
  * SQLite-backed analytics storage
@@ -92,6 +96,9 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
         ON analytics(measurement_id)
         WHERE measurement_id LIKE 'mcp:%';
     `);
+
+    // LAST, so a constructor that threw never leaves a half-built owner in the registry.
+    registerDatabaseOwner(this);
   }
 
   /**
@@ -290,6 +297,8 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
    * Close the database connection
    */
   async close(): Promise<void> {
+    unregisterDatabaseOwner(this);
+
     // Flush any pending writes
     if (this.batchQueue.length > 0) {
       await this.saveBatch(this.batchQueue);

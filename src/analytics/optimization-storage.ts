@@ -1,4 +1,8 @@
 import Database from 'better-sqlite3';
+import {
+  registerDatabaseOwner,
+  unregisterDatabaseOwner,
+} from '../core/database-registry.js';
 import { existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join } from 'path';
@@ -47,6 +51,9 @@ export class SqliteOptimizationStorage {
             CREATE INDEX IF NOT EXISTS idx_optimization_hash
                 ON optimization_results(original_text_hash);
         `);
+
+    // LAST, so a failed initialization never leaves a half-built owner in the registry.
+    registerDatabaseOwner(this);
   }
 
   private requireDb(): Database.Database {
@@ -143,6 +150,7 @@ export class SqliteOptimizationStorage {
   public static readonly COMPRESSION_ALGORITHM = 'brotli';
 
   public close(): void {
+    unregisterDatabaseOwner(this);
     if (this.db) {
       this.db.close();
       this.db = null;

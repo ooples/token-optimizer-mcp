@@ -33,6 +33,7 @@ const gemini = JSON.parse(
 );
 const required = [
   'scripts/windows-commands.mjs',
+  'scripts/claude-hook-ownership.mjs',
   'scripts/codex-startup.mjs',
   'scripts/recover-profile-lock.mjs',
   'dist/proxy/usage-parser.js',
