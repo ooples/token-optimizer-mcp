@@ -426,6 +426,13 @@ check(
         `${RESULT} carries no measuredAt/harnessSha/competitorVersion`
       );
 
+    // The probe writes 'unknown' when git rev-parse fails, which is truthy and
+    // therefore satisfied a presence check while naming no revision at all. A
+    // measurement that cannot say which tree produced it is not one anyone can
+    // re-run.
+    if (m.harnessSha === 'unknown')
+      return fail(`${RESULT} was measured outside a git checkout -- run ${REGEN}`);
+
     // A CONTENT HASH, BECAUSE A SHA DOES NOT SEE UNCOMMITTED EDITS.
     // harnessSha records the commit the probe ran at, which says nothing
     // about whether the probe on disk is still that probe -- an edited but
