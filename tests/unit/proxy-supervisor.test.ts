@@ -57,6 +57,37 @@ it('retains an occupied saved port and retries it without client registration', 
   expect((await get(url!, '/v1/messages')).status).toBe(200);
 }, 15000);
 
+// A PORT THAT FREES MID-RETRY IS WHAT SEPARATES ONE PROBE FROM TWO.
+// The test above holds the blocker for the whole call, so all five attempts
+// fail and a supervisor that probes once and one that probes twice both answer
+// null -- it cannot tell them apart. Release the port between attempts instead.
+// The retry then succeeds, and only a version whose guard reads THAT result
+// keeps the route: a version that guards on its own earlier probe has already
+// seen the first failure and abandons a port that is free by the time it binds.
+it('keeps a saved port that comes free between retry attempts', async () => {
+  supervisor = await runSupervisor(env);
+  const url = await ensureRoute(upstreamUrl, env);
+  const port = Number(new URL(url!).port);
+  await supervisor!.close();
+  supervisor = null;
+
+  const blocker = createServer();
+  await new Promise<void>((done) => blocker.listen(port, '127.0.0.1', done));
+  supervisor = await runSupervisor(env);
+  expect(readSupervisorState(env)?.routes[0].url).toBe(url);
+
+  // Attempts run 200ms apart, so releasing at 300ms lands between the second
+  // and third with margin on both sides.
+  let released = false;
+  setTimeout(() => blocker.close(() => (released = true)), 300);
+
+  const again = await ensureRoute(upstreamUrl, env);
+  // Without this the test would still pass if the port were never occupied.
+  expect(released).toBe(true);
+  expect(again).toBe(url);
+}, 15000);
+
+
 it('does not mistake unrelated HTTP JSON for a healthy supervisor', async () => {
   const other = createServer((_req, res) => res.end('{}'));
   await new Promise<void>((done) =>
