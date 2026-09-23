@@ -159,6 +159,27 @@ describe('a JSON block that claims lossless keeps every lexeme it was given', ()
     expect(jsonLexemes(rehydrate(result.text))).toEqual(jsonLexemes(input));
   });
 
+  // WHICH ENCODER RAN, NOT JUST THAT SOMETHING DID. Lexeme equality holds for
+  // whitespace minification too, so a suite whose every fixture minified would
+  // never reach `expandJsonRecords` and would still be green -- the decoder
+  // this file exists to exercise would be dead code covered by nothing.
+  it('the record encoder and the minifier each ran on a fixture of their own', () => {
+    const templated = compressBlock(repeatingRows(), {
+      tuning: DEFAULT_TUNING,
+    }).text;
+    expect(templated).toContain('[JSON array records;');
+    expect(templated).toContain('[/JSON fragment records]');
+
+    // The heterogeneous document has no repeated row shape, so the records
+    // encoder must decline it -- and the minifier must still act, or that
+    // fixture is proving nothing about the other path.
+    const config = heterogeneousConfig();
+    const minified = compressBlock(config, { tuning: DEFAULT_TUNING }).text;
+    expect(minified).not.toContain('[JSON array records;');
+    expect(minified).not.toBe(config);
+    expect(minified.length).toBeLessThan(config.length);
+  });
+
   // WITHOUT THIS THE SUITE COULD PASS ON AN ENGINE THAT RETURNS ITS INPUT.
   // Lexeme equality is trivially true for a no-op, so at least the shapes the
   // engine is supposed to reduce have to be seen reducing.
@@ -195,9 +216,15 @@ describe('the gate can fail, demonstrated on the product rather than asserted', 
     const input = repeatingRows();
     const result = compressBlock(input, { tuning: DEFAULT_TUNING });
 
-    const damaged = result.text.replace(
-      '{"id":"r-59","v":3,"note":"obs 59"}',
-      ''
+    // DAMAGE THE ENCODING THE ENGINE ACTUALLY CHOSE. This used to delete a
+    // minified record literal, which #423 made unreachable: uniform rows now
+    // take the records template, so the literal was absent, the replace was a
+    // no-op and the gate was handed back its own undamaged output.
+    const lines = result.text.split('\n');
+    const close = lines.indexOf('[/JSON fragment records]');
+    expect(close).toBeGreaterThan(0);
+    const damaged = [...lines.slice(0, close - 1), ...lines.slice(close)].join(
+      '\n'
     );
     expect(damaged).not.toBe(result.text);
     expect(() =>

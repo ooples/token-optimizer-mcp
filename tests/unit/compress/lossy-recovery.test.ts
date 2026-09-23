@@ -5,6 +5,7 @@ import { compressJson } from '../../../src/compress/json.js';
 import { foldRepeatedSegments } from '../../../src/compress/segments.js';
 import { DEFAULT_TUNING } from '../../../src/compress/options.js';
 import { expandLog } from '../../helpers/expand-log.js';
+import { rehydrate } from '../../support/rehydrate.js';
 
 /**
  * THE LOSSY PATH, held to the promise its marker makes.
@@ -299,10 +300,15 @@ describe('the spill is the only way back, so it must hold what went', () => {
       tuning: DEFAULT_TUNING,
     });
 
-    // Declining the ELISION is not declining the engine: whitespace removal
-    // is still a real saving and loses nothing, so it survives the refusal.
+    // Declining the ELISION is not declining the engine: the lossless
+    // encodings lose nothing, so they survive the refusal. Since #423 the
+    // engine picks whichever of them is smaller, and for uniform rows that is
+    // the records template rather than plain minification -- so the rows are
+    // read back through the decoder, which is the only thing that can see
+    // them. `JSON.parse` on the emitted text used to work here only because
+    // minification was the sole outcome.
     expect(result.elisions.every((e) => e.lossless)).toBe(true);
-    expect(JSON.parse(result.text)).toEqual(JSON.parse(ROWS));
+    expect(JSON.parse(rehydrate(result.text))).toEqual(JSON.parse(ROWS));
   });
 
   it('code with no source path recovers through the block it spilled', () => {

@@ -35,6 +35,11 @@ function assertStrict(input: string, result: CompressionResult): void {
   // lying there drops bytes with no route back while the result stays honest --
   // which is why both engines carry a second `lossless` literal, inside the
   // elision itself.
+  // AN EMPTY LIST SATISFIES EVERY LOOP BELOW. Rewritten output that admits
+  // `lossless: false` and then names nothing removed passes this test while
+  // telling the reader nothing about where its content went, so the metadata
+  // is required before it is inspected.
+  expect(result.elisions.length).toBeGreaterThan(0);
   for (const elision of result.elisions) {
     expect(elision.lossless).toBe(false);
     expect(elision.recoverAt).not.toBeNull();
