@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-09-23T11:59:48.815973+00:00",
-  "harnessSha": "unknown",
-  "probeSha256": "12c816f4a6435ed46ec02cc8987660f75c1b7aaea65d41ecd83f5867fa578640",
+  "measuredAt": "2026-09-23T14:12:30.144211+00:00",
+  "harnessSha": "690c8eadec02a7c1a39cd8c46b9afeda4cd56319",
+  "probeSha256": "e2ee25f3b8be8b6086ad3d6db4df122e0e68826a49b626a12413a17bbea92d12",
   "competitorVersion": "0.37.0",
   "claims": {
     "losslessModeDropsKeys": {

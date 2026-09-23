@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import subprocess
 import sys
@@ -167,12 +168,20 @@ def main() -> int:
         return 2
 
     out_path = Path(sys.argv[1] if len(sys.argv) > 1 else "bench/competitive/results/claims.json")
+    # NO PROVENANCE, NO ARTIFACT. This used to fall back to "unknown", and the
+    # file in results/ carried that sentinel for weeks: a measurement nobody
+    # could tie to a revision, which is the one thing the stamp exists to do.
+    # verify-blockers rejects the sentinel now, so writing it only produces a
+    # file that fails its own gate -- refuse at the source instead.
     try:
-        sha = (
-            subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except Exception as exc:
+        print(
+            f"cannot stamp the result: git rev-parse HEAD failed ({exc}). "
+            "Run the probe from a checkout; an unstamped measurement is not usable.",
+            file=sys.stderr,
         )
-    except Exception:
-        sha = "unknown"
+        return 3
 
     # A CONTENT HASH OF THIS FILE, ALONGSIDE THE COMMIT.
     #
@@ -190,9 +199,46 @@ def main() -> int:
         "competitorVersion": getattr(headroom, "__version__", "unknown"),
         "claims": {},
     }
-    for name, fn in CLAIMS.items():
-        payload["claims"][name] = fn()
-        print(name, json.dumps(payload["claims"][name]))
+    # A DEGRADED COMPETITOR MEASURES AS A WEAKER COMPETITOR, SILENTLY.
+    #
+    # Both of their optional paths fail soft, and both change the numbers
+    # without changing the exit code. A cold HF cache leaves the Kompress
+    # tokenizer uninstantiable and the code fixture comes back uncompressed
+    # (bytesOut 7680, elidesBodies false); a missing tree-sitter degrades the
+    # same claim differently (bytesOut 6019, signaturesOut 36). Either one
+    # writes a claims file that understates them, and every downstream gate
+    # then compares our output against a competitor that was not running.
+    #
+    # Both report through logging on the `headroom` hierarchy, so one handler
+    # catches them -- including whichever optional path they add next.
+    degradations: list[str] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            degradations.append(record.getMessage())
+
+    competitor_log = logging.getLogger("headroom")
+    capture = _Capture(level=logging.WARNING)
+    competitor_log.addHandler(capture)
+    previous_level = competitor_log.level
+    competitor_log.setLevel(min(previous_level or logging.WARNING, logging.WARNING))
+    try:
+        for name, fn in CLAIMS.items():
+            payload["claims"][name] = fn()
+            print(name, json.dumps(payload["claims"][name]))
+    finally:
+        competitor_log.removeHandler(capture)
+        competitor_log.setLevel(previous_level)
+
+    if degradations:
+        print(
+            "the competitor ran degraded, so these numbers do not describe it:",
+            file=sys.stderr,
+        )
+        for message in dict.fromkeys(degradations):
+            print(f"  {message}", file=sys.stderr)
+        print("nothing written.", file=sys.stderr)
+        return 4
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
