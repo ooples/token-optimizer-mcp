@@ -101,7 +101,13 @@ describe('the diagnostic distinguishes a decision from an omission', () => {
   });
 
   it('reports an unrecognised value as unset, since it was not understood', () => {
-    expect(describePolicy({ TOKEN_OPTIMIZER_TELEMETRY: 'maybe' })).toContain('maybe');
+    // BOTH HALVES, OR THIS PASSES FOR THE BUG IT NAMES. Asserting only that
+    // the raw value survives is satisfied by 'explicitly disabled (maybe)',
+    // which is precisely the output this test exists to rule out.
+    const said = describePolicy({ TOKEN_OPTIMIZER_TELEMETRY: 'maybe' });
+    expect(said).toContain('unset');
+    expect(said).toContain('maybe');
+    expect(said).not.toContain('explicitly disabled');
   });
 });
 

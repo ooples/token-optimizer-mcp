@@ -85,8 +85,15 @@ export function describePolicy(env: NodeJS.ProcessEnv = process.env): string {
     // doctor output that reads as the tool not having noticed. Only an absent
     // or unrecognised value is genuinely unset.
     const raw = (env.TOKEN_OPTIMIZER_TELEMETRY ?? '').trim();
+    // ONLY A RECOGNISED OFF VALUE IS A DECISION. An unrecognised one is a
+    // typo, and calling it "explicitly disabled" tells the operator their
+    // setting was understood when it was not -- which is the same failure
+    // this branch exists to prevent, pointed the other way. It is repeated
+    // back so they can see what was read.
+    if (explicit(env.TOKEN_OPTIMIZER_TELEMETRY) === false)
+      return `off: local telemetry is explicitly disabled (${raw})`;
     return raw
-      ? `off: local telemetry is explicitly disabled (${raw})`
+      ? `off: local telemetry is opt-in and unset (unrecognised value: ${raw})`
       : 'off: local telemetry is opt-in and unset';
   }
   if (!beaconEnabled(env)) return 'local only: upload is opt-in and unset';
