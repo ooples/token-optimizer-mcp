@@ -11,6 +11,13 @@ import { expandLog } from '../helpers/expand-log.js';
  * being too forgiving passes everything, which is indistinguishable from having
  * no gate at all.
  *
+ * A SUBSTRING ORACLE CANNOT DO THIS JOB. The records encoder states a repeated
+ * row shape once, and for a column stepping by a constant it writes a rule
+ * rather than the values -- so `r-0` is not a substring of the output at all,
+ * it is `"r-"` in the template joined to slot 0 the rule produces. Asked
+ * whether the output still contains the input, such an oracle reports healthy
+ * compression as data loss.
+ *
  * So the envelope handling lives here once and the per-engine payload grammars
  * register into it. The envelope `[... {removed}]` / `[... {removed} -> {at}]`
  * is centralised in `src/compress/annotate.ts#inlineMarker` even though the
@@ -56,7 +63,10 @@ export function expandJsonRecords(text: string): string {
         .split('\n')
         .map((row, index) => {
           const present = JSON.parse(row) as string[];
-          const slotCount = present.length + rules.size;
+          // Slots carrying a rule were omitted from the row; the rest arrive in
+          // order, so the two streams are interleaved by slot number.
+          const slotCount =
+            present.length + [...rules.keys()].filter((k) => k >= 0).length;
           const values: string[] = [];
           let next = 0;
           for (let slot = 0; slot < slotCount; slot += 1) {

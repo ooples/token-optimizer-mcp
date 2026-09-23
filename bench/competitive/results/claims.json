@@ -1,0 +1,33 @@
+{
+  "measuredAt": "2026-09-23T14:36:00.124517+00:00",
+  "harnessSha": "3f539ce8b28895dec9602b24e22d8457d44ee638",
+  "probeSha256": "e2ee25f3b8be8b6086ad3d6db4df122e0e68826a49b626a12413a17bbea92d12",
+  "competitorVersion": "0.37.0",
+  "claims": {
+    "losslessModeDropsKeys": {
+      "mode": "lossless_only=True",
+      "keysIn": 40,
+      "keysOut": 15,
+      "outputParsesAsJson": true,
+      "recoveryMarkers": [],
+      "bytesIn": 2573,
+      "bytesOut": 791
+    },
+    "ccrMarkerDiesWithTheStore": {
+      "hashesInOutput": 1,
+      "resolveWhileWarm": 1,
+      "storeCleared": true,
+      "resolveAfterClear": 0,
+      "rowsVisible": 12,
+      "rowsIn": 90
+    },
+    "codeMarkerCarriesNoLocation": {
+      "bytesIn": 7680,
+      "bytesOut": 7099,
+      "signaturesIn": 40,
+      "signaturesOut": 40,
+      "elidesBodies": true,
+      "markerCarriesLocation": false
+    }
+  }
+}
