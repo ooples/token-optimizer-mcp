@@ -3,6 +3,16 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { startRoutingMaintenance } from '../../src/proxy/routing-maintenance.js';
+import { controlPort } from '../../src/proxy/supervisor.js';
+
+/*
+ * ASKED FOR, NOT WRITTEN DOWN. The recovery guard compares the saved controlUrl against the port
+ * the supervisor would bind now, so a literal here is a fixture that goes stale the moment the
+ * default moves -- which is exactly what happened: this was written against 45710 and #428 moved
+ * the default to 16999, below the range the kernel allocates outbound source ports from. The
+ * guard then declined every recovery and the suite failed on four Node versions.
+ */
+const controlUrl = `http://127.0.0.1:${controlPort({})}`;
 
 const homes: string[] = [];
 const stops: (() => void)[] = [];
@@ -47,7 +57,7 @@ describe('routing maintenance lifecycle', () => {
       join(home, 'proxy-supervisor.json'),
       JSON.stringify({
         schema: 1,
-        controlUrl: 'http://127.0.0.1:45710',
+        controlUrl,
         routes: [{ upstream: 'https://gateway.example' }],
       })
     );
