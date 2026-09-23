@@ -63,4 +63,36 @@ describe('doctor reports a wired hook that no longer resolves', () => {
     expect(check).toBeDefined();
     expect(check.pass).toBe(true);
   });
+
+  it('leaves a foreign command alone when its flag merely starts with ours', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tok-foreign-'));
+    const settingsPath = join(dir, 'settings.json');
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                {
+                  type: 'command',
+                  // Not ours: the flag only SHARES OUR PREFIX. The script is
+                  // missing on purpose, so claiming this entry would report
+                  // someone else's broken hook as a token-optimizer failure.
+                  command: `node "${join(dir, 'gone', 'their-stop.mjs')}" --token-optimizer-hook-debug`,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    const checks = checklist({ root: dir, settingsPath, install: { method: 'script' } });
+    const check = named(checks, 'wired hooks resolve on disk');
+
+    expect(check).toBeDefined();
+    expect(check.pass).toBe(true);
+    expect(check.detail ?? '').not.toContain('their-stop.mjs');
+  });
 });

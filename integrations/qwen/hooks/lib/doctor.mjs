@@ -20,7 +20,7 @@
  * complaint.
  */
 
-import { OWNERSHIP_FLAG, entrypointOf } from './wire.mjs';
+import { entrypointOf, hasOwnershipFlag } from './wire.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import {
@@ -956,7 +956,7 @@ export function checklist({ root, settingsPath, install }) {
           for (const entry of Array.isArray(entries) ? entries : []) {
             for (const hook of entry?.hooks || []) {
               const command = hook?.command || '';
-              if (!command.includes(OWNERSHIP_FLAG)) continue;
+              if (!hasOwnershipFlag(command)) continue;
               const script = entrypointOf(command);
               if (script && !existsSync(script)) stale.push(script);
             }

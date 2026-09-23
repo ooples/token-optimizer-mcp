@@ -114,6 +114,19 @@ function tokenize(command) {
   );
 }
 
+/**
+ * Does this command carry our ownership flag as a WHOLE argument?
+ *
+ * Shared rather than private so a second caller cannot reintroduce the
+ * substring bug the comment below describes. doctor.mjs asked
+ * `command.includes(OWNERSHIP_FLAG)`, which accepts a user's
+ * `--token-optimizer-hook-debug` as ours and then reports their missing
+ * script as a token-optimizer failure.
+ */
+export function hasOwnershipFlag(command) {
+  return typeof command === 'string' && tokenize(command).includes(OWNERSHIP_FLAG);
+}
+
 export function entrypointOf(command) {
   const tokens = tokenize(command);
 
@@ -144,7 +157,7 @@ const isOurs = (entry) => {
     // because it could be imitated, recognising a longer flag as ours would
     // reintroduce the same class of mistake through the mechanism meant to end
     // it.
-    if (tokenize(command).includes(OWNERSHIP_FLAG)) return true;
+    if (hasOwnershipFlag(command)) return true;
 
     const script = entrypointOf(command).split('\\').join('/');
     if (!script) return false;
