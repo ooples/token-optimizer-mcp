@@ -38,7 +38,10 @@ if (existsSync(settingsPath)) {
 }
 
 const plan = remove ? null : wirePlan(settings, hooksDir);
-const next = remove ? unwire(settings) : wire(settings, hooksDir);
+const next = remove ? unwire(settings) : wire(settings, hooksDir, { exists: existsSync });
+// existsSync is supplied HERE, at the edge: hooks-core stays free of node:fs
+// because it is vendored into every client integration, while the real install
+// path still refuses a directory that does not hold the hooks.
 
 if (dryRun) {
   console.log(remove

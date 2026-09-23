@@ -18,6 +18,7 @@
  * complaint.
  */
 
+import { entrypointOf, isOurs } from './wire.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import {
@@ -933,6 +934,49 @@ export function checklist({ root, settingsPath, install }) {
                 'hooks wired into settings',
                 'no token-optimizer entries found',
                 'run install-hooks.sh to add the PreToolUse and SessionStart entries'
+              )
+        );
+
+        // WIRED IS NOT THE SAME AS WORKING. The check above is a substring test,
+        // so an entry naming a script that no longer exists still reads as wired
+        // while every invocation of it dies with MODULE_NOT_FOUND. That is not
+        // hypothetical: an upgrade wired its own staging directory, the OS later
+        // cleaned that directory up, and the Stop hook failed on every turn with
+        // settings that looked perfectly healthy.
+        //
+        // This says nothing about WHERE a hook lives -- any folder the user chose
+        // is legitimate -- only whether the file the command names is still there.
+        // Keyed on OUR OWNERSHIP FLAG, not on wiredEntries(). Ownership additionally
+        // requires a `token-optimizer` path SEGMENT, and the staging directory that
+        // caused this ("optimizer upgrade <tmp>/new/plugin/hooks") has none -- so
+        // the entry we most need to report would have been the one entry skipped.
+        // The flag is written by us and by nobody else, which is the property that
+        // matters here.
+        const stale = [];
+        for (const entries of Object.values(settings?.hooks || {})) {
+          for (const entry of Array.isArray(entries) ? entries : []) {
+            for (const hook of entry?.hooks || []) {
+              const command = hook?.command || '';
+              // OURS BY EITHER TEST, NOT JUST THE FLAG. Entries we wrote
+              // before the flag existed carry no flag, so a flag-only
+              // check skipped exactly the legacy hooks most likely to
+              // point at a script that has since moved. isOurs applies
+              // the flag test first and falls back to the path shape, so
+              // an unrelated /workspace/token-optimizer/stop.mjs is still
+              // not claimed.
+              if (!isOurs({ hooks: [hook] })) continue;
+              const script = entrypointOf(command);
+              if (script && !existsSync(script)) stale.push(script);
+            }
+          }
+        }
+        checks.push(
+          stale.length === 0
+            ? ok('wired hooks resolve on disk', settingsPath)
+            : bad(
+                'wired hooks resolve on disk',
+                `wired to ${stale.length === 1 ? 'a path that no longer exists' : `${stale.length} paths that no longer exist`}: ${stale.join(', ')}`,
+                're-run the installer against the directory that holds the installed hooks'
               )
         );
       } catch {
