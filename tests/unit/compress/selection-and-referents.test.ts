@@ -126,17 +126,34 @@ describe('a dedup back-reference points at bytes that are present', () => {
     // THE REFERENT MUST BE IN THE PAYLOAD. A lossless elision here carries no
     // recoverAt, so the only thing that can make it recoverable is another
     // block in the same request still holding the bytes.
-    const surviving = result.texts.filter((_, i) => blocks[i].text === shared);
-    expect(surviving.some((text) => text === shared)).toBe(true);
+    const sharedAt = blocks
+      .map((b, i) => (b.text === shared ? i : -1))
+      .filter((i) => i >= 0);
+    expect(sharedAt).toHaveLength(3);
 
-    // And the duplicates really did go, or nothing was saved.
-    expect(surviving.filter((text) => text === shared).length).toBeLessThan(
-      blocks.filter((b) => b.text === shared).length
+    const kept = sharedAt.filter((i) => result.texts[i] === shared);
+    const pointed = sharedAt.filter((i) => result.texts[i] !== shared);
+    // Exactly one copy survives to be pointed at; the other two point at it.
+    expect(kept).toHaveLength(1);
+    expect(pointed).toHaveLength(2);
+
+    // AND EACH ONE MUST NAME THE SHARED BLOCK, NOT MERELY SOMETHING.
+    // Asserting only that one raw copy survived is satisfied by an
+    // implementation that keeps blocks[0] and points a shared duplicate at
+    // beta instead, which is a different block of the same size.
+    expect(result.texts[pointed[0]]).toContain(
+      `shown above: "${shared.slice(0, 40)}..." (#1)`
     );
+    expect(result.texts[pointed[1]]).toContain('as #1 above');
 
+    // Both halves, of every elision. The conditional form this replaces --
+    // lossless ? expect null : expect not-null -- is satisfied by a regression
+    // that sets lossless: false AND a non-null recoverAt, which is precisely
+    // the state a local duplicate reference must never be in.
+    expect(result.elisions.length).toBeGreaterThan(0);
     for (const elision of result.elisions) {
-      if (elision.lossless) expect(elision.recoverAt).toBeNull();
-      else expect(elision.recoverAt).not.toBeNull();
+      expect(elision.lossless).toBe(true);
+      expect(elision.recoverAt).toBeNull();
     }
   });
 
