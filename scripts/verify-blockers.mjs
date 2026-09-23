@@ -19,10 +19,13 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 
@@ -368,9 +371,26 @@ check('B10', 'ndjson is compressed, and damaged json still refused', () => {
 
 // ---------------------------------------------------------------- B11
 check('B11', 'the competitor clone is out of our test run', () => {
-  const cfg = read('jest.config.js');
-  if (!cfg.includes('.codex/')) return fail('.codex/ is not ignored by jest');
-  return pass('<rootDir>/.codex/ is in testPathIgnorePatterns');
+  // THE ARRAY, NOT THE FILE’S PROSE. Searching the source text for
+  // '.codex/' also matches the comment above the pattern explaining why it
+  // is there, so deleting the live entry and keeping the explanation left
+  // this green while the competitor clone came back into the test run.
+  let cfg;
+  try {
+    cfg = require(join(ROOT, 'jest.config.js'));
+  } catch (err) {
+    return fail(`jest.config.js does not load: ${err.message}`);
+  }
+  // jest.config.js is ESM (export default), so require hands back the module
+  // namespace and the config sits under .default.
+  const config = cfg?.default ?? cfg;
+  const ignored = config?.testPathIgnorePatterns;
+  if (!Array.isArray(ignored))
+    return fail(`jest.config.js declares no testPathIgnorePatterns array`);
+  const hit = ignored.find((p) => typeof p === 'string' && p.includes('.codex/'));
+  if (!hit)
+    return fail(`.codex/ is not in testPathIgnorePatterns: ${JSON.stringify(ignored)}`);
+  return pass(`${hit} is in testPathIgnorePatterns`);
 });
 
 // ---------------------------------------------------------------- B12
@@ -503,6 +523,148 @@ check('B12', 'the launch suite is hermetic and green', () => {
     'green, with a guard that exports a pin and requires it to be ignored'
   );
 });
+
+// ---------------------------------------------------------------- B14
+check(
+  'B14',
+  'every competitive claim is backed by a re-runnable measurement',
+  () => {
+    const PROBE = 'bench/competitive/probe-headroom.py';
+    const RESULT = 'bench/competitive/results/claims.json';
+    const REGEN = `python ${PROBE} ${RESULT}`;
+
+    // THREE CLAIMS ABOUT THEM WERE MADE FROM READING SOURCE AND EACH WAS WRONG:
+    // a function tested with one flag generalised to a capability they have; a
+    // result object read through the wrong field, reporting their output as
+    // larger than their input; and a substring oracle run against a CSV
+    // encoding, reporting total loss where there was none. Every one would have
+    // shipped. So a claim is a measurement with a producer, or it is not a
+    // claim.
+    if (!existsSync(join(ROOT, PROBE)))
+      return fail(`no claim probe at ${PROBE}`);
+    if (!existsSync(join(ROOT, RESULT)))
+      return deferred(`no committed measurement at ${RESULT} -- run ${REGEN}`);
+
+    let m;
+    try {
+      m = JSON.parse(read(RESULT));
+    } catch (err) {
+      return fail(`${RESULT} is not readable json: ${err.message}`);
+    }
+    if (!m?.measuredAt || !m?.harnessSha || !m?.competitorVersion)
+      return fail(
+        `${RESULT} carries no measuredAt/harnessSha/competitorVersion`
+      );
+
+    // The probe writes 'unknown' when git rev-parse fails, which is truthy and
+    // therefore satisfied a presence check while naming no revision at all. A
+    // measurement that cannot say which tree produced it is not one anyone can
+    // re-run.
+    if (m.harnessSha === 'unknown')
+      return fail(`${RESULT} was measured outside a git checkout -- run ${REGEN}`);
+
+    // A CONTENT HASH, BECAUSE A SHA DOES NOT SEE UNCOMMITTED EDITS.
+    // harnessSha records the commit the probe ran at, which says nothing
+    // about whether the probe on disk is still that probe -- an edited but
+    // uncommitted probe keeps the old stamp and every claim below keeps
+    // passing against a measurement it no longer produces.
+    const probeHash = createHash('sha256')
+      .update(read(PROBE).replace(/\r\n/g, '\n'), 'utf8')
+      .digest('hex');
+    if (!m.probeSha256)
+      return fail(`${RESULT} carries no probeSha256 -- run ${REGEN}`);
+    if (m.probeSha256 !== probeHash)
+      return fail(
+        `${RESULT} was measured with a different ${PROBE} ` +
+          `(${m.probeSha256.slice(0, 12)} vs ${probeHash.slice(0, 12)}) -- run ${REGEN}`
+      );
+
+    const c = m.claims ?? {};
+    const problems = [];
+
+    // 'their lossless mode is not lossless'
+    const lossless = c.losslessModeDropsKeys;
+    if (!lossless) problems.push('losslessModeDropsKeys not measured');
+    else {
+      if (!(lossless.keysOut < lossless.keysIn))
+        problems.push(
+          `lossless mode kept ${lossless.keysOut} of ${lossless.keysIn} keys -- ` +
+            'it no longer drops any, so the claim is retired, not failing'
+        );
+      if (lossless.outputParsesAsJson !== true)
+        problems.push(
+          'lossless output no longer parses, so "silent" is unproven'
+        );
+      if ((lossless.recoveryMarkers ?? []).length)
+        problems.push(
+          `lossless output now carries ${JSON.stringify(lossless.recoveryMarkers)} -- ` +
+            'the drop is marked, so "no marker of any kind" is false'
+        );
+    }
+
+    // 'their marker dies with the store'
+    const ccr = c.ccrMarkerDiesWithTheStore;
+    if (!ccr) problems.push('ccrMarkerDiesWithTheStore not measured');
+    else {
+      if (!(ccr.hashesInOutput > 0 && ccr.resolveWhileWarm > 0))
+        problems.push(
+          'nothing resolved even warm, so the probe proves nothing'
+        );
+      if (ccr.storeCleared !== true)
+        problems.push(
+          'the store could not be cleared, so the cold case is untested'
+        );
+      else if (ccr.resolveAfterClear !== 0)
+        problems.push(
+          `${ccr.resolveAfterClear} hash(es) still resolve after clearing -- ` +
+            'the marker survives, so the claim is false'
+        );
+      if (!(ccr.rowsVisible < ccr.rowsIn))
+        problems.push(
+          'no rows were removed, so nothing depended on the marker'
+        );
+    }
+
+    // 'their code marker names no location, ours does'
+    const code = c.codeMarkerCarriesNoLocation;
+    if (!code) problems.push('codeMarkerCarriesNoLocation not measured');
+    else {
+      if (code.elidesBodies !== true)
+        problems.push(
+          'they no longer elide bodies, so the comparison is not like for like'
+        );
+      // MEASURED FALSE, NOT MERELY NOT-TRUE. `undefined === true` is false,
+      // so a result carrying only {"elidesBodies": true} satisfied this and
+      // the comparison below, where two missing counts compare equal. The
+      // claim is about what their marker does, so it needs the observation.
+      if (code.markerCarriesLocation !== false)
+        problems.push(
+          `markerCarriesLocation is ${JSON.stringify(code.markerCarriesLocation)}, ` +
+            'so the claim is either false or unmeasured'
+        );
+      const counted = (v) => Number.isInteger(v) && v > 0;
+      if (!counted(code.signaturesIn) || !counted(code.signaturesOut))
+        problems.push(
+          `signature counts are ${JSON.stringify(code.signaturesIn)}/` +
+            `${JSON.stringify(code.signaturesOut)} -- the probe found no signatures ` +
+            'to compare, so retention is unmeasured'
+        );
+      else if (code.signaturesOut !== code.signaturesIn)
+        problems.push(
+          `they kept ${code.signaturesOut} of ${code.signaturesIn} signatures -- ` +
+            'retention differs, so a ratio comparison needs that caveat'
+        );
+    }
+
+    if (problems.length) return fail(problems.join('; '));
+    return pass(
+      `3 claims re-measured against ${m.competitorVersion}: ` +
+        `${lossless.keysOut}/${lossless.keysIn} keys kept unmarked, ` +
+        `${ccr.resolveAfterClear} of ${ccr.hashesInOutput} hashes resolve cold, ` +
+        `their code marker located=${code.markerCarriesLocation}`
+    );
+  }
+);
 
 // ---------------------------------------------------------------- report
 const w = Math.max(...results.map((r) => r.what.length));
