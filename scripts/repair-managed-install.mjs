@@ -152,8 +152,14 @@ export function repairManagedInstall({
             /^node "(.+[/\\]plugin[/\\]hooks[/\\](session-start|pretooluse-router|post-tool|precompact-optimize|stop)\.mjs)" --token-optimizer-hook$/
           );
           if (!match) continue;
-          if (/["%'`$\r\n]/.test(root) || /["%'`$\r\n]/.test(match[1]))
-            continue;
+          // AN APOSTROPHE IS LITERAL HERE. The command written below is
+          // DOUBLE-quoted, so a single quote carries no meaning inside it --
+          // rejecting it only skipped the migration for anyone whose path
+          // looks like C:\Users\O'Brien. The others stay rejected: a double
+          // quote ends the span, % and $ and a backtick still expand inside
+          // it, and a newline would split the command.
+          const unsafe = /["%`$\r\n]/;
+          if (unsafe.test(root) || unsafe.test(match[1])) continue;
           const next = upgrade(match[1], `plugin/hooks/${match[2]}.mjs`);
           if (next === match[1]) continue;
           hook.command = `node "${next}" --token-optimizer-hook`;

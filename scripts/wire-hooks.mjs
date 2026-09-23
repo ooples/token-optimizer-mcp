@@ -53,11 +53,40 @@ const next = remove
   ? unwire(settings)
   : dedupeClaudePluginHooks(wire(settings, hooksDir), settingsPath).settings;
 
+/**
+ * What the FILE ends up registering, which is not always what we planned.
+ *
+ * When an enabled installed plugin already provides an event,
+ * dedupeClaudePluginHooks takes our manual entry back out again. Reporting
+ * plan.events then names registrations the written file does not contain --
+ * the user is told a hook was wired, finds nothing in settings.json for it,
+ * and has no way to tell that outcome from a failure. The events are
+ * therefore read back out of `next`, and the ones the plugin covers are
+ * reported as covered rather than silently folded in.
+ */
+const wiredNow = remove
+  ? []
+  : plan.events.filter((event) =>
+      (next.hooks?.[event] || []).some((group) =>
+        (group?.hooks || []).some(
+          (hook) =>
+            typeof hook?.command === 'string' &&
+            hook.command.includes('--token-optimizer-hook')
+        )
+      )
+    );
+const byPlugin = remove
+  ? []
+  : plan.events.filter((event) => !wiredNow.includes(event));
+const covered = byPlugin.length
+  ? `; ${byPlugin.join(', ')} already provided by the installed plugin`
+  : '';
+
 if (dryRun) {
   console.log(
     remove
       ? `[token-optimizer-mcp] would remove ${wiredEntries(settings).length} entry/entries, leaving everything else`
-      : `[token-optimizer-mcp] would wire ${plan.events.join(', ')}; ` +
+      : `[token-optimizer-mcp] would wire ${wiredNow.join(', ') || 'nothing'}${covered}; ` +
           `replacing ${plan.replacing} of ours, preserving ${plan.preserving} of yours`
   );
   process.exit(0);
@@ -78,6 +107,6 @@ writeFileSync(settingsPath, `${JSON.stringify(next, null, 2)}\n`);
 console.log(
   remove
     ? `[token-optimizer-mcp] removed our hook entries from ${settingsPath}; your other hooks were left alone`
-    : `[token-optimizer-mcp] wired ${plan.events.join(', ')} into ${settingsPath}; ` +
+    : `[token-optimizer-mcp] wired ${wiredNow.join(', ') || 'nothing'} into ${settingsPath}${covered}; ` +
         `${plan.preserving} existing hook entry/entries preserved`
 );
