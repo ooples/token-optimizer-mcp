@@ -189,6 +189,15 @@ export function expandSearchHunks(text: string): string {
     const [, path, first, last, marks, encoded] = header;
     const start = Number(first);
     const end = Number(last);
+    // A DESCENDING RANGE HAS TO FAIL, NOT HANG. `src/a.ts:3-1` gives a count
+    // of -1, the short-body check below passes it because `0 < -1` is false,
+    // and `cursor += count` walks back onto this same header for ever. A
+    // helper that hangs takes the whole run with it; a helper that throws
+    // names the bad input.
+    if (end < start)
+      throw new Error(
+        `rehydrate: hunk ${path}:${start}-${end} has a descending range`
+      );
     const count = end - start + 1;
     const body = lines.slice(cursor + 1, cursor + 1 + count);
     if (body.length < count)
@@ -225,8 +234,14 @@ const UNCONSUMED = /^\s*\[\/?(?:JSON |All \d+ JSON |TAP )/;
  * survived expansion means `expandSearchHunks` declined the header carrying
  * it -- a variant it does not invert -- and the body lines under it are still
  * missing their path and line number.
+ *
+ * Anchored to the header's own shape: the phrase is ordinary content anywhere
+ * else, and `{"note":"[exact declaration rows: ...]"}` is a document this
+ * helper has no business refusing.
  */
-const UNCONSUMED_SUFFIX = /\[exact declaration rows:/;
+const UNCONSUMED_SUFFIX = new RegExp(
+  `^(?:${SEARCH_PATH}):\\d+-\\d+.*\\[exact declaration rows:`
+);
 
 /**
  * Applies every registered grammar, then refuses anything left over.

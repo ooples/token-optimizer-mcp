@@ -224,6 +224,16 @@ const SECTIONS = [
   'beta block with enough text in it to be worth folding away entirely',
 ].join('\n\n');
 
+/**
+ * Uniform rows carrying a number lexeme `JSON.stringify` cannot produce, so a
+ * spill re-serialised from the parsed values is visibly not the source.
+ */
+const LEXEMES = `[${Array.from(
+  { length: 60 },
+  (_, i) =>
+    `{"id":${i},"region":"us-east-1","status":"ok","ratio":1.0,"latencyMs":${20 + (i % 7)}}`
+).join(',')}]`;
+
 const ROWS = JSON.stringify(
   Array.from({ length: 60 }, (_, i) => ({
     id: i,
@@ -294,8 +304,34 @@ describe('the spill is the only way back, so it must hold what went', () => {
     expect(JSON.parse(content)).toEqual(JSON.parse(ROWS));
   });
 
+  it('the json tail spill keeps the lexemes the source wrote', () => {
+    const sink = recordingSpill();
+    const result = compressJson(LEXEMES, {
+      spill: sink.spill,
+      tuning: DEFAULT_TUNING,
+    });
+
+    // Without this the assertion below would be about nothing: a lossless
+    // answer spills no rows, so there would be no spill to be wrong.
+    expect(result.lossless).toBe(false);
+    expect(sink.files.size).toBe(1);
+
+    const [, content] = [...sink.files][0];
+    // A SPILL BUILT FROM THE PARSED VALUES IS NOT THE SOURCE. `1.0` parses to
+    // 1 and stringifies back as `1`, and the spill is the only place the
+    // dropped rows still exist -- so an agent recovering from it would read a
+    // number the document never spelled that way. Deep-equality is blind to
+    // this, which is why the lexeme is named here.
+    expect(content).toContain('"ratio":1.0');
+    expect(JSON.parse(content)).toEqual(JSON.parse(LEXEMES));
+  });
+
   it('json keeps the minification and the rows when the sink fails', () => {
-    const result = compressJson(ROWS, {
+    // INDENTED ON PURPOSE. `ROWS` is already minified, so a fallback that
+    // returned its input untouched would pass this test without compressing
+    // anything.
+    const padded = JSON.stringify(JSON.parse(ROWS), null, 2);
+    const result = compressJson(padded, {
       spill: failingSpill,
       tuning: DEFAULT_TUNING,
     });
@@ -308,6 +344,8 @@ describe('the spill is the only way back, so it must hold what went', () => {
     // them. `JSON.parse` on the emitted text used to work here only because
     // minification was the sole outcome.
     expect(result.elisions.every((e) => e.lossless)).toBe(true);
+    expect(result.lossless).toBe(true);
+    expect(result.text.length).toBeLessThan(padded.length);
     expect(JSON.parse(rehydrate(result.text))).toEqual(JSON.parse(ROWS));
   });
 

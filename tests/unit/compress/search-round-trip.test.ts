@@ -101,4 +101,19 @@ describe('the search decoder refuses what it cannot rebuild', () => {
       rehydrate('src/a.ts:1-2 [exact declaration rows: name=rhs]\nA\tb\nC\td')
     ).toThrow(/unconsumed marker/);
   });
+
+  it('leaves the same phrase alone when it is ordinary content', () => {
+    // The refusal above is about a HEADER the expander declined, not about a
+    // form of words. Firing on any line carrying the phrase would make this
+    // helper reject documents the engine never touched.
+    const text = '{"note":"[exact declaration rows: name=rhs]"}';
+    expect(rehydrate(text)).toBe(text);
+  });
+
+  it('refuses a descending range instead of walking it for ever', () => {
+    // `3-1` gives a count of -1, which the short-body check cannot catch
+    // because no body is ever shorter than -1 lines, and the cursor then
+    // steps BACK onto this header. The helper has to fail closed.
+    expect(() => rehydrate('src/a.ts:3-1\nx\ny')).toThrow(/descending range/);
+  });
 });
