@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressJsonArray } from '../../../src/compress/json-fragments.js';
+import { expandJsonRecords as expand } from '../../support/rehydrate.js';
 
 /**
  * AN ARITHMETIC COLUMN IS EMITTED AS A RULE, SO A DECODER MUST APPLY THE RULE.
@@ -17,49 +18,6 @@ import { compressJsonArray } from '../../../src/compress/json-fragments.js';
  * claim ship unchecked earlier in this work.
  */
 
-/** Rebuilds the original from the emitted text alone, rule included. */
-function expand(text: string): string {
-  return text.replace(
-    /\[JSON array records; ALL \d+ records preserved(?:, \d+ encoded here)?\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: (\[[^\n]+?\])(; slots ([^\]\n]+) count from 0)?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
-    (
-      _all,
-      encoded: string,
-      _clause,
-      slots: string | undefined,
-      rows: string
-    ) => {
-      const template = JSON.parse(encoded) as (number | string)[];
-      const rules = new Map<number, { first: number; step: number }>();
-      for (const part of (slots ?? '').split(' ').filter(Boolean)) {
-        const m = /^(\d+)=(-?\d+)\+(-?\d+)n$/.exec(part);
-        if (!m) throw new Error(`unreadable run clause ${part}`);
-        rules.set(Number(m[1]), { first: Number(m[2]), step: Number(m[3]) });
-      }
-      return rows
-        .trim()
-        .split('\n')
-        .map((row, index) => {
-          const present = JSON.parse(row) as string[];
-          // Slots carrying a rule were omitted from the row; the rest arrive in
-          // order, so the two streams are interleaved by slot number.
-          const slotCount =
-            present.length + [...rules.keys()].filter((k) => k >= 0).length;
-          const values: string[] = [];
-          let next = 0;
-          for (let slot = 0; slot < slotCount; slot += 1) {
-            const rule = rules.get(slot);
-            values.push(
-              rule ? String(rule.first + rule.step * index) : present[next++]
-            );
-          }
-          return template
-            .map((part) => (typeof part === 'number' ? values[part] : part))
-            .join('');
-        })
-        .join('');
-    }
-  );
-}
 
 const arithmetic = (n: number) =>
   '[\n' +

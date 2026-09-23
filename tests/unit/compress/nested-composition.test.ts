@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import { compressBlock } from '../../../src/compress/router.js';
 import { DEFAULT_TUNING } from '../../../src/compress/options.js';
 import { expandLog } from '../../helpers/expand-log.js';
+import { expandJsonRecords } from '../../support/rehydrate.js';
 
 /**
  * THE LAST TWO ENGINES CLAIMING `lossless` WITH NOTHING RECONSTRUCTING IT.
@@ -157,11 +158,18 @@ describe('headed json sections keep their content', () => {
     // THE CLAIM IS THAT ONLY WHITESPACE WENT, so every row must still be here.
     // Asserted on content rather than on layout: this transform is allowed to
     // reflow, and a shape assertion would fail for the wrong reason.
+    //
+    // READ THROUGH THE DECODER, NOT THE RAW TEXT. These rows are uniform, so
+    // the records encoder states the shape once and supplies each row as
+    // fragments -- `r-0` is "r-" in the template joined to a slot the run rule
+    // generates, and it is not a substring of the output. A substring oracle
+    // here reports a lossless encoding as data loss (#415).
+    const rebuilt = expandJsonRecords(result.text);
     for (let i = 0; i < rows.length; i += 1) {
-      expect(result.text).toContain(`r-${i}`);
-      expect(result.text).toContain(`obs ${i}`);
+      expect(rebuilt).toContain(`r-${i}`);
+      expect(rebuilt).toContain(`obs ${i}`);
     }
-    expect(result.text).toContain('checkout');
+    expect(rebuilt).toContain('checkout');
 
     // And the engine really did something -- otherwise the loop above is
     // satisfied by an untouched document.
