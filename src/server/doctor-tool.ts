@@ -137,6 +137,9 @@ export async function installDoctor(input: {
     skipServer: true,
     clientName: input?.clientName,
     client: requested || null,
+    // THE PROJECT, NOT THE PACKAGE. A client that reads its hooks from the repository it was
+    // opened in is diagnosed against that repository; $root is where this server was installed.
+    cwd,
     cacheDegradedReason: input?.cacheDegradedReason ?? null,
   });
 
