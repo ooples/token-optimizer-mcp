@@ -48,25 +48,28 @@ handed the identical bytes.
 <!-- HEADROOM-TABLE:START -- every figure below must appear in
      `bench/compression/headroom/results/head-to-head.json`. Guarded by
      `node bench/compression/readme-headroom.check.mjs`; do not hand-edit.
-     Each cell is `characters / tokens`, tokens from cl100k_base over both
-     arms' real output. -->
+     The first three cells are `characters / tokens`, tokens from cl100k_base
+     over both arms' real output. `zero-turn ids` is `ours / theirs`: of the
+     identifiers planted in that workload, how many the agent can have without
+     spending a turn -- in the text, or rebuilt from the text alone.
+     -->
 
-| workload             | payload |        theirs |          ours | ours, dial on   |
-| -------------------- | ------: | ------------: | ------------: | --------------- |
-| agent-loop           | 172,110 | 41.9% / 46.7% | 93.8% / 94.7% | 100.0% / 100.0% |
-| agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% | 100.0% / 100.0% |
-| browser-session      | 782,294 | 21.8% / 13.6% | 93.7% / 28.9% | 100.0% / 99.9%  |
-| code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% | 99.9% / 99.9%   |
-| codebase-exploration | 136,113 | 99.7% / 99.6% | 57.4% / 50.3% | 100.0% / 99.9%  |
-| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% | 99.9% / 99.9%   |
-| human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% | 99.8% / 99.9%   |
-| issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% | 99.9% / 99.9%   |
-| raw-build-log        | 158,237 | 99.8% / 99.8% | 70.7% / 47.7% | 100.0% / 100.0% |
-| relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% | 99.9% / 99.9%   |
-| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% |
-| sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% | 100.0% / 100.0% |
+| workload             | payload |        theirs |          ours | ours, dial on   | zero-turn ids |
+| -------------------- | ------: | ------------: | ------------: | --------------- | ------------: |
+| agent-loop           | 172,110 | 41.9% / 46.7% | 93.8% / 94.7% | 100.0% / 100.0% |       11 / 72 |
+| agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% | 100.0% / 100.0% |     40 / 1070 |
+| browser-session      | 782,294 | 21.8% / 13.6% | 93.7% / 28.9% | 100.0% / 99.9%  |     281 / 281 |
+| code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% | 99.9% / 99.9%   |       10 / 91 |
+| codebase-exploration | 136,113 | 99.7% / 99.6% | 57.4% / 50.3% | 100.0% / 99.9%  |       375 / 0 |
+| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% | 99.9% / 99.9%   |       914 / 0 |
+| human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% | 99.8% / 99.9%   |        3 / 12 |
+| issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% | 99.9% / 99.9%   |         0 / 0 |
+| raw-build-log        | 158,237 | 99.8% / 99.8% | 70.7% / 47.7% | 100.0% / 100.0% |       427 / 0 |
+| relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% | 99.9% / 99.9%   |         0 / 0 |
+| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% |     331 / 331 |
+| sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% | 100.0% / 100.0% |      42 / 353 |
 
-Recorded 2026-09-24 at `72843318`, by the command in the
+Recorded 2026-09-24 at `db4c3527`, by the command in the
 record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
 re-derive it the way it re-derives the table below -- it checks this provenance and
 these figures against `bench/compression/headroom/results/head-to-head.json` instead.
@@ -83,6 +86,18 @@ report ~99.7% and we report 57-71%. Their number there is a **content-cache
 reference**: the block is not made smaller, it is taken out of the request, put
 in a store, and replaced by a 24-character `<<ccr:...>>` marker. The same is true
 of the four rows where they edge us out in the nineties.
+
+**So the last column is the one that decides a turn.** A marker is not the
+content: to read what it stands for, the agent spends a request. `zero-turn ids`
+counts the identifiers planted in each workload that need no such request --
+still in the text, or rebuildable from the text alone. On the three rows we
+lose on reduction we take that column outright, 375-0, 914-0 and 427-0: their
+marker leaves none of it behind, our skeleton leaves all of it. **We lose it on
+five rows** -- `agent-loop`, `agent-loop-logs`, `code-search`,
+`human-authored-json` and `sre-debugging` -- because our reduction there comes
+from spilling too, and a spill costs the same turn theirs does. Over the corpus
+it is 2,434 of 5,702 for us against 2,210 for them: a lead, not a rout, and the
+two columns have to be read together or each one flatters somebody.
 
 `browser-session` used to be the one genuine engine loss on this corpus, at 6.0%
 against their 21.8%. It is now 93.5%, from folding exact long repeats inside a
