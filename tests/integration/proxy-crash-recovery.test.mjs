@@ -14,7 +14,10 @@ import { createHash } from 'node:crypto';
 import { CLIENT_CAPABILITIES } from '../../hooks-core/capabilities.mjs';
 
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
-async function until(check, timeout = 20000) {
+// THE WAIT BUDGET ONE `until` MAY SPEND. Exported as a constant because the
+// per-case timeout below is derived from it; moving one has to move the other.
+const UNTIL_TIMEOUT_MS = 20_000;
+async function until(check, timeout = UNTIL_TIMEOUT_MS) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
     try {
@@ -32,6 +35,11 @@ async function listen(server) {
   return server.address().port;
 }
 const close = (server) => new Promise((done) => server.close(done));
+
+/** Sequential `until` waits in one case; see the note on the case timeout. */
+const UNTIL_WAITS_PER_CASE = 6;
+/** Spawning the client, the 2s exit race and the retrying temp-dir removal. */
+const SPAWN_AND_TEARDOWN_MS = 15_000;
 
 describe('a connected MCP session survives a dead background proxy', () => {
   it.each([
@@ -228,6 +236,14 @@ describe('a connected MCP session survives a dead background proxy', () => {
         });
       }
     },
-    45000
+    // A CASE NEEDS A BUDGET BIGGER THAN WHAT IT IS ALLOWED TO WAIT FOR. One
+    // case awaits `until` six times -- for the handshake, the first proxy, the
+    // port release, the recovered proxy, the second response and the profile
+    // write -- and each of those may legally spend UNTIL_TIMEOUT_MS before any
+    // assertion is reached. At a flat 45s the budget sat below that ceiling, so
+    // the case passed on an idle machine (~11s) and could only fail under load
+    // with a timeout rather than an assertion, which says nothing about what
+    // went wrong. Derived, the two stay in step.
+    UNTIL_WAITS_PER_CASE * UNTIL_TIMEOUT_MS + SPAWN_AND_TEARDOWN_MS
   );
 });
