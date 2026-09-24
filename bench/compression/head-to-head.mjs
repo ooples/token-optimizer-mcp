@@ -149,6 +149,19 @@ const tokens = (text) => {
  */
 const DISTINCTIVE = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{7,}$/;
 
+/**
+ * A DECLARED SYMBOL IS A RETENTION UNIT, and MIN_SYMBOL keeps the count honest.
+ *
+ * Retention is scored by substring presence, so a two- or three-character name
+ * matches by accident in any output long enough and would credit every arm for
+ * keeping something it dropped. Five characters is where a coincidental hit
+ * stops being plausible while real names still count.
+ */
+const MIN_SYMBOL = 5;
+const DECLARED =
+  /\b(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:class|interface|type|enum|function|const|let|var)\s+([A-Za-z_$][\w$]*)/g;
+const NAMED_IMPORT = /\bimport\s+(?:type\s+)?\{([^}]*)\}/g;
+
 function collect(value, into) {
   if (typeof value === 'string') {
     if (DISTINCTIVE.test(value) && /\d/.test(value)) into.add(value);
@@ -174,6 +187,30 @@ function collect(value, into) {
     // are counted as retention units too.
     for (const heading of value.match(/^#{1,6} .+$/gm) || []) {
       into.add(heading.trim());
+    }
+    // CODE NEEDS ITS OWN UNIT FOR THE SAME REASON PROSE DID. The rule above
+    // keys on "contains a digit", and a declared symbol -- `class CacheEngine`,
+    // `function resolveTuning` -- almost never has one. Measured on
+    // codebase-exploration, that scored two whole source blocks at ONE
+    // retention unit each while they declare hundreds of symbols between them,
+    // and a spill policy tuned against that count would have moved them out as
+    // though nothing in them were ever asked for again. A symbol name is
+    // exactly what a later turn greps for, so it is a unit.
+    //
+    // DECLARATIONS AND NAMED IMPORTS ONLY, never every word that looks like an
+    // identifier: retention is scored with `includes`, so a short or common
+    // token is found as a coincidental substring of almost any output and
+    // would inflate every arm's score at once. MIN_SYMBOL is the floor that
+    // makes that collision implausible while still admitting real names.
+    for (const m of value.matchAll(DECLARED)) {
+      if (m[1].length >= MIN_SYMBOL) into.add(m[1]);
+    }
+    for (const m of value.matchAll(NAMED_IMPORT)) {
+      for (const part of m[1].split(',')) {
+        const name = part.trim().split(/\s+as\s+/)[0].trim();
+        if (name.length >= MIN_SYMBOL && /^[A-Za-z_$][\w$]*$/.test(name))
+          into.add(name);
+      }
     }
     return;
   }
