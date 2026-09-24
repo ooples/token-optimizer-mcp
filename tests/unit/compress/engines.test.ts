@@ -1,6 +1,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressJson, looksLikeJson } from '../../../src/compress/json.js';
 import { compressLog, looksLikeLog } from '../../../src/compress/log.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
 import {
   compressCode,
   looksLikeCode,
@@ -199,9 +200,16 @@ describe('log', () => {
       lines.push(stamped(i, 'WARN peer dependency mismatch'));
       lines.push(stamped(i, `DEBUG unique step ${i}`));
     }
-    const out = compressLog(lines.join('\n'));
-    expect(out.text).toContain('elsewhere');
-    expect(out.text.length).toBeLessThan(lines.join('\n').length);
+    const input = lines.join('\n');
+    const out = compressLog(input);
+    // THE DEFECT IS 0%, NOT A MISSING MARKER. Consecutive-only folding left a
+    // log like this untouched; what matters is that the interleaved repetition
+    // is gone and every line still comes back. Which encoding removes it is a
+    // size decision made per block -- scattered folding states the repeat in
+    // one marker, templating states the shape once and lists the values -- so
+    // naming one of them here would pin the choice rather than the outcome.
+    expect(out.text.length).toBeLessThan(input.length / 2);
+    expect(expandLog(out.text)).toBe(input);
   });
 
   // PRESERVATION.

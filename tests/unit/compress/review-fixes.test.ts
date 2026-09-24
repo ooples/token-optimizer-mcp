@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressLog } from '../../../src/compress/log.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
 import { rehydrate } from '../../../src/compress/rehydrate.js';
 import { compressProse } from '../../../src/compress/prose.js';
 import { compressSearchResults } from '../../../src/compress/search.js';
@@ -36,10 +37,19 @@ describe('log folding keeps the timestamps it removes', () => {
     // -- the whole reason this engine beats a naive one on the most repetitive
     // logs there are. The stamps were then simply gone, and the result still
     // said `lossless: true`. On a log, WHEN is often the question.
-    const out = compressLog(clocked(9, 'connection pool warmed'));
+    // ASSERTED THROUGH THE DECODER, not as a substring, because two encodings
+    // both satisfy the requirement and only one of them writes a stamp
+    // contiguously. The duplicate marker lists `12:00:01` whole; a template
+    // states `12:00:#` once and `01` among its values. Both keep WHEN, which
+    // is what this test defends -- the defect it pins is stamps being dropped
+    // outright while the result still claimed `lossless: true`. Rebuilding the
+    // input from the output alone proves every one survived, and proves it
+    // whichever encoding the size comparison picked.
+    const input = clocked(9, 'connection pool warmed');
+    const out = compressLog(input);
 
-    expect(out.text).toContain('12:00:01');
-    expect(out.text).toContain('12:00:08');
+    expect(expandLog(out.text)).toBe(input);
+    expect(out.text.length).toBeLessThan(input.length);
     expect(out.elisions.some((e) => e.lossless)).toBe(true);
   });
 
