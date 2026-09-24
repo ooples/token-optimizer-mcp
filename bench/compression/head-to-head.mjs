@@ -49,6 +49,7 @@ import { get_encoding } from 'tiktoken';
 import { compressBlock } from '../../dist/compress/router.js';
 import { compressBody } from '../../dist/proxy/server.js';
 import { rehydrate } from '../../dist/compress/rehydrate.js';
+import { imageSize } from '../../dist/compress/images.js';
 
 const dir = process.argv[2];
 if (!dir) {
@@ -86,7 +87,35 @@ const resolved = existsSync(resolvedPath)
  * for punctuation-dense markers.
  */
 const encoding = get_encoding('cl100k_base');
-const tokens = (text) => encoding.encode(text).length;
+
+// IMAGES ARE NOT BILLED AS THE TEXT THEY ARRIVE IN, and counting them that way
+// was not a rounding error. browser-session carries four PNG screenshots; the
+// provider charges width*height/750, which is 1,585 tokens each, while cl100k
+// over the base64 charges 115,715 and 134,999. That is 501,428 tokens counted
+// against 6,340 actually billed -- 79x -- and since the images are 95% of the
+// payload's measured token count, EVERY token figure for that workload on BOTH
+// arms was a statement about base64 rather than about cost.
+//
+// So base64 runs long enough to carry an image header are priced by their
+// pixels and removed from the text before it is tokenised. This is done on raw
+// text rather than on parsed blocks deliberately: the compressed outputs are no
+// longer message lists, and an arm can only be compared with another if the
+// same rule is applied to both.
+//
+// 750 is the divisor src/compress/images.ts uses; it is the provider's, not
+// ours, and if they change it both arms move together.
+const PIXELS_PER_TOKEN = 750;
+const BASE64_RUN = /[A-Za-z0-9+/]{1000,}={0,2}/g;
+const tokens = (text) => {
+  let imaged = 0;
+  const stripped = text.replace(BASE64_RUN, (run) => {
+    const size = imageSize(run);
+    if (!size) return run;
+    imaged += Math.ceil((size.width * size.height) / PIXELS_PER_TOKEN);
+    return '';
+  });
+  return encoding.encode(stripped).length + imaged;
+};
 
 /**
  * Things whose loss would be silent and fatal.
@@ -550,7 +579,7 @@ console.log(
   `chars   ours ${pct(oursChars)}   theirs ${pct(theirsChars)}   (denominator: the payload bytes both arms were given)`
 );
 console.log(
-  `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload, tokenised with cl100k_base, both arms' real output)`
+  `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload; cl100k_base on text, pixels/750 on images, both arms' real output)`
 );
 // The body arm's own denominator, over the workloads it could run -- NOT the
 // corpus denominator above. Mixing them would let a body total that skipped a
