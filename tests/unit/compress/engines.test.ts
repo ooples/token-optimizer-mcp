@@ -324,6 +324,47 @@ describe('code', () => {
     expect(compressCode(diff, { sourcePath: 'x.ts' }).text).toBe(diff);
   });
 
+  // A hashbang is legal only at offset 0, and concatenation puts one anywhere.
+  // When the parse for the whole block threw on it, the generic line heuristic
+  // took over and -- as the second expectation here pins -- elides nothing at
+  // all on this shape, so an entire multi-file block came back uncompressed.
+  it('elides bodies in a block whose SECOND file opens with a hashbang', () => {
+    const first = [
+      'export function first(input) {',
+      "  const parts = input.split(' ');",
+      '  const out = [];',
+      '  for (const p of parts) out.push(p);',
+      "  return out.join('-');",
+      '}',
+    ].join('\n');
+    const second = [
+      'export function second(limit) {',
+      '  let total = 0;',
+      '  for (let i = 0; i < limit; i += 1) total += i;',
+      '  if (total > 10) total = 10;',
+      '  return total;',
+      '}',
+    ].join('\n');
+    const block = `${first}\n\n#!/usr/bin/env node\n${second}`;
+
+    const out = compressCode(block, { sourcePath: 'x.ts' });
+
+    // BOTH bodies go, not just the one before the hashbang.
+    expect(out.elisions).toHaveLength(2);
+    expect(out.text).toContain('export function first(input) {');
+    expect(out.text).toContain('export function second(limit) {');
+    expect(out.text).not.toContain('total += i');
+
+    // The mask exists only for the parser: the line itself is still there,
+    // spelled exactly as it was.
+    expect(out.text).toContain('#!/usr/bin/env node');
+    expect(out.text).not.toContain('//!/usr/bin/env node');
+
+    // The fallback that used to handle this block finds nothing to elide,
+    // which is what made the regression silent rather than merely worse.
+    expect(compressCode(block, { language: 'generic' }).text).toBe(block);
+  });
+
   // PRESERVATION.
   it('keeps signatures, imports and the declaration line', () => {
     const out = compressCode(ts, { sourcePath: 'src/w.ts' });
