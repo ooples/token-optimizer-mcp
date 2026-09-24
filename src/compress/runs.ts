@@ -116,25 +116,47 @@ function quoteFor(
   const run = text.substr(from, length);
   for (let size = QUOTE_START; size <= length; size *= 2) {
     const needle = text.substr(from, size);
+    // A WIDER WINDOW CANNOT LOSE A CHARACTER THE NARROW ONE HELD, so an
+    // opening that cannot be delimited is a refusal now, not after three more
+    // doublings that will each carry the same backtick.
+    if (needle.includes(FENCE)) return null;
     const at = prefix.indexOf(needle);
     if (at !== -1 && prefix.substr(at, length) === run) return needle;
   }
   return null;
 }
+/**
+ * The character the quote is delimited by.
+ *
+ * A BACKTICK, NOT A DOUBLE QUOTE, WHICH IS WHAT THE OTHER MARKERS IN THIS
+ * MODULE USE. Those all sit inside one block, and the block is escaped by
+ * `JSON.stringify` on its way to the wire, so a quote in them costs nothing.
+ * This pass is the only one that can also be handed a whole serialised
+ * request -- a document whose quoting has ALREADY happened -- and a raw `"`
+ * dropped into that ends the string it lands in. Measured: three of the twelve
+ * comparator payloads stopped parsing as JSON, and the harness scored the
+ * identifiers in them as unrecoverable, which is how a real win reads as a
+ * loss. A backtick needs no escape in either context.
+ */
+const FENCE = '`';
+
 /** What a folded run looks like in the output. */
 function markerFor(length: number, quote: string): string {
-  return `[... ${length.toLocaleString('en-US')} bytes, an exact repeat of the run opening ${JSON.stringify(quote)} above]`;
+  return `[... ${length.toLocaleString('en-US')} bytes, an exact repeat of the run opening ${FENCE}${quote}${FENCE} above]`;
 }
 
 /**
  * The grammar `rehydrate` inverts.
  *
- * The quote is matched lazily up to the first `" above]`, which is enough
- * because `JSON.stringify` escapes an embedded quote and the verification pass
- * in `foldLongRepeats` refuses to emit anything this cannot read back.
+ * The quote runs to the next backtick and cannot contain one, because
+ * `quoteFor` refuses an opening that does -- so the delimiter is exact rather
+ * than lazily guessed, and a marker the encoder never wrote cannot be read as
+ * one. A newline inside a quote is allowed and simply makes the marker two
+ * lines: this pass runs last, and `rehydrate` runs it first, so no
+ * line-oriented decoder ever sees the marker whole.
  */
 const FOLDED =
-  /\[\.\.\. ([\d,]+) bytes, an exact repeat of the run opening ("[\s\S]*?") above\]/;
+  /\[\.\.\. ([\d,]+) bytes, an exact repeat of the run opening `([^`]*)` above\]/;
 
 /** Is there a folded run anywhere in here? */
 export function hasFoldedRuns(text: string): boolean {
@@ -164,14 +186,7 @@ export function expandLongRepeats(text: string): string {
     out += text.slice(read, found.index);
 
     const length = Number(found[1].replace(/,/g, ''));
-    let quote: unknown;
-    try {
-      quote = JSON.parse(found[2]);
-    } catch {
-      throw new Error(`expandLongRepeats: unreadable quote in ${found[0]}`);
-    }
-    if (typeof quote !== 'string')
-      throw new Error(`expandLongRepeats: unreadable quote in ${found[0]}`);
+    const quote = found[2];
 
     // FIRST WINS, the same rule the encoder addressed it by. Several earlier
     // copies of one run share an opening, and they are the same bytes, so
@@ -188,6 +203,27 @@ export function expandLongRepeats(text: string): string {
     read = found.index + found[0].length;
   }
   return out + text.slice(read);
+}
+
+/**
+ * Is the character at `at` a quote that opens or closes a JSON string?
+ *
+ * A quote is a boundary unless a backslash escapes it, and a backslash is
+ * only an escape when an even number of them precede it -- `\\\\"` ends a
+ * string, `\\"` does not.
+ */
+function atStringEdge(text: string, at: number): boolean {
+  if (text.charCodeAt(at) !== QUOTE) return false;
+  let back = at - 1;
+  while (back >= 0 && text.charCodeAt(back) === BACKSLASH) back -= 1;
+  return (at - 1 - back) % 2 === 0;
+}
+
+/** Would a cut at `at` land between a backslash and what it escapes? */
+function splitsEscape(text: string, at: number): boolean {
+  let back = at - 1;
+  while (back >= 0 && text.charCodeAt(back) === BACKSLASH) back -= 1;
+  return (at - 1 - back) % 2 === 1;
 }
 
 /** One repeat the scan decided to fold. */
@@ -214,6 +250,8 @@ interface Repeat {
  * rather than only forwards.
  */
 const STRIDE = MIN_REPEAT - GRAIN;
+const QUOTE = 34;
+const BACKSLASH = 92;
 
 /** One repeat the scan decided to fold. */
 interface Repeat {
@@ -243,7 +281,7 @@ function windowsAgree(text: string, a: number, b: number): boolean {
  * strictness the rest of this module keeps is worth more than the last few
  * hundred characters of a fold.
  */
-function findRepeats(text: string): Repeat[] {
+function findRepeats(text: string, document: boolean): Repeat[] {
   const hashes = windowHashes(text);
   if (hashes.length === 0) return [];
 
@@ -276,15 +314,35 @@ function findRepeats(text: string): Repeat[] {
       lo > taken &&
       lo - d > 0 &&
       hi - lo < d &&
-      text.charCodeAt(lo - 1) === text.charCodeAt(lo - d - 1)
+      text.charCodeAt(lo - 1) === text.charCodeAt(lo - d - 1) &&
+      // THE SAME BOUNDARY, READ BACKWARDS. The glue in front of two copies is
+      // identical too -- `{"text":"` sits in front of both -- so backward
+      // growth walks out through the string's OPENING quote and the removed
+      // region swallows the structure between the copies.
+      !(document && atStringEdge(text, lo - 1))
     )
       lo -= 1;
     while (
       hi < text.length &&
       hi - lo < d &&
-      text.charCodeAt(hi) === text.charCodeAt(hi - d)
+      text.charCodeAt(hi) === text.charCodeAt(hi - d) &&
+      // ONE STRING, NOT ONE DOCUMENT. Growth is greedy, and what follows two
+      // copies of a run is usually the same punctuation, so a run of
+      // `"AAAA"},{"AAAA"}` grows through the closing quote and takes it with
+      // the copy it removes -- leaving the string it lived in unterminated.
+      // The bytes still read back identically, which is why the round-trip
+      // check below cannot see it. Stopping at the terminator can.
+      !(document && atStringEdge(text, hi))
     )
       hi += 1;
+
+    if (document) {
+      // AND NOT THROUGH AN ESCAPE AT EITHER END: a run ending on a lone
+      // backslash would escape the `[` the marker opens with, and one starting
+      // on an escaped character would leave its backslash behind.
+      while (hi > lo && splitsEscape(text, hi)) hi -= 1;
+      while (lo < hi && splitsEscape(text, lo)) lo += 1;
+    }
 
     const length = hi - lo;
     const quote =
@@ -299,6 +357,16 @@ function findRepeats(text: string): Repeat[] {
   }
   return found;
 }
+/** Does this text read as JSON? */
+function parses(text: string): boolean {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Replaces every long exact repeat with a marker naming the run it copies.
  *
@@ -312,7 +380,14 @@ function findRepeats(text: string): Repeat[] {
  */
 export function foldLongRepeats(text: string): CompressionResult | null {
   if (text.length < MIN_REPEAT * 2) return null;
-  const repeats = findRepeats(text);
+  // WAS IT A DOCUMENT BEFORE? Asked before anything is cut, because the answer
+  // is only interesting if it was yes: a cut that lands between a backslash
+  // and the character it escapes leaves the escape dangling, and nothing in
+  // the byte-for-byte check below would notice -- that check reads the text
+  // back, and the text is identical either way. Cheap, and only on input that
+  // opens like a document.
+  const wasDocument = /^\s*[[{]/.test(text.slice(0, 64)) && parses(text);
+  const repeats = findRepeats(text, wasDocument);
   if (repeats.length === 0) return null;
 
   let out = '';
@@ -336,6 +411,8 @@ export function foldLongRepeats(text: string): CompressionResult | null {
     return null;
   }
   if (readBack !== text) return null;
+  // A DOCUMENT THAT PARSED HAS TO STILL PARSE. See `wasDocument` above.
+  if (wasDocument && !parses(out)) return null;
 
   const elision: Elision = {
     removed: `${repeats.length} repeated run${repeats.length === 1 ? '' : 's'}, ${removed.toLocaleString('en-US')} bytes`,
