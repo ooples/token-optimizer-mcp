@@ -16,7 +16,7 @@
  * folding an error are the tokens that mattered.
  */
 
-import { count, inlineMarker } from './annotate.js';
+import { count, encodeGaps, inlineMarker } from './annotate.js';
 import { compressLogPeriods } from './log-periods.js';
 import { overlapsStructural, structuralRanges } from './structural.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
@@ -133,7 +133,7 @@ export function compressLog(
     lines.some(
       (line) =>
         line.trimStart().startsWith('[... ') ||
-        /\[\d+ occurrences, positions=\[/.test(line)
+        /\[\d+ occurrences, (?:positions|gaps)=\[/.test(line)
     )
   )
     return unchanged(text);
@@ -503,7 +503,7 @@ function templated(lines: string[], elisions: Elision[]): string[] {
       continue;
     const rows = valueRows.map((row) => row.map(encodeValue).join(' '));
     const rendered =
-      `${shape}  [${count(members.length, 'occurrence')}, positions=${JSON.stringify(members.map((index) => index + 1))}; # = ` +
+      `${shape}  [${count(members.length, 'occurrence')}, gaps=${encodeGaps(members.map((index) => index + 1))}; # = ` +
       `${rows.join(' | ')}]`;
 
     // Only if it actually pays. A template over long, highly variable lines

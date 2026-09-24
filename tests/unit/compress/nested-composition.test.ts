@@ -73,7 +73,7 @@ describe('a log compressed inside a json string survives the round trip', () => 
 
     const damaged = [
       compressed.replace(/; # = (\S+)/, '; # ='),
-      compressed.replace(/positions=\[(\d+),/, 'positions=['),
+      compressed.replace(/gaps=\[(\d+),/, 'gaps=['),
     ].filter((candidate) => candidate !== compressed);
     expect(damaged).toHaveLength(2);
 
