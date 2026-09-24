@@ -47,6 +47,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
 import { compressBlock } from '../../dist/compress/router.js';
+import { compressBody } from '../../dist/proxy/server.js';
 import { rehydrate } from '../../dist/compress/rehydrate.js';
 
 const dir = process.argv[2];
@@ -246,6 +247,44 @@ for (const [name, text] of Object.entries(payloads)) {
   const out = compressBlock(text, { spill, query: queryOf(text) });
   const ms = Date.now() - started;
 
+  // THE SECOND ARM. compressBlock takes a text string, so a payload's image
+  // blocks reach it only as base64 inside serialised JSON -- browser-session is
+  // 88.6% screenshots, and src/compress/images.ts (which deduplicates them) is
+  // unreachable from the block router. compressBody takes the request buffer and
+  // sees structured content blocks. Both are published because the difference
+  // between the layer and the pipeline is a fact about the product, not a choice
+  // of which number to show.
+  //
+  // The wrapper adds a model/max_tokens envelope of ~60 bytes to both sides of
+  // the ratio, which is under 0.1% of every payload here; it is not corrected
+  // for, so the body ratios are very slightly pessimistic.
+  const bodySpilled = [];
+  let body = null;
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      const wrapped = JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 1024,
+        messages: parsed,
+      });
+      const result = compressBody(Buffer.from(wrapped, 'utf8'), (c, hint) => {
+        bodySpilled.push(c);
+        return `.token-optimizer/spill/b${bodySpilled.length}-${hint}`;
+      });
+      body = {
+        before: Buffer.byteLength(wrapped, 'utf8'),
+        after: result.body.length,
+        text: result.body.toString('utf8'),
+        tokBefore: tokens(wrapped),
+        tokAfter: tokens(result.body.toString('utf8')),
+        reason: result.summary.compressed ? '' : (result.summary.reason ?? ''),
+      };
+    }
+  } catch {
+    /* a payload that is not a message list has no body arm */
+  }
+
   const before = text.length;
   const after = out.text.length;
 
@@ -317,6 +356,23 @@ for (const [name, text] of Object.entries(payloads)) {
     }
   }
   lost += gone;
+
+  // THE BODY ARM IS SCORED THE SAME WAY. A compression ratio published without a
+  // loss column is the exact thing this harness exists to stop, so the body arm
+  // answers the same question: after the decoder has run and the spill is read,
+  // how many identifiers is a reader unable to reach at all?
+  let bodyGone = 0;
+  if (body !== null) {
+    const bodyRecovered = recoverable(body.text, `${name} (body)`);
+    const bodySpill = bodySpilled.join('\n');
+    for (const id of want)
+      if (
+        !body.text.includes(id) &&
+        !bodyRecovered.includes(id) &&
+        !bodySpill.includes(id)
+      )
+        bodyGone++;
+  }
 
   const t = theirs[name];
   // REFUSE A MISSING ENTRY RATHER THAN SUBSTITUTE OUR OWN TEXT FOR IT. The
@@ -395,6 +451,13 @@ for (const [name, text] of Object.entries(payloads)) {
     theirRedeemed,
     theirGone,
     theirMeasured: theirResolved !== null,
+    bodyBefore: body?.before ?? 0,
+    bodyAfter: body?.after ?? 0,
+    bodyRatio: body ? 1 - body.after / body.before : null,
+    bodyTokBefore: body?.tokBefore ?? 0,
+    bodyTokAfter: body?.tokAfter ?? 0,
+    bodyReason: body?.reason ?? '',
+    bodyGone,
     missing,
     conserved,
     grew,
@@ -414,17 +477,29 @@ const n = (v, w) => String(v).padStart(w);
 // `derv`/`spill` and `ccr` are not the same cost -- see the note at the theirs
 // scoring above -- but they are the same KIND of claim, and lining them up is
 // what stops one arm's recovery counting and the other's being ignored.
+// `body` is the same product measured one layer up: compressBody over the whole
+// request, which sees structured content blocks where compressBlock sees only a
+// serialised string. It is printed beside `ours`, never instead of it.
+const bodyPct = (r) =>
+  r.bodyRatio === null ? '     -' : pct(r.bodyRatio).padStart(6);
+const bodyTokPct = (r) =>
+  r.bodyRatio === null
+    ? '     -'
+    : pct(1 - r.bodyTokAfter / r.bodyTokBefore).padStart(6);
 console.log(
-  'workload                  before     ours   theirs |   ours  theirs (tokens) |  ids | ours:  ctx  derv spill  gone | theirs:  ctx   ccr  gone | their arm'
+  'workload                  before     ours    body   theirs |   ours    body  theirs (tokens) |  ids | ours:  ctx  derv spill  gone | body: gone | theirs:  ctx   ccr  gone | their arm'
 );
 for (const r of rows) {
   console.log(
     `${r.name.padEnd(22)} ${n(r.before, 8)}  ${pct(r.ours).padStart(6)}  ` +
-      `${pct(r.theirs).padStart(6)} | ${pct(r.oursTok).padStart(6)} ${pct(r.theirsTok).padStart(6)} | ` +
+      `${bodyPct(r)}  ${pct(r.theirs).padStart(6)} | ${pct(r.oursTok).padStart(6)} ` +
+      `${bodyTokPct(r)} ${pct(r.theirsTok).padStart(6)} | ` +
       `${n(r.ids, 5)} | ${n(r.inOut, 10)} ${n(r.derived, 5)} ${n(r.inSpill, 5)} ` +
-      `${n(r.gone, 5)} | ${n(r.theirIn, 12)} ${r.theirMeasured ? n(r.theirRedeemed, 5) : '    ?'} ` +
+      `${n(r.gone, 5)} | ${r.bodyRatio === null ? '         -' : n(r.bodyGone, 10)} | ` +
+      `${n(r.theirIn, 12)} ${r.theirMeasured ? n(r.theirRedeemed, 5) : '    ?'} ` +
       `${r.theirMeasured ? n(r.theirGone, 5) : '    ?'} | ${r.arm}` +
-      (r.conserved ? '' : '  !! CONSERVATION FAILED')
+      (r.conserved ? '' : '  !! CONSERVATION FAILED') +
+      (r.bodyReason ? `  [body: ${r.bodyReason}]` : '')
   );
 }
 
@@ -452,6 +527,20 @@ console.log(
 console.log(
   `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload, tokenised with cl100k_base, both arms' real output)`
 );
+// The body arm's own denominator, over the workloads it could run -- NOT the
+// corpus denominator above. Mixing them would let a body total that skipped a
+// workload be read against a block total that did not.
+const bodyRows = rows.filter((r) => r.bodyRatio !== null);
+if (bodyRows.length > 0) {
+  const bSum = (f) => bodyRows.reduce((n, r) => n + f(r), 0);
+  const bChars = 1 - bSum((r) => r.bodyAfter) / bSum((r) => r.bodyBefore);
+  const bTok = 1 - bSum((r) => r.bodyTokAfter) / bSum((r) => r.bodyTokBefore);
+  const blockSame = 1 - bSum((r) => r.after) / bSum((r) => r.before);
+  console.log(
+    `body    chars ${pct(bChars)}   tokens ${pct(bTok)}   over ${bodyRows.length}/${rows.length} workloads ` +
+      `(compressBlock on the same ${bodyRows.length}: ${pct(blockSame)} chars)`
+  );
+}
 // STATED NEUTRALLY, because the first version of this summary was one-sided in
 // our favour and the second was one-sided against us. BOTH arms elide with a
 // recovery path, so "absent from the text" is not loss on either side -- and
@@ -514,8 +603,22 @@ if (unconserved.length)
 for (const [label, reason] of refusals)
   console.log(`DECODER REFUSED on ${label}: ${reason}`);
 
+// A body-arm loss fails the run even though the body RATIO does not gate it.
+// The ratio is published side by side because the locked decision was to show
+// the difference rather than pick a column; a lost identifier is not a column,
+// it is a defect in the pipeline that actually ships.
+const bodyLost = sum((r) => r.bodyGone);
+if (bodyLost > 0)
+  console.log(
+    `BODY ARM LOST ${bodyLost} identifier(s) on: ` +
+      rows
+        .filter((r) => r.bodyGone > 0)
+        .map((r) => `${r.name}(${r.bodyGone})`)
+        .join(', ')
+  );
 const failed =
   lost > 0 ||
+  bodyLost > 0 ||
   lostWorkloads.length > 0 ||
   unconserved.length > 0 ||
   oursChars <= theirsChars ||
