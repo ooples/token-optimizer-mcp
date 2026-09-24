@@ -177,11 +177,29 @@ function matchedLines(
  * matched, `-` for one it does not.
  */
 export function expandSearchHunks(text: string): string {
-  const newline = text.includes('\r\n') ? '\r\n' : '\n';
-  const lines = text.split(newline);
-  const out: string[] = [];
+  // EACH LINE CARRIES ITS OWN TERMINATOR, exactly as the engine now emits them.
+  // Splitting on one guessed newline left a stray CR on every line of the other
+  // kind, so a mixed-ending document's header was never matched and the decoder
+  // reported it as an unconsumed marker -- the decoder failing, read as the
+  // encoder failing.
+  type Line = { raw: string; eol: string };
+  const lines: Line[] = [];
+  for (let i = 0; i < text.length; ) {
+    let stop = i;
+    while (stop < text.length && text[stop] !== '\n' && text[stop] !== '\r')
+      stop += 1;
+    const eol =
+      stop >= text.length
+        ? ''
+        : text[stop] === '\r' && text[stop + 1] === '\n'
+          ? '\r\n'
+          : text[stop];
+    lines.push({ raw: text.slice(i, stop), eol });
+    i = stop + eol.length;
+  }
+  const out: Line[] = [];
   for (let cursor = 0; cursor < lines.length; cursor += 1) {
-    const header = SEARCH_HEADER.exec(lines[cursor]);
+    const header = SEARCH_HEADER.exec(lines[cursor].raw);
     if (!header) {
       out.push(lines[cursor]);
       continue;
@@ -208,21 +226,26 @@ export function expandSearchHunks(text: string): string {
     const template = encoded ? (JSON.parse(encoded) as string[]) : null;
     body.forEach((row, offset) => {
       const line = start + offset;
-      let content = row;
+      let content = row.raw;
       if (template) {
-        const fields = row.split('\t');
+        const fields = row.raw.split('\t');
         if (fields.length !== 2)
           throw new Error(
-            `rehydrate: declaration row is not two fields: ${row}`
+            `rehydrate: declaration row is not two fields: ${row.raw}`
           );
         content =
           template[0] + fields[0] + template[1] + fields[1] + template[2];
       }
-      out.push(`${path}:${line}${matched.has(line) ? ':' : '-'}${content}`);
+      // The body line's OWN terminator, not the header's: the header is
+      // consumed and the line it restores must end as it originally did.
+      out.push({
+        raw: `${path}:${line}${matched.has(line) ? ':' : '-'}${content}`,
+        eol: row.eol,
+      });
     });
     cursor += count;
   }
-  return out.join(newline);
+  return out.map((line) => line.raw + line.eol).join('');
 }
 
 /** Markers this module must consume rather than pass through as text. */
