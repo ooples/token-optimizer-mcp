@@ -114,6 +114,30 @@ console.log(
     `rows, against a record from ${record.recordedAt} (${record.commit.slice(0, 8)}).`
 );
 
+// THE TABLE IS NOT THE WHOLE CLAIM; WHEN IT WAS TAKEN IS PART OF IT. Every
+// figure above can agree with the record perfectly while the record describes a
+// compressor three commits ago, and nothing in a figures-only comparison can
+// tell. The README therefore states the record's date and commit in prose, and
+// that prose is checked here -- so a reader is told how old these numbers are,
+// and a stale record has to be declared rather than merely not noticed.
+//
+// This does not prove the record is CURRENT. It cannot: the other arm needs a
+// clone CI has not got. `scripts/verify-blockers.mjs` carries that half, by
+// refusing to call the tree shippable once `src/compress` has moved past the
+// commit named here.
+const provenance = [record.recordedAt, record.commit.slice(0, 8)].filter(
+  (claim) => !block.includes(claim)
+);
+
+if (provenance.length) {
+  console.error(
+    '\nreadme-headroom.check FAILED. The HEADROOM-TABLE block does not state\n' +
+      `the record it is checked against: ${provenance.join(' and ')} missing.\n` +
+      'Say where the figures came from, beside the figures.'
+  );
+  process.exit(1);
+}
+
 if (missing.length) {
   console.error('\nreadme-headroom.check FAILED. Not found in the record:');
   for (const { workload, figure } of missing)

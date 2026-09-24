@@ -66,6 +66,11 @@ handed the identical bytes.
 | repeated-reads       | 152,321 |  23.0% / 21.6% |   59.5% / 48.5% | 100.0% / 100.0% |
 | sre-debugging        | 312,456 |  99.8% / 99.8% |   97.1% / 97.7% | 100.0% / 100.0% |
 
+Recorded 2026-09-24 at `3dc70c5a`, by the command in the record's `regenerate` field.
+That second arm needs a HeadRoom clone, so CI cannot re-derive it the way it
+re-derives the table below -- it checks this provenance and these figures
+against `bench/compression/headroom/results/head-to-head.json` instead.
+
 <!-- HEADROOM-TABLE:END -->
 
 Over the corpus the shipped default takes **58.6%** of the characters and
