@@ -236,7 +236,31 @@ export function compressLog(
     }
   }
 
-  const folded = templated(foldScattered(out, elisions), elisions);
+  // TWO CANDIDATE FOLDINGS, AND THE CHEAPER ONE WINS. Scattered folding used
+  // to run unconditionally before templating, which let it claim every exact
+  // duplicate first and leave templating only the lines nothing else had
+  // taken. On a build log that is a bad trade: the duplicates it claims share
+  // a shape with the lines around them, so templating would have folded the
+  // whole family into one row-per-line list instead of a dozen separate
+  // position maps. Measured on raw-build-log's large block, 55,388 chars via
+  // scatter-then-template against 46,064 via templating alone.
+  //
+  // Neither path is a superset of the other -- a duplicate whose shape is
+  // unique is invisible to templating, and that is the case scattered folding
+  // was added for -- so the choice is made per block by rendering both and
+  // keeping the shorter. Both are lossless, so the pick costs no fidelity.
+  const scatterElisions: Elision[] = [];
+  const scattered = templated(
+    foldScattered(out, scatterElisions),
+    scatterElisions
+  );
+  const templateElisions: Elision[] = [];
+  const plain = templated(out, templateElisions);
+  const width = (lines: readonly string[]) =>
+    lines.reduce((n, line) => n + line.length + 1, 0);
+  const plainWins = width(plain) < width(scattered);
+  const folded = plainWins ? plain : scattered;
+  elisions.push(...(plainWins ? templateElisions : scatterElisions));
 
   if (!elisions.length) return unchanged(text);
   return {
@@ -453,10 +477,18 @@ function templated(lines: string[], elisions: Elision[]): string[] {
         !valueRows[0][c].includes('#') &&
         valueRows.every((row) => row[c] === valueRows[0][c])
     );
+    // ALL-FIXED MEANS THE LINES ARE IDENTICAL -- a line is its shape with its
+    // values put back, so a group whose every column agrees is a group of one
+    // line repeated. Duplicate folding is the owner of that case, and it says
+    // so in one marker; templating says it as a row of the same values per
+    // copy, `# = 12 00 00 | 12 00 00 | 12 00 00`, which is longer than the
+    // lines it replaces to read and no shorter to think about. This used to be
+    // unreachable because duplicate folding always ran first and always took
+    // them; it became reachable the moment that stopped being unconditional,
+    // and an order-of-passes accident is not a reason to emit it.
+    if (fixed.every(Boolean)) continue;
     let shape = rawShape;
-    // All-fixed would mean the lines are identical, which the duplicate folding
-    // above has already taken; leaving it alone keeps one owner per case.
-    if (fixed.some(Boolean) && !fixed.every(Boolean)) {
+    if (fixed.some(Boolean)) {
       let column = -1;
       shape = rawShape.replace(/#/g, () => {
         column += 1;
