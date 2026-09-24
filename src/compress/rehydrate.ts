@@ -1,4 +1,4 @@
-import { expandLog } from '../helpers/expand-log.js';
+import { expandLog } from './expand-log.js';
 
 /**
  * ONE ENTRY POINT FOR "REBUILD THE INPUT FROM THE OUTPUT ALONE", AND IT FAILS

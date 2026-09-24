@@ -1,7 +1,7 @@
 import { test, expect } from '@jest/globals';
 import { compressTap, looksLikeTap } from '../../../src/compress/tap.js';
 import { compressResponses } from '../../../src/proxy/responses.js';
-import { rehydrate } from '../../support/rehydrate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 function pass(i: number, nl = '\n', name = `case ${i}`): string {
   return `# Subtest: ${name}${nl}ok ${i} - ${name}${nl}  ---${nl}  duration_ms: ${i}.001${nl}  type: 'test'${nl}  ...${nl}`;

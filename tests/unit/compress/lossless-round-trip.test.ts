@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressBlock } from '../../../src/compress/router.js';
-import { expandLog } from '../../helpers/expand-log.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
 
 /**
  * THE GATE ON `lossless: true`, held to its word by reconstruction.

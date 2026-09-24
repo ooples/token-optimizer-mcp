@@ -4,8 +4,8 @@ import { compressProse } from '../../../src/compress/prose.js';
 import { compressJson } from '../../../src/compress/json.js';
 import { foldRepeatedSegments } from '../../../src/compress/segments.js';
 import { DEFAULT_TUNING } from '../../../src/compress/options.js';
-import { expandLog } from '../../helpers/expand-log.js';
-import { rehydrate } from '../../support/rehydrate.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 /**
  * THE LOSSY PATH, held to the promise its marker makes.

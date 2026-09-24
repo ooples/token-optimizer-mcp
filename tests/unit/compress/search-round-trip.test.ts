@@ -1,5 +1,5 @@
 import { compressSearchResults } from '../../../src/compress/search.js';
-import { rehydrate } from '../../support/rehydrate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 /**
  * The gate for the engine's ORDINARY output.

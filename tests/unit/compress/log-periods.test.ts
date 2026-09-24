@@ -4,7 +4,7 @@ import { compressLogPeriods } from '../../../src/compress/log-periods.js';
 // The shared decoder rather than a local copy: it knows this marker already, and
 // unlike a private expander it REFUSES an unrecognised one instead of passing it
 // through as a line of text.
-import { rehydrate } from '../../support/rehydrate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 const protectedLine = (line: string) => /ERROR|AssertionError/.test(line);
 

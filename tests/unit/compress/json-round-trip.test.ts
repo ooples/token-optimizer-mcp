@@ -2,7 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import { compressBlock } from '../../../src/compress/router.js';
 import { DEFAULT_TUNING } from '../../../src/compress/options.js';
 import { jsonLexemes } from '../../support/json-lexemes.js';
-import { rehydrate } from '../../support/rehydrate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 /**
  * THE JSON ENGINE HAS THE LARGEST MEASURED REDUCTION AND, UNTIL NOW, NO GATE.
