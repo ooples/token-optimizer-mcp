@@ -53,38 +53,40 @@ handed the identical bytes.
 
 | workload             | payload |         theirs |            ours | ours, dial on   |
 | -------------------- | ------: | -------------: | --------------: | --------------- |
-| agent-loop           | 172,110 |    8.1% / 6.7% |   93.8% / 94.7% | 100.0% / 100.0% |
-| agent-loop-logs      | 328,490 |    4.5% / 3.1% |   96.3% / 97.1% | 100.0% / 100.0% |
+| agent-loop           | 172,110 |  41.9% / 46.7% |   93.8% / 94.7% | 100.0% / 100.0% |
+| agent-loop-logs      | 328,490 |  51.3% / 45.8% |   96.3% / 97.1% | 100.0% / 100.0% |
 | browser-session      | 782,294 |  21.8% / 13.6% |    5.6% / 24.1% | 100.0% / 99.9%  |
-| code-search          | 131,444 |  99.5% / 99.5% |   95.8% / 96.5% | 99.9% / 99.9%   |
+| code-search          | 131,444 |  47.5% / 53.5% |   95.8% / 96.5% | 99.9% / 99.9%   |
 | codebase-exploration | 136,113 |  99.7% / 99.6% |   53.2% / 44.9% | 100.0% / 99.9%  |
 | grep-output          |  75,399 |  99.6% / 99.6% |   50.4% / 49.8% | 99.9% / 99.9%   |
 | human-authored-json  |  38,645 |  32.8% / 31.3% |   96.9% / 97.2% | 99.8% / 99.9%   |
-| issue-triage         | 109,534 |  99.4% / 99.5% |   95.3% / 95.9% | 99.9% / 99.9%   |
+| issue-triage         | 109,534 |  53.1% / 54.4% |   95.3% / 95.9% | 99.9% / 99.9%   |
 | raw-build-log        | 158,237 |  99.8% / 99.8% |   58.0% / 40.1% | 100.0% / 100.0% |
-| relevance-probe      |  49,367 |  98.5% / 98.8% |   96.1% / 97.0% | 99.9% / 99.9%   |
-| repeated-reads       | 152,321 |  23.0% / 21.6% |   59.5% / 48.5% | 100.0% / 100.0% |
-| sre-debugging        | 312,456 |  99.8% / 99.8% |   97.1% / 97.7% | 100.0% / 100.0% |
+| relevance-probe      |  49,367 |  64.3% / 65.4% |   96.1% / 97.0% | 99.9% / 99.9%   |
+| repeated-reads       | 152,321 |  22.8% / 20.5% |   59.5% / 48.5% | 100.0% / 100.0% |
+| sre-debugging        | 312,456 |  88.4% / 90.5% |   97.1% / 97.7% | 100.0% / 100.0% |
 
-Recorded 2026-09-24 at `3dc70c5a`, by the command in the record's `regenerate` field.
-That second arm needs a HeadRoom clone, so CI cannot re-derive it the way it
-re-derives the table below -- it checks this provenance and these figures
-against `bench/compression/headroom/results/head-to-head.json` instead.
+Recorded 2026-09-24 at `d0dd35d5`, by the command in the
+record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
+re-derive it the way it re-derives the table below -- it checks this provenance and
+these figures against `bench/compression/headroom/results/head-to-head.json` instead.
 
 <!-- HEADROOM-TABLE:END -->
 
 Over the corpus the shipped default takes **58.6%** of the characters and
-**76.9%** of the tokens; theirs takes 49.7% and 60.0%. Nothing is unrecoverable
+**76.9%** of the tokens; theirs takes 51.3% and 62.8%. Nothing is unrecoverable
 on either side.
 
-**Read the rows, though, because eight of them are not ours.** On
+**Read the rows, though, because four of them are not ours.** On
 `grep-output`, `codebase-exploration` and `raw-build-log` they report ~99.7% and
 we report 50–58%, and that gap is not a compression result. Their number there is
 a **content-cache reference**: the block is not made smaller, it is taken out of
 the request, put in a store, and replaced by a 24-character `<<ccr:...>>` marker.
 Ours are real reductions of text that is still in the request and still readable.
 The two columns are measuring different things, and the honest way to say so is
-to publish the like-for-like beside them.
+to publish the like-for-like beside them. The fourth, `browser-session`, is not
+that: it is a real loss on characters, 5.6% against their 21.8%, and we take it
+back only on tokens.
 
 **`ours, dial on` is that like-for-like, and it is substitution, not reduction.**
 Set `spillWholeBlockBelow` and a block our engines could not compress is moved
@@ -148,18 +150,18 @@ in prose is a fact about the tree it was measured on, which is why
 above from the harness rather than trusting it.
 
 **Reduction is not the only column, and the other one goes to them.** Scored
-symmetrically on their own fixtures, of 5,702 retention units they keep **1,750**
+symmetrically on their own fixtures, of 5,702 retention units they keep **2,210**
 directly visible in the text they send and we keep **852** — we reach a higher
 reduction partly by eliding harder, into a spill about 0.44x the size of the
 input. A further **1,582** of ours are reconstructible from the output alone with
 no extra turn, and **3,268** are behind a path in the output, one `Read` away;
-theirs redeems 3,952 through its store, one retrieval call away. **Nothing is
+theirs redeems 3,492 through its store, one retrieval call away. **Nothing is
 unrecoverable on either side.** All of those numbers belong in any quote of any
 of them.
 
 Against the four comparators in this reimplemented arm: **ours on all four.**
 Against their real implementation on all twelve workloads, the table at the top
-of this section: **ours on 4 of 12 by default, 12 of 12 with the dial on**, and
+of this section: **ours on 8 of 12 by default, 12 of 12 with the dial on**, and
 ours on the corpus total in both denominators either way.
 
 The two columns come from different arms of the same engine, and that is the
