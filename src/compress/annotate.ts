@@ -97,3 +97,55 @@ export function count(
 export function span(path: string, start: number, end: number): string {
   return start === end ? `${path}:${start}` : `${path}:${start}-${end}`;
 }
+
+/**
+ * An ascending index list, as gaps rather than absolutes.
+ *
+ * `positions=[...]` on a log template held one absolute line number per
+ * occurrence, and on a dense template that is most of what the template costs:
+ * on the `raw-build-log` fixture the four lists were 7,897 of the block's
+ * 46,064 characters, 17%, to say something the reader almost never reads
+ * digit by digit. The positions are ascending and usually near-consecutive, so
+ * the gap between them is a one-digit number where the absolute is four, and a
+ * run of equal gaps folds. Same 1,800 line numbers, 3,347 characters.
+ *
+ * The form is `first,gap,gap*repeat,...` where every gap is the step from the
+ * previous position. Gaps are >= 1, so `*` can only ever mean a repeat count
+ * and the grammar stays unambiguous.
+ */
+export function encodeGaps(positions: readonly number[]): string {
+  if (!positions.length) return '[]';
+  const out: string[] = [String(positions[0])];
+  let gap = 0;
+  let run = 0;
+  const flush = () => {
+    if (!run) return;
+    out.push(run > 1 ? `${gap}*${run}` : String(gap));
+  };
+  for (let i = 1; i < positions.length; i += 1) {
+    const step = positions[i] - positions[i - 1];
+    if (step === gap) {
+      run += 1;
+      continue;
+    }
+    flush();
+    gap = step;
+    run = 1;
+  }
+  flush();
+  return `[${out.join(',')}]`;
+}
+
+/** The inverse of {@link encodeGaps}. */
+export function decodeGaps(encoded: string): number[] {
+  const inner = encoded.slice(1, -1);
+  if (!inner) return [];
+  const tokens = inner.split(',');
+  const positions = [Number(tokens[0])];
+  for (const token of tokens.slice(1)) {
+    const [gap, repeat] = token.split('*');
+    for (let n = 0; n < (repeat ? Number(repeat) : 1); n += 1)
+      positions.push(positions[positions.length - 1] + Number(gap));
+  }
+  return positions;
+}

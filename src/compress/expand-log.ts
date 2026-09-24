@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { PathAddressedError, pathAddressed } from './annotate.js';
+import { PathAddressedError, decodeGaps, pathAddressed } from './annotate.js';
 
 /** Independent decoder for the inline formats, using no original input. */
 /**
@@ -30,16 +30,30 @@ export function expandLog(text: string): string {
     };
     for (const line of lines) {
       const template =
-        /^(.*)  \[(\d+) occurrences, positions=(\[[\d,]+\]); # = (.*)\]$/s.exec(
+        /^(.*)  \[(\d+) occurrences, (positions|gaps)=(\[[\d,*]*\]); # = (.*)\]$/s.exec(
           line
+        );
+      // FAIL CLOSED ON A TEMPLATE THIS DECODER CANNOT READ. A grammar change
+      // inside the brackets -- absolute positions became gaps here -- makes the
+      // match above fail, and without this the line falls through to
+      // `retained.push` and is reported as one ordinary log line. Every
+      // occurrence it stood for is then missing from a reconstruction that
+      // claims to have succeeded. A shape that announces itself as a template
+      // and does not parse is an error, not a line.
+      if (templates && !template && / {2}\[\d+ occurrences, /.test(line))
+        throw new Error(
+          `expandLog: unreadable template ${JSON.stringify(line.slice(0, 120))}`
         );
       const scattered =
         /^\[\.\.\. the same line, (\d+) more times? elsewhere; before scattered folding (\{.*\})\]$/.exec(
           line
         );
       if (templates && template) {
-        const positions: number[] = JSON.parse(template[3]);
-        const rows = template[4].split(' | ');
+        const positions: number[] =
+          template[3] === 'gaps'
+            ? decodeGaps(template[4])
+            : JSON.parse(template[4]);
+        const rows = template[5].split(' | ');
         assert.equal(rows.length, Number(template[2]));
         assert.equal(rows.length, positions.length);
         rows.forEach((row, i) => {

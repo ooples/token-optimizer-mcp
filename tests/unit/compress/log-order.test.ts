@@ -63,7 +63,7 @@ describe('lossless log order and whitespace', () => {
     );
     const input = lines.join('\n');
     const out = compressLog(input);
-    expect(out.text).toContain('positions=');
+    expect(out.text).toContain('gaps=');
     expect(out.text).toContain('issue #123');
     expect(expandLog(out.text)).toBe(input);
   });
