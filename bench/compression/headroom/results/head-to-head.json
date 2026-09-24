@@ -2,7 +2,7 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-24",
-  "commit": "072e618ffd3aa6038678dd2b8361d89e777b5716",
+  "commit": "728433187d7a1fdd5489a4cd0a2d7cdd1696041a",
   "capture": {
     "dir": "hr-cold2/out",
     "theirsDigest": "0c2663858b875373"
@@ -61,14 +61,14 @@
       "payload": "782294",
       "arm": "router",
       "chars": {
-        "ours": "93.5%",
-        "body": "49.7%",
+        "ours": "93.7%",
+        "body": "49.9%",
         "sub": "100.0%",
         "theirs": "21.8%"
       },
       "tokens": {
-        "ours": "26.1%",
-        "body": "35.4%",
+        "ours": "28.9%",
+        "body": "35.6%",
         "sub": "99.9%",
         "theirs": "13.6%"
       },
@@ -109,14 +109,14 @@
       "payload": "136113",
       "arm": "router",
       "chars": {
-        "ours": "56.8%",
-        "body": "40.2%",
+        "ours": "57.4%",
+        "body": "40.8%",
         "sub": "100.0%",
         "theirs": "99.7%"
       },
       "tokens": {
-        "ours": "50.1%",
-        "body": "34.7%",
+        "ours": "50.3%",
+        "body": "34.8%",
         "sub": "99.9%",
         "theirs": "99.6%"
       },
@@ -133,20 +133,20 @@
       "payload": "75399",
       "arm": "router",
       "chars": {
-        "ours": "50.4%",
-        "body": "44.3%",
+        "ours": "57.4%",
+        "body": "51.0%",
         "sub": "99.9%",
         "theirs": "99.6%"
       },
       "tokens": {
-        "ours": "49.8%",
-        "body": "42.7%",
+        "ours": "52.8%",
+        "body": "45.4%",
         "sub": "99.9%",
         "theirs": "99.6%"
       },
       "retention": {
-        "inContext": "2",
-        "reconstructible": "912",
+        "inContext": "1",
+        "reconstructible": "913",
         "recoverable": "0",
         "theirsInContext": "0",
         "subUnrecoverable": "0"
@@ -205,14 +205,14 @@
       "payload": "158237",
       "arm": "router",
       "chars": {
-        "ours": "67.6%",
-        "body": "60.9%",
+        "ours": "70.7%",
+        "body": "63.8%",
         "sub": "100.0%",
         "theirs": "99.8%"
       },
       "tokens": {
-        "ours": "45.6%",
-        "body": "41.0%",
+        "ours": "47.7%",
+        "body": "43.1%",
         "sub": "100.0%",
         "theirs": "99.8%"
       },
@@ -253,14 +253,14 @@
       "payload": "152321",
       "arm": "router",
       "chars": {
-        "ours": "73.9%",
-        "body": "71.6%",
+        "ours": "74.3%",
+        "body": "71.9%",
         "sub": "100.0%",
         "theirs": "22.8%"
       },
       "tokens": {
-        "ours": "69.6%",
-        "body": "68.5%",
+        "ours": "69.7%",
+        "body": "68.7%",
         "sub": "100.0%",
         "theirs": "20.5%"
       },
@@ -299,11 +299,11 @@
   ],
   "totals": {
     "chars": {
-      "ours": "88.4%",
+      "ours": "89.0%",
       "theirs": "51.3%"
     },
     "tokens": {
-      "ours": "79.8%",
+      "ours": "80.3%",
       "theirs": "62.8%"
     },
     "sub": {
@@ -320,10 +320,10 @@
     "retention": {
       "units": "5702",
       "inContext": {
-        "ours": "151",
+        "ours": "150",
         "theirs": "2210"
       },
-      "reconstructible": "2283",
+      "reconstructible": "2284",
       "recoverable": {
         "ours": "3268",
         "theirs": "3492"
