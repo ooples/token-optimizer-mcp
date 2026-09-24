@@ -173,18 +173,39 @@ export function compressSearchResults(
   text: string,
   _ctx: EngineContext = {}
 ): CompressionResult {
-  const newline = text.includes('\r\n') ? '\r\n' : '\n';
-  // A single hunk header cannot describe mixed line endings. Preserve such
-  // input verbatim; uniform LF/CRLF retains its original byte convention.
-  if (/\r(?!\n)/.test(text) || (newline === '\r\n' && /(?<!\r)\n/.test(text)))
-    return unchanged(text);
-  const lines = text.split(newline);
-  const out: string[] = [];
+  // A HUNK HEADER CANNOT DESCRIBE MIXED LINE ENDINGS -- and the guard that
+  // enforced that refused the WHOLE block on finding any, which made one stray
+  // LF among 747 CRLF lines cost a 60KB grep dump its entire 56% saving. The
+  // rule was right; its scope was not. Carrying each line's own terminator makes
+  // the distinction local: a hunk ends where the terminator changes, so no
+  // header ever claims lines it cannot describe, and only the lines actually
+  // straddling the change fall back to their original prefixes.
+  type Line = { raw: string; eol: string };
+  const lines: Line[] = [];
+  for (let i = 0; i < text.length; ) {
+    let end = i;
+    while (end < text.length && text[end] !== '\n' && text[end] !== '\r') end++;
+    const raw = text.slice(i, end);
+    // A lone CR is a terminator in its own right, not a character inside the
+    // line. Treating it as one is what lets this function stop refusing it.
+    const eol =
+      end >= text.length
+        ? ''
+        : text[end] === '\r' && text[end + 1] === '\n'
+          ? '\r\n'
+          : text[end];
+    lines.push({ raw, eol });
+    i = end + eol.length;
+  }
+  const out: Line[] = [];
   let factoredDeclarations = false;
 
   let path: string | null = null;
   let start = 0;
   let previous = 0;
+  // The terminator the open hunk is built from. A line ending differently
+  // cannot join it, however contiguous its line number.
+  let hunkEol = '';
   // THE SEPARATOR IS CONTENT, so the buffer keeps it rather than the text
   // alone. A hunk too short to earn a header is restored line by line, and
   // rebuilding those lines with a hardcoded `:` turned every ripgrep CONTEXT
@@ -192,7 +213,7 @@ export function compressSearchResults(
   // `src/a.ts:11:  return 1;`. That is the exact distinction this file's
   // header says must survive, quietly inverted on the most common shape in
   // grep output: the single-line hunk.
-  let buffer: { sep: string; text: string }[] = [];
+  let buffer: { sep: string; text: string; eol: string }[] = [];
   let matchedOffsets: number[] = [];
 
   const flush = (): void => {
@@ -203,7 +224,10 @@ export function compressSearchResults(
       // separator, so the line's own leading whitespace is already in `text`,
       // and inserting another doubled it on every restored line.
       buffer.forEach((line, i) =>
-        out.push(`${path}:${start + i}${line.sep}${line.text}`)
+        out.push({
+          raw: `${path}:${start + i}${line.sep}${line.text}`,
+          eol: line.eol,
+        })
       );
     } else {
       const range = start === previous ? `${start}` : `${start}-${previous}`;
@@ -211,13 +235,26 @@ export function compressSearchResults(
       // from a `:` hit without a prefix on every line.
       const marks = matchNote(matchedOffsets, start, previous);
       const declarations = declarationRows(buffer);
+      // Every line in the hunk shares one terminator, so the synthesised header
+      // can only be written with that one.
+      const eol = buffer[0].eol;
       if (declarations) {
-        out.push(`${path}:${range}${marks}${declarations.note}`);
-        for (const row of declarations.rows) out.push(row);
+        out.push({ raw: `${path}:${range}${marks}${declarations.note}`, eol });
+        // The hunk's LAST emitted line carries the last source line's own
+        // terminator, which is absent when the text ends without one.
+        declarations.rows.forEach((row, i) =>
+          out.push({
+            raw: row,
+            eol:
+              i === declarations.rows.length - 1
+                ? buffer[buffer.length - 1].eol
+                : eol,
+          })
+        );
         factoredDeclarations = true;
       } else {
-        out.push(`${path}:${range}${marks}`);
-        for (const line of buffer) out.push(line.text);
+        out.push({ raw: `${path}:${range}${marks}`, eol });
+        for (const line of buffer) out.push({ raw: line.text, eol: line.eol });
       }
     }
     path = null;
@@ -225,26 +262,34 @@ export function compressSearchResults(
     matchedOffsets = [];
   };
 
-  for (const raw of lines) {
-    const hit = parseHit(raw);
+  for (const line of lines) {
+    const hit = parseHit(line.raw);
     if (!hit) {
       flush();
-      out.push(raw);
+      out.push(line);
       continue;
     }
-    const contiguous = path === hit.path && hit.line === previous + 1;
+    // AN ABSENT TERMINATOR IS NOT A TERMINATOR CHANGE. Only the last line of
+    // the text can have one, and there is nothing after it for a header to
+    // describe wrongly. Excluding it split that line out of its hunk and
+    // restored its full prefix, costing compression on every block that does
+    // not end with a newline -- which is most of them.
+    const sameEnding = line.eol === hunkEol || line.eol === '';
+    const contiguous =
+      path === hit.path && hit.line === previous + 1 && sameEnding;
     if (!contiguous) {
       flush();
       path = hit.path;
       start = hit.line;
+      hunkEol = line.eol;
     }
     previous = hit.line;
     if (hit.matched) matchedOffsets.push(hit.line);
-    buffer.push({ sep: hit.sep, text: hit.text });
+    buffer.push({ sep: hit.sep, text: hit.text, eol: line.eol });
   }
   flush();
 
-  const body = out.join(newline);
+  const body = out.map((line) => line.raw + line.eol).join('');
   if (body.length >= text.length) return unchanged(text);
 
   return {
