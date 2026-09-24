@@ -358,6 +358,31 @@ function encodeValue(value: string): string {
 const MIN_TEMPLATE = 4;
 
 /**
+ * Characters a shared lead must save before it is worth factoring out.
+ *
+ * NOT AN OVERHEAD FIGURE, A LEGIBILITY PRICE. Factoring turns a stamp the model
+ * can read -- and the user can grep -- into two halves it has to join, and
+ * in-context retention is the column we are already behind on. On a group of
+ * eight that buys about thirty characters, which is not worth anything; on the
+ * four-hundred-line repeats in a real build log it is thousands of tokens.
+ * Paying the price only where the saving is real keeps small folds readable.
+ */
+const LEAD_MIN_SAVING = 400;
+
+/** The longest text every one of these begins with. */
+function commonPrefix(values: readonly string[]): string {
+  if (values.length === 0) return '';
+  let prefix = values[0];
+  for (const value of values.slice(1)) {
+    let n = 0;
+    while (n < prefix.length && n < value.length && prefix[n] === value[n]) n++;
+    prefix = prefix.slice(0, n);
+    if (!prefix) break;
+  }
+  return prefix;
+}
+
+/**
  * Collapses lines that differ only in their numbers.
  *
  * THE LINES THAT SURVIVE FOLDING ARE THE PROBLEM. Load-bearing lines are
@@ -511,11 +536,34 @@ function foldScattered(lines: string[], elisions: Elision[]): string[] {
     const first = members[0];
     // Positions refer to the sequence entering this stage, not timestamps.
     // Restore templates, then scattered copies, then adjacent runs.
-    const copies = members
+    const copies: Array<[number, string]> = members
       .slice(1)
       .map((index) => [index + 1, stampOf(lines[index])]);
+
+    // EVERY COPY CARRIES A WHOLE TIMESTAMP, and on a log confined to one hour
+    // they agree for the first fourteen characters of it. Those bytes came to
+    // 21,760 tokens on raw-build-log -- 55% of the compressed block -- spent
+    // restating `2026-09-09T18:` about two thousand times. Stating the shared
+    // lead once is the same trade the template folding above makes, moved to
+    // the other encoding.
+    //
+    // Emitted only when it clears its own overhead, and read back as `''` when
+    // absent, so an output written before this still decodes unchanged.
+    const lead = commonPrefix(copies.map(([, prefix]) => prefix));
+    const worthLeading = lead.length * copies.length >= LEAD_MIN_SAVING;
     const annotation = inlineMarker(
-      `the same line, ${count(copies.length, 'more time')} elsewhere; before scattered folding ${JSON.stringify({ firstPrefix: stampOf(lines[first]), copiesAtLines: copies })}`,
+      `the same line, ${count(copies.length, 'more time')} elsewhere; before scattered folding ${JSON.stringify(
+        worthLeading
+          ? {
+              firstPrefix: stampOf(lines[first]),
+              lead,
+              copiesAtLines: copies.map(([position, prefix]) => [
+                position,
+                prefix.slice(lead.length),
+              ]),
+            }
+          : { firstPrefix: stampOf(lines[first]), copiesAtLines: copies }
+      )}`,
       null
     );
     const removedSize = members
