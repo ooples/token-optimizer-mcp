@@ -48,8 +48,8 @@ import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
 import { compressBlock } from '../../dist/compress/router.js';
 import { compressBody } from '../../dist/proxy/server.js';
-import { rehydrate } from '../../dist/compress/rehydrate.js';
-import { imageSize } from '../../dist/compress/images.js';
+import { rehydrateSequence } from '../../dist/compress/rehydrate.js';
+import { describeImage, imageSize } from '../../dist/compress/images.js';
 import { PathAddressedError } from '../../dist/compress/annotate.js';
 
 const dir = process.argv[2];
@@ -241,9 +241,10 @@ const refusals = new Map();
 const pathRefusals = new Map();
 function recoverable(text, label) {
   const parts = [];
+  let step = rehydrateSequence();
   const decode = (fragment) => {
     try {
-      const back = rehydrate(fragment);
+      const back = step(fragment);
       if (back !== fragment) parts.push(back);
     } catch (error) {
       if (error instanceof PathAddressedError) {
@@ -260,6 +261,30 @@ function recoverable(text, label) {
   } catch {
     parsed = undefined;
   }
+
+  // THE IMAGES ARE READ OFF THE OUTPUT, NOT OFF THE INPUT, because the question
+  // is what a reader holding only the output can rebuild. `dedupImages` keeps
+  // the first copy of every distinct image and numbers the rest against it, so
+  // the first copies are still here -- but only the parsed structure says which
+  // string leaf is an image, which is why the decoder is handed them rather
+  // than left to guess from the bytes.
+  const imagesAbove = [];
+  const findImages = (node) => {
+    if (Array.isArray(node)) {
+      node.forEach(findImages);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+    const image = describeImage(node);
+    if (image) {
+      if (!imagesAbove.includes(image.data)) imagesAbove.push(image.data);
+      return;
+    }
+    Object.values(node).forEach(findImages);
+  };
+  if (parsed !== undefined) findImages(parsed);
+  step = rehydrateSequence(imagesAbove);
+
   const walk = (node) => {
     if (typeof node === 'string') decode(node);
     else if (Array.isArray(node)) node.forEach(walk);
@@ -675,6 +700,15 @@ if (unconserved.length)
 // unrecoverable, so the gap costs us and the list is the work queue.
 for (const [label, reason] of refusals)
   console.log(`DECODER REFUSED on ${label}: ${reason}`);
+
+// COUNTED SEPARATELY AND PRINTED SEPARATELY, because the two lines want opposite
+// fixes. The one above is a decoder that cannot read our own output; this one is
+// the design working -- content moved to a spill, one `Read` away -- and it was
+// being tallied into a variable nothing ever printed, which is the same as not
+// measuring it. A column of these growing is worth seeing; a column of these
+// being called defects is what put six by-design markers on the work queue.
+for (const [label, n] of pathRefusals)
+  console.log(`moved to a spill path on ${label}: ${n}`);
 
 // A body-arm loss fails the run even though the body RATIO does not gate it.
 // The ratio is published side by side because the locked decision was to show
