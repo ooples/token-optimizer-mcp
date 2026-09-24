@@ -2,9 +2,9 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-24",
-  "commit": "c786c869f01a808ae026cfc614b0a87be35d8d15",
+  "commit": "bbc0b8372cf86744e2da857402bf9ddda5c8471e",
   "capture": {
-    "dir": "hr-cold4/out",
+    "dir": "hr5/out",
     "theirsDigest": "0c2663858b875373"
   },
   "workloads": [
@@ -35,6 +35,21 @@
         "presetZeroTurn": "11",
         "theirsZeroTurn": "72",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "13",
+          "theirs": "0",
+          "preset": "13"
+        },
+        "handedTokens": {
+          "ours": "2458",
+          "theirs": "24739"
+        },
+        "wholeTokens": {
+          "ours": "36344",
+          "theirs": "24739"
+        }
       }
     },
     {
@@ -64,6 +79,21 @@
         "presetZeroTurn": "40",
         "theirsZeroTurn": "1070",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "11",
+          "theirs": "0",
+          "preset": "11"
+        },
+        "handedTokens": {
+          "ours": "3011",
+          "theirs": "57227"
+        },
+        "wholeTokens": {
+          "ours": "79326",
+          "theirs": "57227"
+        }
       }
     },
     {
@@ -93,6 +123,21 @@
         "presetZeroTurn": "0",
         "theirsZeroTurn": "281",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "0",
+          "theirs": "2",
+          "preset": "1"
+        },
+        "handedTokens": {
+          "ours": "23554",
+          "theirs": "28616"
+        },
+        "wholeTokens": {
+          "ours": "23554",
+          "theirs": "32838"
+        }
       }
     },
     {
@@ -122,6 +167,21 @@
         "presetZeroTurn": "10",
         "theirsZeroTurn": "91",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "2",
+          "theirs": "0",
+          "preset": "2"
+        },
+        "handedTokens": {
+          "ours": "1275",
+          "theirs": "16723"
+        },
+        "wholeTokens": {
+          "ours": "22967",
+          "theirs": "16723"
+        }
       }
     },
     {
@@ -151,6 +211,21 @@
         "presetZeroTurn": "0",
         "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "3",
+          "theirs": "4",
+          "preset": "4"
+        },
+        "handedTokens": {
+          "ours": "19593",
+          "theirs": "144"
+        },
+        "wholeTokens": {
+          "ours": "41675",
+          "theirs": "34131"
+        }
       }
     },
     {
@@ -180,6 +255,21 @@
         "presetZeroTurn": "0",
         "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "0",
+          "theirs": "2",
+          "preset": "1"
+        },
+        "handedTokens": {
+          "ours": "9995",
+          "theirs": "93"
+        },
+        "wholeTokens": {
+          "ours": "9995",
+          "theirs": "18950"
+        }
       }
     },
     {
@@ -209,6 +299,21 @@
         "presetZeroTurn": "3",
         "theirsZeroTurn": "12",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "3",
+          "theirs": "1",
+          "preset": "3"
+        },
+        "handedTokens": {
+          "ours": "428",
+          "theirs": "10416"
+        },
+        "wholeTokens": {
+          "ours": "11066",
+          "theirs": "25136"
+        }
       }
     },
     {
@@ -238,6 +343,21 @@
         "presetZeroTurn": "0",
         "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "2",
+          "theirs": "0",
+          "preset": "2"
+        },
+        "handedTokens": {
+          "ours": "1438",
+          "theirs": "16014"
+        },
+        "wholeTokens": {
+          "ours": "22601",
+          "theirs": "16014"
+        }
       }
     },
     {
@@ -267,6 +387,21 @@
         "presetZeroTurn": "0",
         "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "0",
+          "theirs": "2",
+          "preset": "1"
+        },
+        "handedTokens": {
+          "ours": "30668",
+          "theirs": "96"
+        },
+        "wholeTokens": {
+          "ours": "30668",
+          "theirs": "58622"
+        }
       }
     },
     {
@@ -296,6 +431,21 @@
         "presetZeroTurn": "0",
         "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "2",
+          "theirs": "0",
+          "preset": "2"
+        },
+        "handedTokens": {
+          "ours": "479",
+          "theirs": "5608"
+        },
+        "wholeTokens": {
+          "ours": "9038",
+          "theirs": "5608"
+        }
       }
     },
     {
@@ -325,6 +475,21 @@
         "presetZeroTurn": "0",
         "theirsZeroTurn": "331",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "3",
+          "theirs": "1",
+          "preset": "4"
+        },
+        "handedTokens": {
+          "ours": "14202",
+          "theirs": "37273"
+        },
+        "wholeTokens": {
+          "ours": "36665",
+          "theirs": "44743"
+        }
       }
     },
     {
@@ -354,6 +519,21 @@
         "presetZeroTurn": "42",
         "theirsZeroTurn": "353",
         "subUnrecoverable": "0"
+      },
+      "cost": {
+        "turns": {
+          "ours": "2",
+          "theirs": "2",
+          "preset": "2"
+        },
+        "handedTokens": {
+          "ours": "2342",
+          "theirs": "9659"
+        },
+        "wholeTokens": {
+          "ours": "68167",
+          "theirs": "75452"
+        }
       }
     }
   ],
@@ -361,6 +541,22 @@
     "chars": {
       "ours": "89.0%",
       "theirs": "51.3%"
+    },
+    "cost": {
+      "usdPerMtok": "5",
+      "turns": {
+        "ours": "41",
+        "theirs": "14",
+        "preset": "46"
+      },
+      "handedTokens": {
+        "ours": "109443",
+        "theirs": "206608"
+      },
+      "wholeTokens": {
+        "ours": "392066",
+        "theirs": "410183"
+      }
     },
     "tokens": {
       "ours": "80.3%",
