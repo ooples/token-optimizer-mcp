@@ -1,6 +1,10 @@
 import { expandLongRepeats } from './runs.js';
 import { expandLog } from './expand-log.js';
-import { PATH_ID_PREFIX } from './search.js';
+import {
+  BACK_REFERENCE,
+  ESCAPED_REFERENCE,
+  PATH_ID_PREFIX,
+} from './search.js';
 import { findReferent, readBackReference } from './dedup.js';
 import { readImageBackReference } from './images.js';
 
@@ -227,6 +231,14 @@ export function expandSearchHunks(text: string): string {
       throw new Error(`rehydrate: hunk path ${id} is not in the path table`);
     return path;
   };
+  // THE BODY LINES THE ENCODER NUMBERED, AND ONLY THOSE. A back-reference
+  // names a line by its position among the body lines of hunks written
+  // WITHOUT a declaration template -- the same set the encoder walked, in the
+  // same order -- so neither side has to carry the numbering. A declaration
+  // row is two tab-separated fields rather than content and was never
+  // counted; counting it here would shift every ordinal after the first one.
+  const literals = new Map<number, string>();
+  let ordinal = 0;
   const out: Line[] = [];
   for (let cursor = 0; cursor < lines.length; cursor += 1) {
     const header = SEARCH_HEADER.exec(lines[cursor].raw);
@@ -258,6 +270,28 @@ export function expandSearchHunks(text: string): string {
     body.forEach((row, offset) => {
       const line = start + offset;
       let content = row.raw;
+      if (!template) {
+        const reference = BACK_REFERENCE.exec(row.raw);
+        if (reference) {
+          // A REFERENCE FORWARD OR TO NOTHING IS A TRUNCATED BLOCK. Emitting
+          // the marker as content would report a reconstruction carrying a
+          // line the original never held.
+          const referent = literals.get(Number(reference[1]));
+          if (referent === undefined)
+            throw new Error(
+              `rehydrate: hunk line ${row.raw} references no earlier line`
+            );
+          content = referent;
+        } else {
+          // AN ESCAPED LINE IS CONTENT, and the content is the form with one
+          // fewer `=`. Registering the escape instead would hand a later
+          // reference the wrong line.
+          const escaped = ESCAPED_REFERENCE.exec(row.raw);
+          if (escaped) content = `[=${escaped[1]}]`;
+          literals.set(ordinal, content);
+        }
+        ordinal += 1;
+      }
       if (template) {
         const fields = row.raw.split('\t');
         if (fields.length !== 2)
