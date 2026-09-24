@@ -45,6 +45,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
 import { compressBlock } from '../../dist/compress/router.js';
@@ -908,9 +909,31 @@ if (process.argv[3] === '--record') {
       'bench/compression/headroom/results/head-to-head.json',
     recordedAt: new Date().toISOString().slice(0, 10),
     commit,
+    // WHICH CAPTURE THIS WAS SCORED AGAINST, because the out-dir is a
+    // positional argument and a stale one is silent. A re-record pointed at an
+    // out-dir left over from an earlier session reproduced a competitor column
+    // that had already been retracted: our side moved, theirs reverted, and the
+    // published standing went from nine workloads to five. Nothing in the
+    // record showed it, because the record held only the ratios -- and a ratio
+    // that changes looks exactly like a measurement that changed. The digest
+    // and the per-row arm below are what make that diff legible.
+    capture: {
+      // The tail only. This file is public and the out-dir is a scratch path on
+      // whoever ran it; the digest is what identifies the capture, the name is
+      // only there to say which one a re-run should replace.
+      dir: dir.split(/[\\/]/).filter(Boolean).slice(-2).join('/'),
+      theirsDigest: createHash('sha256')
+        .update(readFileSync(join(dir, 'theirs.json')))
+        .digest('hex')
+        .slice(0, 16),
+    },
     workloads: rows.map((r) => ({
       name: r.name,
       payload: String(r.before),
+      // Their nine-arm sweep picks a winner per workload, and which one it
+      // picked is the difference between "they compressed it" and "they moved
+      // it to a store". A ratio alone cannot say that.
+      arm: theirs[r.name]?.arm ?? null,
       chars: {
         ours: pct(r.ours),
         body: r.bodyRatio === null ? null : pct(r.bodyRatio),
