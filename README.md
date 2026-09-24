@@ -53,20 +53,20 @@ handed the identical bytes.
 
 | workload             | payload |        theirs |          ours | ours, dial on   |
 | -------------------- | ------: | ------------: | ------------: | --------------- |
-| agent-loop           | 172,110 |   8.1% / 6.7% | 93.8% / 94.7% | 100.0% / 100.0% |
-| agent-loop-logs      | 328,490 |   4.5% / 3.1% | 96.3% / 97.1% | 100.0% / 100.0% |
+| agent-loop           | 172,110 | 41.9% / 46.7% | 93.8% / 94.7% | 100.0% / 100.0% |
+| agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% | 100.0% / 100.0% |
 | browser-session      | 782,294 | 21.8% / 13.6% | 93.5% / 26.1% | 100.0% / 99.9%  |
-| code-search          | 131,444 | 99.5% / 99.5% | 95.8% / 96.5% | 99.9% / 99.9%   |
+| code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% | 99.9% / 99.9%   |
 | codebase-exploration | 136,113 | 99.7% / 99.6% | 56.8% / 50.1% | 100.0% / 99.9%  |
 | grep-output          |  75,399 | 99.6% / 99.6% | 50.4% / 49.8% | 99.9% / 99.9%   |
 | human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% | 99.8% / 99.9%   |
-| issue-triage         | 109,534 | 99.4% / 99.5% | 95.3% / 95.9% | 99.9% / 99.9%   |
+| issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% | 99.9% / 99.9%   |
 | raw-build-log        | 158,237 | 99.8% / 99.8% | 67.6% / 45.6% | 100.0% / 100.0% |
-| relevance-probe      |  49,367 | 98.5% / 98.8% | 96.1% / 97.0% | 99.9% / 99.9%   |
-| repeated-reads       | 152,321 | 23.0% / 21.6% | 73.9% / 69.6% | 100.0% / 100.0% |
-| sre-debugging        | 312,456 | 99.8% / 99.8% | 97.1% / 97.7% | 100.0% / 100.0% |
+| relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% | 99.9% / 99.9%   |
+| repeated-reads       | 152,321 | 22.8% / 20.5% | 73.9% / 69.6% | 100.0% / 100.0% |
+| sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% | 100.0% / 100.0% |
 
-Recorded 2026-09-24 at `30bf7220`, by the command in the
+Recorded 2026-09-24 at `072e618f`, by the command in the
 record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
 re-derive it the way it re-derives the table below -- it checks this provenance and
 these figures against `bench/compression/headroom/results/head-to-head.json` instead.
@@ -74,7 +74,7 @@ these figures against `bench/compression/headroom/results/head-to-head.json` ins
 <!-- HEADROOM-TABLE:END -->
 
 Over the corpus the shipped default takes **88.4%** of the characters and
-**79.8%** of the tokens; theirs takes 49.7% and 60.0%. Nothing is unrecoverable
+**79.8%** of the tokens; theirs takes 51.3% and 62.8%. Nothing is unrecoverable
 on either side.
 
 **Read the rows, though, because the ones we lose are not compression
@@ -168,17 +168,17 @@ above from the harness rather than trusting it.
 
 **Reduction is not the only column, and the other one goes to them.** Scored
 symmetrically on their own fixtures, of 5,702 retention units they keep
-**1,750** directly visible in the text they send and we keep **151** — we reach
+**2,210** directly visible in the text they send and we keep **151** — we reach
 a higher reduction partly by eliding harder, into a spill about 0.44x the size
 of the input. A further **2,283** of ours are reconstructible from the output
 alone with no extra turn, and **3,268** are behind a path in the output, one
-`Read` away; theirs redeems **3,952** through its store, one retrieval call away.
+`Read` away; theirs redeems **3,492** through its store, one retrieval call away.
 **Nothing is unrecoverable on either side.** All of those numbers belong in any
 quote of any of them.
 
 Against the four comparators in this reimplemented arm: **ours on all four.**
 Against their real implementation on all twelve workloads, the table at the top
-of this section: **ours on 5 of 12 by default, 12 of 12 with the dial on**, and
+of this section: **ours on 9 of 12 by default, 12 of 12 with the dial on**, and
 ours on the corpus total in both denominators either way. Their column is the
 best of the nine configurations that capture holds, and on the seven rows they
 take it is the content-cache reference described above rather than a smaller

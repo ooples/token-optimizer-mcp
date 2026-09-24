@@ -2,57 +2,64 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-24",
-  "commit": "30bf7220a005f78b97dc61e4cba2b7dd3a9fcf9b",
+  "commit": "072e618ffd3aa6038678dd2b8361d89e777b5716",
+  "capture": {
+    "dir": "hr-cold2/out",
+    "theirsDigest": "0c2663858b875373"
+  },
   "workloads": [
     {
       "name": "agent-loop",
       "payload": "172110",
+      "arm": "pipeline@0.10",
       "chars": {
         "ours": "93.8%",
         "body": "0.0%",
         "sub": "100.0%",
-        "theirs": "8.1%"
+        "theirs": "41.9%"
       },
       "tokens": {
         "ours": "94.7%",
         "body": "0.0%",
         "sub": "100.0%",
-        "theirs": "6.7%"
+        "theirs": "46.7%"
       },
       "retention": {
         "inContext": "11",
         "reconstructible": "0",
         "recoverable": "61",
-        "theirsInContext": "61",
+        "theirsInContext": "72",
         "subUnrecoverable": "0"
       }
     },
     {
       "name": "agent-loop-logs",
       "payload": "328490",
+      "arm": "pipeline@0.10",
       "chars": {
         "ours": "96.3%",
         "body": "0.0%",
         "sub": "100.0%",
-        "theirs": "4.5%"
+        "theirs": "51.3%"
       },
       "tokens": {
         "ours": "97.1%",
         "body": "0.0%",
         "sub": "100.0%",
-        "theirs": "3.1%"
+        "theirs": "45.8%"
       },
       "retention": {
         "inContext": "40",
         "reconstructible": "0",
         "recoverable": "1030",
-        "theirsInContext": "1065",
+        "theirsInContext": "1070",
         "subUnrecoverable": "0"
       }
     },
     {
       "name": "browser-session",
       "payload": "782294",
+      "arm": "router",
       "chars": {
         "ours": "93.5%",
         "body": "49.7%",
@@ -76,29 +83,31 @@
     {
       "name": "code-search",
       "payload": "131444",
+      "arm": "router",
       "chars": {
         "ours": "95.8%",
         "body": "84.5%",
         "sub": "99.9%",
-        "theirs": "99.5%"
+        "theirs": "47.5%"
       },
       "tokens": {
         "ours": "96.5%",
         "body": "84.7%",
         "sub": "99.9%",
-        "theirs": "99.5%"
+        "theirs": "53.5%"
       },
       "retention": {
         "inContext": "10",
         "reconstructible": "0",
         "recoverable": "81",
-        "theirsInContext": "0",
+        "theirsInContext": "91",
         "subUnrecoverable": "0"
       }
     },
     {
       "name": "codebase-exploration",
       "payload": "136113",
+      "arm": "router",
       "chars": {
         "ours": "56.8%",
         "body": "40.2%",
@@ -122,6 +131,7 @@
     {
       "name": "grep-output",
       "payload": "75399",
+      "arm": "router",
       "chars": {
         "ours": "50.4%",
         "body": "44.3%",
@@ -145,6 +155,7 @@
     {
       "name": "human-authored-json",
       "payload": "38645",
+      "arm": "router",
       "chars": {
         "ours": "96.9%",
         "body": "47.0%",
@@ -168,17 +179,18 @@
     {
       "name": "issue-triage",
       "payload": "109534",
+      "arm": "router",
       "chars": {
         "ours": "95.3%",
         "body": "89.0%",
         "sub": "99.9%",
-        "theirs": "99.4%"
+        "theirs": "53.1%"
       },
       "tokens": {
         "ours": "95.9%",
         "body": "89.4%",
         "sub": "99.9%",
-        "theirs": "99.5%"
+        "theirs": "54.4%"
       },
       "retention": {
         "inContext": "0",
@@ -191,6 +203,7 @@
     {
       "name": "raw-build-log",
       "payload": "158237",
+      "arm": "router",
       "chars": {
         "ours": "67.6%",
         "body": "60.9%",
@@ -214,17 +227,18 @@
     {
       "name": "relevance-probe",
       "payload": "49367",
+      "arm": "router",
       "chars": {
         "ours": "96.1%",
         "body": "85.8%",
         "sub": "99.9%",
-        "theirs": "98.5%"
+        "theirs": "64.3%"
       },
       "tokens": {
         "ours": "97.0%",
         "body": "86.3%",
         "sub": "99.9%",
-        "theirs": "98.8%"
+        "theirs": "65.4%"
       },
       "retention": {
         "inContext": "0",
@@ -237,17 +251,18 @@
     {
       "name": "repeated-reads",
       "payload": "152321",
+      "arm": "router",
       "chars": {
         "ours": "73.9%",
         "body": "71.6%",
         "sub": "100.0%",
-        "theirs": "23.0%"
+        "theirs": "22.8%"
       },
       "tokens": {
         "ours": "69.6%",
         "body": "68.5%",
         "sub": "100.0%",
-        "theirs": "21.6%"
+        "theirs": "20.5%"
       },
       "retention": {
         "inContext": "1",
@@ -260,23 +275,24 @@
     {
       "name": "sre-debugging",
       "payload": "312456",
+      "arm": "crusher-lossy-ccr",
       "chars": {
         "ours": "97.1%",
         "body": "86.2%",
         "sub": "100.0%",
-        "theirs": "99.8%"
+        "theirs": "88.4%"
       },
       "tokens": {
         "ours": "97.7%",
         "body": "86.5%",
         "sub": "100.0%",
-        "theirs": "99.8%"
+        "theirs": "90.5%"
       },
       "retention": {
         "inContext": "42",
         "reconstructible": "0",
         "recoverable": "2087",
-        "theirsInContext": "0",
+        "theirsInContext": "353",
         "subUnrecoverable": "0"
       }
     }
@@ -284,11 +300,11 @@
   "totals": {
     "chars": {
       "ours": "88.4%",
-      "theirs": "49.7%"
+      "theirs": "51.3%"
     },
     "tokens": {
       "ours": "79.8%",
-      "theirs": "60.0%"
+      "theirs": "62.8%"
     },
     "sub": {
       "chars": "100.0%",
@@ -305,12 +321,12 @@
       "units": "5702",
       "inContext": {
         "ours": "151",
-        "theirs": "1750"
+        "theirs": "2210"
       },
       "reconstructible": "2283",
       "recoverable": {
         "ours": "3268",
-        "theirs": "3952"
+        "theirs": "3492"
       }
     }
   }
