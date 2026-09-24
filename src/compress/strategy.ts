@@ -771,6 +771,9 @@ export function v1Frontier(
   const respect = !attempt || frozen !== null;
   let out = pathAddressed(request, options, respect, floor);
   let reanchored = attempt;
+  // WHETHER THE OUTPUT WE SHIP RESPECTED A BOUNDARY, tracked rather than
+  // re-derived, because the revert below can replace `out` with one that does.
+  let respected = respect;
 
   // COMPRESSING NEW CONTENT COMMITS US TO IT. The moment we shrink a block,
   // the provider caches OUR bytes for it -- so next turn, when the client
@@ -784,14 +787,6 @@ export function v1Frontier(
     JSON.stringify(out.request).length < JSON.stringify(request).length
   )
     reanchored = true;
-
-  // The boundary to reuse next turn: whatever we already froze, or -- on the
-  // turn compression first bites -- the floor it bit at. Recorded only when
-  // something was actually removed, because a turn that changed nothing has
-  // committed us to nothing.
-  const removedAnything =
-    JSON.stringify(out.request).length < JSON.stringify(request).length;
-  const compressFrom = frozen ?? (removedAnything ? floor : null);
 
   // A REWRITE OF THE CACHED PREFIX HAS TO CLEAR ITS OWN COST. See
   // MIN_PREFIX_REWRITE_SHARE: below that share the 1.25x write we are about to
@@ -818,8 +813,34 @@ export function v1Frontier(
     if (removed < before * minRewriteShare(options.tuning)) {
       out = pathAddressed(request, options, true, floor);
       reanchored = false;
+      respected = true;
     }
   }
+
+  // The boundary to reuse next turn: whatever we already froze, or -- on the
+  // turn compression first bites -- the floor it bit at. Recorded only when
+  // something was actually removed, because a turn that changed nothing has
+  // committed us to nothing.
+  //
+  // THE BOUNDARY THE OUTPUT ACTUALLY USED, NOT THE ONE WE WERE HANDED, which is
+  // why it is measured here rather than before the revert above, and why it
+  // reads the tracked `respected` rather than the `respect` we asked for.
+  // `floor` is null on the turn compression first bites, and null does not mean
+  // "no boundary": `pathAddressed` substitutes `lastCacheBreakpoint(request)`
+  // for it and compresses strictly after that. Recording the null froze
+  // nothing, so the turn after it saw `anchored: true` with no boundary,
+  // re-derived the prefix from scratch and rewrote bytes the provider was
+  // already holding -- a guaranteed miss on the whole prefix, which is the one
+  // thing anchoring exists to prevent. Measured on browser-session: v1-anchored
+  // 14,666 steady tokens against v1-frontier's 11,410, equal once it is real.
+  //
+  // And only when the output respected a boundary at all. A full rewrite has
+  // none to freeze, and claiming one would tell the next turn to leave a prefix
+  // alone that we had in fact replaced.
+  const removedAnything =
+    JSON.stringify(out.request).length < JSON.stringify(request).length;
+  const boundary = respected ? (floor ?? lastCacheBreakpoint(request)) : null;
+  const compressFrom = frozen ?? (removedAnything ? boundary : null);
 
   const withKnowledge = injectKnowledge(out.request, knowledge);
 

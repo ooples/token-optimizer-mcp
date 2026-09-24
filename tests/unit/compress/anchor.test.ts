@@ -498,3 +498,145 @@ describe('a declined rewrite is reconsidered as the conversation grows', () => {
     expect(removedFrom(conversation(1), anchors)).toBe(0);
   });
 });
+
+describe('the turn compression first bites freezes the boundary it used', () => {
+  /**
+   * THE ONE STATE WHERE `floor` IS NULL AND STILL MEANS SOMETHING.
+   *
+   * `pathAddressed` is handed a floor and, when that floor is null, quietly
+   * substitutes `lastCacheBreakpoint(request)` and compresses strictly after
+   * it. So on the turn compression first bites there IS a boundary -- it just
+   * is not the value the caller passed down. Recording the null instead of the
+   * boundary froze nothing, while still recording `anchored: true`; the turn
+   * after that saw an anchored conversation with no boundary, re-derived the
+   * prefix from scratch and rewrote bytes the provider was already holding.
+   * That is a guaranteed miss on the whole prefix, which is the single thing
+   * anchoring exists to prevent.
+   *
+   * Reached from the `extended` branch, because that is where the opening turn
+   * banked a record whose own breakpoint is null (a one-message opening has no
+   * cache marker) and the next turn arrives with a real one.
+   *
+   * Measured on the browser-session workload before the fix: v1-anchored 14,666
+   * steady tokens against v1-frontier's 11,410, so re-anchoring COST tokens and
+   * gate 4 failed. The two are equal once the boundary is real.
+   */
+  const NEWLINE = String.fromCharCode(10);
+  const body = (n: number): string =>
+    Array.from(
+      { length: n },
+      (_, i) =>
+        `export function helper${i}(input: number): number {` +
+        NEWLINE +
+        `  const doubled = input * 2;` +
+        NEWLINE +
+        `  const shifted = doubled + ${i};` +
+        NEWLINE +
+        `  return shifted;` +
+        NEWLINE +
+        `}`
+    ).join(NEWLINE);
+
+  /**
+   * THE CACHE MARKER SITS EARLY, which is what makes this fixture different
+   * from the one above. With the marker on the LAST tool result there is
+   * nothing after the frontier to compress, the turn removes zero bytes, and
+   * the boundary is never recorded either way -- so the fixture would pass
+   * against the defect. Everything compressible has to be on the far side of
+   * the marker for the turn to commit us to anything.
+   */
+  const conversation = (turns: number): ProviderRequest => {
+    const messages: unknown[] = [
+      { role: 'user', content: [{ type: 'text', text: 'fix the failing test' }] },
+    ];
+    for (let i = 0; i < turns; i += 1) {
+      messages.push({
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: `t${i}`,
+            name: 'Read',
+            input: { file_path: `f${i}.ts` },
+          },
+        ],
+      });
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: `t${i}`,
+            content: [{ type: 'text', text: body(60) }],
+            ...(i === 0 ? { cache_control: { type: 'ephemeral' } } : {}),
+          },
+        ],
+      });
+    }
+    return {
+      system: 'You are a coding agent. '.repeat(1200),
+      messages,
+    } as unknown as ProviderRequest;
+  };
+
+  const nextTurn = (request: ProviderRequest): ProviderRequest =>
+    ({
+      ...request,
+      messages: [
+        ...(request.messages ?? []),
+        { role: 'user', content: [{ type: 'text', text: 'and now?' }] },
+      ],
+    }) as unknown as ProviderRequest;
+
+  /** V1 plus the commit step the proxy performs, as above. */
+  const step = (request: ProviderRequest, anchors: AnchorStore) => {
+    const before = JSON.stringify(request).length;
+    const out = v1Frontier(request, { spill: () => '/spill/x.txt', anchors });
+    if (out.anchor) anchors.remember(out.anchor.key, out.anchor.record);
+    return {
+      request: out.request,
+      record: out.anchor?.record,
+      removed: before - JSON.stringify(out.request).length,
+    };
+  };
+
+  /**
+   * The three turns gate 4 replays: a small opening, the session as the
+   * fixture captures it, and one turn after that.
+   */
+  const replay = () => {
+    const anchors = anchorStore();
+    const request = conversation(24);
+    step(
+      { ...request, messages: (request.messages ?? []).slice(0, 1) },
+      anchors
+    );
+    const first = step(request, anchors);
+    const second = step(nextTurn(request), anchors);
+    return { first, second };
+  };
+
+  const prefixOf = (request: ProviderRequest): string =>
+    JSON.stringify((request.messages ?? []).slice(0, 2));
+
+  it('records the boundary rather than the null it was handed', () => {
+    const { first } = replay();
+
+    // NOT VACUOUS: the turn has to have committed us to something before the
+    // boundary is worth anything. Against the defect this read 186,430 too,
+    // and only the boundary was wrong.
+    expect(first.removed).toBeGreaterThan(0);
+    expect(first.record?.anchored).toBe(true);
+    expect(first.record?.compressFrom).not.toBeNull();
+  });
+
+  it('reproduces a byte-identical prefix on the turn after it', () => {
+    const { first, second } = replay();
+
+    expect(prefixOf(second.request)).toBe(prefixOf(first.request));
+    // The same work, not merely the same bytes. With the boundary lost, the
+    // second turn re-derived the prefix from scratch and removed 60,456 where
+    // the first had removed 186,430 -- a different prefix, billed as a write.
+    expect(second.removed).toBe(first.removed);
+  });
+});
