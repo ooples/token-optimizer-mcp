@@ -233,6 +233,9 @@ function queryOf(text) {
  * the decoder declines to vouch for that fragment; the fragment then earns no
  * credit and is named at the end. That direction can only cost us.
  */
+/** The shape every back-reference marker shares, whichever form it took. */
+const MARKER_SHAPED = /\[\.\.\. [\d,]+ bytes, /;
+
 const refusals = new Map();
 // NOT A DEFECT, AND IT USED TO SHARE A LIST WITH ONE. `rehydrate` rebuilds from
 // the output ALONE, so a `[... what went -> path]` marker is something it can
@@ -243,8 +246,10 @@ const refusals = new Map();
 const pathRefusals = new Map();
 function recoverable(text, label) {
   const parts = [];
+  let handed = 0;
   let step = rehydrateSequence();
   const decode = (fragment) => {
+    if (MARKER_SHAPED.test(fragment)) handed += 1;
     try {
       const back = step(fragment);
       if (back !== fragment) parts.push(back);
@@ -287,21 +292,53 @@ function recoverable(text, label) {
   if (parsed !== undefined) findImages(parsed);
   step = rehydrateSequence(imagesAbove);
 
+  // A BLOCK, NOT EVERY STRING. `rehydrateSequence` resolves the run form by
+  // ORDER -- it names the block after the one the reference above it resolved
+  // to -- so it has to be handed the block texts, in reader order, and nothing
+  // else. Walking every string leaf interleaves each block's own `"text"` type
+  // discriminator between the markers, which breaks the walk the form
+  // describes. The quoted forms survived that because they resolve by CONTENT
+  // and a stray string never matches a quote; the first order-addressed marker
+  // is what made the sloppiness visible. These are the keys `mapBlocks` writes
+  // through, so they are the whole set of places a marker can be.
+  const TEXT_BEARING = new Set(['messages', 'system', 'content', 'text']);
   const walk = (node) => {
     if (typeof node === 'string') decode(node);
     else if (Array.isArray(node)) node.forEach(walk);
     else if (node && typeof node === 'object')
-      Object.values(node).forEach(walk);
+      for (const [key, value] of Object.entries(node))
+        if (TEXT_BEARING.has(key)) walk(value);
   };
   // A SERIALISED MESSAGE LIST IS NOT A BLOCK, and handing one to a line-oriented
   // decoder asks a question with no answer: the document is one line with every
   // newline escaped, so a marker claiming 8 folded rows meets 135 candidates and
   // the decoder correctly refuses. That refusal said nothing about our output --
   // it was the harness mis-addressing the decoder -- and it produced four of the
-  // names on the gap list. The blocks are the string leaves, so when the payload
-  // parses, the leaves are the whole of the attempt.
+  // names on the gap list. So when the payload parses, the attempt is made over
+  // its BLOCKS -- see the walk above for why the string leaves are not them.
   if (parsed !== undefined) walk(parsed);
   else decode(text);
+  // NOT TAKEN ON TRUST. Narrowing the walk could quietly stop handing the
+  // decoder a marker, and a marker never handed over is a marker that never
+  // refuses -- which turns a gap into a clean row and reads as an improvement.
+  // So count the back-references anywhere in the payload and insist the walk
+  // above was given every one of them.
+  let reachable = 0;
+  const countMarkers = (node) => {
+    if (typeof node === 'string') {
+      if (MARKER_SHAPED.test(node)) reachable += 1;
+    } else if (Array.isArray(node)) node.forEach(countMarkers);
+    else if (node && typeof node === 'object')
+      Object.values(node).forEach(countMarkers);
+  };
+  if (parsed !== undefined) countMarkers(parsed);
+  else if (MARKER_SHAPED.test(text)) reachable += 1;
+  if (handed < reachable && !refusals.has(label))
+    refusals.set(
+      label,
+      `harness: ${reachable - handed} of ${reachable} back-references were ` +
+        'never handed to the decoder'
+    );
   return parts.join('\n');
 }
 
