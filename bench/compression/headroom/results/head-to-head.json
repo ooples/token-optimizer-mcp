@@ -2,7 +2,7 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-24",
-  "commit": "5af7e30e88ad0f50a369c69a6425e1e144362db4",
+  "commit": "b702c66cfc7f180e6c59984438eeb7b05c8b18ff",
   "capture": {
     "dir": "hr5/out",
     "theirsDigest": "0c2663858b875373"
