@@ -25,7 +25,9 @@
  *                    code and log would claim it and then find nothing
  *   log         40
  *   code        30
- *   prose       10   the most permissive claim, so it goes last
+ *   prose       10   the most permissive claim of the content engines
+ *   records      5   a SHAPE, not a kind, so it goes last of all: it may only
+ *                    see text every engine above deliberately declined
  */
 
 import { compressCode, looksLikeCode, looksLikeDiff } from './code.js';
@@ -34,7 +36,7 @@ import {
   compressJsonSections,
   looksLikeJsonSections,
 } from './json-sections.js';
-import { compressLog, looksLikeLog } from './log.js';
+import { compressLog, looksLikeLog, looksTemplated } from './log.js';
 import { compressTap, looksLikeTap } from './tap.js';
 import {
   compressJsonFragments,
@@ -124,6 +126,51 @@ registerEngine({
   compress: compressCode,
 });
 
+/**
+ * Content that belongs to another engine even when that engine declines it.
+ *
+ * `engineFor` takes the first claim and never falls through, so a shape-based
+ * claim down here only ever sees text nothing above wanted -- and "nothing
+ * wanted it" turned out to include two cases where a better-informed engine had
+ * deliberately looked away:
+ *
+ *   - source code read so the agent can edit it exactly. `looksLikeCode` misses
+ *     a module whose every line begins `export const`, so `code` never claimed
+ *     it and the block survived by accident. Folding it would have broken the
+ *     exact string edit it was read for.
+ *   - a truncated or invalid JSON document. `json` refuses it precisely BECAUSE
+ *     it is malformed; templating its lines instead would rewrite bytes the
+ *     caller must see verbatim to know they are broken.
+ *
+ * Both are recognised here rather than by widening the engines' own predicates,
+ * because widening those would change which engine COMPRESSES the healthy case
+ * and this only needs to change who declines the sick one.
+ */
+const JSON_MEMBER = /^\s*"[^"\n]+":\s/m;
+const CODE_KEYWORD =
+  /^\s*(?:export|import|from|function|class|const|let|var|def|func|impl|public|private|protected|return|if|for|while|switch|type|interface|enum)\b/m;
+
+// BELOW EVERY OTHER ENGINE ON PURPOSE, so it can only pick up what nothing else
+// wanted. Repeated same-shape records are not a kind of content, they are a
+// SHAPE that several kinds of content happen to have, and claiming on shape from
+// anywhere higher stole from engines that knew better: at the log engine's
+// priority of 40 it took source code away from `code`, which refuses to touch a
+// file the agent read in order to edit it exactly.
+//
+// Sitting last means the only text reaching it is text the router would
+// otherwise have returned as `unknown` and left at full width -- which is
+// exactly where the browser accessibility trees were.
+registerEngine({
+  name: 'records',
+  priority: 5,
+  claims: (text, ctx) =>
+    looksTemplated(text) &&
+    !JSON_MEMBER.test(text) &&
+    !CODE_KEYWORD.test(text) &&
+    !looksLikeCode(text, ctx),
+  compress: (text, ctx) => compressLog(text, ctx),
+});
+
 registerEngine({
   name: 'prose',
   priority: 10,
@@ -140,6 +187,7 @@ export const BUILT_IN_ENGINES = Object.freeze([
   'log',
   'code',
   'prose',
+  'records',
 ]);
 
 /**

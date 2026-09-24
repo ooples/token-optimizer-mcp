@@ -75,6 +75,11 @@ export type ContentKind =
   | 'log'
   | 'prose'
   | 'search'
+  // Repeated same-shape records that no more specific engine claimed. A shape
+  // rather than a kind, which is why it is reported under its own name instead
+  // of as 'log': the engine that folds it is the same one, but the content is
+  // whatever was left over.
+  | 'records'
   // Anything a third party registered. Named so a custom engine appears in
   // a report rather than being invisible.
   | 'custom'

@@ -1,6 +1,22 @@
 import assert from 'node:assert/strict';
 
 /** Independent decoder for the inline formats, using no original input. */
+/**
+ * Undoes the value encoding the template writer applies.
+ *
+ * ORDER IS THE WHOLE CORRECTNESS ARGUMENT. `%25` is decoded LAST, so a value
+ * that really contained the text `%20` -- written out as `%2520` -- comes back
+ * as `%20` and not as a space. Decoding `%25` first would turn it into `%20`
+ * and then into a space, which is a silent corruption rather than a failure.
+ */
+function decodeValue(value: string): string {
+  return value
+    .replace(/%20/g, ' ')
+    .replace(/%09/g, '	')
+    .replace(/%7C/g, '|')
+    .replace(/%25/g, '%');
+}
+
 export function expandLog(text: string): string {
   function restoreIndexed(lines: string[], templates: boolean): string[] {
     const retained: string[] = [];
@@ -26,7 +42,7 @@ export function expandLog(text: string): string {
         assert.equal(rows.length, Number(template[2]));
         assert.equal(rows.length, positions.length);
         rows.forEach((row, i) => {
-          const values = row.split(' ');
+          const values = row.split(' ').map(decodeValue);
           let at = 0;
           const original = template[1].replace(/#/g, () => values[at++]);
           assert.equal(at, values.length);

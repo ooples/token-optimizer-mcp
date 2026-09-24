@@ -81,6 +81,41 @@ export function looksLikeLog(text: string): boolean {
 }
 
 /**
+ * Whether the text is made of repeated records, whatever they are records OF.
+ *
+ * `looksLikeLog` recognises a log by its timestamps and its severity words,
+ * which is one way for a block to be a pile of repeated records and not the
+ * only one. A browser accessibility tree is the same thing without either --
+ *
+ *   node 0: role=listitem name="collect digest" focusable=false bounds=(597,141)
+ *
+ * -- and 701 such lines were reaching the router as `unknown`, compressing by
+ * 0.0%, while the console log printed beside them in the same conversation was
+ * claimed and folded by 41.4%. The engine could already do the work; nothing
+ * asked it to.
+ *
+ * So the question is asked structurally: strip each line to its shape and see
+ * whether a real share of the block collapses into a handful of them. That is
+ * the same test `foldTemplates` applies to decide it has something to fold, so
+ * a claim made here is one the compressor can honour.
+ */
+export function looksTemplated(text: string): boolean {
+  const lines = text.split('\n');
+  if (lines.length < 8) return false;
+  const shapes = new Map<string, number>();
+  for (const line of lines) {
+    if (!line.trim() || line.includes('#')) continue;
+    const shape = shapeOf(line);
+    // A line with nothing variable in it is not a record, it is a line.
+    if (shape === line) continue;
+    shapes.set(shape, (shapes.get(shape) ?? 0) + 1);
+  }
+  let templated = 0;
+  for (const n of shapes.values()) if (n >= MIN_TEMPLATE) templated += n;
+  return templated / lines.length > 0.3;
+}
+
+/**
  * Folds runs of identical lines into one line and a count.
  *
  * LOSSLESS BY CONSTRUCTION, which is the point. "the same line, 37 more times"
@@ -287,7 +322,37 @@ function valuesOf(line: string): string[] {
 //
 // Bare hex runs are NOT matched -- only an explicit 0x prefix -- because an
 // unanchored hex class happily eats the middle of ordinary identifiers.
-const VARIABLE = /0x[0-9a-f]+|\d+(?:\.\d+)?/gi;
+// A QUOTED VALUE IS ONE TOKEN, and leaving it out made the comment above a lie
+// about the code below it. Without it a browser accessibility tree --
+//
+//   node 0: role=listitem name="collect digest" focusable=false bounds=(597,141)
+//
+// shares no shape with the next line, because the name differs, so 701 lines of
+// a rigid four-field record templated at 8.7% and 65,210 chars of the
+// browser-session workload were left at full width by an engine whose whole job
+// is folding repeated records.
+const VARIABLE = /"[^"\n]*"|0x[0-9a-f]+|\d+(?:\.\d+)?/gi;
+
+/**
+ * A value, made safe to put between the inline delimiters.
+ *
+ * The rows of a template join on ' | ' and the values within a row on ' ', so a
+ * value carrying either was previously grounds for abandoning the whole group
+ * (see the guard below). A quoted name almost always carries a space, which
+ * would have made the widening above buy nothing at all.
+ *
+ * Percent-encoding is chosen over quoting because it leaves every value that
+ * does NOT contain a delimiter completely untouched: existing output stays
+ * byte-identical, which matters when the provider is holding those bytes in a
+ * cached prefix. `%` itself is encoded first so decoding is unambiguous.
+ */
+function encodeValue(value: string): string {
+  return value
+    .replace(/%/g, '%25')
+    .replace(/ /g, '%20')
+    .replace(/\t/g, '%09')
+    .replace(/\|/g, '%7C');
+}
 
 /** Below this a template costs more than the lines it replaces. */
 const MIN_TEMPLATE = 4;
@@ -340,10 +405,12 @@ function templated(lines: string[], elisions: Elision[]): string[] {
 
     // One row of values per occurrence, in the order they appeared.
     const valueRows = members.map((i) => valuesOf(lines[i]));
-    // Values must not collide with the inline row/column delimiters.
-    if (valueRows.some((row) => row.some((value) => /\s|\|/.test(value))))
+    // Values must not collide with the inline row/column delimiters. Encoding
+    // handles a space, a tab and a bar; a newline cannot be encoded away
+    // because it would still split the line, so such a group is still refused.
+    if (valueRows.some((row) => row.some((value) => /[\r\n]/.test(value))))
       continue;
-    const rows = valueRows.map((row) => row.join(' '));
+    const rows = valueRows.map((row) => row.map(encodeValue).join(' '));
     const rendered =
       `${shape}  [${count(members.length, 'occurrence')}, positions=${JSON.stringify(members.map((index) => index + 1))}; # = ` +
       `${rows.join(' | ')}]`;
