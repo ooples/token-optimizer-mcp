@@ -78,12 +78,18 @@ describe('plain search hunks reconstruct from the output alone', () => {
 
   it('writes each match note shape, so the round trip exercised all of them', () => {
     const text = compressSearchResults(fixture('\n')).text;
-    expect(text).toContain('src/proxy/supervisor.ts:10-15 (matched 10,12,15)');
-    expect(text).toContain('src/proxy/supervisor.ts:20-23 (matched 21-23)');
-    expect(text).toContain('hooks-core/derive.mjs:30-32 (matched 31)');
-    expect(text).toContain('hooks-core/derive.mjs:40-42 (context)');
-    expect(text).toContain('a/b.txt:50-53\n');
-    expect(text).toContain('a/b.txt:99-lone');
+    // Three files over six hunks, so the path table pays and every header
+    // carries an id. The table is what makes the ids resolvable, so assert it
+    // alongside them rather than only the shapes it renames.
+    expect(text).toContain(
+      '[paths @0=src/proxy/supervisor.ts @1=hooks-core/derive.mjs @2=a/b.txt]'
+    );
+    expect(text).toContain('@0:10-15 (matched 10,12,15)');
+    expect(text).toContain('@0:20-23 (matched 21-23)');
+    expect(text).toContain('@1:30-32 (matched 31)');
+    expect(text).toContain('@1:40-42 (context)');
+    expect(text).toContain('@2:50-53\n');
+    expect(text).toContain('@2:99-lone');
   });
 });
 

@@ -54,6 +54,9 @@ const HIT =
 /** Below this the header costs more than the prefixes it replaces. */
 const MIN_HUNK_LINES = 2;
 
+/** Leads every id the path table mints. Kept in step with `rehydrate.ts`. */
+export const PATH_ID_PREFIX = '@';
+
 /** Fraction of lines that must look like hits before this engine claims the block. */
 const MIN_DENSITY = 0.6;
 
@@ -197,7 +200,10 @@ export function compressSearchResults(
     lines.push({ raw, eol });
     i = end + eol.length;
   }
-  const out: Line[] = [];
+  // Emitted lines keep the path they lead with SEPARATE from the rest, so the
+  // fold below rewrites a field rather than pattern-matching its own output.
+  type Emitted = { path: string | null; raw: string; eol: string };
+  const out: Emitted[] = [];
   let factoredDeclarations = false;
 
   let path: string | null = null;
@@ -225,7 +231,8 @@ export function compressSearchResults(
       // and inserting another doubled it on every restored line.
       buffer.forEach((line, i) =>
         out.push({
-          raw: `${path}:${start + i}${line.sep}${line.text}`,
+          path,
+          raw: `:${start + i}${line.sep}${line.text}`,
           eol: line.eol,
         })
       );
@@ -239,11 +246,16 @@ export function compressSearchResults(
       // can only be written with that one.
       const eol = buffer[0].eol;
       if (declarations) {
-        out.push({ raw: `${path}:${range}${marks}${declarations.note}`, eol });
+        out.push({
+          path,
+          raw: `:${range}${marks}${declarations.note}`,
+          eol,
+        });
         // The hunk's LAST emitted line carries the last source line's own
         // terminator, which is absent when the text ends without one.
         declarations.rows.forEach((row, i) =>
           out.push({
+            path: null,
             raw: row,
             eol:
               i === declarations.rows.length - 1
@@ -253,8 +265,9 @@ export function compressSearchResults(
         );
         factoredDeclarations = true;
       } else {
-        out.push({ raw: `${path}:${range}${marks}`, eol });
-        for (const line of buffer) out.push({ raw: line.text, eol: line.eol });
+        out.push({ path, raw: `:${range}${marks}`, eol });
+        for (const line of buffer)
+          out.push({ path: null, raw: line.text, eol: line.eol });
       }
     }
     path = null;
@@ -266,7 +279,7 @@ export function compressSearchResults(
     const hit = parseHit(line.raw);
     if (!hit) {
       flush();
-      out.push(line);
+      out.push({ path: null, ...line });
       continue;
     }
     // AN ABSENT TERMINATOR IS NOT A TERMINATOR CHANGE. Only the last line of
@@ -289,7 +302,33 @@ export function compressSearchResults(
   }
   flush();
 
-  const body = out.map((line) => line.raw + line.eol).join('');
+  // THE PATH IS STATED ONCE PER HUNK, AND A REPO PATH IS LONG. On the
+  // grep-output fixture 68 headers carried 3,019 characters of path over 17
+  // distinct files -- 11% of the compressed block spent re-typing directory
+  // names the reader already has. A table at the top and a short id on each
+  // header says the same thing in 1,038.
+  //
+  // It only pays above a handful of hunks, and it is refused outright if any
+  // real path in the input looks like an id this pass would mint, so an id can
+  // never be read as a path or a path as an id.
+  const used = new Set<string>();
+  for (const line of out) if (line.path) used.add(line.path);
+  const table = [...used];
+  const ids = new Map(table.map((p, i) => [p, `${PATH_ID_PREFIX}${i}`]));
+  const minted = new Set(ids.values());
+  const folded =
+    table.length > 1 &&
+    out.filter((line) => line.path).length > table.length &&
+    !table.some((p) => minted.has(p));
+  const render = (line: Emitted): string =>
+    (line.path === null ? '' : folded ? ids.get(line.path) : line.path) +
+    line.raw +
+    line.eol;
+  const eol = out.find((line) => line.eol)?.eol ?? '\n';
+  const header = folded
+    ? `[paths ${table.map((p) => `${ids.get(p)}=${p}`).join(' ')}]${eol}`
+    : '';
+  const body = header + out.map(render).join('');
   if (body.length >= text.length) return unchanged(text);
 
   return {
@@ -298,9 +337,13 @@ export function compressSearchResults(
     // stated once and every line number is recoverable from the header.
     elisions: [
       {
-        removed: factoredDeclarations
-          ? 'repeated path prefixes and exact declaration boilerplate'
-          : 'repeated path prefixes',
+        removed: [
+          'repeated path prefixes',
+          factoredDeclarations ? 'exact declaration boilerplate' : '',
+          folded ? 'whole paths, into the table above' : '',
+        ]
+          .filter(Boolean)
+          .join(' and '),
         recoverAt: null,
         lossless: true,
       },
