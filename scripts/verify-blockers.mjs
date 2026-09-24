@@ -133,50 +133,109 @@ check('B2', 'the cache-weighted gate is green and not vacuous', () => {
 });
 
 // ---------------------------------------------------------------- B3
-check('B3', 'the published table is reproducible by its harness', () => {
+check('B3', 'the published tables are reproducible by their harnesses', () => {
   const t = run(process.execPath, ['bench/compression/readme-table.check.mjs']);
   if (!t.ok) return fail('README figures disagree with the harness');
   if (!t.out.includes('README TABLE AGREES'))
     return fail('check did not confirm agreement');
-  return pass(t.out.trim().split('\n').slice(-2).join(' | '));
+  // THE SECOND TABLE HAS ITS OWN CHAIN. head-to-head.mjs needs a HeadRoom clone
+  // on disk, which this machine may not have, so its figures are checked
+  // against the run recorded beside it rather than re-measured here. That is a
+  // weaker link and it is a checked one; leaving the larger of the two
+  // published tables out entirely would have let it drift unguarded.
+  const h = run(process.execPath, [
+    'bench/compression/readme-headroom.check.mjs',
+  ]);
+  if (!h.ok || !h.out.includes('AGREES with the recorded run')) {
+    return fail('README head-to-head figures disagree with the recorded run');
+  }
+  return pass(
+    [t, h].map((x) => x.out.trim().split('\n').slice(-2)[0]).join(' | ')
+  );
 });
 
 // ---------------------------------------------------------------- B4 / B5
-check('B4', 'codebase-exploration is not claimed as a win', () => {
+check('B4', 'the codebase-exploration verdict agrees with its own row', () => {
   const r = read('README.md');
-  // THE PROPERTY, NOT THE VERDICT. This first asserted the row reads
-  // "parity", which was true of the branch this work began on and false on
-  // master, where the figure is 46.0% against their 47.4%. A check pinned to
-  // one verdict breaks on an honest re-measurement, so it pins the two things
-  // that hold whichever way the number moves: the row is never in the win
-  // column, and the tally is never counted over workloads.
-  const row = r.match(/^\|\s*codebase-exploration\s*\|.*$/im);
-  if (!row) return fail('the row is not in the table at all');
-  if (/\|\s*ours\s*\|/i.test(row[0])) {
-    return fail(`claimed as a win: ${row[0].trim()}`);
+  // THE PROPERTY, NOT THE VERDICT, AND NOT A FIXED DIRECTION EITHER. This once
+  // asserted "parity", which was true of the branch the work began on; then
+  // "never ours", which was true while the row read 46.0% against their 47.4%.
+  // Both broke on an honest re-measurement -- the second on the one that turned
+  // the row into a win at 48.8%. What holds whichever way the number moves is
+  // that the verdict agrees with the two figures printed beside it, so that is
+  // what is checked.
+  //
+  // SCOPED TO THE PROOF TABLE. The head-to-head table above it has a
+  // codebase-exploration row too, with four cells and no verdict column, and an
+  // unscoped match found that one first.
+  const block = r.match(/PROOF-TABLE:START[\s\S]*?PROOF-TABLE:END/);
+  if (!block) return fail('the proof table markers are gone');
+  const row = block[0].match(/^\|\s*codebase-exploration\s*\|.*$/im);
+  if (!row) return fail('the row is not in the proof table at all');
+  const cells = row[0].split('|').map((c) => c.trim());
+  const theirs = Number.parseFloat(cells[3]);
+  const ours = Number.parseFloat(cells[4]);
+  const verdict = (cells[5] ?? '').toLowerCase();
+  if (!Number.isFinite(theirs) || !Number.isFinite(ours)) {
+    return fail(`the row does not carry two figures: ${row[0].trim()}`);
   }
-  if (!/\|\s*(parity|theirs)\s*\|/i.test(row[0])) {
-    return fail(`verdict is neither parity nor theirs: ${row[0].trim()}`);
+  const earned = ours > theirs ? 'ours' : ours < theirs ? 'theirs' : 'parity';
+  if (verdict !== earned) {
+    return fail(
+      `row reads ${ours}% against ${theirs}% but is published as ` +
+        `"${verdict}", not "${earned}"`
+    );
   }
   if (/ours on 7 of 8|ours on 8 of 8/.test(r)) {
     return fail('the old over-workload tally is still published');
   }
-  if (!/published comparators/.test(r)) {
-    return fail('the tally does not say it counts over comparators');
-  }
-  return pass(`not a win (${row[0].trim()}); tally reads over comparators`);
+  return pass(`${ours}% against ${theirs}%, published as ${verdict}`);
 });
 
 check('B5', 'every reduction claim carries the retention claim', () => {
   const r = read('README.md');
-  const hasReduction = r.includes('91.5%') || /97\.\d%/.test(r);
-  if (!hasReduction) return fail('no reduction figure found to qualify');
-  if (!(r.includes('1,890') && r.includes('345'))) {
-    return fail('the retention counts are not beside it');
+  // DERIVED FROM THE RECORDED RUN, NOT FROM LITERALS HERE. This used to pin
+  // 1,890, 345 and 0.94x, and went on asserting them for as long as the README
+  // did -- so a check meant to stop a reduction figure travelling without its
+  // retention figures could not tell that all five had gone stale together.
+  // head-to-head.mjs --record writes what the harness printed; the README has
+  // to carry those numbers and no others.
+  const recordPath = 'bench/compression/headroom/results/head-to-head.json';
+  if (!existsSync(join(ROOT, recordPath))) {
+    return fail(`no recorded run at ${recordPath}`);
   }
-  if (!/0\.94x/.test(r)) return fail('the spill size is not disclosed');
+  const record = JSON.parse(read(recordPath));
+  const { totals } = record;
+  const count = (n) => Number(n).toLocaleString('en-US');
+  const figures = [
+    ['corpus reduction, ours', totals.chars.ours],
+    ['corpus reduction, theirs', totals.chars.theirs],
+    ['retention units', count(totals.retention.units)],
+    ['in context, ours', count(totals.retention.inContext.ours)],
+    ['in context, theirs', count(totals.retention.inContext.theirs)],
+    ['reconstructible', count(totals.retention.reconstructible)],
+    ['recoverable, ours', count(totals.retention.recoverable.ours)],
+    ['recoverable, theirs', count(totals.retention.recoverable.theirs)],
+    ['spill size', totals.spillStore],
+  ];
+  const wanted = figures.filter(([, figure]) => !r.includes(figure));
+  if (wanted.length) {
+    return fail(
+      `the README does not carry: ${wanted
+        .map(([name, figure]) => `${name} (${figure})`)
+        .join(', ')}`
+    );
+  }
+  // THE SUBSTITUTION COLUMN HAS TO SAY WHAT IT IS. It reports a ratio near
+  // 100% by moving whole blocks to disk, which is a move and not a reduction,
+  // and a quote of it without that word is a misquote.
+  if (r.includes(totals.sub.chars) && !/substitution/i.test(r)) {
+    return fail(`${totals.sub.chars} is published without the word ` +
+      '"substitution" anywhere near it');
+  }
   return pass(
-    'retention counts and spill size published next to the reduction'
+    `${figures.length} figures carried, from the run recorded at ` +
+      record.commit.slice(0, 8)
   );
 });
 
