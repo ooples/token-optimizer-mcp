@@ -2,7 +2,7 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-24",
-  "commit": "bbc0b8372cf86744e2da857402bf9ddda5c8471e",
+  "commit": "5af7e30e88ad0f50a369c69a6425e1e144362db4",
   "capture": {
     "dir": "hr5/out",
     "theirsDigest": "0c2663858b875373"
@@ -49,6 +49,18 @@
         "wholeTokens": {
           "ours": "36344",
           "theirs": "24739"
+        },
+        "session": {
+          "p0": {
+            "none": "150989",
+            "ours": "7989",
+            "theirs": "80402"
+          },
+          "p1": {
+            "ours": "119910",
+            "theirs": "80402"
+          },
+          "breakEven": "65%"
         }
       }
     },
@@ -93,6 +105,18 @@
         "wholeTokens": {
           "ours": "79326",
           "theirs": "57227"
+        },
+        "session": {
+          "p0": {
+            "none": "342862",
+            "ours": "9786",
+            "theirs": "185988"
+          },
+          "p1": {
+            "ours": "230034",
+            "theirs": "185988"
+          },
+          "breakEven": "80%"
         }
       }
     },
@@ -137,6 +161,18 @@
         "wholeTokens": {
           "ours": "23554",
           "theirs": "32838"
+        },
+        "session": {
+          "p0": {
+            "none": "107640",
+            "ours": "76551",
+            "theirs": "93002"
+          },
+          "p1": {
+            "ours": "76551",
+            "theirs": "112872"
+          },
+          "breakEven": "always"
         }
       }
     },
@@ -181,6 +217,18 @@
         "wholeTokens": {
           "ours": "22967",
           "theirs": "16723"
+        },
+        "session": {
+          "p0": {
+            "none": "116854",
+            "ours": "4144",
+            "theirs": "54350"
+          },
+          "p1": {
+            "ours": "51194",
+            "theirs": "54350"
+          },
+          "breakEven": "always"
         }
       }
     },
@@ -225,6 +273,18 @@
         "wholeTokens": {
           "ours": "41675",
           "theirs": "34131"
+        },
+        "session": {
+          "p0": {
+            "none": "128183",
+            "ours": "63677",
+            "theirs": "468"
+          },
+          "p1": {
+            "ours": "128203",
+            "theirs": "91828"
+          },
+          "breakEven": "never"
         }
       }
     },
@@ -269,6 +329,18 @@
         "wholeTokens": {
           "ours": "9995",
           "theirs": "18950"
+        },
+        "session": {
+          "p0": {
+            "none": "68848",
+            "ours": "32484",
+            "theirs": "302"
+          },
+          "p1": {
+            "ours": "32484",
+            "theirs": "41897"
+          },
+          "breakEven": "77%"
         }
       }
     },
@@ -313,6 +385,18 @@
         "wholeTokens": {
           "ours": "11066",
           "theirs": "25136"
+        },
+        "session": {
+          "p0": {
+            "none": "49296",
+            "ours": "1391",
+            "theirs": "33852"
+          },
+          "p1": {
+            "ours": "30007",
+            "theirs": "36394"
+          },
+          "breakEven": "always"
         }
       }
     },
@@ -357,6 +441,18 @@
         "wholeTokens": {
           "ours": "22601",
           "theirs": "16014"
+        },
+        "session": {
+          "p0": {
+            "none": "114056",
+            "ours": "4674",
+            "theirs": "52046"
+          },
+          "p1": {
+            "ours": "49874",
+            "theirs": "52046"
+          },
+          "breakEven": "always"
         }
       }
     },
@@ -401,6 +497,18 @@
         "wholeTokens": {
           "ours": "30668",
           "theirs": "58622"
+        },
+        "session": {
+          "p0": {
+            "none": "190743",
+            "ours": "99671",
+            "theirs": "312"
+          },
+          "p1": {
+            "ours": "99671",
+            "theirs": "119899"
+          },
+          "breakEven": "83%"
         }
       }
     },
@@ -445,6 +553,18 @@
         "wholeTokens": {
           "ours": "9038",
           "theirs": "5608"
+        },
+        "session": {
+          "p0": {
+            "none": "52637",
+            "ours": "1557",
+            "theirs": "18226"
+          },
+          "p1": {
+            "ours": "21829",
+            "theirs": "18226"
+          },
+          "breakEven": "82%"
         }
       }
     },
@@ -489,6 +609,18 @@
         "wholeTokens": {
           "ours": "36665",
           "theirs": "44743"
+        },
+        "session": {
+          "p0": {
+            "none": "152464",
+            "ours": "46157",
+            "theirs": "121137"
+          },
+          "p1": {
+            "ours": "107700",
+            "theirs": "143172"
+          },
+          "breakEven": "always"
         }
       }
     },
@@ -533,6 +665,18 @@
         "wholeTokens": {
           "ours": "68167",
           "theirs": "75452"
+        },
+        "session": {
+          "p0": {
+            "none": "331503",
+            "ours": "7612",
+            "theirs": "31392"
+          },
+          "p1": {
+            "ours": "143474",
+            "theirs": "36324"
+          },
+          "breakEven": "18%"
         }
       }
     }
@@ -556,6 +700,27 @@
       "wholeTokens": {
         "ours": "392066",
         "theirs": "410183"
+      },
+      "session": {
+        "turnsAfter": "20",
+        "baseContextTokens": "12000",
+        "p0": {
+          "none": "1806074",
+          "ours": "355690",
+          "theirs": "671476"
+        },
+        "p1": {
+          "none": "1806074",
+          "ours": "1090931",
+          "theirs": "973395"
+        },
+        "breakEven": "73%",
+        "capMultiple": {
+          "oursP0": "5.08x",
+          "theirsP0": "2.69x",
+          "oursP50": "2.50x",
+          "theirsP50": "2.20x"
+        }
       }
     },
     "tokens": {
