@@ -43,7 +43,8 @@
  * unrecoverable.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
 import { compressBlock } from '../../dist/compress/router.js';
@@ -802,6 +803,103 @@ if (bodyLost > 0)
         .map((r) => `${r.name}(${r.bodyGone})`)
         .join(', ')
   );
+/**
+ * The run, written down where a check that cannot run it can still read it.
+ *
+ * WHY A FILE AND NOT THE STDOUT. This harness needs a HeadRoom clone and their
+ * Python harness to produce the arm it scores against, so CI cannot run it the
+ * way `readme-table.check.mjs` runs `proof.mjs`. Without somewhere to put the
+ * result, the twelve-row table in the README would be the one thing this
+ * repository keeps saying it will not ship: a figure with nothing behind it.
+ *
+ * SO THE CHAIN HAS TWO LINKS, AND BOTH ARE CHECKABLE. Prose against this record
+ * is checked in CI on every commit, by `readme-headroom.check.mjs`. This record
+ * against the live harness is checked by anyone holding the clone, by re-running
+ * with --record and diffing -- which is also exactly what regenerating it does.
+ * Neither link is an assertion; the second one is simply not free.
+ *
+ * The strings are recorded ALREADY FORMATTED, the same way the table prints
+ * them, so the comparison is text against text. A checker that re-derived "46.0%"
+ * from 0.4604 would be re-implementing the rounding, and a rounding that drifted
+ * would make the two agree on a number neither of them shows.
+ */
+if (process.argv[3] === '--record') {
+  const at = process.argv[4];
+  if (!at) {
+    console.error('head-to-head: --record needs a path to write to');
+    process.exit(1);
+  }
+  let commit = 'unknown';
+  try {
+    commit = execFileSync('git', ['rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
+  } catch {
+    // A tarball is not a repository. The record is still the record.
+  }
+  const record = {
+    harness: 'bench/compression/head-to-head.mjs',
+    // The one thing a reader cannot re-derive from this file: what produced the
+    // arm on the other side of the table.
+    regenerate:
+      'python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && ' +
+      'python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && ' +
+      'node bench/compression/head-to-head.mjs <out-dir> --record ' +
+      'bench/compression/headroom/results/head-to-head.json',
+    recordedAt: new Date().toISOString().slice(0, 10),
+    commit,
+    workloads: rows.map((r) => ({
+      name: r.name,
+      payload: String(r.before),
+      chars: {
+        ours: pct(r.ours),
+        body: r.bodyRatio === null ? null : pct(r.bodyRatio),
+        sub: pct(r.subRatio),
+        theirs: pct(r.theirs),
+      },
+      tokens: {
+        ours: pct(r.oursTok),
+        body: r.bodyRatio === null ? null : pct(1 - r.bodyTokAfter / r.bodyTokBefore),
+        sub: pct(r.subTok),
+        theirs: pct(r.theirsTok),
+      },
+      retention: {
+        inContext: String(r.inOut),
+        reconstructible: String(r.derived),
+        recoverable: String(r.inSpill),
+        theirsInContext: String(r.theirIn),
+        subUnrecoverable: String(r.subGone),
+      },
+    })),
+    totals: {
+      chars: { ours: pct(oursChars), theirs: pct(theirsChars) },
+      tokens: { ours: pct(oursTokens), theirs: pct(theirsTokens) },
+      sub: {
+        chars: pct(1 - subAll / beforeAll),
+        tokens: pct(1 - subTokAll / beforeTokAll),
+        // SUBSTITUTION, NOT REDUCTION. The store is recorded beside the ratio for
+        // the same reason it is printed beside it.
+        store: `${(sum((r) => r.subStore) / beforeAll).toFixed(2)}x`,
+        unrecoverable: String(sum((r) => r.subGone)),
+      },
+      spillStore: `${(sum((r) => r.spillRatio * r.before) / beforeAll).toFixed(2)}x`,
+      unrecoverable: {
+        ours: String(lost),
+        theirs: String(sum((r) => (r.theirMeasured ? r.theirGone : 0))),
+      },
+      retention: {
+        units: String(allIds),
+        inContext: { ours: String(oursIn), theirs: String(theirsIn) },
+        reconstructible: String(oursDerived),
+        recoverable: { ours: String(oursSpilled), theirs: String(theirsRedeemed) },
+      },
+    },
+  };
+  writeFileSync(at, `${JSON.stringify(record, null, 2)}
+`);
+  console.log(`recorded ${rows.length} workloads to ${at}`);
+}
+
 const failed =
   lost > 0 ||
   bodyLost > 0 ||
