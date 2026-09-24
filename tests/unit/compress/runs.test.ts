@@ -20,12 +20,19 @@ import { rehydrate } from '../../../src/compress/rehydrate.js';
  * held a repeat long enough to fold, so the test that asks for a decline
  * failed against correct code. A prime modulus has no such short cycle.
  */
+const FENCE_CHAR = '`';
+
 function noise(bytes: number, seed: number): string {
   const out: string[] = [];
   let state = (seed % 2_147_483_646) + 1;
   while (out.length < bytes) {
     state = (state * 48_271) % 2_147_483_647;
-    out.push(String.fromCharCode(33 + (state % 90)));
+    // EVERY PRINTABLE CHARACTER BUT THE BACKTICK, so a fixture carries the
+    // quotes and backslashes a serialised document is full of -- those are the
+    // interesting ones -- while the one character that makes the pass decline
+    // is left to the test that asks for that decline by name.
+    const code = 33 + (state % 89);
+    out.push(String.fromCharCode(code >= FENCE_CHAR.charCodeAt(0) ? code + 1 : code));
   }
   return out.join('');
 }
@@ -78,14 +85,47 @@ describe('long repeat folding', () => {
 
   it('refuses a marker naming a run that is not above it', () => {
     const marker =
-      '[... 4,000 bytes, an exact repeat of the run opening "nothing up here matches this" above]';
+      '[... 4,000 bytes, an exact repeat of the run opening `nothing up here matches this` above]';
     expect(() => expandLongRepeats(marker)).toThrow(/names no run above/);
   });
 
   it('refuses a length that runs off the end of what it rebuilt', () => {
     const quote = 'a stated opening that is long enough';
-    const marker = `${quote}\n[... 900,000 bytes, an exact repeat of the run opening ${JSON.stringify(quote)} above]`;
+    const marker = `${quote}\n[... 900,000 bytes, an exact repeat of the run opening \`${quote}\` above]`;
     expect(() => expandLongRepeats(marker)).toThrow(/past its source/);
+  });
+
+  it('leaves a document that parsed still parsing', () => {
+    // THE CHECK THE BYTE-FOR-BYTE ONE CANNOT MAKE. A serialised request is a
+    // document whose quoting has already happened, so a marker carrying a raw
+    // `"` ends the string it lands in and the document stops parsing -- while
+    // reading exactly the same bytes back. Three comparator payloads did that
+    // before the delimiter moved to a backtick.
+    const blob = noise(9_000, 23);
+    const payload = JSON.stringify({
+      messages: [{ text: blob }, { text: blob }],
+    });
+    const folded = foldLongRepeats(payload);
+    expect(folded).not.toBeNull();
+    if (folded === null) return;
+
+    // THE MARKER, NOT THE DOCUMENT. The document is JSON and is made of
+    // quotes; what must carry none is the text this pass writes into it.
+    const marker = /\[\.\.\. [\s\S]*? above]/.exec(folded.text)?.[0] ?? '';
+    expect(marker).not.toBe('');
+    expect(marker).not.toContain('"');
+    expect(() => JSON.parse(folded.text) as unknown).not.toThrow();
+    expect(expandLongRepeats(folded.text)).toBe(payload);
+  });
+
+  it('declines an opening it cannot delimit', () => {
+    // A BACKTICK IN THE OPENING IS A REFUSAL, NOT AN ESCAPE. Escaping it would
+    // need a backslash, which is the other character that cannot be written
+    // raw into a document that is already escaped, so the pass gives the fold
+    // up instead of inventing a second grammar to get it back.
+    const blob = `${FENCE_CHAR}${noise(9_000, 29)}`;
+    const folded = foldLongRepeats(`head ${blob} middle ${blob} tail`);
+    expect(folded).toBeNull();
   });
 
   it('reads back through the router and the shared decoder', () => {
