@@ -46,6 +46,7 @@ import { compressProse, looksLikeProse } from './prose.js';
 import { compressSearchResults, looksLikeSearchResults } from './search.js';
 import { engineFor, registerEngine, runEngine } from './registry.js';
 import { readNumbering } from './numbering.js';
+import { foldLongRepeats } from './runs.js';
 import { foldRepeatedSegments, looksRepetitive } from './segments.js';
 import type { CompressionResult, ContentKind, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
@@ -304,21 +305,20 @@ function substitute(
   return moveOut(text, ctx) ?? result;
 }
 
-export function compressBlock(
+/**
+ * Dispatch and run, with no pass that reads the whole block afterwards.
+ *
+ * SPLIT OUT SO THE NUMBERED PATH CAN SKIP THE FOLD. A numbered read is
+ * compressed on its bare content and renumbered afterwards, and `restore`
+ * fails closed unless every line it did not expect is one the engine declared
+ * as inserted. `foldLongRepeats` rewrites the inside of a line and can span a
+ * line break, so it has nothing to declare -- running it there turned a good
+ * compression into an untouched block. It belongs above this, once.
+ */
+function routed(
   text: string,
   ctx: EngineContext = {}
 ): CompressionResult {
-  // A numbered read is detected on its BARE content and re-numbered
-  // afterwards. Detecting on the numbered form finds nothing at all --
-  // see readNumbering, where the measurement is recorded.
-  const numbering = readNumbering(text);
-  if (numbering) {
-    const inner = compressBlock(numbering.stripped, ctx);
-    if (inner.text === numbering.stripped) return unchanged(text);
-    // Only exact inserted markers may be unnumbered; rewrites fail closed.
-    const restored = numbering.restore(inner.text, inner.insertedLines);
-    return restored === null ? unchanged(text) : { ...inner, text: restored };
-  }
   const engine = engineFor(text, ctx);
   // RESOLVED ONCE, HERE. An engine reading `ctx.tuning?.keepRows ?? 3`
   // would put the default in two places, and the second copy is the one
@@ -352,4 +352,52 @@ export function compressBlock(
     engine ? runEngine(engine, text, tuned) : unchanged(text),
     tuned
   );
+}
+
+/**
+ * Compresses one block.
+ *
+ * Two things happen here that `routed` deliberately does not do: a numbered
+ * read is stripped, compressed and renumbered, and whatever survives is
+ * offered to the long-repeat fold.
+ *
+ * THE FOLD RUNS LAST AND ONLY AT THE TOP. Last, because it should see what
+ * the engine left rather than what it was given -- an engine that already
+ * removed the second copy leaves nothing here to find, and one that could not
+ * reach inside a line leaves the whole of it. Only at the top, because a
+ * string inside a JSON document is routed back through here with a depth, and
+ * a marker folded into a nested value would be re-escaped by the document
+ * around it and read back through a different grammar than the one that wrote
+ * it. `movable` draws the same line for the same reason.
+ *
+ * The fold is offered the ORIGINAL text as well, so a block no engine claimed
+ * is still eligible: an unclaimed block is the one most likely to be a large
+ * opaque payload sent twice.
+ */
+export function compressBlock(
+  text: string,
+  ctx: EngineContext = {}
+): CompressionResult {
+  // A numbered read is detected on its BARE content and re-numbered
+  // afterwards. Detecting on the numbered form finds nothing at all --
+  // see readNumbering, where the measurement is recorded.
+  const numbering = readNumbering(text);
+  if (numbering) {
+    const inner = routed(numbering.stripped, ctx);
+    if (inner.text === numbering.stripped) return unchanged(text);
+    // Only exact inserted markers may be unnumbered; rewrites fail closed.
+    const restored = numbering.restore(inner.text, inner.insertedLines);
+    return restored === null ? unchanged(text) : { ...inner, text: restored };
+  }
+
+  const result = routed(text, ctx);
+  if ((ctx.stringDepth ?? 0) !== 0) return result;
+  const folded = foldLongRepeats(result.text);
+  if (folded === null) return result;
+  return {
+    ...result,
+    text: folded.text,
+    elisions: [...result.elisions, ...folded.elisions],
+    lossless: result.lossless && folded.lossless,
+  };
 }

@@ -1,3 +1,4 @@
+import { expandLongRepeats } from './runs.js';
 import { expandLog } from './expand-log.js';
 import { findReferent, readBackReference } from './dedup.js';
 import { readImageBackReference } from './images.js';
@@ -276,11 +277,15 @@ const UNCONSUMED_SUFFIX = new RegExp(
  * would otherwise survive as ordinary-looking lines.
  */
 export function rehydrate(text: string): string {
-  // Search first: its grammar is line-structural rather than delimited, so it
-  // has to see the hunk bodies before any other grammar rewrites a line inside
-  // one.
+  // Long repeats first of all, because the fold is the LAST thing the encoder
+  // does and inverting in the other order would hand each grammar a block with
+  // a hole in it. Search next: its grammar is line-structural rather than
+  // delimited, so it has to see the hunk bodies before any other grammar
+  // rewrites a line inside one.
   const out = expandLog(
-    expandTapRecords(expandJsonRecords(expandSearchHunks(text)))
+    expandTapRecords(
+      expandJsonRecords(expandSearchHunks(expandLongRepeats(text)))
+    )
   );
   for (const line of out.split('\n'))
     if (UNCONSUMED.test(line) || UNCONSUMED_SUFFIX.test(line))
