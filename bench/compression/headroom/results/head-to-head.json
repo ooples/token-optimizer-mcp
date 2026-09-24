@@ -2,7 +2,7 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-24",
-  "commit": "82a9ec898443aa6271fe0d5190ebb29ebb06c290",
+  "commit": "a1a844c4063c65f469fa7ceadbd8374a90bca2c2",
   "capture": {
     "dir": "hr5/out",
     "theirsDigest": "0c2663858b875373"
@@ -237,25 +237,25 @@
       "payload": "136113",
       "arm": "router",
       "chars": {
-        "ours": "57.4%",
-        "body": "40.8%",
+        "ours": "65.1%",
+        "body": "48.6%",
         "preset": "100.0%",
         "sub": "100.0%",
         "theirs": "99.7%"
       },
       "tokens": {
-        "ours": "50.3%",
-        "body": "34.8%",
+        "ours": "58.0%",
+        "body": "42.5%",
         "preset": "99.9%",
         "sub": "99.9%",
         "theirs": "99.6%"
       },
       "retention": {
-        "inContext": "193",
+        "inContext": "173",
         "reconstructible": "333",
-        "recoverable": "54",
+        "recoverable": "74",
         "theirsInContext": "2",
-        "oursZeroTurn": "526",
+        "oursZeroTurn": "506",
         "presetZeroTurn": "0",
         "theirsZeroTurn": "2",
         "subUnrecoverable": "0"
@@ -267,21 +267,21 @@
           "preset": "4"
         },
         "handedTokens": {
-          "ours": "19593",
+          "ours": "16569",
           "theirs": "144"
         },
         "wholeTokens": {
-          "ours": "41675",
+          "ours": "38651",
           "theirs": "34131"
         },
         "session": {
           "p0": {
             "none": "128183",
-            "ours": "63677",
+            "ours": "53849",
             "theirs": "468"
           },
           "p1": {
-            "ours": "128203",
+            "ours": "117468",
             "theirs": "91828"
           },
           "breakEven": "never"
@@ -683,7 +683,7 @@
   ],
   "totals": {
     "chars": {
-      "ours": "89.0%",
+      "ours": "89.4%",
       "theirs": "51.3%"
     },
     "cost": {
@@ -694,11 +694,11 @@
         "preset": "46"
       },
       "handedTokens": {
-        "ours": "109443",
+        "ours": "106419",
         "theirs": "206608"
       },
       "wholeTokens": {
-        "ours": "392066",
+        "ours": "389042",
         "theirs": "410183"
       },
       "session": {
@@ -706,25 +706,25 @@
         "baseContextTokens": "12000",
         "p0": {
           "none": "1806074",
-          "ours": "355690",
+          "ours": "345862",
           "theirs": "671476"
         },
         "p1": {
           "none": "1806074",
-          "ours": "1090931",
+          "ours": "1080196",
           "theirs": "973395"
         },
-        "breakEven": "73%",
+        "breakEven": "75%",
         "capMultiple": {
-          "oursP0": "5.08x",
+          "oursP0": "5.22x",
           "theirsP0": "2.69x",
-          "oursP50": "2.50x",
+          "oursP50": "2.53x",
           "theirsP50": "2.20x"
         }
       }
     },
     "tokens": {
-      "ours": "80.3%",
+      "ours": "80.9%",
       "theirs": "62.8%"
     },
     "sub": {
@@ -741,12 +741,12 @@
     "retention": {
       "units": "6098",
       "inContext": {
-        "ours": "453",
+        "ours": "433",
         "theirs": "2278"
       },
       "reconstructible": "2284",
       "recoverable": {
-        "ours": "3361",
+        "ours": "3381",
         "theirs": "3820"
       }
     }
