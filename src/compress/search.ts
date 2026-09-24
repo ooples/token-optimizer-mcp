@@ -57,6 +57,22 @@ const MIN_HUNK_LINES = 2;
 /** Leads every id the path table mints. Kept in step with `rehydrate.ts`. */
 export const PATH_ID_PREFIX = '@';
 
+/** A body line standing in for an earlier one. Kept in step with `rehydrate.ts`. */
+export const BACK_REFERENCE = /^\[=(\d+)\]$/;
+
+/**
+ * A body line that would otherwise BE a reference, and its escaped form.
+ *
+ * Standing the pass down on a document containing `[=0]` does not save it:
+ * the decoder is handed the output alone and cannot tell a block that
+ * declined to fold from one that folded, so a literal `[=0]` decodes as a
+ * reference either way. One more `=` makes the two forms disjoint, costs a
+ * character on a line that essentially never occurs, and is injective --
+ * `[==0]` escapes to `[===0]`, so nothing collides on the way back either.
+ */
+export const COLLIDING_REFERENCE = /^\[=(=*\d+)\]$/;
+export const ESCAPED_REFERENCE = /^\[==(=*\d+)\]$/;
+
 /** Fraction of lines that must look like hits before this engine claims the block. */
 const MIN_DENSITY = 0.6;
 
@@ -202,7 +218,16 @@ export function compressSearchResults(
   }
   // Emitted lines keep the path they lead with SEPARATE from the rest, so the
   // fold below rewrites a field rather than pattern-matching its own output.
-  type Emitted = { path: string | null; raw: string; eol: string };
+  // `content` marks a line that IS hunk body text, which is the only thing a
+  // back-reference may stand for. A short hunk's restored lines carry their own
+  // path and line number, and a declaration row is two tab-separated fields;
+  // neither is a line the decoder can re-derive by repeating an earlier one.
+  type Emitted = {
+    path: string | null;
+    raw: string;
+    eol: string;
+    content?: true;
+  };
   const out: Emitted[] = [];
   let factoredDeclarations = false;
 
@@ -267,7 +292,7 @@ export function compressSearchResults(
       } else {
         out.push({ path, raw: `:${range}${marks}`, eol });
         for (const line of buffer)
-          out.push({ path: null, raw: line.text, eol: line.eol });
+          out.push({ path: null, raw: line.text, eol: line.eol, content: true });
       }
     }
     path = null;
@@ -301,6 +326,34 @@ export function compressSearchResults(
     buffer.push({ sep: hit.sep, text: hit.text, eol: line.eol });
   }
   flush();
+
+  // THE SAME LINE OF CODE COMES BACK HIT AFTER HIT. A grep for a symbol
+  // returns its call sites, and a call site in one file reads the same as a
+  // call site in another: on the grep-output fixture 300 body lines repeated
+  // one already above them, 4,883 characters of it.
+  //
+  // The ordinal is the line's position among the body lines of this block, so
+  // both sides count the same set in the same order and neither has to be told
+  // the numbering. A back-reference is only written where it is shorter than
+  // the line it replaces, and the whole pass stands down if any real body line
+  // already reads as one -- a document must never be able to forge a reference
+  // into itself.
+  const bodyLines = out.filter((line) => line.content);
+  const firstAt = new Map<string, number>();
+  bodyLines.forEach((line, ordinal) => {
+    const original = line.raw;
+    const seen = firstAt.get(original);
+    if (seen === undefined) firstAt.set(original, ordinal);
+    else {
+      const reference = `[=${seen}]`;
+      if (reference.length < original.length) {
+        line.raw = reference;
+        return;
+      }
+    }
+    const collision = COLLIDING_REFERENCE.exec(original);
+    if (collision) line.raw = `[==${collision[1]}]`;
+  });
 
   // THE PATH IS STATED ONCE PER HUNK, AND A REPO PATH IS LONG. On the
   // grep-output fixture 68 headers carried 3,019 characters of path over 17

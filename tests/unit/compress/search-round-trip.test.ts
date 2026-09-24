@@ -93,6 +93,66 @@ describe('plain search hunks reconstruct from the output alone', () => {
   });
 });
 
+/** A hunk of `texts` under `path`, every line a match, starting at `start`. */
+function hits(path: string, start: number, texts: readonly string[]): string[] {
+  return texts.map((text, i) => `${path}:${start + i}:${text}`);
+}
+
+describe('a body line repeating an earlier one is written as a reference', () => {
+  // A grep for a symbol returns its call sites, and a call site in one file
+  // reads the same as a call site in another. These are the repeats.
+  const shared = '    return this.cache.get(key) ?? this.load(key);';
+  const other = '    this.metrics.record(key, Date.now() - started);';
+
+  const repeated = (): string =>
+    [
+      ...hits('src/a/store.ts', 10, ['function get(key: string) {', shared, '}']),
+      '--',
+      ...hits('src/b/store.ts', 20, ['function fetch(key: string) {', shared, '}']),
+      '--',
+      ...hits('src/c/store.ts', 30, ['function tap(key: string) {', other, shared]),
+    ].join('\n');
+
+  it('folds the repeat and rebuilds it from the reference alone', () => {
+    const result = compressSearchResults(repeated());
+    // Ordinals count body lines across the whole block: 0,1,2 then 3,4,5 then
+    // 6,7,8. The first `shared` is 1, so both later copies name 1.
+    expect(result.text).toContain('[=1]');
+    // Folded, not merely mentioned: the line itself survives exactly once.
+    expect(result.text.split(shared).length - 1).toBe(1);
+    expect(result.lossless).toBe(true);
+    expect(rehydrate(result.text)).toBe(repeated());
+  });
+
+  it('escapes a line that would otherwise read as a reference', () => {
+    // THE DECODER IS HANDED THE OUTPUT ALONE. It cannot tell a block that
+    // declined to fold from one that folded, so declining is no defence
+    // against a literal `[=0]`; one more `=` makes the two forms disjoint
+    // and leaves the genuine repeat still worth folding.
+    const forged = [
+      ...hits('src/a/store.ts', 10, ['[=0]', shared, '}']),
+      '--',
+      ...hits('src/b/store.ts', 20, ['[==7]', shared, '}']),
+    ].join('\n');
+    const result = compressSearchResults(forged);
+    expect(result.text).toContain('[==0]');
+    expect(result.text).toContain('[===7]');
+    expect(result.text).toContain('[=1]');
+    expect(rehydrate(result.text)).toBe(forged);
+  });
+
+  it('leaves a repeat alone where the reference would not be shorter', () => {
+    const tiny = [
+      ...hits('src/a/store.ts', 10, ['aa', 'b', 'cc']),
+      '--',
+      ...hits('src/b/store.ts', 20, ['dd', 'b', 'ee']),
+    ].join('\n');
+    const result = compressSearchResults(tiny);
+    expect(result.text).not.toContain('[=1]');
+    expect(rehydrate(result.text)).toBe(tiny);
+  });
+});
+
 describe('the search decoder refuses what it cannot rebuild', () => {
   it('refuses a hunk claiming more lines than follow it', () => {
     // A HEADER IS A PROMISE ABOUT ARITY. Returning the three lines that do
@@ -114,6 +174,15 @@ describe('the search decoder refuses what it cannot rebuild', () => {
     // helper reject documents the engine never touched.
     const text = '{"note":"[exact declaration rows: name=rhs]"}';
     expect(rehydrate(text)).toBe(text);
+  });
+
+  it('refuses a reference to a line that never arrived', () => {
+    // A FORWARD OR DANGLING REFERENCE IS A TRUNCATED BLOCK. Passing the
+    // marker through as content would report a successful reconstruction
+    // carrying a line the original never held.
+    expect(() => rehydrate('src/a.ts:1-2\nhello\n[=5]')).toThrow(
+      /references no earlier line/
+    );
   });
 
   it('refuses a descending range instead of walking it for ever', () => {
