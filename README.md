@@ -60,16 +60,16 @@ handed the identical bytes.
 | agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% | 96.3% / 97.1% | 100.0% / 100.0% | 40 / 1070 / 40 |
 | browser-session      | 782,294 | 21.8% / 13.6% | 93.7% / 28.9% | 100.0% / 99.9% | 100.0% / 99.9%  | 281 / 281 / 0 |
 | code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% | 95.8% / 96.5% | 99.9% / 99.9%   |  10 / 91 / 10 |
-| codebase-exploration | 136,113 | 99.7% / 99.6% | 57.4% / 50.3% | 100.0% / 99.9% | 100.0% / 99.9%  |   375 / 0 / 0 |
-| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% | 99.9% / 99.9% | 99.9% / 99.9%   |   914 / 0 / 0 |
+| codebase-exploration | 136,113 | 99.7% / 99.6% | 57.4% / 50.3% | 100.0% / 99.9% | 100.0% / 99.9%  |   526 / 2 / 0 |
+| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% | 99.9% / 99.9% | 99.9% / 99.9%   |  1040 / 1 / 0 |
 | human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% | 96.9% / 97.2% | 99.8% / 99.9%   |    3 / 12 / 3 |
 | issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% | 95.3% / 95.9% | 99.9% / 99.9%   |     0 / 0 / 0 |
 | raw-build-log        | 158,237 | 99.8% / 99.8% | 70.7% / 47.7% | 100.0% / 100.0% | 100.0% / 100.0% |   427 / 0 / 0 |
 | relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% | 96.1% / 97.0% | 99.9% / 99.9%   |     0 / 0 / 0 |
-| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% | 100.0% / 100.0% | 331 / 331 / 0 |
+| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% | 100.0% / 100.0% | 357 / 396 / 0 |
 | sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% | 97.1% / 97.7% | 100.0% / 100.0% | 42 / 353 / 42 |
 
-Recorded 2026-09-24 at `b702c66c`, by the command in the
+Recorded 2026-09-24 at `82a9ec89`, by the command in the
 record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
 re-derive it the way it re-derives the table below -- it checks this provenance and
 these figures against `bench/compression/headroom/results/head-to-head.json` instead.
@@ -91,12 +91,12 @@ of the four rows where they edge us out in the nineties.
 content: to read what it stands for, the agent spends a request. `zero-turn ids`
 counts the identifiers planted in each workload that need no such request --
 still in the text, or rebuildable from the text alone. On the three rows we
-lose on reduction we take that column outright, 375-0, 914-0 and 427-0: their
-marker leaves none of it behind, our skeleton leaves all of it. **We lose it on
+lose on reduction we take that column outright, 526-2, 1040-1 and 427-0: their
+marker leaves almost none of it behind, our skeleton leaves all of it. **We lose it on
 five rows** -- `agent-loop`, `agent-loop-logs`, `code-search`,
 `human-authored-json` and `sre-debugging` -- because our reduction there comes
 from spilling too, and a spill costs the same turn theirs does. Over the corpus
-it is 2,434 of 5,702 for us against 2,210 for them: a lead, not a rout, and the
+it is 2,737 of 6,098 for us against 2,278 for them: a lead, not a rout, and the
 two columns have to be read together or each one flatters somebody.
 
 `browser-session` used to be the one genuine engine loss on this corpus, at 6.0%
@@ -135,9 +135,10 @@ still has it — a content cache moves it regardless. And the marker carries a
 where a cache reference costs a retrieval round trip and degrades to
 `[unresolved: entry not found]` once the store has moved on.
 
-It is **off by default**, because the trade is real: 1,672 of the 2,284
-identifiers a reader can rebuild from our output with no extra turn sit in
-exactly the blocks it would move. On by default, this would be their product
+It is **off by default**, because the trade is real: every one of the **2,284**
+identifiers a reader can rebuild from our output with no extra turn sits in
+exactly the blocks it would move -- the five rows where the dial fires are the
+five rows that reconstructible column lives on, and nowhere else. On by default, this would be their product
 with a better marker.
 
 **`ours, preset` is the same dial at the setting a caller would actually run**
@@ -147,9 +148,9 @@ figure is the shipped one, the block stays in the request, and the zero-turn
 count is untouched. On the other five it matches their headline -- 100.0% on
 `codebase-exploration`, 99.9% on `grep-output`, 100.0% on `raw-build-log` -- and
 it buys that the same way they do. **Those five rows are exactly where our
-zero-turn wins live**, and the column takes all of them: 375, 914, 427, 331 and
-281 go to 0. Over the corpus it is 98.1% of the characters against 89.0%, and
-106 zero-turn identifiers against 2,434. Nothing becomes unrecoverable -- the
+zero-turn wins live**, and the column takes all of them: 526, 1040, 427, 357
+and 281 go to 0. Over the corpus it is 98.1% of the characters against 89.0%, and
+106 zero-turn identifiers against 2,737. Nothing becomes unrecoverable -- the
 loss column is 0 on every row -- but a moved block is a turn, and the preset
 column is published so that trade is visible rather than folded into a
 headline. It is off by default for the same reason.
@@ -196,12 +197,12 @@ in prose is a fact about the tree it was measured on, which is why
 above from the harness rather than trusting it.
 
 **Reduction is not the only column, and the other one goes to them.** Scored
-symmetrically on their own fixtures, of 5,702 retention units they keep
-**2,210** directly visible in the text they send and we keep **151** — we reach
+symmetrically on their own fixtures, of 6,098 retention units they keep
+**2,278** directly visible in the text they send and we keep **453** — we reach
 a higher reduction partly by eliding harder, into a spill about 0.44x the size
 of the input. A further **2,284** of ours are reconstructible from the output
-alone with no extra turn, and **3,268** are behind a path in the output, one
-`Read` away; theirs redeems **3,492** through its store, one retrieval call away.
+alone with no extra turn, and **3,361** are behind a path in the output, one
+`Read` away; theirs redeems **3,820** through its store, one retrieval call away.
 **Nothing is unrecoverable on either side.** All of those numbers belong in any
 quote of any of them.
 
