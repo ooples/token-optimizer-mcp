@@ -47,6 +47,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
 import { compressBlock } from '../../dist/compress/router.js';
+import { resolveTuning } from '../../dist/compress/options.js';
 import { compressBody } from '../../dist/proxy/server.js';
 import { rehydrateSequence } from '../../dist/compress/rehydrate.js';
 import { describeImage, imageSize } from '../../dist/compress/images.js';
@@ -320,6 +321,38 @@ for (const [name, text] of Object.entries(payloads)) {
   const out = compressBlock(text, { spill, query: queryOf(text) });
   const ms = Date.now() - started;
 
+  // THE SUBSTITUTION ARM, MEASURED SEPARATELY AND NAMED FOR WHAT IT IS. HeadRoom
+  // reaches ~99.7% on the three workloads our engines find hardest by not
+  // compressing them at all: a `<<ccr:hash,blob,32107>>` reference is 24
+  // characters and the block is in a content store. `spillWholeBlockBelow` does
+  // the same move for any block our engines could not take 90% off, and writes a
+  // path the agent can `Read` itself instead of a key that costs a retrieval
+  // call and can come back `[unresolved: entry not found]`.
+  //
+  // THE DIAL IS AT 1 HERE, NOT AT ITS RECOMMENDED SETTING, because this column
+  // is a like-for-like against a content cache and a content cache moves every
+  // block it touches. At 1 no saving is ever good enough to keep a block, so
+  // the arm does exactly what theirs does and the two numbers mean the same
+  // thing. A caller who actually wants this would run it nearer 0.9, which
+  // leaves every well-compressed block in the request and moves only what the
+  // engines had nothing to offer -- a better product and a worse headline, and
+  // mixing the two into one column is how a headline stops being checkable.
+  //
+  // It is a THIRD COLUMN rather than a new default because the two arms are not
+  // the same product. The default arm leaves those blocks in the request, where
+  // 1,274 of the 1,582 identifiers a reader can rebuild from the output alone
+  // happen to live. Publishing one number would mean choosing which of those
+  // facts to hide.
+  const subSpilled = [];
+  const sub = compressBlock(text, {
+    spill: (content, hint) => {
+      subSpilled.push(content);
+      return `.token-optimizer/spill/s${subSpilled.length}-${hint}`;
+    },
+    query: queryOf(text),
+    tuning: resolveTuning({ spillWholeBlockBelow: 1 }),
+  });
+
   // THE SECOND ARM. compressBlock takes a text string, so a payload's image
   // blocks reach it only as base64 inside serialised JSON -- browser-session is
   // 88.6% screenshots, and src/compress/images.ts (which deduplicates them) is
@@ -458,6 +491,21 @@ for (const [name, text] of Object.entries(payloads)) {
   // loss column is the exact thing this harness exists to stop, so the body arm
   // answers the same question: after the decoder has run and the spill is read,
   // how many identifiers is a reader unable to reach at all?
+  // THE SUBSTITUTION ARM IS SCORED THE SAME WAY, and it is the arm most likely
+  // to lose something: it moves whole blocks out, so every identifier in one has
+  // to come back off the spill or it is gone. A ratio near 100% earned by losing
+  // content is the exact claim this harness exists to refuse.
+  let subGone = 0;
+  const subRecovered = recoverable(sub.text, `${name} (sub)`);
+  const subSpill = subSpilled.join('\n');
+  for (const id of want)
+    if (
+      !sub.text.includes(id) &&
+      !subRecovered.includes(id) &&
+      !subSpill.includes(id)
+    )
+      subGone++;
+
   let bodyGone = 0;
   if (body !== null) {
     const bodyRecovered = recoverable(body.text, `${name} (body)`);
@@ -556,6 +604,12 @@ for (const [name, text] of Object.entries(payloads)) {
     bodyReason: body?.reason ?? '',
     bodyBehind: body?.behind ?? 0,
     bodyGone,
+    subAfter: sub.text.length,
+    subStore: subSpilled.reduce((n, c) => n + c.length, 0),
+    subRatio: 1 - sub.text.length / before,
+    subTok: 1 - tokens(sub.text) / tokens(text),
+    subTokAfter: tokens(sub.text),
+    subGone,
     missing,
     conserved,
     grew,
@@ -584,16 +638,22 @@ const bodyTokPct = (r) =>
   r.bodyRatio === null
     ? '     -'
     : pct(1 - r.bodyTokAfter / r.bodyTokBefore).padStart(6);
+// `sub` is the SUBSTITUTION arm and the header calls it that, because it is the
+// one column here that is not a compression ratio. A block it moved is on disk
+// behind a path; nothing about it got smaller. It is the like-for-like against
+// their content-cache column, which works the same way.
 console.log(
-  'workload                  before     ours    body   theirs |   ours    body  theirs (tokens) |  ids | ours:  ctx  derv spill  gone | body: gone | theirs:  ctx   ccr  gone | their arm'
+  'workload                  before     ours    body     sub   theirs |   ours    body     sub  theirs (tokens) |  ids | ours:  ctx  derv spill  gone | body: gone | sub: gone | theirs:  ctx   ccr  gone | their arm'
 );
 for (const r of rows) {
   console.log(
     `${r.name.padEnd(22)} ${n(r.before, 8)}  ${pct(r.ours).padStart(6)}  ` +
-      `${bodyPct(r)}  ${pct(r.theirs).padStart(6)} | ${pct(r.oursTok).padStart(6)} ` +
-      `${bodyTokPct(r)} ${pct(r.theirsTok).padStart(6)} | ` +
+      `${bodyPct(r)}  ${pct(r.subRatio).padStart(6)}  ${pct(r.theirs).padStart(6)} | ` +
+      `${pct(r.oursTok).padStart(6)} ` +
+      `${bodyTokPct(r)} ${pct(r.subTok).padStart(6)} ${pct(r.theirsTok).padStart(6)} | ` +
       `${n(r.ids, 5)} | ${n(r.inOut, 10)} ${n(r.derived, 5)} ${n(r.inSpill, 5)} ` +
       `${n(r.gone, 5)} | ${r.bodyRatio === null ? '         -' : n(r.bodyGone, 10)} | ` +
+      `${n(r.subGone, 9)} | ` +
       `${n(r.theirIn, 12)} ${r.theirMeasured ? n(r.theirRedeemed, 5) : '    ?'} ` +
       `${r.theirMeasured ? n(r.theirGone, 5) : '    ?'} | ${r.arm}` +
       (r.conserved ? '' : '  !! CONSERVATION FAILED') +
@@ -613,6 +673,12 @@ const theirsTokAll = sum((r) =>
   Math.round(r.oursTokBefore * (1 - r.theirsTok))
 );
 
+// THE SUBSTITUTION ARM'S OWN TOTALS, on the same denominators as the two above.
+// They are not a compression ratio and the line below says so: a moved block is
+// on disk, and `spill store` reports what that costs.
+const subAll = sum((r) => r.subAfter);
+const subTokAll = sum((r) => r.subTokAfter);
+
 const oursChars = 1 - oursAll / beforeAll;
 const theirsChars = 1 - theirsAll / beforeAll;
 const oursTokens = 1 - oursTokAll / beforeTokAll;
@@ -624,6 +690,10 @@ console.log(
 );
 console.log(
   `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload; cl100k_base on text, pixels/750 on images, both arms' real output)`
+);
+console.log(
+  `sub     chars ${pct(1 - subAll / beforeAll)}   tokens ${pct(1 - subTokAll / beforeTokAll)}   ` +
+    `(SUBSTITUTION, not reduction: the moved blocks are on disk, see the store line below)`
 );
 // The body arm's own denominator, over the workloads it could run -- NOT the
 // corpus denominator above. Mixing them would let a body total that skipped a
@@ -687,6 +757,15 @@ if (theirsUnmeasured.length)
 console.log(
   `spill store: ${(sum((r) => r.spillRatio * r.before) / beforeAll).toFixed(2)}x the input, on disk, ` +
     `read only when an elision is followed up`
+);
+console.log(
+  // THE SUBSTITUTION ARM'S STORE, PRINTED BESIDE ITS RATIO, because a column
+  // reading 100.0% has to be readable as what it is. Nothing was compressed
+  // there: the blocks are on disk at about their original size, and the ratio
+  // measures how little of them is left in the request. Their content cache
+  // column is the same trade with the same store behind it.
+  `  substitution arm: ${(sum((r) => r.subStore) / beforeAll).toFixed(2)}x the input on disk, ` +
+    `${sum((r) => r.subGone)} identifiers unrecoverable`
 );
 
 const lostWorkloads = rows.filter((r) => r.ours <= r.theirs).map((r) => r.name);

@@ -48,7 +48,8 @@ import { engineFor, registerEngine, runEngine } from './registry.js';
 import { readNumbering } from './numbering.js';
 import { foldRepeatedSegments, looksRepetitive } from './segments.js';
 import type { CompressionResult, ContentKind, EngineContext } from './types.js';
-import { unchanged } from './types.js';
+import { spillFor, unchanged } from './types.js';
+import { marker } from './annotate.js';
 import { DEFAULT_TUNING } from './options.js';
 
 /**
@@ -222,6 +223,87 @@ export function engineNameFor(
  * grew is discarded, a throw passes the input through untouched, and a lossy
  * elision with nowhere to recover from is refused.
  */
+/**
+ * The smallest block worth moving out of the request whole.
+ *
+ * Below this the marker and its path are a real share of what they replace, and
+ * the reader has lost a block they could simply have read.
+ */
+const MIN_SUBSTITUTE_BYTES = 4_000;
+
+/**
+ * May this block be moved out of the request whole?
+ *
+ * SUBSTITUTION, NOT REDUCTION. Nothing here makes a block smaller: it takes the
+ * block out and writes `[... n bytes, moved whole -> path]` where it was. The
+ * ratio that produces is a measurement of a move, and `spillWholeBlockBelow` is
+ * documented to say exactly that, because a 99% in a table says the opposite.
+ *
+ * Moving a block is lossy by the definition this codebase uses -- the output no
+ * longer determines what was removed -- so the lossless dial forbids it for the
+ * same reason it forbids eliding a function body.
+ */
+function movable(text: string, ctx: EngineContext): boolean {
+  return (
+    (ctx.tuning?.spillWholeBlockBelow ?? 0) > 0 &&
+    ctx.tuning?.allowLossy === true &&
+    text.length >= MIN_SUBSTITUTE_BYTES &&
+    // THE OUTERMOST BLOCK ONLY, or the same bytes are written twice. A string
+    // inside a JSON document is routed back through here, so a nested value
+    // would be moved to its own file and then moved again inside the block
+    // containing it -- and the outer spill holds the ORIGINAL text, which makes
+    // the inner one dead weight. Measured at 2.34x the input on disk before
+    // this clause and 1.44x after, for identical output.
+    (ctx.stringDepth ?? 0) === 0
+  );
+}
+
+/** The block moved out whole, or null when there is nowhere to put it. */
+function moveOut(
+  text: string,
+  ctx: EngineContext
+): CompressionResult | null {
+  // A SINK THAT FAILED IS NOT A PATH. `spillFor` normalises the proxy's empty
+  // string to null, and without somewhere to put the block the honest answer is
+  // whatever the engine managed, however modest it was.
+  const at = spillFor(ctx, text, 'block');
+  if (at === null) return null;
+
+  const removed = `${text.length.toLocaleString('en-US')} bytes, moved whole`;
+  const line = marker({ removed, recoverAt: at });
+  return {
+    text: line,
+    insertedLines: [line],
+    elisions: [{ removed, recoverAt: at, lossless: false }],
+    lossless: false,
+  };
+}
+
+/**
+ * Moves a block that barely compressed out of the request, leaving its path.
+ *
+ * GATED ON THE SAVING RATHER THAN THE SIZE. HeadRoom's content-cache references
+ * do this to every block over a size floor, which is where their ~99.7% comes
+ * from. Gating on what the engines actually achieved keeps every block they
+ * compressed well IN the request -- the reader still has it, and the ratio on it
+ * is a real one -- and matches the cache reference only where our engines had
+ * nothing to offer. That is the better trade in both directions, which is the
+ * only reason to ship this at all.
+ *
+ * OFF UNLESS ASKED. Default `spillWholeBlockBelow` is 0, so this returns its
+ * input untouched and no shipped measurement moves. See the dial.
+ */
+function substitute(
+  text: string,
+  result: CompressionResult,
+  ctx: EngineContext
+): CompressionResult {
+  if (!movable(text, ctx)) return result;
+  const saving = 1 - result.text.length / text.length;
+  if (saving >= (ctx.tuning?.spillWholeBlockBelow ?? 0)) return result;
+  return moveOut(text, ctx) ?? result;
+}
+
 export function compressBlock(
   text: string,
   ctx: EngineContext = {}
@@ -238,7 +320,6 @@ export function compressBlock(
     return restored === null ? unchanged(text) : { ...inner, text: restored };
   }
   const engine = engineFor(text, ctx);
-  if (!engine) return unchanged(text);
   // RESOLVED ONCE, HERE. An engine reading `ctx.tuning?.keepRows ?? 3`
   // would put the default in two places, and the second copy is the one
   // that drifts. Filling it in at the single dispatch point means every
@@ -252,5 +333,23 @@ export function compressBlock(
     // Supplied here rather than imported by the engine, which would cycle.
     compressNested: ctx.compressNested ?? compressBlock,
   };
-  return runEngine(engine, text, tuned);
+  // NO ENGINE RUN AT ALL WHERE NOTHING IT PRODUCED COULD BE KEPT. At a threshold
+  // of 1 no saving is good enough, so running the engine first only writes spill
+  // files the move then supersedes: 1.44x the input on disk against 1.00x, for
+  // byte-identical output. Below 1 the saving has to be measured, so the engine
+  // runs and the decision waits for it.
+  if (movable(text, tuned) && (tuned.tuning?.spillWholeBlockBelow ?? 0) >= 1) {
+    const moved = moveOut(text, tuned);
+    if (moved !== null) return moved;
+  }
+
+  // A BLOCK NOBODY CLAIMED IS THE STRONGEST CASE FOR MOVING IT, not a case to
+  // skip: its saving is zero by definition. It used to return here, above the
+  // substitution pass, which meant the dial did nothing for the one shape it
+  // most obviously applies to.
+  return substitute(
+    text,
+    engine ? runEngine(engine, text, tuned) : unchanged(text),
+    tuned
+  );
 }
