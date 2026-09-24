@@ -51,42 +51,59 @@ handed the identical bytes.
      Each cell is `characters / tokens`, tokens from cl100k_base over both
      arms' real output. -->
 
-| workload             | payload |         theirs |            ours | ours, dial on   |
-| -------------------- | ------: | -------------: | --------------: | --------------- |
-| agent-loop           | 172,110 |  41.9% / 46.7% |   93.8% / 94.7% | 100.0% / 100.0% |
-| agent-loop-logs      | 328,490 |  51.3% / 45.8% |   96.3% / 97.1% | 100.0% / 100.0% |
-| browser-session      | 782,294 |  21.8% / 13.6% |    6.0% / 28.3% | 100.0% / 99.9%  |
-| code-search          | 131,444 |  47.5% / 53.5% |   95.8% / 96.5% | 99.9% / 99.9%   |
-| codebase-exploration | 136,113 |  99.7% / 99.6% |   56.8% / 50.1% | 100.0% / 99.9%  |
-| grep-output          |  75,399 |  99.6% / 99.6% |   50.4% / 49.8% | 99.9% / 99.9%   |
-| human-authored-json  |  38,645 |  32.8% / 31.3% |   96.9% / 97.2% | 99.8% / 99.9%   |
-| issue-triage         | 109,534 |  53.1% / 54.4% |   95.3% / 95.9% | 99.9% / 99.9%   |
-| raw-build-log        | 158,237 |  99.8% / 99.8% |   67.6% / 45.6% | 100.0% / 100.0% |
-| relevance-probe      |  49,367 |  64.3% / 65.4% |   96.1% / 97.0% | 99.9% / 99.9%   |
-| repeated-reads       | 152,321 |  22.8% / 20.5% |   64.8% / 55.6% | 100.0% / 100.0% |
-| sre-debugging        | 312,456 |  88.4% / 90.5% |   97.1% / 97.7% | 100.0% / 100.0% |
+| workload             | payload |        theirs |          ours | ours, dial on   |
+| -------------------- | ------: | ------------: | ------------: | --------------- |
+| agent-loop           | 172,110 |   8.1% / 6.7% | 93.8% / 94.7% | 100.0% / 100.0% |
+| agent-loop-logs      | 328,490 |   4.5% / 3.1% | 96.3% / 97.1% | 100.0% / 100.0% |
+| browser-session      | 782,294 | 21.8% / 13.6% | 93.5% / 26.1% | 100.0% / 99.9%  |
+| code-search          | 131,444 | 99.5% / 99.5% | 95.8% / 96.5% | 99.9% / 99.9%   |
+| codebase-exploration | 136,113 | 99.7% / 99.6% | 56.8% / 50.1% | 100.0% / 99.9%  |
+| grep-output          |  75,399 | 99.6% / 99.6% | 50.4% / 49.8% | 99.9% / 99.9%   |
+| human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% | 99.8% / 99.9%   |
+| issue-triage         | 109,534 | 99.4% / 99.5% | 95.3% / 95.9% | 99.9% / 99.9%   |
+| raw-build-log        | 158,237 | 99.8% / 99.8% | 67.6% / 45.6% | 100.0% / 100.0% |
+| relevance-probe      |  49,367 | 98.5% / 98.8% | 96.1% / 97.0% | 99.9% / 99.9%   |
+| repeated-reads       | 152,321 | 23.0% / 21.6% | 73.9% / 69.6% | 100.0% / 100.0% |
+| sre-debugging        | 312,456 | 99.8% / 99.8% | 97.1% / 97.7% | 100.0% / 100.0% |
 
-Recorded 2026-09-24 at `11e74fa5`, by the command in the
+Recorded 2026-09-24 at `30bf7220`, by the command in the
 record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
 re-derive it the way it re-derives the table below -- it checks this provenance and
 these figures against `bench/compression/headroom/results/head-to-head.json` instead.
 
 <!-- HEADROOM-TABLE:END -->
 
-Over the corpus the shipped default takes **59.9%** of the characters and
-**78.7%** of the tokens; theirs takes 51.3% and 62.8%. Nothing is unrecoverable
+Over the corpus the shipped default takes **88.4%** of the characters and
+**79.8%** of the tokens; theirs takes 49.7% and 60.0%. Nothing is unrecoverable
 on either side.
 
-**Read the rows, though, because four of them are not ours.** On
-`grep-output`, `codebase-exploration` and `raw-build-log` they report ~99.7% and
-we report 50–58%, and that gap is not a compression result. Their number there is
-a **content-cache reference**: the block is not made smaller, it is taken out of
-the request, put in a store, and replaced by a 24-character `<<ccr:...>>` marker.
-Ours are real reductions of text that is still in the request and still readable.
-The two columns are measuring different things, and the honest way to say so is
-to publish the like-for-like beside them. The fourth, `browser-session`, is not
-that: it is a real loss on characters, 6.0% against their 21.8%, and we take it
-back only on tokens.
+**Read the rows, though, because the ones we lose are not compression
+results.** On `grep-output`, `codebase-exploration` and `raw-build-log` they
+report ~99.7% and we report 50-68%. Their number there is a **content-cache
+reference**: the block is not made smaller, it is taken out of the request, put
+in a store, and replaced by a 24-character `<<ccr:...>>` marker. The same is true
+of the four rows where they edge us out in the nineties.
+
+`browser-session` used to be the one genuine engine loss on this corpus, at 6.0%
+against their 21.8%. It is now 93.5%, from folding exact long repeats inside a
+block rather than at a boundary someone else drew — a serialised message
+list with inline images is a single 780,000-character line, which every other
+pass here reads as one unit.
+
+**Most of that 93.5% is the fixture, and the honest number is lower.** This
+payload holds four images, two of them distinct, and the base64 in them is
+generated rather than photographic: one distinct image alone folds from 160,032
+characters to 5,572, which no real PNG would do. What carries over to a real
+session is the duplication — half the image bytes here are a second copy of
+an image already in the request, which is 44.3% of the whole payload, and an
+agent re-sending a screenshot it has already sent is ordinary. Folding only that
+is a ~44% reduction, still ahead of their 21.8% on the same row, and the
+generated base64 is worth about 49 points on top that we would not claim twice.
+
+The run the marker names is still in the output above it, so the reader rebuilds
+it without asking for anything, which is why the characters fall much further
+than the tokens (26.1%) — the image tokens are counted from pixels on both
+arms either way.
 
 **`ours, dial on` is that like-for-like, and it is substitution, not reduction.**
 Set `spillWholeBlockBelow` and a block our engines could not compress is moved
@@ -103,7 +120,7 @@ still has it — a content cache moves it regardless. And the marker carries a
 where a cache reference costs a retrieval round trip and degrades to
 `[unresolved: entry not found]` once the store has moved on.
 
-It is **off by default**, because the trade is real: 1,672 of the 2,282
+It is **off by default**, because the trade is real: 1,672 of the 2,283
 identifiers a reader can rebuild from our output with no extra turn sit in
 exactly the blocks it would move. On by default, this would be their product
 with a better marker.
@@ -150,19 +167,22 @@ in prose is a fact about the tree it was measured on, which is why
 above from the harness rather than trusting it.
 
 **Reduction is not the only column, and the other one goes to them.** Scored
-symmetrically on their own fixtures, of 5,702 retention units they keep **2,210**
-directly visible in the text they send and we keep **152** — we reach a higher
-reduction partly by eliding harder, into a spill about 0.44x the size of the
-input. A further **2,282** of ours are reconstructible from the output alone with
-no extra turn, and **3,268** are behind a path in the output, one `Read` away;
-theirs redeems 3,492 through its store, one retrieval call away. **Nothing is
-unrecoverable on either side.** All of those numbers belong in any quote of any
-of them.
+symmetrically on their own fixtures, of 5,702 retention units they keep
+**1,750** directly visible in the text they send and we keep **151** — we reach
+a higher reduction partly by eliding harder, into a spill about 0.44x the size
+of the input. A further **2,283** of ours are reconstructible from the output
+alone with no extra turn, and **3,268** are behind a path in the output, one
+`Read` away; theirs redeems **3,952** through its store, one retrieval call away.
+**Nothing is unrecoverable on either side.** All of those numbers belong in any
+quote of any of them.
 
 Against the four comparators in this reimplemented arm: **ours on all four.**
 Against their real implementation on all twelve workloads, the table at the top
-of this section: **ours on 8 of 12 by default, 12 of 12 with the dial on**, and
-ours on the corpus total in both denominators either way.
+of this section: **ours on 5 of 12 by default, 12 of 12 with the dial on**, and
+ours on the corpus total in both denominators either way. Their column is the
+best of the nine configurations that capture holds, and on the seven rows they
+take it is the content-cache reference described above rather than a smaller
+block — which is why the dial, doing the same kind of thing, takes all twelve.
 
 The two columns come from different arms of the same engine, and that is the
 point. `v3-history` compresses history too and matches them byte for byte;

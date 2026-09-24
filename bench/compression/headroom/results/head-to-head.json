@@ -2,7 +2,7 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-24",
-  "commit": "11e74fa5cb609fb27bca285ea1775ddf7dbb32e5",
+  "commit": "30bf7220a005f78b97dc61e4cba2b7dd3a9fcf9b",
   "workloads": [
     {
       "name": "agent-loop",
@@ -11,19 +11,19 @@
         "ours": "93.8%",
         "body": "0.0%",
         "sub": "100.0%",
-        "theirs": "41.9%"
+        "theirs": "8.1%"
       },
       "tokens": {
         "ours": "94.7%",
         "body": "0.0%",
         "sub": "100.0%",
-        "theirs": "46.7%"
+        "theirs": "6.7%"
       },
       "retention": {
         "inContext": "11",
         "reconstructible": "0",
         "recoverable": "61",
-        "theirsInContext": "72",
+        "theirsInContext": "61",
         "subUnrecoverable": "0"
       }
     },
@@ -34,19 +34,19 @@
         "ours": "96.3%",
         "body": "0.0%",
         "sub": "100.0%",
-        "theirs": "51.3%"
+        "theirs": "4.5%"
       },
       "tokens": {
         "ours": "97.1%",
         "body": "0.0%",
         "sub": "100.0%",
-        "theirs": "45.8%"
+        "theirs": "3.1%"
       },
       "retention": {
         "inContext": "40",
         "reconstructible": "0",
         "recoverable": "1030",
-        "theirsInContext": "1070",
+        "theirsInContext": "1065",
         "subUnrecoverable": "0"
       }
     },
@@ -54,20 +54,20 @@
       "name": "browser-session",
       "payload": "782294",
       "chars": {
-        "ours": "6.0%",
+        "ours": "93.5%",
         "body": "49.7%",
         "sub": "100.0%",
         "theirs": "21.8%"
       },
       "tokens": {
-        "ours": "28.3%",
+        "ours": "26.1%",
         "body": "35.4%",
         "sub": "99.9%",
         "theirs": "13.6%"
       },
       "retention": {
-        "inContext": "1",
-        "reconstructible": "280",
+        "inContext": "0",
+        "reconstructible": "281",
         "recoverable": "0",
         "theirsInContext": "281",
         "subUnrecoverable": "0"
@@ -80,19 +80,19 @@
         "ours": "95.8%",
         "body": "84.5%",
         "sub": "99.9%",
-        "theirs": "47.5%"
+        "theirs": "99.5%"
       },
       "tokens": {
         "ours": "96.5%",
         "body": "84.7%",
         "sub": "99.9%",
-        "theirs": "53.5%"
+        "theirs": "99.5%"
       },
       "retention": {
         "inContext": "10",
         "reconstructible": "0",
         "recoverable": "81",
-        "theirsInContext": "91",
+        "theirsInContext": "0",
         "subUnrecoverable": "0"
       }
     },
@@ -172,13 +172,13 @@
         "ours": "95.3%",
         "body": "89.0%",
         "sub": "99.9%",
-        "theirs": "53.1%"
+        "theirs": "99.4%"
       },
       "tokens": {
         "ours": "95.9%",
         "body": "89.4%",
         "sub": "99.9%",
-        "theirs": "54.4%"
+        "theirs": "99.5%"
       },
       "retention": {
         "inContext": "0",
@@ -218,13 +218,13 @@
         "ours": "96.1%",
         "body": "85.8%",
         "sub": "99.9%",
-        "theirs": "64.3%"
+        "theirs": "98.5%"
       },
       "tokens": {
         "ours": "97.0%",
         "body": "86.3%",
         "sub": "99.9%",
-        "theirs": "65.4%"
+        "theirs": "98.8%"
       },
       "retention": {
         "inContext": "0",
@@ -238,16 +238,16 @@
       "name": "repeated-reads",
       "payload": "152321",
       "chars": {
-        "ours": "64.8%",
+        "ours": "73.9%",
         "body": "71.6%",
         "sub": "100.0%",
-        "theirs": "22.8%"
+        "theirs": "23.0%"
       },
       "tokens": {
-        "ours": "55.6%",
+        "ours": "69.6%",
         "body": "68.5%",
         "sub": "100.0%",
-        "theirs": "20.5%"
+        "theirs": "21.6%"
       },
       "retention": {
         "inContext": "1",
@@ -264,31 +264,31 @@
         "ours": "97.1%",
         "body": "86.2%",
         "sub": "100.0%",
-        "theirs": "88.4%"
+        "theirs": "99.8%"
       },
       "tokens": {
         "ours": "97.7%",
         "body": "86.5%",
         "sub": "100.0%",
-        "theirs": "90.5%"
+        "theirs": "99.8%"
       },
       "retention": {
         "inContext": "42",
         "reconstructible": "0",
         "recoverable": "2087",
-        "theirsInContext": "353",
+        "theirsInContext": "0",
         "subUnrecoverable": "0"
       }
     }
   ],
   "totals": {
     "chars": {
-      "ours": "59.9%",
-      "theirs": "51.3%"
+      "ours": "88.4%",
+      "theirs": "49.7%"
     },
     "tokens": {
-      "ours": "78.7%",
-      "theirs": "62.8%"
+      "ours": "79.8%",
+      "theirs": "60.0%"
     },
     "sub": {
       "chars": "100.0%",
@@ -304,13 +304,13 @@
     "retention": {
       "units": "5702",
       "inContext": {
-        "ours": "152",
-        "theirs": "2210"
+        "ours": "151",
+        "theirs": "1750"
       },
-      "reconstructible": "2282",
+      "reconstructible": "2283",
       "recoverable": {
         "ours": "3268",
-        "theirs": "3492"
+        "theirs": "3952"
       }
     }
   }
