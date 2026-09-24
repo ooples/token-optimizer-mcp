@@ -219,6 +219,40 @@ function atStringEdge(text: string, at: number): boolean {
   return (at - 1 - back) % 2 === 0;
 }
 
+/**
+ * Every position in `text` holding a quote that opens or closes a JSON string,
+ * in order.
+ *
+ * One pass, because the alternative is counting quotes from the start of the
+ * document once per candidate repeat.
+ */
+function stringEdges(text: string): number[] {
+  const at: number[] = [];
+  for (let i = 0; i < text.length; i += 1) if (atStringEdge(text, i)) at.push(i);
+  return at;
+}
+
+/**
+ * Does `[lo, hi)` sit inside a single JSON string?
+ *
+ * True when no string edge falls in the region -- so it cannot span two
+ * strings -- AND an odd number of edges precede it, which is what being inside
+ * one means. The second half is the part worth stating: a region with no
+ * quotes in it may just as well be sitting in the structure BETWEEN two
+ * strings, and a marker dropped there is not a string at all.
+ */
+function insideOneString(edges: number[], lo: number, hi: number): boolean {
+  let low = 0;
+  let high = edges.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (edges[mid] < lo) low = mid + 1;
+    else high = mid;
+  }
+  if (low % 2 === 0) return false;
+  return low === edges.length || edges[low] >= hi;
+}
+
 /** Would a cut at `at` land between a backslash and what it escapes? */
 function splitsEscape(text: string, at: number): boolean {
   let back = at - 1;
@@ -284,6 +318,7 @@ function windowsAgree(text: string, a: number, b: number): boolean {
 function findRepeats(text: string, document: boolean): Repeat[] {
   const hashes = windowHashes(text);
   if (hashes.length === 0) return [];
+  const edges = document ? stringEdges(text) : [];
 
   const firstAt = new Map<number, number>();
   for (let i = 0; i < hashes.length; i += 1)
@@ -342,6 +377,22 @@ function findRepeats(text: string, document: boolean): Repeat[] {
       // on an escaped character would leave its backslash behind.
       while (hi > lo && splitsEscape(text, hi)) hi -= 1;
       while (lo < hi && splitsEscape(text, lo)) lo += 1;
+    }
+
+    // AND WHOLLY INSIDE ONE STRING. Growth stops at a string edge, but the
+    // SEED does not have to start inside a string at all: it is a 256-byte
+    // window that matched another 256-byte window, and in a serialised request
+    // the glue between two blocks -- `"},{"type":"text","text":"` -- repeats
+    // just as faithfully as the content around it. A region that opens in one
+    // string and closes in the next is replaced by a marker that merges them
+    // and drops the structure in between, and the bytes still read back
+    // identically. Measured on the browser-session payload: eleven repeats,
+    // a 735,340-character block down to 49,508, every byte restored -- and a
+    // document that no longer parsed, so the whole fold was thrown away and
+    // the block went out untouched.
+    if (document && !insideOneString(edges, lo, hi)) {
+      probe += STRIDE;
+      continue;
     }
 
     const length = hi - lo;
