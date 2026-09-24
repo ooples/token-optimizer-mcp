@@ -55,31 +55,31 @@ handed the identical bytes.
 | -------------------- | ------: | ------------: | ------------: | --------------- |
 | agent-loop           | 172,110 | 41.9% / 46.7% | 93.8% / 94.7% | 100.0% / 100.0% |
 | agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% | 100.0% / 100.0% |
-| browser-session      | 782,294 | 21.8% / 13.6% | 93.5% / 26.1% | 100.0% / 99.9%  |
+| browser-session      | 782,294 | 21.8% / 13.6% | 93.7% / 28.9% | 100.0% / 99.9%  |
 | code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% | 99.9% / 99.9%   |
-| codebase-exploration | 136,113 | 99.7% / 99.6% | 56.8% / 50.1% | 100.0% / 99.9%  |
-| grep-output          |  75,399 | 99.6% / 99.6% | 50.4% / 49.8% | 99.9% / 99.9%   |
+| codebase-exploration | 136,113 | 99.7% / 99.6% | 57.4% / 50.3% | 100.0% / 99.9%  |
+| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% | 99.9% / 99.9%   |
 | human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% | 99.8% / 99.9%   |
 | issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% | 99.9% / 99.9%   |
-| raw-build-log        | 158,237 | 99.8% / 99.8% | 67.6% / 45.6% | 100.0% / 100.0% |
+| raw-build-log        | 158,237 | 99.8% / 99.8% | 70.7% / 47.7% | 100.0% / 100.0% |
 | relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% | 99.9% / 99.9%   |
-| repeated-reads       | 152,321 | 22.8% / 20.5% | 73.9% / 69.6% | 100.0% / 100.0% |
+| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% |
 | sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% | 100.0% / 100.0% |
 
-Recorded 2026-09-24 at `072e618f`, by the command in the
+Recorded 2026-09-24 at `72843318`, by the command in the
 record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
 re-derive it the way it re-derives the table below -- it checks this provenance and
 these figures against `bench/compression/headroom/results/head-to-head.json` instead.
 
 <!-- HEADROOM-TABLE:END -->
 
-Over the corpus the shipped default takes **88.4%** of the characters and
-**79.8%** of the tokens; theirs takes 51.3% and 62.8%. Nothing is unrecoverable
+Over the corpus the shipped default takes **89.0%** of the characters and
+**80.3%** of the tokens; theirs takes 51.3% and 62.8%. Nothing is unrecoverable
 on either side.
 
 **Read the rows, though, because the ones we lose are not compression
 results.** On `grep-output`, `codebase-exploration` and `raw-build-log` they
-report ~99.7% and we report 50-68%. Their number there is a **content-cache
+report ~99.7% and we report 57-71%. Their number there is a **content-cache
 reference**: the block is not made smaller, it is taken out of the request, put
 in a store, and replaced by a 24-character `<<ccr:...>>` marker. The same is true
 of the four rows where they edge us out in the nineties.
@@ -120,7 +120,7 @@ still has it — a content cache moves it regardless. And the marker carries a
 where a cache reference costs a retrieval round trip and degrades to
 `[unresolved: entry not found]` once the store has moved on.
 
-It is **off by default**, because the trade is real: 1,672 of the 2,283
+It is **off by default**, because the trade is real: 1,672 of the 2,284
 identifiers a reader can rebuild from our output with no extra turn sit in
 exactly the blocks it would move. On by default, this would be their product
 with a better marker.
@@ -149,7 +149,7 @@ comparator can be checked without their clone. `node bench/compression/proof.mjs
 | code-search          |  17765 |  92.1% |  97.6% | ours    |
 | sre-debugging        |  65694 |  92.2% |  98.4% | ours    |
 | issue-triage         |  54174 |  72.8% |  97.3% | ours    |
-| codebase-exploration |  78502 |  47.4% |  53.4% | ours    |
+| codebase-exploration |  78502 |  47.4% |  54.2% | ours    |
 
 <!-- PROOF-TABLE:END -->
 
@@ -157,11 +157,11 @@ Four workloads, because those are the four this arm has a published comparator
 for. The harness reports twelve; the other eight are ours alone here, and are
 scored head-to-head in the table above instead.
 
-**`codebase-exploration` was theirs and is now ours, by 6.0 points.** An earlier
+**`codebase-exploration` was theirs and is now ours, by 6.8 points.** An earlier
 version of this table claimed 61.3% for us on that row, then parity, then a
 published loss at 46.0% against their 47.4%. The first two were figures from a
 branch rather than from here; the third was true on this tree when it was
-written, and three `log` engine commits since have moved it to **53.4%**. A number
+written, and four `log` engine commits since have moved it to **54.2%**. A number
 in prose is a fact about the tree it was measured on, which is why
 `bench/compression/readme-table.check.mjs` re-derives every figure in the block
 above from the harness rather than trusting it.
@@ -170,7 +170,7 @@ above from the harness rather than trusting it.
 symmetrically on their own fixtures, of 5,702 retention units they keep
 **2,210** directly visible in the text they send and we keep **151** — we reach
 a higher reduction partly by eliding harder, into a spill about 0.44x the size
-of the input. A further **2,283** of ours are reconstructible from the output
+of the input. A further **2,284** of ours are reconstructible from the output
 alone with no extra turn, and **3,268** are behind a path in the output, one
 `Read` away; theirs redeems **3,492** through its store, one retrieval call away.
 **Nothing is unrecoverable on either side.** All of those numbers belong in any
