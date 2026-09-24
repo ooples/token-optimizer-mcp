@@ -55,6 +55,14 @@ import { rehydrateSequence } from '../../dist/compress/rehydrate.js';
 import { expandLongRepeats } from '../../dist/compress/runs.js';
 import { describeImage, imageSize } from '../../dist/compress/images.js';
 import { PathAddressedError } from '../../dist/compress/annotate.js';
+import {
+  DEFAULTS,
+  breakEven,
+  costAt,
+  costLine,
+  markerBytes,
+  usageMultiplier,
+} from './cost-model.mjs';
 
 const dir = process.argv[2];
 if (!dir) {
@@ -652,7 +660,8 @@ for (const [name, text] of Object.entries(payloads)) {
   // `<<ccr:HASH,...>>` marker redeemed by `headroom_retrieve`; ours is a
   // spill path redeemed by a Read. Distinct, because two markers naming the
   // same hash are one retrieval, and a byte figure cannot see either.
-  const theirTurns = new Set(theirText.match(/<<ccr:[^>]*>>/g) ?? []).size;
+  const theirMarkers = [...new Set(theirText.match(/<<ccr:[^>]*>>/g) ?? [])];
+  const theirTurns = theirMarkers.length;
   let theirIn = 0;
   for (const id of want) if (theirText.includes(id)) theirIn++;
 
@@ -729,6 +738,13 @@ for (const [name, text] of Object.entries(payloads)) {
     subTurns: subSpilled.length,
     presetTurns: presetSpilled.length,
     theirTurns,
+    // PER BLOCK, not just the total. A session cost model has to know how
+    // many separate round trips the bytes arrive in and how big each one is;
+    // a single sum cannot tell one 40k fetch from thirteen 3k ones.
+    oursBlockTok: spilled.map(tokens),
+    subBlockTok: subSpilled.map(tokens),
+    presetBlockTok: presetSpilled.map(tokens),
+    theirMarkerBytes: theirMarkers.map(markerBytes),
     oursTokSpill: tokens(haveSpill),
     subTokSpill: tokens(subSpill),
     presetTokSpill: tokens(presetSpill),
@@ -874,6 +890,133 @@ const subAll = sum((r) => r.subAfter);
 const presetAll = sum((r) => r.presetAfter);
 const presetTokAll = sum((r) => r.presetTokAfter);
 const subTokAll = sum((r) => r.subTokAfter);
+
+// WHAT THE WHOLE SESSION COSTS, which is what a subscription is metered on.
+//
+// The two bounds above price a payload as if it were sent once and then
+// forgotten. An agent re-sends the conversation on every request, so the real
+// question is what the payload costs over the turns that FOLLOW it -- with the
+// cached prefix billed at a tenth, and with each retrieval charged the extra
+// request it forces rather than only the bytes it hands back. That last term
+// is the one a byte column cannot see, and it is the one that decides this
+// comparison. `cost-model.mjs` holds the model and names its two assumptions.
+const armsFor = (r, params) => {
+  const theirHanded = tokens(theirs[r.name].bestText ?? '');
+  // Their per-block split is read off their own markers; the TOTAL is measured
+  // from their resolver. A rounded `156.3KB` can move how the bytes spread
+  // across turns, never how many of them there are.
+  const bytes = r.theirMarkerBytes;
+  const byteSum = bytes.reduce((a, b) => a + b, 0);
+  const theirBlocks = bytes.map((b) =>
+    byteSum === 0 ? 0 : (r.theirTokRedeem * b) / byteSum
+  );
+  const L = (handed, blocks) => costLine({ handed, blocks, params });
+  return {
+    none: L(r.oursTokBefore, []),
+    ours: L(r.oursTokAfter, r.oursBlockTok),
+    theirs: L(theirHanded, theirBlocks),
+    preset: L(r.presetTokAfter, r.presetBlockTok),
+  };
+};
+
+const addLines = (a, b) => ({
+  fixed: a.fixed + b.fixed,
+  perFetch: a.perFetch + b.perFetch,
+});
+const ZERO = { fixed: 0, perFetch: 0 };
+const sessionCosts = rows.map((r) => {
+  const arms = armsFor(r, DEFAULTS);
+  return { name: r.name, r, arms, cross: breakEven(arms.ours, arms.theirs) };
+});
+const foldCorpus = (all) => {
+  const keys = ['none', 'ours', 'theirs', 'preset'];
+  const out = {};
+  for (const key of keys)
+    out[key] = all.reduce((acc, a) => addLines(acc, a[key]), ZERO);
+  out.cross = breakEven(out.ours, out.theirs);
+  return out;
+};
+const corpus = foldCorpus(sessionCosts.map((c) => c.arms));
+// Keyed for the record block, which walks `rows` rather than `sessionCosts`.
+const byName = Object.fromEntries(sessionCosts.map((c) => [c.name, c.arms]));
+const crossByName = Object.fromEntries(
+  sessionCosts.map((c) => [c.name, c.cross])
+);
+
+const k = (t) => `${(t / 1000).toFixed(1)}k`;
+const times = (base, arm) => `${usageMultiplier(base, arm).toFixed(2)}x`;
+// A crossing outside [0, 1] is not a missing answer, it is the strongest one:
+// the arm is cheaper at every fetch rate there is.
+const rate = (c) =>
+  c.p === null
+    ? c.cheaper === 'a'
+      ? 'always'
+      : 'never'
+    : `${(c.p * 100).toFixed(0)}%`;
+
+console.log(
+  `\nsession cost, effective input tokens -- ${DEFAULTS.turnsAfter} turns after the ` +
+    `payload, ${k(DEFAULTS.baseContextTokens)} of prior context`
+);
+console.log(
+  '                                     turns |   nothing fetched       | everything fetched | ours'
+);
+console.log(
+  'workload                         ours theirs |   none    ours  theirs |    ours     theirs | wins below'
+);
+for (const c of sessionCosts) {
+  console.log(
+    `${c.name.padEnd(32)} ${n(c.r.oursTurns, 5)} ${n(c.r.theirTurns, 6)} | ` +
+      `${n(k(costAt(c.arms.none, 0)), 6)} ${n(k(costAt(c.arms.ours, 0)), 7)} ` +
+      `${n(k(costAt(c.arms.theirs, 0)), 7)} | ` +
+      `${n(k(costAt(c.arms.ours, 1)), 7)} ${n(k(costAt(c.arms.theirs, 1)), 10)} | ` +
+      `${n(rate(c.cross), 10)}`
+  );
+}
+
+// THE SUBSCRIPTION QUESTION, answered in the unit a plan is metered in. A cap
+// is a token budget, so "costs 40% as much" and "the cap buys 2.5x as much of
+// this work" are one sentence; the second is the one that was asked.
+console.log(
+  '\nwhat a plan buys, whole corpus          effective tokens          the same cap buys'
+);
+console.log(
+  'fetch rate    nothing      ours    theirs |     ours   theirs   vs them'
+);
+for (const p of [0, 0.25, 0.5, 1]) {
+  const none = costAt(corpus.none, p);
+  const ours = costAt(corpus.ours, p);
+  const them = costAt(corpus.theirs, p);
+  console.log(
+    `${n(`${(p * 100).toFixed(0)}%`, 10)} ${n(k(none), 10)} ${n(k(ours), 9)} ${n(k(them), 9)} | ` +
+      `${n(times(none, ours), 8)} ${n(times(none, them), 8)} ${n(times(them, ours), 9)}`
+  );
+}
+console.log(
+  `ours is cheaper than theirs while the agent fetches back less than ` +
+    `${rate(corpus.cross)} of what was moved out`
+);
+
+// THE OBVIOUS ATTACK ON THE ABOVE, run rather than waited for. Both numbers in
+// DEFAULTS are guesses about how a session is used, so the table prints how far
+// the answer moves when they move.
+// AT HALF THE BLOCKS FETCHED, not at none. With nothing fetched the cache
+// factor is common to every arm and cancels, so a p = 0 column would print
+// the same ratio on every row and prove only that it had been divided out.
+console.log('\nsensitivity, at a 50% fetch rate');
+console.log('turns after   prior ctx |  ours x   theirs x | ours wins below');
+for (const turnsAfter of [5, 20, 60])
+  for (const baseContextTokens of [4000, 12000, 40000]) {
+    const params = { ...DEFAULTS, turnsAfter, baseContextTokens };
+    const c = foldCorpus(rows.map((r) => armsFor(r, params)));
+    const none = costAt(c.none, 0.5);
+    console.log(
+      `${n(turnsAfter, 11)} ${n(k(baseContextTokens), 11)} | ` +
+        `${n(times(none, costAt(c.ours, 0.5)), 7)} ` +
+        `${n(times(none, costAt(c.theirs, 0.5)), 9)} | ` +
+        `${n(rate(c.cross), 12)}`
+    );
+  }
 
 const oursChars = 1 - oursAll / beforeAll;
 const theirsChars = 1 - theirsAll / beforeAll;
@@ -1123,6 +1266,23 @@ if (process.argv[3] === '--record') {
             tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem
           ),
         },
+        // THE SESSION MODEL, which is what a subscription is metered on.
+        // `p0` assumes nothing is ever fetched back and `p1` that everything
+        // is; `breakEven` is the fetch rate at which the two arms cost the
+        // same, and is the only one of the three that rests on no guess about
+        // how long a session runs or how much context precedes the payload.
+        session: {
+          p0: {
+            none: String(Math.round(costAt(byName[r.name].none, 0))),
+            ours: String(Math.round(costAt(byName[r.name].ours, 0))),
+            theirs: String(Math.round(costAt(byName[r.name].theirs, 0))),
+          },
+          p1: {
+            ours: String(Math.round(costAt(byName[r.name].ours, 1))),
+            theirs: String(Math.round(costAt(byName[r.name].theirs, 1))),
+          },
+          breakEven: rate(crossByName[r.name]),
+        },
       },
     })),
     totals: {
@@ -1143,6 +1303,34 @@ if (process.argv[3] === '--record') {
           theirs: String(
             sum((r) => tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem)
           ),
+        },
+        // THE SAME MODEL OVER THE WHOLE CORPUS, plus the two session-shape
+        // assumptions it was evaluated under, so a reader can tell which of
+        // these figures would move if they disagreed with either.
+        session: {
+          turnsAfter: String(DEFAULTS.turnsAfter),
+          baseContextTokens: String(DEFAULTS.baseContextTokens),
+          p0: {
+            none: String(Math.round(costAt(corpus.none, 0))),
+            ours: String(Math.round(costAt(corpus.ours, 0))),
+            theirs: String(Math.round(costAt(corpus.theirs, 0))),
+          },
+          p1: {
+            none: String(Math.round(costAt(corpus.none, 1))),
+            ours: String(Math.round(costAt(corpus.ours, 1))),
+            theirs: String(Math.round(costAt(corpus.theirs, 1))),
+          },
+          breakEven: rate(corpus.cross),
+          // What the same subscription cap buys, against doing nothing at all.
+          capMultiple: {
+            oursP0: times(costAt(corpus.none, 0), costAt(corpus.ours, 0)),
+            theirsP0: times(costAt(corpus.none, 0), costAt(corpus.theirs, 0)),
+            oursP50: times(costAt(corpus.none, 0.5), costAt(corpus.ours, 0.5)),
+            theirsP50: times(
+              costAt(corpus.none, 0.5),
+              costAt(corpus.theirs, 0.5)
+            ),
+          },
         },
       },
       tokens: { ours: pct(oursTokens), theirs: pct(theirsTokens) },
