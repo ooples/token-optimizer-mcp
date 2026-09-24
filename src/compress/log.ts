@@ -400,11 +400,45 @@ function templated(lines: string[], elisions: Elision[]): string[] {
   const replaced = new Map<number, string>();
   const drop = new Set<number>();
 
-  for (const [shape, members] of groups) {
+  for (const [rawShape, members] of groups) {
     if (members.length < MIN_TEMPLATE) continue;
 
     // One row of values per occurrence, in the order they appeared.
-    const valueRows = members.map((i) => valuesOf(lines[i]));
+    let valueRows = members.map((i) => valuesOf(lines[i]));
+
+    // A COLUMN THAT NEVER VARIES IS NOT A VARIABLE. `shapeOf` blanks every
+    // digit run, so a build log covering a single day writes that day into
+    // every row: on raw-build-log the per-row value lists came to 21,279
+    // tokens, 47% of the whole compressed output, largely re-stating
+    // `2026 09 09 18` a few hundred times. That is why the workload shed 44.8%
+    // of its CHARACTERS and only 15.1% of its TOKENS -- the replacement was
+    // cheaper in bytes and barely cheaper in the unit the provider bills.
+    //
+    // The decoder needs no change for this, which is the reason to do it here
+    // rather than invent a new marker: it consumes exactly one value per `#`,
+    // so dropping a `#` and its column together keeps the two in step.
+    const width = valueRows[0].length;
+    const fixed = Array.from(
+      { length: width },
+      (_, c) =>
+        // A hoisted value is read back as template text, so one containing the
+        // placeholder would come back as a placeholder. `shapeOf` only ever
+        // sees lines without `#`, so this cannot currently fire -- it is here
+        // so that staying true is not an accident of the caller.
+        !valueRows[0][c].includes('#') &&
+        valueRows.every((row) => row[c] === valueRows[0][c])
+    );
+    let shape = rawShape;
+    // All-fixed would mean the lines are identical, which the duplicate folding
+    // above has already taken; leaving it alone keeps one owner per case.
+    if (fixed.some(Boolean) && !fixed.every(Boolean)) {
+      let column = -1;
+      shape = rawShape.replace(/#/g, () => {
+        column += 1;
+        return fixed[column] ? valueRows[0][column] : '#';
+      });
+      valueRows = valueRows.map((row) => row.filter((_, c) => !fixed[c]));
+    }
     // Values must not collide with the inline row/column delimiters. Encoding
     // handles a space, a tab and a bar; a newline cannot be encoded away
     // because it would still split the line, so such a group is still refused.
