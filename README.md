@@ -125,7 +125,7 @@ comparator can be checked without their clone. `node bench/compression/proof.mjs
 | code-search          |  17765 |  92.1% |  97.6% | ours    |
 | sre-debugging        |  65694 |  92.2% |  98.4% | ours    |
 | issue-triage         |  54174 |  72.8% |  97.3% | ours    |
-| codebase-exploration |  78502 |  47.4% |  46.0% | theirs  |
+| codebase-exploration |  78502 |  47.4% |  48.8% | ours    |
 
 <!-- PROOF-TABLE:END -->
 
@@ -133,13 +133,14 @@ Four workloads, because those are the four this arm has a published comparator
 for. The harness reports twelve; the other eight are ours alone here, and are
 scored head-to-head in the table above instead.
 
-**`codebase-exploration` is theirs, by 1.4 points.** An earlier version of this
-table claimed 61.3% for us on that row, and a later one claimed parity; both
-were figures from a branch rather than from here. Measured on this tree it is
-46.0% against their 47.4%, and it is published as a loss because that is what
-it is. A number in prose is a fact about the tree it was measured on, which is
-why `bench/compression/readme-table.check.mjs` re-derives every figure in the
-block above from the harness rather than trusting it.
+**`codebase-exploration` was theirs and is now ours, by 1.4 points.** An earlier
+version of this table claimed 61.3% for us on that row, then parity, then a
+published loss at 46.0% against their 47.4%. The first two were figures from a
+branch rather than from here; the third was true on this tree when it was
+written, and two `log` engine commits since have moved it to **48.8%**. A number
+in prose is a fact about the tree it was measured on, which is why
+`bench/compression/readme-table.check.mjs` re-derives every figure in the block
+above from the harness rather than trusting it.
 
 **Reduction is not the only column, and the other one goes to them.** Scored
 symmetrically on their own fixtures, of 5,702 retention units they keep **1,750**
@@ -151,10 +152,10 @@ theirs redeems 3,952 through its store, one retrieval call away. **Nothing is
 unrecoverable on either side.** All of those numbers belong in any quote of any
 of them.
 
-Against the four comparators in this reimplemented arm: **ours on 3, theirs on
-1.** Against their real implementation on all twelve workloads, the table at the
-top of this section: **ours on 4 of 12 by default, 12 of 12 with the dial on**,
-and ours on the corpus total in both denominators either way.
+Against the four comparators in this reimplemented arm: **ours on all four.**
+Against their real implementation on all twelve workloads, the table at the top
+of this section: **ours on 4 of 12 by default, 12 of 12 with the dial on**, and
+ours on the corpus total in both denominators either way.
 
 The two columns come from different arms of the same engine, and that is the
 point. `v3-history` compresses history too and matches them byte for byte;
@@ -525,15 +526,11 @@ planted needle disappears, because a size metric alone cannot tell compression
 from truncation.
 
 Reduction over the content each strategy is permitted to rewrite, on fixtures
-matching the four workloads HeadRoom publishes (their figures from their
-README; ours from `bench/compression`, which anyone can run):
-
-| workload             | ours  | theirs |
-| -------------------- | ----- | ------ |
-| issue triage         | 98.9% | 72.8%  |
-| code search          | 98.2% | 92.1%  |
-| SRE debugging        | 92.8% | 92.2%  |
-| codebase exploration | 61.3% | 47.4%  |
+matching the four workloads HeadRoom publishes, is the guarded table earlier in
+this section -- 97.3%, 97.6%, 98.4% and 48.8% against their 72.8%, 92.1%, 92.2%
+and 47.4%. It is stated once and checked there rather than restated here, which
+is how this copy came to claim 98.9%, 98.2%, 92.8% and 61.3% long after the
+tree had moved.
 
 These are not their corpora, which are unpublished; the code workloads read real
 files out of this repository and the rest are generated to the shape and scale
@@ -548,12 +545,12 @@ cache-weighted effective tokens on all of them:
 
 | workload        | raw reduction, ours / theirs | effective tokens, ours / theirs |
 | --------------- | ---------------------------- | ------------------------------- |
-| code search     | 85.0% / **96.8%**            | **859** / 1,068                 |
-| SRE debugging   | 86.2% / **97.2%**            | **1,783** / 2,141               |
-| issue triage    | 90.7% / **98.0%**            | **439** / 557                   |
-| grep output     | 47.1% / **53.4%**            | **6,896** / 8,971               |
-| raw build log   | 50.1% / **55.0%**            | **15,937** / 17,943             |
-| browser session | 20.3% / 20.3%                | **18,407** / 18,539             |
+| code search     | 84.6% / **95.8%**            | **999** / 1,383                 |
+| SRE debugging   | 86.2% / **97.1%**            | **1,833** / 2,261               |
+| issue triage    | 89.2% / **95.3%**            | **812** / 1,277                 |
+| grep output     | 45.9% / **51.9%**            | **7,146** / 9,514               |
+| raw build log   | 54.7% / **59.4%**            | **14,448** / 16,769             |
+| browser session | 45.7% / **49.4%**            | **11,398** / 14,685             |
 
 The competitor arm is this repository's own reimplementation of their published
 design -- opaque hash markers, history compressed, a retrieval tool and system
