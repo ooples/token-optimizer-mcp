@@ -1,5 +1,6 @@
 import { expandLongRepeats } from './runs.js';
 import { expandLog } from './expand-log.js';
+import { PATH_ID_PREFIX } from './search.js';
 import { findReferent, readBackReference } from './dedup.js';
 import { readImageBackReference } from './images.js';
 
@@ -126,8 +127,11 @@ export function expandTapRecords(text: string): string {
  * Without the constraint `18:10-20 INFO up` reads as a hunk of eleven lines
  * and a decoder eats the next eleven lines of an unrelated log.
  */
+/** `[paths @0=src/a.ts @1=src/b.ts ...]`, as `compressSearchResults` writes it. */
+const PATH_TABLE = /^\[paths ((?:[^\s=]+=[^\s]+)(?: [^\s=]+=[^\s]+)*)\]$/;
+
 const SEARCH_PATH =
-  '(?:[A-Za-z]:[\\\\/][^\\s:]*|[^\\s:]*[\\\\/][^\\s:]*|[^\\s:]+\\.[A-Za-z0-9]+)';
+  `(?:[A-Za-z]:[\\\\/][^\\s:]*|[^\\s:]*[\\\\/][^\\s:]*|[^\\s:]+\\.[A-Za-z0-9]+|${PATH_ID_PREFIX}\\d+)`;
 
 /**
  * `path:start-end` plus the two optional suffixes the encoder can append.
@@ -200,6 +204,29 @@ export function expandSearchHunks(text: string): string {
     lines.push({ raw: text.slice(i, stop), eol });
     i = stop + eol.length;
   }
+  // THE PATH TABLE, IF THE ENCODER MINTED ONE. It is the first line or it is
+  // absent; a block that never folded reads exactly as it did before.
+  const paths = new Map<string, string>();
+  const table = lines.length ? PATH_TABLE.exec(lines[0].raw) : null;
+  if (table) {
+    for (const entry of table[1].split(' ')) {
+      const at = entry.indexOf('=');
+      if (at < 1)
+        throw new Error(`rehydrate: unreadable path table entry ${entry}`);
+      paths.set(entry.slice(0, at), entry.slice(at + 1));
+    }
+    lines.shift();
+  }
+  // AN ID WITH NO TABLE ENTRY IS A TRUNCATED BLOCK, NOT A FILE NAMED `@3`.
+  // Passing it through would put a path the reader cannot resolve into a
+  // reconstruction that claims to be the original.
+  const resolve = (id: string): string => {
+    if (!id.startsWith(PATH_ID_PREFIX)) return id;
+    const path = paths.get(id);
+    if (path === undefined)
+      throw new Error(`rehydrate: hunk path ${id} is not in the path table`);
+    return path;
+  };
   const out: Line[] = [];
   for (let cursor = 0; cursor < lines.length; cursor += 1) {
     const header = SEARCH_HEADER.exec(lines[cursor].raw);
@@ -207,7 +234,8 @@ export function expandSearchHunks(text: string): string {
       out.push(lines[cursor]);
       continue;
     }
-    const [, path, first, last, marks, encoded] = header;
+    const [, id, first, last, marks, encoded] = header;
+    const path = resolve(id);
     const start = Number(first);
     const end = Number(last);
     // A DESCENDING RANGE HAS TO FAIL, NOT HANG. `src/a.ts:3-1` gives a count
@@ -248,7 +276,22 @@ export function expandSearchHunks(text: string): string {
     });
     cursor += count;
   }
-  return out.map((line) => line.raw + line.eol).join('');
+  // A HUNK TOO SHORT FOR A HEADER KEEPS ITS OWN PREFIX ON EVERY LINE, and the
+  // fold shortened those prefixes as well. They are not headers, so the loop
+  // above passed them through untouched and they would reach the caller still
+  // saying `@3:` -- a path no reader can resolve, inside output that claims to
+  // be the original.
+  return out
+    .map((line) => {
+      if (!paths.size) return line.raw + line.eol;
+      const at = line.raw.indexOf(':');
+      const id = at > 0 ? line.raw.slice(0, at) : '';
+      const path = paths.get(id);
+      return path === undefined
+        ? line.raw + line.eol
+        : path + line.raw.slice(at) + line.eol;
+    })
+    .join('');
 }
 
 /** Markers this module must consume rather than pass through as text. */
