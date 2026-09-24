@@ -723,6 +723,37 @@ for (const r of rows) {
   );
 }
 
+// THE THIRD COLUMN: WHAT COSTS A TURN.
+//
+// Neither reduction figure answers the question that decides the bill. Both
+// arms reach a high one the same way -- by not sending some of the bytes --
+// and what separates them is what the agent does next.
+//
+// THIS IS NOT MEASURED IN BYTES, and the first version of it was. `after +
+// spill` looks like the cost of full redemption and is not: our engines
+// spill the WHOLE block and keep a skeleton of it in the output, so that sum
+// counts the skeleton twice and reported -15.1% on codebase-exploration --
+// a reconstruction larger than the thing reconstructed. Capping it at the
+// payload would have hidden the double count rather than removed it.
+//
+// Information is the unit that survives the objection. Of the identifiers
+// planted in each workload, how many can the agent have WITHOUT spending a
+// turn? Ours: the ones still in the text, plus the ones the text alone
+// rebuilds. Theirs: the ones still in the text. A `<<ccr:...>>` marker is
+// never in the second group -- redeeming it is a `headroom_retrieve` call,
+// and it re-injects the block at close to its original size.
+console.log('');
+console.log(
+  'zero-turn information                       ids     ours   theirs | ours = ctx + reconstructible'
+);
+for (const r of rows) {
+  const oursFree = r.inOut + r.derived;
+  console.log(
+    `${r.name.padEnd(40)} ${n(r.ids, 8)}  ${n(oursFree, 6)}  ${n(r.theirIn, 6)} | ` +
+      `${n(r.inOut, 5)} + ${n(r.derived, 5)}`
+  );
+}
+
 const sum = (f) => rows.reduce((n, r) => n + f(r), 0);
 const beforeAll = sum((r) => r.before);
 const oursAll = sum((r) => r.after);
@@ -752,6 +783,10 @@ console.log(
 );
 console.log(
   `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload; cl100k_base on text, pixels/750 on images, both arms' real output)`
+);
+console.log(
+  `free    ours ${sum((r) => r.inOut + r.derived)}   theirs ${sum((r) => r.theirIn)}   ` +
+    `of ${sum((r) => r.ids)} identifiers, available with no extra turn`
 );
 console.log(
   `sub     chars ${pct(1 - subAll / beforeAll)}   tokens ${pct(1 - subTokAll / beforeTokAll)}   ` +
@@ -951,6 +986,8 @@ if (process.argv[3] === '--record') {
         reconstructible: String(r.derived),
         recoverable: String(r.inSpill),
         theirsInContext: String(r.theirIn),
+        oursZeroTurn: String(r.inOut + r.derived),
+        theirsZeroTurn: String(r.theirIn),
         subUnrecoverable: String(r.subGone),
       },
     })),

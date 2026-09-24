@@ -2,7 +2,7 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-24",
-  "commit": "728433187d7a1fdd5489a4cd0a2d7cdd1696041a",
+  "commit": "db4c3527bd7bd277e09f4d47c2f2270dcfed6814",
   "capture": {
     "dir": "hr-cold2/out",
     "theirsDigest": "0c2663858b875373"
@@ -29,6 +29,8 @@
         "reconstructible": "0",
         "recoverable": "61",
         "theirsInContext": "72",
+        "oursZeroTurn": "11",
+        "theirsZeroTurn": "72",
         "subUnrecoverable": "0"
       }
     },
@@ -53,6 +55,8 @@
         "reconstructible": "0",
         "recoverable": "1030",
         "theirsInContext": "1070",
+        "oursZeroTurn": "40",
+        "theirsZeroTurn": "1070",
         "subUnrecoverable": "0"
       }
     },
@@ -77,6 +81,8 @@
         "reconstructible": "281",
         "recoverable": "0",
         "theirsInContext": "281",
+        "oursZeroTurn": "281",
+        "theirsZeroTurn": "281",
         "subUnrecoverable": "0"
       }
     },
@@ -101,6 +107,8 @@
         "reconstructible": "0",
         "recoverable": "81",
         "theirsInContext": "91",
+        "oursZeroTurn": "10",
+        "theirsZeroTurn": "91",
         "subUnrecoverable": "0"
       }
     },
@@ -125,6 +133,8 @@
         "reconstructible": "333",
         "recoverable": "0",
         "theirsInContext": "0",
+        "oursZeroTurn": "375",
+        "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
       }
     },
@@ -149,6 +159,8 @@
         "reconstructible": "913",
         "recoverable": "0",
         "theirsInContext": "0",
+        "oursZeroTurn": "914",
+        "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
       }
     },
@@ -173,6 +185,8 @@
         "reconstructible": "0",
         "recoverable": "9",
         "theirsInContext": "12",
+        "oursZeroTurn": "3",
+        "theirsZeroTurn": "12",
         "subUnrecoverable": "0"
       }
     },
@@ -197,6 +211,8 @@
         "reconstructible": "0",
         "recoverable": "0",
         "theirsInContext": "0",
+        "oursZeroTurn": "0",
+        "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
       }
     },
@@ -221,6 +237,8 @@
         "reconstructible": "427",
         "recoverable": "0",
         "theirsInContext": "0",
+        "oursZeroTurn": "427",
+        "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
       }
     },
@@ -245,6 +263,8 @@
         "reconstructible": "0",
         "recoverable": "0",
         "theirsInContext": "0",
+        "oursZeroTurn": "0",
+        "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
       }
     },
@@ -269,6 +289,8 @@
         "reconstructible": "330",
         "recoverable": "0",
         "theirsInContext": "331",
+        "oursZeroTurn": "331",
+        "theirsZeroTurn": "331",
         "subUnrecoverable": "0"
       }
     },
@@ -293,6 +315,8 @@
         "reconstructible": "0",
         "recoverable": "2087",
         "theirsInContext": "353",
+        "oursZeroTurn": "42",
+        "theirsZeroTurn": "353",
         "subUnrecoverable": "0"
       }
     }
