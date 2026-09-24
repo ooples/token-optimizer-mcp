@@ -2,7 +2,7 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-24",
-  "commit": "b702c66cfc7f180e6c59984438eeb7b05c8b18ff",
+  "commit": "82a9ec898443aa6271fe0d5190ebb29ebb06c290",
   "capture": {
     "dir": "hr5/out",
     "theirsDigest": "0c2663858b875373"
@@ -251,13 +251,13 @@
         "theirs": "99.6%"
       },
       "retention": {
-        "inContext": "42",
+        "inContext": "193",
         "reconstructible": "333",
-        "recoverable": "0",
-        "theirsInContext": "0",
-        "oursZeroTurn": "375",
+        "recoverable": "54",
+        "theirsInContext": "2",
+        "oursZeroTurn": "526",
         "presetZeroTurn": "0",
-        "theirsZeroTurn": "0",
+        "theirsZeroTurn": "2",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -307,13 +307,13 @@
         "theirs": "99.6%"
       },
       "retention": {
-        "inContext": "1",
+        "inContext": "127",
         "reconstructible": "913",
         "recoverable": "0",
-        "theirsInContext": "0",
-        "oursZeroTurn": "914",
+        "theirsInContext": "1",
+        "oursZeroTurn": "1040",
         "presetZeroTurn": "0",
-        "theirsZeroTurn": "0",
+        "theirsZeroTurn": "1",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -587,13 +587,13 @@
         "theirs": "20.5%"
       },
       "retention": {
-        "inContext": "1",
+        "inContext": "27",
         "reconstructible": "330",
-        "recoverable": "0",
-        "theirsInContext": "331",
-        "oursZeroTurn": "331",
+        "recoverable": "39",
+        "theirsInContext": "396",
+        "oursZeroTurn": "357",
         "presetZeroTurn": "0",
-        "theirsZeroTurn": "331",
+        "theirsZeroTurn": "396",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -739,15 +739,15 @@
       "theirs": "0"
     },
     "retention": {
-      "units": "5702",
+      "units": "6098",
       "inContext": {
-        "ours": "150",
-        "theirs": "2210"
+        "ours": "453",
+        "theirs": "2278"
       },
       "reconstructible": "2284",
       "recoverable": {
-        "ours": "3268",
-        "theirs": "3492"
+        "ours": "3361",
+        "theirs": "3820"
       }
     }
   }
