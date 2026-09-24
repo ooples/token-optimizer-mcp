@@ -6,9 +6,10 @@
  * is a memory -- so the instrument lives in the repo and the claim is
  * regenerated on demand rather than recalled.
  *
- * Run their side first, which writes both files this reads:
+ * Run their side first, then redeem their markers, then score:
  *
  *   python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir>
+ *   python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir>
  *   node bench/compression/head-to-head.mjs <out-dir>
  *
  * FOUR RULES, because each of them has already caught a wrong answer in this work:
@@ -27,18 +28,26 @@
  *    OUR side misconfigured -- the audit has to run on both arms or it is just
  *    a bias with extra steps.
  *
- * 4. RETENTION IS SCORED, NOT ASSUMED. A compressor that deletes the answer
- *    wins on size and loses on the only thing that matters. Every identifier in
- *    the input must survive either in the output or in a named spill; anything
- *    in neither is unrecoverable loss and FAILS the run regardless of size.
+ * 4. RETENTION IS SCORED AFTER RECOVERY, ON BOTH ARMS, AND NOT ASSUMED. A
+ *    compressor that deletes the answer wins on size and loses on the only
+ *    thing that matters -- but so does a scorer that calls recoverable content
+ *    lost. Both arms elide into something, so both arms are asked to give it
+ *    back before anything is counted as gone: ours by decoding the output with
+ *    the reference decoder in `src/compress/rehydrate.ts`, theirs by handing
+ *    their marker text to their own resolver in a SEPARATE, LATER PROCESS
+ *    (`resolve-theirs.py`). Searching raw output text for substrings, which is
+ *    what this file used to do, reported factored-but-present identifiers as
+ *    losses on BOTH sides and was the single largest error in it.
  *
- * Exits non-zero if we lose on either denominator, or if any identifier is lost.
+ * Exits non-zero if we lose on either denominator, if any identifier is
+ * unrecoverable.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
 import { compressBlock } from '../../dist/compress/router.js';
+import { rehydrate } from '../../dist/compress/rehydrate.js';
 
 const dir = process.argv[2];
 if (!dir) {
@@ -50,6 +59,19 @@ if (!dir) {
 
 const payloads = JSON.parse(readFileSync(join(dir, 'payloads.json'), 'utf8'));
 const theirs = JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'));
+
+/**
+ * THEIR MARKERS, REDEEMED BY A PROCESS THAT IS NOT THE ONE THAT WROTE THEM.
+ *
+ * Optional only because it needs their package importable. Without it their
+ * store is unmeasured, and this file says so rather than scoring it as empty.
+ *
+ *   python bench/compression/headroom/resolve-theirs.py <clone-or-dash> <out-dir>
+ */
+const resolvedPath = join(dir, 'theirs-resolved.json');
+const resolved = existsSync(resolvedPath)
+  ? JSON.parse(readFileSync(resolvedPath, 'utf8'))
+  : null;
 
 /**
  * A REAL tokeniser, applied to both arms' actual output.
@@ -158,6 +180,55 @@ function queryOf(text) {
   return undefined;
 }
 
+/**
+ * EVERYTHING THE PUBLISHED DECODER CAN PUT BACK, given only the output.
+ *
+ * This is our side of the operation `resolve-theirs.py` performs on theirs,
+ * and it is deliberately the SHIPPED decoder (`src/compress/rehydrate.ts`),
+ * not a reimplementation: a bespoke expander written to score our own
+ * benchmark would be our guess at our own losslessness, and a flattering guess
+ * is indistinguishable from a result.
+ *
+ * IT HAS TO DESCEND INTO THE JSON. Most payloads here are a serialised
+ * conversation, and the compressed tool output sits inside a string value with
+ * its newlines escaped -- where the decoder's line-oriented grammars cannot
+ * see it. Offered only the whole document, it recovers nothing at all on most
+ * of these workloads, which would score them as total loss. So every string
+ * leaf is offered to it as well.
+ *
+ * A refusal is not a failure of the run. An unregistered marker grammar means
+ * the decoder declines to vouch for that fragment; the fragment then earns no
+ * credit and is named at the end. That direction can only cost us.
+ */
+const refusals = new Map();
+function recoverable(text, label) {
+  const parts = [];
+  const decode = (fragment) => {
+    try {
+      const back = rehydrate(fragment);
+      if (back !== fragment) parts.push(back);
+    } catch (error) {
+      const first = String(error.message).split('\n')[0];
+      if (!refusals.has(label)) refusals.set(label, first);
+    }
+  };
+  decode(text);
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = undefined;
+  }
+  const walk = (node) => {
+    if (typeof node === 'string') decode(node);
+    else if (Array.isArray(node)) node.forEach(walk);
+    else if (node && typeof node === 'object')
+      Object.values(node).forEach(walk);
+  };
+  if (parsed !== undefined) walk(parsed);
+  return parts.join('\n');
+}
+
 const rows = [];
 let lost = 0;
 
@@ -199,18 +270,46 @@ for (const [name, text] of Object.entries(payloads)) {
   const conserved = !grew && spillRatio <= 2;
 
   const want = identifiers(text);
-  // SUBSTRING, not set membership. Compression reformats -- a value that
-  // arrived as a JSON field may leave as part of a folded line -- and scoring
-  // by exact token equality would report reformatting as data loss. At eight
-  // characters with a digit, a coincidental substring match is not a real risk.
+
+  // RECOVER FIRST, THEN SEARCH -- on both arms -- because a substring oracle
+  // cannot see factored content and was reporting healthy compression as
+  // catastrophic loss.
+  //
+  // The grep engine hoists line numbers out of the body and states them once in
+  // a hunk header: 100 lines of `src/x.ts:142:...` become `src/x.ts:101-200`
+  // plus the bodies. Every number is still there and none of them is a literal
+  // substring any more, so `includes` turned 912 retained into 912 gone on a
+  // change that decodes back exactly. The instrument moved, not the thing being
+  // measured.
+  //
+  // WHAT THE FIX IS NOT. A first attempt demanded that a block declaring
+  // `lossless: true` reconstruct BYTE FOR BYTE, and promptly accused the JSON
+  // engine of a broken promise. It had not made one: on a JSON document the
+  // claim is about the VALUE, and dropping 38KB of indentation changes no
+  // value. A gate that cannot state the contract it is checking manufactures
+  // its own failures, which is worse than the gap it replaced.
+  //
+  // So the question asked here is the narrow one retention actually needs, and
+  // it is the same question asked of their arm: run the published decoder over
+  // the output and see what comes back. An identifier counts as recovered only
+  // if it is really there afterwards. Nothing is credited on a promise.
+  const recoveredOut = recoverable(out.text, name);
+
+  // SUBSTRING, not set membership, for what is LITERALLY present. Compression
+  // reformats -- a value that arrived as a JSON field may leave as part of a
+  // folded line -- and scoring by exact token equality would report
+  // reformatting as data loss. At eight characters with a digit, a coincidental
+  // substring match is not a real risk.
   const haveOut = out.text;
   const haveSpill = spilled.join('\n');
   let inOut = 0;
+  let derived = 0;
   let inSpill = 0;
   let gone = 0;
   const missing = [];
   for (const id of want) {
     if (haveOut.includes(id)) inOut++;
+    else if (recoveredOut.includes(id)) derived++;
     else if (haveSpill.includes(id)) inSpill++;
     else {
       gone++;
@@ -254,7 +353,28 @@ for (const [name, text] of Object.entries(payloads)) {
   const theirText = t.bestText ?? text;
   let theirIn = 0;
   for (const id of want) if (theirText.includes(id)) theirIn++;
-  const theirGone = want.size - theirIn;
+
+  // THEIR STORE, OPENED -- the other half of the same correction.
+  //
+  // The paragraph above was right that their markers are not proof of loss,
+  // and then scored them as loss anyway for want of a way to check. There is
+  // one: their resolver, run from a process that did not write the markers.
+  // It redeems them, so their elisions belong in the recoverable column
+  // exactly as our spill does, and only what neither arm can produce is gone.
+  //
+  // The difference that remains is the one worth stating plainly: our
+  // recoverable content is a path the agent already has and can open with a
+  // Read it was going to make anyway, theirs is a marker that costs a
+  // `headroom_retrieve` round trip. That is a turn, not a byte, and this file
+  // measures bytes -- so it reports the counts and leaves the trade visible
+  // rather than folding it into a score.
+  const theirResolved = resolved?.[name]?.text ?? null;
+  let theirRedeemed = 0;
+  if (theirResolved !== null)
+    for (const id of want)
+      if (!theirText.includes(id) && theirResolved.includes(id))
+        theirRedeemed++;
+  const theirGone = want.size - theirIn - theirRedeemed;
   rows.push({
     name,
     before,
@@ -268,10 +388,13 @@ for (const [name, text] of Object.entries(payloads)) {
     arm: t ? t.arm : 'n/a',
     ids: want.size,
     inOut,
+    derived,
     inSpill,
     gone,
     theirIn,
+    theirRedeemed,
     theirGone,
+    theirMeasured: theirResolved !== null,
     missing,
     conserved,
     grew,
@@ -281,15 +404,26 @@ for (const [name, text] of Object.entries(payloads)) {
 }
 
 const pct = (n) => `${(n * 100).toFixed(1)}%`;
+const n = (v, w) => String(v).padStart(w);
+// THE SAME FOUR BUCKETS ON BOTH SIDES, so a column can be read across the bar:
+//   ctx    literally present in the text the model is handed
+//   derv   not literal, but reconstructible from that text alone (ours)
+//   ccr    not literal, redeemed from their store by a later process (theirs)
+//   spill  in a file the agent can Read without asking us anything (ours)
+//   gone   produced by neither the output nor any recovery path
+// `derv`/`spill` and `ccr` are not the same cost -- see the note at the theirs
+// scoring above -- but they are the same KIND of claim, and lining them up is
+// what stops one arm's recovery counting and the other's being ignored.
 console.log(
-  'workload                  before     ours   theirs |   ours  theirs (tokens) | ids | ours: out spill gone | theirs: in gone | their arm'
+  'workload                  before     ours   theirs |   ours  theirs (tokens) |  ids | ours:  ctx  derv spill  gone | theirs:  ctx   ccr  gone | their arm'
 );
 for (const r of rows) {
   console.log(
-    `${r.name.padEnd(22)} ${String(r.before).padStart(8)}  ${pct(r.ours).padStart(6)}  ` +
+    `${r.name.padEnd(22)} ${n(r.before, 8)}  ${pct(r.ours).padStart(6)}  ` +
       `${pct(r.theirs).padStart(6)} | ${pct(r.oursTok).padStart(6)} ${pct(r.theirsTok).padStart(6)} | ` +
-      `${String(r.ids).padStart(4)} | ${String(r.inOut).padStart(9)} ${String(r.inSpill).padStart(5)} ` +
-      `${String(r.gone).padStart(4)} | ${String(r.theirIn).padStart(10)} ${String(r.theirGone).padStart(4)} | ${r.arm}` +
+      `${n(r.ids, 5)} | ${n(r.inOut, 10)} ${n(r.derived, 5)} ${n(r.inSpill, 5)} ` +
+      `${n(r.gone, 5)} | ${n(r.theirIn, 12)} ${r.theirMeasured ? n(r.theirRedeemed, 5) : '    ?'} ` +
+      `${r.theirMeasured ? n(r.theirGone, 5) : '    ?'} | ${r.arm}` +
       (r.conserved ? '' : '  !! CONSERVATION FAILED')
   );
 }
@@ -319,19 +453,23 @@ console.log(
   `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload, tokenised with cl100k_base, both arms' real output)`
 );
 // STATED NEUTRALLY, because the first version of this summary was one-sided in
-// our favour. BOTH arms elide with a recovery path -- ours a readable spill,
-// theirs a retrieval store this harness cannot open -- so "absent from their
-// text" is NOT loss, and counting our spill as retained while counting their
-// store as nothing is the same asymmetry that made the original claim wrong,
-// merely reversed.
+// our favour and the second was one-sided against us. BOTH arms elide with a
+// recovery path, so "absent from the text" is not loss on either side -- and
+// the fix for counting their store as empty was never to count ours as empty
+// too, it was to open both. Both are opened now, so the numbers below are
+// post-recovery on both arms and a `gone` is a real gone.
 //
-// The comparable figure is in-context presence, and on these fixtures it does
-// NOT favour us: the higher reduction is reached partly BY eliding more, so
-// fewer needles stay directly visible. Whether that is the better trade depends
-// on how often a needle is followed up, which this harness cannot see.
+// In-context presence still does not favour us on these fixtures: the higher
+// reduction is reached partly BY eliding more, so fewer needles stay directly
+// visible. What differs is the price of the follow-up -- a path we already
+// handed the agent versus a retrieval call -- and that is a turn, which this
+// harness does not measure and must not quietly score.
 const oursIn = sum((r) => r.inOut);
+const oursDerived = sum((r) => r.derived);
 const oursSpilled = sum((r) => r.inSpill);
 const theirsIn = sum((r) => r.theirIn);
+const theirsRedeemed = sum((r) => r.theirRedeemed);
+const theirsUnmeasured = rows.filter((r) => !r.theirMeasured);
 const allIds = sum((r) => r.ids);
 console.log(`retention units           ${allIds}`);
 console.log(
@@ -339,9 +477,21 @@ console.log(
     (theirsIn > oursIn ? '   <-- THEY keep more directly visible' : '')
 );
 console.log(
-  `  recoverable    ours ${oursSpilled} in a named spill   theirs ${allIds - theirsIn} in a store this harness cannot read`
+  `  reconstructible  ours ${oursDerived} from the output alone, no extra turn`
 );
-console.log(`  unrecoverable by us      ${lost}`);
+console.log(
+  `  recoverable    ours ${oursSpilled} via a path in the output (one Read)   ` +
+    `theirs ${theirsRedeemed} via their CCR store (one retrieval call)`
+);
+console.log(
+  `  unrecoverable  ours ${lost}   theirs ${sum((r) => (r.theirMeasured ? r.theirGone : 0))}`
+);
+if (theirsUnmeasured.length)
+  console.log(
+    `  THEIR STORE UNMEASURED on ${theirsUnmeasured.length} workload(s): no ${'theirs-resolved.json'}. ` +
+      'Their column is not comparable until ' +
+      'bench/compression/headroom/resolve-theirs.py has been run over this out-dir.'
+  );
 // SAID OUT LOUD. Most retained identifiers live in the spill, and the spill is
 // about the size of the input -- so the saving is a saving in CONTEXT, not on
 // disk. That is the design (context tokens are the billed resource and a spill
@@ -358,6 +508,11 @@ if (lostWorkloads.length)
 const unconserved = rows.filter((r) => !r.conserved).map((r) => r.name);
 if (unconserved.length)
   console.log(`CONSERVATION FAILED ON: ${unconserved.join(', ')}`);
+// NAMED, BECAUSE A DECODER GAP LOOKS EXACTLY LIKE DATA LOSS IN THE COLUMNS
+// ABOVE and the two want opposite fixes. Anything listed here was scored as if
+// unrecoverable, so the gap costs us and the list is the work queue.
+for (const [label, reason] of refusals)
+  console.log(`DECODER REFUSED on ${label}: ${reason}`);
 
 const failed =
   lost > 0 ||
