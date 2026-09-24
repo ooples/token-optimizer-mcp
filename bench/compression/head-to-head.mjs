@@ -272,13 +272,37 @@ for (const [name, text] of Object.entries(payloads)) {
         bodySpilled.push(c);
         return `.token-optimizer/spill/b${bodySpilled.length}-${hint}`;
       });
+      // WHY A ZERO IS A ZERO. compressBody declines to rewrite anything behind
+      // the client's own cache_control marker, because a rewritten prefix costs
+      // a 1.25x cache write. Claude Code puts that marker on the second-to-last
+      // user turn, so on a real multi-turn agent loop the marker sits at the END
+      // and the whole payload is off limits -- agent-loop reports 0.0% with 0
+      // elisions while compressBlock gets 93.8% off the same bytes.
+      //
+      // That is a refusal, not an inability, and the two need different
+      // responses. Printing the share behind the marker is what makes the
+      // difference visible instead of leaving a bare zero to be read as a
+      // missing engine.
+      let marker = -1;
+      parsed.forEach((m, i) => {
+        if (Array.isArray(m.content))
+          for (const b of m.content) if (b?.cache_control) marker = i;
+      });
+      const behind =
+        marker < 0
+          ? 0
+          : JSON.stringify(parsed.slice(0, marker + 1)).length /
+            JSON.stringify(parsed).length;
       body = {
+        behind,
         before: Buffer.byteLength(wrapped, 'utf8'),
         after: result.body.length,
         text: result.body.toString('utf8'),
         tokBefore: tokens(wrapped),
         tokAfter: tokens(result.body.toString('utf8')),
-        reason: result.summary.compressed ? '' : (result.summary.reason ?? ''),
+        reason: result.summary.compressed
+          ? ''
+          : `${result.summary.reason ?? ''}; ${(behind * 100).toFixed(0)}% of the payload is behind the client's cache marker`,
       };
     }
   } catch {
@@ -457,6 +481,7 @@ for (const [name, text] of Object.entries(payloads)) {
     bodyTokBefore: body?.tokBefore ?? 0,
     bodyTokAfter: body?.tokAfter ?? 0,
     bodyReason: body?.reason ?? '',
+    bodyBehind: body?.behind ?? 0,
     bodyGone,
     missing,
     conserved,
