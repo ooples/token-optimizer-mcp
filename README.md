@@ -69,7 +69,7 @@ handed the identical bytes.
 | repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% | 100.0% / 100.0% | 331 / 331 / 0 |
 | sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% | 97.1% / 97.7% | 100.0% / 100.0% | 42 / 353 / 42 |
 
-Recorded 2026-09-24 at `c786c869`, by the command in the
+Recorded 2026-09-24 at `bbc0b837`, by the command in the
 record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
 re-derive it the way it re-derives the table below -- it checks this provenance and
 these figures against `bench/compression/headroom/results/head-to-head.json` instead.

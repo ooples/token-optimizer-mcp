@@ -647,6 +647,12 @@ for (const [name, text] of Object.entries(payloads)) {
   // they lost it: their CCR store may still hold it, exactly as our spill holds
   // ours. What it can do is stop a silent asymmetry being quoted as a win.
   const theirText = t.bestText ?? text;
+  // WHAT A RECOVERY COSTS IN ROUND TRIPS, on both sides, counted the same
+  // way: one fetch per distinct place content was moved to. Theirs is a
+  // `<<ccr:HASH,...>>` marker redeemed by `headroom_retrieve`; ours is a
+  // spill path redeemed by a Read. Distinct, because two markers naming the
+  // same hash are one retrieval, and a byte figure cannot see either.
+  const theirTurns = new Set(theirText.match(/<<ccr:[^>]*>>/g) ?? []).size;
   let theirIn = 0;
   for (const id of want) if (theirText.includes(id)) theirIn++;
 
@@ -715,6 +721,21 @@ for (const [name, text] of Object.entries(payloads)) {
     conserved,
     grew,
     spillRatio,
+    // TURNS, and the tokens a turn drags back into context with it. The
+    // in-context figure alone flatters whichever arm moved the most out, so
+    // both are carried: what the agent is handed, and what it ends up paying
+    // for if it needs all of it back.
+    oursTurns: spilled.length,
+    subTurns: subSpilled.length,
+    presetTurns: presetSpilled.length,
+    theirTurns,
+    oursTokSpill: tokens(haveSpill),
+    subTokSpill: tokens(subSpill),
+    presetTokSpill: tokens(presetSpill),
+    theirTokRedeem:
+      theirResolved === null
+        ? 0
+        : Math.max(0, tokens(theirResolved) - theirAfter),
     ms,
   });
 }
@@ -790,6 +811,44 @@ for (const r of rows) {
   console.log(
     `${r.name.padEnd(40)} ${n(r.ids, 8)}  ${n(oursFree, 6)}  ${n(r.theirIn, 6)} ${n(r.presetFree, 8)} | ` +
       `${n(r.inOut, 5)} + ${n(r.derived, 5)}`
+  );
+}
+
+// WHAT THE WHOLE JOB COSTS, not what the first message costs.
+//
+// A reduction column answers "how big is the text the agent is handed". It
+// cannot answer "what did the agent pay", because content moved to a store is
+// absent from the first number and arrives in full the moment anybody wants
+// it. Both arms move content, so both get the same two bounds:
+//
+//   handed   the compressed text alone -- the optimistic case, nothing fetched
+//   whole    handed + everything the arm moved out, fetched back
+//
+// `whole` deliberately double-counts a skeleton that survives in the text and
+// arrives again inside its own spill, because that is what the agent is
+// actually billed for. It is a COST, not a reduction, and a cost above the
+// original payload is a real outcome rather than an arithmetic fault.
+//
+// PRICE IS A PARAMETER. The dollar columns exist to make the two bounds
+// comparable at a glance; every one of them scales linearly with this rate,
+// so a reader on another price multiplies rather than re-runs.
+const USD_PER_MTOK = 5;
+const usd = (tok) => (tok / 1e6) * USD_PER_MTOK;
+const money = (tok) => `$${usd(tok).toFixed(4)}`;
+
+console.log(
+  '\nturns and cost                          turns          handed tokens            whole tokens |        handed $            whole $'
+);
+console.log(
+  'workload                            ours theirs      ours    theirs       ours    theirs |    ours   theirs     ours   theirs'
+);
+for (const r of rows) {
+  const oursWhole = r.oursTokAfter + r.oursTokSpill;
+  const theirHanded = tokens(theirs[r.name].bestText ?? '');
+  const theirWhole = theirHanded + r.theirTokRedeem;
+  console.log(
+    `${r.name.padEnd(34)} ${n(r.oursTurns, 5)} ${n(r.theirTurns, 6)} ${n(r.oursTokAfter, 9)} ${n(theirHanded, 9)} ${n(oursWhole, 10)} ${n(theirWhole, 9)} | ` +
+      `${n(money(r.oursTokAfter), 7)} ${n(money(theirHanded), 8)} ${n(money(oursWhole), 8)} ${n(money(theirWhole), 8)}`
   );
 }
 
@@ -1027,7 +1086,10 @@ if (process.argv[3] === '--record') {
       },
       tokens: {
         ours: pct(r.oursTok),
-        body: r.bodyRatio === null ? null : pct(1 - r.bodyTokAfter / r.bodyTokBefore),
+        body:
+          r.bodyRatio === null
+            ? null
+            : pct(1 - r.bodyTokAfter / r.bodyTokBefore),
         preset: pct(r.presetTok),
         sub: pct(r.subTok),
         theirs: pct(r.theirsTok),
@@ -1042,9 +1104,47 @@ if (process.argv[3] === '--record') {
         theirsZeroTurn: String(r.theirIn),
         subUnrecoverable: String(r.subGone),
       },
+      // THE TWO BOUNDS, RECORDED. `handed` is the text the agent is given;
+      // `whole` is that plus everything the arm moved out, fetched back.
+      // Recording only the first is how a store-backed arm reads as free.
+      cost: {
+        turns: {
+          ours: String(r.oursTurns),
+          theirs: String(r.theirTurns),
+          preset: String(r.presetTurns),
+        },
+        handedTokens: {
+          ours: String(r.oursTokAfter),
+          theirs: String(tokens(theirs[r.name].bestText ?? '')),
+        },
+        wholeTokens: {
+          ours: String(r.oursTokAfter + r.oursTokSpill),
+          theirs: String(
+            tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem
+          ),
+        },
+      },
     })),
     totals: {
       chars: { ours: pct(oursChars), theirs: pct(theirsChars) },
+      cost: {
+        usdPerMtok: String(USD_PER_MTOK),
+        turns: {
+          ours: String(sum((r) => r.oursTurns)),
+          theirs: String(sum((r) => r.theirTurns)),
+          preset: String(sum((r) => r.presetTurns)),
+        },
+        handedTokens: {
+          ours: String(sum((r) => r.oursTokAfter)),
+          theirs: String(sum((r) => tokens(theirs[r.name].bestText ?? ''))),
+        },
+        wholeTokens: {
+          ours: String(sum((r) => r.oursTokAfter + r.oursTokSpill)),
+          theirs: String(
+            sum((r) => tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem)
+          ),
+        },
+      },
       tokens: { ours: pct(oursTokens), theirs: pct(theirsTokens) },
       sub: {
         chars: pct(1 - subAll / beforeAll),
@@ -1063,12 +1163,18 @@ if (process.argv[3] === '--record') {
         units: String(allIds),
         inContext: { ours: String(oursIn), theirs: String(theirsIn) },
         reconstructible: String(oursDerived),
-        recoverable: { ours: String(oursSpilled), theirs: String(theirsRedeemed) },
+        recoverable: {
+          ours: String(oursSpilled),
+          theirs: String(theirsRedeemed),
+        },
       },
     },
   };
-  writeFileSync(at, `${JSON.stringify(record, null, 2)}
-`);
+  writeFileSync(
+    at,
+    `${JSON.stringify(record, null, 2)}
+`
+  );
   console.log(`recorded ${rows.length} workloads to ${at}`);
 }
 
