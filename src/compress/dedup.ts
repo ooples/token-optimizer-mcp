@@ -207,6 +207,74 @@ function backReference(bytes: number, quote: string): string {
 }
 
 /**
+ * The referent a back-reference names, or null when the line is not one.
+ *
+ * THE INVERSE LIVES BESIDE THE ENCODER, for the reason `rehydrate` gives for
+ * centralising the envelope: a hand-written inverse in another file drifts from
+ * the grammar it is supposed to invert, and one that has drifted into being too
+ * forgiving passes everything. The three markers above are the whole grammar,
+ * and this is where they are read back.
+ *
+ * NOT A LOSSY MARKER, WHICH IS THE WHOLE POINT OF READING IT BACK. The content
+ * is in the same request, above -- that is exactly the claim made below when
+ * these elisions are recorded `lossless: true` with `recoverAt: null`. A
+ * decoder shown one block in isolation cannot check that claim, so it refused,
+ * and three by-design references sat on a list of suspected data loss.
+ */
+export interface BackReference {
+  /**
+   * The quoted opening with its ellipsis stripped, so it is a prefix of the
+   * referent's reader head. Null on the cheap repeat form, which carries a
+   * label and nothing else.
+   */
+  readonly needle: string | null;
+  /** The ordinal in `(#n)` or `as #n above`, or null where there is none. */
+  readonly label: number | null;
+}
+
+const SPELLED_OUT =
+  /^\s*\[\.\.\. [\d,]+ bytes, shown above: "([\s\S]*)"(?: \(#(\d+)\))?\]\s*$/;
+const REPEAT = /^\s*\[\.\.\. [\d,]+ bytes, as #(\d+) above\]\s*$/;
+
+export function readBackReference(line: string): BackReference | null {
+  const spelled = SPELLED_OUT.exec(line);
+  if (spelled) {
+    const quote = spelled[1];
+    return {
+      // `quoteFor` strips the same three characters before it tests rivals, so
+      // stripping them here asks the identical question it answered.
+      needle: quote.endsWith('...') ? quote.slice(0, -3) : quote,
+      label: spelled[2] === undefined ? null : Number(spelled[2]),
+    };
+  }
+  const repeat = REPEAT.exec(line);
+  return repeat === null ? null : { needle: null, label: Number(repeat[1]) };
+}
+
+/**
+ * The one block above whose head this quote names, or null when it names no
+ * single one.
+ *
+ * FAILING CLOSED IS THE POINT. `quoteFor` widens a quote until exactly one
+ * block above answers to it, so zero matches or two mean the output and this
+ * reader disagree about what is above -- and a decoder that picked one anyway
+ * would be vouching for a reconstruction it did not make.
+ *
+ * Duplicates collapse first because the encoder compared against a Set: two
+ * byte-identical untouchable blocks are one rival to it, and counting them as
+ * two here would refuse a reference that is perfectly well defined.
+ */
+export function findReferent(
+  needle: string,
+  above: readonly string[]
+): string | null {
+  const hits = [...new Set(above)].filter((text) =>
+    readerHead(text).startsWith(needle)
+  );
+  return hits.length === 1 ? hits[0] : null;
+}
+
+/**
  * Replaces repeated blocks with a reference to the copy already in the request.
  *
  * KEYED ON THE SOURCE, NOT ON THE COMPRESSED FORM, and this took a measurement

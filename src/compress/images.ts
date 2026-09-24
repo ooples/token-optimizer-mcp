@@ -164,6 +164,23 @@ export function imageBackReference(image: ImageBlock, ordinal: number): string {
   return `[... the same ${size}${image.mediaType} image already shown above (#${ordinal})${cost} -- not repeated here]`;
 }
 
+/**
+ * The ordinal an image back-reference names, or null when the line is not one.
+ *
+ * The inverse of the marker above, kept beside it so the two cannot drift. What
+ * the ordinal points at is the nth DISTINCT image in the request, counted in
+ * order of first appearance -- which is exactly how `dedupImages` numbers them,
+ * and why a reader resolving one needs the images above in that same order
+ * rather than a table it has to be handed separately.
+ */
+const IMAGE_BACK_REFERENCE =
+  /^\s*\[\.\.\. the same .*? image already shown above \(#(\d+)\)[^\]]*\]\s*$/;
+
+export function readImageBackReference(line: string): number | null {
+  const match = IMAGE_BACK_REFERENCE.exec(line);
+  return match === null ? null : Number(match[1]);
+}
+
 export interface ImageDedupResult {
   /** One entry per input block: the replacement, or null to keep as-is. */
   readonly replacements: readonly (string | null)[];

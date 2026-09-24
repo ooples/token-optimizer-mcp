@@ -1,4 +1,6 @@
 import { expandLog } from './expand-log.js';
+import { findReferent, readBackReference } from './dedup.js';
+import { readImageBackReference } from './images.js';
 
 /**
  * ONE ENTRY POINT FOR "REBUILD THE INPUT FROM THE OUTPUT ALONE", AND IT FAILS
@@ -284,4 +286,70 @@ export function rehydrate(text: string): string {
     if (UNCONSUMED.test(line) || UNCONSUMED_SUFFIX.test(line))
       throw new Error(`rehydrate: unconsumed marker ${JSON.stringify(line)}`);
   return out;
+}
+
+
+/**
+ * A rehydrator for a WHOLE payload: blocks handed over in the order a reader
+ * meets them, each rebuilt with the ones above it in hand.
+ *
+ * `rehydrate` answers "rebuild this block from this block", which is the right
+ * question for every engine that compresses a block in place. It is the wrong
+ * question for a back-reference. `dedupBlocks` and `dedupImages` remove a
+ * repeat and point at the copy still standing further up the SAME request, so
+ * the content is in the output -- it is simply not in the fragment holding the
+ * marker. Asked block by block the decoder refused, correctly and uselessly,
+ * and three by-design references sat on a list of suspected data loss.
+ *
+ * STILL THE STRICT ORACLE. A marker naming nothing above, or naming two things,
+ * throws. Resolving it to a guess would be the too-forgiving decoder this
+ * module exists to avoid, and the guess would be silent.
+ *
+ * `images` is the one thing a text-only reader cannot work out for itself: an
+ * image back-reference counts DISTINCT images, and telling an image block from
+ * a text block needs the structure the payload was parsed from. The caller
+ * passes their data in order of first appearance -- read off the output, where
+ * the first copy of each one is still present.
+ */
+export function rehydrateSequence(
+  images: readonly string[] = []
+): (block: string) => string {
+  const above: string[] = [];
+  const byLabel = new Map<number, string>();
+
+  return (block: string): string => {
+    const ordinal = readImageBackReference(block);
+    if (ordinal !== null) {
+      const data = images[ordinal - 1];
+      if (data === undefined)
+        throw new Error(`rehydrate: no image #${ordinal} above this block`);
+      return data;
+    }
+
+    const reference = readBackReference(block);
+    if (reference === null) {
+      const out = rehydrate(block);
+      // KEPT AS IT ARRIVED, NOT AS IT REBUILT. A quote is computed over the
+      // text that was EMITTED -- `quoteFor` separates the referent from the
+      // other emitted blocks -- so matching it against a rebuilt original
+      // would be comparing it with bytes the encoder never saw.
+      above.push(block);
+      return out;
+    }
+
+    const referent =
+      reference.needle === null
+        ? reference.label === null
+          ? null
+          : (byLabel.get(reference.label) ?? null)
+        : findReferent(reference.needle, above);
+    if (referent === null)
+      throw new Error(
+        `rehydrate: back-reference names no single block above: ${JSON.stringify(block)}`
+      );
+    // The spelled-out form is the one that carries both a quote and a label,
+    // so the cheap `as #n above` repeats after it resolve by label alone.
+    if (reference.label !== null) byLabel.set(reference.label, referent);
+    return rehydrate(referent);
+  };
 }
