@@ -8,7 +8,7 @@ import {
 // that one returned any header without `[exact declaration rows:` unchanged,
 // so the plain path-prefix hunk -- everything the engine emits below 64
 // uniform lines -- was never reconstructed by it at all.
-import { rehydrate } from '../../support/rehydrate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 function fixture(
   path = 'src/settings.ts',

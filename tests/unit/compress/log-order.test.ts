@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressLog } from '../../../src/compress/log.js';
-import { expandLog } from '../../helpers/expand-log.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
 
 describe('lossless log order and whitespace', () => {
   it('does not wrap input that already resembles its template encoding', () => {

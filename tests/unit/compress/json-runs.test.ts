@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressJsonArray } from '../../../src/compress/json-fragments.js';
-import { expandJsonRecords as expand } from '../../support/rehydrate.js';
+import { expandJsonRecords as expand } from '../../../src/compress/rehydrate.js';
 
 /**
  * AN ARITHMETIC COLUMN IS EMITTED AS A RULE, SO A DECODER MUST APPLY THE RULE.
