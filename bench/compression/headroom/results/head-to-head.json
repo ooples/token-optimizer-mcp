@@ -1,0 +1,317 @@
+{
+  "harness": "bench/compression/head-to-head.mjs",
+  "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
+  "recordedAt": "2026-09-24",
+  "commit": "3dc70c5a9b27a5d9046b9f52d87c81a4ce196b66",
+  "workloads": [
+    {
+      "name": "agent-loop",
+      "payload": "172110",
+      "chars": {
+        "ours": "93.8%",
+        "body": "0.0%",
+        "sub": "100.0%",
+        "theirs": "8.1%"
+      },
+      "tokens": {
+        "ours": "94.7%",
+        "body": "0.0%",
+        "sub": "100.0%",
+        "theirs": "6.7%"
+      },
+      "retention": {
+        "inContext": "11",
+        "reconstructible": "0",
+        "recoverable": "61",
+        "theirsInContext": "61",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "agent-loop-logs",
+      "payload": "328490",
+      "chars": {
+        "ours": "96.3%",
+        "body": "0.0%",
+        "sub": "100.0%",
+        "theirs": "4.5%"
+      },
+      "tokens": {
+        "ours": "97.1%",
+        "body": "0.0%",
+        "sub": "100.0%",
+        "theirs": "3.1%"
+      },
+      "retention": {
+        "inContext": "40",
+        "reconstructible": "0",
+        "recoverable": "1030",
+        "theirsInContext": "1065",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "browser-session",
+      "payload": "782294",
+      "chars": {
+        "ours": "5.6%",
+        "body": "49.3%",
+        "sub": "100.0%",
+        "theirs": "21.8%"
+      },
+      "tokens": {
+        "ours": "24.1%",
+        "body": "31.1%",
+        "sub": "99.9%",
+        "theirs": "13.6%"
+      },
+      "retention": {
+        "inContext": "136",
+        "reconstructible": "145",
+        "recoverable": "0",
+        "theirsInContext": "281",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "code-search",
+      "payload": "131444",
+      "chars": {
+        "ours": "95.8%",
+        "body": "84.5%",
+        "sub": "99.9%",
+        "theirs": "99.5%"
+      },
+      "tokens": {
+        "ours": "96.5%",
+        "body": "84.7%",
+        "sub": "99.9%",
+        "theirs": "99.5%"
+      },
+      "retention": {
+        "inContext": "10",
+        "reconstructible": "0",
+        "recoverable": "81",
+        "theirsInContext": "0",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "codebase-exploration",
+      "payload": "136113",
+      "chars": {
+        "ours": "53.2%",
+        "body": "36.6%",
+        "sub": "100.0%",
+        "theirs": "99.7%"
+      },
+      "tokens": {
+        "ours": "44.9%",
+        "body": "29.4%",
+        "sub": "99.9%",
+        "theirs": "99.6%"
+      },
+      "retention": {
+        "inContext": "223",
+        "reconstructible": "152",
+        "recoverable": "0",
+        "theirsInContext": "0",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "grep-output",
+      "payload": "75399",
+      "chars": {
+        "ours": "50.4%",
+        "body": "44.3%",
+        "sub": "99.9%",
+        "theirs": "99.6%"
+      },
+      "tokens": {
+        "ours": "49.8%",
+        "body": "42.7%",
+        "sub": "99.9%",
+        "theirs": "99.6%"
+      },
+      "retention": {
+        "inContext": "2",
+        "reconstructible": "912",
+        "recoverable": "0",
+        "theirsInContext": "0",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "human-authored-json",
+      "payload": "38645",
+      "chars": {
+        "ours": "96.9%",
+        "body": "39.7%",
+        "sub": "99.8%",
+        "theirs": "32.8%"
+      },
+      "tokens": {
+        "ours": "97.2%",
+        "body": "42.3%",
+        "sub": "99.9%",
+        "theirs": "31.3%"
+      },
+      "retention": {
+        "inContext": "3",
+        "reconstructible": "0",
+        "recoverable": "9",
+        "theirsInContext": "12",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "issue-triage",
+      "payload": "109534",
+      "chars": {
+        "ours": "95.3%",
+        "body": "89.0%",
+        "sub": "99.9%",
+        "theirs": "99.4%"
+      },
+      "tokens": {
+        "ours": "95.9%",
+        "body": "89.4%",
+        "sub": "99.9%",
+        "theirs": "99.5%"
+      },
+      "retention": {
+        "inContext": "0",
+        "reconstructible": "0",
+        "recoverable": "0",
+        "theirsInContext": "0",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "raw-build-log",
+      "payload": "158237",
+      "chars": {
+        "ours": "58.0%",
+        "body": "53.3%",
+        "sub": "100.0%",
+        "theirs": "99.8%"
+      },
+      "tokens": {
+        "ours": "40.1%",
+        "body": "37.7%",
+        "sub": "100.0%",
+        "theirs": "99.8%"
+      },
+      "retention": {
+        "inContext": "217",
+        "reconstructible": "210",
+        "recoverable": "0",
+        "theirsInContext": "0",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "relevance-probe",
+      "payload": "49367",
+      "chars": {
+        "ours": "96.1%",
+        "body": "85.8%",
+        "sub": "99.9%",
+        "theirs": "98.5%"
+      },
+      "tokens": {
+        "ours": "97.0%",
+        "body": "86.3%",
+        "sub": "99.9%",
+        "theirs": "98.8%"
+      },
+      "retention": {
+        "inContext": "0",
+        "reconstructible": "0",
+        "recoverable": "0",
+        "theirsInContext": "0",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "repeated-reads",
+      "payload": "152321",
+      "chars": {
+        "ours": "59.5%",
+        "body": "68.9%",
+        "sub": "100.0%",
+        "theirs": "23.0%"
+      },
+      "tokens": {
+        "ours": "48.5%",
+        "body": "65.0%",
+        "sub": "100.0%",
+        "theirs": "21.6%"
+      },
+      "retention": {
+        "inContext": "168",
+        "reconstructible": "163",
+        "recoverable": "0",
+        "theirsInContext": "331",
+        "subUnrecoverable": "0"
+      }
+    },
+    {
+      "name": "sre-debugging",
+      "payload": "312456",
+      "chars": {
+        "ours": "97.1%",
+        "body": "86.2%",
+        "sub": "100.0%",
+        "theirs": "99.8%"
+      },
+      "tokens": {
+        "ours": "97.7%",
+        "body": "86.5%",
+        "sub": "100.0%",
+        "theirs": "99.8%"
+      },
+      "retention": {
+        "inContext": "42",
+        "reconstructible": "0",
+        "recoverable": "2087",
+        "theirsInContext": "0",
+        "subUnrecoverable": "0"
+      }
+    }
+  ],
+  "totals": {
+    "chars": {
+      "ours": "58.6%",
+      "theirs": "49.7%"
+    },
+    "tokens": {
+      "ours": "76.9%",
+      "theirs": "60.0%"
+    },
+    "sub": {
+      "chars": "100.0%",
+      "tokens": "100.0%",
+      "store": "1.00x",
+      "unrecoverable": "0"
+    },
+    "spillStore": "0.44x",
+    "unrecoverable": {
+      "ours": "0",
+      "theirs": "0"
+    },
+    "retention": {
+      "units": "5702",
+      "inContext": {
+        "ours": "852",
+        "theirs": "1750"
+      },
+      "reconstructible": "1582",
+      "recoverable": {
+        "ours": "3268",
+        "theirs": "3952"
+      }
+    }
+  }
+}
