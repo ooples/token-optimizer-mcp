@@ -51,6 +51,7 @@ import { compressBlock } from '../../dist/compress/router.js';
 import { resolveTuning } from '../../dist/compress/options.js';
 import { compressBody } from '../../dist/proxy/server.js';
 import { rehydrateSequence } from '../../dist/compress/rehydrate.js';
+import { expandLongRepeats } from '../../dist/compress/runs.js';
 import { describeImage, imageSize } from '../../dist/compress/images.js';
 import { PathAddressedError } from '../../dist/compress/annotate.js';
 
@@ -246,6 +247,28 @@ const refusals = new Map();
 const pathRefusals = new Map();
 function recoverable(text, label) {
   const parts = [];
+
+  // THE WHOLE DOCUMENT FIRST, BECAUSE THAT IS WHAT WAS FOLDED. Every other
+  // pass rewrites the inside of one block, so decoding block by block matches
+  // how they were written. `foldLongRepeats` is the exception: it runs over
+  // the text `compressBlock` was handed, which for these payloads is the whole
+  // serialised request, and its marker names a run that may live in an EARLIER
+  // block. Handing the decoder one block at a time therefore asks it to
+  // resolve a back-reference against text it was never shown -- which is not a
+  // finding about the engine but about the order these two lines were in. The
+  // engine restores both folded payloads byte for byte when it is given the
+  // same scope it compressed: 735,340 -> 50,602 -> 735,340 on browser-session.
+  try {
+    const unfolded = expandLongRepeats(text);
+    if (unfolded !== text) {
+      parts.push(unfolded);
+      text = unfolded;
+    }
+  } catch (error) {
+    if (!refusals.has(label))
+      refusals.set(label, String(error.message).split(/\r?\n/)[0]);
+  }
+
   let handed = 0;
   let step = rehydrateSequence();
   const decode = (fragment) => {
