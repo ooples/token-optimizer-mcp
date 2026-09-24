@@ -39,6 +39,38 @@ export function marker(
     : `[... ${elision.removed}]`;
 }
 
+/**
+ * The path out of a lossy marker, or null when the line is not one.
+ *
+ * `rehydrate` rebuilds the input from the output ALONE, so a `-> path` marker
+ * is something it can never expand: the path is the whole point of it. That is
+ * a completely different fact from "a marker family nobody registered", and a
+ * caller which cannot tell the two apart files by-design behaviour on a defect
+ * queue -- which is exactly what the head-to-head harness was doing, reporting
+ * six refusals that were the design working.
+ *
+ * The parser lives here because this file owns the envelope both forms share.
+ */
+export function pathAddressed(line: string): string | null {
+  const match = /^\s*\[\.\.\. .* -> ([^\]]+)\]\s*$/.exec(line);
+  return match ? match[1] : null;
+}
+
+/**
+ * A marker that was recognised and is recoverable, just not from here.
+ *
+ * Carries the path so a caller can score the content as retrieved-in-one-read
+ * rather than lost.
+ */
+export class PathAddressedError extends Error {
+  readonly recoverAt: string;
+  constructor(recoverAt: string) {
+    super(`expandLog: content was moved to ${recoverAt}; read it there`);
+    this.name = 'PathAddressedError';
+    this.recoverAt = recoverAt;
+  }
+}
+
 /** An inline elision, written where the content used to be. */
 export function inlineMarker(
   removed: string,

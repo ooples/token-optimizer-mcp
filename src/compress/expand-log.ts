@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { PathAddressedError, pathAddressed } from './annotate.js';
 
 /** Independent decoder for the inline formats, using no original input. */
 /**
@@ -107,6 +108,14 @@ export function expandLog(text: string): string {
       // a new marker family nobody taught it, and the LOSSY form
       // `[... what went -> path]`, which by construction cannot be
       // rebuilt from the output alone -- the path is the whole point.
+      //
+      // BOTH REFUSE, BUT THEY ARE NOT THE SAME FACT. The second is the design
+      // working and its content is one `Read` away; the first is a gap. Sharing
+      // one error type meant a caller had to tell them apart by matching on
+      // message text, so the head-to-head harness filed six by-design refusals
+      // on a queue meant for defects. The path travels with the refusal now.
+      const at = pathAddressed(line);
+      if (at !== null) throw new PathAddressedError(at);
       throw new Error(`expandLog: unrecognised marker ${JSON.stringify(line)}`);
     } else result.push(line);
   }
