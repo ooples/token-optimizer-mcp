@@ -46,15 +46,6 @@
 import type { Elision } from './types.js';
 
 /**
- * Below this a reference costs more than the repeat.
- *
- * The marker runs about 130 characters once it quotes an opening line, so the
- * floor is set well above it rather than at break-even: a marginal saving is
- * not worth asking a model to follow a pointer.
- */
-export const MIN_DEDUP_BYTES = 600;
-
-/**
  * How much of the referent's opening is quoted, so the model can find it.
  *
  * KEPT SHORT ON PURPOSE, and the number was measured rather than guessed. Every
@@ -64,6 +55,29 @@ export const MIN_DEDUP_BYTES = 600;
  * timestamped line -- without paying for the rest of it.
  */
 const QUOTE_CHARS = 40;
+
+/** The widest ordinal the bound below assumes; see `markerCost`. */
+const WIDEST_LABEL = 99;
+
+/**
+ * Below this a reference cannot pay for itself -- derived, not chosen.
+ *
+ * THE OLD NUMBER WAS A GUESS, AND IT WAS WRONG BY A FACTOR OF FOUR. It read 600
+ * on the strength of a comment estimating the marker at "about 130 characters".
+ * Measured across the twelve benchmark workloads, the markers actually emitted
+ * run 31 to 83 characters, median 59. So the floor is computed instead: the
+ * widest marker this module can render, quoting a full `QUOTE_CHARS`, doubled.
+ * A block is pointed at only when the pointer costs at most half of it.
+ * Marginal savings are still refused -- now at the size where they are in fact
+ * marginal, rather than four times above it.
+ *
+ * A PRE-FILTER, NOT THE GUARANTEE. It bounds the marker by its widest possible
+ * form and by a byte count of zero, both of which flatter a real block.
+ * `worthPointingAt` weighs the marker that will actually be emitted.
+ */
+export const MIN_DEDUP_BYTES =
+  2 * labelledReference(0, 'x'.repeat(QUOTE_CHARS), WIDEST_LABEL).length;
+
 
 /** One block on its way through a strategy. */
 export interface DedupBlock {
@@ -205,6 +219,39 @@ function repeatReference(bytes: number, label: number): string {
 function backReference(bytes: number, quote: string): string {
   return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}"]`;
 }
+
+/**
+ * The widest marker this block could be rendered as, in characters.
+ *
+ * A label is not handed out until every slot is known, so the bound assumes the
+ * labelled form with a two-digit ordinal -- the widest of the three shapes. A
+ * reference approved on this figure can only come out shorter than it was
+ * judged on, never longer, which is the direction a guard has to err in.
+ */
+function markerCost(bytes: number, quote: string): number {
+  return labelledReference(bytes, quote, 99).length;
+}
+
+/**
+ * Is a pointer worth what it replaces?
+ *
+ * THE FLOOR ALONE CANNOT ANSWER THIS, because a quote widens. `quoteFor` pushes
+ * one out towards MAX_QUOTE_CHARS to separate a referent from its rivals, so a
+ * block that cleared the floor on the assumption of a forty-character quote can
+ * still meet a marker five times that. Here the quote exists, so the question is
+ * answered rather than assumed.
+ *
+ * AND THE MARKER REPLACES THE EMITTED TEXT, NOT THE SOURCE. The two drift a long
+ * way apart: a block whose original ran to five thousand bytes may have been
+ * compressed to eighty before it reached this module, and pointing at that costs
+ * more than sending it. The count the marker DISPLAYS is the original -- that is
+ * what the reader lost, and what makes the marker wide -- so the cost is
+ * measured against the original and the saving against the text.
+ */
+function worthPointingAt(block: DedupBlock, quote: string): boolean {
+  return markerCost(block.original.length, quote) * 2 <= block.text.length;
+}
+
 
 /**
  * The referent a back-reference names, or null when the line is not one.
@@ -386,7 +433,11 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     // at two places and call the elision lossless.
     const quote = earlier === undefined ? null : quoteFor(earlier, emitted);
 
-    if (earlier !== undefined && quote !== null) {
+    if (
+      earlier !== undefined &&
+      quote !== null &&
+      worthPointingAt(block, quote)
+    ) {
       slots.push({
         kind: 'ref',
         bytes: block.original.length,

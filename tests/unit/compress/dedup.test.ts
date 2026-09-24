@@ -284,3 +284,74 @@ describe('a referent pointed at twice is spelled out once', () => {
     expect(refs(out.texts).some((t) => /as #\d+ above/.test(t))).toBe(true);
   });
 });
+
+/**
+ * A pointer has to be cheaper than the bytes it replaces, and the floor alone
+ * cannot promise that.
+ *
+ * The floor assumes a forty-character quote. `quoteFor` does not promise one:
+ * it widens a quote until exactly one block above answers to it, out towards
+ * MAX_QUOTE_CHARS, so two blocks that agree for a hundred and sixty characters
+ * force a marker four times the assumed width. Before this was weighed, such a
+ * block cleared the floor and was replaced by a marker nearly as long as
+ * itself -- a saving of a few dozen characters, in exchange for asking a model
+ * to go and find the referent. The module's own rule is that a marginal saving
+ * is not worth a pointer; this is where the rule is applied to the marker that
+ * will actually be emitted rather than to an assumed one.
+ */
+describe('a reference is only emitted when it pays for itself', () => {
+  // The shared opening is what forces the quote wide: `quoteFor` cannot
+  // separate these two blocks until it has quoted past everything they agree
+  // on, so the marker carries all 165 characters of it.
+  const shared = 'shared opening that two blocks agree on for a long way '.repeat(
+    3
+  );
+  const pair = (tail: number): readonly DedupBlock[] =>
+    [
+      `${shared}${'A'.repeat(tail)}`,
+      `${shared}${'B'.repeat(tail)}`,
+      `${shared}${'A'.repeat(tail)}`,
+    ].map((t) => block(t));
+
+  const isMarker = (text: string): boolean => /^\[\.\.\. /.test(text);
+
+  it('sends the block when the marker would cost more than half of it', () => {
+    const blocks = pair(40);
+    // Comfortably over the floor, so the floor is not what refuses it.
+    expect(blocks[2].text.length).toBeGreaterThan(MIN_DEDUP_BYTES);
+
+    const { texts, elisions } = dedupBlocks(blocks);
+    expect(isMarker(texts[2])).toBe(false);
+    expect(texts[2]).toBe(blocks[2].text);
+    // And nothing was claimed to have been removed.
+    expect(elisions).toHaveLength(0);
+  });
+
+  it('still emits one once the block is worth the marker', () => {
+    // THE SAME SHAPE, ONLY BIGGER, which is what makes the test above mean
+    // something. The quote is just as wide and just as ambiguous here, so if
+    // this case also came back whole the refusal above would prove nothing
+    // about economics -- it would only show the quote had failed to resolve.
+    const blocks = pair(500);
+    const { texts } = dedupBlocks(blocks);
+
+    expect(isMarker(texts[2])).toBe(true);
+    expect(texts[2].length * 2).toBeLessThanOrEqual(blocks[2].text.length);
+  });
+
+  it('never emits a marker that is not worth its block, anywhere', () => {
+    // THE INVARIANT ITSELF, rather than the two points above it. Whatever the
+    // quote had to widen to, the emitted marker is at most half the text it
+    // stands in for -- which is the property the derived floor is only a cheap
+    // approximation of.
+    let seen = 0;
+    for (let tail = 20; tail <= 900; tail += 20) {
+      const blocks = pair(tail);
+      const { texts } = dedupBlocks(blocks);
+      if (!isMarker(texts[2])) continue;
+      seen += 1;
+      expect(texts[2].length * 2).toBeLessThanOrEqual(blocks[2].text.length);
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+});
