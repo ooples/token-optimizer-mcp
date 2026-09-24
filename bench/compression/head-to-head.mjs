@@ -50,6 +50,7 @@ import { compressBlock } from '../../dist/compress/router.js';
 import { compressBody } from '../../dist/proxy/server.js';
 import { rehydrate } from '../../dist/compress/rehydrate.js';
 import { imageSize } from '../../dist/compress/images.js';
+import { PathAddressedError } from '../../dist/compress/annotate.js';
 
 const dir = process.argv[2];
 if (!dir) {
@@ -231,6 +232,13 @@ function queryOf(text) {
  * credit and is named at the end. That direction can only cost us.
  */
 const refusals = new Map();
+// NOT A DEFECT, AND IT USED TO SHARE A LIST WITH ONE. `rehydrate` rebuilds from
+// the output ALONE, so a `[... what went -> path]` marker is something it can
+// never expand -- the path is the whole point of it. Six of those sat on a
+// queue the comment above calls the work queue, which is how a queue stops
+// being read. They are counted, because a column of them growing IS worth
+// seeing, but they are not named as gaps.
+const pathRefusals = new Map();
 function recoverable(text, label) {
   const parts = [];
   const decode = (fragment) => {
@@ -238,11 +246,14 @@ function recoverable(text, label) {
       const back = rehydrate(fragment);
       if (back !== fragment) parts.push(back);
     } catch (error) {
+      if (error instanceof PathAddressedError) {
+        pathRefusals.set(label, (pathRefusals.get(label) ?? 0) + 1);
+        return;
+      }
       const first = String(error.message).split('\n')[0];
       if (!refusals.has(label)) refusals.set(label, first);
     }
   };
-  decode(text);
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -255,7 +266,15 @@ function recoverable(text, label) {
     else if (node && typeof node === 'object')
       Object.values(node).forEach(walk);
   };
+  // A SERIALISED MESSAGE LIST IS NOT A BLOCK, and handing one to a line-oriented
+  // decoder asks a question with no answer: the document is one line with every
+  // newline escaped, so a marker claiming 8 folded rows meets 135 candidates and
+  // the decoder correctly refuses. That refusal said nothing about our output --
+  // it was the harness mis-addressing the decoder -- and it produced four of the
+  // names on the gap list. The blocks are the string leaves, so when the payload
+  // parses, the leaves are the whole of the attempt.
   if (parsed !== undefined) walk(parsed);
+  else decode(text);
   return parts.join('\n');
 }
 
