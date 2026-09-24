@@ -2,9 +2,9 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-24",
-  "commit": "db4c3527bd7bd277e09f4d47c2f2270dcfed6814",
+  "commit": "c786c869f01a808ae026cfc614b0a87be35d8d15",
   "capture": {
-    "dir": "hr-cold2/out",
+    "dir": "hr-cold4/out",
     "theirsDigest": "0c2663858b875373"
   },
   "workloads": [
@@ -15,12 +15,14 @@
       "chars": {
         "ours": "93.8%",
         "body": "0.0%",
+        "preset": "93.8%",
         "sub": "100.0%",
         "theirs": "41.9%"
       },
       "tokens": {
         "ours": "94.7%",
         "body": "0.0%",
+        "preset": "94.7%",
         "sub": "100.0%",
         "theirs": "46.7%"
       },
@@ -30,6 +32,7 @@
         "recoverable": "61",
         "theirsInContext": "72",
         "oursZeroTurn": "11",
+        "presetZeroTurn": "11",
         "theirsZeroTurn": "72",
         "subUnrecoverable": "0"
       }
@@ -41,12 +44,14 @@
       "chars": {
         "ours": "96.3%",
         "body": "0.0%",
+        "preset": "96.3%",
         "sub": "100.0%",
         "theirs": "51.3%"
       },
       "tokens": {
         "ours": "97.1%",
         "body": "0.0%",
+        "preset": "97.1%",
         "sub": "100.0%",
         "theirs": "45.8%"
       },
@@ -56,6 +61,7 @@
         "recoverable": "1030",
         "theirsInContext": "1070",
         "oursZeroTurn": "40",
+        "presetZeroTurn": "40",
         "theirsZeroTurn": "1070",
         "subUnrecoverable": "0"
       }
@@ -67,12 +73,14 @@
       "chars": {
         "ours": "93.7%",
         "body": "49.9%",
+        "preset": "100.0%",
         "sub": "100.0%",
         "theirs": "21.8%"
       },
       "tokens": {
         "ours": "28.9%",
         "body": "35.6%",
+        "preset": "99.9%",
         "sub": "99.9%",
         "theirs": "13.6%"
       },
@@ -82,6 +90,7 @@
         "recoverable": "0",
         "theirsInContext": "281",
         "oursZeroTurn": "281",
+        "presetZeroTurn": "0",
         "theirsZeroTurn": "281",
         "subUnrecoverable": "0"
       }
@@ -93,12 +102,14 @@
       "chars": {
         "ours": "95.8%",
         "body": "84.5%",
+        "preset": "95.8%",
         "sub": "99.9%",
         "theirs": "47.5%"
       },
       "tokens": {
         "ours": "96.5%",
         "body": "84.7%",
+        "preset": "96.5%",
         "sub": "99.9%",
         "theirs": "53.5%"
       },
@@ -108,6 +119,7 @@
         "recoverable": "81",
         "theirsInContext": "91",
         "oursZeroTurn": "10",
+        "presetZeroTurn": "10",
         "theirsZeroTurn": "91",
         "subUnrecoverable": "0"
       }
@@ -119,12 +131,14 @@
       "chars": {
         "ours": "57.4%",
         "body": "40.8%",
+        "preset": "100.0%",
         "sub": "100.0%",
         "theirs": "99.7%"
       },
       "tokens": {
         "ours": "50.3%",
         "body": "34.8%",
+        "preset": "99.9%",
         "sub": "99.9%",
         "theirs": "99.6%"
       },
@@ -134,6 +148,7 @@
         "recoverable": "0",
         "theirsInContext": "0",
         "oursZeroTurn": "375",
+        "presetZeroTurn": "0",
         "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
       }
@@ -145,12 +160,14 @@
       "chars": {
         "ours": "57.4%",
         "body": "51.0%",
+        "preset": "99.9%",
         "sub": "99.9%",
         "theirs": "99.6%"
       },
       "tokens": {
         "ours": "52.8%",
         "body": "45.4%",
+        "preset": "99.9%",
         "sub": "99.9%",
         "theirs": "99.6%"
       },
@@ -160,6 +177,7 @@
         "recoverable": "0",
         "theirsInContext": "0",
         "oursZeroTurn": "914",
+        "presetZeroTurn": "0",
         "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
       }
@@ -171,12 +189,14 @@
       "chars": {
         "ours": "96.9%",
         "body": "47.0%",
+        "preset": "96.9%",
         "sub": "99.8%",
         "theirs": "32.8%"
       },
       "tokens": {
         "ours": "97.2%",
         "body": "47.8%",
+        "preset": "97.2%",
         "sub": "99.9%",
         "theirs": "31.3%"
       },
@@ -186,6 +206,7 @@
         "recoverable": "9",
         "theirsInContext": "12",
         "oursZeroTurn": "3",
+        "presetZeroTurn": "3",
         "theirsZeroTurn": "12",
         "subUnrecoverable": "0"
       }
@@ -197,12 +218,14 @@
       "chars": {
         "ours": "95.3%",
         "body": "89.0%",
+        "preset": "95.3%",
         "sub": "99.9%",
         "theirs": "53.1%"
       },
       "tokens": {
         "ours": "95.9%",
         "body": "89.4%",
+        "preset": "95.9%",
         "sub": "99.9%",
         "theirs": "54.4%"
       },
@@ -212,6 +235,7 @@
         "recoverable": "0",
         "theirsInContext": "0",
         "oursZeroTurn": "0",
+        "presetZeroTurn": "0",
         "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
       }
@@ -223,12 +247,14 @@
       "chars": {
         "ours": "70.7%",
         "body": "63.8%",
+        "preset": "100.0%",
         "sub": "100.0%",
         "theirs": "99.8%"
       },
       "tokens": {
         "ours": "47.7%",
         "body": "43.1%",
+        "preset": "100.0%",
         "sub": "100.0%",
         "theirs": "99.8%"
       },
@@ -238,6 +264,7 @@
         "recoverable": "0",
         "theirsInContext": "0",
         "oursZeroTurn": "427",
+        "presetZeroTurn": "0",
         "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
       }
@@ -249,12 +276,14 @@
       "chars": {
         "ours": "96.1%",
         "body": "85.8%",
+        "preset": "96.1%",
         "sub": "99.9%",
         "theirs": "64.3%"
       },
       "tokens": {
         "ours": "97.0%",
         "body": "86.3%",
+        "preset": "97.0%",
         "sub": "99.9%",
         "theirs": "65.4%"
       },
@@ -264,6 +293,7 @@
         "recoverable": "0",
         "theirsInContext": "0",
         "oursZeroTurn": "0",
+        "presetZeroTurn": "0",
         "theirsZeroTurn": "0",
         "subUnrecoverable": "0"
       }
@@ -275,12 +305,14 @@
       "chars": {
         "ours": "74.3%",
         "body": "71.9%",
+        "preset": "100.0%",
         "sub": "100.0%",
         "theirs": "22.8%"
       },
       "tokens": {
         "ours": "69.7%",
         "body": "68.7%",
+        "preset": "100.0%",
         "sub": "100.0%",
         "theirs": "20.5%"
       },
@@ -290,6 +322,7 @@
         "recoverable": "0",
         "theirsInContext": "331",
         "oursZeroTurn": "331",
+        "presetZeroTurn": "0",
         "theirsZeroTurn": "331",
         "subUnrecoverable": "0"
       }
@@ -301,12 +334,14 @@
       "chars": {
         "ours": "97.1%",
         "body": "86.2%",
+        "preset": "97.1%",
         "sub": "100.0%",
         "theirs": "88.4%"
       },
       "tokens": {
         "ours": "97.7%",
         "body": "86.5%",
+        "preset": "97.7%",
         "sub": "100.0%",
         "theirs": "90.5%"
       },
@@ -316,6 +351,7 @@
         "recoverable": "2087",
         "theirsInContext": "353",
         "oursZeroTurn": "42",
+        "presetZeroTurn": "42",
         "theirsZeroTurn": "353",
         "subUnrecoverable": "0"
       }

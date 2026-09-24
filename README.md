@@ -49,27 +49,27 @@ handed the identical bytes.
      `bench/compression/headroom/results/head-to-head.json`. Guarded by
      `node bench/compression/readme-headroom.check.mjs`; do not hand-edit.
      The first three cells are `characters / tokens`, tokens from cl100k_base
-     over both arms' real output. `zero-turn ids` is `ours / theirs`: of the
+     over both arms' real output. `zero-turn ids` is `ours / theirs / preset`: of the
      identifiers planted in that workload, how many the agent can have without
      spending a turn -- in the text, or rebuilt from the text alone.
      -->
 
-| workload             | payload |        theirs |          ours | ours, dial on   | zero-turn ids |
-| -------------------- | ------: | ------------: | ------------: | --------------- | ------------: |
-| agent-loop           | 172,110 | 41.9% / 46.7% | 93.8% / 94.7% | 100.0% / 100.0% |       11 / 72 |
-| agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% | 100.0% / 100.0% |     40 / 1070 |
-| browser-session      | 782,294 | 21.8% / 13.6% | 93.7% / 28.9% | 100.0% / 99.9%  |     281 / 281 |
-| code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% | 99.9% / 99.9%   |       10 / 91 |
-| codebase-exploration | 136,113 | 99.7% / 99.6% | 57.4% / 50.3% | 100.0% / 99.9%  |       375 / 0 |
-| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% | 99.9% / 99.9%   |       914 / 0 |
-| human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% | 99.8% / 99.9%   |        3 / 12 |
-| issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% | 99.9% / 99.9%   |         0 / 0 |
-| raw-build-log        | 158,237 | 99.8% / 99.8% | 70.7% / 47.7% | 100.0% / 100.0% |       427 / 0 |
-| relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% | 99.9% / 99.9%   |         0 / 0 |
-| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% |     331 / 331 |
-| sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% | 100.0% / 100.0% |      42 / 353 |
+| workload             | payload |        theirs |          ours | ours, preset  | ours, dial on   | zero-turn ids |
+| -------------------- | ------: | ------------: | ------------: | ------------: | --------------- | ------------: |
+| agent-loop           | 172,110 | 41.9% / 46.7% | 93.8% / 94.7% | 93.8% / 94.7% | 100.0% / 100.0% |  11 / 72 / 11 |
+| agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% | 96.3% / 97.1% | 100.0% / 100.0% | 40 / 1070 / 40 |
+| browser-session      | 782,294 | 21.8% / 13.6% | 93.7% / 28.9% | 100.0% / 99.9% | 100.0% / 99.9%  | 281 / 281 / 0 |
+| code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% | 95.8% / 96.5% | 99.9% / 99.9%   |  10 / 91 / 10 |
+| codebase-exploration | 136,113 | 99.7% / 99.6% | 57.4% / 50.3% | 100.0% / 99.9% | 100.0% / 99.9%  |   375 / 0 / 0 |
+| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% | 99.9% / 99.9% | 99.9% / 99.9%   |   914 / 0 / 0 |
+| human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% | 96.9% / 97.2% | 99.8% / 99.9%   |    3 / 12 / 3 |
+| issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% | 95.3% / 95.9% | 99.9% / 99.9%   |     0 / 0 / 0 |
+| raw-build-log        | 158,237 | 99.8% / 99.8% | 70.7% / 47.7% | 100.0% / 100.0% | 100.0% / 100.0% |   427 / 0 / 0 |
+| relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% | 96.1% / 97.0% | 99.9% / 99.9%   |     0 / 0 / 0 |
+| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% | 100.0% / 100.0% | 331 / 331 / 0 |
+| sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% | 97.1% / 97.7% | 100.0% / 100.0% | 42 / 353 / 42 |
 
-Recorded 2026-09-24 at `db4c3527`, by the command in the
+Recorded 2026-09-24 at `c786c869`, by the command in the
 record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
 re-derive it the way it re-derives the table below -- it checks this provenance and
 these figures against `bench/compression/headroom/results/head-to-head.json` instead.
@@ -139,6 +139,20 @@ It is **off by default**, because the trade is real: 1,672 of the 2,284
 identifiers a reader can rebuild from our output with no extra turn sit in
 exactly the blocks it would move. On by default, this would be their product
 with a better marker.
+
+**`ours, preset` is the same dial at the setting a caller would actually run**
+-- `spillWholeBlockBelow: 0.9`, so a block is moved only where the engines could
+not take 90% off it. On seven of the twelve rows it changes nothing at all: the
+figure is the shipped one, the block stays in the request, and the zero-turn
+count is untouched. On the other five it matches their headline -- 100.0% on
+`codebase-exploration`, 99.9% on `grep-output`, 100.0% on `raw-build-log` -- and
+it buys that the same way they do. **Those five rows are exactly where our
+zero-turn wins live**, and the column takes all of them: 375, 914, 427, 331 and
+281 go to 0. Over the corpus it is 98.1% of the characters against 89.0%, and
+106 zero-turn identifiers against 2,434. Nothing becomes unrecoverable -- the
+loss column is 0 on every row -- but a moved block is a turn, and the preset
+column is published so that trade is visible rather than folded into a
+headline. It is off by default for the same reason.
 
 Reproduce the whole table:
 

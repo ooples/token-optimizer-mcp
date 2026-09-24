@@ -415,6 +415,26 @@ for (const [name, text] of Object.entries(payloads)) {
     tuning: resolveTuning({ spillWholeBlockBelow: 1 }),
   });
 
+  // THE PRESET ARM: THE DIAL AT THE SETTING A CALLER WOULD ACTUALLY RUN.
+  //
+  // The `sub` column above is a like-for-like against a content cache and is
+  // deliberately unusable as a product -- at a threshold of 1 no saving is ever
+  // good enough, so a block the engines took 96% off is moved out anyway and the
+  // reader loses it. At 0.9 the move fires only where the engines could not reach
+  // 90%, which on this corpus is the three log-and-grep shapes and nothing else.
+  // Every well-compressed block stays in the request, so the reduction is mostly
+  // real and the zero-turn column mostly survives; that pair is the claim, and it
+  // is only checkable if the arm is published separately from the one at 1.
+  const presetSpilled = [];
+  const preset = compressBlock(text, {
+    spill: (content, hint) => {
+      presetSpilled.push(content);
+      return `.token-optimizer/spill/p${presetSpilled.length}-${hint}`;
+    },
+    query: queryOf(text),
+    tuning: resolveTuning({ spillWholeBlockBelow: 0.9 }),
+  });
+
   // THE SECOND ARM. compressBlock takes a text string, so a payload's image
   // blocks reach it only as base64 inside serialised JSON -- browser-session is
   // 88.6% screenshots, and src/compress/images.ts (which deduplicates them) is
@@ -568,6 +588,19 @@ for (const [name, text] of Object.entries(payloads)) {
     )
       subGone++;
 
+  // THE PRESET ARM IS SCORED ON BOTH COLUMNS, because its whole claim is that it
+  // buys reduction without buying it out of the reader's pocket. `presetFree` is
+  // the zero-turn count: in the text, or rebuilt from the text alone. `presetGone`
+  // is the loss column every other arm here answers.
+  const presetRecovered = recoverable(preset.text, `${name} (preset)`);
+  const presetSpill = presetSpilled.join('\n');
+  let presetGone = 0;
+  let presetFree = 0;
+  for (const id of want) {
+    if (preset.text.includes(id) || presetRecovered.includes(id)) presetFree++;
+    else if (!presetSpill.includes(id)) presetGone++;
+  }
+
   let bodyGone = 0;
   if (body !== null) {
     const bodyRecovered = recoverable(body.text, `${name} (body)`);
@@ -672,6 +705,12 @@ for (const [name, text] of Object.entries(payloads)) {
     subTok: 1 - tokens(sub.text) / tokens(text),
     subTokAfter: tokens(sub.text),
     subGone,
+    presetAfter: preset.text.length,
+    presetRatio: 1 - preset.text.length / before,
+    presetTok: 1 - tokens(preset.text) / tokens(text),
+    presetTokAfter: tokens(preset.text),
+    presetFree,
+    presetGone,
     missing,
     conserved,
     grew,
@@ -744,12 +783,12 @@ for (const r of rows) {
 // and it re-injects the block at close to its original size.
 console.log('');
 console.log(
-  'zero-turn information                       ids     ours   theirs | ours = ctx + reconstructible'
+  'zero-turn information                       ids     ours   theirs   preset | ours = ctx + reconstructible'
 );
 for (const r of rows) {
   const oursFree = r.inOut + r.derived;
   console.log(
-    `${r.name.padEnd(40)} ${n(r.ids, 8)}  ${n(oursFree, 6)}  ${n(r.theirIn, 6)} | ` +
+    `${r.name.padEnd(40)} ${n(r.ids, 8)}  ${n(oursFree, 6)}  ${n(r.theirIn, 6)} ${n(r.presetFree, 8)} | ` +
       `${n(r.inOut, 5)} + ${n(r.derived, 5)}`
   );
 }
@@ -770,6 +809,11 @@ const theirsTokAll = sum((r) =>
 // They are not a compression ratio and the line below says so: a moved block is
 // on disk, and `spill store` reports what that costs.
 const subAll = sum((r) => r.subAfter);
+// THE PRESET ARM'S TOTALS, likewise. Part of this one IS a compression ratio --
+// the blocks the engines kept -- and part of it is a move, which is why it is
+// reported next to its own zero-turn count rather than on its own.
+const presetAll = sum((r) => r.presetAfter);
+const presetTokAll = sum((r) => r.presetTokAfter);
 const subTokAll = sum((r) => r.subTokAfter);
 
 const oursChars = 1 - oursAll / beforeAll;
@@ -787,6 +831,11 @@ console.log(
 console.log(
   `free    ours ${sum((r) => r.inOut + r.derived)}   theirs ${sum((r) => r.theirIn)}   ` +
     `of ${sum((r) => r.ids)} identifiers, available with no extra turn`
+);
+console.log(
+  `preset  chars ${pct(1 - presetAll / beforeAll)}   tokens ${pct(1 - presetTokAll / beforeTokAll)}   ` +
+    `free ${sum((r) => r.presetFree)}   lost ${sum((r) => r.presetGone)}   ` +
+    '(spillWholeBlockBelow 0.9: move only what the engines could not take 90% off)'
 );
 console.log(
   `sub     chars ${pct(1 - subAll / beforeAll)}   tokens ${pct(1 - subTokAll / beforeTokAll)}   ` +
@@ -972,12 +1021,14 @@ if (process.argv[3] === '--record') {
       chars: {
         ours: pct(r.ours),
         body: r.bodyRatio === null ? null : pct(r.bodyRatio),
+        preset: pct(r.presetRatio),
         sub: pct(r.subRatio),
         theirs: pct(r.theirs),
       },
       tokens: {
         ours: pct(r.oursTok),
         body: r.bodyRatio === null ? null : pct(1 - r.bodyTokAfter / r.bodyTokBefore),
+        preset: pct(r.presetTok),
         sub: pct(r.subTok),
         theirs: pct(r.theirsTok),
       },
@@ -987,6 +1038,7 @@ if (process.argv[3] === '--record') {
         recoverable: String(r.inSpill),
         theirsInContext: String(r.theirIn),
         oursZeroTurn: String(r.inOut + r.derived),
+        presetZeroTurn: String(r.presetFree),
         theirsZeroTurn: String(r.theirIn),
         subUnrecoverable: String(r.subGone),
       },
