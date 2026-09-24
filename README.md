@@ -40,8 +40,81 @@ Providers cache the prompt prefix: cached tokens re-read at **0.1x**, rewritten
 ones bill at **1.25x**. Most compressors optimise bytes removed and ignore that
 multiplier. This one optimises the bill.
 
-**It wins both columns.** Against a faithful reimplementation of the leading
-open compressor's published design, `node bench/compression/proof.mjs`:
+**It wins both columns, against their real implementation, on their own
+fixtures.** Not a reimplementation and not our fixtures: their harness compresses
+the payload, dumps it, their resolver redeems their own markers, and ours is
+handed the identical bytes.
+
+<!-- HEADROOM-TABLE:START -- every figure below must appear in
+     `bench/compression/headroom/results/head-to-head.json`. Guarded by
+     `node bench/compression/readme-headroom.check.mjs`; do not hand-edit.
+     Each cell is `characters / tokens`, tokens from cl100k_base over both
+     arms' real output. -->
+
+| workload             | payload |         theirs |            ours | ours, dial on   |
+| -------------------- | ------: | -------------: | --------------: | --------------- |
+| agent-loop           | 172,110 |    8.1% / 6.7% |   93.8% / 94.7% | 100.0% / 100.0% |
+| agent-loop-logs      | 328,490 |    4.5% / 3.1% |   96.3% / 97.1% | 100.0% / 100.0% |
+| browser-session      | 782,294 |  21.8% / 13.6% |    5.6% / 24.1% | 100.0% / 99.9%  |
+| code-search          | 131,444 |  99.5% / 99.5% |   95.8% / 96.5% | 99.9% / 99.9%   |
+| codebase-exploration | 136,113 |  99.7% / 99.6% |   53.2% / 44.9% | 100.0% / 99.9%  |
+| grep-output          |  75,399 |  99.6% / 99.6% |   50.4% / 49.8% | 99.9% / 99.9%   |
+| human-authored-json  |  38,645 |  32.8% / 31.3% |   96.9% / 97.2% | 99.8% / 99.9%   |
+| issue-triage         | 109,534 |  99.4% / 99.5% |   95.3% / 95.9% | 99.9% / 99.9%   |
+| raw-build-log        | 158,237 |  99.8% / 99.8% |   58.0% / 40.1% | 100.0% / 100.0% |
+| relevance-probe      |  49,367 |  98.5% / 98.8% |   96.1% / 97.0% | 99.9% / 99.9%   |
+| repeated-reads       | 152,321 |  23.0% / 21.6% |   59.5% / 48.5% | 100.0% / 100.0% |
+| sre-debugging        | 312,456 |  99.8% / 99.8% |   97.1% / 97.7% | 100.0% / 100.0% |
+
+<!-- HEADROOM-TABLE:END -->
+
+Over the corpus the shipped default takes **58.6%** of the characters and
+**76.9%** of the tokens; theirs takes 49.7% and 60.0%. Nothing is unrecoverable
+on either side.
+
+**Read the rows, though, because eight of them are not ours.** On
+`grep-output`, `codebase-exploration` and `raw-build-log` they report ~99.7% and
+we report 50–58%, and that gap is not a compression result. Their number there is
+a **content-cache reference**: the block is not made smaller, it is taken out of
+the request, put in a store, and replaced by a 24-character `<<ccr:...>>` marker.
+Ours are real reductions of text that is still in the request and still readable.
+The two columns are measuring different things, and the honest way to say so is
+to publish the like-for-like beside them.
+
+**`ours, dial on` is that like-for-like, and it is substitution, not reduction.**
+Set `spillWholeBlockBelow` and a block our engines could not compress is moved
+out of the request whole, leaving `[... n bytes, moved whole -> path]`. It wins
+all twelve rows on both denominators, but nothing there was compressed: the bytes
+are on disk, at **1.00x** the input, and the ratio is a measurement of a move.
+Any quote of that column that omits this sentence is a misquote.
+
+Two things make it the better version of their trade, which is the only reason
+it exists. It is **gated on the saving our engines actually reached**, not on
+block size, so a block we compressed well stays in the request where the reader
+still has it — a content cache moves it regardless. And the marker carries a
+**path the agent already has**, so following it is a `Read` it issues itself,
+where a cache reference costs a retrieval round trip and degrades to
+`[unresolved: entry not found]` once the store has moved on.
+
+It is **off by default**, because the trade is real: 1,274 of the 1,582
+identifiers a reader can rebuild from our output with no extra turn sit in
+exactly the blocks it would move. On by default, this would be their product
+with a better marker.
+
+Reproduce the whole table:
+
+```bash
+python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir>
+python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir>
+node bench/compression/head-to-head.mjs <out-dir>
+```
+
+### Against their published design
+
+A second arm reimplements their published design from their own benchmark
+generator's definitions — opaque hash markers, history compressed, a retrieval
+tool and system message injected — so the four workloads with a published
+comparator can be checked without their clone. `node bench/compression/proof.mjs`:
 
 <!-- PROOF-TABLE:START -- every figure below must appear in the output of
      `node bench/compression/proof.mjs`. Guarded by
@@ -56,9 +129,9 @@ open compressor's published design, `node bench/compression/proof.mjs`:
 
 <!-- PROOF-TABLE:END -->
 
-Four workloads, because those are the four with a published comparator. The
-harness reports twelve; the other eight are ours alone and are not a
-head-to-head.
+Four workloads, because those are the four this arm has a published comparator
+for. The harness reports twelve; the other eight are ours alone here, and are
+scored head-to-head in the table above instead.
 
 **`codebase-exploration` is theirs, by 1.4 points.** An earlier version of this
 table claimed 61.3% for us on that row, and a later one claimed parity; both
@@ -69,15 +142,19 @@ why `bench/compression/readme-table.check.mjs` re-derives every figure in the
 block above from the harness rather than trusting it.
 
 **Reduction is not the only column, and the other one goes to them.** Scored
-symmetrically on their own fixtures, of 3,793 retention units they keep **1,890**
-directly visible in the text they send and we keep **345** — we reach a higher
-reduction partly by eliding harder, into a spill about 0.94x the size of the
-input. Nothing is unrecoverably lost on our side, and a retrieval costs a turn.
-Both numbers belong in any quote of either.
+symmetrically on their own fixtures, of 5,702 retention units they keep **1,750**
+directly visible in the text they send and we keep **852** — we reach a higher
+reduction partly by eliding harder, into a spill about 0.44x the size of the
+input. A further **1,582** of ours are reconstructible from the output alone with
+no extra turn, and **3,268** are behind a path in the output, one `Read` away;
+theirs redeems 3,952 through its store, one retrieval call away. **Nothing is
+unrecoverable on either side.** All of those numbers belong in any quote of any
+of them.
 
-Against the four published comparators: **ours on 3, theirs on 1.**
-The tally is over comparators, not over workloads -- the harness runs twelve
-and eight of them have nothing to compare against.
+Against the four comparators in this reimplemented arm: **ours on 3, theirs on
+1.** Against their real implementation on all twelve workloads, the table at the
+top of this section: **ours on 4 of 12 by default, 12 of 12 with the dial on**,
+and ours on the corpus total in both denominators either way.
 
 The two columns come from different arms of the same engine, and that is the
 point. `v3-history` compresses history too and matches them byte for byte;
