@@ -149,8 +149,46 @@ check('B3', 'the published tables are reproducible by their harnesses', () => {
   if (!h.ok || !h.out.includes('AGREES with the recorded run')) {
     return fail('README head-to-head figures disagree with the recorded run');
   }
+  // AND THE RECORD HAS TO DESCRIBE THIS TREE, not an older one. The check above
+  // compares prose to the record and would agree just as happily if the record
+  // were taken before the compressor changed -- both sides would be consistent
+  // and both would be out of date. So the one thing that cannot be re-measured
+  // here is instead bounded: if nothing under `src/compress` has moved since the
+  // commit the record names, the figures still describe what this tree does.
+  //
+  // A FAILURE HERE IS NOT A BUG, IT IS A RE-RECORD. The remedy is the record's
+  // own `regenerate` field, and it needs the clone -- which is exactly why this
+  // is a shippability blocker rather than something CI could be asked to fix.
+  const record = JSON.parse(
+    read('bench/compression/headroom/results/head-to-head.json')
+  );
+  const moved = run('git', [
+    'diff',
+    '--name-only',
+    record.commit,
+    'HEAD',
+    '--',
+    'src/compress',
+  ]);
+  if (!moved.ok) {
+    return fail(
+      `cannot compare src/compress against the recorded commit ` +
+        `${record.commit.slice(0, 8)}`
+    );
+  }
+  const changed = moved.out
+    .split('\n')
+    .filter((line) => line.trim() !== '');
+  if (changed.length) {
+    return fail(
+      `the head-to-head record is from ${record.commit.slice(0, 8)} and ` +
+        `${changed.length} compressor file(s) have changed since, starting ` +
+        `with ${changed[0]} -- re-record with: ${record.regenerate}`
+    );
+  }
   return pass(
-    [t, h].map((x) => x.out.trim().split('\n').slice(-2)[0]).join(' | ')
+    [t, h].map((x) => x.out.trim().split('\n').slice(-2)[0]).join(' | ') +
+      ' | src/compress unchanged since the record'
   );
 });
 
