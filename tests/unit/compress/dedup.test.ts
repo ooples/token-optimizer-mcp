@@ -3,6 +3,7 @@ import { dedupBlocks, MIN_DEDUP_BYTES } from '../../../src/compress/dedup.js';
 import type { DedupBlock } from '../../../src/compress/dedup.js';
 import { v1Frontier, v3History } from '../../../src/compress/strategy.js';
 import type { ProviderRequest } from '../../../src/compress/frontier.js';
+import { rehydrateSequence } from '../../../src/compress/rehydrate.js';
 
 /**
  * Cross-block dedup: the same bytes, sent twice, charged twice.
@@ -303,9 +304,8 @@ describe('a reference is only emitted when it pays for itself', () => {
   // The shared opening is what forces the quote wide: `quoteFor` cannot
   // separate these two blocks until it has quoted past everything they agree
   // on, so the marker carries all 165 characters of it.
-  const shared = 'shared opening that two blocks agree on for a long way '.repeat(
-    3
-  );
+  const shared =
+    'shared opening that two blocks agree on for a long way '.repeat(3);
   const pair = (tail: number): readonly DedupBlock[] =>
     [
       `${shared}${'A'.repeat(tail)}`,
@@ -353,5 +353,67 @@ describe('a reference is only emitted when it pays for itself', () => {
       expect(texts[2].length * 2).toBeLessThanOrEqual(blocks[2].text.length);
     }
     expect(seen).toBeGreaterThan(0);
+  });
+});
+
+describe('a mirrored stretch is worded once and still walks back', () => {
+  // Twelve distinct blocks, then the same twelve again in the same order --
+  // the shape an agent produces when it re-sends its message list a turn later,
+  // and the shape the quoted form charges for twelve times over.
+  const mirror = (n: number): readonly DedupBlock[] => {
+    const first = Array.from({ length: n }, (_, i) => big(`svc-${i} :: `));
+    return [...first, ...first].map((t) => block(t));
+  };
+  const RUN = /^\[\.\.\. [\d,]+ bytes, next above\]$/;
+
+  it('spells out the first reference and orders the rest', () => {
+    const { texts } = dedupBlocks(mirror(12));
+    const back = texts.slice(12);
+    expect(back[0]).toMatch(/^\[\.\.\. [\d,]+ bytes, shown above: "/);
+    expect(back.slice(1).every((t) => RUN.test(t))).toBe(true);
+  });
+
+  it('costs less than quoting every one of them', () => {
+    const blocks = mirror(12);
+    const { texts } = dedupBlocks(blocks);
+    const run = texts.slice(12).join('').length;
+    // The same references, worded the way they were before runs existed: every
+    // one of them spelled out. NOT A CONSTANT -- if the run form ever stopped
+    // paying, this would catch it rather than enshrining today's number.
+    const quoted = texts[12].length * 12;
+    expect(run).toBeLessThan(quoted);
+  });
+
+  it('gives every block back, through the decoder that ships', () => {
+    const blocks = mirror(12);
+    const { texts } = dedupBlocks(blocks);
+
+    // NOT VACUOUS: the run form has to be in what is being decoded, or this
+    // proves only that literals survive.
+    expect(texts.filter((t) => RUN.test(t)).length).toBe(11);
+
+    const decode = rehydrateSequence();
+    expect(texts.map(decode)).toEqual(blocks.map((b) => b.text));
+  });
+
+  it('refuses a run form with no reference before it', () => {
+    const { texts } = dedupBlocks(mirror(12));
+    const orphan = texts.find((t) => RUN.test(t));
+    expect(orphan).toBeDefined();
+    // Handed the marker alone, a decoder knows of no walk to continue. Guessing
+    // would be the forgiving decoder this module exists to avoid.
+    expect(() => rehydrateSequence()(orphan as string)).toThrow(
+      /names no single block above/
+    );
+  });
+
+  it('refuses a run form whose walk was broken by a literal', () => {
+    const { texts } = dedupBlocks(mirror(12));
+    const decode = rehydrateSequence();
+    texts.slice(0, 14).forEach(decode);
+    // A literal between the reference and its continuation is a stretch the
+    // encoder never emits, so the decoder must not resolve one.
+    expect(() => decode(big('interloper :: '))).not.toThrow();
+    expect(() => decode(texts[14])).toThrow(/names no single block above/);
   });
 });

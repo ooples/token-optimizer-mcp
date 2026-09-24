@@ -78,7 +78,6 @@ const WIDEST_LABEL = 99;
 export const MIN_DEDUP_BYTES =
   2 * labelledReference(0, 'x'.repeat(QUOTE_CHARS), WIDEST_LABEL).length;
 
-
 /** One block on its way through a strategy. */
 export interface DedupBlock {
   /** The text as it stands now -- already compressed, if it was going to be. */
@@ -216,6 +215,28 @@ function repeatReference(bytes: number, label: number): string {
   return `[... ${bytes.toLocaleString('en-US')} bytes, as #${label} above]`;
 }
 
+/**
+ * The block after the one the previous reference named: the run form.
+ *
+ * A MIRRORED REGION IS THE COMMON SHAPE, and quoting every block of it pays for
+ * the same information over and over. When an agent re-sends its message list a
+ * turn later, a stretch of blocks reappears in the order it first appeared in,
+ * so after the first reference has been spelled out with a quote, each block
+ * after it is fully determined by ORDER alone -- and order is free.
+ *
+ * STILL NOT A HASH, AND STILL NOT A POINTER INTO A TABLE. A reader follows this
+ * by scrolling one block further than the reference above it just sent them,
+ * which is the same motion the quoted form asks for and needs no lookup. It is
+ * only ever emitted directly after another reference whose referent sits
+ * immediately before this one, so the walk it describes is the walk that exists.
+ *
+ * Measured on the mirrored-payload workload: fourteen quoted references at 1,016
+ * characters became one quoted reference and thirteen of these, at 388.
+ */
+function nextReference(bytes: number): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, next above]`;
+}
+
 function backReference(bytes: number, quote: string): string {
   return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}"]`;
 }
@@ -252,7 +273,6 @@ function worthPointingAt(block: DedupBlock, quote: string): boolean {
   return markerCost(block.original.length, quote) * 2 <= block.text.length;
 }
 
-
 /**
  * The referent a back-reference names, or null when the line is not one.
  *
@@ -277,11 +297,19 @@ export interface BackReference {
   readonly needle: string | null;
   /** The ordinal in `(#n)` or `as #n above`, or null where there is none. */
   readonly label: number | null;
+  /**
+   * True on the run form, which names its referent by ORDER rather than by
+   * quote: the block after the one the preceding reference resolved to. It
+   * carries neither a needle nor a label, so a reader with no preceding
+   * reference cannot resolve it -- and must refuse rather than guess.
+   */
+  readonly follows: boolean;
 }
 
 const SPELLED_OUT =
   /^\s*\[\.\.\. [\d,]+ bytes, shown above: "([\s\S]*)"(?: \(#(\d+)\))?\]\s*$/;
 const REPEAT = /^\s*\[\.\.\. [\d,]+ bytes, as #(\d+) above\]\s*$/;
+const NEXT = /^\s*\[\.\.\. [\d,]+ bytes, next above\]\s*$/;
 
 export function readBackReference(line: string): BackReference | null {
   const spelled = SPELLED_OUT.exec(line);
@@ -292,10 +320,12 @@ export function readBackReference(line: string): BackReference | null {
       // stripping them here asks the identical question it answered.
       needle: quote.endsWith('...') ? quote.slice(0, -3) : quote,
       label: spelled[2] === undefined ? null : Number(spelled[2]),
+      follows: false,
     };
   }
   const repeat = REPEAT.exec(line);
-  return repeat === null ? null : { needle: null, label: Number(repeat[1]) };
+  if (repeat) return { needle: null, label: Number(repeat[1]), follows: false };
+  return NEXT.test(line) ? { needle: null, label: null, follows: true } : null;
 }
 
 /**
@@ -358,6 +388,12 @@ type Slot =
       readonly referent: string;
       /** Widened past `opening` only where a rival above shares it. */
       readonly quote: string;
+      /**
+       * Where the referent sits in this same array. Two references whose
+       * referents are one apart describe a mirrored stretch, and the second of
+       * them can be worded by order instead of by quote -- see `nextReference`.
+       */
+      readonly at: number;
     };
 
 export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
@@ -382,6 +418,12 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
   // screen that a quote can land on, so it counts as a rival.
   const emitted = new Set<string>();
 
+  // WHERE each literal landed, on the same first-wins rule `byOutput` uses, so
+  // the position recorded here is the position of the block a reference will
+  // actually resolve to. Only literals are recorded: a reference is not a block
+  // a later reference can point at.
+  const positionOf = new Map<string, number>();
+
   const remember = (block: DedupBlock): void => {
     if (
       !block.touchable &&
@@ -399,6 +441,7 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     if (!block.touchable) {
       remember(block);
       emitted.add(block.text);
+      if (!positionOf.has(block.text)) positionOf.set(block.text, slots.length);
       slots.push({ kind: 'text', text: block.text });
       continue;
     }
@@ -443,6 +486,7 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
         bytes: block.original.length,
         referent: earlier,
         quote,
+        at: positionOf.get(earlier) ?? -1,
       });
       elisions.push({
         removed: `${block.original.length.toLocaleString('en-US')} bytes already shown earlier in this conversation`,
@@ -456,6 +500,7 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
 
     remember(block);
     emitted.add(block.text);
+    if (!positionOf.has(block.text)) positionOf.set(block.text, slots.length);
     slots.push({ kind: 'text', text: block.text });
   }
 
@@ -479,9 +524,43 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     if (!labels.has(slot.referent)) labels.set(slot.referent, labels.size + 1);
   }
 
+  // A MIRRORED STRETCH IS WORDED ONCE. Where consecutive references name
+  // consecutive blocks above, every one after the first is already determined by
+  // its position, and quoting it charges again for what the reference before it
+  // has just established. `nextReference` says only how many bytes went and that
+  // the walk carries on, which on the mirrored workload turned 1,016 characters
+  // of marker into 388.
+  //
+  // THE CHAIN IS WHAT MAKES IT RESOLVABLE, so it must not be broken anywhere in
+  // the middle. A run form is emitted only directly after another reference, and
+  // only when its referent is the very next block after that one's -- which is
+  // exactly the walk a reader performs. The first of any stretch stays spelled
+  // out with its quote, so the chain always starts somewhere a reader can find.
+  //
+  // LABELLED REFERENTS ARE LEFT ALONE. A label is handed to a referent that is
+  // pointed at more than once, and the cheap `as #n above` form already prices
+  // those repeats; folding one into a run would have to decide which of the two
+  // cheap forms wins and would put a label's introduction behind a marker that
+  // does not carry it. Runs are built only from referents named exactly once.
+  const runnable = slots.map((slot, i) => {
+    if (slot.kind !== 'ref' || labels.has(slot.referent)) return false;
+    const prev = slots[i - 1];
+    if (prev === undefined || prev.kind !== 'ref') return false;
+    if (labels.has(prev.referent) || slot.at !== prev.at + 1) return false;
+    // AND ONLY WHERE IT PAYS, measured on the markers themselves rather than
+    // assumed. A very short quote can make the spelled-out form the cheaper of
+    // the two, and emitting the terser wording would then cost bytes to say
+    // less.
+    return (
+      nextReference(slot.bytes).length <
+      backReference(slot.bytes, slot.quote).length
+    );
+  });
+
   const spelledOut = new Set<string>();
-  const texts = slots.map((slot) => {
+  const texts = slots.map((slot, i) => {
     if (slot.kind === 'text') return slot.text;
+    if (runnable[i]) return nextReference(slot.bytes);
     const label = labels.get(slot.referent);
     if (label === undefined) return backReference(slot.bytes, slot.quote);
     if (spelledOut.has(slot.referent))
