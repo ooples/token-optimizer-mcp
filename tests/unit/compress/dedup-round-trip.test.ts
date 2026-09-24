@@ -37,24 +37,42 @@ function readerHead(text: string): string {
 }
 
 const MARKER =
-  /^\[\.\.\. [\d,]+ bytes, (?:shown above: "(.*)"(?: \(#(\d+)\))?|as #(\d+) above)\]$/;
+  /^\[\.\.\. [\d,]+ bytes, (?:shown above: "(.*)"(?: \(#(\d+)\))?|as #(\d+) above|(next above))\]$/;
 
 /** The elided text, recovered from what a model can see and nothing else. */
 function reconstruct(texts: readonly string[]): string[] {
   const out: string[] = [];
   const byLabel = new Map<number, string>();
+  // ALSO A READER'S RULE, AND DELIBERATELY NOT THE EMITTER'S. `next above` says
+  // the block after the one the marker before it named, so a reader follows it
+  // by scrolling one further than they just scrolled -- nothing about slots,
+  // positions or first-wins maps, which is what the emitter reasons in. Written
+  // that way it can disagree with the emitter, which is the point of this file.
+  //
+  // Where the reader is not mid-walk there is no "one further", so it refuses.
+  let walked = -1;
   for (const text of texts) {
     const m = MARKER.exec(text);
     if (m === null) {
       out.push(text);
+      walked = -1;
       continue;
     }
-    const [, quoted, introduced, repeated] = m;
+    const [, quoted, introduced, repeated, next] = m;
+    if (next !== undefined) {
+      const referent = walked < 0 ? undefined : out[walked + 1];
+      if (referent === undefined)
+        throw new Error('"next above" continues a walk that is not running');
+      out.push(referent);
+      walked += 1;
+      continue;
+    }
     if (repeated !== undefined) {
       const referent = byLabel.get(Number(repeated));
       if (referent === undefined)
         throw new Error(`#${repeated} was never introduced above`);
       out.push(referent);
+      walked = out.indexOf(referent);
       continue;
     }
     const needle = quoted.endsWith('...') ? quoted.slice(0, -3) : quoted;
@@ -66,6 +84,7 @@ function reconstruct(texts: readonly string[]): string[] {
         `"${quoted}" names ${found.length} blocks above, not one`
       );
     out.push(found[0]);
+    walked = out.indexOf(found[0]);
     if (introduced !== undefined) byLabel.set(Number(introduced), found[0]);
   }
   return out;

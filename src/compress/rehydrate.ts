@@ -288,7 +288,6 @@ export function rehydrate(text: string): string {
   return out;
 }
 
-
 /**
  * A rehydrator for a WHOLE payload: blocks handed over in the order a reader
  * meets them, each rebuilt with the ones above it in hand.
@@ -316,6 +315,13 @@ export function rehydrateSequence(
 ): (block: string) => string {
   const above: string[] = [];
   const byLabel = new Map<number, string>();
+  // WHERE THE LAST REFERENCE LEFT THE READER, as an index into `above`. The run
+  // form names its referent by order -- the block after that one -- so following
+  // it means remembering where the walk had got to. A literal block puts it back
+  // to nowhere, because the encoder only ever emits a run form directly after
+  // another reference; a decoder that carried the position across a literal
+  // would resolve something the encoder never wrote.
+  let walkedTo = -1;
 
   return (block: string): string => {
     const ordinal = readImageBackReference(block);
@@ -334,11 +340,20 @@ export function rehydrateSequence(
       // other emitted blocks -- so matching it against a rebuilt original
       // would be comparing it with bytes the encoder never saw.
       above.push(block);
+      walkedTo = -1;
       return out;
     }
 
-    const referent =
-      reference.needle === null
+    const referent = reference.follows
+      ? // NOT `above[walkedTo + 1]` ON ITS OWN. With the walk at nowhere, that
+        // index is zero, and a run form arriving with no reference before it
+        // would quietly resolve to the FIRST block above instead of refusing --
+        // the decoder vouching for a reconstruction it never made. Caught by
+        // the test that breaks a walk with a literal and asks for a refusal.
+        walkedTo < 0
+        ? null
+        : (above[walkedTo + 1] ?? null)
+      : reference.needle === null
         ? reference.label === null
           ? null
           : (byLabel.get(reference.label) ?? null)
@@ -350,6 +365,10 @@ export function rehydrateSequence(
     // The spelled-out form is the one that carries both a quote and a label,
     // so the cheap `as #n above` repeats after it resolve by label alone.
     if (reference.label !== null) byLabel.set(reference.label, referent);
+    // Advance the walk, so a stretch of run forms steps one block at a time.
+    // `indexOf` is the first copy, which is the one the encoder pointed at: it
+    // records a literal's position on the same first-wins rule.
+    walkedTo = reference.follows ? walkedTo + 1 : above.indexOf(referent);
     return rehydrate(referent);
   };
 }
