@@ -52,14 +52,18 @@ export function expandLog(text: string): string {
       } else if (!templates && scattered) {
         const data: {
           firstPrefix: string;
+          // Absent on anything written before the shared lead was factored out,
+          // and on a group whose prefixes share too little for it to pay.
+          lead?: string;
           copiesAtLines: Array<[number, string]>;
         } = JSON.parse(scattered[2]);
+        const lead = data.lead ?? '';
         const first = retained.at(-1)!;
         assert(first.startsWith(data.firstPrefix));
         assert.equal(data.copiesAtLines.length, Number(scattered[1]));
         const body = first.slice(data.firstPrefix.length);
         for (const [position, prefix] of data.copiesAtLines)
-          put(position, prefix + body);
+          put(position, lead + prefix + body);
       } else retained.push(line);
     }
     const result: string[] = [];
