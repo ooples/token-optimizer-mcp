@@ -38,6 +38,12 @@ that happen to disagree.
 
 Usage:
     python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir>
+    python bench/compression/headroom/run-theirs.py - <out-dir> --extra <payloads.json>
+
+`--extra` carries payloads this script did not generate -- our own twelve
+fixtures, exported by `node bench/compression/export-payloads.mjs`. Carried and
+generated payloads are driven identically: the same three entry points, the
+same budget sweep, the same best-of. A clone of `-` skips their generators.
 
 Writes <out-dir>/payloads.json (the exact bytes our side must compress) and
 <out-dir>/theirs.json (their best result per workload, with the arm named).
@@ -51,14 +57,27 @@ import sys
 # compiled _core extension; the installed wheel has it. Prepending the clone
 # shadows the wheel and the router fails to import, so the clone goes LAST and
 # supplies only `benchmarks`, which the wheel does not ship.
+# A CLONE OF `-` MEANS "NOT GENERATING THEIR FIXTURES HERE". Every compressor
+# this script drives comes from the installed wheel; the clone supplies only
+# `benchmarks`, their fixture generators. A run that carries its own payloads
+# therefore needs no clone, and refusing to start without one would mean their
+# binary could never be measured on anybody else's workload.
 CLONE = sys.argv[1]
 OUT = sys.argv[2]
-sys.path.append(CLONE)
+EXTRA = sys.argv[sys.argv.index("--extra") + 1] if "--extra" in sys.argv else None
+if CLONE != "-":
+    sys.path.append(CLONE)
 
 import random  # noqa: E402
 
-from benchmarks.scenarios import conversations as C  # noqa: E402
-from benchmarks.scenarios import tool_outputs as T  # noqa: E402
+try:
+    from benchmarks.scenarios import conversations as C  # noqa: E402
+    from benchmarks.scenarios import tool_outputs as T  # noqa: E402
+
+    HAVE_THEIR_FIXTURES = True
+except ImportError:
+    C = T = None
+    HAVE_THEIR_FIXTURES = False
 
 
 def tokens(text):
@@ -79,14 +98,38 @@ random.seed(42)
 # `native` is the generator's own return value -- a message list for the two
 # conversation workloads, which is what their pipeline consumes. `text` is the
 # serialisation both sides are scored on.
-WORKLOADS = {
-    "log-entries": T.generate_log_entries(400),
-    "search-results": T.generate_search_results(300),
-    "api-responses": T.generate_api_responses(200),
-    "database-rows": T.generate_database_rows(300),
-    "agentic-conversation": C.generate_anthropic_agentic_conversation(12),
-    "rag-conversation": C.generate_rag_conversation(40000),
-}
+WORKLOADS = {}
+if HAVE_THEIR_FIXTURES:
+    WORKLOADS.update(
+        {
+            "log-entries": T.generate_log_entries(400),
+            "search-results": T.generate_search_results(300),
+            "api-responses": T.generate_api_responses(200),
+            "database-rows": T.generate_database_rows(300),
+            "agentic-conversation": C.generate_anthropic_agentic_conversation(12),
+            "rag-conversation": C.generate_rag_conversation(40000),
+        }
+    )
+
+# CARRIED PAYLOADS GET THE IDENTICAL TREATMENT, which is the only reason they
+# may be compared. They enter as `native` -- the generator's own shape -- so a
+# message list stays a message list and their pipeline sees its native path,
+# exactly as their own fixtures do. Serialising ours to a flat string first
+# would hand them a worse entry point on our workloads than on theirs, and the
+# difference would read as their capability rather than as our harness.
+if EXTRA:
+    with open(EXTRA, encoding="utf-8") as handle:
+        carried = json.load(handle)
+    for name in sorted(carried):
+        if name in WORKLOADS:
+            raise SystemExit("carried payload %r collides with one of theirs" % name)
+        WORKLOADS[name] = carried[name]
+
+if not WORKLOADS:
+    raise SystemExit(
+        "no workloads. Pass a headroom clone for their fixtures, "
+        "--extra <payloads.json> for carried ones, or both."
+    )
 
 PAYLOADS = {name: text_of(value) for name, value in WORKLOADS.items()}
 
