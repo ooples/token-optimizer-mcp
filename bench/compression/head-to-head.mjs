@@ -255,7 +255,10 @@ function collect(value, into, key) {
     }
     for (const m of value.matchAll(NAMED_IMPORT)) {
       for (const part of m[1].split(',')) {
-        const name = part.trim().split(/\s+as\s+/)[0].trim();
+        const name = part
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim();
         if (name.length >= MIN_SYMBOL && /^[A-Za-z_$][\w$]*$/.test(name))
           into.add(name);
       }
@@ -500,9 +503,36 @@ for (const [name, text] of Object.entries(payloads)) {
   // MEASURED WITH `performance.now`, NOT `Date.now`. Several of these payloads
   // compress in under a millisecond, and a 1 ms clock reports those as 0 -- which
   // is indistinguishable from an arm that never ran.
-  const started = performance.now();
+  // ELEVEN RUNS, MEDIAN PUBLISHED, SPREAD PUBLISHED WITH IT. A single reading of
+  // a transform that finishes in tens of milliseconds is partly a reading of
+  // whatever else the machine was doing, and #435 MUST-WIN 2a asks for the median
+  // of eleven in one process. The gate needs `min` and `max` as well, because a
+  // margin narrower than the measurement's own spread is not a win, it is noise
+  // pointing our way. The timed repeats spill into a throwaway sink so the
+  // recorded call below is still the only one whose spills count.
+  // THIRTY-ONE, NOT THE ELEVEN #435 ASKED FOR. Eleven is enough for a median
+  // and not enough for the tails, and the tails are what the gate compares: at
+  // eleven samples a single interference spike lands squarely on the 90th
+  // percentile, and two consecutive captures disagreed about whole rows because
+  // of it. Thirty-one puts three readings outside each tail, so one spike costs
+  // nothing and a genuinely unstable arm still reads as unstable.
+  const SPEED_SAMPLES = 31;
+  const samples = [];
+  for (let i = 0; i < SPEED_SAMPLES; i += 1) {
+    const t0 = performance.now();
+    compressBlock(text, { spill: () => {}, query: queryOf(text) });
+    samples.push(performance.now() - t0);
+  }
+  // KEPT IN RUN ORDER. Sorting loses which reading was first, and the first
+  // reading is the one that paid for the JIT: it is routinely several times the
+  // rest, on both arms. The gate decides what to do with that; the harness's
+  // job is to hand over the readings, not to pick the flattering ones.
+  const msSamples = samples.map((v) => Number(v.toFixed(3)));
+  const sorted = [...samples].sort((a, b) => a - b);
+  const ms = sorted[(sorted.length - 1) >> 1];
+  const msMin = sorted[0];
+  const msMax = sorted[sorted.length - 1];
   const out = compressBlock(text, { spill, query: queryOf(text) });
-  const ms = performance.now() - started;
 
   // THE SUBSTITUTION ARM, MEASURED SEPARATELY AND NAMED FOR WHAT IT IS. HeadRoom
   // reaches ~99.7% on the three workloads our engines find hardest by not
@@ -866,6 +896,9 @@ for (const [name, text] of Object.entries(payloads)) {
         ? 0
         : Math.max(0, tokens(theirResolved) - theirAfter),
     ms,
+    msMin,
+    msMax,
+    msSamples,
   });
 }
 
@@ -1334,7 +1367,7 @@ if (process.argv[3] === '--record') {
               Object.entries(
                 JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'))
               ).map(([name, row]) => {
-                const { ms, ...rest } = row;
+                const { ms, msMin, msMax, msSamples, ...rest } = row;
                 return [name, rest];
               })
             )
@@ -1425,10 +1458,16 @@ if (process.argv[3] === '--record') {
       // treats it as unmeasured rather than as a pass.
       speed: {
         oursMs: r.ms.toFixed(3),
+        oursMsMin: r.msMin.toFixed(3),
+        oursMsMax: r.msMax.toFixed(3),
+        oursMsSamples: r.msSamples,
         theirsMs:
           typeof theirs[r.name]?.ms === 'number'
             ? theirs[r.name].ms.toFixed(3)
             : null,
+        theirsMsSamples: Array.isArray(theirs[r.name]?.msSamples)
+          ? theirs[r.name].msSamples
+          : null,
       },
     })),
     totals: {

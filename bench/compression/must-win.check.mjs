@@ -124,12 +124,55 @@ function judge(row, cfg, floors) {
     detail: `${turnsO} round trip(s) vs ${turnsT}`,
   };
 
+  // OUR SLOW READINGS AGAINST THEIR FAST ONES, and nothing softer. Both arms
+  // are timed eleven times in one process, and the recorded samples show why a
+  // median-against-median test would not be enough: the first reading pays for
+  // the JIT (ours runs 2.2x the median on `codebase-exploration`), and beyond
+  // that both arms take sporadic spikes from whatever else the machine is doing
+  // -- theirs hit 220ms against a 45ms median on `grep-output`, ours 193ms
+  // against 52ms on `repeated-reads`. Comparing medians would hand us rows we
+  // win only when the machine is quiet.
+  //
+  // So: our 90th percentile must beat their 10th. It is the same distance from
+  // each median, taken in opposite directions, which makes it symmetric rather
+  // than merely conservative; it discards one spike per arm and no more, so a
+  // run where OUR timings are unstable does not get to claim the win; and it
+  // introduces no tuned constant -- there is no jitter allowance to argue about,
+  // because the spread of the readings is doing that job directly.
+  //
+  // WORST-AGAINST-BEST WAS REJECTED. `max(ours) <= min(theirs)` needs no
+  // percentile at all, but it lets one interference spike on either arm decide a
+  // criterion, and the recorded samples carry several that have nothing to do
+  // with either compressor.
+  const quantile = (xs, q) => {
+    const sorted = [...xs].sort((a, b) => a - b);
+    const at = Math.min(sorted.length - 1, Math.round(q * (sorted.length - 1)));
+    return sorted[at];
+  };
+  const ourSamples = row.speed?.oursMsSamples;
+  const theirSamples = row.speed?.theirsMsSamples;
   const ms = num(row.speed?.oursMs);
   const theirMs = num(row.speed?.theirsMs);
-  const speed =
-    theirMs === null
-      ? { pass: null, detail: `ours ${ms}ms, theirs unmeasured` }
-      : { pass: ms <= theirMs, detail: `${ms}ms vs ${theirMs}ms` };
+  let speed;
+  if (theirMs === null) {
+    speed = { pass: null, detail: `ours ${ms}ms, theirs unmeasured` };
+  } else if (!Array.isArray(ourSamples) || !Array.isArray(theirSamples)) {
+    // A capture from before the samples were recorded cannot answer the strict
+    // question, and the weaker one it can answer is not this criterion.
+    speed = {
+      pass: null,
+      detail: `${ms}ms vs ${theirMs}ms - single readings, spread not recorded`,
+    };
+  } else {
+    const ourSlow = quantile(ourSamples, 0.9);
+    const theirFast = quantile(theirSamples, 0.1);
+    speed = {
+      pass: ourSlow <= theirFast,
+      detail:
+        `our p90 ${ourSlow.toFixed(1)}ms vs their p10 ${theirFast.toFixed(1)}ms ` +
+        `(medians ${ms} / ${theirMs}, ${ourSamples.length} runs each)`,
+    };
+  }
 
   const ids = num(row.retention?.ids);
   const oursZt = num(row.retention?.oursZeroTurn);
