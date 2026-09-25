@@ -15,6 +15,7 @@ import {
 import { tokenBenefit } from './token-gate.js';
 import { classify } from '../compress/router.js';
 import type { Tuning } from '../compress/options.js';
+import type { SpillSink } from '../compress/types.js';
 import type { CompressionFacts } from './accounting.js';
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -24,7 +25,7 @@ function object(value: unknown): value is Record<string, unknown> {
 export function compressResponses(
   body: Buffer,
   request: Record<string, unknown>,
-  spill: (content: string, hint: string) => string,
+  spill: SpillSink,
   tuning?: Tuning,
   outputLocation: (index: number) => string = (index) =>
     `input[${index}].output`

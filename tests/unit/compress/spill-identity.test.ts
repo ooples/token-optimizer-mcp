@@ -94,3 +94,55 @@ describe('spillFor addresses content, not calls', () => {
     expect(out.text.length).toBeLessThan(text.length);
   });
 });
+
+/**
+ * No sink is a decision, and it is the default one.
+ *
+ * An elided body is a `Read` the agent has to spend a turn on, and no
+ * compression ratio pays a turn back. The engines already treat an absent sink
+ * as `stay lossless or leave it alone`; these pin that this is the arm a caller
+ * gets by default, and that it is not merely the lossy one with the recovery
+ * path filed off.
+ */
+describe('an absent sink keeps the content in the request', () => {
+  const LF = String.fromCharCode(10);
+  const file = Array.from({ length: 60 }, (_, i) =>
+    [
+      `function handler${i}(input: string): string {`,
+      `  const trimmed = input.trim();`,
+      `  const upper = trimmed.toUpperCase();`,
+      `  return upper + ' ${i}';`,
+      `}`,
+    ].join(LF)
+  ).join(LF + LF);
+  const text = [file, file, file].join(
+    LF + LF + '// ---- next read ----' + LF + LF
+  );
+
+  it('compresses losslessly and quotes no recovery path', () => {
+    const out = compressBlock(text);
+    expect(out.lossless).toBe(true);
+    expect(out.text).not.toContain('.token-optimizer/spill');
+    // The identifiers are still there to be read, not to be fetched.
+    for (const id of ['handler0', 'handler17', 'handler59'])
+      expect(out.text).toContain(id);
+  });
+
+  it('still collapses the repeated copies, which is why it is affordable', () => {
+    // Two of the three copies fold away losslessly, so the duplication is
+    // already gone before anything could have been elided. That is why a sink
+    // buys so little on this shape, and why it is not worth a round trip.
+    const out = compressBlock(text);
+    expect(out.text.length).toBeLessThan(text.length / 2);
+  });
+
+  it('is larger than the spilled arm, and that is the trade being made', () => {
+    const sinkless = compressBlock(text);
+    const spilledOut = compressBlock(text, {
+      spill: (_content, hint) => `.token-optimizer/spill/1-${hint}`,
+    });
+    expect(spilledOut.text.length).toBeLessThan(sinkless.text.length);
+    expect(spilledOut.lossless).toBe(false);
+    expect(sinkless.lossless).toBe(true);
+  });
+});

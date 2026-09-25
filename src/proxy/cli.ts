@@ -28,6 +28,7 @@ interface Args {
   readonly preset?: string;
   readonly projectRoot?: string;
   readonly quiet: boolean;
+  readonly spill: boolean;
   readonly help: boolean;
 }
 
@@ -37,7 +38,7 @@ const USAGE = [
   'token-optimizer-proxy -- compression on the wire',
   '',
   '  token-optimizer-proxy [--port N] [--upstream URL] [--preset NAME]',
-  '                        [--project-root DIR] [--quiet]',
+  '                        [--project-root DIR] [--quiet] [--spill]',
   '',
   '  --port N          Listen on this port. Default 0, meaning any free port.',
   '  --upstream URL    Where to forward. Defaults to',
@@ -49,6 +50,9 @@ const USAGE = [
   "  --project-root D  Where to read this project's knowledge graph from.",
   '                    Default: the current directory.',
   '  --quiet           No per-request summaries on stderr.',
+  '  --spill           Let bodies the engines cannot describe leave the',
+  '                    request, recoverable with a Read. Smaller requests,',
+  '                    at one round trip each. Off by default.',
   '',
   '  Point a client at the printed URL through its own base-URL variable --',
   '  ANTHROPIC_BASE_URL for Claude Code. `token-optimizer-doctor` reports which',
@@ -70,6 +74,7 @@ export function parseArgs(argv: readonly string[]): Args {
   let preset: string | undefined;
   let projectRoot: string | undefined;
   let quiet = false;
+  let spill = false;
   let help = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -116,6 +121,9 @@ export function parseArgs(argv: readonly string[]): Args {
       case '--quiet':
         quiet = true;
         break;
+      case '--spill':
+        spill = true;
+        break;
       case '--help':
       case '-h':
         help = true;
@@ -125,7 +133,7 @@ export function parseArgs(argv: readonly string[]): Args {
     }
   }
 
-  return { port, upstream, preset, projectRoot, quiet, help };
+  return { port, upstream, preset, projectRoot, quiet, spill, help };
 }
 
 function summaryLine(summary: ProxySummary): string {
@@ -178,6 +186,7 @@ export async function run(argv: readonly string[]): Promise<number> {
       upstream: args.upstream,
       preset: args.preset,
       projectRoot: args.projectRoot,
+      spill: args.spill,
       onSummary: args.quiet
         ? undefined
         : (summary) => void process.stderr.write(summaryLine(summary)),

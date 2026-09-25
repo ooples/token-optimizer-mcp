@@ -3,6 +3,7 @@ import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { AnchorStore } from '../compress/anchor.js';
 import type { Finding } from '../compress/knowledge.js';
 import type { Tuning } from '../compress/options.js';
+import type { SpillSink } from '../compress/types.js';
 import type { CompressionFacts } from './accounting.js';
 
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -15,7 +16,7 @@ const object = (value: unknown): value is Record<string, unknown> =>
 export function compressChatCompletions(
   body: Buffer,
   request: Record<string, unknown>,
-  spill: (content: string, hint: string) => string,
+  spill: SpillSink,
   anchors?: AnchorStore,
   findings: readonly Finding[] = [],
   tuning?: Tuning,

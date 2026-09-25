@@ -61,3 +61,14 @@ test('recovery failure does not corrupt cache accounting or prevent retry', () =
   fail = false;
   expect(cachedOutput(text, spill)).toEqual(compressBlock(text, { spill }));
 });
+
+test('a caller with no sink is cached too, and nothing it caches is fetchable', () => {
+  // `undefined` is the product default, so the cache has to serve it. It has
+  // no sink to re-check on a hit, which is why the hit path cannot simply call
+  // one, and every zero-turn caller compresses identically, so they may share
+  // entries.
+  const expected = compressBlock(text, { tuning: DEFAULT_TUNING });
+  expect(cachedOutput(text, undefined, DEFAULT_TUNING)).toEqual(expected);
+  expect(cachedOutput(text, undefined, DEFAULT_TUNING)).toEqual(expected);
+  expect(expected.lossless).toBe(true);
+});
