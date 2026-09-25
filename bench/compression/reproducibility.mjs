@@ -1,0 +1,112 @@
+/**
+ * WHAT A PUBLISHED NUMBER HAS TO CARRY BEFORE SOMEONE ELSE CAN RE-RUN IT.
+ *
+ * Every figure in this repository is produced by two programs on one machine,
+ * and an outside reader has no way to tell a number that would come back the
+ * same from a number that happened once. The difference is entirely in what the
+ * record says about the run, so this module states the minimum and refuses a
+ * record that falls short of it.
+ *
+ * THE FIELDS ARE NOT A WISH LIST. Each one has already moved a published number
+ * on this project, or is the only thing that could have detected a move that
+ * did happen:
+ *
+ *   commit, dirty     a record stamped with a sha whose tree was modified names
+ *                     code that does not exist anywhere. Reproducing it is not
+ *                     merely hard, it is undefined.
+ *   node, tiktoken    the token column IS the tokeniser. A different tiktoken
+ *                     build re-segments every payload, and nothing else in the
+ *                     record would show it.
+ *   encoding          cl100k_base against o200k_base moves the same text by
+ *                     double digits.
+ *   payloadsDigest    the ratios are a function of the input. Two records with
+ *                     different payload sets are not comparable, and the
+ *                     payload set is generated, so it drifts.
+ *   theirsDigest      a stale out-dir reproduced a competitor column that had
+ *                     already been retracted, and nothing in the record showed
+ *                     it: ours moved, theirs reverted, the standing went from
+ *                     nine workloads to five.
+ *   headroomVersion   their engine's own version, without which "theirs" names
+ *                     nothing.
+ *   python            their capture runs under it.
+ *   speedPasses       a speed verdict taken over fewer than two passes cannot
+ *                     separate a regression from interference, on either side.
+ *
+ * EVERY PROBLEM AT ONCE, not the first one. A refusal that stops at the first
+ * missing field costs a full re-run per field, and a re-run is the expensive
+ * thing here -- the capture takes minutes and the meter reads cannot be
+ * repeated at will. So the refusal lists all of them.
+ */
+
+/** sha256 truncated to 16, the width the record uses. */
+const HEX16 = /^[0-9a-f]{16}$/;
+/** A version, permissively: leading major.minor.patch, anything after. */
+const SEMVER = /^[0-9]+[.][0-9]+[.][0-9]+/;
+const SHA40 = /^[0-9a-f]{40}$/;
+const NAME = /^[a-z0-9_]+$/;
+
+/**
+ * The required fields, each with the shape it must have and the reason a reader
+ * needs it. Order is the order the refusal reports them in.
+ */
+export const FIELDS = {
+  commit: { look: SHA40, says: 'the 40-character sha of the tree that produced it' },
+  node: { look: SEMVER, says: 'the node version the scorer ran on' },
+  tiktoken: { look: SEMVER, says: 'the tokeniser package version' },
+  encoding: { look: NAME, says: 'the encoding the token column was measured in' },
+  payloadsDigest: { look: HEX16, says: 'sha256 of payloads.json, first 16' },
+  theirsDigest: { look: HEX16, says: 'sha256 of their output, first 16' },
+  headroomVersion: { look: SEMVER, says: 'the competitor package version' },
+  python: { look: SEMVER, says: 'the python their capture ran under' },
+};
+
+/** Both sides of a speed verdict need at least this many separated passes. */
+export const MIN_PASSES = 2;
+
+/**
+ * Why this record cannot be reproduced, or null when it can.
+ *
+ * @param {object|null|undefined} prov the record's reproduction block
+ * @returns {string|null}
+ */
+export function reproducibilityRefusal(prov) {
+  if (prov === null || typeof prov !== 'object') {
+    return 'no reproduction block at all, so nothing about the run was recorded';
+  }
+  const problems = [];
+  for (const [field, { look, says }] of Object.entries(FIELDS)) {
+    const value = prov[field];
+    if (value === undefined || value === null || value === '' || value === 'unknown') {
+      problems.push(`${field} is missing (${says})`);
+    } else if (typeof value !== 'string' || !look.test(value)) {
+      // A FIELD THAT IS PRESENT AND UNUSABLE IS WORSE THAN AN ABSENT ONE,
+      // because it reads as recorded. An empty digest, a truncated sha and the
+      // literal string 'unknown' all arrived here from real code paths that
+      // swallowed a failure and carried on.
+      problems.push(`${field} is not usable: ${JSON.stringify(value)} (${says})`);
+    }
+  }
+  // A DIRTY TREE IS THE ONE FIELD WHOSE HONEST VALUE IS A REFUSAL. The sha is
+  // well formed and the code it names is not the code that ran.
+  if (prov.dirty === true) {
+    problems.push('the working tree was modified, so the commit names code that did not run');
+  } else if (prov.dirty !== false) {
+    problems.push('dirty is missing, so nothing says whether the tree was clean');
+  }
+  const passes = prov.speedPasses;
+  if (passes === null || typeof passes !== 'object') {
+    problems.push('speedPasses is missing (how many separated passes each side was timed over)');
+  } else {
+    for (const side of ['ours', 'theirs']) {
+      const n = passes[side];
+      if (!Number.isInteger(n) || n < MIN_PASSES) {
+        problems.push(
+          `speedPasses.${side} is ${JSON.stringify(n)}, and a speed verdict needs ` +
+            `${MIN_PASSES} or more separated passes on both sides`
+        );
+      }
+    }
+  }
+  if (problems.length === 0) return null;
+  return `${problems.length} thing(s) stop this record being re-runnable: ` + problems.join('; ');
+}

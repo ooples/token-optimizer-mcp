@@ -148,6 +148,39 @@ try {
       'the record stamps which stub produced it',
       String(rec.stubOurs)
     );
+    // THE REPRODUCTION BLOCK, on a record whose provenance is known because
+    // this check produced it. reproducibility.check.mjs proves the gate refuses
+    // a deficient block; what it cannot prove is that the scorer FILLS one in,
+    // and a gate reading a field nothing writes passes every record forever.
+    const rep = rec.reproduction ?? {};
+    check(
+      rep.node === process.versions.node &&
+        /^[0-9]+[.][0-9]+[.][0-9]+/.test(String(rep.tiktoken)) &&
+        rep.encoding === 'cl100k_base',
+      'the record states the toolchain the token column was measured with',
+      `node ${rep.node}, tiktoken ${rep.tiktoken}, ${rep.encoding}`
+    );
+    check(
+      /^[0-9a-f]{16}$/.test(String(rep.payloadsDigest)) &&
+        /^[0-9a-f]{16}$/.test(String(rep.theirsDigest)) &&
+        rep.payloadsDigest !== rep.theirsDigest,
+      'and digests the input it scored and the output it scored it against',
+      `payloads ${rep.payloadsDigest}, theirs ${rep.theirsDigest}`
+    );
+    check(
+      rep.speedPasses?.ours === 3 && rep.speedPasses?.theirs === 3,
+      'and counts the speed passes on BOTH sides, which is what makes the verdict decidable',
+      JSON.stringify(rep.speedPasses)
+    );
+    // A stub run is a measurement of nothing, so this record is not one a
+    // reader should ever reproduce -- but the refusal it carries has to be
+    // about the tree, not about a field the scorer forgot. The only reasons
+    // allowed here are the ones this environment really has.
+    check(
+      rep.refusal === null || /(dirty|working tree was modified)/.test(String(rep.refusal)),
+      'and any refusal it carries is about the tree, not a field left unfilled',
+      String(rep.refusal)
+    );
     for (const w of rec.workloads) {
       const name = w.name;
       const arms = ['ours', 'body', 'preset', 'sub'];

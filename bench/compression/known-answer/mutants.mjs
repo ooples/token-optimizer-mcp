@@ -50,6 +50,7 @@ const SPLIT = sub('cost-split.mjs');
 const BASE = sub('base-context.mjs');
 const METER = sub('calibrate.mjs');
 const SPEED = comp('speed-verdict.mjs');
+const REPRO = comp('reproducibility.mjs');
 
 /** The check that is supposed to refuse each defect. */
 const SCORER = join(HERE, 'scorer.check.mjs');
@@ -57,6 +58,7 @@ const SPLIT_CHECK = sub('cost-split.check.mjs');
 const BASE_CHECK = sub('base-context.check.mjs');
 const METER_CHECK = sub('calibrate.check.mjs');
 const SPEED_CHECK = comp('speed-verdict.check.mjs');
+const REPRO_CHECK = comp('reproducibility.check.mjs');
 
 const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
@@ -279,6 +281,66 @@ const MUTANTS = [
     check: SPEED_CHECK,
     from: '  return { pass: null, detail: `ours ${ms}ms, theirs unmeasured` };',
     to: '  return { pass: true, detail: `ours ${ms}ms, theirs unmeasured` };',
+  },
+  {
+    name: 'a truncated sha passes as a commit',
+    defect:
+      'a sha that lost characters to a double slice still names a commit, and the record reads as stamped',
+    caughtBy: 'reproducibility: commit as a 39-character sha is refused',
+    file: REPRO,
+    check: REPRO_CHECK,
+    from: 'const SHA40 = /^[0-9a-f]{40}$/;',
+    to: 'const SHA40 = /^[0-9a-f]+$/;',
+  },
+  {
+    name: 'a modified tree stops being a refusal',
+    defect:
+      'the one field whose honest value is a refusal turned into a field that is merely present',
+    caughtBy: 'reproducibility: a record from a modified tree is refused, and the reason says why the sha is not enough',
+    file: REPRO,
+    check: REPRO_CHECK,
+    from: '  if (prov.dirty === true) {',
+    to: "  if (prov.dirty === 'modified') {",
+  },
+  {
+    name: 'one pass clears the reproduction bar',
+    defect:
+      'the bar that makes a speed verdict decidable lowered to a single pass, which is the capture that shipped',
+    caughtBy: 'reproducibility: one pass on their side is refused, and the refusal names their side',
+    file: REPRO,
+    check: REPRO_CHECK,
+    from: '      if (!Number.isInteger(n) || n < MIN_PASSES) {',
+    to: '      if (!Number.isInteger(n) || n < 1) {',
+  },
+  {
+    name: 'only the first problem is reported',
+    defect:
+      'eight deficiencies reported one at a time, at one capture run each, while the count says eight',
+    caughtBy: 'reproducibility: five problems are reported as five, not as the first one',
+    file: REPRO,
+    check: REPRO_CHECK,
+    from: "  return `${problems.length} thing(s) stop this record being re-runnable: ` + problems.join('; ');",
+    to: '  return `${problems.length} thing(s) stop this record being re-runnable: ` + problems[0];',
+  },
+  {
+    name: 'their digest drops out of the required set',
+    defect:
+      'the field that catches a stale out-dir quietly stops being required, and the per-field loop stops asking for it too',
+    caughtBy: 'reproducibility: the required set is exactly the 8 fields a re-run needs',
+    file: REPRO,
+    check: REPRO_CHECK,
+    from: "  theirsDigest: { look: HEX16, says: 'sha256 of their output, first 16' },",
+    to: '  // theirsDigest: no longer required',
+  },
+  {
+    name: 'a field that is present and unusable passes',
+    defect:
+      'an empty digest and the literal sentinel for a failed git call read as recorded, which is how both reached a published record',
+    caughtBy: 'reproducibility: payloadsDigest as an empty string is refused',
+    file: REPRO,
+    check: REPRO_CHECK,
+    from: "    } else if (typeof value !== 'string' || !look.test(value)) {",
+    to: "    } else if (typeof value !== 'string') {",
   },
 ];
 

@@ -64,6 +64,9 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
+import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
+import { reproducibilityRefusal } from './reproducibility.mjs';
 // THE ONE SEAM ON OUR SIDE. Both engines reach this scorer through a module
 // that can be swapped for stub arms, so every figure below has an answer that
 // can be stated before the run. See ours-engine.mjs; the other dist imports
@@ -184,7 +187,12 @@ const resolved = existsSync(resolvedPath)
  * the byte count, which is exactly what happens when a compressor trades prose
  * for punctuation-dense markers.
  */
-const encoding = get_encoding('cl100k_base');
+// NAMED, not repeated as a literal, because the record has to state which
+// encoding the token column was measured in and a second literal is a second
+// thing to forget. cl100k_base against o200k_base moves the same text by double
+// digits.
+const ENCODING_NAME = 'cl100k_base';
+const encoding = get_encoding(ENCODING_NAME);
 
 // IMAGES ARE NOT BILLED AS THE TEXT THEY ARRIVE IN, and counting them that way
 // was not a rounding error. browser-session carries four PNG screenshots; the
@@ -1457,6 +1465,71 @@ if (process.argv[3] === '--record') {
   } catch {
     // A tarball is not a repository. The record is still the record.
   }
+
+  // WAS THE TREE CLEAN? The sha is a claim that the code which produced these
+  // numbers can be checked out again, and a modified tree makes that claim
+  // false while leaving the sha perfectly well formed. `null` means the
+  // question could not be asked, which the gate treats as unanswered, not as
+  // clean.
+  let dirty = null;
+  try {
+    dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0;
+  } catch {
+    dirty = null;
+  }
+  // THE TOKENISER'S OWN VERSION. The token column is a function of it: a
+  // different build re-segments every payload without one line changing in our
+  // code or theirs. Resolved by walking up from the module it loads, because
+  // the package does not export its own package.json.
+  let tiktokenVersion = 'unknown';
+  try {
+    let at = dirname(createRequire(import.meta.url).resolve('tiktoken'));
+    for (let up = 0; up < 5; up += 1) {
+      const manifest = join(at, 'package.json');
+      if (existsSync(manifest)) {
+        const parsed = JSON.parse(readFileSync(manifest, 'utf8'));
+        if (parsed.name === 'tiktoken' && typeof parsed.version === 'string') {
+          tiktokenVersion = parsed.version;
+          break;
+        }
+      }
+      at = dirname(at);
+    }
+  } catch {
+    // Left as 'unknown', which the gate refuses. It does not guess.
+  }
+  // HOW MANY SEPARATED PASSES EACH SIDE WAS TIMED OVER -- the minimum across
+  // rows, not the constant either program aims for, because the row with the
+  // fewest passes is the one whose verdict cannot be trusted. Their side counts
+  // only rows they measured at all: a workload their engine declined has no
+  // timing to repeat, and counting it as 0 would describe the whole capture as
+  // single-pass.
+  const ourPassCounts = rows.map((r) => (Array.isArray(r.msPasses) ? r.msPasses.length : 0));
+  const theirPassCounts = rows
+    .map((r) => theirs[r.name])
+    .filter((row) => row && Array.isArray(row.msSamples))
+    .map((row) => (Array.isArray(row.msPasses) ? row.msPasses.length : 0));
+  const reproduction = {
+    commit,
+    dirty,
+    node: process.versions.node,
+    tiktoken: tiktokenVersion,
+    encoding: ENCODING_NAME,
+    // THE INPUT THE RATIOS ARE A FUNCTION OF. The payload set is generated, so
+    // it drifts, and two records taken over different payloads are not
+    // comparable however alike their columns look.
+    payloadsDigest: createHash('sha256')
+      .update(readFileSync(join(dir, 'payloads.json')))
+      .digest('hex')
+      .slice(0, 16),
+    theirsDigest: null,
+    headroomVersion: theirs.__provenance__?.headroomVersion ?? null,
+    python: theirs.__provenance__?.python ?? null,
+    speedPasses: {
+      ours: ourPassCounts.length ? Math.min(...ourPassCounts) : 0,
+      theirs: theirPassCounts.length ? Math.min(...theirPassCounts) : 0,
+    },
+  };
   const record = {
     harness: 'bench/compression/head-to-head.mjs',
     // NOT NULL MEANS NOT A MEASUREMENT -- our column came from stub arms and
@@ -1724,6 +1797,21 @@ if (process.argv[3] === '--record') {
       },
     },
   };
+  // THE DIGEST IS COMPUTED ONCE, in the capture block above, and copied here
+  // rather than hashed twice: two hashes of the same file are two chances to
+  // hash it differently.
+  reproduction.theirsDigest = record.capture.theirsDigest;
+  record.reproduction = reproduction;
+  // THE REFUSAL TRAVELS IN THE RECORD, it is not thrown. Recording from a
+  // modified tree is how this repository is worked on and pretending otherwise
+  // would only mean recording less; what must never happen is a number reaching
+  // a reader with nothing said about whether it can be re-run. So the reason is
+  // written down, the warning here is loud, and the gate that has to be green
+  // before anything is published is the one over the COMMITTED record.
+  record.reproduction.refusal = reproducibilityRefusal(reproduction);
+  if (record.reproduction.refusal) {
+    console.error('WARNING: this record is not re-runnable as written: ' + record.reproduction.refusal);
+  }
   writeFileSync(
     at,
     `${JSON.stringify(record, null, 2)}
