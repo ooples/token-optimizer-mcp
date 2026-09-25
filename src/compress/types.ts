@@ -121,7 +121,7 @@ export interface EngineContext {
    * quote in `recoverAt`. Absent means the engine must stay lossless or leave
    * the content alone.
    */
-  readonly spill?: (content: string, hint: string) => string;
+  readonly spill?: SpillSink;
   /**
    * What the agent is asking about, so retention can be ranked against it
    * rather than decided from the shape of the content alone.
@@ -149,6 +149,27 @@ export interface EngineContext {
    */
   readonly embeddings?: EmbeddingCache;
 }
+
+/**
+ * Somewhere to put content an engine wants to elide -- or `undefined`, which
+ * is a decision and not an omission.
+ *
+ * `undefined` MEANS THE CONTENT STAYS IN THE REQUEST. An engine with no sink
+ * compresses losslessly or leaves the block alone; it never removes bytes it
+ * cannot describe. That is the zero-round-trip arm, and it is what a caller
+ * gets unless it asks for the other one, because a recovery path is a turn the
+ * agent has to spend and a turn is the one cost no compression ratio pays back.
+ *
+ * Supplying a sink is the opposite trade: a smaller request now against a
+ * `Read` later. Measured over the twelve head-to-head workloads it is the
+ * right trade on the log-and-table shapes, where eliding removes 90%+ of the
+ * block, and the wrong one wherever the content repeats inside the request --
+ * there the lossless fold already collapses the copies, so the sink buys a few
+ * thousand tokens and costs a round trip. `spillWholeBlockBelow` in
+ * `options.ts` is the dial for the first case; this type is how a caller says
+ * no to both.
+ */
+export type SpillSink = ((content: string, hint: string) => string) | undefined;
 
 import type { Tuning } from './options.js';
 import type { EmbeddingCache } from './embedding.js';

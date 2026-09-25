@@ -491,14 +491,19 @@ const rows = [];
 let lost = 0;
 
 for (const [name, text] of Object.entries(payloads)) {
-  // CAPTURED, NOT DISCARDED. Content that moved to a spill is recoverable and
-  // must be scored as retained; a harness that ignored the spill would report
-  // our own elisions as data loss.
+  // THE PUBLISHED ARM IS HANDED NO SINK, and that is the product default --
+  // see `SpillSink` in src/compress/types.ts. With nowhere to spill to, every
+  // engine either compresses losslessly or leaves the block alone, so this arm
+  // costs the agent no round trips and every identifier it started with is
+  // still in the request.
+  //
+  // IT STAYS AN ARRAY because the columns below are shared with the `sub` and
+  // `preset` arms, which do spill and are published beside this one: the trade
+  // has to stay visible, it just stops being the default. On `repeated-reads`
+  // a sink buys 6,178 tokens of hand-off and costs a fetch, because the
+  // lossless fold has already collapsed the repeated copies -- which is the
+  // measurement that moved the default.
   const spilled = [];
-  const spill = (content, hint) => {
-    spilled.push(content);
-    return `.token-optimizer/spill/${spilled.length}-${hint}`;
-  };
 
   // MEASURED WITH `performance.now`, NOT `Date.now`. Several of these payloads
   // compress in under a millisecond, and a 1 ms clock reports those as 0 -- which
@@ -508,8 +513,8 @@ for (const [name, text] of Object.entries(payloads)) {
   // whatever else the machine was doing, and #435 MUST-WIN 2a asks for the median
   // of eleven in one process. The gate needs `min` and `max` as well, because a
   // margin narrower than the measurement's own spread is not a win, it is noise
-  // pointing our way. The timed repeats spill into a throwaway sink so the
-  // recorded call below is still the only one whose spills count.
+  // pointing our way. The timed loop runs the same sinkless arm as the
+  // recorded call, so the published median times the arm that is published.
   // THIRTY-ONE, NOT THE ELEVEN #435 ASKED FOR. Eleven is enough for a median
   // and not enough for the tails, and the tails are what the gate compares: at
   // eleven samples a single interference spike lands squarely on the 90th
@@ -520,7 +525,7 @@ for (const [name, text] of Object.entries(payloads)) {
   const samples = [];
   for (let i = 0; i < SPEED_SAMPLES; i += 1) {
     const t0 = performance.now();
-    compressBlock(text, { spill: () => {}, query: queryOf(text) });
+    compressBlock(text, { query: queryOf(text) });
     samples.push(performance.now() - t0);
   }
   // KEPT IN RUN ORDER. Sorting loses which reading was first, and the first
@@ -532,7 +537,7 @@ for (const [name, text] of Object.entries(payloads)) {
   const ms = sorted[(sorted.length - 1) >> 1];
   const msMin = sorted[0];
   const msMax = sorted[sorted.length - 1];
-  const out = compressBlock(text, { spill, query: queryOf(text) });
+  const out = compressBlock(text, { query: queryOf(text) });
 
   // THE SUBSTITUTION ARM, MEASURED SEPARATELY AND NAMED FOR WHAT IT IS. HeadRoom
   // reaches ~99.7% on the three workloads our engines find hardest by not

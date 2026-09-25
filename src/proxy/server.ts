@@ -56,6 +56,7 @@ import {
   type CompressionFacts,
 } from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
+import type { SpillSink } from '../compress/types.js';
 import { captureDir, captureRequest } from './capture.js';
 import { compressResponses } from './responses.js';
 import { compressChatCompletions } from './chat-completions.js';
@@ -178,6 +179,25 @@ export interface ProxyOptions {
    * would opt back into the unbounded buffering the ceiling exists to prevent.
    */
   readonly maxBodyBytes?: number;
+  /**
+   * Whether content the engines cannot describe losslessly may leave the
+   * request and be recovered from a file.
+   *
+   * OFF BY DEFAULT, which is a measurement and not caution. An elided body is
+   * a `Read` the agent has to spend a turn on, and a turn is not paid back by
+   * any compression ratio: over the twelve head-to-head workloads, turning
+   * this on wins the cheapest-at-the-first-request column and loses the column
+   * that counts what the agent can answer without going back for anything.
+   * `repeated-reads` is the clearest case -- one file quoted three times costs
+   * 47,613 effective input tokens with this off and nothing to fetch, against
+   * 121,137 for the comparator, and the lossless fold that collapses the
+   * copies is what makes the spill unnecessary rather than merely optional.
+   *
+   * On, it is the right trade on log-and-table shapes where eliding removes
+   * 90% of a block and nothing in the request repeats. That is a caller's call
+   * about its own context pressure, so it is a flag rather than a default.
+   */
+  readonly spill?: boolean;
 }
 
 export interface ProxySummary {
@@ -383,7 +403,7 @@ function conversationKeyFor(
 
 export function compressBody(
   body: Buffer,
-  spill: (content: string, hint: string) => string,
+  spill: SpillSink,
   anchors?: AnchorStore,
   findings?: readonly Finding[],
   tuning?: Tuning,
@@ -1166,7 +1186,10 @@ export async function startProxy(
     'token-optimizer-spill',
     randomBytes(12).toString('hex')
   );
-  const spill = spillTo(spillRoot);
+  // NO SINK UNLESS ASKED. `undefined` reaches every engine as "keep it in the
+  // request", which is the zero-round-trip arm -- see SpillSink in
+  // compress/types.ts for why that is the default rather than the fallback.
+  const spill = options.spill === true ? spillTo(spillRoot) : undefined;
   // One store per proxy, holding a hash and a boolean per conversation.
   // Per-conversation, never per-request, and passed in explicitly rather
   // than reached for -- HeadRoom's #3486 is a shared router keeping request
