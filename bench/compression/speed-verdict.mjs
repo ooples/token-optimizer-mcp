@@ -126,9 +126,18 @@ if (theirMs === null) {
   // Ours takes p90 within a pass and theirs p10, because the bar is our slow
   // against their fast -- but the across-pass median is now applied to both,
   // so a contaminated pass is discarded on their side exactly as it is on
-  // ours. Pooling their passes instead would have let one noisy pass raise
-  // their p10 and widen the gap in our favour, and pooling is what the old
-  // single-pass capture amounted to.
+  // ours.
+  //
+  // NEITHER OF THE TWO WRONG WAYS TO DO THIS, and they fail in opposite
+  // directions. The single pass that shipped let a noisy run raise their p10,
+  // widening the gap in our favour -- that is the defect being fixed. Pooling
+  // three passes and taking one p10 over all 93 readings does the reverse: the
+  // fast decile of the pool is whatever their BEST pass managed at its best,
+  // so we would be measured against their best burst while our own column is
+  // measured on its typical slow pass. Best-of-any against typical is the
+  // shape of comparison this project has published once and had to retract.
+  // Per-pass first, then the median, is the only reduction that is the same
+  // operation on both columns.
   const theirPerPass = theirPasses.map((xs) => quantile(xs, 0.1));
   const theirFast = quantile(theirPerPass, 0.5);
   const perPass = ourPasses.map((xs) => quantile(xs, 0.9));

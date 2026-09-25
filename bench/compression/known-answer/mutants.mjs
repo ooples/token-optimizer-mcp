@@ -49,12 +49,14 @@ const RET = comp('retention.mjs');
 const SPLIT = sub('cost-split.mjs');
 const BASE = sub('base-context.mjs');
 const METER = sub('calibrate.mjs');
+const SPEED = comp('speed-verdict.mjs');
 
 /** The check that is supposed to refuse each defect. */
 const SCORER = join(HERE, 'scorer.check.mjs');
 const SPLIT_CHECK = sub('cost-split.check.mjs');
 const BASE_CHECK = sub('base-context.check.mjs');
 const METER_CHECK = sub('calibrate.check.mjs');
+const SPEED_CHECK = comp('speed-verdict.check.mjs');
 
 const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
@@ -227,6 +229,56 @@ const MUTANTS = [
     check: METER_CHECK,
     from: '  const qualifying = rows.filter((r) => r.y >= 2);',
     to: '  const qualifying = rows.filter((r) => r.y >= 1);',
+  },
+  {
+    name: 'their passes pooled instead of reduced pass by pass',
+    defect:
+      'the asymmetry this file was extended for: their side back to one p10 over every reading, so a contaminated pass of theirs is no longer discarded',
+    caughtBy: 'speed-verdict: a contaminated minority of their passes is discarded, not pooled',
+    file: SPEED,
+    check: SPEED_CHECK,
+    from: '  const theirFast = quantile(theirPerPass, 0.5);',
+    to: '  const theirFast = quantile(theirSamples, 0.1);',
+  },
+  {
+    name: 'one pass on their side decides the row anyway',
+    defect:
+      'the refusal covered our side only, which is the state that shipped: their between-run spread assumed away while ours was measured',
+    caughtBy: 'speed-verdict: one pass on their side cannot decide it either, and the refusal says whose',
+    file: SPEED,
+    check: SPEED_CHECK,
+    from: '  theirPasses.length < 2',
+    to: '  theirPasses.length < 1',
+  },
+  {
+    name: 'the refusal names the wrong side',
+    defect:
+      'a refusal that misreports which column is short sends the next capture to re-measure the wrong arm',
+    caughtBy: 'speed-verdict: one pass on their side cannot decide it either, and the refusal says whose',
+    file: SPEED,
+    check: SPEED_CHECK,
+    from: "    Array.isArray(theirPasses) && theirPasses.length >= 2 ? null : 'theirs',",
+    to: "    Array.isArray(theirPasses) && theirPasses.length >= 2 ? null : 'ours',",
+  },
+  {
+    name: 'our within-pass median stands in for our p90',
+    defect:
+      'the bar softened to median-against-p10, which hands us every row we win only while the machine is quiet',
+    caughtBy: 'speed-verdict: our spikes count against us',
+    file: SPEED,
+    check: SPEED_CHECK,
+    from: '  const perPass = ourPasses.map((xs) => quantile(xs, 0.9));',
+    to: '  const perPass = ourPasses.map((xs) => quantile(xs, 0.5));',
+  },
+  {
+    name: 'an unmeasured competitor reads as a pass',
+    defect:
+      'the third verdict state collapsed into a pass, so a row nobody timed on their side is published as our win',
+    caughtBy: 'speed-verdict: an unmeasured competitor is not a win',
+    file: SPEED,
+    check: SPEED_CHECK,
+    from: '  return { pass: null, detail: `ours ${ms}ms, theirs unmeasured` };',
+    to: '  return { pass: true, detail: `ours ${ms}ms, theirs unmeasured` };',
   },
 ];
 

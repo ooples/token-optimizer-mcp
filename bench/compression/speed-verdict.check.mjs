@@ -286,5 +286,26 @@ check(
   );
 }
 
+{
+  // AND THE REDUCTION HAS TO BE PER PASS, not a quantile over the pool. The
+  // two are not the same statistic once the passes differ internally: their
+  // first pass here spent a third of its readings at 60ms and the rest at
+  // 300ms, so its own fast decile is 60 while the other two passes sit at 300
+  // throughout. Reduced pass by pass their fast reading is 300, the typical
+  // one. Pooled, the fast decile of all 93 readings is 60 -- their best burst,
+  // in their best pass -- and we would be judged against that while our own
+  // column is judged on its TYPICAL slow pass. That is the same asymmetry the
+  // single-pass capture had, pointing the other way, and best-of-any is the
+  // exact shape of a comparison this project has already published once and
+  // had to retract.
+  const burst = [...flat(60, 12), ...flat(300, 19)];
+  const v = verdict([flat(200), flat(200), flat(200)], [burst, flat(300), flat(300)]);
+  check(
+    v.pass === true && /their p10 300.0ms/.test(v.detail),
+    'a contaminated minority of their passes is discarded, not pooled',
+    v.detail
+  );
+}
+
 console.log(failures === 0 ? '\nall checks pass' : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);
