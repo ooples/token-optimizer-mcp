@@ -512,6 +512,38 @@ else:
     store["bytes"] = 0
     store["sha256"] = None
 
+# AN ARM THAT RETURNS ITS INPUT IS NOT THE SAME AS AN ARM THAT DECLINES, AND
+# THE DIFFERENCE IS INVISIBLE IN THE SCORE. Both land at ratio 1.0, so both are
+# published as "their engine achieved nothing on this workload" -- which is a
+# claim about THEM, made out of a silence that is just as likely to be ours.
+#
+# It happened. Three captures on 2026-09-24/25 scored every `pipeline@*` arm as
+# a no-op on 10 of 12 workloads -- exactly the 10 that are tool output rather
+# than a conversation -- while `crusher` and `router` returned normal figures.
+# Every later capture (five of them, with a warm store, with no store at all,
+# with and without their clone) offloads on all 12 and agrees byte for byte.
+# The published record was taken from the inert regime, so it understated their
+# engine by up to 200x per workload, and nothing in the output said so.
+#
+# The count below is the trip-wire. It cannot say WHICH of the two a no-op was,
+# and it does not try: it records the shape so a reader and a downstream gate
+# can see an arm that has gone quiet, instead of reading its silence as a win.
+inert = {}
+for label in sorted({label for r in results.values() for label in r.get("arms", {})}):
+    ran = [r for r in results.values() if label in r.get("arms", {})]
+    inert[label] = {
+        "ranOn": len(ran),
+        "returnedInputUnchanged": sum(1 for r in ran if r["arms"][label] == r["before"]),
+    }
+for label, counts in inert.items():
+    if counts["ranOn"] and counts["returnedInputUnchanged"] * 2 > counts["ranOn"]:
+        print(
+            "WARNING: arm %s returned its input unchanged on %d of %d workloads. "
+            "That is scored as zero reduction for them; check it is their engine "
+            "declining and not this harness feeding it a shape it cannot read."
+            % (label, counts["returnedInputUnchanged"], counts["ranOn"])
+        )
+
 provenance = {
     "headroomVersion": _headroom_version(),
     "python": sys.version.split()[0],
@@ -520,6 +552,7 @@ provenance = {
     "ccrStoreAfterRun": store,
     "theirFixtures": HAVE_THEIR_FIXTURES,
     "carriedPayloads": sorted(set(WORKLOADS) - set(THEIR_FIXTURE_NAMES)),
+    "inertArms": inert,
 }
 print("ccr store after run: %s bytes, sha %s" % (store["bytes"], store["sha256"]))
 
