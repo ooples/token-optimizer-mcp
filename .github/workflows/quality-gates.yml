@@ -632,3 +632,131 @@ jobs:
           node bench/compression/known-answer/capture.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           echo '```' >> $GITHUB_STEP_SUMMARY
           exit $status
+
+
+  # THE INSTRUMENTS, EACH AGAINST INPUTS WHOSE ANSWER IS FIXED IN ADVANCE.
+  #
+  # Seven checks existed and none of them ran anywhere but on a laptop. They are
+  # the arithmetic every published figure passes through: retention buckets, the
+  # offload accounting, the effective-input-token cost model, the base context a
+  # saving is a share of, the input/output cost split, the meter calibration, and
+  # the speed verdict. A number is only as trustworthy as the last run of the
+  # check under it, and until this job that run was whenever somebody remembered.
+  #
+  # NO npm ci AND NO BUILD: every one of these imports nothing but node: and its
+  # neighbours, which is a property worth keeping -- it is why they can gate a
+  # pull request in seconds. If one of them ever needs a dependency, it belongs
+  # in the scorer job below instead of being bought with an install here.
+  bench-instruments:
+    name: Bench Instrument Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check every scoring instrument
+        run: |
+          set -o pipefail
+          {
+            echo "## Bench Instrument Checks"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          for check in \
+            bench/compression/retention.check.mjs \
+            bench/compression/offload.check.mjs \
+            bench/compression/cost-model.check.mjs \
+            bench/compression/speed-verdict.check.mjs \
+            bench/subscription/base-context.check.mjs \
+            bench/subscription/cost-split.check.mjs \
+            bench/subscription/calibrate.check.mjs
+          do
+            echo "== $check" | tee -a $GITHUB_STEP_SUMMARY
+            node "$check" 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          done
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
+
+  # THE SCORER, AND WHETHER ITS OWN CHECK WOULD CATCH ANYTHING.
+  #
+  # The capture path (the job above) is layer 1. This is layer 2: head-to-head
+  # driven end to end over a known-answer capture with three stub engines --
+  # identity, lossy by a stated amount, and a mirror of their winning arm -- so
+  # every figure in the table has a value computable before the run. The mirror
+  # profile is the one that needs no ground truth at all: both columns describe
+  # the same bytes, so any difference between them is the scorer treating one
+  # side differently from the other.
+  #
+  # THEN THE MUTATION SCORE, which is the only evidence that the checks above
+  # refuse anything. Eighteen defects this project has actually shipped, or could
+  # ship without breaking anything visibly, are reintroduced one at a time across
+  # the scorer and the subscription chain; every one must turn a check red. A
+  # survivor is a hole, and the job fails on it -- the score went 5/6 -> 6/6 and
+  # 17/18 -> 18/18 by adding the assertions two survivors exposed.
+  #
+  # This one does need the install and the build: head-to-head tokenises with
+  # tiktoken and imports the compiled engine, even when the engine it scores is
+  # stubbed.
+  known-answer-scorer:
+    name: Known-Answer Scorer and Mutation Score
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Score a known-answer capture with stub engines
+        run: |
+          set -o pipefail
+          {
+            echo "## Known-Answer Scorer"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/known-answer/scorer.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
+
+      # Runs even when the check above failed, because a red check with an
+      # unknown mutation score is a different situation from a red check whose
+      # battery still covers everything, and the difference decides what to fix.
+      - name: Publish the mutation score
+        if: always()
+        run: |
+          set -o pipefail
+          {
+            echo "## Mutation Score"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/known-answer/mutants.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
