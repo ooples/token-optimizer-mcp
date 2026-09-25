@@ -1116,18 +1116,30 @@ console.log(
     `payload, ${k(DEFAULTS.baseContextTokens)} of prior context`
 );
 console.log(
-  '                                     turns |   nothing fetched       | everything fetched | ours'
+  '                          spill sites |     nothing fetched      |  everything fetched  | ours vs'
 );
 console.log(
-  'workload                    spills ours theirs |   none    ours  theirs |    ours     theirs | ours wins below'
+  'workload                 ours pre theirs |   none    ours  preset  theirs |   ours  preset  theirs | theirs'
 );
 for (const c of sessionCosts) {
   console.log(
-    `${c.name.padEnd(32)} ${n(c.r.oursTurns, 11)} ${n(c.r.theirTurns, 6)} | ` +
+    `${c.name.padEnd(24)} ${n(c.r.oursTurns, 4)} ${n(c.r.presetTurns, 3)} ${n(c.r.theirTurns, 6)} | ` +
       `${n(k(costAt(c.arms.none, 0)), 6)} ${n(k(costAt(c.arms.ours, 0)), 7)} ` +
-      `${n(k(costAt(c.arms.theirs, 0)), 7)} | ` +
-      `${n(k(costAt(c.arms.ours, 1)), 7)} ${n(k(costAt(c.arms.theirs, 1)), 10)} | ` +
-      `${n(rate(c.cross), 10)}`
+      `${n(k(costAt(c.arms.preset, 0)), 7)} ${n(k(costAt(c.arms.theirs, 0)), 7)} | ` +
+      `${n(k(costAt(c.arms.ours, 1)), 6)} ${n(k(costAt(c.arms.preset, 1)), 7)} ` +
+      `${n(k(costAt(c.arms.theirs, 1)), 7)} | ` +
+      `${n(rate(c.cross), 7)}`
+  );
+}
+// Our spilling arm against theirs, which is the comparison that decides whether
+// eviction or in-place compression is the better answer to a cache-read bill.
+{
+  const pre = breakEven(corpus.preset, corpus.theirs);
+  console.log(
+    `  preset (our spilling arm) vs theirs, whole corpus: ` +
+      `${k(costAt(corpus.preset, 0))} -> ${k(costAt(corpus.preset, 1))} against ` +
+      `${k(costAt(corpus.theirs, 0))} -> ${k(costAt(corpus.theirs, 1))}, ` +
+      `preset wins ${rate(pre)}`
   );
 }
 
@@ -1461,10 +1473,12 @@ if (process.argv[3] === '--record') {
           p0: {
             none: String(Math.round(costAt(byName[r.name].none, 0))),
             ours: String(Math.round(costAt(byName[r.name].ours, 0))),
+            preset: String(Math.round(costAt(byName[r.name].preset, 0))),
             theirs: String(Math.round(costAt(byName[r.name].theirs, 0))),
           },
           p1: {
             ours: String(Math.round(costAt(byName[r.name].ours, 1))),
+            preset: String(Math.round(costAt(byName[r.name].preset, 1))),
             theirs: String(Math.round(costAt(byName[r.name].theirs, 1))),
           },
           breakEven: rate(crossByName[r.name]),
@@ -1530,14 +1544,20 @@ if (process.argv[3] === '--record') {
           p0: {
             none: String(Math.round(costAt(corpus.none, 0))),
             ours: String(Math.round(costAt(corpus.ours, 0))),
+            preset: String(Math.round(costAt(corpus.preset, 0))),
             theirs: String(Math.round(costAt(corpus.theirs, 0))),
           },
           p1: {
             none: String(Math.round(costAt(corpus.none, 1))),
             ours: String(Math.round(costAt(corpus.ours, 1))),
+            preset: String(Math.round(costAt(corpus.preset, 1))),
             theirs: String(Math.round(costAt(corpus.theirs, 1))),
           },
           breakEven: rate(corpus.cross),
+          // The `ours` arm above compresses in place and spills nothing, so
+          // against a cache-read bill it is the wrong arm to quote alone.
+          // `preset` is the one that evicts, and it is the one that wins.
+          presetBreakEven: rate(breakEven(corpus.preset, corpus.theirs)),
           // What the same subscription cap buys, against doing nothing at all.
           capMultiple: {
             oursP0: times(costAt(corpus.none, 0), costAt(corpus.ours, 0)),
