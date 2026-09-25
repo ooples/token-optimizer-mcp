@@ -288,5 +288,98 @@ function independentSteps(n) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 5. A SATURATED FIT HAS NO ERROR BARS, AND ZERO IS THE WRONG ONE TO PRINT.
+//
+// With as many identifiable coordinates as rows the solver passes exactly
+// through every point. The residual is then 0 by construction, and dividing it
+// by a degrees-of-freedom floor of 1 -- which is what this file failed to
+// catch -- turns "no information about precision" into "+/- 0%", the most
+// confident output the report can produce, in the one case that has earned
+// none of it.
+//
+// The live rig hit exactly this: two observations, two coordinates, `+/- 0%`
+// on both, one of them physically impossible (case 6). Nothing here tested a
+// design with rows <= rank, which is why it shipped.
+// ---------------------------------------------------------------------------
+{
+  const A = coordName('opus', 'cacheRead');
+  const B = coordName('opus', 'cacheWrite1h');
+  const mk = (a, b, y) => ({ x: new Map([[A, a], [B, b]]), y });
+
+  const saturated = fit([mk(1000, 10, 1), mk(2000, 25, 3)]);
+  check(
+    'an exactly determined fit is reported as saturated, not as precise',
+    saturated.saturated === true && saturated.rank === saturated.rows && saturated.dof === 0,
+    `${saturated.rows} rows, rank ${saturated.rank}, dof ${saturated.dof}`
+  );
+  check(
+    'its standard errors are undetermined rather than zero',
+    Object.values(saturated.stderr).every((se) => !Number.isFinite(se)) &&
+      Object.values(saturated.relativeStderr).every((r) => !Number.isFinite(r)) &&
+      saturated.sigma === null,
+    'sigma is null and every stderr is non-finite'
+  );
+  check(
+    'so every coordinate is withheld as imprecise',
+    imprecise(saturated).length === Object.keys(saturated.theta).length,
+    `${imprecise(saturated).length} of ${Object.keys(saturated.theta).length} withheld`
+  );
+  check(
+    'a zero residual on a saturated fit is not evidence of anything',
+    saturated.residual === 0 && saturated.saturated === true,
+    'residual 0 is forced by the design, so the flag is what a reader must see'
+  );
+
+  // The converse, so the guard is about degrees of freedom and not a blanket
+  // refusal: more rows than coordinates, and the error bars come back.
+  const spare = fit([mk(1000, 10, 1), mk(2000, 25, 3), mk(3000, 12, 2), mk(1500, 40, 4)]);
+  check(
+    'more rows than coordinates restores real error bars',
+    spare.saturated === false &&
+      spare.dof === 2 &&
+      Object.values(spare.relativeStderr).every((r) => Number.isFinite(r) && r > 0),
+    `dof ${spare.dof}, rel ` +
+      Object.values(spare.relativeStderr)
+        .map((r) => `${(r * 100).toFixed(0)}%`)
+        .join(' / ')
+  );
+
+  // -------------------------------------------------------------------------
+  // 6. A NEGATIVE WEIGHT IS IMPOSSIBLE, NOT MERELY SMALL.
+  //
+  // Utilisation is monotone non-decreasing in every token kind: spending a
+  // cache read cannot hand quota back. An unconstrained least squares will
+  // still return a negative weight whenever two coordinates move nearly in
+  // lockstep and the meter's rounding breaks the proportion -- which is the
+  // normal condition of this rig's data, not an exotic one. The sign is the
+  // only surviving evidence that the design failed to separate them, so it
+  // must reach the report; the magnitude looks like any other result.
+  // -------------------------------------------------------------------------
+  const negative = fit([mk(1000, 10, 1), mk(2000, 20, 2), mk(3000, 31, 2)]);
+  const neg = Object.entries(negative.theta).filter(([, v]) => v < 0);
+  check(
+    'a negative weight is named as impossible, not published as a number',
+    neg.length === 1 && negative.impossible.length === 1 && negative.impossible[0] === neg[0][0],
+    `${negative.impossible.join(', ')} came back at ${neg[0]?.[1].toExponential(2)}`
+  );
+  check(
+    'and carries no error bar, so nothing downstream can quote it as precise',
+    !Number.isFinite(negative.relativeStderr[negative.impossible[0]]) &&
+      imprecise(negative).some((w) => w.name === negative.impossible[0]),
+    'relative stderr is undetermined and the coordinate is withheld'
+  );
+  check(
+    'the two flags are independent -- this fit has a spare row and is still wrong',
+    negative.saturated === false && negative.dof === 1 && negative.impossible.length === 1,
+    `dof ${negative.dof}, saturated ${negative.saturated}`
+  );
+  check(
+    'a well-posed fit raises neither flag',
+    spare.impossible.length === 0 && spare.saturated === false,
+    'no impossible sign, not saturated'
+  );
+}
+
 console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

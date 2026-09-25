@@ -308,6 +308,16 @@ export function fit(rows, { tol = 1e-8 } = {}) {
   const theta = {};
   for (let i = 0; i < rank; i++) theta[varying[pivots[i]]] = solved[i];
 
+  // A NEGATIVE WEIGHT IS NOT A SMALL WEIGHT. Utilisation is monotone
+  // non-decreasing in every token kind -- no amount of cache reading hands
+  // quota back -- so a negative theta is not the measurement of a cheap
+  // coordinate. It is proof that this design failed to separate that
+  // coordinate from the ones it is collinear with, and the sign is the only
+  // evidence of the failure that survives into the output. Unflagged it prints
+  // to four figures like any other result, and it is the one result a reader
+  // has no reason to doubt.
+  const impossible = Object.keys(theta).filter((name) => theta[name] < 0);
+
   const dropped = [
     ...constant.map((name) => ({ name, reason: 'no observation moved this coordinate' })),
   ];
@@ -344,8 +354,18 @@ export function fit(rows, { tol = 1e-8 } = {}) {
   // and on quantised data it should land near 0.41 -- the standard deviation of
   // the difference of two uniform rounding errors -- which is a free check that
   // the noise model is the one actually in the data.
-  const dof = Math.max(1, rows.length - rank);
-  const sigma2 = sse / dof;
+  //
+  // DEGREES OF FREEDOM CAN BE ZERO, AND ZERO IS NOT ONE. With as many
+  // identifiable coordinates as rows, the fit passes exactly through every
+  // point: sse is 0 by construction, and dividing that by a floor of 1 reports
+  // sigma = 0 and a standard error of 0 on every coordinate -- maximal
+  // confidence in exactly the case that carries no information about precision
+  // at all. The residual there is not small, it is undefined, and so is every
+  // error bar derived from it. Two observations produced precisely this: two
+  // coordinates, two rows, `+/- 0%` on both.
+  const dof = rows.length - rank;
+  const saturated = dof <= 0;
+  const sigma2 = saturated ? Infinity : sse / dof;
   const inverse = Array.from({ length: rank }, () => new Array(rank).fill(0));
   for (let i = rank - 1; i >= 0; i--) {
     if (R[i][i] === 0) continue;
@@ -361,10 +381,11 @@ export function fit(rows, { tol = 1e-8 } = {}) {
   for (let i = 0; i < rank; i++) {
     let rowSq = 0;
     for (let j = i; j < rank; j++) rowSq += inverse[i][j] * inverse[i][j];
-    const se = Math.sqrt(sigma2 * rowSq);
     const name = varying[pivots[i]];
+    const se = saturated || theta[name] < 0 ? Infinity : Math.sqrt(sigma2 * rowSq);
     stderr[name] = se;
-    relativeStderr[name] = theta[name] === 0 ? Infinity : Math.abs(se / theta[name]);
+    relativeStderr[name] =
+      theta[name] === 0 || !Number.isFinite(se) ? Infinity : Math.abs(se / theta[name]);
   }
 
   return {
@@ -372,7 +393,10 @@ export function fit(rows, { tol = 1e-8 } = {}) {
     theta,
     stderr,
     relativeStderr,
-    sigma: Math.sqrt(sigma2),
+    sigma: saturated ? null : Math.sqrt(sigma2),
+    dof,
+    saturated,
+    impossible,
     dropped,
     rank,
     residual: rmse,
@@ -519,13 +543,35 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   console.log(`\nrank ${result.rank} of ${result.varying.length} varying coordinates`);
   for (const [name, value] of Object.entries(result.theta).sort()) {
     const rel = result.relativeStderr[name];
-    const flag = rel <= 0.25 ? '' : '   TOO IMPRECISE TO PUBLISH';
-    console.log(
-      `  ${name.padEnd(24)} theta ${value.toExponential(4)} % per token  ` +
-        `+/- ${(rel * 100).toFixed(0)}%${flag}`
-    );
+    const bar = Number.isFinite(rel) ? `+/- ${(rel * 100).toFixed(0)}%` : '+/- undetermined';
+    const flag =
+      value < 0
+        ? '   IMPOSSIBLE SIGN - not identified'
+        : rel <= 0.25
+          ? ''
+          : '   TOO IMPRECISE TO PUBLISH';
+    console.log(`  ${name.padEnd(24)} theta ${value.toExponential(4)} % per token  ${bar}${flag}`);
   }
   for (const d of result.dropped) console.log(`  ${d.name.padEnd(24)} UNIDENTIFIABLE - ${d.reason}`);
+
+  if (result.saturated) {
+    console.log(
+      `\nSATURATED FIT: ${result.rows} row(s) and ${result.rank} identifiable ` +
+        `coordinate(s), so ${result.dof} degrees of freedom. The fit passes exactly ` +
+        `through every point\nby construction. Its residual is 0 because it must be, ` +
+        `not because the model is right, and no standard error\ncan be formed from ` +
+        `it. Every weight above is undetermined -- collect more observations than ` +
+        `coordinates.`
+    );
+  }
+  if (result.impossible.length) {
+    console.log(
+      `\n${result.impossible.length} coordinate(s) came out NEGATIVE: ` +
+        `${result.impossible.join(', ')}. Utilisation cannot fall when a token is spent,` +
+        `\nso these are not cheap coordinates -- they are unseparated ones. ` +
+        `Do not quote them.`
+    );
+  }
 
   console.log(
     `\nresidual ${result.residual.toFixed(3)} percentage points ` +
@@ -538,7 +584,16 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   if (weak.length) {
     console.log(
       `\n${weak.length} coordinate(s) are identifiable but too uncertain to use: ` +
-        weak.map((w) => `${w.name} (+/-${(w.relativeStderr * 100).toFixed(0)}%)`).join(', ') +
+        weak
+          .map(
+            (w) =>
+              `${w.name} (${
+                Number.isFinite(w.relativeStderr)
+                  ? `+/-${(w.relativeStderr * 100).toFixed(0)}%`
+                  : 'undetermined'
+              })`
+          )
+          .join(', ') +
         `\nCollect more observations, or run a workload that moves them specifically.`
     );
   }
