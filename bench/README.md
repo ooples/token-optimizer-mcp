@@ -137,3 +137,76 @@ our numbers with nothing here having changed. Bumping it is a deliberate act tha
 starts a **new campaign**: results either side of a bump are not comparable, and
 mixing them is exactly what the pin prevents. Record the bump next to the results
 it produced.
+
+## subscription/ — what a subscription is actually charged
+
+Everything else here counts tokens with a local tokeniser and prices them with
+the constants in `compression/cost-model.mjs`. Those constants (`cacheWrite:
+1.25`, `cacheRead: 0.1`, `outputPerInput: 5`) are API list prices restated as if
+they were a subscription's exchange rate, and until this directory existed
+nothing had ever checked that. `bench/subscription/` checks it against the meter
+a Claude subscription is actually rationed by.
+
+Two instruments, neither of which spends quota:
+
+| | what it gives | what it cannot give |
+| --- | --- | --- |
+| `meter.mjs` — `GET /api/oauth/usage` | the real metered quantity | whole percent only; `limit_dollars` is null on Max |
+| `transcripts.mjs` — `~/.claude/projects/**/*.jsonl` | exact per-request `usage`, split five ways | says nothing about how the meter weights them |
+
+`observe.mjs` pairs them into one line of `observations.jsonl`; `calibrate.mjs`
+fits weights to those lines.
+
+### The runbook
+
+```bash
+npm run bench:subscription:check      # solver self-test, synthetic, no network
+npm run bench:subscription:observe    # one free reading -> observations.jsonl
+npm run bench:subscription:calibrate  # fit, once enough readings exist
+```
+
+To measure a workload, bracket it:
+
+```bash
+node bench/subscription/observe.mjs --label before-<workload>
+#   ... run the workload ...
+node bench/subscription/observe.mjs --label after-<workload>
+```
+
+**The quantum sets the minimum experiment.** The meter reports whole percent, so
+a workload that moves the five-hour window by less than 1 is invisible however
+precisely its tokens were counted. On a Max 20x plan 1% is roughly 1.5M
+cache-read-equivalent tokens — a real session, not a single request. Runs
+smaller than that produce rows `calibrate.mjs` will correctly refuse to fit.
+
+**Run it with the machine idle.** A transcript row is written after its response
+completes, so a reading taken seconds after a live turn can miss requests the
+meter has already counted. `observe.mjs` records `secondsSinceLastRequest` and
+`requestsLast10Min` so a contaminated reading is identifiable rather than
+invisible; the session doing the observing burns the same window it is reading.
+
+### What it will and will not tell you
+
+It solves for `theta = 100 * w / L`, not for `w`. The cap `L` is null on this
+plan, so weights are only ever recoverable up to a common factor — which is
+enough, because every claim the benchmark makes is a ratio and the factor
+cancels. It is **not** enough to print "this workload cost $N", and the rig
+never does.
+
+Three states, not two, and the report distinguishes them:
+
+- **solved** — a weight with a standard error small enough to use.
+- **unidentifiable** — no observation moved the coordinate (on a machine that
+  only ever writes 1h cache entries, `cacheWrite5m` is permanently here), or it
+  moved only in lockstep with another. Reported by name, never by value.
+- **identifiable but imprecise** — moved, but by far less than the 1% quantum.
+  This is where `input` sits on a normal Claude Code workload, buried under cache
+  reads three orders of magnitude larger. A number is printed with its error bar
+  and flagged `TOO IMPRECISE TO PUBLISH`.
+
+The default fit uses **differences** between consecutive readings inside one
+window. Usage from claude.ai, another machine on the same subscription, or any
+client that writes no transcript lands on the meter and never on this disk; in a
+delta a steady unobserved baseline cancels, in a level fit it biases every
+weight. `--levels` runs the level fit as a cross-check — agreement is evidence,
+disagreement localises the problem to coverage.

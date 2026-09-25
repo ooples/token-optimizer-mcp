@@ -143,7 +143,10 @@
     "bench:screen:knowledge": "bash bench/thol/screen-knowledge.sh",
     "verify:install": "node scripts/verify-fresh-install.mjs",
     "bench:must-win": "node bench/compression/must-win.check.mjs",
-    "bench:ledger:provenance": "node bench/ledger/verify-provenance.mjs"
+    "bench:ledger:provenance": "node bench/ledger/verify-provenance.mjs",
+    "bench:subscription:observe": "node bench/subscription/observe.mjs",
+    "bench:subscription:calibrate": "node bench/subscription/calibrate.mjs",
+    "bench:subscription:check": "node bench/subscription/calibrate.check.mjs"
   },
   "repository": {
     "type": "git",
