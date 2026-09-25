@@ -46,6 +46,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { classifyIds } from './retention.mjs';
+import { classifyArms, declaredOffloadBytes } from './offload.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -854,6 +855,47 @@ for (const [name, text] of Object.entries(payloads)) {
   // they lost it: their CCR store may still hold it, exactly as our spill holds
   // ours. What it can do is stop a silent asymmetry being quoted as a win.
   const theirText = t.bestText ?? text;
+
+  // THEIR ARM, SPLIT THE WAY OURS ALREADY IS.
+  //
+  // `theirAfter` above is their best arm of any kind, chosen by ratio. Several
+  // of their arms reach that ratio by writing the content to a local store and
+  // leaving a marker behind, which is what our `sub` arm does and what the
+  // report calls "SUBSTITUTION, not reduction" when we do it. Comparing our
+  // encoding arm against their substitution arm is the wrong comparison, so
+  // their best NON-offloading arm is measured here alongside it.
+  //
+  // THREE STATES, NOT TWO. A capture taken before `run-theirs.py` recorded every
+  // arm's bytes cannot answer the question at all, and that is not the same as
+  // a capture that answered "no such arm". `theirCleanState` names which:
+  //   'measured'    -- a non-offloading arm exists and was scored
+  //   'none'        -- every arm offloaded, so no like-for-like number exists
+  //   'unrecorded'  -- this capture predates arm capture and cannot be asked
+  let theirCleanState = 'unrecorded';
+  let theirCleanTok = null;
+  let theirCleanBeforeTok = null;
+  let theirCleanArm = null;
+  if (t.armTexts && t.armBeforeTexts) {
+    const arms = Object.fromEntries(
+      Object.entries(t.armTexts).map(([label, armText]) => [
+        label,
+        { text: armText, beforeText: t.armBeforeTexts[label] ?? text },
+      ])
+    );
+    const split = classifyArms(arms, { size: tokens });
+    if (split.clean === null) {
+      theirCleanState = 'none';
+    } else {
+      theirCleanState = 'measured';
+      theirCleanArm = split.clean.label;
+      theirCleanBeforeTok = tokens(t.armBeforeTexts[split.clean.label] ?? text);
+      theirCleanTok = tokens(t.armTexts[split.clean.label]);
+    }
+  }
+  // What their published arm claims it put on disk, so the substitution
+  // comparison can print a store size beside its ratio the way ours does.
+  const theirOffloadBytes = declaredOffloadBytes(theirText);
+
   // WHAT A RECOVERY COSTS IN ROUND TRIPS, on both sides, counted the same
   // way: one fetch per distinct place content was moved to. Theirs is a
   // `<<ccr:HASH,...>>` marker redeemed by `headroom_retrieve`; ours is a
@@ -913,6 +955,15 @@ for (const [name, text] of Object.entries(payloads)) {
     bodyReason: body?.reason ?? '',
     bodyBehind: body?.behind ?? 0,
     bodyGone,
+    // THEIR LIKE-FOR-LIKE ARM. See `theirCleanState` above for why this is
+    // three-valued: null here means either "no such arm" or "this capture
+    // cannot be asked", and the state says which. Summing null as zero would
+    // report a reduction nobody measured, on their side of the table.
+    theirCleanState,
+    theirCleanArm,
+    theirCleanTok,
+    theirCleanBeforeTok,
+    theirOffloadBytes,
     subAfter: sub.text.length,
     subStore: subSpilled.reduce((n, c) => n + c.length, 0),
     subRatio: 1 - sub.text.length / before,
@@ -1075,6 +1126,9 @@ const sum = (f) => rows.reduce((n, r) => n + f(r), 0);
 const beforeAll = sum((r) => r.before);
 const oursAll = sum((r) => r.after);
 const theirsAll = sum((r) => theirs[r.name].after);
+// `sum` is over every row; this is the same fold over an explicit subset, for
+// totals that are only defined on some workloads.
+const sum2 = (subset, f) => subset.reduce((n, r) => n + f(r), 0);
 const beforeTokAll = sum((r) => r.oursTokBefore);
 const oursTokAll = sum((r) => r.oursTokAfter);
 // Their per-workload token ratio applied to the common denominator, so the
@@ -1259,11 +1313,50 @@ const theirsTokens = 1 - theirsTokAll / beforeTokAll;
 
 console.log('');
 console.log(
-  `chars   ours ${pct(oursChars)}   theirs ${pct(theirsChars)}   (denominator: the payload bytes both arms were given)`
+  `chars   ours ${pct(oursChars)}   theirs ${pct(theirsChars)}   (denominator: the payload bytes both arms were given; theirs is best-of-any arm, offload included -- see like4like)`
 );
 console.log(
-  `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload; cl100k_base on text, pixels/750 on images, both arms' real output)`
+  `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload; cl100k_base on text, pixels/750 on images, both arms' real output; theirs is best-of-any arm, offload included -- see like4like)`
 );
+// THE LIKE-FOR-LIKE ROW: our encoding arm against their best NON-offloading
+// arm, over the workloads where such an arm exists on their side.
+//
+// The `theirs` line above is their best arm of any kind. Several of their arms
+// reach their ratio by writing content to a local store, which is exactly what
+// our `sub` line below is labelled "SUBSTITUTION, not reduction" for doing. So
+// the line above compares our encoding arm with their substitution arm, and
+// this line is the comparison that is actually apples to apples.
+//
+// IT IS SCORED ONLY OVER THE WORKLOADS WHERE IT IS DEFINED, and says how many
+// those are. Counting a workload where every arm of theirs offloaded as "their
+// non-offload arm reduced 0%" would invent a measurement, and it would invent
+// one on their side of the table, which flatters us.
+{
+  const measured = rows.filter((r) => r.theirCleanState === 'measured');
+  const noClean = rows.filter((r) => r.theirCleanState === 'none');
+  const unrecorded = rows.filter((r) => r.theirCleanState === 'unrecorded');
+  if (measured.length > 0) {
+    const ourSide = 1 - sum2(measured, (r) => r.oursTokAfter) / sum2(measured, (r) => r.oursTokBefore);
+    const theirSide =
+      1 - sum2(measured, (r) => r.theirCleanTok) / sum2(measured, (r) => r.theirCleanBeforeTok);
+    console.log(
+      `like4like  ours ${pct(ourSide)}   theirs ${pct(theirSide)}   ` +
+        `(tokens, over the ${measured.length} of ${rows.length} workloads where they have a ` +
+        'non-offloading arm; their column above is best-of-any and includes offload)'
+    );
+  }
+  if (noClean.length > 0)
+    console.log(
+      `           no like-for-like number on ${noClean.length}: ` +
+        `${noClean.map((r) => r.name).join(', ')} -- every arm of theirs moved bytes to the store`
+    );
+  if (unrecorded.length > 0)
+    console.log(
+      `           cannot be asked on ${unrecorded.length}: ` +
+        `${unrecorded.map((r) => r.name).join(', ')} -- captured before run-theirs.py recorded ` +
+        'every arm; re-capture to score these'
+    );
+}
 console.log(
   `free    ours ${sum((r) => r.inOut + r.derived)}   theirs ${sum((r) => r.theirIn)}   ` +
     `of ${sum((r) => r.ids)} identifiers, available with no extra turn`
