@@ -36,6 +36,29 @@
 const MIN_ID_LEN = 8;
 
 /**
+ * Split a scraped identifier set into the part that can be scored and the part
+ * that cannot.
+ *
+ * THE EXCLUSION HAS TO HAPPEN BEFORE THE CALLER STARTS COUNTING, not inside
+ * `classifyIds` alone. head-to-head scrapes one set and then walks it in six
+ * separate loops -- our arm, the body arm, the sub arm, their arm, their
+ * redeemed markers -- and only one of those six went through `classifyIds`. So
+ * our column was scored against the safe subset while their column was scored
+ * against the whole scrape, and the denominator printed beside both was the
+ * whole scrape. On `ka-items` that read `25 | 24 0 null 0`: four buckets that
+ * cannot sum to their own denominator, under an arm that changed nothing.
+ *
+ * Splitting at the scrape makes every loop and the denominator agree by
+ * construction rather than by six edits that can drift apart again.
+ */
+export function splitScorable(ids) {
+  const want = [];
+  const unsafeIds = [];
+  for (const id of ids) (String(id).length >= MIN_ID_LEN ? want : unsafeIds).push(id);
+  return { want: new Set(want), unsafeIds };
+}
+
+/**
  * Sort every wanted identifier into exactly one of the four buckets.
  *
  * `hasSink` is the caller's declaration that this arm was given somewhere to
