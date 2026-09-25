@@ -401,7 +401,7 @@ def run(name, native, text):
 
     arm, best = min(attempts, key=reduction)
     ratio = reduction((arm, best))
-    # ELEVEN READINGS OF THE WINNING ARM, MEDIAN PUBLISHED. The sweep above
+    # REPEATED READINGS OF THE WINNING ARM, MEDIAN PUBLISHED. The sweep above
     # times each arm once, which is enough to pick a winner and not enough to
     # compare against ours: a single reading of a sub-second call is partly a
     # reading of the machine. Only the winner is repeated, because only the
