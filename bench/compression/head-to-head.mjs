@@ -61,7 +61,9 @@ import {
   costAt,
   costLine,
   markerBytes,
+  sumLines,
   usageMultiplier,
+  worstAgainst,
 } from './cost-model.mjs';
 
 const dir = process.argv[2];
@@ -1070,11 +1072,10 @@ const armsFor = (r, params) => {
   };
 };
 
-const addLines = (a, b) => ({
-  fixed: a.fixed + b.fixed,
-  perFetch: a.perFetch + b.perFetch,
-});
-const ZERO = { fixed: 0, perFetch: 0 };
+// The fold belongs to the model, not to this file. A local copy that knew only
+// the field names of an older cost line would drop the rest in silence, and the
+// corpus row -- the one the README quotes -- would be quietly wrong while every
+// per-session row above it stayed right.
 const sessionCosts = rows.map((r) => {
   const arms = armsFor(r, DEFAULTS);
   return { name: r.name, r, arms, cross: breakEven(arms.ours, arms.theirs) };
@@ -1082,8 +1083,7 @@ const sessionCosts = rows.map((r) => {
 const foldCorpus = (all) => {
   const keys = ['none', 'ours', 'theirs', 'preset'];
   const out = {};
-  for (const key of keys)
-    out[key] = all.reduce((acc, a) => addLines(acc, a[key]), ZERO);
+  for (const key of keys) out[key] = sumLines(all.map((a) => a[key]));
   out.cross = breakEven(out.ours, out.theirs);
   return out;
 };
@@ -1098,12 +1098,18 @@ const k = (t) => `${(t / 1000).toFixed(1)}k`;
 const times = (base, arm) => `${usageMultiplier(base, arm).toFixed(2)}x`;
 // A crossing outside [0, 1] is not a missing answer, it is the strongest one:
 // the arm is cheaper at every fetch rate there is.
-const rate = (c) =>
-  c.p === null
-    ? c.cheaper === 'a'
-      ? 'always'
-      : 'never'
-    : `${(c.p * 100).toFixed(0)}%`;
+// `breakEven(ours, theirs)` names ours `a`. Three things can happen, and the
+// column header says "ours wins below", so only one of them may be printed as a
+// bare percentage: if theirs is the cheaper arm at rest, the SAME number means
+// the opposite thing, and printing it unqualified would invert the claim. A
+// second crossing gets a marker rather than being dropped -- with a quadratic
+// cost there is no longer any guarantee that one rate settles the question.
+const rate = (c) => {
+  if (c.p === null) return c.cheaper === 'a' ? 'always' : 'never';
+  const more = c.crossings.length > 1 ? '+' : '';
+  const pct = `${(c.p * 100).toFixed(0)}%${more}`;
+  return c.cheaper === 'a' ? pct : `above ${pct}`;
+};
 
 console.log(
   `\nsession cost, effective input tokens -- ${DEFAULTS.turnsAfter} turns after the ` +
@@ -1113,11 +1119,11 @@ console.log(
   '                                     turns |   nothing fetched       | everything fetched | ours'
 );
 console.log(
-  'workload                         ours theirs |   none    ours  theirs |    ours     theirs | wins below'
+  'workload                    spills ours theirs |   none    ours  theirs |    ours     theirs | ours wins below'
 );
 for (const c of sessionCosts) {
   console.log(
-    `${c.name.padEnd(32)} ${n(c.r.oursTurns, 5)} ${n(c.r.theirTurns, 6)} | ` +
+    `${c.name.padEnd(32)} ${n(c.r.oursTurns, 11)} ${n(c.r.theirTurns, 6)} | ` +
       `${n(k(costAt(c.arms.none, 0)), 6)} ${n(k(costAt(c.arms.ours, 0)), 7)} ` +
       `${n(k(costAt(c.arms.theirs, 0)), 7)} | ` +
       `${n(k(costAt(c.arms.ours, 1)), 7)} ${n(k(costAt(c.arms.theirs, 1)), 10)} | ` +
@@ -1144,8 +1150,15 @@ for (const p of [0, 0.25, 0.5, 1]) {
   );
 }
 console.log(
-  `ours is cheaper than theirs while the agent fetches back less than ` +
-    `${rate(corpus.cross)} of what was moved out`
+  corpus.cross.p === null
+    ? `${corpus.cross.cheaper === 'a' ? 'ours' : 'theirs'} is cheaper at every ` +
+        `fetch rate from 0 to 100%`
+    : `${corpus.cross.cheaper === 'a' ? 'ours' : 'theirs'} is cheaper than the ` +
+        `other while the agent fetches back less than ` +
+        `${(corpus.cross.p * 100).toFixed(0)}% of what was moved out` +
+        (corpus.cross.crossings.length > 1
+          ? `, and they swap back at ${(corpus.cross.crossings[1] * 100).toFixed(0)}%`
+          : '')
 );
 
 // THE OBVIOUS ATTACK ON THE ABOVE, run rather than waited for. Both numbers in
@@ -1455,6 +1468,20 @@ if (process.argv[3] === '--record') {
             theirs: String(Math.round(costAt(byName[r.name].theirs, 1))),
           },
           breakEven: rate(crossByName[r.name]),
+          // THE RATE THAT FLATTERS US LEAST, so a gate has something to stand
+          // on. Cost is quadratic in the fetch rate, so the two endpoints no
+          // longer bound the interval between them: a difference that opens
+          // upward dips in the middle, and an arm can lead at 0% and at 100%
+          // while trailing somewhere between. This is that point, found
+          // exactly rather than sampled.
+          worst: (() => {
+            const w = worstAgainst(byName[r.name].ours, byName[r.name].theirs);
+            return {
+              fetchRate: w.p.toFixed(4),
+              ours: String(Math.round(costAt(byName[r.name].ours, w.p))),
+              theirs: String(Math.round(costAt(byName[r.name].theirs, w.p))),
+            };
+          })(),
         },
       },
       // SPEED, THE SECOND MUST-WIN. Ours is measured; theirs is null until a
