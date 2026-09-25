@@ -666,8 +666,20 @@ function weekObs(points) {
   const r = weeklyClaimReadiness(weekObs([[23, 0], [24, 5e6], [25, 10e6]]));
   check(
     'deltas of 1 do not clear the bar, however many there are',
-    r.ready === false && r.best === 1 && /2 or more/.test(r.reason),
+    r.ready === false && r.best === 1 && /best so far: 1/.test(r.reason),
     r.reason
+  );
+  // AND IT MUST BE THE REFUSAL BRANCH THAT SAID SO. Asserting only that the
+  // text mentions the bar does not tell a refusal from an affirmation: both
+  // messages carry the phrase "2 or more", one to demand it and one to claim
+  // it was met. So a bar lowered to `r.y >= 1` passed that regex while
+  // reporting these rows as qualifying, and `best` stayed 1 because the rows
+  // really are 1. The mutation battery caught it; this is the assertion that
+  // was missing, and `best so far` exists only on the refusal.
+  check(
+    'and no row of 1 is reported as having qualified',
+    r.qualifying === undefined,
+    r.qualifying === undefined ? 'nothing qualified, so no list' : String(r.qualifying)
   );
 }
 
