@@ -41,6 +41,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const RESULTS = join(here, 'headroom', 'results', 'head-to-head.json');
 const RATCHET = join(here, 'headroom', 'results', 'must-win.ratchet.json');
 const promote = process.argv.includes('--promote');
+// `--json` exists so anything that QUOTES these verdicts -- an issue body, a
+// summary, a dashboard -- can read them from the judge instead of restating
+// them by hand. A number copied by hand is a number that drifts.
+const asJson = process.argv.includes('--json');
 
 /**
  * PER-ROW CONFIGURATION, EACH LINE TRACEABLE TO THE ISSUE THAT APPROVED IT.
@@ -131,7 +135,10 @@ function judge(row, cfg, floors) {
   const oursZt = num(row.retention?.oursZeroTurn);
   let retention;
   if (cfg.retention === null) {
-    retention = { pass: null, detail: `${oursZt}/${ids} - not a must-win here` };
+    retention = {
+      pass: null,
+      detail: `${oursZt}/${ids} - not a must-win here`,
+    };
   } else if (ids === null) {
     retention = { pass: null, detail: 'ids not recorded' };
   } else {
@@ -169,6 +176,7 @@ const ratchet = existsSync(RATCHET)
       retentionFloors: {},
     };
 
+const report = {};
 const regressed = [];
 const unpromoted = [];
 const open = [];
@@ -184,13 +192,19 @@ for (const row of results.workloads) {
       nextFloors[row.name] = Math.max(nextFloors[row.name] ?? 0, v.value);
     const key = `${row.name}/${criterion}`;
     const was = ratchet.enforced?.[key] === true;
+    (report[row.name] ??= { issue: cfg.issue })[criterion] = {
+      pass: v.pass,
+      detail: v.detail,
+      enforced: was,
+    };
     // A pair stays enforced once enforced, so a regression is reported on every
     // later run rather than only on the one that caused it.
     if (v.pass === true || was) next[key] = true;
     if (v.pass === true && !was) unpromoted.push(`${key} - ${v.detail}`);
     if (v.pass !== true && was)
       regressed.push(`${key} - ${v.detail} (was enforced)`);
-    if (v.pass === false && !was) open.push(`#${cfg.issue} ${key} - ${v.detail}`);
+    if (v.pass === false && !was)
+      open.push(`#${cfg.issue} ${key} - ${v.detail}`);
     if (v.pass === null && !was)
       open.push(`#${cfg.issue} ${key} - UNMEASURED: ${v.detail}`);
   }
@@ -211,13 +225,20 @@ if (promote) {
   process.exit(0);
 }
 
+if (asJson) {
+  console.log(JSON.stringify(report, null, 2));
+  process.exit(0);
+}
+
 const enforcedCount = Object.keys(ratchet.enforced ?? {}).length;
 console.log(
   `must-win gate: ${enforcedCount} enforced, ${open.length} open, ` +
     `${regressed.length} regressed, ${unpromoted.length} unrecorded pass(es)`
 );
 if (open.length)
-  console.log(`\nOPEN MUST-WINS (not a build failure):\n  ${open.join('\n  ')}`);
+  console.log(
+    `\nOPEN MUST-WINS (not a build failure):\n  ${open.join('\n  ')}`
+  );
 if (unpromoted.length)
   console.log(
     '\nNEWLY PASSING - run with --promote so they can never regress:\n  ' +
