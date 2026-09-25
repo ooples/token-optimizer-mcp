@@ -131,6 +131,34 @@ export const WRITE_TTL_CENSUS = Object.freeze({
 });
 
 /**
+ * WHAT THE BILL IS ACTUALLY MADE OF, and where `turnsAfter` comes from.
+ *
+ * `bench/subscription/cost-split.mjs` converts real transcript usage into this
+ * unit and divides it four ways. The division that matters here is the last
+ * one: `cacheRead / (cacheWrite5m + cacheWrite1h)` is, by the model's own
+ * definition, the number of turns over which a written token is re-read. That
+ * is `turnsAfter`, and it need not be guessed.
+ *
+ * The shares below are steady across every window from 1 to 30 days. The RATIO
+ * is not: it reads 56.0 over 7 days, 57.0 over 14 and 70.3 over 30, a spread of
+ * 23%. So the honest statement is a range, not a point -- which is why the
+ * default sits at the bottom of it and the sensitivity sweep covers the top.
+ * Every value in that range is at least 2.8x the 20 this model used to assume.
+ *
+ * Re-derive with `node bench/subscription/cost-split.mjs`; this is a note of
+ * what it said on the date below, not a substitute for running it.
+ */
+export const BILL_SPLIT_CENSUS = Object.freeze({
+  measuredOn: '2026-09-25',
+  windowDays: 7,
+  requests: 15176,
+  effectiveInputTokens: 490_210_000,
+  shares: Object.freeze({ input: 0.004, write: 0.232, read: 0.649, output: 0.115 }),
+  thinkingShareOfOutput: 0.35,
+  readsPerWrittenToken: Object.freeze({ d7: 56.02, d14: 56.97, d30: 70.34 }),
+});
+
+/**
  * The model's assumptions, all overridable per arm.
  *
  * `turnsAfter`, `baseContextTokens`, `fetchCallTokens` and `fetchBatch` are the
@@ -149,8 +177,18 @@ export const DEFAULTS = Object.freeze({
   cacheRead: RATES.cacheRead,
   /** Output bills at 5x input across the current line-up. */
   outputPerInput: RATES.outputPerInput,
-  /** Assistant requests following the one the payload lands in. */
-  turnsAfter: 20,
+  /**
+   * Assistant requests following the one the payload lands in, over which its
+   * cached prefix is re-read.
+   *
+   * MEASURED, not guessed: 56 is reads per written token over 7 days of real
+   * traffic (BILL_SPLIT_CENSUS). It was 20 here until that division was run,
+   * and 20 turned out to understate the dominant term by at least 2.8x. The
+   * bottom of the measured range is the default because it is the value least
+   * favourable to the conclusion that cache reads dominate -- and cache reads
+   * dominate anyway, at 64.9% of the bill.
+   */
+  turnsAfter: 56,
   /** System prompt, tool schemas and prior conversation, in tokens. */
   baseContextTokens: 12000,
   /** Output tokens the model writes to issue one retrieval call. */

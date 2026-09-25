@@ -64,6 +64,17 @@ const CASES = [
 
 const GRID = [0, 0.05, 0.1, 0.25, 1 / 3, 0.5, 0.75, 0.9, 1];
 
+/**
+ * Pinned parameters for the cases that need a crossing to exist.
+ *
+ * `DEFAULTS.turnsAfter` is a MEASUREMENT now, re-derived from real traffic, so
+ * a case that quietly depends on its present value is testing the traffic and
+ * not the arithmetic -- and breaks the day the traffic moves. These cases are
+ * about where a crossing is and how it is labelled, so they pin the parameter
+ * and say so. The cases that must hold at any parameter keep using DEFAULTS.
+ */
+const PINNED = Object.freeze({ ...DEFAULTS, turnsAfter: 20 });
+
 // ---------------------------------------------------------------------------
 // 1. The rewrite did not change the maths, only where it was wrong.
 // ---------------------------------------------------------------------------
@@ -296,8 +307,8 @@ function scanCrossings(a, b, steps = 2_000_000) {
 
 {
   // A real pair: ours spills into many places, theirs into few.
-  const ours = costLine({ handed: 30000, blocks: Array.from({ length: 41 }, () => 900), params: DEFAULTS });
-  const theirs = costLine({ handed: 52000, blocks: Array.from({ length: 14 }, () => 2600), params: DEFAULTS });
+  const ours = costLine({ handed: 30000, blocks: Array.from({ length: 41 }, () => 900), params: PINNED });
+  const theirs = costLine({ handed: 52000, blocks: Array.from({ length: 14 }, () => 2600), params: PINNED });
   const be = breakEven(ours, theirs);
   const scanned = scanCrossings(ours, theirs);
   const agree =
@@ -415,8 +426,8 @@ function scanCrossings(a, b, steps = 2_000_000) {
 {
   // The real arms, where the answer should be an endpoint and agree with the
   // crossing the same pair reports.
-  const ours = costLine({ handed: 30000, blocks: Array.from({ length: 41 }, () => 900), params: DEFAULTS });
-  const theirs = costLine({ handed: 52000, blocks: Array.from({ length: 14 }, () => 2600), params: DEFAULTS });
+  const ours = costLine({ handed: 30000, blocks: Array.from({ length: 41 }, () => 900), params: PINNED });
+  const theirs = costLine({ handed: 52000, blocks: Array.from({ length: 14 }, () => 2600), params: PINNED });
   const worst = worstAgainst(ours, theirs);
   const be = breakEven(ours, theirs);
   // Ours is cheaper at rest and there is one crossing, so the worst point must

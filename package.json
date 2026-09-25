@@ -147,7 +147,9 @@
     "bench:ledger:provenance": "node bench/ledger/verify-provenance.mjs",
     "bench:subscription:observe": "node bench/subscription/observe.mjs",
     "bench:subscription:calibrate": "node bench/subscription/calibrate.mjs",
-    "bench:subscription:check": "node bench/subscription/calibrate.check.mjs"
+    "bench:subscription:check": "node bench/subscription/calibrate.check.mjs",
+    "bench:subscription:split": "node bench/subscription/cost-split.mjs",
+    "bench:subscription:split:check": "node bench/subscription/cost-split.check.mjs"
   },
   "repository": {
     "type": "git",
