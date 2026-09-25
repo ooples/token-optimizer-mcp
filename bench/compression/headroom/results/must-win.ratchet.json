@@ -1,12 +1,23 @@
 {
   "note": "pairs recorded as passing; a pass here may never regress",
   "enforced": {
+    "agent-loop-logs/speed": true,
+    "agent-loop/speed": true,
     "browser-session/cost": true,
     "browser-session/retention": true,
+    "browser-session/speed": true,
+    "code-search/speed": true,
     "codebase-exploration/retention": true,
     "grep-output/retention": true,
+    "grep-output/speed": true,
+    "human-authored-json/speed": true,
+    "issue-triage/speed": true,
     "raw-build-log/retention": true,
-    "sre-debugging/retention": true
+    "raw-build-log/speed": true,
+    "relevance-probe/speed": true,
+    "repeated-reads/speed": true,
+    "sre-debugging/retention": true,
+    "sre-debugging/speed": true
   },
   "retentionFloors": {
     "agent-loop-logs": 87,
