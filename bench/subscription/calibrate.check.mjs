@@ -45,6 +45,7 @@ import {
   imprecise,
   offsetSignature,
   capReport,
+  weeklyClaimReadiness,
   sameWindowInstance,
 } from './calibrate.mjs';
 import { KINDS, zeroTotals } from './transcripts.mjs';
@@ -624,6 +625,89 @@ const lvl = (label, tokens, y) => ({
     seen.join(' ')
   );
 }
+
+// ---------------------------------------------------------------------------
+// 9. The weekly claim gate -- what the rig refuses to say, and until when.
+// ---------------------------------------------------------------------------
+
+const WEEK_RESETS = '2026-09-30T10:00:00.000Z';
+
+/** A run of seven_day observations: `[percent, cumulativeInputTokens]` pairs. */
+function weekObs(points) {
+  return points.map(([percent, input], i) => ({
+    at: new Date(Date.parse(WEEK_RESETS) - (10 - i) * 3600e3).toISOString(),
+    label: `w${i}`,
+    rig: 1,
+    windows: {
+      seven_day: {
+        percent,
+        resetsAt: WEEK_RESETS,
+        totals: { ...zeroTotals(), input },
+        byFamily: { opus: { ...zeroTotals(), input } },
+      },
+    },
+    quiet: { secondsSinceLastRequest: 600, requestsLast10Min: 0 },
+  }));
+}
+
+{
+  const r = weeklyClaimReadiness(weekObs([[23, 0]]));
+  check(
+    'a single reading cannot support a weekly claim',
+    r.ready === false && r.best === 0,
+    r.reason
+  );
+}
+
+{
+  // The state the rig is actually in: deltas of 1 and nothing larger. These
+  // bound the cap from below, which gives a saving a ceiling and no floor --
+  // and a claim without a floor is not a claim.
+  const r = weeklyClaimReadiness(weekObs([[23, 0], [24, 5e6], [25, 10e6]]));
+  check(
+    'deltas of 1 do not clear the bar, however many there are',
+    r.ready === false && r.best === 1 && /2 or more/.test(r.reason),
+    r.reason
+  );
+}
+
+{
+  // One row that moves the meter by 2 closes the interval from both sides, and
+  // being a delta it has differenced away any fixed offset on the way.
+  const r = weeklyClaimReadiness(weekObs([[23, 0], [25, 10e6]]));
+  check(
+    'a single delta of 2 is enough to close the cap, but only loosely',
+    r.ready === true && Number.isFinite(r.bracket.hi) && r.bracket.lo > 0 &&
+      Math.abs(r.width - 3) < 1e-9,
+    `${(r.bracket.lo / 1e6).toFixed(0)}M .. ${(r.bracket.hi / 1e6).toFixed(0)}M, ${r.width.toFixed(2)}x wide`
+  );
+}
+
+{
+  // Readiness is not "a qualifying row exists" but "a qualifying row leaves a
+  // usable bracket". Two that contradict each other must not pass.
+  const r = weeklyClaimReadiness(weekObs([[20, 0], [22, 10e6], [26, 12e6]]));
+  check(
+    'qualifying rows that contradict each other are still not ready',
+    r.ready === false,
+    r.reason
+  );
+}
+
+{
+  // The gate must be immune to the offset that makes levels unsafe: shifting
+  // every reading up by a constant leaves the deltas, and the verdict, alone.
+  const clean = weeklyClaimReadiness(weekObs([[23, 0], [25, 10e6]]));
+  const shifted = weeklyClaimReadiness(weekObs([[28, 0], [30, 10e6]]));
+  check(
+    'a fixed offset on every reading does not move the delta verdict',
+    clean.ready === shifted.ready &&
+      Math.abs(clean.bracket.lo - shifted.bracket.lo) < 1 &&
+      Math.abs(clean.bracket.hi - shifted.bracket.hi) < 1,
+    `${(shifted.bracket.lo / 1e6).toFixed(0)}M .. ${(shifted.bracket.hi / 1e6).toFixed(0)}M both ways`
+  );
+}
+
 
 
 console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`);

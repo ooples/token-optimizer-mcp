@@ -637,6 +637,57 @@ export function savingAsShareOfCap(tokens, bracket) {
 
 
 /**
+ * May a weekly saving be quoted yet, and if not, what exactly is missing?
+ *
+ * This exists because "we will collect that reading eventually" is not a gate.
+ * A number that is nearly supported reads exactly like one that is supported,
+ * so the refusal has to live in the code that would otherwise print it.
+ *
+ * The bar is a seven_day DELTA row of 2 or more. Nothing weaker will do:
+ *
+ *  - A LEVELS bracket cannot clear it. Levels are contaminated by any billed
+ *    traffic the transcripts never saw and by any fixed additive term, both of
+ *    which understate the cap and so overstate the saving. `offsetSignature`
+ *    shows the seven_day rows still admit 1.1pp of offset.
+ *  - A DELTA of 1 cannot clear it either. It bounds the cap from below only,
+ *    so the saving gets a ceiling and no floor -- and a floor is the half a
+ *    product claim actually needs.
+ *
+ * A delta differences the offset away, and a delta of 2 closes the interval.
+ * One reading, ordinary work in between, a second reading.
+ */
+export function weeklyClaimReadiness(observations, { rates = RATE_OF } = {}) {
+  const { rows } = buildRows(observations, { windowKey: 'seven_day', mode: 'deltas' });
+  const bracket = bracketCap(rows, { rates, mode: 'deltas' });
+  const qualifying = rows.filter((r) => r.y >= 2);
+  if (qualifying.length === 0) {
+    const best = rows.reduce((a, r) => Math.max(a, r.y), 0);
+    return {
+      ready: false,
+      bracket,
+      best,
+      reason:
+        `no seven_day delta row moved the meter by 2 or more (best so far: ${best}). ` +
+        'Until one does, the cap has no offset-immune floor and a saving quoted as ' +
+        'a share of it has no floor either.',
+    };
+  }
+  return {
+    ready: Number.isFinite(bracket.hi) && !bracket.empty,
+    bracket,
+    best: Math.max(...qualifying.map((r) => r.y)),
+    qualifying: qualifying.map((r) => r.label),
+    // A delta of 2 makes the bracket finite but leaves it (y+1)/(y-1) = 3x
+    // wide. A bigger move narrows it: 5 gives 1.5x, 10 gives 1.22x. Readiness
+    // is about whether a floor EXISTS; `width` is how much it is worth.
+    width: Number.isFinite(bracket.hi) && bracket.lo > 0 ? bracket.hi / bracket.lo : Infinity,
+    reason: bracket.empty
+      ? 'qualifying rows exist but contradict each other'
+      : 'a seven_day delta of 2 or more closes the cap from both sides',
+  };
+}
+
+/**
  * Why a set of levels might disagree, and which way the disagreement runs.
  *
  * `bracketCap` assumes the meter is PROPORTIONAL to cost: y = 100*cost/cap. If
@@ -795,6 +846,29 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
       );
     }
   }
+  const ready = weeklyClaimReadiness(observations);
+  console.log(
+    '\nMAY A WEEKLY SAVING BE QUOTED YET?  ' +
+      (ready.ready ? 'YES' : 'NO') +
+      (ready.ready && Number.isFinite(ready.width)
+        ? `  (cap bracket is ${ready.width.toFixed(2)}x wide; a bigger delta narrows it)`
+        : '') +
+      '\n  ' + ready.reason
+  );
+  if (!ready.ready && Number.isFinite(saving)) {
+    console.log(
+      '  The --saving figures above are arithmetic on a bracket that is not yet' +
+        '\n  entitled to carry a claim. Do not publish them.'
+    );
+  }
+  if (!ready.ready) {
+    console.log(
+      '  To close it: take a reading, do ordinary work, take another. At recent' +
+        '\n  rates a 2-point move takes a few hours of use. Meter reads are GETs and' +
+        '\n  spend no quota, so the cost of collecting this is zero.'
+    );
+  }
+
   console.log(
     '\nCOVERAGE, AND WHICH WAY IT BIASES THIS. The percentages are the meter\'s own,\n' +
       'but the token totals are summed from local transcripts. Any billed traffic not\n' +
