@@ -25,7 +25,7 @@ import { activeRanker } from './ranking.js';
 import type { EmbeddingCache } from './embedding.js';
 import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
-import { unchanged } from './types.js';
+import { spillFor, unchanged } from './types.js';
 
 /**
  * Bodies shorter than this stay: the marker would cost more than the code.
@@ -441,8 +441,11 @@ export function compressCode(
   //
   // It is also better for the reader: one file holding the original in order,
   // rather than N fragments they would have to reassemble.
-  const anchorPath =
-    ctx.sourcePath ?? (ctx.spill ? ctx.spill(text, 'block.txt') : null);
+  // THROUGH `spillFor`, NOT AROUND IT. Calling the sink directly skipped both
+  // the empty-string check and the one-path-per-content memo, which is how the
+  // same file read three times in one request became three spill files and
+  // three round trips.
+  const anchorPath = ctx.sourcePath ?? spillFor(ctx, text, 'block.txt');
 
   for (const [from, to] of spans) {
     const lineCount = to - from + 1;

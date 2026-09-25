@@ -169,13 +169,70 @@ export type Engine = (text: string, ctx: EngineContext) => CompressionResult;
  *
  * Null means the engine must stay lossless or leave the content alone.
  */
+const SPILLED = new WeakMap<
+  object,
+  Map<string, Map<number, Map<string, string>>>
+>();
+
+/**
+ * One path per distinct content, for the life of one sink.
+ *
+ * THE SAME BYTES UNDER TWO NAMES IS NOT TWO RECOVERIES, IT IS TWO ROUND TRIPS.
+ * A request that reads one file three times -- the shape the `repeated-reads`
+ * fixture is built from -- handed the identical 32,369 characters to the sink
+ * three times and got three different paths back. That cost three fetches where
+ * one would do, and it cost far more than that indirectly: the three elided
+ * skeletons were byte-identical except for the path in their markers, so the
+ * lossless repeat fold that would have collapsed them could no longer see them
+ * as repeats. Measured on that fixture, addressing the spill by content takes
+ * the hand-off from 14,202 tokens to 8,772 and the round trips from three to
+ * one, and neither number came from compressing anything harder.
+ *
+ * Keyed on the sink itself, so the memo lives exactly as long as the closure
+ * the caller handed us -- one request for the proxy, one workload for the
+ * bench -- and a caller that builds a fresh sink per request shares nothing
+ * across requests. Content is keyed by its own bytes: a hash would be shorter
+ * to hold but would introduce a collision this has no way to detect, and the
+ * strings are already resident.
+ */
 export function spillFor(
   ctx: EngineContext,
   content: string,
   hint: string
 ): string | null {
-  const at = ctx.spill?.(content, hint);
-  return at ? at : null;
+  const sink = ctx.spill;
+  if (!sink) return null;
+  let byHint = SPILLED.get(sink);
+  if (!byHint) {
+    byHint = new Map<string, Map<number, Map<string, string>>>();
+    SPILLED.set(sink, byHint);
+  }
+  // LENGTH FIRST, CONTENT ONLY IF A LENGTH MATCHES.
+  //
+  // The obvious memo -- one map from content to path -- made every workload
+  // 25-35% slower, including the ones that never spill anything: reaching a
+  // `Map` keyed by a 150,000-character string means hashing that string, and
+  // these blocks are fresh substrings on every pass, so the hash is paid every
+  // time and cached never. Bucketing by length costs an integer lookup, and a
+  // block whose length nothing else shares -- which is the ordinary case --
+  // never reaches a string comparison at all. Duplicates share a length by
+  // definition, so nothing that this is for is missed.
+  let byLength = byHint.get(hint);
+  if (!byLength) {
+    byLength = new Map<number, Map<string, string>>();
+    byHint.set(hint, byLength);
+  }
+  const sameLength = byLength.get(content.length);
+  const known = sameLength?.get(content);
+  if (known !== undefined) return known;
+  const at = sink(content, hint);
+  // A SINK THAT FAILED IS NOT REMEMBERED. `''` is how the proxy reports a
+  // failed write, and caching that would turn one bad write into a permanent
+  // refusal to spill anything with those bytes in it.
+  if (!at) return null;
+  if (sameLength) sameLength.set(content, at);
+  else byLength.set(content.length, new Map([[content, at]]));
+  return at;
 }
 
 /** Nothing to do: hand the text back untouched. */
