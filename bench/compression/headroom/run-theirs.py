@@ -125,13 +125,50 @@ if HAVE_THEIR_FIXTURES:
 # exactly as their own fixtures do. Serialising ours to a flat string first
 # would hand them a worse entry point on our workloads than on theirs, and the
 # difference would read as their capability rather than as our harness.
+def is_messages(native):
+    """A message list, as opposed to the item list a tool generator returns."""
+    return (
+        isinstance(native, list)
+        and native
+        and all(isinstance(m, dict) and "role" in m for m in native)
+    )
+
+
 if EXTRA:
     with open(EXTRA, encoding="utf-8") as handle:
         carried = json.load(handle)
     for name in sorted(carried):
         if name in WORKLOADS:
             raise SystemExit("carried payload %r collides with one of theirs" % name)
-        WORKLOADS[name] = carried[name]
+        value = carried[name]
+        # A CARRIER THAT FLATTENS A CONVERSATION CHANGES WHAT IS BEING MEASURED.
+        #
+        # `payloads.json` holds `text_of(value)` -- the bytes OUR side compresses
+        # -- so a conversation comes back as one long JSON string. Feed that
+        # string back in here and `is_messages` says no, `as_messages` wraps the
+        # whole conversation inside a single synthetic tool_result, and their
+        # pipeline CCR-offloads the lot: 131,444 chars to 665 on code-search.
+        # That is a shape no proxy ever produces. Handed the SAME workload in its
+        # native message-list form, their pipeline declines on 10 of our 12, and
+        # `crusher`/`router` carry them instead.
+        #
+        # Both regimes were captured and published as if they measured the same
+        # thing. They do not, and the difference is up to 200x on a workload, so
+        # the lossy one is refused rather than detected afterwards. Use the
+        # `natives.json` this script writes; `payloads.json` is for our side.
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except ValueError:
+                parsed = None
+            if is_messages(parsed):
+                raise SystemExit(
+                    "carried payload %r is a conversation that was flattened to text. "
+                    "Pass <out-dir>/natives.json, not payloads.json: wrapping it again "
+                    "hands their pipeline a whole conversation inside one tool_result "
+                    "and measures a shape no proxy produces." % name
+                )
+        WORKLOADS[name] = value
 
 if not WORKLOADS:
     raise SystemExit(
@@ -275,15 +312,6 @@ def _pipeline():
             ContentRouter(router_cfg),
         ],
         provider=provider,
-    )
-
-
-def is_messages(native):
-    """A message list, as opposed to the item list a tool generator returns."""
-    return (
-        isinstance(native, list)
-        and native
-        and all(isinstance(m, dict) and "role" in m for m in native)
     )
 
 
@@ -479,6 +507,11 @@ for name, native in WORKLOADS.items():
 os.makedirs(OUT, exist_ok=True)
 with open(os.path.join(OUT, "payloads.json"), "w", encoding="utf-8") as handle:
     json.dump(PAYLOADS, handle)
+# THE SHAPE, NOT JUST THE BYTES. `payloads.json` is what our side compresses and
+# is deliberately flat. `natives.json` is what a replay must be given, because
+# only it can tell their engine a conversation from a tool output.
+with open(os.path.join(OUT, "natives.json"), "w", encoding="utf-8") as handle:
+    json.dump(WORKLOADS, handle)
 # THE STORE STATE IS PART OF THE MEASUREMENT, so it is recorded with it.
 #
 # WHY THIS BLOCK EXISTS. Their `pipeline@*` arms hand blocks to a DURABLE CCR
