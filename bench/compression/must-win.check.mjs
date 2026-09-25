@@ -1,9 +1,16 @@
 /**
  * THE GATE THE TWELVE STORIES ARE WRITTEN AGAINST.
  *
- * Issue #435 defines three must-wins per workload and asks for a check that
+ * Issue #435 defines the must-wins per workload and asks for a check that
  * decides them from the recorded results rather than from a reading of the
  * tables. This is that check.
+ *
+ * FOUR CRITERIA, NOT THE THREE #435 WAS FILED WITH. Round trips began as a
+ * clause of the cost criterion and were split out on 2026-09-25, because the
+ * cost model already prices every one of them and the clause was the sole
+ * reason four rows that win at BOTH ends of the fetch rate were failing. What
+ * a round trip costs beyond tokens is the wall clock, which is a different
+ * claim and now has to carry itself.
  *
  * IT IS A RATCHET, NOT A WALL. Nine of the twelve rows fail at least one
  * must-win today, and a gate that failed the build for all of them would be
@@ -72,7 +79,7 @@ const ROWS = {
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
 /**
- * The three must-wins for one row, each as `{ pass, detail }`, with `pass: null`
+ * The four must-wins for one row, each as `{ pass, detail }`, with `pass: null`
  * when the inputs to decide it are not recorded. AN UNMEASURED CRITERION IS
  * NEVER A PASS -- that distinction is the whole reason speed is reported
  * separately instead of being quietly treated as satisfied.
@@ -86,14 +93,31 @@ function judge(row, cfg, floors) {
   const turnsO = num(c.turns.ours);
   const turnsT = num(c.turns.theirs);
 
+  // BOTH ENDPOINTS, AND NOTHING ELSE. Cost is affine in the fetch rate, so
+  // an arm cheaper at p=0 and at p=1 is cheaper at every rate in between --
+  // there is no third point to check. Round trips used to be a third clause
+  // here and are not any more: `perFetch` already charges each one for the
+  // extra pass over context and the 300 effective tokens of the tool call the
+  // model writes, so requiring `turns` as well billed the same round trip
+  // twice, and it was the only thing failing four rows that win both ends.
   const tie = cfg.costFloor === 'tie-at-p0';
   const p0ok = tie ? p0o <= p0t : p0o < p0t;
   const cost = {
-    pass: p0ok && p1o < p1t && turnsO <= turnsT,
+    pass: p0ok && p1o < p1t,
     detail:
       `p0 ${p0o} ${tie ? '<=' : '<'} ${p0t} ${p0ok ? 'ok' : 'NO'}; ` +
-      `p1 ${p1o} < ${p1t} ${p1o < p1t ? 'ok' : 'NO'}; ` +
-      `turns ${turnsO} <= ${turnsT} ${turnsO <= turnsT ? 'ok' : 'NO'}`,
+      `p1 ${p1o} < ${p1t} ${p1o < p1t ? 'ok' : 'NO'}`,
+  };
+
+  // ITS OWN CRITERION, because what it measures is not tokens. The one real
+  // cost of a round trip the model cannot see is the wall clock, and speed
+  // times compression rather than retrieval, so nothing else here presses on
+  // chattiness. Kept visible and scored separately so a row reads `cheaper but
+  // chattier` in the open, instead of a win by moving five blocks out of the
+  // request passing quietly as a win by compressing them.
+  const turns = {
+    pass: turnsO <= turnsT,
+    detail: `${turnsO} round trip(s) vs ${turnsT}`,
   };
 
   const ms = num(row.speed?.oursMs);
@@ -131,7 +155,7 @@ function judge(row, cfg, floors) {
     };
   }
 
-  return { cost, speed, retention };
+  return { cost, turns, speed, retention };
 }
 
 const results = JSON.parse(readFileSync(RESULTS, 'utf8'));
