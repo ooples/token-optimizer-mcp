@@ -97,20 +97,49 @@ function judge(row, cfg, floors) {
   const turnsO = num(c.turns.ours);
   const turnsT = num(c.turns.theirs);
 
-  // BOTH ENDPOINTS, AND NOTHING ELSE. Cost is affine in the fetch rate, so
-  // an arm cheaper at p=0 and at p=1 is cheaper at every rate in between --
-  // there is no third point to check. Round trips used to be a third clause
-  // here and are not any more: `perFetch` already charges each one for the
-  // extra pass over context and the 300 effective tokens of the tool call the
-  // model writes, so requiring `turns` as well billed the same round trip
+  // BOTH ENDPOINTS AND THE WORST POINT BETWEEN THEM. The endpoints alone used
+  // to be the whole test, on the grounds that cost was affine in the fetch rate
+  // and an arm ahead at 0% and 100% was ahead everywhere between. That stopped
+  // being true when the model became quadratic: the round-pass re-reads a
+  // prefix whose own blocks are only present with probability p, so two
+  // independent p's multiply. A difference that opens upward has its minimum in
+  // the MIDDLE, and an arm can lead at both ends while briefly trailing between
+  // them -- exactly the shape a two-point gate is blind to.
+  //
+  // `worstAgainst` finds that point exactly (a parabola turns once, so the two
+  // ends and the vertex decide the interval), and `head-to-head` records it.
+  // Requiring it is what makes "cheaper at every fetch rate" a checked claim
+  // rather than an inference from a linearity the model no longer has.
+  //
+  // A row recorded before that field existed cannot be judged on it, and an
+  // unmeasured criterion is never a pass: it fails, and says why.
+  //
+  // Round trips used to be a clause here and are not any more: the fetch term
+  // already charges each one for the extra pass over context and the tool call
+  // the model writes, so requiring `turns` as well billed the same round trip
   // twice, and it was the only thing failing four rows that win both ends.
   const tie = cfg.costFloor === 'tie-at-p0';
   const p0ok = tie ? p0o <= p0t : p0o < p0t;
+  const w = c.session.worst;
+  const wo = w ? num(w.ours) : null;
+  const wt = w ? num(w.theirs) : null;
+  // The worst point is an endpoint whenever the difference is concave, and at
+  // p=0 a tie-floor row is allowed to tie, so the worst clause honours the
+  // same floor rather than contradicting it.
+  const wok =
+    w === undefined
+      ? false
+      : tie && Number(w.fetchRate) === 0
+        ? wo <= wt
+        : wo < wt;
   const cost = {
-    pass: p0ok && p1o < p1t,
+    pass: p0ok && p1o < p1t && wok,
     detail:
       `p0 ${p0o} ${tie ? '<=' : '<'} ${p0t} ${p0ok ? 'ok' : 'NO'}; ` +
-      `p1 ${p1o} < ${p1t} ${p1o < p1t ? 'ok' : 'NO'}`,
+      `p1 ${p1o} < ${p1t} ${p1o < p1t ? 'ok' : 'NO'}; ` +
+      (w === undefined
+        ? 'worst UNRECORDED (re-run head-to-head)'
+        : `worst@${(Number(w.fetchRate) * 100).toFixed(0)}% ${wo} < ${wt} ${wok ? 'ok' : 'NO'}`),
   };
 
   // ITS OWN CRITERION, because what it measures is not tokens. The one real
