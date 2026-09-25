@@ -37,6 +37,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { speedVerdict } from './speed-verdict.mjs';
+
 const here = dirname(fileURLToPath(import.meta.url));
 const RESULTS = join(here, 'headroom', 'results', 'head-to-head.json');
 const RATCHET = join(here, 'headroom', 'results', 'must-win.ratchet.json');
@@ -153,55 +155,13 @@ function judge(row, cfg, floors) {
     detail: `${turnsO} round trip(s) vs ${turnsT}`,
   };
 
-  // OUR SLOW READINGS AGAINST THEIR FAST ONES, and nothing softer. Both arms
-  // are timed 31 times in one process, and the recorded samples show why a
-  // median-against-median test would not be enough: the first reading pays for
-  // the JIT (ours runs 2.2x the median on `codebase-exploration`), and beyond
-  // that both arms take sporadic spikes from whatever else the machine is doing
-  // -- theirs hit 220ms against a 45ms median on `grep-output`, ours 193ms
-  // against 52ms on `repeated-reads`. Comparing medians would hand us rows we
-  // win only when the machine is quiet.
-  //
-  // So: our 90th percentile must beat their 10th. It is the same distance from
-  // each median, taken in opposite directions, which makes it symmetric rather
-  // than merely conservative; it discards one spike per arm and no more, so a
-  // run where OUR timings are unstable does not get to claim the win; and it
-  // introduces no tuned constant -- there is no jitter allowance to argue about,
-  // because the spread of the readings is doing that job directly.
-  //
-  // WORST-AGAINST-BEST WAS REJECTED. `max(ours) <= min(theirs)` needs no
-  // percentile at all, but it lets one interference spike on either arm decide a
-  // criterion, and the recorded samples carry several that have nothing to do
-  // with either compressor.
-  const quantile = (xs, q) => {
-    const sorted = [...xs].sort((a, b) => a - b);
-    const at = Math.min(sorted.length - 1, Math.round(q * (sorted.length - 1)));
-    return sorted[at];
-  };
-  const ourSamples = row.speed?.oursMsSamples;
-  const theirSamples = row.speed?.theirsMsSamples;
-  const ms = num(row.speed?.oursMs);
-  const theirMs = num(row.speed?.theirsMs);
-  let speed;
-  if (theirMs === null) {
-    speed = { pass: null, detail: `ours ${ms}ms, theirs unmeasured` };
-  } else if (!Array.isArray(ourSamples) || !Array.isArray(theirSamples)) {
-    // A capture from before the samples were recorded cannot answer the strict
-    // question, and the weaker one it can answer is not this criterion.
-    speed = {
-      pass: null,
-      detail: `${ms}ms vs ${theirMs}ms - single readings, spread not recorded`,
-    };
-  } else {
-    const ourSlow = quantile(ourSamples, 0.9);
-    const theirFast = quantile(theirSamples, 0.1);
-    speed = {
-      pass: ourSlow <= theirFast,
-      detail:
-        `our p90 ${ourSlow.toFixed(1)}ms vs their p10 ${theirFast.toFixed(1)}ms ` +
-        `(medians ${ms} / ${theirMs}, ${ourSamples.length} runs each)`,
-    };
-  }
+  const speed = speedVerdict({
+    ourSamples: row.speed?.oursMsSamples,
+    ourPasses: row.speed?.oursMsPasses,
+    theirSamples: row.speed?.theirsMsSamples,
+    ms: num(row.speed?.oursMs),
+    theirMs: num(row.speed?.theirsMs),
+  });
 
   const ids = num(row.retention?.ids);
   const oursZt = num(row.retention?.oursZeroTurn);
@@ -250,6 +210,7 @@ const ratchet = existsSync(RATCHET)
 
 const report = {};
 const regressed = [];
+const unverified = [];
 const unpromoted = [];
 const open = [];
 const next = {};
@@ -273,8 +234,14 @@ for (const row of results.workloads) {
     // later run rather than only on the one that caused it.
     if (v.pass === true || was) next[key] = true;
     if (v.pass === true && !was) unpromoted.push(`${key} - ${v.detail}`);
-    if (v.pass !== true && was)
-      regressed.push(`${key} - ${v.detail} (was enforced)`);
+    // AN ENFORCED PAIR THAT NO LONGER PASSES FAILS THE GATE EITHER WAY, but the
+    // two ways are different facts and get reported as such. `false` means the
+    // claim was tested and lost. `null` means this run could not test it -- and
+    // saying "regressed" there is the same category error as publishing a
+    // saturated fit's zero residual: it reports as a finding about the code
+    // something that is only a fact about the measurement.
+    if (v.pass === false && was) regressed.push(`${key} - ${v.detail} (was enforced)`);
+    if (v.pass === null && was) unverified.push(`${key} - ${v.detail} (was enforced)`);
     if (v.pass === false && !was)
       open.push(`#${cfg.issue} ${key} - ${v.detail}`);
     if (v.pass === null && !was)
@@ -305,7 +272,8 @@ if (asJson) {
 const enforcedCount = Object.keys(ratchet.enforced ?? {}).length;
 console.log(
   `must-win gate: ${enforcedCount} enforced, ${open.length} open, ` +
-    `${regressed.length} regressed, ${unpromoted.length} unrecorded pass(es)`
+    `${regressed.length} regressed, ${unverified.length} unverified, ` +
+    `${unpromoted.length} unrecorded pass(es)`
 );
 if (open.length)
   console.log(
@@ -316,9 +284,14 @@ if (unpromoted.length)
     '\nNEWLY PASSING - run with --promote so they can never regress:\n  ' +
       unpromoted.join('\n  ')
   );
+if (unverified.length)
+  console.log(
+    `\nNOT MEASURED - these are enforced and this run could not test them:\n  ` +
+      `${unverified.join('\n  ')}`
+  );
 if (regressed.length)
   console.error(
     `\nREGRESSED - these were enforced and now fail:\n  ${regressed.join('\n  ')}`
   );
 
-process.exit(regressed.length || unpromoted.length ? 1 : 0);
+process.exit(regressed.length || unverified.length || unpromoted.length ? 1 : 0);

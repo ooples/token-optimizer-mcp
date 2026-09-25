@@ -493,6 +493,69 @@ function recoverable(text, label) {
 const rows = [];
 let lost = 0;
 
+/**
+ * EVERY WORKLOAD TIMED SEVERAL TIMES OVER, BECAUSE THE SPREAD THAT DECIDES THE
+ * GATE IS BETWEEN RUNS AND NOT INSIDE ONE.
+ *
+ * Measured with five independent regenerations of this record: on the two
+ * workloads whose verdict kept flipping, the standard deviation of our p90
+ * BETWEEN runs was 34.05ms and 28.10ms, against 6.91ms and 13.39ms for the
+ * bootstrapped spread WITHIN a single run. A confidence interval drawn from
+ * one run's samples therefore understates the real uncertainty by a factor of
+ * two to five, and would report a machine hiccup as a regression with a
+ * straight face -- the same false confidence `calibrate.mjs` used to report
+ * for a saturated fit.
+ *
+ * The interference is COMMON-MODE, which is what makes it tractable. In the
+ * one contaminated run of the five, codebase-exploration went 46 -> 131.6ms,
+ * raw-build-log 53 -> 125.2ms, grep-output 9.4 -> 21.7ms, human-authored-json
+ * 5.4 -> 21.1ms and issue-triage 12.2 -> 24.1ms: everything at once, which no
+ * code change does. So the passes are separated by a full sweep of every other
+ * workload rather than run back to back -- a pass takes seconds, and an
+ * interference event that outlasts one pass is visible as a pass that
+ * disagrees with its neighbours instead of as a quietly inflated average.
+ *
+ * What the gate does with the disagreement is the gate's business; this
+ * function's job is to hand over passes that were sampled at different
+ * moments, and to keep them separate so the disagreement survives.
+ */
+function timeEveryWorkload(byName) {
+  // THIRTY-ONE, NOT THE ELEVEN #435 ASKED FOR. Eleven is enough for a median
+  // and not enough for the tails, and the tails are what the gate compares: at
+  // eleven samples a single interference spike lands squarely on the 90th
+  // percentile. Thirty-one puts three readings outside each tail.
+  const SPEED_SAMPLES = 31;
+  // THREE PASSES. Two cannot tell which of a disagreeing pair was the odd one
+  // out, and the cost is linear: this is the whole runtime of the harness.
+  const SPEED_PASSES = 3;
+  const passes = new Map(Object.keys(byName).map((n) => [n, []]));
+  for (let pass = 0; pass < SPEED_PASSES; pass += 1) {
+    for (const [name, text] of Object.entries(byName)) {
+      // MEASURED WITH `performance.now`, NOT `Date.now`. Several of these
+      // payloads compress in under a millisecond, and a 1 ms clock reports
+      // those as 0 -- indistinguishable from an arm that never ran.
+      const samples = [];
+      for (let i = 0; i < SPEED_SAMPLES; i += 1) {
+        const t0 = performance.now();
+        compressBlock(text, { query: queryOf(text) });
+        samples.push(performance.now() - t0);
+      }
+      // KEPT IN RUN ORDER. Sorting loses which reading was first, and the
+      // first reading is the one that paid for the JIT: it is routinely
+      // several times the rest, on both arms. The gate decides what to do
+      // with that; the harness hands over the readings, not the flattering
+      // ones.
+      passes.get(name).push(samples.map((v) => Number(v.toFixed(3))));
+    }
+  }
+  return passes;
+}
+
+// TIMED BEFORE ANYTHING ELSE RUNS, so the passes see a comparable machine and
+// not a process that has been compressing, tokenising and writing JSON for a
+// minute by the time the last workload is reached.
+const speedPasses = timeEveryWorkload(payloads);
+
 for (const [name, text] of Object.entries(payloads)) {
   // THE PUBLISHED ARM IS HANDED NO SINK, and that is the product default --
   // see `SpillSink` in src/compress/types.ts. With nowhere to spill to, every
@@ -508,35 +571,14 @@ for (const [name, text] of Object.entries(payloads)) {
   // measurement that moved the default.
   const spilled = [];
 
-  // MEASURED WITH `performance.now`, NOT `Date.now`. Several of these payloads
-  // compress in under a millisecond, and a 1 ms clock reports those as 0 -- which
-  // is indistinguishable from an arm that never ran.
-  // REPEATED RUNS, MEDIAN PUBLISHED, SPREAD PUBLISHED WITH IT. A single reading of
-  // a transform that finishes in tens of milliseconds is partly a reading of
-  // whatever else the machine was doing, and #435 MUST-WIN 2a asks for the median
-  // of eleven in one process. The gate needs `min` and `max` as well, because a
-  // margin narrower than the measurement's own spread is not a win, it is noise
-  // pointing our way. The timed loop runs the same sinkless arm as the
-  // recorded call, so the published median times the arm that is published.
-  // THIRTY-ONE, NOT THE ELEVEN #435 ASKED FOR. Eleven is enough for a median
-  // and not enough for the tails, and the tails are what the gate compares: at
-  // eleven samples a single interference spike lands squarely on the 90th
-  // percentile, and two consecutive captures disagreed about whole rows because
-  // of it. Thirty-one puts three readings outside each tail, so one spike costs
-  // nothing and a genuinely unstable arm still reads as unstable.
-  const SPEED_SAMPLES = 31;
-  const samples = [];
-  for (let i = 0; i < SPEED_SAMPLES; i += 1) {
-    const t0 = performance.now();
-    compressBlock(text, { query: queryOf(text) });
-    samples.push(performance.now() - t0);
-  }
-  // KEPT IN RUN ORDER. Sorting loses which reading was first, and the first
-  // reading is the one that paid for the JIT: it is routinely several times the
-  // rest, on both arms. The gate decides what to do with that; the harness's
-  // job is to hand over the readings, not to pick the flattering ones.
-  const msSamples = samples.map((v) => Number(v.toFixed(3)));
-  const sorted = [...samples].sort((a, b) => a - b);
+  // THE TIMED ARM IS THE SINKLESS ARM, the same one the recorded call below
+  // runs, so the published median times what is published. The passes were
+  // taken up front by `timeEveryWorkload`; `msSamples` stays the pooled
+  // reading every existing consumer expects, and `msPasses` keeps them apart
+  // for the gate.
+  const msPasses = speedPasses.get(name);
+  const msSamples = msPasses.flat();
+  const sorted = [...msSamples].sort((a, b) => a - b);
   const ms = sorted[(sorted.length - 1) >> 1];
   const msMin = sorted[0];
   const msMax = sorted[sorted.length - 1];
@@ -907,6 +949,7 @@ for (const [name, text] of Object.entries(payloads)) {
     msMin,
     msMax,
     msSamples,
+    msPasses,
   });
 }
 
@@ -1406,7 +1449,7 @@ if (process.argv[3] === '--record') {
               Object.entries(
                 JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'))
               ).map(([name, row]) => {
-                const { ms, msMin, msMax, msSamples, ...rest } = row;
+                const { ms, msMin, msMax, msSamples, msPasses, ...rest } = row;
                 return [name, rest];
               })
             )
@@ -1516,6 +1559,10 @@ if (process.argv[3] === '--record') {
         oursMsMin: r.msMin.toFixed(3),
         oursMsMax: r.msMax.toFixed(3),
         oursMsSamples: r.msSamples,
+        // THE PASSES, KEPT APART. Pooling them would average an interference
+        // event into the reading instead of exposing it; the gate compares the
+        // passes with each other and refuses to decide when they disagree.
+        oursMsPasses: r.msPasses,
         theirsMs:
           typeof theirs[r.name]?.ms === 'number'
             ? theirs[r.name].ms.toFixed(3)
