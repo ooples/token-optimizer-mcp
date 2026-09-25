@@ -38,6 +38,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { speedVerdict } from './speed-verdict.mjs';
+import { reproducibilityRefusal } from './reproducibility.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RESULTS = join(here, 'headroom', 'results', 'head-to-head.json');
@@ -270,6 +271,17 @@ if (asJson) {
   process.exit(0);
 }
 
+// IS THE RECORD THESE VERDICTS CAME FROM RE-RUNNABLE BY ANYONE ELSE? Every
+// line above compares the recorded figures against the ratchet, and not one of
+// them asks whether the recording itself could be repeated. A record with no
+// provenance can still pass every claim in the ratchet, and an outside reader
+// has nothing to check it with.
+//
+// IT IS A BLOCKER AND NOT A FLIPPED CLAIM, deliberately. Marking all 53 pairs
+// unverified because their provenance is thin would destroy the ratchet, which
+// is the thing keeping the claims honest. The claims still stand on the numbers
+// that were measured; what fails is the publication.
+const notReproducible = reproducibilityRefusal(results.reproduction ?? null);
 const enforcedCount = Object.keys(ratchet.enforced ?? {}).length;
 console.log(
   `must-win gate: ${enforcedCount} enforced, ${open.length} open, ` +
@@ -295,4 +307,11 @@ if (regressed.length)
     `\nREGRESSED - these were enforced and now fail:\n  ${regressed.join('\n  ')}`
   );
 
-process.exit(regressed.length || unverified.length || unpromoted.length ? 1 : 0);
+if (notReproducible)
+  console.error(
+    `\nNOT RE-RUNNABLE - the recorded run cannot be reproduced from what it wrote down:\n  ` +
+      notReproducible +
+      `\n  Re-record with head-to-head.mjs --record from a clean tree against a capture that carries it.`
+  );
+
+process.exit(notReproducible || regressed.length || unverified.length || unpromoted.length ? 1 : 0);
