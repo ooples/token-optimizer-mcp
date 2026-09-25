@@ -541,3 +541,50 @@ jobs:
             echo "⚠️ Found $FIXME_COUNT FIXME comments" >> $GITHUB_STEP_SUMMARY
             grep -rn "FIXME" src --include="*.ts" >> $GITHUB_STEP_SUMMARY || true
           fi
+
+  # THE TWELVE HEAD-TO-HEAD WORKLOADS, DECIDED BY SCRIPT RATHER THAN BY EYE.
+  #
+  # Every per-workload claim in #436-#447 is a triple -- cheaper, faster, holds
+  # more of the content -- and until this job existed the only thing standing
+  # between a claim and the README was somebody reading a table correctly.
+  #
+  # IT IS A RATCHET. Nine of the twelve rows fail at least one criterion today,
+  # so a gate that failed the build for all of them would be switched off within
+  # the week. Pairs that pass are enforced and can never regress; pairs that fail
+  # are printed as open must-wins and do not fail the build. The build DOES fail
+  # when an enforced pair regresses, and when a new pair starts passing without
+  # being promoted -- an improvement nobody records is one that can be silently
+  # undone.
+  #
+  # NO npm ci AND NO BUILD, deliberately. The check reads the recorded
+  # head-to-head.json with nothing but node:fs, so it runs in seconds and cannot
+  # drift from the published tables by re-deriving anything.
+  must-win:
+    name: Must-Win Ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The open list goes to the job summary on every run, because the whole
+      # value of a ratchet is that the work still outstanding stays visible
+      # instead of living in twelve issue bodies nobody opens.
+      - name: Check the must-win ratchet
+        run: |
+          set -o pipefail
+          {
+            echo "## Must-Win Ratchet"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/must-win.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
