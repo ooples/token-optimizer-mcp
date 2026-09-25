@@ -121,3 +121,136 @@ in the same table, with no workload omitted and no comparator dropped.
 - HeadRoom version: `0.37.0`
 - Our tree: recorded per run as the committed SHA; no run is published from a
   dirty tree.
+
+---
+
+# Extension, committed 2026-09-25: the instruments, not just the arms
+
+Everything above commits to how the two arms are *configured*. It says nothing
+about the code that turns their output into a number, and that code is where
+every retraction in this project has come from: the retracted `like4like`
+figures, the retracted store-drift cause, the retracted 31% break-even, the
+retracted recoverability edge. In each case the arms were fair and the
+instrument was wrong.
+
+So this extension pre-registers the instruments. Written before the three-pass
+capture that will re-score every published figure has been read -- the capture
+is regenerated *because* these commitments invalidate the one that exists.
+
+## Two layers, tested separately, and why one test cannot cover both
+
+- **Layer 1, the capture.** `headroom/run-theirs.py` and the payload export:
+  what bytes each arm was given and what it returned. Its known-answer test is
+  `known-answer/capture.check.mjs`, driven by stub arms whose right answer is
+  arithmetic (`known-answer/arms.py`, `ours-identity.mjs`, `ours-lossy.mjs`,
+  `ours-mirror.mjs`).
+- **Layer 2, the scorer.** `head-to-head.mjs` and every instrument it calls:
+  the tokeniser, `identifiers.mjs`, `retention.mjs`, `cost-model.mjs`,
+  `speed-verdict.mjs`, `reproducibility.mjs`. Its known-answer test is
+  `known-answer/scorer.check.mjs`.
+
+A green layer-1 test says the capture recorded what happened. It cannot say the
+scorer read it correctly, and for most of this project's history only layer 1
+was tested. Both are required before a number is published.
+
+## The commitment that makes those tests worth anything
+
+A check is only evidence if it *refuses* something. The battery is therefore
+mutation-tested: `known-answer/mutants.mjs` applies a known defect to an
+instrument and requires the corresponding check to fail.
+
+Fixed now, before the re-score:
+
+1. **The score is published with the number, every time**, as caught/total.
+2. **A survivor is closed by ADDING an assertion**, never by deleting the
+   mutant, narrowing its blast radius, or relaxing the check it defeated. If a
+   survivor cannot be closed, it stays in the table as a survivor and the claim
+   it undermines is published as unverified.
+3. **A mutant whose anchor no longer matches exactly once is reported STALE and
+   counts as a failure**, because a mutant that applies nothing is
+   indistinguishable from a mutant that was caught.
+4. **Every instrument that decides a published number carries mutants.** An
+   instrument with none is treated as untested regardless of how many assertions
+   its own check file contains.
+
+## The speed criterion, fixed before the capture that tests it
+
+`speed-verdict.mjs`, and it is the same operation on both columns:
+
+- Within a pass: our **p90** against their **p10**. Our slow readings against
+  their fast ones -- the same distance from each median, in opposite directions.
+- Across passes: the **median** of those per-pass values, on both sides.
+- The bar is `ourSlow <= theirFast`. No jitter allowance, no tuned constant.
+- **Minimum two passes per side.** Fewer on either side returns `null`.
+- Three states, and `null` is a claim about the measurement, not about the code.
+  The gate must never round it to a pass. Twelve speed criteria currently read
+  `unverified` for exactly this reason, and they stay that way until a capture
+  with three passes on *their* side exists.
+
+Neither of the two wrong reductions is permitted, and they fail in opposite
+directions: one pass on their side lets interference inflate their p10 and widen
+the gap in our favour; a single p10 over the pooled readings of three passes
+measures us against their best burst. Per-pass first, then median, is the only
+reduction identical on both columns.
+
+## Re-runnability is a precondition of publication, not a nicety
+
+`reproducibility.mjs` refuses a record that cannot be re-run, and
+`must-win.check.mjs` fails on that refusal. A record must carry, all of them
+present and usable:
+
+`commit` (40 hex), `node`, `tiktoken`, `encoding`, `payloadsDigest`,
+`theirsDigest`, `headroomVersion`, `python`, plus `dirty: false` and a per-side
+speed pass count of at least two.
+
+Two commitments about this gate specifically, because a gate is easy to fake:
+
+- **A field that is present but unusable is a refusal**, not a pass: `'unknown'`
+  from a failed git call, an empty digest, a truncated sha, a version that is a
+  number rather than a string. A published record whose provenance reads
+  `unknown` is worse than one with no provenance, because it looks checked.
+- **The required set is written out by hand in the check**, independently of the
+  table it tests. A loop over the table's own keys cannot notice a field deleted
+  *from* the table, and that is precisely the regression worth catching.
+
+## The subscription claim, and what will and will not be published as proof
+
+The claim that matters to a user is *how much of a weekly subscription
+allowance is saved*. It is not a compression ratio, and the following is fixed
+in advance so it cannot be softened later.
+
+1. **The unit is an effective input token**, from `cost-model.mjs` `RATES`:
+   input 1x, 5m cache write 1.25x, 1h cache write 2.0x, cache read 0.1x,
+   output 5x. A saving quoted in raw characters or in undifferentiated
+   "tokens" is not a subscription saving and is not published as one.
+2. **Base context is measured, never assumed.** The shipped default is `null`
+   so that an unmeasured run cannot silently inherit a flattering constant; the
+   measured value comes from `bench/subscription/base-context.mjs` over real
+   first requests, with a minimum session count. Understating the base inflates
+   every percentage that follows, which is how the 12,000-against-65,063 error
+   happened.
+3. **The meter is evidence only as a delta over at least two readings** of the
+   same `seven_day` window, and the cap it implies is published **as a bracket,
+   not a point estimate** -- the observed levels do not agree, and a single
+   reading cannot separate the cap from the fixed offset in the signature.
+4. **The arithmetic carries known-answer tests**: `cost-split.check.mjs`,
+   `base-context.check.mjs`, `calibrate.check.mjs`, each in `bench:instruments`
+   and each mutation-covered under the rules above.
+5. **No quota is spent to produce it.** Meter reads are GETs; every other input
+   is a local transcript. No credential is ever written to an observations file.
+
+## What voids this extension
+
+- A published number produced by an instrument whose mutants were last run
+  before its most recent change.
+- A survivor closed by weakening the check that failed to catch it, or by
+  deleting or narrowing the mutant.
+- A `null` speed verdict counted as anything but unverified.
+- A record published while `reproducibility.mjs` refuses it, or with that gate
+  removed from `must-win.check.mjs` rather than satisfied.
+- A subscription saving quoted without the base-context measurement it rests on,
+  or with a cap presented as a point estimate.
+- A capture re-scored after its numbers were read, with the criterion changed in
+  between. The criteria above were fixed while twelve speed rows read
+  `unverified` and the record read `NOT RE-RUNNABLE`; that is the state they
+  were chosen in.
