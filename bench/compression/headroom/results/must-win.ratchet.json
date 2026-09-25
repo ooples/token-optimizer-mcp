@@ -10,6 +10,7 @@
     "code-search/cost": true,
     "code-search/speed": true,
     "codebase-exploration/retention": true,
+    "codebase-exploration/speed": true,
     "codebase-exploration/turns": true,
     "grep-output/retention": true,
     "grep-output/speed": true,
