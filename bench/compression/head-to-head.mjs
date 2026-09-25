@@ -63,9 +63,17 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
-import { compressBlock } from '../../dist/compress/router.js';
+// THE ONE SEAM ON OUR SIDE. Both engines reach this scorer through a module
+// that can be swapped for stub arms, so every figure below has an answer that
+// can be stated before the run. See ours-engine.mjs; the other dist imports
+// stay direct because they are instruments, not the thing being measured.
+import {
+  compressBlock,
+  compressBody,
+  KNOWN_ANSWER_OURS,
+  stubbedScorerRefusal,
+} from './ours-engine.mjs';
 import { resolveTuning } from '../../dist/compress/options.js';
-import { compressBody } from '../../dist/proxy/server.js';
 import { rehydrateSequence } from '../../dist/compress/rehydrate.js';
 import { expandLongRepeats } from '../../dist/compress/runs.js';
 import { describeImage, imageSize } from '../../dist/compress/images.js';
@@ -1559,6 +1567,15 @@ if (process.argv[3] === '--record') {
     console.error('head-to-head: --record needs a path to write to');
     process.exit(1);
   }
+  // A STUBBED RUN MAY BE RECORDED, BUT NEVER WHERE A PUBLISHED ONE LIVES.
+  // known-answer/scorer.check.mjs needs this record -- it is the assertion
+  // surface for every figure the table prints. What it must not be able to do
+  // is land in results/ and be read later as a measurement.
+  const scorerRefusal = stubbedScorerRefusal(at);
+  if (scorerRefusal) {
+    console.error(scorerRefusal);
+    process.exit(2);
+  }
   let commit = 'unknown';
   try {
     commit = execFileSync('git', ['rev-parse', 'HEAD'], {
@@ -1569,6 +1586,10 @@ if (process.argv[3] === '--record') {
   }
   const record = {
     harness: 'bench/compression/head-to-head.mjs',
+    // NOT NULL MEANS NOT A MEASUREMENT -- our column came from stub arms and
+    // this record describes the scorer, not the product. The mirror of
+    // `__provenance__.stubArms` on their side.
+    stubOurs: KNOWN_ANSWER_OURS,
     // The one thing a reader cannot re-derive from this file: what produced the
     // arm on the other side of the table.
     regenerate:
