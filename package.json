@@ -142,6 +142,7 @@
     "proxy": "node dist/proxy/cli.js",
     "bench:screen:knowledge": "bash bench/thol/screen-knowledge.sh",
     "verify:install": "node scripts/verify-fresh-install.mjs",
+    "bench:must-win": "node bench/compression/must-win.check.mjs",
     "bench:ledger:provenance": "node bench/ledger/verify-provenance.mjs"
   },
   "repository": {
