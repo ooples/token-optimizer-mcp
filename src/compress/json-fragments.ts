@@ -12,6 +12,69 @@ export function looksLikeJsonFragments(text: string): boolean {
   );
 }
 
+/**
+ * How many scalars a record exposes as `"key": value` pairs, at any depth.
+ *
+ * THE COUNT IS THE INTEGRITY CHECK, and it used to be `Object.keys().length`
+ * with nested records refused outright a few lines above. That refusal cost
+ * two workloads their whole margin: a search result is `{id, score, title,
+ * snippet, source, metadata:{author, created_at, category}}`, and one nested
+ * object was enough to send forty identical-shaped records to plain
+ * minification. Measured on `code-search` the array encoder returned the
+ * input untouched at 15,697 characters on every one of its blocks.
+ *
+ * Descending fixes the count rather than the encoder: the field scanner
+ * already reads inner pairs, because it walks the record's bytes and does not
+ * care how deep a pair sits. A key whose value is an object or an array is not
+ * a column -- the scanner cannot match `{` as a scalar -- so those bytes stay
+ * in the literal chunk, which is where a constant belongs anyway.
+ *
+ * ARRAY ELEMENTS ARE NOT COUNTED UNLESS THEY ARE OBJECTS. A bare scalar in an
+ * array has no key in front of it, so the scanner never matches it and it
+ * stays literal; counting it here would fail every record that has one.
+ */
+function scalarLeaves(value: unknown): number {
+  if (Array.isArray(value)) {
+    // A LIST OF SCALARS IS ONE SLOT, WHICH IS WHAT MAKES ITS LENGTH STOP
+    // MATTERING. `labels: ["bug"]` and `labels: ["bug", "needs-triage"]` are
+    // the same record to a reader and were two different SHAPES here, because
+    // the elements sat in the literal chunks rather than in a value. Two
+    // hundred and twenty issues drawn from two shapes fragmented into a
+    // hundred and eighteen contiguous runs, nearly all of them too short to
+    // template at all. Captured whole, the list is one varying value like any
+    // other and the length stops splitting the document.
+    if (value.every((item) => item === null || typeof item !== 'object'))
+      return 1;
+    let total = 0;
+    for (const item of value)
+      if (item !== null && typeof item === 'object')
+        total += scalarLeaves(item);
+    return total;
+  }
+  if (value === null || typeof value !== 'object') return 0;
+  let total = 0;
+  for (const inner of Object.values(value as Record<string, unknown>))
+    total +=
+      inner !== null && typeof inner === 'object' ? scalarLeaves(inner) : 1;
+  return total;
+}
+
+/**
+ * One JSON scalar, as it is SPELLED rather than as it parses.
+ *
+ * Shared by both alternatives of the field scanner so that a list of scalars
+ * and a bare scalar can never disagree about what a scalar is. A disagreement
+ * there is silent: the record fails the leaf count, every record after it does
+ * too, and the document goes out minified with nothing to say why.
+ *
+ * IT CARRIES ITS OWN `(?:...)`. Interpolating a bare alternation splits
+ * whatever encloses it -- `(?:\\s*${SCALAR}\\s*,)*` became "whitespace then a
+ * string" OR "true" OR ... OR "a number then a comma" -- which still compiles,
+ * still matches, and quietly matches the wrong thing.
+ */
+const SCALAR =
+  '(?:"(?:\\\\.|[^"\\\\])*"|true|false|null|-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)';
+
 interface RecordParts {
   start: number;
   end: number;
@@ -57,14 +120,21 @@ function records(text: string, compact = false): RecordParts[] {
     } catch {
       continue;
     }
-    if (
-      !parsed ||
-      Array.isArray(parsed) ||
-      Object.values(parsed).some((v) => v !== null && typeof v === 'object')
-    )
-      continue;
-    const field =
-      /"(?:\\.|[^"\\])*"\s*:\s*("(?:\\.|[^"\\])*"|true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+    if (!parsed || Array.isArray(parsed)) continue;
+    const field = new RegExp(
+      // `"key":` followed by one scalar, or by a whole list of them.
+      //
+      // THE LIST ALTERNATIVE IS ONLY FOR LISTS OF SCALARS. A list holding
+      // objects is left alone: the key/value alternative reaches its inner
+      // fields by itself and templates each of them, which is the better
+      // encoding whenever the inner records line up. It is the list of bare
+      // scalars -- labels, tags, a set of ids -- that has no keys to match and
+      // so ends up as literal text whose LENGTH becomes part of the shape.
+      `"(?:\\\\.|[^"\\\\])*"\\s*:\\s*(` +
+        `\\[(?:\\s*${SCALAR}\\s*,)*\\s*(?:${SCALAR}\\s*)?\\]` +
+        `|${SCALAR})`,
+      'g'
+    );
     const chunks: string[] = [],
       values: string[] = [];
     let cursor = 0;
@@ -74,8 +144,7 @@ function records(text: string, compact = false): RecordParts[] {
       values.push(encode(value[1]));
       cursor = start + value[1].length;
     }
-    if (!values.length || values.length !== Object.keys(parsed).length)
-      continue;
+    if (!values.length || values.length !== scalarLeaves(parsed)) continue;
     chunks.push(encode(source.slice(cursor)));
     result.push({
       start: match.index!,
