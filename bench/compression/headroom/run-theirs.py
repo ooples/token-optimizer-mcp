@@ -91,6 +91,19 @@ import random  # noqa: E402
 # cannot arrive as a silent zero that reads like our win.
 import logging  # noqa: E402
 
+# THEIR BEST CONFIGURATION WINS, AND THAT INCLUDES THEIR OWN OVERRIDES. Their
+# content detector falls back to a pure-Python backend on Windows and says so:
+# "native Magika/ONNX detector is unsafe by default on Windows; override with
+# HEADROOM_DETECT_BACKEND=rust". A fallback detector routes worse, which makes
+# their output bigger and our reduction look better, so the capture asks for
+# the native one rather than accepting the weaker default.
+#
+# `setdefault`, so an operator who has a reason to pin a backend keeps it, and
+# the value that actually ran is recorded either way. If the native detector
+# fails on this machine, the capture fails loudly instead of quietly measuring
+# a degraded competitor -- which is the whole point of the block below.
+os.environ.setdefault("HEADROOM_DETECT_BACKEND", "rust")
+
 ADVISORY_SIGNATURES = (
     # Their cache aligner reporting that OUR fixture puts a timestamp in the
     # system prompt, so the cache prefix cannot be stable. Their engine ran;
@@ -118,6 +131,58 @@ class _WarningCapture(logging.Handler):
 _competitor_log = logging.getLogger("headroom")
 _competitor_log.addHandler(_WarningCapture(level=logging.WARNING))
 _competitor_log.setLevel(min(_competitor_log.level or logging.WARNING, logging.WARNING))
+
+
+# AND THEIR ML COMPRESSOR HAS TO BE AWAKE BEFORE THE FIRST ARM RUNS.
+#
+# `ContentRouter` kicks off a background download, warns once per instance that
+# the model is not ready, and carries on without it. Every arm in a capture
+# finishes long before the load does, so the whole run measured their engine
+# with its ML path switched off -- 16 warnings in one capture, and the model
+# was already cached on disk for the last of them. Prefetching is not enough;
+# the load is asynchronous, so the capture has to WAIT for it.
+#
+# It is cheap: measured at 8 seconds from a warm cache, once per capture, and
+# outside every timed region. Failure is recorded rather than raised -- a
+# machine with no HuggingFace access should still be able to take a capture,
+# and the gate will refuse to publish it as a comparison.
+KOMPRESS_WARMUP_SECONDS = 240
+
+
+def warm_their_model():
+    """Block until their ML compressor is loaded, and say what happened."""
+    started = time.time()
+    # NOT ON A KNOWN-ANSWER RUN. Those replace the innermost engine call with
+    # arithmetic, so their model is not in the picture, and waiting for it would
+    # put a HuggingFace download on the critical path of a unit test -- up to the
+    # full timeout on a CI runner with no access to it.
+    if KNOWN_ANSWER_ARMS:
+        return {"ready": None, "waitedSeconds": 0.0, "why": "known-answer run"}
+
+    try:
+        from headroom.transforms.kompress_compressor import KompressCompressor
+
+        compressor = KompressCompressor()
+        compressor.ensure_background_load()
+        while time.time() - started < KOMPRESS_WARMUP_SECONDS:
+            if compressor.is_ready():
+                return {
+                    "ready": True,
+                    "waitedSeconds": round(time.time() - started, 1),
+                    "why": None,
+                }
+            time.sleep(1.0)
+        return {
+            "ready": False,
+            "waitedSeconds": round(time.time() - started, 1),
+            "why": "not ready within %ds" % KOMPRESS_WARMUP_SECONDS,
+        }
+    except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
+        return {
+            "ready": False,
+            "waitedSeconds": round(time.time() - started, 1),
+            "why": "%s: %s" % (type(exc).__name__, exc),
+        }
 
 
 def is_advisory(message):
@@ -452,6 +517,16 @@ if KNOWN_ANSWER_ARMS:
     APPLY = _stub.apply
     print("KNOWN-ANSWER RUN via %s -- this measures the harness, not an engine" % KNOWN_ANSWER_ARMS)
 
+
+KOMPRESS_WARMUP = warm_their_model()
+print(
+    "their ML compressor: %s after %.1fs%s"
+    % (
+        "ready" if KOMPRESS_WARMUP["ready"] else "NOT READY",
+        KOMPRESS_WARMUP["waitedSeconds"],
+        "" if KOMPRESS_WARMUP["why"] is None else " (%s)" % KOMPRESS_WARMUP["why"],
+    )
+)
 
 # THE WINNING ARM OF EACH WORKLOAD, KEPT CALLABLE SO IT CAN BE TIMED AGAIN
 # LATER. Filled by `run`, drained by the pass sweep at the bottom of the file.
@@ -797,6 +872,8 @@ provenance = {
     # downstream gate refuses to publish a win from it. `advisory` is the
     # allow-listed remainder, recorded because it is still an asymmetry.
     "competitorWarnings": competitor_warnings,
+    "detectBackend": os.environ.get("HEADROOM_DETECT_BACKEND"),
+    "kompressWarmup": KOMPRESS_WARMUP,
     # NOT NULL MEANS NOT A MEASUREMENT. A known-answer capture drives this same
     # path with arms whose output is arithmetic, so its numbers are correct and
     # meaningless at once -- exactly the kind of file that must never reach a
