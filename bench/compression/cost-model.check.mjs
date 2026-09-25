@@ -40,6 +40,7 @@ import {
   roundsAt,
   sumLines,
   sweep,
+  commonSessionCost,
   usageMultiplier,
   worstAgainst,
 } from './cost-model.mjs';
@@ -449,9 +450,68 @@ function scanCrossings(a, b, steps = 2_000_000) {
 // ---------------------------------------------------------------------------
 
 {
+  // THE PAYLOAD-ONLY RATIO, WHICH IS WHAT THIS USED TO RETURN BY DEFAULT.
+  // Still exactly the baseline over the arm -- it just has to be asked for now,
+  // because it is not what a subscription meters.
   check(
-    usageMultiplier(1000, 400) === 2.5 && usageMultiplier(1000, 0) === Infinity,
-    'the usage multiplier is the baseline over the arm'
+    usageMultiplier(1000, 400, { commonCost: 0 }) === 2.5 &&
+      usageMultiplier(1000, 0, { commonCost: 0 }) === Infinity,
+    'with no common term the multiplier is the baseline over the arm'
+  );
+
+  // THE COMMON TERM CANCELS IN A DIFFERENCE AND DOES NOT CANCEL IN A QUOTIENT.
+  // That asymmetry is the whole defect: a session's own output is identical
+  // across arms, so leaving it out of both sides of a ratio does not leave the
+  // ratio alone -- it pushes it away from 1, and away from 1 is always the
+  // direction that flatters whichever arm is cheaper.
+  const payloadOnly = usageMultiplier(1000, 400, { commonCost: 0 });
+  const metered = usageMultiplier(1000, 400, { commonCost: 600 });
+  check(
+    metered < payloadOnly && metered > 1,
+    'a common term moves the multiplier toward 1, never past it',
+    `${payloadOnly.toFixed(3)}x -> ${metered.toFixed(3)}x`
+  );
+  check(
+    Math.abs(metered - 1600 / 1000) < 1e-12,
+    'and it is added to both sides, not one',
+    `(1000+600)/(400+600) = ${metered}`
+  );
+
+  // The default is the measured one, and it scales with the turn count so a
+  // sweep that attacks `turnsAfter` moves this term with it instead of
+  // holding it at the default's value.
+  check(
+    commonSessionCost() === DEFAULTS.turnsAfter * DEFAULTS.outputTokensPerTurn * RATES.outputPerInput,
+    'the common term is turns x output per turn x the output rate',
+    `${DEFAULTS.turnsAfter} x ${DEFAULTS.outputTokensPerTurn} x ${RATES.outputPerInput} = ${commonSessionCost()}`
+  );
+  check(
+    commonSessionCost({ ...DEFAULTS, turnsAfter: 2 * DEFAULTS.turnsAfter }) === 2 * commonSessionCost(),
+    'doubling the turns doubles it',
+    'so a sweep over turnsAfter cannot hold it fixed by accident'
+  );
+
+  // AND THE INVARIANT THAT MAKES THIS SAFE TO ADD: every ordering claim the
+  // gate makes is a DIFFERENCE between two arms, so a term both arms share
+  // cannot move a break-even or a worst-case margin. If it could, this change
+  // would be re-scoring the comparison rather than correcting the ratio.
+  const armA = { c0: 900_000, c1: 50_000, c2: 10_000 };
+  const armB = { c0: 700_000, c1: 400_000, c2: 60_000 };
+  const shifted = (a, by) => ({ ...a, c0: a.c0 + by });
+  const by = commonSessionCost();
+  const before = breakEven(armA, armB);
+  const after = breakEven(shifted(armA, by), shifted(armB, by));
+  check(
+    before.p === after.p && before.cheaper === after.cheaper,
+    'a term shared by both arms moves no break-even',
+    `p ${before.p === null ? 'none' : before.p.toFixed(6)} either way, cheaper ${before.cheaper}`
+  );
+  const wBefore = worstAgainst(armA, armB);
+  const wAfter = worstAgainst(shifted(armA, by), shifted(armB, by));
+  check(
+    wBefore.p === wAfter.p && Math.abs(wBefore.margin - wAfter.margin) < 1e-6,
+    'nor the worst fetch rate, nor the margin there',
+    `worst at p=${wBefore.p.toFixed(4)}, margin ${wBefore.margin.toFixed(1)} either way`
   );
 }
 

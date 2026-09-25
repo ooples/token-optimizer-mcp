@@ -60,6 +60,7 @@ import {
   breakEven,
   costAt,
   costLine,
+  commonSessionCost,
   markerBytes,
   sumLines,
   usageMultiplier,
@@ -1095,7 +1096,15 @@ const crossByName = Object.fromEntries(
 );
 
 const k = (t) => `${(t / 1000).toFixed(1)}k`;
-const times = (base, arm) => `${usageMultiplier(base, arm).toFixed(2)}x`;
+// EVERY `times` HERE IS A CORPUS RATIO, SO THE COMMON TERM IS PER SESSION
+// TIMES THE NUMBER OF SESSIONS. A workload is one session, and the assistant
+// writes its own output in each of them regardless of which arm packed the
+// context. That output is 11.6% of the measured bill and no arm touches it, so
+// it belongs on BOTH sides of a "what the cap buys" ratio -- omitted, it
+// pushed every multiple away from 1, always in our favour.
+const CORPUS_COMMON = commonSessionCost() * sessionCosts.length;
+const times = (base, arm) =>
+  `${usageMultiplier(base, arm, { commonCost: CORPUS_COMMON }).toFixed(2)}x`;
 // A crossing outside [0, 1] is not a missing answer, it is the strongest one:
 // the arm is cheaper at every fetch rate there is.
 // `breakEven(ours, theirs)` names ours `a`. Three things can happen, and the

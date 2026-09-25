@@ -194,6 +194,18 @@ export const DEFAULTS = Object.freeze({
   /** Output tokens the model writes to issue one retrieval call. */
   fetchCallTokens: 60,
   /**
+   * The output tokens the assistant itself writes, per turn, averaged over real
+   * traffic. Measured: 746.3 over the 7-day census (11,383,556 output tokens
+   * across 15,252 requests). See BILL_SPLIT_CENSUS.
+   *
+   * It exists because the cost of an ARM and the cost of a SESSION are not the
+   * same quantity, and only the first was ever computed. Compressing a payload
+   * does not change how much the assistant writes back, so this term is
+   * identical across every arm -- which is exactly why leaving it out was safe
+   * for orderings and wrong for ratios. See `commonSessionCost`.
+   */
+  outputTokensPerTurn: 746,
+  /**
    * Blocks resolved per retrieval round, i.e. per extra request.
    *
    * 1 is the conservative choice and is deliberate: a larger batch divides the
@@ -419,9 +431,37 @@ export function worstAgainst(a, b) {
   return { p: at, margin: margin(at) };
 }
 
-export function usageMultiplier(baselineCost, armCost) {
-  if (armCost <= 0) return Infinity;
-  return baselineCost / armCost;
+/**
+ * The part of a session's bill that every arm incurs identically: the output
+ * the assistant writes over the turns that follow the payload.
+ *
+ * It scales with `turnsAfter`, so a sweep that attacks that assumption moves
+ * this term with it rather than holding it fixed at the default's value.
+ */
+export function commonSessionCost(params = DEFAULTS) {
+  return params.turnsAfter * params.outputTokensPerTurn * params.outputPerInput;
+}
+
+/**
+ * What the same subscription cap buys, arm against baseline.
+ *
+ * THE COMMON TERM IS NOT OPTIONAL HERE, AND ITS OMISSION ONLY EVER FLATTERED
+ * US. A subscription meters the whole session, and the output the assistant
+ * writes is 11.6% of this user's measured bill. No arm changes it: the same
+ * question gets the same answer however its context was packed. Left out of
+ * both sides of a ratio, a term that cancels in a DIFFERENCE does not cancel
+ * in a QUOTIENT -- it pushes the quotient away from 1, and always in the
+ * direction that makes the arm look better. `ours` read 1.96x with it missing.
+ *
+ * So orderings, break-evens and the must-win gate are untouched by this (they
+ * are all differences), and every published multiple moves toward 1.
+ *
+ * Pass `{ commonCost: 0 }` to recover the payload-only ratio deliberately.
+ */
+export function usageMultiplier(baselineCost, armCost, { params = DEFAULTS, commonCost } = {}) {
+  const common = commonCost ?? commonSessionCost(params);
+  if (armCost + common <= 0) return Infinity;
+  return (baselineCost + common) / (armCost + common);
 }
 
 /**
