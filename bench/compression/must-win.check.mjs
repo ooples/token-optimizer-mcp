@@ -38,6 +38,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { speedVerdict } from './speed-verdict.mjs';
+import { degradationRefusal } from './competitor-health.mjs';
 import { reproducibilityRefusal } from './reproducibility.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -282,6 +283,16 @@ if (asJson) {
 // is the thing keeping the claims honest. The claims still stand on the numbers
 // that were measured; what fails is the publication.
 const notReproducible = reproducibilityRefusal(results.reproduction ?? null);
+// AND THE SAME QUESTION ABOUT THE OTHER SIDE: was their engine whole when it
+// was measured? Their optional paths fail soft, each one makes their output
+// bigger, and a bigger output for them is a better number for us. So a capture
+// that recorded a missing capability of theirs -- or that recorded nothing
+// about it, which reads identically in the score -- cannot publish a win.
+//
+// A BLOCKER FOR THE SAME REASON as the one above: the claims stand on what was
+// measured, and what fails is the publication of a comparison against an
+// engine that was not all there.
+const degraded = degradationRefusal(results.capture?.theirsProvenance ?? null);
 const enforcedCount = Object.keys(ratchet.enforced ?? {}).length;
 console.log(
   `must-win gate: ${enforcedCount} enforced, ${open.length} open, ` +
@@ -307,6 +318,12 @@ if (regressed.length)
     `\nREGRESSED - these were enforced and now fail:\n  ${regressed.join('\n  ')}`
   );
 
+if (degraded)
+  console.log(
+    `\nNOT A COMPARISON - their engine was not whole, or the capture did not say:\n  ` +
+      degraded +
+      `\n  Re-capture with run-theirs.py once their optional paths are available.`
+  );
 if (notReproducible)
   console.error(
     `\nNOT RE-RUNNABLE - the recorded run cannot be reproduced from what it wrote down:\n  ` +
@@ -314,4 +331,8 @@ if (notReproducible)
       `\n  Re-record with head-to-head.mjs --record from a clean tree against a capture that carries it.`
   );
 
-process.exit(notReproducible || regressed.length || unverified.length || unpromoted.length ? 1 : 0);
+process.exit(
+  degraded || notReproducible || regressed.length || unverified.length || unpromoted.length
+    ? 1
+    : 0
+);

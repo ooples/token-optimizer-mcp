@@ -143,7 +143,7 @@
     "bench:screen:knowledge": "bash bench/thol/screen-knowledge.sh",
     "verify:install": "node scripts/verify-fresh-install.mjs",
     "bench:must-win": "node bench/compression/must-win.check.mjs",
-    "bench:instruments": "node bench/compression/retention.check.mjs && node bench/compression/offload.check.mjs && node bench/compression/cost-model.check.mjs && node bench/compression/speed-verdict.check.mjs && node bench/compression/reproducibility.check.mjs && node bench/subscription/base-context.check.mjs && node bench/subscription/cost-split.check.mjs && node bench/subscription/calibrate.check.mjs",
+    "bench:instruments": "node bench/compression/retention.check.mjs && node bench/compression/offload.check.mjs && node bench/compression/cost-model.check.mjs && node bench/compression/speed-verdict.check.mjs && node bench/compression/reproducibility.check.mjs && node bench/compression/competitor-health.check.mjs && node bench/subscription/base-context.check.mjs && node bench/subscription/cost-split.check.mjs && node bench/subscription/calibrate.check.mjs",
     "bench:known-answer": "node bench/compression/known-answer/capture.check.mjs",
     "bench:known-answer:scorer": "node bench/compression/known-answer/scorer.check.mjs",
     "bench:known-answer:mutants": "node bench/compression/known-answer/mutants.mjs",

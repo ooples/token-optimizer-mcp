@@ -676,6 +676,7 @@ jobs:
             bench/compression/cost-model.check.mjs \
             bench/compression/speed-verdict.check.mjs \
             bench/compression/reproducibility.check.mjs \
+            bench/compression/competitor-health.check.mjs \
             bench/subscription/base-context.check.mjs \
             bench/subscription/cost-split.check.mjs \
             bench/subscription/calibrate.check.mjs

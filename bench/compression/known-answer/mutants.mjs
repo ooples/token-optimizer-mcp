@@ -51,6 +51,7 @@ const BASE = sub('base-context.mjs');
 const METER = sub('calibrate.mjs');
 const SPEED = comp('speed-verdict.mjs');
 const REPRO = comp('reproducibility.mjs');
+const HEALTH = comp('competitor-health.mjs');
 
 /** The check that is supposed to refuse each defect. */
 const SCORER = join(HERE, 'scorer.check.mjs');
@@ -59,6 +60,7 @@ const BASE_CHECK = sub('base-context.check.mjs');
 const METER_CHECK = sub('calibrate.check.mjs');
 const SPEED_CHECK = comp('speed-verdict.check.mjs');
 const REPRO_CHECK = comp('reproducibility.check.mjs');
+const HEALTH_CHECK = comp('competitor-health.check.mjs');
 
 const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
@@ -341,6 +343,56 @@ const MUTANTS = [
     check: REPRO_CHECK,
     from: "    } else if (typeof value !== 'string' || !look.test(value)) {",
     to: "    } else if (typeof value !== 'string') {",
+  },
+  {
+    name: 'a capture that never recorded warnings reads as whole',
+    defect:
+      'the check for whether degradation was recorded at all removed, so every capture taken before the recording existed passes as a clean comparison',
+    caughtBy: 'competitor-health: a provenance with no competitorWarnings key is refused as not having said',
+    file: HEALTH,
+    check: HEALTH_CHECK,
+    from: "  if (!('competitorWarnings' in provenance)) {",
+    to: '  if (false) {',
+  },
+  {
+    name: 'the capture certifies its own allow-list',
+    defect:
+      'the gate stops recognising advisory messages independently, so widening the list in run-theirs.py would wave any degradation through',
+    caughtBy: 'competitor-health: an advisory this gate does not recognise is refused',
+    file: HEALTH,
+    check: HEALTH_CHECK,
+    from: '    } else if (!ADVISORY_SIGNATURES.some((signature) => entry.message.includes(signature))) {',
+    to: '    } else if (false) {',
+  },
+  {
+    name: 'a zero-count warning reads as a real entry',
+    defect:
+      'an entry whose count is 0 or fractional accepted as readable, which is a degradation that can be written down and not counted',
+    caughtBy: 'competitor-health: an entry with count 0 is refused as unreadable',
+    file: HEALTH,
+    check: HEALTH_CHECK,
+    from: '  entry.count >= 1;',
+    to: '  entry.count >= 0;',
+  },
+  {
+    name: 'recorded degradations are not read',
+    defect:
+      'the degraded list walked as empty, so a Kompress model that never loaded is recorded and then ignored',
+    caughtBy: 'competitor-health: a recorded degradation is refused, named and counted',
+    file: HEALTH,
+    check: HEALTH_CHECK,
+    from: '  for (const entry of seen.degraded) {',
+    to: '  for (const entry of []) {',
+  },
+  {
+    name: 'an unreadable warnings block reads as empty',
+    defect:
+      'the shape check dropped, so competitorWarnings of {} passes and nothing is ever refused again',
+    caughtBy: 'competitor-health: a block that is not two arrays is refused as unreadable',
+    file: HEALTH,
+    check: HEALTH_CHECK,
+    from: '    !Array.isArray(seen.degraded) ||',
+    to: '    false ||',
   },
 ];
 

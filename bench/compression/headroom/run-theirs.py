@@ -72,6 +72,59 @@ if CLONE != "-":
 import hashlib  # noqa: E402
 import random  # noqa: E402
 
+# A DEGRADED COMPETITOR MEASURES AS A WEAKER COMPETITOR, SILENTLY, and until
+# now this capture had no way to say so. Their optional paths fail soft and
+# say so only on their own logger: on this machine the Kompress model was not
+# downloadable ("Kompress model not ready; requests will not be compressed" --
+# their own comment at the emission site calls it degraded) and the native
+# content detector is off by default on Windows. Both times their engine ran
+# with a capability missing, the number recorded for them was smaller for that
+# reason, and nothing in the file said which reason it was.
+#
+# `bench/competitive/probe-headroom.py` has refused to write a claims file
+# under exactly this condition since it was written. The head-to-head capture,
+# which is where the published table comes from, did not.
+#
+# UNKNOWN WARNINGS COUNT AS DEGRADATION. The allow-list is for messages that
+# are advice about OUR payload rather than a capability of theirs going
+# missing; everything else is recorded as degradation, so a path they add next
+# cannot arrive as a silent zero that reads like our win.
+import logging  # noqa: E402
+
+ADVISORY_SIGNATURES = (
+    # Their cache aligner reporting that OUR fixture puts a timestamp in the
+    # system prompt, so the cache prefix cannot be stable. Their engine ran;
+    # the advice is about the payload we handed it. It is still recorded.
+    "cache prefix unstable",
+)
+
+COMPETITOR_WARNINGS = {}
+
+
+class _WarningCapture(logging.Handler):
+    """Every WARNING their package emits, deduplicated, with a count."""
+
+    def emit(self, record):  # noqa: D102
+        message = record.getMessage()
+        seen = COMPETITOR_WARNINGS.setdefault(
+            message, {"logger": record.name, "message": message, "count": 0}
+        )
+        seen["count"] += 1
+
+
+# INSTALLED BEFORE ANY ARM RUNS, and on the hierarchy root rather than on the
+# module that emits today, so a warning from a module they add later is caught
+# by the same handler.
+_competitor_log = logging.getLogger("headroom")
+_competitor_log.addHandler(_WarningCapture(level=logging.WARNING))
+_competitor_log.setLevel(min(_competitor_log.level or logging.WARNING, logging.WARNING))
+
+
+def is_advisory(message):
+    """Advice about our payload, as opposed to a capability of theirs missing."""
+    return any(signature in message for signature in ADVISORY_SIGNATURES)
+
+
 try:
     from benchmarks.scenarios import conversations as C  # noqa: E402
     from benchmarks.scenarios import tool_outputs as T  # noqa: E402
@@ -718,6 +771,17 @@ for label, counts in inert.items():
             % (label, counts["returnedInputUnchanged"], counts["ranOn"])
         )
 
+warnings_seen = sorted(COMPETITOR_WARNINGS.values(), key=lambda w: w["message"])
+competitor_warnings = {
+    "degraded": [w for w in warnings_seen if not is_advisory(w["message"])],
+    "advisory": [w for w in warnings_seen if is_advisory(w["message"])],
+}
+for entry in competitor_warnings["degraded"]:
+    print(
+        "WARNING: their engine ran with a capability missing (%dx from %s): %s"
+        % (entry["count"], entry["logger"], entry["message"])
+    )
+
 provenance = {
     "headroomVersion": _headroom_version(),
     "python": sys.version.split()[0],
@@ -727,6 +791,12 @@ provenance = {
     "theirFixtures": HAVE_THEIR_FIXTURES,
     "carriedPayloads": sorted(set(WORKLOADS) - set(THEIR_FIXTURE_NAMES)),
     "inertArms": inert,
+    # WHAT RAN DEGRADED, SPLIT BY WHOSE FAULT IT IS. `degraded` means a
+    # capability of theirs was missing while they were being measured, so
+    # every number in this file understates them by an unknown amount and the
+    # downstream gate refuses to publish a win from it. `advisory` is the
+    # allow-listed remainder, recorded because it is still an asymmetry.
+    "competitorWarnings": competitor_warnings,
     # NOT NULL MEANS NOT A MEASUREMENT. A known-answer capture drives this same
     # path with arms whose output is arithmetic, so its numbers are correct and
     # meaningless at once -- exactly the kind of file that must never reach a
