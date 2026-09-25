@@ -15,13 +15,8 @@
  * REQUEST, which re-reads the whole prefix one more time and costs the output
  * tokens of the tool call that asked for it.
  *
- * That last term is the one a byte column cannot see, and it is the one that
- * decides this comparison: at 41 round trips against 14, our arm pays for 27
- * passes over the conversation that theirs never makes.
- *
  * THE UNIT is an effective input token: what a token would cost if it were
- * billed once, at the plain input rate. A cache write counts 1.25 of them, a
- * cache read 0.1, an output token 5. Nothing here is denominated in money,
+ * billed once, at the plain input rate. Nothing here is denominated in money,
  * because a dollar figure bakes in a model and a price list and is stale the
  * day either moves. Multiply by your own rate for money; read it as-is for a
  * subscription, whose cap is metered on the same quantity.
@@ -32,107 +27,322 @@
  * 1 without changing which arm is cheaper. They enter in one place,
  * `baseContextTokens`, and only in the term where the arms genuinely differ --
  * an extra request re-reads them, and the arms do not make the same number of
- * extra requests.
+ * extra requests. `baseContextTokens` is a per-arm parameter rather than a
+ * constant, because an arm that rewrites the tool schemas does not hand the
+ * model the same prefix as one that does not; see THE SCHEMA TIE below.
+ *
+ * ------------------------------------------------------------------------
+ * THREE THINGS THIS FILE GOT WRONG BEFORE, AND WHAT REPLACED THEM
+ * ------------------------------------------------------------------------
+ *
+ * 1. IT CHARGED THE 5-MINUTE CACHE-WRITE RATE FOR TRAFFIC THAT IS ENTIRELY
+ *    1-HOUR. A cache write is 1.25x the input rate at the 5-minute TTL and
+ *    2.0x at the 1-hour TTL. This file asserted 1.25 for everything. Over the
+ *    last seven days of real transcripts on the machine that runs this bench,
+ *    15,093 distinct requests reported a TTL split and 100.00% of the
+ *    56,477,162 cache-write tokens were `ephemeral_1h_input_tokens`; the
+ *    5-minute counter was zero, and no request used the legacy undifferentiated
+ *    field. So the rate that applied to every observed request was the one this
+ *    file never used. `cacheWrite` now defaults to the 1-hour rate, `RATES`
+ *    names both, and `sweep` can vary it like any other assumption.
+ *
+ * 2. IT CHARGED AN EXTRA REQUEST PER BLOCK RATHER THAN PER ROUND. A retrieval
+ *    round is one extra request no matter how many blocks it resolves. In
+ *    HeadRoom's proxy that is explicit: every `headroom_retrieve` call in one
+ *    assistant response is executed together and followed by a single
+ *    continuation call (`ccr/response_handler.py`, the `while rounds <
+ *    max_retrieval_rounds` loop -- `results = [...]` over all `ccr_calls`, then
+ *    one `api_call_fn`). The same is true of a client-side tool loop: several
+ *    tool_use blocks in one response come back as several tool_results in one
+ *    user message, and cost one request between them. `fetchBatch` is how many
+ *    blocks a round resolves; the per-block terms stay per block, and only the
+ *    pass over the prefix is divided by it.
+ *
+ * 3. IT PRICED EVERY FETCH AS IF EVERY EARLIER FETCH HAD ALREADY HAPPENED. The
+ *    old loop grew `prefix` by each block unconditionally, so at a fetch rate
+ *    of 10% it still charged the tenth fetch for re-reading all nine blocks
+ *    before it. That is only true at p = 1. The honest expectation is that
+ *    earlier blocks are present with probability p, which makes the round pass
+ *    QUADRATIC in p rather than linear -- and the cost of an arm a quadratic,
+ *    not a line. That is the whole change: `costAt` evaluates
+ *    `c0 + c1*p + c2*p^2`, and `breakEven` solves a quadratic. At p = 1 the new
+ *    model reproduces the old number to the last bit, which is asserted in
+ *    `cost-model.check.mjs`; below p = 1 it stops overcharging, and the arm it
+ *    was overcharging most was the one that spills into the most places, which
+ *    is ours.
+ *
+ * ------------------------------------------------------------------------
+ * THINGS THAT ARE DELIBERATELY NOT MODELLED, AND WHY
+ * ------------------------------------------------------------------------
+ *
+ * THEIR THREE-ROUND CAP IS NOT A DELIVERY CEILING. `max_retrieval_rounds` is 3,
+ * but `rounds` is initialised to 0 inside the per-response handler, so the cap
+ * is three rounds PER ASSISTANT RESPONSE and resets on the next one. Modelling
+ * it as a session-wide cap would both cheapen their arm and invent a
+ * content-loss they do not have. It is a latency and liveness property, not a
+ * cost term, so it does not appear here.
+ *
+ * THEIR MIXED-CALL BAILOUT IS NOT MODELLED EITHER. When the model calls
+ * `headroom_retrieve` alongside a non-CCR tool, their proxy declines to resolve
+ * it and hands the call back to the client, which then spends a real agent turn
+ * on it. That is a cost their arm pays and this model does not charge them,
+ * because the rate at which a model mixes the two is unmeasured. It is an
+ * omission in THEIR favour and is recorded as such rather than guessed at.
+ *
+ * THE SCHEMA TIE IS ASSUMED, NOT MEASURED. Their proxy rewrites the tool
+ * schemas before forwarding (`proxy/tool_schema_compaction.py`), and we do not.
+ * `baseContextTokens` is therefore a per-arm parameter, but both arms are
+ * currently given the same value, because the reduction has not been measured
+ * against a real client's tool array. Until it is, this file assumes a tie it
+ * has no evidence for, and the assumption favours us.
  */
 
 /**
- * Published Anthropic multipliers, plus two facts about a session that are not
- * published anywhere because they are properties of how it is used.
+ * Published per-token multipliers, each relative to one plain input token.
  *
- * `turnsAfter` and `baseContextTokens` are the two guesses in this file. The
- * break-even rate below is reported precisely because it does not depend on
- * either being right, and `sweep` exists so the sensitivity to both is printed
+ * These are the only numbers here taken on authority rather than measured, and
+ * `bench/subscription/` exists to stop that being true: `paramsFromMeter`
+ * accepts what the meter actually solved for and replaces them.
+ */
+export const RATES = Object.freeze({
+  /** A cache write at the 5-minute TTL. */
+  cacheWrite5m: 1.25,
+  /** A cache write at the 1-hour TTL. */
+  cacheWrite1h: 2.0,
+  /** A cache read, at either TTL. */
+  cacheRead: 0.1,
+  /** Output, across the current line-up. */
+  outputPerInput: 5,
+});
+
+/**
+ * The cache-write TTL census behind `cacheWrite` defaulting to the 1-hour rate.
+ *
+ * Re-derive with `bench/subscription/transcripts.mjs`; this is a note of what
+ * it said, not a substitute for running it.
+ */
+export const WRITE_TTL_CENSUS = Object.freeze({
+  windowDays: 7,
+  requests: 15093,
+  requestsWithoutTtlSplit: 0,
+  ephemeral5mTokens: 0,
+  ephemeral1hTokens: 56477162,
+  legacyUndifferentiatedTokens: 0,
+});
+
+/**
+ * The model's assumptions, all overridable per arm.
+ *
+ * `turnsAfter`, `baseContextTokens`, `fetchCallTokens` and `fetchBatch` are the
+ * guesses. The break-even rate is reported precisely because it does not depend
+ * on any of them being right, and `sweep` exists so the sensitivity is printed
  * rather than asserted.
  */
 export const DEFAULTS = Object.freeze({
-  /** A cache write bills at 1.25x the base input rate. */
-  cacheWrite: 1.25,
+  /**
+   * A cache write, as a multiple of the input rate. Defaults to the 1-hour
+   * rate because that is what 100% of observed traffic used; see
+   * WRITE_TTL_CENSUS.
+   */
+  cacheWrite: RATES.cacheWrite1h,
   /** A cache read bills at 0.1x. */
-  cacheRead: 0.1,
+  cacheRead: RATES.cacheRead,
   /** Output bills at 5x input across the current line-up. */
-  outputPerInput: 5,
+  outputPerInput: RATES.outputPerInput,
   /** Assistant requests following the one the payload lands in. */
   turnsAfter: 20,
   /** System prompt, tool schemas and prior conversation, in tokens. */
   baseContextTokens: 12000,
   /** Output tokens the model writes to issue one retrieval call. */
   fetchCallTokens: 60,
+  /**
+   * Blocks resolved per retrieval round, i.e. per extra request.
+   *
+   * 1 is the conservative choice and is deliberate: a larger batch divides the
+   * extra-request term, which helps whichever arm spills into more places, and
+   * that arm is ours. Nothing in either mechanism forces 1 -- their proxy
+   * resolves every call in a response together, and a client-side tool loop
+   * returns every tool_result in one message -- so the true value is >= 1 for
+   * both and unmeasured. Holding it at 1 charges us the most this model can
+   * charge us; `sweep` prints what happens when it is not 1.
+   */
+  fetchBatch: 1,
+});
+
+/** The additive identity for `addLines`: an arm that costs nothing. */
+export const ZERO_LINE = Object.freeze({
+  c0: 0,
+  c1: 0,
+  c2: 0,
+  blocks: 0,
+  roundsAtFullFetch: 0,
 });
 
 /**
- * One arm's cost as a straight line in the fetch rate `p`.
+ * One arm's cost as a quadratic in the fetch rate `p`.
  *
- * Returns `{ fixed, perFetch }`, so the cost at rate `p` is
- * `fixed + p * perFetch`. Keeping both arms linear is what makes a single
- * break-even rate meaningful instead of a curve to be eyeballed, and it costs
- * one modelling approximation, stated here rather than buried:
+ * Returns `{ c0, c1, c2, ... }`, so the cost at rate `p` is
+ * `c0 + c1*p + c2*p^2` -- evaluate it with `costAt` rather than by hand.
  *
- * THE EXTRA PASS IS CHARGED OVER A PREFIX THAT ALREADY HOLDS THE EARLIER
- * BLOCKS, whether or not those earlier fetches happened. At a high fetch rate
- * that is simply true. At a low one it overcharges -- but it overcharges per
- * fetch, so it falls hardest on the arm that spills into the most places, which
- * is ours. The approximation errs AGAINST the arm this file belongs to.
+ * WHERE EACH TERM COMES FROM, with W the cache-write multiple, R the cache-read
+ * multiple, O the output multiple, N the turns after the payload lands, B the
+ * base context, F the output tokens of one retrieval call, and b the batch:
+ *
+ *   c0  the text the agent is handed: written once, read on every later
+ *       request. This is the whole cost of an arm that spills nothing, and it
+ *       is the only term that does not depend on p.
+ *
+ *   c1  per block, if fetched: the output tokens of the call that asks for it
+ *       (F*O), the block written to cache and then resident for the rest of the
+ *       session, and 1/b of an extra request re-reading the fixed part of the
+ *       prefix (B + handed).
+ *
+ *   c2  per block, if fetched: 1/b of that same extra request re-reading the
+ *       EARLIER BLOCKS -- which are themselves only present with probability p.
+ *       Two independent p's multiply, and that is the whole reason this is a
+ *       quadratic and not a line.
+ *
+ * RESIDENCY. A fetched block is assumed to land at turn `N*(i+1)/(n+1)` and to
+ * stay for what is left. Spacing retrievals evenly is the only schedule that
+ * does not quietly pick a side, and holding the schedule fixed as p falls is
+ * unbiased: a random subset of evenly spaced positions has the same mean
+ * position as the whole set.
  */
 export function costLine({ handed, blocks = [], params = DEFAULTS }) {
   const {
     cacheWrite: W,
     cacheRead: R,
-    outputPerInput,
+    outputPerInput: O,
     turnsAfter: N,
-    baseContextTokens,
-    fetchCallTokens,
-  } = params;
+    baseContextTokens: B,
+    fetchCallTokens: F,
+    fetchBatch: b,
+  } = { ...DEFAULTS, ...params };
 
-  // The text the agent is handed: written to the cache once, read on every
-  // request after that. This is the whole cost of an arm that spills nothing.
-  const fixed = handed * (W + R * N);
+  if (!(b >= 1)) throw new Error(`fetchBatch must be >= 1, got ${b}`);
 
-  let perFetch = 0;
-  let prefix = baseContextTokens + handed;
+  const c0 = handed * (W + R * N);
+
+  let c1 = 0;
+  let c2 = 0;
+  let earlier = 0; // tokens of blocks before this one, if they were all fetched
   const n = blocks.length;
   for (let i = 0; i < n; i++) {
-    // Retrievals are assumed spread evenly through the remaining session, so
-    // the i-th lands here and is then resident for whatever is left. Bunching
-    // them at the start would cost more and at the end less; even spacing is
-    // the only choice that does not quietly pick a side.
     const at = (N * (i + 1)) / (n + 1);
     const size = blocks[i];
-    perFetch += prefix * R; // one more pass over everything already there
-    perFetch += fetchCallTokens * outputPerInput; // the call the model writes
-    perFetch += size * (W + R * Math.max(0, N - at)); // the block, then resident
-    prefix += size;
+    c1 += F * O; // the call the model writes to ask for it
+    c1 += size * (W + R * Math.max(0, N - at)); // written, then resident
+    c1 += (R / b) * (B + handed); // its share of one extra request...
+    c2 += (R / b) * earlier; // ...over a prefix that is itself only p-present
+    earlier += size;
   }
-  return { fixed, perFetch };
+
+  return {
+    c0,
+    c1,
+    c2,
+    blocks: n,
+    /** Expected retrieval rounds when every block is fetched. */
+    roundsAtFullFetch: n / b,
+    /** Kept so a caller reading the old field name gets the fixed cost. */
+    fixed: c0,
+  };
+}
+
+/**
+ * Two arms' costs, added.
+ *
+ * A quadratic plus a quadratic is a quadratic, so folding a corpus by adding
+ * coefficients is exact rather than an approximation -- `costAt(a+b, p)` equals
+ * `costAt(a, p) + costAt(b, p)` at every p, which `cost-model.check.mjs`
+ * asserts on a grid. That is what makes a corpus-level break-even meaningful:
+ * it is the rate at which the whole corpus costs the same, with every workload
+ * fetching at that rate.
+ */
+export function addLines(a, b) {
+  return {
+    c0: a.c0 + b.c0,
+    c1: a.c1 + b.c1,
+    c2: a.c2 + b.c2,
+    blocks: (a.blocks ?? 0) + (b.blocks ?? 0),
+    roundsAtFullFetch: (a.roundsAtFullFetch ?? 0) + (b.roundsAtFullFetch ?? 0),
+    fixed: a.c0 + b.c0,
+  };
+}
+
+/** Every line, added. */
+export function sumLines(lines) {
+  return lines.reduce(addLines, ZERO_LINE);
 }
 
 /** Effective input tokens for a line at fetch rate `p`. */
 export function costAt(line, p) {
-  return line.fixed + p * line.perFetch;
+  return line.c0 + p * line.c1 + p * p * line.c2;
+}
+
+/** Expected extra requests at fetch rate `p`. */
+export function roundsAt(line, p) {
+  return p * (line.roundsAtFullFetch ?? 0);
+}
+
+/** Real roots of `c2*x^2 + c1*x + c0`, computed without catastrophic cancellation. */
+function quadraticRoots(c2, c1, c0) {
+  if (c2 === 0) return c1 === 0 ? [] : [-c0 / c1];
+  const disc = c1 * c1 - 4 * c2 * c0;
+  if (disc < 0) return [];
+  if (disc === 0) return [-c1 / (2 * c2)];
+  const root = Math.sqrt(disc);
+  // Pairing the sign with c1 keeps `q` away from zero, so neither root is the
+  // difference of two nearly equal numbers.
+  const q = -0.5 * (c1 + Math.sign(c1 || 1) * root);
+  return [q / c2, c0 / q].sort((x, y) => x - y);
 }
 
 /**
  * The fetch rate at which two arms cost the same.
  *
  * THIS IS THE FIGURE TO PUBLISH. Every other number here rests on a guess about
- * session length or context size; this one is a statement of the form "we are
- * cheaper unless your agent pulls back more than X% of what was moved out",
- * which a reader can check against their own behaviour and which is false if we
- * are wrong. `p` is null when the lines do not cross inside [0, 1] -- then one
- * arm is cheaper at every fetch rate, and `cheaper` names it.
+ * session length, context size or batching; this one is a statement of the form
+ * "we are cheaper unless your agent pulls back more than X% of what was moved
+ * out", which a reader can check against their own behaviour and which is false
+ * if we are wrong.
+ *
+ * Returns `{ p, cheaper, cheaperAbove, crossings }`:
+ *
+ *   p             the first crossing strictly inside (0, 1), or null if the
+ *                 arms do not cross there -- in which case one arm is cheaper
+ *                 at every fetch rate and `cheaper` names it.
+ *   cheaper       which arm costs less at p = 0. 'a', 'b', or 'tie'.
+ *   cheaperAbove  which arm costs less at p = 1. Equal to `cheaper` exactly
+ *                 when there is no crossing.
+ *   crossings     every root in (0, 1). Two arms whose costs are quadratics can
+ *                 cross TWICE, and a caller that prints only `p` would be
+ *                 stating a half-truth; this is here so that cannot happen
+ *                 silently.
+ *
+ * `cheaper` is about p = 0 and `cheaperAbove` about p = 1 -- do not read either
+ * as "the winner". A caller that prints "ours wins below X%" must check that
+ * `cheaper` is actually ours; below a crossing it may not be.
  */
 export function breakEven(a, b) {
-  const slope = a.perFetch - b.perFetch;
-  const gap = b.fixed - a.fixed;
-  const at = (p) => Math.sign(costAt(b, p) - costAt(a, p));
-  // Sign of (theirs - ours) at p = 0 decides who is cheaper when they do not
-  // cross; +1 means ours costs less.
-  const end = at(1) !== 0 ? at(1) : at(0);
-  const cheaper = end > 0 ? 'a' : end < 0 ? 'b' : 'tie';
-  if (slope === 0) return { p: null, cheaper };
-  const p = gap / slope;
-  if (!(p > 0 && p < 1)) return { p: null, cheaper };
-  // Below the crossing, whichever arm the p = 0 comparison favours is cheaper.
-  return { p, cheaper: at(0) > 0 ? 'a' : 'b' };
+  // d(p) > 0 means b costs more than a, i.e. a is cheaper.
+  const d = (p) => costAt(b, p) - costAt(a, p);
+  const side = (p) => Math.sign(d(p));
+  const name = (s) => (s > 0 ? 'a' : s < 0 ? 'b' : 'tie');
+
+  const cheaper = name(side(0));
+  const cheaperAbove = name(side(1));
+
+  const crossings = quadraticRoots(b.c2 - a.c2, b.c1 - a.c1, b.c0 - a.c0)
+    .filter((p) => p > 0 && p < 1)
+    .sort((x, y) => x - y);
+
+  return {
+    p: crossings.length > 0 ? crossings[0] : null,
+    cheaper,
+    cheaperAbove,
+    crossings,
+  };
 }
 
 /**
@@ -142,25 +352,79 @@ export function breakEven(a, b) {
  * buys 2.5x as much of this work" are the same sentence. The second is the one
  * a subscriber asked, so it is the one this returns.
  */
+/**
+ * The fetch rate at which arm `a` fares WORST against arm `b`, and the margin
+ * there -- `theirs` minus `ours`, so a positive margin means `a` is ahead.
+ *
+ * This exists because the cost stopped being a straight line. While it was
+ * affine, an arm ahead at p = 0 and at p = 1 was ahead everywhere between, and
+ * a gate could settle the question with two evaluations. A quadratic difference
+ * that opens upward has its minimum in the MIDDLE, so both endpoints can show a
+ * comfortable lead over an interval where the lead is briefly gone.
+ *
+ * A parabola has one turning point, so three candidates decide the whole
+ * interval exactly: the two ends, and the vertex when it opens upward and falls
+ * inside (0, 1). No scan, no sampling, no tolerance.
+ */
+export function worstAgainst(a, b) {
+  const d2 = b.c2 - a.c2;
+  const d1 = b.c1 - a.c1;
+  const d0 = b.c0 - a.c0;
+  const margin = (p) => d0 + d1 * p + d2 * p * p;
+  const candidates = [0, 1];
+  if (d2 > 0) {
+    const vertex = -d1 / (2 * d2);
+    if (vertex > 0 && vertex < 1) candidates.push(vertex);
+  }
+  let at = 0;
+  for (const p of candidates) if (margin(p) < margin(at)) at = p;
+  return { p: at, margin: margin(at) };
+}
+
 export function usageMultiplier(baselineCost, armCost) {
   if (armCost <= 0) return Infinity;
   return baselineCost / armCost;
 }
 
 /**
- * The same comparison across a grid of session lengths and context sizes.
+ * The same comparison across a grid of assumptions.
  *
- * The two guesses in DEFAULTS are the obvious place to attack these numbers, so
- * the harness prints the attack instead of waiting for it.
+ * The guesses in DEFAULTS are the obvious place to attack these numbers, so the
+ * harness prints the attack instead of waiting for it. Any DEFAULTS key may be
+ * swept; `build` is called once per combination with the resulting params.
  */
 export function sweep(build, grid) {
+  const keys = Object.keys(grid);
   const out = [];
-  for (const turnsAfter of grid.turnsAfter)
-    for (const baseContextTokens of grid.baseContextTokens) {
-      const params = { ...DEFAULTS, turnsAfter, baseContextTokens };
-      out.push({ turnsAfter, baseContextTokens, ...build(params) });
+  const walk = (i, chosen) => {
+    if (i === keys.length) {
+      const params = { ...DEFAULTS, ...chosen };
+      out.push({ ...chosen, ...build(params) });
+      return;
     }
+    for (const value of grid[keys[i]]) walk(i + 1, { ...chosen, [keys[i]]: value });
+  };
+  walk(0, {});
   return out;
+}
+
+/**
+ * Params built from what the subscription meter actually solved for, rather
+ * than from the price list.
+ *
+ * `ratios` are per-token weights RELATIVE TO ONE INPUT TOKEN -- exactly what
+ * `bench/subscription/calibrate.mjs` can recover, because the unknown plan cap
+ * cancels in a ratio and never in an absolute. Any ratio left out keeps its
+ * published value, so a partial calibration is usable rather than all-or-
+ * nothing. Passing a measured ratio here is the only way a number in this file
+ * stops being an assertion.
+ */
+export function paramsFromMeter(ratios = {}, overrides = {}) {
+  const measured = {};
+  if (Number.isFinite(ratios.cacheWrite)) measured.cacheWrite = ratios.cacheWrite;
+  if (Number.isFinite(ratios.cacheRead)) measured.cacheRead = ratios.cacheRead;
+  if (Number.isFinite(ratios.output)) measured.outputPerInput = ratios.output;
+  return { ...DEFAULTS, ...measured, ...overrides };
 }
 
 /**
