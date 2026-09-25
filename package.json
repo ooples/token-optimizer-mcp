@@ -144,6 +144,7 @@
     "verify:install": "node scripts/verify-fresh-install.mjs",
     "bench:must-win": "node bench/compression/must-win.check.mjs",
     "bench:known-answer:scorer": "node bench/compression/known-answer/scorer.check.mjs",
+    "bench:known-answer:mutants": "node bench/compression/known-answer/mutants.mjs",
     "bench:cost-model:check": "node bench/compression/cost-model.check.mjs",
     "bench:ledger:provenance": "node bench/ledger/verify-provenance.mjs",
     "bench:subscription:observe": "node bench/subscription/observe.mjs",

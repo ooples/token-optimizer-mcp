@@ -200,6 +200,26 @@ try {
       'and nothing else is, beyond the two envelope values the keyed rule admits',
       JSON.stringify(envelope)
     );
+    // AND THE FLOOR MUST ACTUALLY EXCLUDE SOMETHING. Without this the exclusion
+    // could be lowered to one character -- readmitting every short token as a
+    // free substring match -- and every other assertion here would still hold,
+    // because the denominator and the buckets would widen together. The mutation
+    // battery found exactly that hole. ka-items scrapes `error`, five
+    // characters, which is too short to score by `includes` and must be
+    // reported rather than quietly counted.
+    const items = byName(identity)['ka-items'].retention;
+    const scraped = [...identifiers(payloads['ka-items'])];
+    const short = scraped.filter((x) => x.length < 8);
+    check(
+      short.length > 0,
+      'the fixture really does scrape an identifier too short to score',
+      JSON.stringify(short)
+    );
+    check(
+      num(items.unsafeIds) === short.length && num(items.ids) === scraped.length - short.length,
+      'and it is excluded from the denominator and reported, not quietly counted',
+      `ids ${items.ids}, unsafe ${items.unsafeIds}, scraped ${scraped.length}`
+    );
     const w = byName(identity)['ka-identifiers'].retention;
     check(
       num(w.ids) === found.length,
