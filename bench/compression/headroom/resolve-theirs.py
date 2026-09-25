@@ -52,7 +52,12 @@ with open(os.path.join(OUT, "theirs.json"), encoding="utf8") as handle:
     theirs = json.load(handle)
 
 out = {}
+# `__provenance__` records the store state the capture ran against; it is not
+# a workload. Keys are namespaced with dunders precisely so this stays a
+# one-line filter rather than a list that drifts.
 for name, entry in sorted(theirs.items()):
+    if name.startswith("__"):
+        continue
     text = entry.get("bestText") or ""
     markers = len(MARKER.findall(text))
     try:

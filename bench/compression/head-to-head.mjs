@@ -765,11 +765,12 @@ for (const [name, text] of Object.entries(payloads)) {
   // A zero meaning `never asked` sat in a table beside three columns that
   // meant `measured`. It now reports null, and `retention.check.mjs` arms a
   // positive control so a null can only ever mean no sink.
+  const haveSpill = spilled.join('\n');
   const classified = classifyIds({
     ids: want,
     output: out.text,
     reconstructed: recoveredOut,
-    spill: spilled.join('\n'),
+    spill: haveSpill,
     hasSink: OURS_HAS_SINK,
   });
   const { inOut, derived, inSpill, gone, missing } = classified;
@@ -1447,6 +1448,16 @@ if (process.argv[3] === '--record') {
       // exactly the case the digest exists to rule out. Stripping it keeps the
       // digest a statement about their OUTPUT. It changed once, deliberately,
       // when the timings were added.
+      // THE STORE STATE THE CAPTURE RAN AGAINST, carried from `run-theirs.py`.
+      //
+      // Their `pipeline@*` arms hand blocks to a durable CCR store, so those
+      // arms return different bytes against different store states -- measured
+      // at up to 100x on the same workload, same version, same payload. The
+      // digest below proves two captures saw the same OUTPUT; this proves they
+      // ran the same EXPERIMENT. A record without it cannot support a
+      // per-workload comparison, because nothing says the two runs are
+      // comparable, and a ratchet built on one is comparing two experiments.
+      theirsProvenance: theirs.__provenance__ ?? null,
       theirsDigest: createHash('sha256')
         .update(
           JSON.stringify(

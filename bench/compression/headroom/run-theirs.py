@@ -69,6 +69,7 @@ EXTRA = sys.argv[sys.argv.index("--extra") + 1] if "--extra" in sys.argv else No
 if CLONE != "-":
     sys.path.append(CLONE)
 
+import hashlib  # noqa: E402
 import random  # noqa: E402
 
 try:
@@ -99,6 +100,12 @@ random.seed(42)
 # `native` is the generator's own return value -- a message list for the two
 # conversation workloads, which is what their pipeline consumes. `text` is the
 # serialisation both sides are scored on.
+# Named once, so the provenance block can say which rows were theirs.
+THEIR_FIXTURE_NAMES = (
+    "log-entries", "search-results", "api-responses",
+    "database-rows", "agentic-conversation", "rag-conversation",
+)
+
 WORKLOADS = {}
 if HAVE_THEIR_FIXTURES:
     WORKLOADS.update(
@@ -438,6 +445,20 @@ def run(name, native, text):
         "msMax": round(samples[-1], 3),
         "msSamples": ordered,
         "arms": {label: round(reduction((label, out)) * len(text)) for label, out in attempts},
+        # EVERY ARM'S BYTES, NOT ONLY THE WINNER'S.
+        #
+        # The winner above is chosen by compression ratio, which is the right
+        # rule for a compression claim and the WRONG one for a retention claim:
+        # it systematically selects their most lossy arm, and the scorer then
+        # reports how much that arm lost. That comparison had a thumb on it in
+        # our favour, and nothing downstream could correct for it, because the
+        # sizes recorded in `arms` above cannot be rescored -- only text can.
+        #
+        # So every attempt's output is kept. The scorer picks their best arm
+        # PER METRIC: the ratio winner for compression, the arm that actually
+        # retained most for retention. Costs ~20MB in a gitignored directory.
+        "armTexts": {label: out for label, out in attempts},
+        "armBeforeTexts": {label: wrapped.get(label, text) for label, _ in attempts},
         # The actual bytes, so the scorer can tokenise their output with the
         # same real tokeniser it uses on ours instead of trusting a proxy.
         "bestText": best,
@@ -458,8 +479,52 @@ for name, native in WORKLOADS.items():
 os.makedirs(OUT, exist_ok=True)
 with open(os.path.join(OUT, "payloads.json"), "w", encoding="utf-8") as handle:
     json.dump(PAYLOADS, handle)
+# THE STORE STATE IS PART OF THE MEASUREMENT, so it is recorded with it.
+#
+# WHY THIS BLOCK EXISTS. Their `pipeline@*` arms hand blocks to a DURABLE CCR
+# store at ~/.headroom/ccr_store.db, so what those arms return depends on what
+# is already in it -- and nothing in this script used to record which state it
+# ran against. A capture taken against one store was published and compared,
+# workload by workload, against captures taken against another. On the twelve
+# carried workloads the `router`, `crusher` and `crusher-lossy-ccr` arms agree
+# byte for byte across runs; the `pipeline` arms vary by up to 100x. Every
+# published per-workload verdict that turned on a pipeline arm was therefore
+# comparing two different experiments.
+#
+# A digest cannot make the runs comparable, but it makes them VISIBLY
+# incomparable, which is the difference between a wrong number and a known one.
+def _headroom_version():
+    """Read from installed metadata: the script never imports the package itself."""
+    try:
+        import importlib.metadata as _md
+        return _md.version("headroom-ai")
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+store_path = os.path.join(os.path.expanduser("~"), ".headroom", "ccr_store.db")
+store = {"path": store_path, "present": os.path.exists(store_path)}
+if store["present"]:
+    with open(store_path, "rb") as handle:
+        store["bytes"] = os.path.getsize(store_path)
+        store["sha256"] = hashlib.sha256(handle.read()).hexdigest()[:16]
+else:
+    store["bytes"] = 0
+    store["sha256"] = None
+
+provenance = {
+    "headroomVersion": _headroom_version(),
+    "python": sys.version.split()[0],
+    # AFTER the run, deliberately: the arms write to it, so the state that
+    # matters for reproducing this capture is the one the next run inherits.
+    "ccrStoreAfterRun": store,
+    "theirFixtures": HAVE_THEIR_FIXTURES,
+    "carriedPayloads": sorted(set(WORKLOADS) - set(THEIR_FIXTURE_NAMES)),
+}
+print("ccr store after run: %s bytes, sha %s" % (store["bytes"], store["sha256"]))
+
 with open(os.path.join(OUT, "theirs.json"), "w", encoding="utf-8") as handle:
-    json.dump(results, handle, indent=2)
+    json.dump({"__provenance__": provenance, **results}, handle, indent=2)
 
 total_before = sum(r["before"] for r in results.values())
 total_after = sum(r["after"] for r in results.values())
