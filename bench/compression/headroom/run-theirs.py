@@ -400,6 +400,16 @@ if KNOWN_ANSWER_ARMS:
     print("KNOWN-ANSWER RUN via %s -- this measures the harness, not an engine" % KNOWN_ANSWER_ARMS)
 
 
+# THE WINNING ARM OF EACH WORKLOAD, KEPT CALLABLE SO IT CAN BE TIMED AGAIN
+# LATER. Filled by `run`, drained by the pass sweep at the bottom of the file.
+RETIME = {}
+
+# THREE, THE SAME NUMBER THE NODE SIDE TAKES. The two sides are compared pass
+# statistic against pass statistic, so an unequal count would put a different
+# estimator on each column.
+SPEED_PASSES = 3
+
+
 def run(name, native, text):
     """Every arm, best (smallest) output wins. Failures are reported, not hidden."""
     attempts = []
@@ -468,6 +478,7 @@ def run(name, native, text):
             "msMin": 0.0,
             "msMax": 0.0,
             "msSamples": [],
+            "msPasses": [],
             "bestText": text,
             "notes": notes,
         }
@@ -503,6 +514,28 @@ def run(name, native, text):
             except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
                 notes["retime:" + arm] = "%s: %s" % (type(exc).__name__, exc)
                 break
+        # AND TWO MORE PASSES, TAKEN LATER, INTERLEAVED WITH EVERY OTHER
+        # WORKLOAD. This is a pass, not the whole reading: the driver at the
+        # bottom of this file sweeps all the winners again, twice, so the
+        # passes are separated in time by seconds of other work.
+        #
+        # WHY IT IS NOT ENOUGH TO TAKE 93 READINGS HERE. The spread that
+        # decides the speed criterion is BETWEEN runs, not inside one -- the
+        # node side measured its own p90 moving 34ms between runs against 7ms
+        # within one, and interference is common-mode, hitting every workload
+        # at once. Ninety-three back-to-back readings inside one interference
+        # event are ninety-three contaminated readings that look perfectly
+        # consistent. Three separated passes show it as one pass that
+        # disagrees with its neighbours.
+        #
+        # WHY THEIR SIDE NEEDS IT AT ALL. The node side has taken three passes
+        # since #435 and this side took one, so the between-run spread was
+        # measured for ours and assumed away for theirs -- and the direction
+        # of that error flatters us. Their statistic is a FAST percentile;
+        # interference only adds time; an inflated p10 widens the gap; and the
+        # gate reads a wider gap as our win. A criterion that can be won by
+        # the opponent's run being noisy is not a speed criterion.
+        RETIME[name] = (arm, fn, args)
     # RUN ORDER PRESERVED for the same reason the node side preserves it: the
     # first reading carries the import and the first-call cost, and a consumer
     # that cannot see which one was first cannot tell warm-up from variance.
@@ -518,6 +551,10 @@ def run(name, native, text):
         "msMin": round(samples[0], 3),
         "msMax": round(samples[-1], 3),
         "msSamples": ordered,
+        # PASS 0. The sweep below appends the rest and rewrites ms/msMin/msMax
+        # from the pool, so `msSamples` stays what every existing consumer
+        # reads and `msPasses` is what the gate needs.
+        "msPasses": [ordered],
         "arms": {label: round(reduction((label, out)) * len(text)) for label, out in attempts},
         # EVERY ARM'S BYTES, NOT ONLY THE WINNER'S.
         #
@@ -549,6 +586,59 @@ for name, native in WORKLOADS.items():
     print("%-24s %8d -> %8d  %5.1f%%  via %s" % (name, row["before"], row["after"], pct, row["arm"]))
     for label, note in row.get("notes", {}).items():
         print("    %s failed: %s" % (label, note))
+
+# THE REMAINING PASSES, SWEPT ACROSS EVERY WORKLOAD RATHER THAN WORKLOAD BY
+# WORKLOAD.
+#
+# Each pass re-times every winner once before any winner is timed a second
+# time, so two passes of the same workload are separated by a full sweep --
+# seconds of other work. That is the whole point: an interference event that
+# outlasts one reading but not one sweep shows up as a pass that disagrees with
+# its neighbours, instead of as a quietly inflated set of consecutive readings
+# that look entirely consistent with each other.
+#
+# `ms`, `msMin` and `msMax` are then recomputed over every pass pooled, so the
+# published median is a median of 93 readings taken at three different moments
+# rather than 31 taken at one.
+for extra_pass in range(1, SPEED_PASSES):
+    for name in WORKLOADS:
+        entry = RETIME.get(name)
+        if entry is None:
+            continue
+        arm, fn, args = entry
+        readings = []
+        for _ in range(31):
+            try:
+                started = time.perf_counter()
+                fn(*args)
+                readings.append(round((time.perf_counter() - started) * 1000.0, 3))
+            except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
+                results[name].setdefault("notes", {})["retime:" + arm] = "%s: %s" % (
+                    type(exc).__name__,
+                    exc,
+                )
+                break
+        # A PASS THAT DIED PART WAY IS NOT A PASS. Appending a short one would
+        # let a 3-reading pass carry the same weight in the across-pass median
+        # as a 31-reading one, and the scorer has no way to see the difference.
+        if len(readings) == 31:
+            results[name]["msPasses"].append(readings)
+
+for name, row in results.items():
+    passes = row.get("msPasses") or []
+    pooled = [v for p in passes for v in p]
+    if not pooled:
+        continue
+    row["msSamples"] = pooled
+    ordered_pool = sorted(pooled)
+    row["ms"] = round(ordered_pool[(len(ordered_pool) - 1) // 2], 3)
+    row["msMin"] = round(ordered_pool[0], 3)
+    row["msMax"] = round(ordered_pool[-1], 3)
+    if len(passes) < SPEED_PASSES:
+        # SAID OUT LOUD, because a row with fewer passes than asked for cannot
+        # be compared pass-for-pass and the scorer refuses it rather than
+        # quietly falling back to the pooled reading.
+        print("    %s: %d speed pass(es) of %d" % (name, len(passes), SPEED_PASSES))
 
 os.makedirs(OUT, exist_ok=True)
 with open(os.path.join(OUT, "payloads.json"), "w", encoding="utf-8") as handle:

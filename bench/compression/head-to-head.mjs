@@ -1632,6 +1632,15 @@ if (process.argv[3] === '--record') {
         theirsMsSamples: Array.isArray(theirs[r.name]?.msSamples)
           ? theirs[r.name].msSamples
           : null,
+        // THEIR PASSES, FOR THE SAME REASON OURS ARE KEPT APART -- and until
+        // the capture recorded them, the gate had a pass-aware estimate for our
+        // column and a single unrepeated reading for theirs. Their statistic is
+        // a FAST percentile, so a noisy pass on their side inflates it, widens
+        // the gap and reads as our win. A capture from before this is null here
+        // and the verdict refuses it rather than deciding asymmetrically.
+        theirsMsPasses: Array.isArray(theirs[r.name]?.msPasses)
+          ? theirs[r.name].msPasses
+          : null,
       },
     })),
     totals: {

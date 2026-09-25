@@ -43,14 +43,27 @@ const withSpikes = (ms, spike, k, n = 31) => [
 ];
 
 const theirs = flat(100);
-const verdict = (ourPasses, theirSamples = theirs) =>
-  speedVerdict({
+/**
+ * THEIR SIDE IS PASSES TOO, and every fixture below hands over three of them.
+ * It used to hand over one flat array, because the capture recorded one pass
+ * for their column and three for ours -- so the spread that decides the gate
+ * was measured for us and assumed away for them. A second argument that is a
+ * single array is repeated into three identical passes, which keeps each
+ * existing case testing exactly what its name says while making the input
+ * shape the one the verdict now requires.
+ */
+const verdict = (ourPasses, theirInput = theirs) => {
+  const theirPasses = Array.isArray(theirInput[0]) ? theirInput : [theirInput, theirInput, theirInput];
+  const theirSamples = theirPasses.flat();
+  return speedVerdict({
     ourSamples: ourPasses.flat(),
     ourPasses,
     theirSamples,
+    theirPasses,
     ms: quantile(ourPasses.flat(), 0.5),
     theirMs: quantile(theirSamples, 0.5),
   });
+};
 
 // ---------------------------------------------------------------------------
 // 1. The bar itself, on readings with no jitter at all.
@@ -168,6 +181,7 @@ check(
     ourSamples: flat(50),
     ourPasses: [flat(50)],
     theirSamples: theirs,
+    theirPasses: [theirs, theirs, theirs],
     ms: 50,
     theirMs: 100,
   });
@@ -185,6 +199,7 @@ check(
     ourSamples: flat(1),
     ourPasses: [flat(1), flat(1), flat(1)],
     theirSamples: null,
+    theirPasses: null,
     ms: 1,
     theirMs: null,
   });
@@ -213,6 +228,61 @@ check(
     v.detail.includes('50.0') && v.detail.includes('160.0'),
     'the detail shows every pass, including the one the median discarded',
     v.detail
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 6. THE ASYMMETRY. Their column got one pass, ours got three.
+
+{
+  // A single pass on their side cannot decide the row either, and the refusal
+  // has to name the side that is short or the next reader takes it for ours.
+  const v = speedVerdict({
+    ourSamples: [...flat(50), ...flat(50), ...flat(50)],
+    ourPasses: [flat(50), flat(50), flat(50)],
+    theirSamples: flat(100),
+    theirPasses: [flat(100)],
+    ms: 50,
+    theirMs: 100,
+  });
+  check(
+    v.pass === null && /one pass only on theirs/.test(v.detail),
+    'one pass on their side cannot decide it either, and the refusal says whose',
+    v.detail
+  );
+}
+
+{
+  // A contaminated pass is discarded on their side exactly as on ours. Their
+  // middle pass ran on a busy machine; the typical fast decile is still 100.
+  const v = verdict([flat(80), flat(80), flat(80)], [flat(100), flat(400), flat(100)]);
+  check(
+    v.pass === true && /theirs 100.0 \/ 400.0 \/ 100.0/.test(v.detail),
+    'a contaminated pass of theirs is discarded, and still shown',
+    v.detail
+  );
+}
+
+{
+  // THE DEFECT ITSELF. Their side used to be captured in ONE pass, and when
+  // that pass was the noisy one its inflated p10 was the whole bar -- a gap we
+  // would have banked as a win at 150ms against a true 100ms. Same readings,
+  // same arms; the only difference is whether their column was repeated.
+  const ours = [flat(150), flat(150), flat(150)];
+  const noisy = flat(400);
+  const asItWas = speedVerdict({
+    ourSamples: ours.flat(),
+    ourPasses: ours,
+    theirSamples: noisy,
+    theirPasses: [noisy],
+    ms: 150,
+    theirMs: 400,
+  });
+  const asItIs = verdict(ours, [flat(100), noisy, flat(100)]);
+  check(
+    asItWas.pass === null && asItIs.pass === false,
+    'their noisy pass no longer hands us a win it did not earn',
+    `one pass: ${asItWas.detail}; three: ${asItIs.detail}`
   );
 }
 

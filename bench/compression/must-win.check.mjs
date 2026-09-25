@@ -159,6 +159,7 @@ function judge(row, cfg, floors) {
     ourSamples: row.speed?.oursMsSamples,
     ourPasses: row.speed?.oursMsPasses,
     theirSamples: row.speed?.theirsMsSamples,
+    theirPasses: row.speed?.theirsMsPasses,
     ms: num(row.speed?.oursMs),
     theirMs: num(row.speed?.theirsMs),
   });

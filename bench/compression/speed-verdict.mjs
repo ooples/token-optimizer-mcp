@@ -26,12 +26,13 @@ export function quantile(xs, q) {
  * @param {object} r
  * @param {number[]|undefined} r.ourSamples every reading of our arm, pooled
  * @param {number[][]|undefined} r.ourPasses those readings kept per pass
- * @param {number[]|undefined} r.theirSamples every reading of their arm
+ * @param {number[]|undefined} r.theirSamples every reading of their arm, pooled
+ * @param {number[][]|undefined} r.theirPasses those readings kept per pass
  * @param {number|null} r.ms our published median
  * @param {number|null} r.theirMs their published median, null when unmeasured
  * @returns {{pass: boolean|null, detail: string}}
  */
-export function speedVerdict({ ourSamples, ourPasses, theirSamples, ms, theirMs }) {
+export function speedVerdict({ ourSamples, ourPasses, theirSamples, theirPasses, ms, theirMs }) {
 // OUR SLOW READINGS AGAINST THEIR FAST ONES, and nothing softer. Both arms
 // are timed 31 times in one process, and the recorded samples show why a
 // median-against-median test would not be enough: the first reading pays for
@@ -61,20 +62,38 @@ if (theirMs === null) {
     pass: null,
     detail: `${ms}ms vs ${theirMs}ms - single readings, spread not recorded`,
   };
-} else if (!Array.isArray(ourPasses) || ourPasses.length < 2) {
+} else if (
+  !Array.isArray(ourPasses) ||
+  ourPasses.length < 2 ||
+  !Array.isArray(theirPasses) ||
+  theirPasses.length < 2
+) {
   // ONE PASS CANNOT ANSWER THIS. Five independent regenerations of the record
   // put the between-run spread of our p90 at 34.05ms and 28.10ms on the two
   // workloads whose verdict kept flipping, against a within-run bootstrap of
   // 6.91ms and 13.39ms for the same estimate. A single pass is therefore
   // consistent with verdicts on both sides of the bar, and calling it either
   // way is a coin toss wearing a percentile.
+  //
+  // AND IT APPLIES TO WHICHEVER SIDE IS SHORT, which until now meant ours
+  // only. Their column was captured in a single pass of 31 while ours got
+  // three, so the between-run spread was measured for us and assumed away for
+  // them -- and the direction of that error favours us: interference only adds
+  // time, an inflated p10 on their side is a wider gap, and the gate reads a
+  // wider gap as a win. A criterion that can be won by their run being noisy
+  // is not a speed criterion.
   const ourSlow = quantile(ourSamples, 0.9);
   const theirFast = quantile(theirSamples, 0.1);
+  const short = [
+    Array.isArray(ourPasses) && ourPasses.length >= 2 ? null : 'ours',
+    Array.isArray(theirPasses) && theirPasses.length >= 2 ? null : 'theirs',
+  ].filter(Boolean);
   return {
     pass: null,
     detail:
       `our p90 ${ourSlow.toFixed(1)}ms vs their p10 ${theirFast.toFixed(1)}ms ` +
-      `- one pass only, which cannot separate a regression from interference`,
+      `- one pass only on ${short.join(' and ')}, which cannot separate a ` +
+      'regression from interference',
   };
 } else {
   // THE BAR IS UNCHANGED -- our p90 against their p10 -- AND THE JITTER BAND
@@ -101,15 +120,27 @@ if (theirMs === null) {
   // where the median discards them. The statistic is therefore blind to the
   // noise and not to the signal -- and taking the best pass instead would
   // have been blind to both, because one lucky pass would be enough.
-  const theirFast = quantile(theirSamples, 0.1);
+  //
+  // THE SAME STATISTIC ON BOTH SIDES, which is the only way the band is
+  // symmetric: within-pass percentile first, then the median ACROSS passes.
+  // Ours takes p90 within a pass and theirs p10, because the bar is our slow
+  // against their fast -- but the across-pass median is now applied to both,
+  // so a contaminated pass is discarded on their side exactly as it is on
+  // ours. Pooling their passes instead would have let one noisy pass raise
+  // their p10 and widen the gap in our favour, and pooling is what the old
+  // single-pass capture amounted to.
+  const theirPerPass = theirPasses.map((xs) => quantile(xs, 0.1));
+  const theirFast = quantile(theirPerPass, 0.5);
   const perPass = ourPasses.map((xs) => quantile(xs, 0.9));
   const ourSlow = quantile(perPass, 0.5);
   const shown = perPass.map((v) => v.toFixed(1)).join(' / ');
+  const shownTheirs = theirPerPass.map((v) => v.toFixed(1)).join(' / ');
   return {
     pass: ourSlow <= theirFast,
     detail:
       `our p90 ${ourSlow.toFixed(1)}ms vs their p10 ${theirFast.toFixed(1)}ms ` +
-      `(median of ${perPass.length} passes: ${shown}; medians ${ms} / ${theirMs})`,
+      `(medians of ${perPass.length} passes: ours ${shown}, theirs ${shownTheirs}; ` +
+      `published medians ${ms} / ${theirMs})`,
   };
 }
 }
