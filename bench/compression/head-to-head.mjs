@@ -1321,8 +1321,25 @@ if (process.argv[3] === '--record') {
       // whoever ran it; the digest is what identifies the capture, the name is
       // only there to say which one a re-run should replace.
       dir: dir.split(/[\\/]/).filter(Boolean).slice(-2).join('/'),
+      // HASHED WITHOUT THE TIMINGS. `ms` is a wall-clock reading and differs on
+      // every capture, so hashing the file whole would move the digest on a
+      // re-run where their compression produced identical bytes -- which is
+      // exactly the case the digest exists to rule out. Stripping it keeps the
+      // digest a statement about their OUTPUT. It changed once, deliberately,
+      // when the timings were added.
       theirsDigest: createHash('sha256')
-        .update(readFileSync(join(dir, 'theirs.json')))
+        .update(
+          JSON.stringify(
+            Object.fromEntries(
+              Object.entries(
+                JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'))
+              ).map(([name, row]) => {
+                const { ms, ...rest } = row;
+                return [name, rest];
+              })
+            )
+          )
+        )
         .digest('hex')
         .slice(0, 16),
     },
