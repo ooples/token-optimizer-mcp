@@ -1,5 +1,14 @@
 /**
- * The head-to-head, against HeadRoom's own fixtures and their own recorded result.
+ * The head-to-head: both engines run over OUR corpus, scored by one instrument.
+ *
+ * WHOSE FIXTURES THESE ARE. All 12 workloads in `bench/compression/workloads/`
+ * are ours -- captured from this project's own agent traffic. An earlier
+ * version of this comment called them "HeadRoom's own fixtures", which was
+ * simply false, and it mattered: a corpus the opponent chose would make a win
+ * far stronger evidence than a corpus we chose. Read every number below as
+ * "on traffic we selected", and note that `run-theirs.py` hands their engine
+ * the identical bytes -- verified byte-for-byte across captures -- so the
+ * corpus is shared even though its provenance is not neutral.
  *
  * WHY IT IS COMMITTED. The numbers this project was quoting came from throwaway
  * scripts that no longer exist. An unreproducible headline is not evidence, it
