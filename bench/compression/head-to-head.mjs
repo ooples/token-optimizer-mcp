@@ -44,6 +44,8 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+
+import { classifyIds } from './retention.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -570,6 +572,10 @@ for (const [name, text] of Object.entries(payloads)) {
   // lossless fold has already collapsed the repeated copies -- which is the
   // measurement that moved the default.
   const spilled = [];
+  // Named rather than inferred from `spilled.length`, because `a sink that
+  // evicted nothing` and `no sink at all` are different measurements and the
+  // classifier is built to refuse to collapse them.
+  const OURS_HAS_SINK = false;
 
   // THE TIMED ARM IS THE SINKLESS ARM, the same one the recorded call below
   // runs, so the published median times what is published. The passes were
@@ -752,22 +758,21 @@ for (const [name, text] of Object.entries(payloads)) {
   // folded line -- and scoring by exact token equality would report
   // reformatting as data loss. At eight characters with a digit, a coincidental
   // substring match is not a real risk.
-  const haveOut = out.text;
-  const haveSpill = spilled.join('\n');
-  let inOut = 0;
-  let derived = 0;
-  let inSpill = 0;
-  let gone = 0;
-  const missing = [];
-  for (const id of want) {
-    if (haveOut.includes(id)) inOut++;
-    else if (recoveredOut.includes(id)) derived++;
-    else if (haveSpill.includes(id)) inSpill++;
-    else {
-      gone++;
-      if (missing.length < 5) missing.push(id);
-    }
-  }
+  // THE CLASSIFICATION LIVES IN `retention.mjs` so it can be checked. It used
+  // to be this loop, and for as long as it was, `inSpill` reported 0 on every
+  // workload -- not because nothing spilled, but because THIS arm has no sink
+  // (`spilled` above is a literal empty array), so the branch could not fire.
+  // A zero meaning `never asked` sat in a table beside three columns that
+  // meant `measured`. It now reports null, and `retention.check.mjs` arms a
+  // positive control so a null can only ever mean no sink.
+  const classified = classifyIds({
+    ids: want,
+    output: out.text,
+    reconstructed: recoveredOut,
+    spill: spilled.join('\n'),
+    hasSink: OURS_HAS_SINK,
+  });
+  const { inOut, derived, inSpill, gone, missing } = classified;
   lost += gone;
 
   // THE BODY ARM IS SCORED THE SAME WAY. A compression ratio published without a
@@ -1490,7 +1495,9 @@ if (process.argv[3] === '--record') {
         ids: String(r.ids),
         inContext: String(r.inOut),
         reconstructible: String(r.derived),
-        recoverable: String(r.inSpill),
+        // null, not "null": a sinkless arm never measured this, and a JSON
+        // null says so to every consumer. See `retention.mjs`.
+        recoverable: r.inSpill === null ? null : String(r.inSpill),
         theirsInContext: String(r.theirIn),
         oursZeroTurn: String(r.inOut + r.derived),
         presetZeroTurn: String(r.presetFree),
