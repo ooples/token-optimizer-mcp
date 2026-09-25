@@ -1,8 +1,8 @@
 {
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
-  "recordedAt": "2026-09-24",
-  "commit": "a1a844c4063c65f469fa7ceadbd8374a90bca2c2",
+  "recordedAt": "2026-09-25",
+  "commit": "18a2d0855ae269e80f38809731dca367e3c2ac34",
   "capture": {
     "dir": "hr5/out",
     "theirsDigest": "0c2663858b875373"
@@ -27,13 +27,13 @@
         "theirs": "46.7%"
       },
       "retention": {
-        "inContext": "11",
+        "inContext": "69",
         "reconstructible": "0",
-        "recoverable": "61",
-        "theirsInContext": "72",
-        "oursZeroTurn": "11",
-        "presetZeroTurn": "11",
-        "theirsZeroTurn": "72",
+        "recoverable": "185",
+        "theirsInContext": "254",
+        "oursZeroTurn": "69",
+        "presetZeroTurn": "69",
+        "theirsZeroTurn": "254",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -83,14 +83,14 @@
         "theirs": "45.8%"
       },
       "retention": {
-        "inContext": "40",
+        "inContext": "87",
         "reconstructible": "0",
-        "recoverable": "1030",
-        "theirsInContext": "1070",
-        "oursZeroTurn": "40",
-        "presetZeroTurn": "40",
-        "theirsZeroTurn": "1070",
-        "subUnrecoverable": "0"
+        "recoverable": "1963",
+        "theirsInContext": "2042",
+        "oursZeroTurn": "87",
+        "presetZeroTurn": "87",
+        "theirsZeroTurn": "2042",
+        "subUnrecoverable": "8"
       },
       "cost": {
         "turns": {
@@ -139,13 +139,13 @@
         "theirs": "13.6%"
       },
       "retention": {
-        "inContext": "0",
-        "reconstructible": "281",
+        "inContext": "6",
+        "reconstructible": "330",
         "recoverable": "0",
-        "theirsInContext": "281",
-        "oursZeroTurn": "281",
+        "theirsInContext": "336",
+        "oursZeroTurn": "336",
         "presetZeroTurn": "0",
-        "theirsZeroTurn": "281",
+        "theirsZeroTurn": "336",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -195,13 +195,13 @@
         "theirs": "53.5%"
       },
       "retention": {
-        "inContext": "10",
+        "inContext": "65",
         "reconstructible": "0",
-        "recoverable": "81",
-        "theirsInContext": "91",
-        "oursZeroTurn": "10",
-        "presetZeroTurn": "10",
-        "theirsZeroTurn": "91",
+        "recoverable": "405",
+        "theirsInContext": "470",
+        "oursZeroTurn": "65",
+        "presetZeroTurn": "65",
+        "theirsZeroTurn": "470",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -251,13 +251,13 @@
         "theirs": "99.6%"
       },
       "retention": {
-        "inContext": "173",
+        "inContext": "176",
         "reconstructible": "333",
-        "recoverable": "74",
-        "theirsInContext": "2",
-        "oursZeroTurn": "506",
+        "recoverable": "81",
+        "theirsInContext": "5",
+        "oursZeroTurn": "509",
         "presetZeroTurn": "0",
-        "theirsZeroTurn": "2",
+        "theirsZeroTurn": "5",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -307,14 +307,14 @@
         "theirs": "99.6%"
       },
       "retention": {
-        "inContext": "127",
-        "reconstructible": "913",
+        "inContext": "132",
+        "reconstructible": "914",
         "recoverable": "0",
-        "theirsInContext": "1",
-        "oursZeroTurn": "1040",
+        "theirsInContext": "4",
+        "oursZeroTurn": "1046",
         "presetZeroTurn": "0",
-        "theirsZeroTurn": "1",
-        "subUnrecoverable": "0"
+        "theirsZeroTurn": "4",
+        "subUnrecoverable": "1"
       },
       "cost": {
         "turns": {
@@ -363,13 +363,13 @@
         "theirs": "31.3%"
       },
       "retention": {
-        "inContext": "3",
+        "inContext": "18",
         "reconstructible": "0",
-        "recoverable": "9",
-        "theirsInContext": "12",
-        "oursZeroTurn": "3",
-        "presetZeroTurn": "3",
-        "theirsZeroTurn": "12",
+        "recoverable": "111",
+        "theirsInContext": "174",
+        "oursZeroTurn": "18",
+        "presetZeroTurn": "18",
+        "theirsZeroTurn": "174",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -419,14 +419,14 @@
         "theirs": "54.4%"
       },
       "retention": {
-        "inContext": "0",
+        "inContext": "34",
         "reconstructible": "0",
-        "recoverable": "0",
-        "theirsInContext": "0",
-        "oursZeroTurn": "0",
-        "presetZeroTurn": "0",
-        "theirsZeroTurn": "0",
-        "subUnrecoverable": "0"
+        "recoverable": "470",
+        "theirsInContext": "504",
+        "oursZeroTurn": "34",
+        "presetZeroTurn": "34",
+        "theirsZeroTurn": "504",
+        "subUnrecoverable": "220"
       },
       "cost": {
         "turns": {
@@ -475,13 +475,13 @@
         "theirs": "99.8%"
       },
       "retention": {
-        "inContext": "0",
+        "inContext": "3",
         "reconstructible": "427",
         "recoverable": "0",
-        "theirsInContext": "0",
-        "oursZeroTurn": "427",
+        "theirsInContext": "3",
+        "oursZeroTurn": "430",
         "presetZeroTurn": "0",
-        "theirsZeroTurn": "0",
+        "theirsZeroTurn": "3",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -531,13 +531,13 @@
         "theirs": "65.4%"
       },
       "retention": {
-        "inContext": "0",
+        "inContext": "24",
         "reconstructible": "0",
-        "recoverable": "0",
-        "theirsInContext": "0",
-        "oursZeroTurn": "0",
-        "presetZeroTurn": "0",
-        "theirsZeroTurn": "0",
+        "recoverable": "503",
+        "theirsInContext": "527",
+        "oursZeroTurn": "24",
+        "presetZeroTurn": "24",
+        "theirsZeroTurn": "527",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -587,13 +587,13 @@
         "theirs": "20.5%"
       },
       "retention": {
-        "inContext": "27",
+        "inContext": "31",
         "reconstructible": "330",
-        "recoverable": "39",
-        "theirsInContext": "396",
-        "oursZeroTurn": "357",
+        "recoverable": "44",
+        "theirsInContext": "405",
+        "oursZeroTurn": "361",
         "presetZeroTurn": "0",
-        "theirsZeroTurn": "396",
+        "theirsZeroTurn": "405",
         "subUnrecoverable": "0"
       },
       "cost": {
@@ -643,14 +643,14 @@
         "theirs": "90.5%"
       },
       "retention": {
-        "inContext": "42",
+        "inContext": "89",
         "reconstructible": "0",
-        "recoverable": "2087",
-        "theirsInContext": "353",
-        "oursZeroTurn": "42",
-        "presetZeroTurn": "42",
-        "theirsZeroTurn": "353",
-        "subUnrecoverable": "0"
+        "recoverable": "3044",
+        "theirsInContext": "514",
+        "oursZeroTurn": "89",
+        "presetZeroTurn": "89",
+        "theirsZeroTurn": "514",
+        "subUnrecoverable": "9"
       },
       "cost": {
         "turns": {
@@ -731,23 +731,23 @@
       "chars": "100.0%",
       "tokens": "100.0%",
       "store": "1.00x",
-      "unrecoverable": "0"
+      "unrecoverable": "238"
     },
     "spillStore": "0.44x",
     "unrecoverable": {
-      "ours": "0",
-      "theirs": "0"
+      "ours": "45",
+      "theirs": "8"
     },
     "retention": {
-      "units": "6098",
+      "units": "9919",
       "inContext": {
-        "ours": "433",
-        "theirs": "2278"
+        "ours": "734",
+        "theirs": "5238"
       },
-      "reconstructible": "2284",
+      "reconstructible": "2334",
       "recoverable": {
-        "ours": "3381",
-        "theirs": "3820"
+        "ours": "6806",
+        "theirs": "4673"
       }
     }
   }
