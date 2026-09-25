@@ -28,7 +28,7 @@
  */
 
 import {
-  DEFAULTS,
+  DEFAULTS as SHIPPED_DEFAULTS,
   RATES,
   ZERO_LINE,
   addLines,
@@ -74,6 +74,30 @@ const GRID = [0, 0.05, 0.1, 0.25, 1 / 3, 0.5, 0.75, 0.9, 1];
  * about where a crossing is and how it is labelled, so they pin the parameter
  * and say so. The cases that must hold at any parameter keep using DEFAULTS.
  */
+// `baseContextTokens` IS NULL IN THE SHIPPED DEFAULTS, ON PURPOSE: it is a
+// property of an environment -- its system prompt and loaded tool schemas --
+// and there is no defensible default, so the model refuses rather than guessing.
+//
+// These cases are synthetic arithmetic and not a claim about any machine, so
+// they pin a fixture value. It is deliberately the 12000 that used to ship, to
+// keep every expected value below unchanged by the refusal work: what changed
+// is that the number now has to be supplied out loud instead of defaulting.
+const FIXTURE_BASE_CONTEXT = 12000;
+const DEFAULTS = Object.freeze({ ...SHIPPED_DEFAULTS, baseContextTokens: FIXTURE_BASE_CONTEXT });
+
+// And the refusal itself is checked, so the null default cannot quietly come
+// back as a number that nobody measured.
+{
+  let refused = false;
+  try {
+    commonSessionCost(SHIPPED_DEFAULTS);
+  } catch {
+    refused = true;
+  }
+  check(refused, 'an unmeasured base context refuses instead of costing the session');
+  check(SHIPPED_DEFAULTS.baseContextTokens === null, 'and the shipped default is null, not a guess', `${SHIPPED_DEFAULTS.baseContextTokens}`);
+}
+
 const PINNED = Object.freeze({ ...DEFAULTS, turnsAfter: 20 });
 
 // ---------------------------------------------------------------------------
@@ -454,8 +478,8 @@ function scanCrossings(a, b, steps = 2_000_000) {
   // Still exactly the baseline over the arm -- it just has to be asked for now,
   // because it is not what a subscription meters.
   check(
-    usageMultiplier(1000, 400, { commonCost: 0 }) === 2.5 &&
-      usageMultiplier(1000, 0, { commonCost: 0 }) === Infinity,
+    usageMultiplier(1000, 400, { commonCost: 0, params: DEFAULTS }) === 2.5 &&
+      usageMultiplier(1000, 0, { commonCost: 0, params: DEFAULTS }) === Infinity,
     'with no common term the multiplier is the baseline over the arm'
   );
 
@@ -464,8 +488,8 @@ function scanCrossings(a, b, steps = 2_000_000) {
   // across arms, so leaving it out of both sides of a ratio does not leave the
   // ratio alone -- it pushes it away from 1, and away from 1 is always the
   // direction that flatters whichever arm is cheaper.
-  const payloadOnly = usageMultiplier(1000, 400, { commonCost: 0 });
-  const metered = usageMultiplier(1000, 400, { commonCost: 600 });
+  const payloadOnly = usageMultiplier(1000, 400, { commonCost: 0, params: DEFAULTS });
+  const metered = usageMultiplier(1000, 400, { commonCost: 600, params: DEFAULTS });
   check(
     metered < payloadOnly && metered > 1,
     'a common term moves the multiplier toward 1, never past it',
@@ -481,12 +505,12 @@ function scanCrossings(a, b, steps = 2_000_000) {
   // sweep that attacks `turnsAfter` moves this term with it instead of
   // holding it at the default's value.
   check(
-    commonSessionCost() === DEFAULTS.turnsAfter * DEFAULTS.outputTokensPerTurn * RATES.outputPerInput,
+    commonSessionCost(DEFAULTS) === DEFAULTS.turnsAfter * DEFAULTS.outputTokensPerTurn * RATES.outputPerInput,
     'the common term is turns x output per turn x the output rate',
-    `${DEFAULTS.turnsAfter} x ${DEFAULTS.outputTokensPerTurn} x ${RATES.outputPerInput} = ${commonSessionCost()}`
+    `${DEFAULTS.turnsAfter} x ${DEFAULTS.outputTokensPerTurn} x ${RATES.outputPerInput} = ${commonSessionCost(DEFAULTS)}`
   );
   check(
-    commonSessionCost({ ...DEFAULTS, turnsAfter: 2 * DEFAULTS.turnsAfter }) === 2 * commonSessionCost(),
+    commonSessionCost({ ...DEFAULTS, turnsAfter: 2 * DEFAULTS.turnsAfter }) === 2 * commonSessionCost(DEFAULTS),
     'doubling the turns doubles it',
     'so a sweep over turnsAfter cannot hold it fixed by accident'
   );
@@ -498,7 +522,7 @@ function scanCrossings(a, b, steps = 2_000_000) {
   const armA = { c0: 900_000, c1: 50_000, c2: 10_000 };
   const armB = { c0: 700_000, c1: 400_000, c2: 60_000 };
   const shifted = (a, by) => ({ ...a, c0: a.c0 + by });
-  const by = commonSessionCost();
+  const by = commonSessionCost(DEFAULTS);
   const before = breakEven(armA, armB);
   const after = breakEven(shifted(armA, by), shifted(armB, by));
   check(

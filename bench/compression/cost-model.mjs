@@ -189,8 +189,28 @@ export const DEFAULTS = Object.freeze({
    * dominate anyway, at 64.9% of the bill.
    */
   turnsAfter: 56,
-  /** System prompt, tool schemas and prior conversation, in tokens. */
-  baseContextTokens: 12000,
+  /**
+   * System prompt, tool schemas and prior conversation, in tokens.
+   *
+   * NULL, AND DELIBERATELY SO: THIS ONE HAS TO BE MEASURED PER ENVIRONMENT.
+   *
+   * It shipped as a hardcoded 12000. Measured on the machine this harness runs
+   * on -- 13 sessions, the first request of each -- the median is 65063, so the
+   * constant was understating the real prefix by 5.4x.
+   *
+   * It is not a harmless guess. The same constant is added to BOTH arms of
+   * every savings ratio, so a smaller base pushes the ratio away from 1 and a
+   * larger one pushes it toward 1. Understating base context therefore inflates
+   * every savings figure the model prints, which is the flattering direction.
+   *
+   * It is also not portable: this machine loads roughly 80 MCP tools and another
+   * will differ by tens of thousands of tokens. There is no defensible default,
+   * so there is no default. `requireBaseContext` below refuses instead, the way
+   * `weeklyClaimReadiness` refuses a weekly claim that has no offset-immune row.
+   *
+   * Measure it with `node bench/subscription/base-context.mjs`.
+   */
+  baseContextTokens: null,
   /** Output tokens the model writes to issue one retrieval call. */
   fetchCallTokens: 60,
   /**
@@ -259,6 +279,9 @@ export const ZERO_LINE = Object.freeze({
  * position as the whole set.
  */
 export function costLine({ handed, blocks = [], params = DEFAULTS }) {
+  // Refuses rather than returning NaN: an unmeasured base context that flows
+  // through as NaN is a silent wrong answer, and one of these printed "0.0k".
+  requireBaseContext(params);
   const {
     cacheWrite: W,
     cacheRead: R,
@@ -439,6 +462,7 @@ export function worstAgainst(a, b) {
  * this term with it rather than holding it fixed at the default's value.
  */
 export function commonSessionCost(params = DEFAULTS) {
+  requireBaseContext(params);
   return params.turnsAfter * params.outputTokensPerTurn * params.outputPerInput;
 }
 
@@ -459,6 +483,7 @@ export function commonSessionCost(params = DEFAULTS) {
  * Pass `{ commonCost: 0 }` to recover the payload-only ratio deliberately.
  */
 export function usageMultiplier(baselineCost, armCost, { params = DEFAULTS, commonCost } = {}) {
+  requireBaseContext(params);
   const common = commonCost ?? commonSessionCost(params);
   if (armCost + common <= 0) return Infinity;
   return (baselineCost + common) / (armCost + common);
@@ -518,4 +543,23 @@ export function markerBytes(marker) {
   if (m === null) return 0;
   const scale = { b: 1, kb: 1024, mb: 1024 ** 2, gb: 1024 ** 3 };
   return Number(m[1]) * scale[m[2].toLowerCase()];
+}
+
+/**
+ * Refuse a cost claim whose base context was never measured.
+ *
+ * Returns the parameters unchanged when they carry a measured base, and throws
+ * otherwise. It throws rather than returning a flag because the alternative to
+ * refusing is printing a number, and a number printed from an unmeasured
+ * constant is indistinguishable from a measured one once it is on the page.
+ */
+export function requireBaseContext(params) {
+  const b = params?.baseContextTokens;
+  if (typeof b === 'number' && Number.isFinite(b) && b > 0) return params;
+  throw new Error(
+    'baseContextTokens has not been measured for this environment, so no cost claim ' +
+      'can be printed. Run `node bench/subscription/base-context.mjs` and pass the ' +
+      'measured median. It is intentionally null by default: the 12000 it replaced ' +
+      'understated this machine by 5.4x, and understating it inflates every savings figure.'
+  );
 }

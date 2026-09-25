@@ -47,6 +47,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { classifyIds } from './retention.mjs';
 import { classifyArms, declaredOffloadBytes } from './offload.mjs';
+import { baseContextReadiness, measureBaseContext } from '../subscription/base-context.mjs';
+import { loadRequests } from '../subscription/transcripts.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -80,6 +82,32 @@ if (!dir) {
 
 const payloads = JSON.parse(readFileSync(join(dir, 'payloads.json'), 'utf8'));
 const theirs = JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'));
+
+// BASE CONTEXT, MEASURED HERE OR NOT CLAIMED AT ALL.
+//
+// Every session-cost figure below adds `baseContextTokens` to both arms, so the
+// constant sits in the numerator and the denominator of every savings ratio.
+// Understating it pushes the ratio away from 1 and inflates the saving, which
+// is the flattering direction, and the 12000 this replaced understated the
+// machine this harness runs on by 5.4x.
+//
+// There is no defensible default, because the number is a property of the
+// environment -- its system prompt and its loaded tool schemas -- and not of
+// the code. So this refuses rather than falling back, the same way
+// `weeklyClaimReadiness` refuses a weekly claim with no offset-immune row.
+const baseMeasured = measureBaseContext({ requests: (await loadRequests()).requests });
+const baseReady = baseContextReadiness(baseMeasured);
+if (!baseReady.ready) {
+  console.error(`REFUSED: base context has not been measured for this environment.`);
+  console.error(`  ${baseReady.reason}`);
+  console.error('');
+  console.error('  Every cost figure this harness prints adds base context to both arms, so');
+  console.error('  quoting one without it would publish a saving nobody measured. Run:');
+  console.error('    node bench/subscription/base-context.mjs');
+  process.exit(2);
+}
+// The measured median, standing in for the parameter that used to be hardcoded.
+const PARAMS = { ...DEFAULTS, baseContextTokens: baseReady.tokens };
 
 /**
  * THEIR MARKERS, REDEEMED BY A PROCESS THAT IS NOT THE ONE THAT WROTE THEM.
@@ -1181,7 +1209,7 @@ const armsFor = (r, params) => {
 // corpus row -- the one the README quotes -- would be quietly wrong while every
 // per-session row above it stayed right.
 const sessionCosts = rows.map((r) => {
-  const arms = armsFor(r, DEFAULTS);
+  const arms = armsFor(r, PARAMS);
   return { name: r.name, r, arms, cross: breakEven(arms.ours, arms.theirs) };
 });
 const foldCorpus = (all) => {
@@ -1205,9 +1233,9 @@ const k = (t) => `${(t / 1000).toFixed(1)}k`;
 // context. That output is 11.6% of the measured bill and no arm touches it, so
 // it belongs on BOTH sides of a "what the cap buys" ratio -- omitted, it
 // pushed every multiple away from 1, always in our favour.
-const CORPUS_COMMON = commonSessionCost() * sessionCosts.length;
+const CORPUS_COMMON = commonSessionCost(PARAMS) * sessionCosts.length;
 const times = (base, arm) =>
-  `${usageMultiplier(base, arm, { commonCost: CORPUS_COMMON }).toFixed(2)}x`;
+  `${usageMultiplier(base, arm, { commonCost: CORPUS_COMMON, params: PARAMS }).toFixed(2)}x`;
 // A crossing outside [0, 1] is not a missing answer, it is the strongest one:
 // the arm is cheaper at every fetch rate there is.
 // `breakEven(ours, theirs)` names ours `a`. Three things can happen, and the
@@ -1224,8 +1252,10 @@ const rate = (c) => {
 };
 
 console.log(
-  `\nsession cost, effective input tokens -- ${DEFAULTS.turnsAfter} turns after the ` +
-    `payload, ${k(DEFAULTS.baseContextTokens)} of prior context`
+  `
+session cost, effective input tokens -- ${PARAMS.turnsAfter} turns after the ` +
+    `payload, ${k(PARAMS.baseContextTokens)} of prior context (MEASURED over ` +
+    `${baseMeasured.sessions} sessions on this machine, not assumed)`
 );
 console.log(
   '                          spill sites |     nothing fetched      |  everything fetched  | ours vs'
@@ -1294,8 +1324,12 @@ console.log(
 console.log('\nsensitivity, at a 50% fetch rate');
 console.log('turns after   prior ctx |  ours x   theirs x | ours wins below');
 for (const turnsAfter of [5, 20, 60])
-  for (const baseContextTokens of [4000, 12000, 40000]) {
-    const params = { ...DEFAULTS, turnsAfter, baseContextTokens };
+  // THE GRID IS DERIVED FROM THE MEASUREMENT, NOT PINNED TO ROUND NUMBERS.
+  // It was [4000, 12000, 40000], every value of which is below what this
+  // machine actually carries -- a sensitivity band that does not contain the
+  // real parameter tests nothing about the real claim.
+  for (const baseContextTokens of [baseMeasured.min, baseMeasured.p50, baseMeasured.max]) {
+    const params = { ...PARAMS, turnsAfter, baseContextTokens };
     const c = foldCorpus(rows.map((r) => armsFor(r, params)));
     const none = costAt(c.none, 0.5);
     console.log(
@@ -1707,7 +1741,9 @@ if (process.argv[3] === '--record') {
         // these figures would move if they disagreed with either.
         session: {
           turnsAfter: String(DEFAULTS.turnsAfter),
-          baseContextTokens: String(DEFAULTS.baseContextTokens),
+          baseContextTokens: String(PARAMS.baseContextTokens),
+          baseContextSessions: String(baseMeasured.sessions),
+          baseContextSource: 'measured',
           p0: {
             none: String(Math.round(costAt(corpus.none, 0))),
             ours: String(Math.round(costAt(corpus.ours, 0))),
