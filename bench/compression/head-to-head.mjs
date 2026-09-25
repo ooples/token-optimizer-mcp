@@ -503,7 +503,7 @@ for (const [name, text] of Object.entries(payloads)) {
   // MEASURED WITH `performance.now`, NOT `Date.now`. Several of these payloads
   // compress in under a millisecond, and a 1 ms clock reports those as 0 -- which
   // is indistinguishable from an arm that never ran.
-  // ELEVEN RUNS, MEDIAN PUBLISHED, SPREAD PUBLISHED WITH IT. A single reading of
+  // REPEATED RUNS, MEDIAN PUBLISHED, SPREAD PUBLISHED WITH IT. A single reading of
   // a transform that finishes in tens of milliseconds is partly a reading of
   // whatever else the machine was doing, and #435 MUST-WIN 2a asks for the median
   // of eleven in one process. The gate needs `min` and `max` as well, because a

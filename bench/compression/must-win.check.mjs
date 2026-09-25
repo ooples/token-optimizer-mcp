@@ -125,7 +125,7 @@ function judge(row, cfg, floors) {
   };
 
   // OUR SLOW READINGS AGAINST THEIR FAST ONES, and nothing softer. Both arms
-  // are timed eleven times in one process, and the recorded samples show why a
+  // are timed 31 times in one process, and the recorded samples show why a
   // median-against-median test would not be enough: the first reading pays for
   // the JIT (ours runs 2.2x the median on `codebase-exploration`), and beyond
   // that both arms take sporadic spikes from whatever else the machine is doing
