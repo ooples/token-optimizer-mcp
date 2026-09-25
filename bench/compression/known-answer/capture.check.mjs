@@ -33,6 +33,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { isOffloading } from '../offload.mjs';
+import { stubbedCaptureRefusal } from '../capture-guard.mjs';
 import { fixtures } from '../fixtures.mjs';
 import {
   IDENTIFIER_COUNT,
@@ -217,6 +218,64 @@ try {
       'after-tokens follow the same ratio as after-chars'
     );
 
+    // EVERY PUBLISHED PER-ARM SIZE, RE-DERIVED FROM THE TEXTS BESIDE IT.
+    // `arms` is a rescaled ratio, not a byte count, so it can drift from the
+    // texts it claims to summarise without anything looking wrong -- and the
+    // drift that matters is the denominator. The pipeline arms are scored
+    // against the tool_result envelope THIS HARNESS added, not against the raw
+    // payload; charge them the raw payload instead and every one of their
+    // conversation ratios moves, in our favour, silently. Recomputing each arm
+    // from `armTexts` over `armBeforeTexts` is the only thing that sees it.
+    const wrong = Object.keys(t.armTexts).filter(
+      (label) => t.arms[label] !== Math.round(ratios[label] * t.before)
+    );
+    check(
+      wrong.length === 0,
+      "each arm's published size is its own texts' ratio, on its own denominator",
+      wrong.length ? wrong.join(',') : `${Object.keys(t.armTexts).length} arms agree`
+    );
+    check(
+      t.armBeforeTexts['ka-identity'] === payload,
+      'a text arm is scored against the payload, with no envelope added'
+    );
+
+    // AN ARM THAT PRODUCED NOTHING MUST BE ABSENT, NOT SCORED AS A NO-OP.
+    // Recording a crash or a decline at ratio 1.0 is a fabricated measurement
+    // that reads, every time, as the competitor achieving nothing on that
+    // workload. This project has shipped that error before.
+    const pipelineLabels = Object.keys(t.armTexts).filter((l) => l.startsWith('pipeline@'));
+    if (f.pipelineDeclines) {
+      check(
+        pipelineLabels.length === 0,
+        'an engine that declined is absent from the arms, not recorded at 1.0',
+        `${pipelineLabels.length} pipeline arms recorded`
+      );
+      check(
+        Object.keys(t.arms).length === Object.keys(t.armTexts).length,
+        'and the scored arms are exactly the arms that produced text',
+        `${Object.keys(t.arms).length} scored, ${Object.keys(t.armTexts).length} with text`
+      );
+      continue;
+    }
+    if (f.armRaises) {
+      check(
+        !(f.armRaises in t.armTexts) && !(f.armRaises in t.arms),
+        `an arm that threw (${f.armRaises}) is absent from the arms`,
+        Object.keys(t.arms).join(',')
+      );
+      check(
+        typeof t.notes?.[f.armRaises] === 'string' &&
+          t.notes[f.armRaises].includes('RuntimeError'),
+        'and its exception is recorded rather than swallowed',
+        t.notes?.[f.armRaises] ?? 'no note'
+      );
+    } else {
+      check(
+        t.armTexts['ka-fragile'] === payload.slice(0, Math.floor(payload.length / 4)),
+        'the quarter arm returned exactly a quarter'
+      );
+    }
+
     // THE CARRIER. `arms.py:apply` is an identity, so this field holds the exact
     // shape the harness handed the engine. The bug that cost a week is visible
     // here and nowhere else -- it never changed a single one of the sizes above.
@@ -269,6 +328,19 @@ try {
     !run.stdout.includes('WARNING: arm ka-half'),
     'and draws no warning'
   );
+  // `ranOn` is the denominator of the whole trip-wire. If a workload where the
+  // arm never produced anything were counted in it, the ratio would be diluted
+  // and a fully inert arm could slip under the 50% threshold unreported.
+  check(
+    inert['ka-fragile']?.ranOn === KA.length - 1,
+    'an arm that threw is left out of its own trip-wire denominator',
+    `${inert['ka-fragile']?.ranOn} of ${KA.length} workloads`
+  );
+  check(
+    inert['pipeline@1.00']?.ranOn === KA.length - 1,
+    'and so is an engine that declined',
+    `${inert['pipeline@1.00']?.ranOn} of ${KA.length} workloads`
+  );
 
   // --------------------------------------------------------- refusal controls
   // A guard that has never been seen to fire is a guard nobody has tested.
@@ -292,17 +364,37 @@ try {
     // The stamp is only worth writing if something reads it. A stub capture is
     // a complete, well-formed, entirely fictional result set; if the scorer
     // would accept one, this whole rig becomes a way to manufacture a win.
-    const scored = spawnSync(
-      'node',
-      [join(REPO, 'bench', 'compression', 'head-to-head.mjs'), outDir],
-      { encoding: 'utf8' }
-    );
-    const said = `${scored.stdout}${scored.stderr}`;
     check(
-      scored.status !== 0 && said.includes('stub arms'),
-      'the scorer refuses a stubbed capture instead of publishing it as a win',
-      `exit ${scored.status}`
+      (stubbedCaptureRefusal(theirs, 'd') ?? '').includes('stub arms'),
+      'a stubbed capture is refused by the guard'
     );
+    check(
+      stubbedCaptureRefusal({ __provenance__: { stubArms: null } }) === null &&
+        stubbedCaptureRefusal({}) === null,
+      'and a real capture is not -- the guard is not simply always refusing'
+    );
+
+    // THE WIRING, WHICH IS A SEPARATE CLAIM FROM THE GUARD WORKING. Running the
+    // scorer needs tiktoken and a built dist/, which a clean CI checkout of
+    // this job does not have. Rather than skip the case there -- a skipped case
+    // is invisible in a count of passes -- the weaker source-level assertion is
+    // made instead, and which one ran is printed.
+    const scorer = join(REPO, 'bench', 'compression', 'head-to-head.mjs');
+    if (existsSync(join(REPO, 'dist', 'compress', 'router.js'))) {
+      const scored = spawnSync('node', [scorer, outDir], { encoding: 'utf8' });
+      const said = `${scored.stdout}${scored.stderr}`;
+      check(
+        scored.status !== 0 && said.includes('stub arms'),
+        'and the scorer, actually run, exits rather than publishing it',
+        `exit ${scored.status}`
+      );
+    } else {
+      const src = readFileSync(scorer, 'utf8');
+      check(
+        src.includes('stubbedCaptureRefusal(theirs') && src.includes('process.exit(2)'),
+        'and the scorer calls the guard (source-level: dist/ absent, so it was not run)'
+      );
+    }
   }
   {
     const emptyDir = join(tmp, 'empty');

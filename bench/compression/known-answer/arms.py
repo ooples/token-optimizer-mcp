@@ -21,6 +21,16 @@ harness bug with no second explanation available.
   ka-offload    returns a single CCR retrieval marker and nothing else. Smallest
                 output, so the ratio-winner selection must pick it, and the
                 offload classifier must refuse to call it compression.
+  ka-fragile    returns a quarter of its input, EXCEPT on a workload carrying
+                the KA-RAISE sentinel, where it throws.
+
+AND TWO ARMS THAT PRODUCE NOTHING, because the dangerous failure is not a wrong
+number, it is a number invented where no measurement happened. An arm that
+crashes or declines must come back ABSENT -- not recorded at ratio 1.0, which
+reads as "their engine achieved nothing here" and quietly counts a crash of
+ours as a win. `apply` returns None on the KA-DECLINE sentinel and `ka-fragile`
+raises on KA-RAISE, so both paths run on every known-answer capture. Without
+them the harness passed its own tests with the fabrication reintroduced.
 
 `apply` is the message-list path and is deliberately an identity: it returns
 whatever `as_messages` handed it. That is not laziness -- it means the bytes
@@ -34,6 +44,10 @@ Asserted by: bench/compression/known-answer/capture.check.mjs
 """
 
 import hashlib
+import json
+
+DECLINE = "KA-DECLINE"
+RAISE = "KA-RAISE"
 
 
 def text_arms(question):
@@ -42,7 +56,15 @@ def text_arms(question):
         ("ka-identity", lambda t: t),
         ("ka-half", lambda t: t[: len(t) // 2]),
         ("ka-offload", _offload),
+        ("ka-fragile", _fragile),
     )
+
+
+def _fragile(text):
+    """A quarter of the input, or an exception on one workload by construction."""
+    if RAISE in text:
+        raise RuntimeError("ka-fragile refuses this workload by construction")
+    return text[: len(text) // 4]
 
 
 def _offload(text):
@@ -52,5 +74,11 @@ def _offload(text):
 
 
 def apply(messages, limit):
-    """Identity on the message list, so the capture records the shape verbatim."""
+    """Identity on the message list, so the capture records the shape verbatim.
+
+    Returns None on the KA-DECLINE workload: an engine that produced no result
+    must be recorded as absent, never as a result of 1.0.
+    """
+    if DECLINE in json.dumps(messages):
+        return None
     return messages

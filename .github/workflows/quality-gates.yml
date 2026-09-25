@@ -588,3 +588,47 @@ jobs:
           node bench/compression/must-win.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           echo '```' >> $GITHUB_STEP_SUMMARY
           exit $status
+
+  # THE HARNESS ITSELF, CHECKED AGAINST ANSWERS FIXED BEFORE IT RAN.
+  #
+  # Every other bench check tests scoring arithmetic on synthetic totals. This
+  # one drives the real capture path -- shape routing, budget sweep, scoring,
+  # arm selection, provenance, trip-wire -- with arms whose output is a
+  # closed-form function of their input, so each figure it produces has a right
+  # answer computable in advance. That path had no tests at all, and it is where
+  # the defects that forced this project's retractions actually lived.
+  #
+  # NO HEADROOM INSTALL AND NO NETWORK: the engine is stubbed, so a failure here
+  # always means the harness is wrong and never that a capture drifted. Python
+  # is needed only to execute run-theirs.py, which is the code under test.
+  known-answer:
+    name: Known-Answer Capture Path
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Check the capture path against known answers
+        run: |
+          set -o pipefail
+          {
+            echo "## Known-Answer Capture Path"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/known-answer/capture.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status

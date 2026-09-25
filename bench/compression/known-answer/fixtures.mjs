@@ -111,6 +111,22 @@ export function knownAnswerFixtures() {
       native: [{ role: 'user', content: entropyText(8192, 777001) }],
     },
     {
+      // THE TWO WORKLOADS WHERE NOTHING COMES BACK. A crash and a decline are
+      // the cases where a harness is most tempted to write down a number
+      // anyway, and both land at "their engine achieved nothing", which reads
+      // as our win. These two make the capture prove it writes down neither.
+      name: 'ka-declines',
+      kind: 'messages',
+      pipelineDeclines: true,
+      native: [{ role: 'user', content: `KA-DECLINE ${entropyText(600, 90001)}` }],
+    },
+    {
+      name: 'ka-raises',
+      kind: 'messages',
+      armRaises: 'ka-fragile',
+      native: [{ role: 'user', content: `KA-RAISE ${entropyText(600, 90002)}` }],
+    },
+    {
       name: 'ka-repeated',
       kind: 'messages',
       uniqueBytes: REPEAT_BLOCK_BYTES,

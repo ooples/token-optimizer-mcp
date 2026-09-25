@@ -56,6 +56,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { classifyIds } from './retention.mjs';
 import { classifyArms, declaredOffloadBytes } from './offload.mjs';
+import { stubbedCaptureRefusal } from './capture-guard.mjs';
 import { baseContextReadiness, measureBaseContext } from '../subscription/base-context.mjs';
 import { loadRequests } from '../subscription/transcripts.mjs';
 import { execFileSync } from 'node:child_process';
@@ -98,12 +99,9 @@ const theirs = JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'));
 // see bench/compression/known-answer/. Those captures parse cleanly, carry
 // every field, and would score as a crushing win over an engine that was never
 // run. Refusing them here is what keeps the test rig out of the record.
-if (theirs.__provenance__?.stubArms) {
-  console.error(
-    `refusing ${dir}: this capture was taken with stub arms ` +
-      `(${theirs.__provenance__.stubArms}), so it measures the harness and not ` +
-      'any engine. Re-run run-theirs.py without BENCH_KNOWN_ANSWER_ARMS.'
-  );
+const stubRefusal = stubbedCaptureRefusal(theirs, dir);
+if (stubRefusal) {
+  console.error(stubRefusal);
   process.exit(2);
 }
 
