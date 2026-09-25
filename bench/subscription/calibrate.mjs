@@ -500,6 +500,204 @@ export function compareToAsserted(result, family) {
   return out;
 }
 
+/**
+ * THE WEEKLY CAP, BRACKETED FROM THE PUBLISHED RATES AND THE METER'S QUANTUM.
+ *
+ * `fit` above asks the hard question -- what does the meter charge for each
+ * kind of token -- and needs a great deal of data to answer it, because five
+ * coordinates have to be separated from one another while cache reads dominate
+ * every row. That question is worth asking and is not the one the product
+ * claim rests on.
+ *
+ * The claim rests on a SCALE. If the meter charges the published rates, then
+ * every mix of tokens collapses to one number -- its cost in effective input
+ * tokens -- and the only unknown left is how many of those the weekly cap
+ * holds. That is one parameter instead of five, and one row can speak to it.
+ *
+ * WHAT IS ASSUMED, PLAINLY. This takes the published RATIOS as given; it does
+ * not verify them. `compareToAsserted` is the check on that assumption, and
+ * until it has the data to run, a bracket produced here is conditional on the
+ * price list being what it says. The two are complementary and neither
+ * substitutes for the other.
+ *
+ * WHY A BRACKET AND NOT AN ESTIMATE. `utilization` is a whole integer percent,
+ * so a reported delta of `d` is consistent with a true delta anywhere in
+ * `(d-1, d+1)`. Dividing the row's cost by a point value of `d` would invent
+ * precision the meter cannot express -- the same error as publishing a
+ * saturated fit's standard errors. Each row therefore yields an INTERVAL for
+ * the cap, and rows are combined by intersecting those intervals.
+ *
+ * THE ASYMMETRY MATTERS, AND IT IS THE SAFE WAY ROUND. A row whose reported
+ * delta is 1 is consistent with a true delta just above 0, so it bounds the cap
+ * only from BELOW -- the interval runs to infinity. A lower bound on the cap is
+ * an UPPER bound on the share of it any saving represents, so a rig with only
+ * such rows can say "at most this much" and must not say "at least". Claiming
+ * a floor on the saving needs a row that moved the meter by 2 or more, and
+ * `needsBiggerDelta` says so rather than letting the caller assume otherwise.
+ */
+
+/** One plain input token is the unit, so it prices at 1 by construction. */
+export const RATE_OF = Object.freeze({ input: 1, ...ASSERTED });
+
+/** A row's cost in effective input tokens, and the families it drew on. */
+export function rowCost(x, rates = RATE_OF) {
+  let cost = 0;
+  const families = new Set();
+  for (const [name, tokens] of x) {
+    if (tokens === 0) continue;
+    const dot = name.indexOf('.');
+    const family = name.slice(0, dot);
+    const kind = name.slice(dot + 1);
+    const rate = rates[kind];
+    if (rate === undefined) continue;
+    cost += rate * tokens;
+    families.add(family);
+  }
+  return { cost, families: [...families] };
+}
+
+/**
+ * The cap, in effective input tokens, as an interval the rows cannot exclude.
+ *
+ * @param {Array<{y: number, x: Map<string, number>, label?: string}>} rows
+ * @returns {{
+ *   lo: number, hi: number, rows: number, usable: number,
+ *   perRow: Array<object>, needsBiggerDelta: boolean,
+ *   mixedFamilies: string[], empty: boolean,
+ * }}
+ */
+export const QUANTUM = Object.freeze({
+  // A DIFFERENCE of two whole-percent readings, each off by less than 1 in the
+  // same direction or opposite ones, lands within 1 of the truth either way.
+  // This holds whether the meter rounds or floors, which is why the convention
+  // does not have to be known.
+  deltas: { below: 1, above: 1 },
+  // A LEVEL is tighter but the convention now matters: rounding puts the truth
+  // in [y-0.5, y+0.5), flooring in [y, y+1). Their union, [y-0.5, y+1), is
+  // assumed because it is true under both, and assuming one of them to gain
+  // 25% on the interval would be buying precision with an unverified premise.
+  levels: { below: 0.5, above: 1 },
+});
+
+export function bracketCap(rows, { rates = RATE_OF, mode = 'deltas' } = {}) {
+  const q = QUANTUM[mode] ?? QUANTUM.deltas;
+  let lo = 0;
+  let hi = Infinity;
+  const perRow = [];
+  const families = new Set();
+  let usable = 0;
+  for (const row of rows) {
+    const { cost, families: fams } = rowCost(row.x, rates);
+    for (const f of fams) families.add(f);
+    // A row that spent nothing, or whose reported delta is 0, constrains
+    // nothing: a true delta in (-1, 1) over zero cost is every cap at once.
+    if (cost <= 0 || row.y <= 0) {
+      perRow.push({ label: row.label, cost, y: row.y, lo: 0, hi: Infinity, constrains: false });
+      continue;
+    }
+    // reading = 100 * cost / cap, with the true reading within the quantum.
+    const rowLo = (100 * cost) / (row.y + q.above);
+    const rowHi = row.y - q.below <= 0 ? Infinity : (100 * cost) / (row.y - q.below);
+    lo = Math.max(lo, rowLo);
+    hi = Math.min(hi, rowHi);
+    usable++;
+    perRow.push({ label: row.label, cost, y: row.y, lo: rowLo, hi: rowHi, constrains: true });
+  }
+  return {
+    lo,
+    hi,
+    rows: rows.length,
+    usable,
+    perRow,
+    // An interval that runs to infinity has no upper bound on the cap, and so
+    // no lower bound on what any saving is worth as a share of it.
+    needsBiggerDelta: !Number.isFinite(hi),
+    // The published rates are multiples of a family's OWN input token, so a
+    // bracket that mixes families has silently assumed those are equal.
+    mixedFamilies: families.size > 1 ? [...families] : [],
+    // Rows can contradict each other outright, which falsifies either the
+    // published rates or the single-cap model. Better to say so than to
+    // return an empty interval that reads like a very tight one.
+    empty: lo > hi,
+  };
+}
+
+/**
+ * What a saving of `tokens` effective input tokens is worth, given a bracket.
+ *
+ * The bracket inverts: the LARGEST cap gives the SMALLEST share, so a saving's
+ * floor comes from `hi` and its ceiling from `lo`. When `hi` is infinite the
+ * floor is 0 -- which is the honest answer, not a failure.
+ */
+export function savingAsShareOfCap(tokens, bracket) {
+  const ceiling = bracket.lo > 0 ? (100 * tokens) / bracket.lo : Infinity;
+  const floor = Number.isFinite(bracket.hi) ? (100 * tokens) / bracket.hi : 0;
+  return { floor, ceiling };
+}
+
+
+/**
+ * Why a set of levels might disagree, and which way the disagreement runs.
+ *
+ * `bracketCap` assumes the meter is PROPORTIONAL to cost: y = 100*cost/cap. If
+ * instead it carries a fixed additive term -- billed traffic the transcripts
+ * never saw, a per-block overhead -- then y = 100*cost/cap + b, and a level
+ * taken when `cost` is small attributes that term to tokens and so implies a
+ * cap that is too SMALL. A row taken late in the window, with much more cost to
+ * dilute it, implies one closer to the truth.
+ *
+ * So the signature of a positive `b` is: the lowest-y row implies the lowest
+ * cap. Two rows at different y solve for both unknowns, which is reported here
+ * as a hypothesis to shoot at, NOT as a cap to quote -- two points fit two
+ * parameters exactly, so this can never fail to produce an answer.
+ *
+ * The direction is what matters for the product claim. `b > 0` means every
+ * levels-derived cap is a LOWER bound, and a saving divided by a cap that is
+ * too small is a saving that looks too BIG. Deltas difference `b` away.
+ */
+export function offsetSignature(bracket) {
+  const rows = bracket.perRow.filter((r) => r.constrains);
+  if (rows.length < 2) return null;
+  const byY = [...rows].sort((a, b) => a.y - b.y);
+  const low = byY[0];
+  const high = byY[byY.length - 1];
+  if (low.y === high.y || high.cost === low.cost) return null;
+  const slope = (high.y - low.y) / (high.cost - low.cost);
+  if (!(slope > 0)) return null;
+  return {
+    cap: 100 / slope,
+    offset: low.y - slope * low.cost,
+    low: { label: low.label, y: low.y },
+    high: { label: high.label, y: high.y },
+    // Positive means the proportional cap is understated, which INFLATES any
+    // saving expressed as a share of it.
+    levelsUnderstateCap: low.y - slope * low.cost > 0,
+  };
+}
+
+/**
+ * The cap, bracketed on every window and by both routes, in one object.
+ *
+ * Both routes are reported because they fail differently. A LEVEL row uses the
+ * whole window at once, so it is only as good as the transcripts' coverage of
+ * that window. A DELTA row is a difference, so whatever traffic sat outside the
+ * transcripts cancels -- but a delta of 1 bounds the cap from below only.
+ * Agreement between them is evidence; disagreement is the interesting case and
+ * is printed rather than averaged away.
+ */
+export function capReport(
+  observations,
+  { windows = ['five_hour', 'seven_day'], rates = RATE_OF } = {}
+) {
+  const out = [];
+  for (const windowKey of windows) {
+    for (const mode of ['levels', 'deltas']) {
+      const { rows } = buildRows(observations, { windowKey, mode });
+      out.push({ windowKey, mode, bracket: bracketCap(rows, { rates, mode }) });
+    }
+  }
+  return out;
+}
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const argv = process.argv.slice(2);
   const flag = (name, fallback) => {
@@ -512,6 +710,101 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const family = flag('--family', 'opus');
 
   const observations = readObservations();
+
+  const M = (x) => (Number.isFinite(x) ? `${(x / 1e6).toFixed(1)}M` : 'unbounded');
+  const saving = Number(flag('--saving', 'NaN'));
+
+  console.log('\n=== THE PLAN CAP, BRACKETED ============================================');
+  console.log(
+    'The published rates pin the RATIOS between token kinds, so any mix collapses\n' +
+      'to one number: its cost in effective input tokens. That leaves one unknown --\n' +
+      'how many of those the plan allows before the meter reads 100%. A reading of\n' +
+      'the meter brackets it; several readings intersect. Nothing below is fitted.'
+  );
+  for (const { windowKey, mode, bracket: b } of capReport(observations)) {
+    console.log(
+      `\n-- ${windowKey} / ${mode}: ${b.usable} of ${b.rows} row(s) constrain the cap`
+    );
+    for (const r of b.perRow) {
+      const how = r.constrains ? `${M(r.lo)} .. ${M(r.hi)}` : 'constrains nothing';
+      console.log(
+        `   ${String(r.label).padEnd(18)} cost ${M(r.cost).padStart(8)} at ` +
+          `${String(r.y).padStart(3)}%  ->  ${how}`
+      );
+    }
+    if (b.usable === 0) {
+      console.log('   no reading moved the meter far enough to say anything');
+      continue;
+    }
+    if (b.empty) {
+      console.log(
+        `   CONTRADICTION: ${M(b.lo)} .. ${M(b.hi)} is empty. These readings cannot all\n` +
+          '   be true of one cap at the published rates. Do not quote a cap for this\n' +
+          '   window, and treat the same model on other windows as suspect until the\n' +
+          '   cause is known.'
+      );
+      const sig = offsetSignature(b);
+      if (sig && sig.levelsUnderstateCap) {
+        console.log(
+          `   The disagreement runs one way: the lower reading (${sig.low.label} at ` +
+            `${sig.low.y}%) implies the smaller cap. That is the signature of a fixed\n` +
+            `   additive term, not of noise. Solving ${sig.low.label} against ${sig.high.label}\n` +
+            `   for both unknowns gives cap ${M(sig.cap)} with an offset of ` +
+            `${sig.offset.toFixed(1)}pp -- a hypothesis to shoot at, not a cap to quote,\n` +
+            '   since two points fit two parameters exactly and so can never fail.\n' +
+            '   Its direction is the part that matters: a positive offset means EVERY\n' +
+            '   levels-derived cap here is a lower bound, and so every saving read as a\n' +
+            '   share of one is an over-statement. Deltas difference the term away.'
+        );
+      }
+      continue;
+    }
+    console.log(`   CAP = ${M(b.lo)} .. ${M(b.hi)} effective input tokens`);
+    const agreeSig = offsetSignature(b);
+    if (mode === "levels" && agreeSig) {
+      console.log(
+        `   Room left for a non-proportional meter: solving ${agreeSig.low.label} against ` +
+          `${agreeSig.high.label} for a cap AND a fixed offset gives ${M(agreeSig.cap)} ` +
+          `with ${agreeSig.offset.toFixed(1)}pp of offset.\n` +
+          `   Rows spanning ${agreeSig.low.y}% to ${agreeSig.high.y}% cannot separate the two, so` +
+          ` agreement here is` + '\n' +
+          `   weaker evidence than it looks. A positive offset would mean the bracket` +
+          ` above is a LOWER bound.`
+      );
+    }
+    if (b.needsBiggerDelta) {
+      console.log(
+        '   Open above: every row moved the meter by 1, which bounds the cap from\n' +
+          '   below only. A row that moves it by 2+ is needed to close it.'
+      );
+    }
+    if (b.mixedFamilies.length) {
+      console.log(
+        `   Rows mix model families (${b.mixedFamilies.join(', ')}), so this cap is for\n` +
+          '   that mix, not for any one family.'
+      );
+    }
+    if (Number.isFinite(saving)) {
+      const s = savingAsShareOfCap(saving, b);
+      console.log(
+        `   A saving of ${M(saving)} over this window is ` +
+          `${s.floor.toFixed(2)} .. ${Number.isFinite(s.ceiling) ? s.ceiling.toFixed(2) : 'unbounded'} ` +
+          'percentage points of the plan.\n' +
+          '   The floor comes from the TOP of the cap bracket: a bigger cap makes the\n' +
+          '   same saving a smaller share.'
+      );
+    }
+  }
+  console.log(
+    '\nCOVERAGE, AND WHICH WAY IT BIASES THIS. The percentages are the meter\'s own,\n' +
+      'but the token totals are summed from local transcripts. Any billed traffic not\n' +
+      'in them understates the cost of a row, which understates the cap, which INFLATES\n' +
+      'every saving expressed as a share of it. The bias runs in the flattering\n' +
+      'direction, so a cap from levels is an upper bound on a saving claim, not a\n' +
+      'measurement of one. Deltas are immune to traffic that is constant across the\n' +
+      'pair but not to traffic that arrives between the two reads.'
+  );
+  console.log('\n=== THE FREE FIT (weaker, kept for contradiction-hunting) ==============');
   const { rows: allRows, skipped } = buildRows(observations, { windowKey, mode });
   const rows = allRows.filter((r) => r.y >= minDelta);
 

@@ -35,11 +35,16 @@
  */
 
 import {
+  bracketCap,
   buildRows,
   fit,
+  rowCost,
+  savingAsShareOfCap,
   bracketAgreement,
   coordName,
   imprecise,
+  offsetSignature,
+  capReport,
   sameWindowInstance,
 } from './calibrate.mjs';
 import { KINDS, zeroTotals } from './transcripts.mjs';
@@ -380,6 +385,246 @@ function independentSteps(n) {
     'no impossible sign, not saturated'
   );
 }
+
+// ---------------------------------------------------------------------------
+// 7. The cap bracket -- one parameter instead of five, and what it refuses.
+// ---------------------------------------------------------------------------
+
+{
+  // A cap of exactly 100M effective input tokens, and a row that spends 24M of
+  // it. At 24% the reading is exact, so the bracket must CONTAIN 100M and must
+  // not pretend to be tighter than the meter's own quantum.
+  const x = new Map([[coordName('opus', 'input'), 24_000_000]]);
+  const b = bracketCap([{ y: 24, x }], { mode: 'levels' });
+  check(
+    'a level brackets the cap on both sides and contains the truth',
+    b.lo <= 100e6 && b.hi >= 100e6 && b.usable === 1,
+    `${(b.lo / 1e6).toFixed(1)}M .. ${(b.hi / 1e6).toFixed(1)}M`
+  );
+}
+
+{
+  // Every published rate, exercised at once. 1M input + 1M 1-hour writes +
+  // 10M reads + 1M output = 1 + 2 + 1 + 5 = 9M effective input tokens.
+  const x = new Map([
+    [coordName('opus', 'input'), 1_000_000],
+    [coordName('opus', 'cacheWrite1h'), 1_000_000],
+    [coordName('opus', 'cacheRead'), 10_000_000],
+    [coordName('opus', 'output'), 1_000_000],
+  ]);
+  const { cost } = rowCost(x);
+  check( 'a mixed row prices at the published rates',cost === 9_000_000, `${cost}`);
+}
+
+{
+  // OUTPUT IS IN THE UNIT, which is the thing the cost model was missing. A
+  // row of pure output must cost five times the same count of input tokens.
+  const out = rowCost(new Map([[coordName('opus', 'output'), 1000]])).cost;
+  const inp = rowCost(new Map([[coordName('opus', 'input'), 1000]])).cost;
+  check( 'output is priced, at five times input',out === 5 * inp, `${out} vs ${inp}`);
+}
+
+{
+  // A DELTA OF 1 BOUNDS THE CAP ONLY FROM BELOW, because the true delta could
+  // be anywhere above 0. Saying otherwise would invent the one bound that
+  // decides whether a saving has a floor.
+  const x = new Map([[coordName('opus', 'input'), 5_000_000]]);
+  const b = bracketCap([{ y: 1, x }], { mode: 'deltas' });
+  check(
+    'a delta of 1 gives a floor on the cap and no ceiling',
+    b.lo > 0 && b.hi === Infinity && b.needsBiggerDelta === true,
+    `${(b.lo / 1e6).toFixed(1)}M .. unbounded`
+  );
+}
+
+{
+  // A delta of 2 closes the interval, which is the whole difference between
+  // "at most this much is saved" and a claim with a floor under it.
+  const x = new Map([[coordName('opus', 'input'), 5_000_000]]);
+  const b = bracketCap([{ y: 2, x }], { mode: 'deltas' });
+  check(
+    'a delta of 2 closes the interval',
+    Number.isFinite(b.hi) && b.needsBiggerDelta === false,
+    `${(b.lo / 1e6).toFixed(1)}M .. ${(b.hi / 1e6).toFixed(1)}M`
+  );
+}
+
+{
+  // Rows intersect: two levels on the same cap must agree, and the
+  // intersection must be no wider than either.
+  const one = { y: 10, x: new Map([[coordName('opus', 'input'), 10_000_000]]) };
+  const two = { y: 50, x: new Map([[coordName('opus', 'input'), 50_000_000]]) };
+  const b = bracketCap([one, two], { mode: 'levels' });
+  const solo = bracketCap([two], { mode: 'levels' });
+  check(
+    'two consistent levels intersect to something no wider than either',
+    !b.empty && b.lo >= solo.lo && b.hi <= solo.hi && b.lo <= 100e6 && b.hi >= 100e6,
+    `${(b.lo / 1e6).toFixed(1)}M .. ${(b.hi / 1e6).toFixed(1)}M`
+  );
+}
+
+{
+  // AND ROWS CAN CONTRADICT EACH OTHER, which is a finding and not a glitch:
+  // it falsifies either the published rates or the single-cap model. An empty
+  // intersection must be NAMED, because `lo > hi` read as an interval is the
+  // tightest-looking answer this code can produce.
+  const cheap = { y: 50, x: new Map([[coordName('opus', 'input'), 10_000_000]]) };
+  const dear = { y: 10, x: new Map([[coordName('opus', 'input'), 50_000_000]]) };
+  const b = bracketCap([cheap, dear], { mode: 'levels' });
+  check( 'contradictory rows are reported as empty, not as a tight interval',b.empty === true, `${(b.lo / 1e6).toFixed(1)}M .. ${(b.hi / 1e6).toFixed(1)}M`);
+}
+
+{
+  // A row that spent nothing, or that moved the meter not at all, constrains
+  // nothing -- and must not be counted as though it had.
+  const b = bracketCap(
+    [
+      { y: 0, x: new Map([[coordName('opus', 'input'), 1_000_000]]) },
+      { y: 5, x: new Map([[coordName('opus', 'input'), 0]]) },
+    ],
+    { mode: 'levels' }
+  );
+  check( 'rows that constrain nothing are counted as such',b.usable === 0 && b.lo === 0 && b.hi === Infinity);
+}
+
+{
+  // The published rates are multiples of a family's OWN input token, so a
+  // bracket drawn across two families has quietly assumed those are equal.
+  const x = new Map([
+    [coordName('opus', 'input'), 1_000_000],
+    [coordName('haiku', 'input'), 1_000_000],
+  ]);
+  const b = bracketCap([{ y: 10, x }], { mode: 'levels' });
+  check( 'a bracket across families says so',b.mixedFamilies.length === 2, b.mixedFamilies.join(','));
+}
+
+{
+  // The inversion: a bigger cap makes any saving a SMALLER share of it, so the
+  // floor comes from the top of the bracket. Getting this backwards would
+  // overstate every saving by the width of the interval.
+  const b = { lo: 100e6, hi: 200e6 };
+  const s = savingAsShareOfCap(2e6, b);
+  check(
+    'a saving is bracketed by the cap, floor from the top of it',
+    Math.abs(s.floor - 1) < 1e-9 && Math.abs(s.ceiling - 2) < 1e-9,
+    `${s.floor.toFixed(2)}pp .. ${s.ceiling.toFixed(2)}pp`
+  );
+}
+
+{
+  // And with no ceiling on the cap there is no floor on the saving. Zero is
+  // the honest answer there, not the ceiling quietly reused.
+  const s = savingAsShareOfCap(2e6, { lo: 100e6, hi: Infinity });
+  check( 'an unbounded cap leaves a saving with no floor',s.floor === 0 && s.ceiling === 2, `${s.floor}pp .. ${s.ceiling}pp`);
+}
+
+// ---------------------------------------------------------------------------
+// 8. The offset probe -- why levels can agree and still be wrong.
+// ---------------------------------------------------------------------------
+
+/** A levels row: `tokens` of plain input read at `y` percent. */
+const lvl = (label, tokens, y) => ({
+  label,
+  y,
+  x: new Map([[coordName('opus', 'input'), tokens]]),
+});
+
+{
+  // Truly proportional traffic against a 200M cap: 20M -> 10%, 60M -> 30%.
+  // The probe must find no offset worth reporting and recover the cap.
+  const b = bracketCap([lvl('early', 20e6, 10), lvl('late', 60e6, 30)], { mode: 'levels' });
+  const sig = offsetSignature(b);
+  check(
+    'proportional rows show no offset and give back the cap',
+    Math.abs(sig.offset) < 1e-9 && Math.abs(sig.cap - 200e6) < 1,
+    `${(sig.cap / 1e6).toFixed(1)}M, offset ${sig.offset.toFixed(2)}pp`
+  );
+  check(
+    'no offset means the levels bracket is not accused of understating',
+    sig.levelsUnderstateCap === false
+  );
+}
+
+{
+  // The same 200M cap, but the meter also carries a fixed 3pp the transcripts
+  // never see: 20M -> 13%, 60M -> 33%. Two points, two unknowns, so both must
+  // come back exactly -- and the LOW row must be the one implying the small cap,
+  // which is the signature the report keys on.
+  const rows = [lvl('early', 20e6, 13), lvl('late', 60e6, 33)];
+  const b = bracketCap(rows, { mode: 'levels' });
+  const sig = offsetSignature(b);
+  check(
+    'an injected offset comes back exactly, with the cap',
+    Math.abs(sig.cap - 200e6) < 1 && Math.abs(sig.offset - 3) < 1e-9,
+    `${(sig.cap / 1e6).toFixed(1)}M, offset ${sig.offset.toFixed(2)}pp`
+  );
+  check(
+    'a positive offset is reported as understating the cap',
+    sig.levelsUnderstateCap === true && sig.low.label === 'early' && sig.high.label === 'late'
+  );
+  const early = b.perRow.find((r) => r.label === 'early');
+  const late = b.perRow.find((r) => r.label === 'late');
+  check(
+    'and the low row really does imply the smaller cap',
+    early.hi < late.lo,
+    `early <= ${(early.hi / 1e6).toFixed(0)}M, late >= ${(late.lo / 1e6).toFixed(0)}M`
+  );
+  check(
+    'which is exactly the contradiction the bracket refuses to paper over',
+    b.empty === true,
+    `${(b.lo / 1e6).toFixed(0)}M .. ${(b.hi / 1e6).toFixed(0)}M`
+  );
+}
+
+{
+  // The dangerous case: rows clustered at almost the same reading. The offset
+  // model fits them just as well as the proportional one, so the bracket agrees
+  // while the truth is elsewhere. The probe exists to say so.
+  const b = bracketCap([lvl('a', 113.8e6, 23), lvl('b', 124.2e6, 25)], { mode: 'levels' });
+  const sig = offsetSignature(b);
+  check(
+    'clustered rows agree and still leave room for an offset',
+    b.empty === false && sig.offset > 0 && sig.cap > b.hi,
+    `bracket ${(b.lo / 1e6).toFixed(0)}-${(b.hi / 1e6).toFixed(0)}M, ` +
+      `offset model ${(sig.cap / 1e6).toFixed(0)}M at ${sig.offset.toFixed(1)}pp`
+  );
+}
+
+{
+  check(
+    'one row cannot separate a cap from an offset',
+    offsetSignature(bracketCap([lvl('only', 24e6, 24)], { mode: 'levels' })) === null
+  );
+  check(
+    'rows at the same reading cannot either',
+    offsetSignature(bracketCap([lvl('a', 24e6, 24), lvl('b', 25e6, 24)], { mode: 'levels' })) ===
+      null
+  );
+}
+
+{
+  // More tokens, lower reading: the slope is negative, which is not an offset
+  // but a broken observation. Reporting a cap from it would be worse than
+  // reporting nothing.
+  const b = bracketCap([lvl('a', 60e6, 10), lvl('b', 20e6, 30)], { mode: 'levels' });
+  check('an impossible slope is refused, not reported', offsetSignature(b) === null);
+}
+
+{
+  // capReport must cover every window and both routes without being told to,
+  // because a caller who has to ask for the failing one will not.
+  const obs = synthesise(independentSteps(6), { floorPercent: false });
+  const report = capReport(obs);
+  const seen = report.map((r) => `${r.windowKey}/${r.mode}`);
+  check(
+    'capReport covers both windows by both routes',
+    seen.length === 4 &&
+      seen.includes('five_hour/levels') &&
+      seen.includes('seven_day/deltas'),
+    seen.join(' ')
+  );
+}
+
 
 console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);
