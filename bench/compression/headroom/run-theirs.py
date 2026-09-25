@@ -52,6 +52,7 @@ Writes <out-dir>/payloads.json (the exact bytes our side must compress) and
 import json
 import os
 import sys
+import time
 
 # APPENDED, NOT PREPENDED. The clone ships a `headroom` package without the
 # compiled _core extension; the installed wheel has it. Prepending the clone
@@ -317,6 +318,12 @@ def run(name, native, text):
     """Every arm, best (smallest) output wins. Failures are reported, not hidden."""
     attempts = []
     notes = {}
+    # WALL TIME PER ARM, so the scorer can compare speed instead of assuming it.
+    # `perf_counter` and not `time.time`: several of these arms finish in well
+    # under a millisecond, and a coarse clock reports those as zero, which reads
+    # as an arm that never ran. Only the winning arm's time is published, since
+    # that is the arm whose output the comparison uses.
+    timings = {}
     question = question_of(native)
 
     for label, fn in (
@@ -328,7 +335,10 @@ def run(name, native, text):
         if label == "router+question" and not question:
             continue
         try:
-            attempts.append((label, fn(text)))
+            started = time.perf_counter()
+            got = fn(text)
+            timings[label] = (time.perf_counter() - started) * 1000.0
+            attempts.append((label, got))
         except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
             notes[label] = "%s: %s" % (type(exc).__name__, exc)
 
@@ -348,7 +358,9 @@ def run(name, native, text):
         limit = max(1, int(before_tokens * fraction))
         label = "pipeline@%.2f" % fraction
         try:
+            started = time.perf_counter()
             got = arm_pipeline(native, text, limit)
+            timings[label] = (time.perf_counter() - started) * 1000.0
             if got is None:
                 continue
             attempts.append((label, got))
@@ -363,6 +375,7 @@ def run(name, native, text):
             "beforeTokens": before_tokens,
             "afterTokens": before_tokens,
             "arm": "none",
+            "ms": 0.0,
             "bestText": text,
             "notes": notes,
         }
@@ -383,6 +396,7 @@ def run(name, native, text):
         "beforeTokens": before_tokens,
         "afterTokens": max(1, round(before_tokens * ratio)),
         "arm": arm,
+        "ms": round(timings.get(arm, 0.0), 3),
         "arms": {label: round(reduction((label, out)) * len(text)) for label, out in attempts},
         # The actual bytes, so the scorer can tokenise their output with the
         # same real tokeniser it uses on ours instead of trusting a proxy.

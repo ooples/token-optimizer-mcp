@@ -497,9 +497,12 @@ for (const [name, text] of Object.entries(payloads)) {
     return `.token-optimizer/spill/${spilled.length}-${hint}`;
   };
 
-  const started = Date.now();
+  // MEASURED WITH `performance.now`, NOT `Date.now`. Several of these payloads
+  // compress in under a millisecond, and a 1 ms clock reports those as 0 -- which
+  // is indistinguishable from an arm that never ran.
+  const started = performance.now();
   const out = compressBlock(text, { spill, query: queryOf(text) });
-  const ms = Date.now() - started;
+  const ms = performance.now() - started;
 
   // THE SUBSTITUTION ARM, MEASURED SEPARATELY AND NAMED FOR WHAT IT IS. HeadRoom
   // reaches ~99.7% on the three workloads our engines find hardest by not
@@ -1348,6 +1351,11 @@ if (process.argv[3] === '--record') {
         theirs: pct(r.theirsTok),
       },
       retention: {
+        // THE DENOMINATOR. Every other number in this object is a count of
+        // identifiers out of this total, and without it a gate cannot tell
+        // "retained 336" from "retained 336 of 336". Their arm is at 100% on
+        // seven of these rows, which is only visible once the total is here.
+        ids: String(r.ids),
         inContext: String(r.inOut),
         reconstructible: String(r.derived),
         recoverable: String(r.inSpill),
@@ -1393,6 +1401,17 @@ if (process.argv[3] === '--record') {
           },
           breakEven: rate(crossByName[r.name]),
         },
+      },
+      // SPEED, THE SECOND MUST-WIN. Ours is measured; theirs is null until a
+      // capture carries it, because `run-theirs.py` has to time their resolver
+      // in the process that runs it. A null here means UNMEASURED, and the gate
+      // treats it as unmeasured rather than as a pass.
+      speed: {
+        oursMs: r.ms.toFixed(3),
+        theirsMs:
+          typeof theirs[r.name]?.ms === 'number'
+            ? theirs[r.name].ms.toFixed(3)
+            : null,
       },
     })),
     totals: {

@@ -2,7 +2,7 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-25",
-  "commit": "18a2d0855ae269e80f38809731dca367e3c2ac34",
+  "commit": "4d6afc376dfaf8319b6c0af087bdae87112f42c7",
   "capture": {
     "dir": "hr5/out",
     "theirsDigest": "0c2663858b875373"
@@ -27,6 +27,7 @@
         "theirs": "46.7%"
       },
       "retention": {
+        "ids": "254",
         "inContext": "69",
         "reconstructible": "0",
         "recoverable": "185",
@@ -62,6 +63,10 @@
           },
           "breakEven": "65%"
         }
+      },
+      "speed": {
+        "oursMs": "29.434",
+        "theirsMs": null
       }
     },
     {
@@ -83,6 +88,7 @@
         "theirs": "45.8%"
       },
       "retention": {
+        "ids": "2050",
         "inContext": "87",
         "reconstructible": "0",
         "recoverable": "1963",
@@ -118,6 +124,10 @@
           },
           "breakEven": "80%"
         }
+      },
+      "speed": {
+        "oursMs": "26.016",
+        "theirsMs": null
       }
     },
     {
@@ -139,6 +149,7 @@
         "theirs": "13.6%"
       },
       "retention": {
+        "ids": "336",
         "inContext": "6",
         "reconstructible": "330",
         "recoverable": "0",
@@ -174,6 +185,10 @@
           },
           "breakEven": "always"
         }
+      },
+      "speed": {
+        "oursMs": "127.228",
+        "theirsMs": null
       }
     },
     {
@@ -195,6 +210,7 @@
         "theirs": "53.5%"
       },
       "retention": {
+        "ids": "470",
         "inContext": "65",
         "reconstructible": "0",
         "recoverable": "405",
@@ -230,6 +246,10 @@
           },
           "breakEven": "always"
         }
+      },
+      "speed": {
+        "oursMs": "8.483",
+        "theirsMs": null
       }
     },
     {
@@ -251,6 +271,7 @@
         "theirs": "99.6%"
       },
       "retention": {
+        "ids": "590",
         "inContext": "176",
         "reconstructible": "333",
         "recoverable": "81",
@@ -286,6 +307,10 @@
           },
           "breakEven": "never"
         }
+      },
+      "speed": {
+        "oursMs": "142.756",
+        "theirsMs": null
       }
     },
     {
@@ -307,6 +332,7 @@
         "theirs": "99.6%"
       },
       "retention": {
+        "ids": "1046",
         "inContext": "132",
         "reconstructible": "914",
         "recoverable": "0",
@@ -342,6 +368,10 @@
           },
           "breakEven": "77%"
         }
+      },
+      "speed": {
+        "oursMs": "17.240",
+        "theirsMs": null
       }
     },
     {
@@ -363,6 +393,7 @@
         "theirs": "31.3%"
       },
       "retention": {
+        "ids": "174",
         "inContext": "18",
         "reconstructible": "0",
         "recoverable": "111",
@@ -398,6 +429,10 @@
           },
           "breakEven": "always"
         }
+      },
+      "speed": {
+        "oursMs": "23.488",
+        "theirsMs": null
       }
     },
     {
@@ -419,6 +454,7 @@
         "theirs": "54.4%"
       },
       "retention": {
+        "ids": "504",
         "inContext": "34",
         "reconstructible": "0",
         "recoverable": "470",
@@ -454,6 +490,10 @@
           },
           "breakEven": "always"
         }
+      },
+      "speed": {
+        "oursMs": "10.620",
+        "theirsMs": null
       }
     },
     {
@@ -475,6 +515,7 @@
         "theirs": "99.8%"
       },
       "retention": {
+        "ids": "430",
         "inContext": "3",
         "reconstructible": "427",
         "recoverable": "0",
@@ -510,6 +551,10 @@
           },
           "breakEven": "83%"
         }
+      },
+      "speed": {
+        "oursMs": "68.311",
+        "theirsMs": null
       }
     },
     {
@@ -531,6 +576,7 @@
         "theirs": "65.4%"
       },
       "retention": {
+        "ids": "527",
         "inContext": "24",
         "reconstructible": "0",
         "recoverable": "503",
@@ -566,6 +612,10 @@
           },
           "breakEven": "82%"
         }
+      },
+      "speed": {
+        "oursMs": "7.926",
+        "theirsMs": null
       }
     },
     {
@@ -587,6 +637,7 @@
         "theirs": "20.5%"
       },
       "retention": {
+        "ids": "405",
         "inContext": "31",
         "reconstructible": "330",
         "recoverable": "44",
@@ -622,6 +673,10 @@
           },
           "breakEven": "always"
         }
+      },
+      "speed": {
+        "oursMs": "69.153",
+        "theirsMs": null
       }
     },
     {
@@ -643,6 +698,7 @@
         "theirs": "90.5%"
       },
       "retention": {
+        "ids": "3133",
         "inContext": "89",
         "reconstructible": "0",
         "recoverable": "3044",
@@ -678,6 +734,10 @@
           },
           "breakEven": "18%"
         }
+      },
+      "speed": {
+        "oursMs": "30.715",
+        "theirsMs": null
       }
     }
   ],
