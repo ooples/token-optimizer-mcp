@@ -162,14 +162,62 @@ const DECLARED =
   /\b(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:class|interface|type|enum|function|const|let|var)\s+([A-Za-z_$][\w$]*)/g;
 const NAMED_IMPORT = /\bimport\s+(?:type\s+)?\{([^}]*)\}/g;
 
-function collect(value, into) {
+/**
+ * A UNIT IS A TOKEN OR A SHORT PHRASE, never a document.
+ *
+ * The keyed rule below admits a string VALUE, and a design-prose block arrives as
+ * one 18KB string value. Admitting that as a single unit would score a whole block
+ * as one identifier -- almost always reported gone -- and drown the real ones. A
+ * hundred and twenty characters is longer than any title, path or label in these
+ * payloads and shorter than any block of them.
+ */
+const MAX_UNIT = 120;
+
+/**
+ * Keys whose NUMERIC value names a record.
+ *
+ * Numbers are admitted only here, and only at four digits or more. An issue number
+ * is what a later turn asks for by name; a price, a count and a byte offset are
+ * not, and scoring retention by `includes` on a two-digit number finds it inside
+ * any output long enough.
+ */
+const IDENTITY_KEY =
+  /(^|_)(id|uuid|guid|sku|key|ref|number|code|hash|sha|commit|pr|issue|trace|span|event|node)$/i;
+
+/**
+ * THE TYPESCRIPT-SHAPED RULES ABOVE ARE BLIND TO STRUCTURED DATA, and two of the
+ * twelve payloads scored ZERO retention units because of it -- so "0 for us, 0 for
+ * them" was never a tie, it was an empty set reported as one.
+ *
+ * Every rule above keys on a digit-bearing token of eight characters, a markdown
+ * heading, or a declaration. Measured against the captured payloads, that finds
+ * nothing at all in `issue-triage` (`"number": 3000`, `"labels": ["needs-triage"]`)
+ * and nothing at all in `relevance-probe` (`"id": "evt_0"`) -- and `evt_0` is the
+ * needle that workload exists to find. It also misses the accessibility names in
+ * `browser-session` (`name="collect digest"`) and every SKU in
+ * `human-authored-json` (`"sku": "A-0"`, itself below the floor and correctly
+ * still excluded).
+ *
+ * So two more shapes count as units, and BOTH ARE SCORED ON EVERY ARM, which is
+ * what keeps this from being a thumb on the scale: on the rows where their arm
+ * keeps the text and ours elides it, these rules widen THEIR column, not ours.
+ *
+ *   keyed  -- a string value reached under an object key, at or above MIN_SYMBOL
+ *             and at or below MAX_UNIT. A value someone stored under a key is a
+ *             value a later turn comes back for; the floor and the cap are what
+ *             keep a coincidental substring and a whole document out.
+ *   quoted -- a quoted substring inside a longer string. A tool result is one
+ *             string, so an accessibility tree, a shell transcript and a log line
+ *             put their names inside it rather than in a field of their own.
+ */
+function collect(value, into, key) {
   if (typeof value === 'string') {
     if (DISTINCTIVE.test(value) && /\d/.test(value)) into.add(value);
     // Structured content arrives as a string inside a tool result, so the
     // identifiers in it are one parse deeper than the top level.
     if (value.length > 2 && (value[0] === '{' || value[0] === '[')) {
       try {
-        collect(JSON.parse(value), into);
+        collect(JSON.parse(value), into, undefined);
       } catch {
         /* not nested JSON */
       }
@@ -212,23 +260,48 @@ function collect(value, into) {
           into.add(name);
       }
     }
+    // A UNIT IS SCORED BY `includes`, SO IT MUST BE A LITERAL SUBSTRING OF THE
+    // TEXT IT CAME FROM -- and a multi-line value is not. Structured content is
+    // one parse deeper than the block, so an issue body reached through that
+    // parse holds real newlines where the block still holds the two-character
+    // escape. Measured on issue-triage, that made 220 of 275 keyed units absent
+    // from their own payload: unretainable by construction, charged as lost
+    // against every arm at once (220 of our 265 and 220 of their 228). Every one
+    // of those 220 was multi-line, and no multi-line keyed unit was ever present,
+    // so the guard drops exactly the phantoms and no real name.
+    if (
+      key !== undefined &&
+      value.length >= MIN_SYMBOL &&
+      value.length <= MAX_UNIT &&
+      !/[\r\n]/.test(value)
+    )
+      into.add(value);
+    for (const m of value.matchAll(/"([^"\n]{5,120})"/g)) into.add(m[1]);
+    return;
+  }
+  if (typeof value === 'number') {
+    const digits = String(value);
+    if (key !== undefined && IDENTITY_KEY.test(key) && /^\d{4,}$/.test(digits))
+      into.add(digits);
     return;
   }
   if (Array.isArray(value)) {
-    for (const item of value) collect(item, into);
+    // THE KEY CARRIES THROUGH AN ARRAY, because `"labels": ["needs-triage"]` names
+    // its members with the key, not with an index of its own.
+    for (const item of value) collect(item, into, key);
     return;
   }
   if (value && typeof value === 'object') {
-    for (const item of Object.values(value)) collect(item, into);
+    for (const [k, item] of Object.entries(value)) collect(item, into, k);
   }
 }
 
 function identifiers(text) {
   const found = new Set();
   try {
-    collect(JSON.parse(text), found);
+    collect(JSON.parse(text), found, undefined);
   } catch {
-    collect(text, found);
+    collect(text, found, undefined);
   }
   return found;
 }
