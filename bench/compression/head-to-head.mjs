@@ -92,6 +92,21 @@ if (!dir) {
 const payloads = JSON.parse(readFileSync(join(dir, 'payloads.json'), 'utf8'));
 const theirs = JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'));
 
+// A KNOWN-ANSWER CAPTURE IS CORRECT AND MEANINGLESS AT THE SAME TIME, which is
+// the most dangerous thing a file in this directory can be. `run-theirs.py` can
+// be driven by stub arms whose output is arithmetic, to test this harness --
+// see bench/compression/known-answer/. Those captures parse cleanly, carry
+// every field, and would score as a crushing win over an engine that was never
+// run. Refusing them here is what keeps the test rig out of the record.
+if (theirs.__provenance__?.stubArms) {
+  console.error(
+    `refusing ${dir}: this capture was taken with stub arms ` +
+      `(${theirs.__provenance__.stubArms}), so it measures the harness and not ` +
+      'any engine. Re-run run-theirs.py without BENCH_KNOWN_ANSWER_ARMS.'
+  );
+  process.exit(2);
+}
+
 // BASE CONTEXT, MEASURED HERE OR NOT CLAIMED AT ALL.
 //
 // Every session-cost figure below adds `baseContextTokens` to both arms, so the

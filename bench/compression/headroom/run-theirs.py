@@ -339,14 +339,65 @@ def as_messages(native, text):
     ]
 
 
+def their_apply(messages, limit):
+    """The one call that reaches their engine on the message-list path."""
+    return _pipeline().apply(messages, "benchmark-model", model_limit=limit)
+
+
+def their_text_arms(question):
+    """Their text-native arms, in the order they are attempted."""
+    return (
+        ("router", lambda t: arm_router(t, question=None)),
+        ("router+question", lambda t: arm_router(t, question=question)),
+        ("crusher", arm_crusher),
+        ("crusher-lossy-ccr", arm_crusher_lossy),
+    )
+
+
 def arm_pipeline(native, text, limit):
     """Their message-list path. Returns the serialised result, or None."""
     messages = as_messages(native, text)
-    result = _pipeline().apply(messages, "benchmark-model", model_limit=limit)
+    result = APPLY(messages, limit)
     out = getattr(result, "messages", result)
     if not isinstance(out, list):
         return None
     return json.dumps(out, indent=2)
+
+
+# THE ENGINE IS SUBSTITUTABLE -- TO TEST THIS HARNESS, NEVER TO PUBLISH.
+#
+# Everything above measures THEIR compressor, and nothing in this file can tell
+# you whether the measurement is sound. The arms are a black box, so a bug in
+# the shape routing, the denominator, the arm selection or the inert trip-wire
+# reads as "their engine did that" and gets published as a fact about them. It
+# has: the carrier bug below moved a single workload's figure by 200x and was
+# written up twice, in opposite directions, before a control settled it.
+#
+# BENCH_KNOWN_ANSWER_ARMS names a module of arms whose output is known by
+# construction -- one that returns its input, one that returns exactly half of
+# it, one that returns an offload marker. Their ratios are arithmetic, so a
+# capture taken with them has a right answer that can be worked out on paper,
+# and this harness can be proven wrong instead of trusted. Note what is NOT
+# stubbed: `as_messages`, the budget sweep, the scoring, the arm selection and
+# the trip-wire all run for real, which is the point -- they are the code under
+# test. Only the innermost engine call is replaced.
+#
+# A capture taken this way measures nobody's engine, so it stamps `stubArms`
+# into the provenance and the scorer refuses to read it as a result.
+KNOWN_ANSWER_ARMS = os.environ.get("BENCH_KNOWN_ANSWER_ARMS")
+TEXT_ARMS = their_text_arms
+APPLY = their_apply
+if KNOWN_ANSWER_ARMS:
+    import importlib.util  # noqa: E402
+
+    _spec = importlib.util.spec_from_file_location("bench_ka_arms", KNOWN_ANSWER_ARMS)
+    if _spec is None or _spec.loader is None:
+        raise SystemExit("cannot load BENCH_KNOWN_ANSWER_ARMS=%r" % KNOWN_ANSWER_ARMS)
+    _stub = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_stub)
+    TEXT_ARMS = _stub.text_arms
+    APPLY = _stub.apply
+    print("KNOWN-ANSWER RUN via %s -- this measures the harness, not an engine" % KNOWN_ANSWER_ARMS)
 
 
 def run(name, native, text):
@@ -364,12 +415,7 @@ def run(name, native, text):
     # KEPT AS CALLABLES, because the winning arm is re-timed below and a
     # median needs the function, not just its first reading.
     callables = {}
-    for label, fn in (
-        ("router", lambda t: arm_router(t, question=None)),
-        ("router+question", lambda t: arm_router(t, question=question)),
-        ("crusher", arm_crusher),
-        ("crusher-lossy-ccr", arm_crusher_lossy),
-    ):
+    for label, fn in TEXT_ARMS(question):
         callables[label] = (fn, (text,))
         if label == "router+question" and not question:
             continue
@@ -550,13 +596,18 @@ else:
 # published as "their engine achieved nothing on this workload" -- which is a
 # claim about THEM, made out of a silence that is just as likely to be ours.
 #
-# It happened. Three captures on 2026-09-24/25 scored every `pipeline@*` arm as
-# a no-op on 10 of 12 workloads -- exactly the 10 that are tool output rather
-# than a conversation -- while `crusher` and `router` returned normal figures.
-# Every later capture (five of them, with a warm store, with no store at all,
-# with and without their clone) offloads on all 12 and agrees byte for byte.
-# The published record was taken from the inert regime, so it understated their
-# engine by up to 200x per workload, and nothing in the output said so.
+# It happened, and reading the silence cost a day. Three captures scored every
+# `pipeline@*` arm as a no-op on 10 of 12 workloads -- exactly the 10 that are
+# tool output rather than conversation -- while later captures offloaded on all
+# 12. That was first written up as "the record understated their engine by 200x
+# per workload". It is the other way round: handed the NATIVE message list their
+# pipeline genuinely declines on those 10, and it was the later captures, fed a
+# conversation flattened to a string, that inflated it. The carrier refusal
+# above now makes the inflating regime unreachable.
+#
+# The lesson the count below encodes is the one that survived the reversal: a
+# ratio of 1.0 is ambiguous, and which of the two it was cannot be recovered
+# from the number afterwards.
 #
 # The count below is the trip-wire. It cannot say WHICH of the two a no-op was,
 # and it does not try: it records the shape so a reader and a downstream gate
@@ -586,6 +637,11 @@ provenance = {
     "theirFixtures": HAVE_THEIR_FIXTURES,
     "carriedPayloads": sorted(set(WORKLOADS) - set(THEIR_FIXTURE_NAMES)),
     "inertArms": inert,
+    # NOT NULL MEANS NOT A MEASUREMENT. A known-answer capture drives this same
+    # path with arms whose output is arithmetic, so its numbers are correct and
+    # meaningless at once -- exactly the kind of file that must never reach a
+    # published table. The scorer refuses a capture that carries this.
+    "stubArms": KNOWN_ANSWER_ARMS,
 }
 print("ccr store after run: %s bytes, sha %s" % (store["bytes"], store["sha256"]))
 
