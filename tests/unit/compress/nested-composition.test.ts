@@ -1,8 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressBlock } from '../../../src/compress/router.js';
 import { DEFAULT_TUNING } from '../../../src/compress/options.js';
-import { expandLog } from '../../helpers/expand-log.js';
-import { expandJsonRecords } from '../../support/rehydrate.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
+import { expandJsonRecords } from '../../../src/compress/rehydrate.js';
 
 /**
  * THE LAST TWO ENGINES CLAIMING `lossless` WITH NOTHING RECONSTRUCTING IT.
@@ -73,7 +73,7 @@ describe('a log compressed inside a json string survives the round trip', () => 
 
     const damaged = [
       compressed.replace(/; # = (\S+)/, '; # ='),
-      compressed.replace(/positions=\[(\d+),/, 'positions=['),
+      compressed.replace(/gaps=\[(\d+),/, 'gaps=['),
     ].filter((candidate) => candidate !== compressed);
     expect(damaged).toHaveLength(2);
 

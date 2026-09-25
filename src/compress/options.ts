@@ -101,6 +101,39 @@ export interface CompressionOptions {
    * of it is recoverable from what the model can see. Default true.
    */
   readonly allowLossy?: boolean;
+  /**
+   * Below this saving, move the whole block out of the request instead.
+   *
+   * SUBSTITUTION, NOT REDUCTION, and the name of this dial is the only place
+   * that can say so before somebody reads a 99% off a table. A block that our
+   * engines could only take 50% off is not made smaller by this; it is taken
+   * out of the request and replaced by `[... n bytes -> path]`, and the bytes
+   * are on disk. The ratio that produces is a measurement of a move.
+   *
+   * WHY HAVE IT AT ALL. It is what HeadRoom's content-cache references do for
+   * every block they touch, which is where their ~99.7% on `grep-output`,
+   * `raw-build-log` and `codebase-exploration` comes from -- their
+   * `<<ccr:hash,blob,32107>>` is 24 characters and the content is in a store.
+   * Ours is better on the only axis that matters after the ratio: the marker
+   * carries a path the agent already has, so following it is a `Read` it can
+   * issue itself, where a cache reference costs a retrieval round trip and
+   * degrades to `[unresolved: entry not found]` when the store has moved on.
+   *
+   * WHY IT IS OFF BY DEFAULT. Because the trade is real and it is ours to lose:
+   * measured over the twelve head-to-head workloads, 1,274 of the 1,582
+   * identifiers a reader can rebuild from the output alone are in exactly the
+   * three blocks this would move. On by default, the product would be their
+   * product with a better marker. Off by default, it is a dial for a caller who
+   * has decided that a small context matters more to them than a readable one.
+   *
+   * Expressed as the saving an engine had to reach to keep its block: 0.9 spills
+   * anything the engines could not take 90% off. 0 -- the default -- never
+   * spills, and no existing measurement moves. 1 is the like-for-like against a
+   * content cache, which moves every block it touches whatever its shape; at
+   * that setting the engines are not run at all, since nothing they produced
+   * could be kept and their spill files would only be superseded.
+   */
+  readonly spillWholeBlockBelow?: number;
 }
 
 /** The same shape with nothing left to decide. */
@@ -124,6 +157,7 @@ export const DEFAULT_TUNING: Tuning = Object.freeze({
   knowledgeBudgetChars: 2000,
   assumedSessionTurns: 100,
   allowLossy: true,
+  spillWholeBlockBelow: 0,
 });
 
 export type PresetName =
@@ -215,6 +249,7 @@ export function resolveTuning(
     knowledgeBudgetChars: pick('knowledgeBudgetChars'),
     assumedSessionTurns: pick('assumedSessionTurns'),
     allowLossy: pick('allowLossy'),
+    spillWholeBlockBelow: pick('spillWholeBlockBelow'),
   };
 }
 

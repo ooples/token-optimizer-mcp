@@ -1,4 +1,12 @@
-import { expandLog } from '../helpers/expand-log.js';
+import { expandLongRepeats } from './runs.js';
+import { expandLog } from './expand-log.js';
+import {
+  BACK_REFERENCE,
+  ESCAPED_REFERENCE,
+  PATH_ID_PREFIX,
+} from './search.js';
+import { findReferent, readBackReference } from './dedup.js';
+import { readImageBackReference } from './images.js';
 
 /**
  * ONE ENTRY POINT FOR "REBUILD THE INPUT FROM THE OUTPUT ALONE", AND IT FAILS
@@ -123,8 +131,11 @@ export function expandTapRecords(text: string): string {
  * Without the constraint `18:10-20 INFO up` reads as a hunk of eleven lines
  * and a decoder eats the next eleven lines of an unrelated log.
  */
+/** `[paths @0=src/a.ts @1=src/b.ts ...]`, as `compressSearchResults` writes it. */
+const PATH_TABLE = /^\[paths ((?:[^\s=]+=[^\s]+)(?: [^\s=]+=[^\s]+)*)\]$/;
+
 const SEARCH_PATH =
-  '(?:[A-Za-z]:[\\\\/][^\\s:]*|[^\\s:]*[\\\\/][^\\s:]*|[^\\s:]+\\.[A-Za-z0-9]+)';
+  `(?:[A-Za-z]:[\\\\/][^\\s:]*|[^\\s:]*[\\\\/][^\\s:]*|[^\\s:]+\\.[A-Za-z0-9]+|${PATH_ID_PREFIX}\\d+)`;
 
 /**
  * `path:start-end` plus the two optional suffixes the encoder can append.
@@ -177,16 +188,66 @@ function matchedLines(
  * matched, `-` for one it does not.
  */
 export function expandSearchHunks(text: string): string {
-  const newline = text.includes('\r\n') ? '\r\n' : '\n';
-  const lines = text.split(newline);
-  const out: string[] = [];
+  // EACH LINE CARRIES ITS OWN TERMINATOR, exactly as the engine now emits them.
+  // Splitting on one guessed newline left a stray CR on every line of the other
+  // kind, so a mixed-ending document's header was never matched and the decoder
+  // reported it as an unconsumed marker -- the decoder failing, read as the
+  // encoder failing.
+  type Line = { raw: string; eol: string };
+  const lines: Line[] = [];
+  for (let i = 0; i < text.length; ) {
+    let stop = i;
+    while (stop < text.length && text[stop] !== '\n' && text[stop] !== '\r')
+      stop += 1;
+    const eol =
+      stop >= text.length
+        ? ''
+        : text[stop] === '\r' && text[stop + 1] === '\n'
+          ? '\r\n'
+          : text[stop];
+    lines.push({ raw: text.slice(i, stop), eol });
+    i = stop + eol.length;
+  }
+  // THE PATH TABLE, IF THE ENCODER MINTED ONE. It is the first line or it is
+  // absent; a block that never folded reads exactly as it did before.
+  const paths = new Map<string, string>();
+  const table = lines.length ? PATH_TABLE.exec(lines[0].raw) : null;
+  if (table) {
+    for (const entry of table[1].split(' ')) {
+      const at = entry.indexOf('=');
+      if (at < 1)
+        throw new Error(`rehydrate: unreadable path table entry ${entry}`);
+      paths.set(entry.slice(0, at), entry.slice(at + 1));
+    }
+    lines.shift();
+  }
+  // AN ID WITH NO TABLE ENTRY IS A TRUNCATED BLOCK, NOT A FILE NAMED `@3`.
+  // Passing it through would put a path the reader cannot resolve into a
+  // reconstruction that claims to be the original.
+  const resolve = (id: string): string => {
+    if (!id.startsWith(PATH_ID_PREFIX)) return id;
+    const path = paths.get(id);
+    if (path === undefined)
+      throw new Error(`rehydrate: hunk path ${id} is not in the path table`);
+    return path;
+  };
+  // THE BODY LINES THE ENCODER NUMBERED, AND ONLY THOSE. A back-reference
+  // names a line by its position among the body lines of hunks written
+  // WITHOUT a declaration template -- the same set the encoder walked, in the
+  // same order -- so neither side has to carry the numbering. A declaration
+  // row is two tab-separated fields rather than content and was never
+  // counted; counting it here would shift every ordinal after the first one.
+  const literals = new Map<number, string>();
+  let ordinal = 0;
+  const out: Line[] = [];
   for (let cursor = 0; cursor < lines.length; cursor += 1) {
-    const header = SEARCH_HEADER.exec(lines[cursor]);
+    const header = SEARCH_HEADER.exec(lines[cursor].raw);
     if (!header) {
       out.push(lines[cursor]);
       continue;
     }
-    const [, path, first, last, marks, encoded] = header;
+    const [, id, first, last, marks, encoded] = header;
+    const path = resolve(id);
     const start = Number(first);
     const end = Number(last);
     // A DESCENDING RANGE HAS TO FAIL, NOT HANG. `src/a.ts:3-1` gives a count
@@ -208,21 +269,63 @@ export function expandSearchHunks(text: string): string {
     const template = encoded ? (JSON.parse(encoded) as string[]) : null;
     body.forEach((row, offset) => {
       const line = start + offset;
-      let content = row;
+      let content = row.raw;
+      if (!template) {
+        const reference = BACK_REFERENCE.exec(row.raw);
+        if (reference) {
+          // A REFERENCE FORWARD OR TO NOTHING IS A TRUNCATED BLOCK. Emitting
+          // the marker as content would report a reconstruction carrying a
+          // line the original never held.
+          const referent = literals.get(Number(reference[1]));
+          if (referent === undefined)
+            throw new Error(
+              `rehydrate: hunk line ${row.raw} references no earlier line`
+            );
+          content = referent;
+        } else {
+          // AN ESCAPED LINE IS CONTENT, and the content is the form with one
+          // fewer `=`. Registering the escape instead would hand a later
+          // reference the wrong line.
+          const escaped = ESCAPED_REFERENCE.exec(row.raw);
+          if (escaped) content = `[=${escaped[1]}]`;
+          literals.set(ordinal, content);
+        }
+        ordinal += 1;
+      }
       if (template) {
-        const fields = row.split('\t');
+        const fields = row.raw.split('\t');
         if (fields.length !== 2)
           throw new Error(
-            `rehydrate: declaration row is not two fields: ${row}`
+            `rehydrate: declaration row is not two fields: ${row.raw}`
           );
         content =
           template[0] + fields[0] + template[1] + fields[1] + template[2];
       }
-      out.push(`${path}:${line}${matched.has(line) ? ':' : '-'}${content}`);
+      // The body line's OWN terminator, not the header's: the header is
+      // consumed and the line it restores must end as it originally did.
+      out.push({
+        raw: `${path}:${line}${matched.has(line) ? ':' : '-'}${content}`,
+        eol: row.eol,
+      });
     });
     cursor += count;
   }
-  return out.join(newline);
+  // A HUNK TOO SHORT FOR A HEADER KEEPS ITS OWN PREFIX ON EVERY LINE, and the
+  // fold shortened those prefixes as well. They are not headers, so the loop
+  // above passed them through untouched and they would reach the caller still
+  // saying `@3:` -- a path no reader can resolve, inside output that claims to
+  // be the original.
+  return out
+    .map((line) => {
+      if (!paths.size) return line.raw + line.eol;
+      const at = line.raw.indexOf(':');
+      const id = at > 0 ? line.raw.slice(0, at) : '';
+      const path = paths.get(id);
+      return path === undefined
+        ? line.raw + line.eol
+        : path + line.raw.slice(at) + line.eol;
+    })
+    .join('');
 }
 
 /** Markers this module must consume rather than pass through as text. */
@@ -251,14 +354,103 @@ const UNCONSUMED_SUFFIX = new RegExp(
  * would otherwise survive as ordinary-looking lines.
  */
 export function rehydrate(text: string): string {
-  // Search first: its grammar is line-structural rather than delimited, so it
-  // has to see the hunk bodies before any other grammar rewrites a line inside
-  // one.
+  // Long repeats first of all, because the fold is the LAST thing the encoder
+  // does and inverting in the other order would hand each grammar a block with
+  // a hole in it. Search next: its grammar is line-structural rather than
+  // delimited, so it has to see the hunk bodies before any other grammar
+  // rewrites a line inside one.
   const out = expandLog(
-    expandTapRecords(expandJsonRecords(expandSearchHunks(text)))
+    expandTapRecords(
+      expandJsonRecords(expandSearchHunks(expandLongRepeats(text)))
+    )
   );
   for (const line of out.split('\n'))
     if (UNCONSUMED.test(line) || UNCONSUMED_SUFFIX.test(line))
       throw new Error(`rehydrate: unconsumed marker ${JSON.stringify(line)}`);
   return out;
+}
+
+/**
+ * A rehydrator for a WHOLE payload: blocks handed over in the order a reader
+ * meets them, each rebuilt with the ones above it in hand.
+ *
+ * `rehydrate` answers "rebuild this block from this block", which is the right
+ * question for every engine that compresses a block in place. It is the wrong
+ * question for a back-reference. `dedupBlocks` and `dedupImages` remove a
+ * repeat and point at the copy still standing further up the SAME request, so
+ * the content is in the output -- it is simply not in the fragment holding the
+ * marker. Asked block by block the decoder refused, correctly and uselessly,
+ * and three by-design references sat on a list of suspected data loss.
+ *
+ * STILL THE STRICT ORACLE. A marker naming nothing above, or naming two things,
+ * throws. Resolving it to a guess would be the too-forgiving decoder this
+ * module exists to avoid, and the guess would be silent.
+ *
+ * `images` is the one thing a text-only reader cannot work out for itself: an
+ * image back-reference counts DISTINCT images, and telling an image block from
+ * a text block needs the structure the payload was parsed from. The caller
+ * passes their data in order of first appearance -- read off the output, where
+ * the first copy of each one is still present.
+ */
+export function rehydrateSequence(
+  images: readonly string[] = []
+): (block: string) => string {
+  const above: string[] = [];
+  const byLabel = new Map<number, string>();
+  // WHERE THE LAST REFERENCE LEFT THE READER, as an index into `above`. The run
+  // form names its referent by order -- the block after that one -- so following
+  // it means remembering where the walk had got to. A literal block puts it back
+  // to nowhere, because the encoder only ever emits a run form directly after
+  // another reference; a decoder that carried the position across a literal
+  // would resolve something the encoder never wrote.
+  let walkedTo = -1;
+
+  return (block: string): string => {
+    const ordinal = readImageBackReference(block);
+    if (ordinal !== null) {
+      const data = images[ordinal - 1];
+      if (data === undefined)
+        throw new Error(`rehydrate: no image #${ordinal} above this block`);
+      return data;
+    }
+
+    const reference = readBackReference(block);
+    if (reference === null) {
+      const out = rehydrate(block);
+      // KEPT AS IT ARRIVED, NOT AS IT REBUILT. A quote is computed over the
+      // text that was EMITTED -- `quoteFor` separates the referent from the
+      // other emitted blocks -- so matching it against a rebuilt original
+      // would be comparing it with bytes the encoder never saw.
+      above.push(block);
+      walkedTo = -1;
+      return out;
+    }
+
+    const referent = reference.follows
+      ? // NOT `above[walkedTo + 1]` ON ITS OWN. With the walk at nowhere, that
+        // index is zero, and a run form arriving with no reference before it
+        // would quietly resolve to the FIRST block above instead of refusing --
+        // the decoder vouching for a reconstruction it never made. Caught by
+        // the test that breaks a walk with a literal and asks for a refusal.
+        walkedTo < 0
+        ? null
+        : (above[walkedTo + 1] ?? null)
+      : reference.needle === null
+        ? reference.label === null
+          ? null
+          : (byLabel.get(reference.label) ?? null)
+        : findReferent(reference.needle, above);
+    if (referent === null)
+      throw new Error(
+        `rehydrate: back-reference names no single block above: ${JSON.stringify(block)}`
+      );
+    // The spelled-out form is the one that carries both a quote and a label,
+    // so the cheap `as #n above` repeats after it resolve by label alone.
+    if (reference.label !== null) byLabel.set(reference.label, referent);
+    // Advance the walk, so a stretch of run forms steps one block at a time.
+    // `indexOf` is the first copy, which is the one the encoder pointed at: it
+    // records a literal's position on the same first-wins rule.
+    walkedTo = reference.follows ? walkedTo + 1 : above.indexOf(referent);
+    return rehydrate(referent);
+  };
 }

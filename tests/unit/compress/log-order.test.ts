@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressLog } from '../../../src/compress/log.js';
-import { expandLog } from '../../helpers/expand-log.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
 
 describe('lossless log order and whitespace', () => {
   it('does not wrap input that already resembles its template encoding', () => {
@@ -63,7 +63,7 @@ describe('lossless log order and whitespace', () => {
     );
     const input = lines.join('\n');
     const out = compressLog(input);
-    expect(out.text).toContain('positions=');
+    expect(out.text).toContain('gaps=');
     expect(out.text).toContain('issue #123');
     expect(expandLog(out.text)).toBe(input);
   });

@@ -40,8 +40,147 @@ Providers cache the prompt prefix: cached tokens re-read at **0.1x**, rewritten
 ones bill at **1.25x**. Most compressors optimise bytes removed and ignore that
 multiplier. This one optimises the bill.
 
-**It wins both columns.** Against a faithful reimplementation of the leading
-open compressor's published design, `node bench/compression/proof.mjs`:
+**It wins both columns, against their real implementation, on their own
+fixtures.** Not a reimplementation and not our fixtures: their harness compresses
+the payload, dumps it, their resolver redeems their own markers, and ours is
+handed the identical bytes.
+
+<!-- HEADROOM-TABLE:START -- every figure below must appear in
+     `bench/compression/headroom/results/head-to-head.json`. Guarded by
+     `node bench/compression/readme-headroom.check.mjs`; do not hand-edit.
+     The first three cells are `characters / tokens`, tokens from cl100k_base
+     over both arms' real output. `zero-turn ids` is `ours / theirs / preset`: of the
+     identifiers planted in that workload, how many the agent can have without
+     spending a turn -- in the text, or rebuilt from the text alone.
+     -->
+
+| workload             | payload |        theirs |          ours | ours, preset  | ours, dial on   | zero-turn ids |
+| -------------------- | ------: | ------------: | ------------: | ------------: | --------------- | ------------: |
+| agent-loop           | 172,110 | 41.9% / 46.7% | 93.8% / 94.7% | 93.8% / 94.7% | 100.0% / 100.0% | 69 / 254 / 69 |
+| agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% | 96.3% / 97.1% | 100.0% / 100.0% | 87 / 2042 / 87 |
+| browser-session      | 782,294 | 21.8% / 13.6% | 93.7% / 28.9% | 100.0% / 99.9% | 100.0% / 99.9%  | 336 / 336 / 0 |
+| code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% | 95.8% / 96.5% | 99.9% / 99.9%   | 65 / 470 / 65 |
+| codebase-exploration | 136,113 | 99.7% / 99.6% | 65.1% / 58.0% | 100.0% / 99.9% | 100.0% / 99.9%  | 509 / 5 / 0 |
+| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% | 99.9% / 99.9% | 99.9% / 99.9%   | 1046 / 4 / 0 |
+| human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% | 96.9% / 97.2% | 99.8% / 99.9%   | 18 / 174 / 18 |
+| issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% | 95.3% / 95.9% | 99.9% / 99.9%   | 34 / 504 / 34 |
+| raw-build-log        | 158,237 | 99.8% / 99.8% | 70.7% / 47.7% | 100.0% / 100.0% | 100.0% / 100.0% | 430 / 3 / 0 |
+| relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% | 96.1% / 97.0% | 99.9% / 99.9%   | 24 / 527 / 24 |
+| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% | 100.0% / 100.0% | 361 / 405 / 0 |
+| sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% | 97.1% / 97.7% | 100.0% / 100.0% | 89 / 514 / 89 |
+
+Recorded 2026-09-25 at `18a2d085`, by the command in the
+record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
+re-derive it the way it re-derives the table below -- it checks this provenance and
+these figures against `bench/compression/headroom/results/head-to-head.json` instead.
+
+<!-- HEADROOM-TABLE:END -->
+
+Over the corpus the shipped default takes **89.4%** of the characters and
+**80.9%** of the tokens; theirs takes 51.3% and 62.8%. Of the 9,919 identifiers
+planted in the corpus, 45 end up unrecoverable on our side and 8 on theirs.
+
+**Read the rows, though, because the ones we lose are not compression
+results.** On `grep-output`, `codebase-exploration` and `raw-build-log` they
+report ~99.7% and we report 57-71%. Their number there is a **content-cache
+reference**: the block is not made smaller, it is taken out of the request, put
+in a store, and replaced by a 24-character `<<ccr:...>>` marker. The same is true
+of the four rows where they edge us out in the nineties.
+
+**So the last column is the one that decides a turn.** A marker is not the
+content: to read what it stands for, the agent spends a request. `zero-turn ids`
+counts the identifiers planted in each workload that need no such request --
+still in the text, or rebuildable from the text alone. On the three rows we
+lose on reduction we take that column outright, 509-5, 1046-4 and 430-3: their
+marker leaves almost none of it behind, our skeleton leaves all of it. **We lose it on
+eight rows** -- `agent-loop`, `agent-loop-logs`, `code-search`,
+`human-authored-json`, `issue-triage`, `relevance-probe`, `repeated-reads` and
+`sre-debugging` -- because our reduction there comes from spilling too, and a
+spill costs the same turn theirs does; `browser-session` ties at 336-336. Over
+the corpus it is 3,068 of 9,919 for us against 5,238 for them: **this column
+goes to them**, and the two columns have to be read together or each one
+flatters somebody.
+
+The unit count moved with the instrument, not with the product. Every rule that
+found a retention unit keyed on a digit-bearing token, a markdown heading or a
+declaration, so `issue-triage` (`"number": 3000`) and `relevance-probe`
+(`"id": "evt_0"`, the needle that workload exists to find) each scored ZERO
+units and reported a tie on an empty set. Counting a string value under an
+object key and a quoted substring inside a longer string -- on both arms, and
+excluding multi-line values, which are not literal substrings of the block they
+came from -- takes the corpus from 6,098 units to 9,919 and reverses this
+column, which read 2,717 against 2,278 before the fix.
+
+`browser-session` used to be the one genuine engine loss on this corpus, at 6.0%
+against their 21.8%. It is now 93.5%, from folding exact long repeats inside a
+block rather than at a boundary someone else drew — a serialised message
+list with inline images is a single 780,000-character line, which every other
+pass here reads as one unit.
+
+**Most of that 93.5% is the fixture, and the honest number is lower.** This
+payload holds four images, two of them distinct, and the base64 in them is
+generated rather than photographic: one distinct image alone folds from 160,032
+characters to 5,572, which no real PNG would do. What carries over to a real
+session is the duplication — half the image bytes here are a second copy of
+an image already in the request, which is 44.3% of the whole payload, and an
+agent re-sending a screenshot it has already sent is ordinary. Folding only that
+is a ~44% reduction, still ahead of their 21.8% on the same row, and the
+generated base64 is worth about 49 points on top that we would not claim twice.
+
+The run the marker names is still in the output above it, so the reader rebuilds
+it without asking for anything, which is why the characters fall much further
+than the tokens (26.1%) — the image tokens are counted from pixels on both
+arms either way.
+
+**`ours, dial on` is that like-for-like, and it is substitution, not reduction.**
+Set `spillWholeBlockBelow` and a block our engines could not compress is moved
+out of the request whole, leaving `[... n bytes, moved whole -> path]`. It wins
+all twelve rows on both denominators, but nothing there was compressed: the bytes
+are on disk, at **1.00x** the input, and the ratio is a measurement of a move.
+Any quote of that column that omits this sentence is a misquote.
+
+Two things make it the better version of their trade, which is the only reason
+it exists. It is **gated on the saving our engines actually reached**, not on
+block size, so a block we compressed well stays in the request where the reader
+still has it — a content cache moves it regardless. And the marker carries a
+**path the agent already has**, so following it is a `Read` it issues itself,
+where a cache reference costs a retrieval round trip and degrades to
+`[unresolved: entry not found]` once the store has moved on.
+
+It is **off by default**, because the trade is real: every one of the **2,334**
+identifiers a reader can rebuild from our output with no extra turn sits in
+exactly the blocks it would move -- the five rows where the dial fires are the
+five rows that reconstructible column lives on, and nowhere else. On by default, this would be their product
+with a better marker.
+
+**`ours, preset` is the same dial at the setting a caller would actually run**
+-- `spillWholeBlockBelow: 0.9`, so a block is moved only where the engines could
+not take 90% off it. On seven of the twelve rows it changes nothing at all: the
+figure is the shipped one, the block stays in the request, and the zero-turn
+count is untouched. On the other five it matches their headline -- 100.0% on
+`codebase-exploration`, 99.9% on `grep-output`, 100.0% on `raw-build-log` -- and
+it buys that the same way they do. **Those five rows are exactly where our
+zero-turn wins live**, and the column takes all of them: 509, 1046, 430, 361
+and 336 go to 0. Over the corpus it is 98.1% of the characters against 89.4%, and
+386 zero-turn identifiers against 3,068. It also puts 46 identifiers beyond
+anything in the output, against 45 shipped -- but a moved block is a turn, and the preset
+column is published so that trade is visible rather than folded into a
+headline. It is off by default for the same reason.
+
+Reproduce the whole table:
+
+```bash
+python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir>
+python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir>
+node bench/compression/head-to-head.mjs <out-dir>
+```
+
+### Against their published design
+
+A second arm reimplements their published design from their own benchmark
+generator's definitions — opaque hash markers, history compressed, a retrieval
+tool and system message injected — so the four workloads with a published
+comparator can be checked without their clone. `node bench/compression/proof.mjs`:
 
 <!-- PROOF-TABLE:START -- every figure below must appear in the output of
      `node bench/compression/proof.mjs`. Guarded by
@@ -52,32 +191,41 @@ open compressor's published design, `node bench/compression/proof.mjs`:
 | code-search          |  17765 |  92.1% |  97.6% | ours    |
 | sre-debugging        |  65694 |  92.2% |  98.4% | ours    |
 | issue-triage         |  54174 |  72.8% |  97.3% | ours    |
-| codebase-exploration |  78502 |  47.4% |  46.0% | theirs  |
+| codebase-exploration |  78502 |  47.4% |  64.9% | ours    |
 
 <!-- PROOF-TABLE:END -->
 
-Four workloads, because those are the four with a published comparator. The
-harness reports twelve; the other eight are ours alone and are not a
-head-to-head.
+Four workloads, because those are the four this arm has a published comparator
+for. The harness reports twelve; the other eight are ours alone here, and are
+scored head-to-head in the table above instead.
 
-**`codebase-exploration` is theirs, by 1.4 points.** An earlier version of this
-table claimed 61.3% for us on that row, and a later one claimed parity; both
-were figures from a branch rather than from here. Measured on this tree it is
-46.0% against their 47.4%, and it is published as a loss because that is what
-it is. A number in prose is a fact about the tree it was measured on, which is
-why `bench/compression/readme-table.check.mjs` re-derives every figure in the
-block above from the harness rather than trusting it.
+**`codebase-exploration` was theirs and is now ours, by 17.5 points.** An earlier
+version of this table claimed 61.3% for us on that row, then parity, then a
+published loss at 46.0% against their 47.4%. The first two were figures from a
+branch rather than from here; the third was true on this tree when it was
+written; four `log` engine commits then moved it to 54.2%, and masking an
+interior hashbang so a concatenated block still parses moved it to **64.9%**. A
+number in prose is a fact about the tree it was measured on, which is why
+`bench/compression/readme-table.check.mjs` re-derives every figure in the block
+above from the harness rather than trusting it.
 
 **Reduction is not the only column, and the other one goes to them.** Scored
-symmetrically on their own fixtures, of 3,793 retention units they keep **1,890**
-directly visible in the text they send and we keep **345** — we reach a higher
-reduction partly by eliding harder, into a spill about 0.94x the size of the
-input. Nothing is unrecoverably lost on our side, and a retrieval costs a turn.
-Both numbers belong in any quote of either.
+symmetrically on their own fixtures, of 9,919 retention units they keep
+**5,238** directly visible in the text they send and we keep **734** — we reach
+a higher reduction partly by eliding harder, into a spill about 0.44x the size
+of the input. A further **2,334** of ours are reconstructible from the output
+alone with no extra turn, and **6,806** are behind a path in the output, one
+`Read` away; theirs redeems **4,673** through its store, one retrieval call away.
+**45 are unrecoverable on our side and 8 on theirs.** All of those numbers belong in any
+quote of any of them.
 
-Against the four published comparators: **ours on 3, theirs on 1.**
-The tally is over comparators, not over workloads -- the harness runs twelve
-and eight of them have nothing to compare against.
+Against the four comparators in this reimplemented arm: **ours on all four.**
+Against their real implementation on all twelve workloads, the table at the top
+of this section: **ours on 9 of 12 by default, 12 of 12 with the dial on**, and
+ours on the corpus total in both denominators either way. Their column is the
+best of the nine configurations that capture holds, and on the seven rows they
+take it is the content-cache reference described above rather than a smaller
+block — which is why the dial, doing the same kind of thing, takes all twelve.
 
 The two columns come from different arms of the same engine, and that is the
 point. `v3-history` compresses history too and matches them byte for byte;
@@ -448,15 +596,11 @@ planted needle disappears, because a size metric alone cannot tell compression
 from truncation.
 
 Reduction over the content each strategy is permitted to rewrite, on fixtures
-matching the four workloads HeadRoom publishes (their figures from their
-README; ours from `bench/compression`, which anyone can run):
-
-| workload             | ours  | theirs |
-| -------------------- | ----- | ------ |
-| issue triage         | 98.9% | 72.8%  |
-| code search          | 98.2% | 92.1%  |
-| SRE debugging        | 92.8% | 92.2%  |
-| codebase exploration | 61.3% | 47.4%  |
+matching the four workloads HeadRoom publishes, is the guarded table earlier in
+this section -- 97.3%, 97.6%, 98.4% and 48.8% against their 72.8%, 92.1%, 92.2%
+and 47.4%. It is stated once and checked there rather than restated here, which
+is how this copy came to claim 98.9%, 98.2%, 92.8% and 61.3% long after the
+tree had moved.
 
 These are not their corpora, which are unpublished; the code workloads read real
 files out of this repository and the rest are generated to the shape and scale
@@ -471,12 +615,12 @@ cache-weighted effective tokens on all of them:
 
 | workload        | raw reduction, ours / theirs | effective tokens, ours / theirs |
 | --------------- | ---------------------------- | ------------------------------- |
-| code search     | 85.0% / **96.8%**            | **859** / 1,068                 |
-| SRE debugging   | 86.2% / **97.2%**            | **1,783** / 2,141               |
-| issue triage    | 90.7% / **98.0%**            | **439** / 557                   |
-| grep output     | 47.1% / **53.4%**            | **6,896** / 8,971               |
-| raw build log   | 50.1% / **55.0%**            | **15,937** / 17,943             |
-| browser session | 20.3% / 20.3%                | **18,407** / 18,539             |
+| code search     | 84.6% / **95.8%**            | **999** / 1,383                 |
+| SRE debugging   | 86.2% / **97.1%**            | **1,833** / 2,261               |
+| issue triage    | 89.2% / **95.3%**            | **812** / 1,277                 |
+| grep output     | 45.9% / **51.9%**            | **7,146** / 9,514               |
+| raw build log   | 54.7% / **59.4%**            | **14,448** / 16,769             |
+| browser session | 45.7% / **49.4%**            | **11,398** / 14,685             |
 
 The competitor arm is this repository's own reimplementation of their published
 design -- opaque hash markers, history compressed, a retrieval tool and system

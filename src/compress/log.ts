@@ -16,7 +16,7 @@
  * folding an error are the tokens that mattered.
  */
 
-import { count, inlineMarker } from './annotate.js';
+import { count, encodeGaps, inlineMarker } from './annotate.js';
 import { compressLogPeriods } from './log-periods.js';
 import { overlapsStructural, structuralRanges } from './structural.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
@@ -81,6 +81,41 @@ export function looksLikeLog(text: string): boolean {
 }
 
 /**
+ * Whether the text is made of repeated records, whatever they are records OF.
+ *
+ * `looksLikeLog` recognises a log by its timestamps and its severity words,
+ * which is one way for a block to be a pile of repeated records and not the
+ * only one. A browser accessibility tree is the same thing without either --
+ *
+ *   node 0: role=listitem name="collect digest" focusable=false bounds=(597,141)
+ *
+ * -- and 701 such lines were reaching the router as `unknown`, compressing by
+ * 0.0%, while the console log printed beside them in the same conversation was
+ * claimed and folded by 41.4%. The engine could already do the work; nothing
+ * asked it to.
+ *
+ * So the question is asked structurally: strip each line to its shape and see
+ * whether a real share of the block collapses into a handful of them. That is
+ * the same test `foldTemplates` applies to decide it has something to fold, so
+ * a claim made here is one the compressor can honour.
+ */
+export function looksTemplated(text: string): boolean {
+  const lines = text.split('\n');
+  if (lines.length < 8) return false;
+  const shapes = new Map<string, number>();
+  for (const line of lines) {
+    if (!line.trim() || line.includes('#')) continue;
+    const shape = shapeOf(line);
+    // A line with nothing variable in it is not a record, it is a line.
+    if (shape === line) continue;
+    shapes.set(shape, (shapes.get(shape) ?? 0) + 1);
+  }
+  let templated = 0;
+  for (const n of shapes.values()) if (n >= MIN_TEMPLATE) templated += n;
+  return templated / lines.length > 0.3;
+}
+
+/**
  * Folds runs of identical lines into one line and a count.
  *
  * LOSSLESS BY CONSTRUCTION, which is the point. "the same line, 37 more times"
@@ -98,7 +133,7 @@ export function compressLog(
     lines.some(
       (line) =>
         line.trimStart().startsWith('[... ') ||
-        /\[\d+ occurrences, positions=\[/.test(line)
+        /\[\d+ occurrences, (?:positions|gaps)=\[/.test(line)
     )
   )
     return unchanged(text);
@@ -201,7 +236,31 @@ export function compressLog(
     }
   }
 
-  const folded = templated(foldScattered(out, elisions), elisions);
+  // TWO CANDIDATE FOLDINGS, AND THE CHEAPER ONE WINS. Scattered folding used
+  // to run unconditionally before templating, which let it claim every exact
+  // duplicate first and leave templating only the lines nothing else had
+  // taken. On a build log that is a bad trade: the duplicates it claims share
+  // a shape with the lines around them, so templating would have folded the
+  // whole family into one row-per-line list instead of a dozen separate
+  // position maps. Measured on raw-build-log's large block, 55,388 chars via
+  // scatter-then-template against 46,064 via templating alone.
+  //
+  // Neither path is a superset of the other -- a duplicate whose shape is
+  // unique is invisible to templating, and that is the case scattered folding
+  // was added for -- so the choice is made per block by rendering both and
+  // keeping the shorter. Both are lossless, so the pick costs no fidelity.
+  const scatterElisions: Elision[] = [];
+  const scattered = templated(
+    foldScattered(out, scatterElisions),
+    scatterElisions
+  );
+  const templateElisions: Elision[] = [];
+  const plain = templated(out, templateElisions);
+  const width = (lines: readonly string[]) =>
+    lines.reduce((n, line) => n + line.length + 1, 0);
+  const plainWins = width(plain) < width(scattered);
+  const folded = plainWins ? plain : scattered;
+  elisions.push(...(plainWins ? templateElisions : scatterElisions));
 
   if (!elisions.length) return unchanged(text);
   return {
@@ -287,10 +346,65 @@ function valuesOf(line: string): string[] {
 //
 // Bare hex runs are NOT matched -- only an explicit 0x prefix -- because an
 // unanchored hex class happily eats the middle of ordinary identifiers.
-const VARIABLE = /0x[0-9a-f]+|\d+(?:\.\d+)?/gi;
+// A QUOTED VALUE IS ONE TOKEN, and leaving it out made the comment above a lie
+// about the code below it. Without it a browser accessibility tree --
+//
+//   node 0: role=listitem name="collect digest" focusable=false bounds=(597,141)
+//
+// shares no shape with the next line, because the name differs, so 701 lines of
+// a rigid four-field record templated at 8.7% and 65,210 chars of the
+// browser-session workload were left at full width by an engine whose whole job
+// is folding repeated records.
+const VARIABLE = /"[^"\n]*"|0x[0-9a-f]+|\d+(?:\.\d+)?/gi;
+
+/**
+ * A value, made safe to put between the inline delimiters.
+ *
+ * The rows of a template join on ' | ' and the values within a row on ' ', so a
+ * value carrying either was previously grounds for abandoning the whole group
+ * (see the guard below). A quoted name almost always carries a space, which
+ * would have made the widening above buy nothing at all.
+ *
+ * Percent-encoding is chosen over quoting because it leaves every value that
+ * does NOT contain a delimiter completely untouched: existing output stays
+ * byte-identical, which matters when the provider is holding those bytes in a
+ * cached prefix. `%` itself is encoded first so decoding is unambiguous.
+ */
+function encodeValue(value: string): string {
+  return value
+    .replace(/%/g, '%25')
+    .replace(/ /g, '%20')
+    .replace(/\t/g, '%09')
+    .replace(/\|/g, '%7C');
+}
 
 /** Below this a template costs more than the lines it replaces. */
 const MIN_TEMPLATE = 4;
+
+/**
+ * Characters a shared lead must save before it is worth factoring out.
+ *
+ * NOT AN OVERHEAD FIGURE, A LEGIBILITY PRICE. Factoring turns a stamp the model
+ * can read -- and the user can grep -- into two halves it has to join, and
+ * in-context retention is the column we are already behind on. On a group of
+ * eight that buys about thirty characters, which is not worth anything; on the
+ * four-hundred-line repeats in a real build log it is thousands of tokens.
+ * Paying the price only where the saving is real keeps small folds readable.
+ */
+const LEAD_MIN_SAVING = 400;
+
+/** The longest text every one of these begins with. */
+function commonPrefix(values: readonly string[]): string {
+  if (values.length === 0) return '';
+  let prefix = values[0];
+  for (const value of values.slice(1)) {
+    let n = 0;
+    while (n < prefix.length && n < value.length && prefix[n] === value[n]) n++;
+    prefix = prefix.slice(0, n);
+    if (!prefix) break;
+  }
+  return prefix;
+}
 
 /**
  * Collapses lines that differ only in their numbers.
@@ -335,17 +449,61 @@ function templated(lines: string[], elisions: Elision[]): string[] {
   const replaced = new Map<number, string>();
   const drop = new Set<number>();
 
-  for (const [shape, members] of groups) {
+  for (const [rawShape, members] of groups) {
     if (members.length < MIN_TEMPLATE) continue;
 
     // One row of values per occurrence, in the order they appeared.
-    const valueRows = members.map((i) => valuesOf(lines[i]));
-    // Values must not collide with the inline row/column delimiters.
-    if (valueRows.some((row) => row.some((value) => /\s|\|/.test(value))))
+    let valueRows = members.map((i) => valuesOf(lines[i]));
+
+    // A COLUMN THAT NEVER VARIES IS NOT A VARIABLE. `shapeOf` blanks every
+    // digit run, so a build log covering a single day writes that day into
+    // every row: on raw-build-log the per-row value lists came to 21,279
+    // tokens, 47% of the whole compressed output, largely re-stating
+    // `2026 09 09 18` a few hundred times. That is why the workload shed 44.8%
+    // of its CHARACTERS and only 15.1% of its TOKENS -- the replacement was
+    // cheaper in bytes and barely cheaper in the unit the provider bills.
+    //
+    // The decoder needs no change for this, which is the reason to do it here
+    // rather than invent a new marker: it consumes exactly one value per `#`,
+    // so dropping a `#` and its column together keeps the two in step.
+    const width = valueRows[0].length;
+    const fixed = Array.from(
+      { length: width },
+      (_, c) =>
+        // A hoisted value is read back as template text, so one containing the
+        // placeholder would come back as a placeholder. `shapeOf` only ever
+        // sees lines without `#`, so this cannot currently fire -- it is here
+        // so that staying true is not an accident of the caller.
+        !valueRows[0][c].includes('#') &&
+        valueRows.every((row) => row[c] === valueRows[0][c])
+    );
+    // ALL-FIXED MEANS THE LINES ARE IDENTICAL -- a line is its shape with its
+    // values put back, so a group whose every column agrees is a group of one
+    // line repeated. Duplicate folding is the owner of that case, and it says
+    // so in one marker; templating says it as a row of the same values per
+    // copy, `# = 12 00 00 | 12 00 00 | 12 00 00`, which is longer than the
+    // lines it replaces to read and no shorter to think about. This used to be
+    // unreachable because duplicate folding always ran first and always took
+    // them; it became reachable the moment that stopped being unconditional,
+    // and an order-of-passes accident is not a reason to emit it.
+    if (fixed.every(Boolean)) continue;
+    let shape = rawShape;
+    if (fixed.some(Boolean)) {
+      let column = -1;
+      shape = rawShape.replace(/#/g, () => {
+        column += 1;
+        return fixed[column] ? valueRows[0][column] : '#';
+      });
+      valueRows = valueRows.map((row) => row.filter((_, c) => !fixed[c]));
+    }
+    // Values must not collide with the inline row/column delimiters. Encoding
+    // handles a space, a tab and a bar; a newline cannot be encoded away
+    // because it would still split the line, so such a group is still refused.
+    if (valueRows.some((row) => row.some((value) => /[\r\n]/.test(value))))
       continue;
-    const rows = valueRows.map((row) => row.join(' '));
+    const rows = valueRows.map((row) => row.map(encodeValue).join(' '));
     const rendered =
-      `${shape}  [${count(members.length, 'occurrence')}, positions=${JSON.stringify(members.map((index) => index + 1))}; # = ` +
+      `${shape}  [${count(members.length, 'occurrence')}, gaps=${encodeGaps(members.map((index) => index + 1))}; # = ` +
       `${rows.join(' | ')}]`;
 
     // Only if it actually pays. A template over long, highly variable lines
@@ -410,11 +568,34 @@ function foldScattered(lines: string[], elisions: Elision[]): string[] {
     const first = members[0];
     // Positions refer to the sequence entering this stage, not timestamps.
     // Restore templates, then scattered copies, then adjacent runs.
-    const copies = members
+    const copies: Array<[number, string]> = members
       .slice(1)
       .map((index) => [index + 1, stampOf(lines[index])]);
+
+    // EVERY COPY CARRIES A WHOLE TIMESTAMP, and on a log confined to one hour
+    // they agree for the first fourteen characters of it. Those bytes came to
+    // 21,760 tokens on raw-build-log -- 55% of the compressed block -- spent
+    // restating `2026-09-09T18:` about two thousand times. Stating the shared
+    // lead once is the same trade the template folding above makes, moved to
+    // the other encoding.
+    //
+    // Emitted only when it clears its own overhead, and read back as `''` when
+    // absent, so an output written before this still decodes unchanged.
+    const lead = commonPrefix(copies.map(([, prefix]) => prefix));
+    const worthLeading = lead.length * copies.length >= LEAD_MIN_SAVING;
     const annotation = inlineMarker(
-      `the same line, ${count(copies.length, 'more time')} elsewhere; before scattered folding ${JSON.stringify({ firstPrefix: stampOf(lines[first]), copiesAtLines: copies })}`,
+      `the same line, ${count(copies.length, 'more time')} elsewhere; before scattered folding ${JSON.stringify(
+        worthLeading
+          ? {
+              firstPrefix: stampOf(lines[first]),
+              lead,
+              copiesAtLines: copies.map(([position, prefix]) => [
+                position,
+                prefix.slice(lead.length),
+              ]),
+            }
+          : { firstPrefix: stampOf(lines[first]), copiesAtLines: copies }
+      )}`,
       null
     );
     const removedSize = members

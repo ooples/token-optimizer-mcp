@@ -1,18 +1,18 @@
 import { compressBlock } from '../compress/router.js';
 import { compressJsonArray } from '../compress/json-fragments.js';
 import type { Tuning } from '../compress/options.js';
-import type { CompressionResult } from '../compress/types.js';
+import type { CompressionResult, SpillSink } from '../compress/types.js';
 
-type Spill = (content: string, hint: string) => string;
 type Entry = {
   result: CompressionResult;
   spills: { content: string; hint: string; path: string }[];
   bytes: number;
 };
 const caches = new WeakMap<
-  Spill,
+  object,
   { tuning: string; bytes: number; entries: Map<string, Entry> }
 >();
+const NO_SINK: object = Object.freeze({});
 const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_ENTRIES = 128;
 
@@ -22,20 +22,26 @@ const MAX_ENTRIES = 128;
  */
 export function cachedOutput(
   text: string,
-  spill: Spill,
+  spill: SpillSink,
   tuning?: Tuning
 ): CompressionResult {
   const options = JSON.stringify(tuning ?? null);
-  let cache = caches.get(spill);
+  // A CALLER WITH NO SINK STILL GETS A CACHE. `undefined` is not a key a
+  // WeakMap will take, and keying it on a shared sentinel is correct rather
+  // than a workaround: every zero-turn caller compresses identically, so they
+  // may share entries, and nothing in an entry can point at a spill path
+  // because none was written.
+  const key: object = spill ?? NO_SINK;
+  let cache = caches.get(key);
   if (!cache || cache.tuning !== options) {
     cache = { tuning: options, bytes: 0, entries: new Map() };
-    caches.set(spill, cache);
+    caches.set(key, cache);
   }
   const hit = cache.entries.get(text);
   if (hit) {
-    const reusable = hit.spills.every(
-      (s) => spill(s.content, s.hint) === s.path
-    );
+    const reusable =
+      spill === undefined ||
+      hit.spills.every((s) => spill(s.content, s.hint) === s.path);
     cache.entries.delete(text);
     if (reusable) {
       cache.entries.set(text, hit);
@@ -44,14 +50,15 @@ export function cachedOutput(
     cache.bytes -= hit.bytes;
   }
   const spills: Entry['spills'] = [];
-  let result = compressBlock(text, {
-    tuning,
-    spill: (content, hint) => {
-      const path = spill(content, hint);
-      spills.push({ content, hint, path });
-      return path;
-    },
-  });
+  const sink: SpillSink =
+    spill === undefined
+      ? undefined
+      : (content, hint) => {
+          const path = spill(content, hint);
+          spills.push({ content, hint, path });
+          return path;
+        };
+  let result = compressBlock(text, { tuning, spill: sink });
   // Small complete arrays can use the same exact lexical record template as
   // large tables, without batching across turns or creating recovery reads.
   if (

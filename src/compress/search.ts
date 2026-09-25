@@ -54,6 +54,25 @@ const HIT =
 /** Below this the header costs more than the prefixes it replaces. */
 const MIN_HUNK_LINES = 2;
 
+/** Leads every id the path table mints. Kept in step with `rehydrate.ts`. */
+export const PATH_ID_PREFIX = '@';
+
+/** A body line standing in for an earlier one. Kept in step with `rehydrate.ts`. */
+export const BACK_REFERENCE = /^\[=(\d+)\]$/;
+
+/**
+ * A body line that would otherwise BE a reference, and its escaped form.
+ *
+ * Standing the pass down on a document containing `[=0]` does not save it:
+ * the decoder is handed the output alone and cannot tell a block that
+ * declined to fold from one that folded, so a literal `[=0]` decodes as a
+ * reference either way. One more `=` makes the two forms disjoint, costs a
+ * character on a line that essentially never occurs, and is injective --
+ * `[==0]` escapes to `[===0]`, so nothing collides on the way back either.
+ */
+export const COLLIDING_REFERENCE = /^\[=(=*\d+)\]$/;
+export const ESCAPED_REFERENCE = /^\[==(=*\d+)\]$/;
+
 /** Fraction of lines that must look like hits before this engine claims the block. */
 const MIN_DENSITY = 0.6;
 
@@ -173,18 +192,51 @@ export function compressSearchResults(
   text: string,
   _ctx: EngineContext = {}
 ): CompressionResult {
-  const newline = text.includes('\r\n') ? '\r\n' : '\n';
-  // A single hunk header cannot describe mixed line endings. Preserve such
-  // input verbatim; uniform LF/CRLF retains its original byte convention.
-  if (/\r(?!\n)/.test(text) || (newline === '\r\n' && /(?<!\r)\n/.test(text)))
-    return unchanged(text);
-  const lines = text.split(newline);
-  const out: string[] = [];
+  // A HUNK HEADER CANNOT DESCRIBE MIXED LINE ENDINGS -- and the guard that
+  // enforced that refused the WHOLE block on finding any, which made one stray
+  // LF among 747 CRLF lines cost a 60KB grep dump its entire 56% saving. The
+  // rule was right; its scope was not. Carrying each line's own terminator makes
+  // the distinction local: a hunk ends where the terminator changes, so no
+  // header ever claims lines it cannot describe, and only the lines actually
+  // straddling the change fall back to their original prefixes.
+  type Line = { raw: string; eol: string };
+  const lines: Line[] = [];
+  for (let i = 0; i < text.length; ) {
+    let end = i;
+    while (end < text.length && text[end] !== '\n' && text[end] !== '\r') end++;
+    const raw = text.slice(i, end);
+    // A lone CR is a terminator in its own right, not a character inside the
+    // line. Treating it as one is what lets this function stop refusing it.
+    const eol =
+      end >= text.length
+        ? ''
+        : text[end] === '\r' && text[end + 1] === '\n'
+          ? '\r\n'
+          : text[end];
+    lines.push({ raw, eol });
+    i = end + eol.length;
+  }
+  // Emitted lines keep the path they lead with SEPARATE from the rest, so the
+  // fold below rewrites a field rather than pattern-matching its own output.
+  // `content` marks a line that IS hunk body text, which is the only thing a
+  // back-reference may stand for. A short hunk's restored lines carry their own
+  // path and line number, and a declaration row is two tab-separated fields;
+  // neither is a line the decoder can re-derive by repeating an earlier one.
+  type Emitted = {
+    path: string | null;
+    raw: string;
+    eol: string;
+    content?: true;
+  };
+  const out: Emitted[] = [];
   let factoredDeclarations = false;
 
   let path: string | null = null;
   let start = 0;
   let previous = 0;
+  // The terminator the open hunk is built from. A line ending differently
+  // cannot join it, however contiguous its line number.
+  let hunkEol = '';
   // THE SEPARATOR IS CONTENT, so the buffer keeps it rather than the text
   // alone. A hunk too short to earn a header is restored line by line, and
   // rebuilding those lines with a hardcoded `:` turned every ripgrep CONTEXT
@@ -192,7 +244,7 @@ export function compressSearchResults(
   // `src/a.ts:11:  return 1;`. That is the exact distinction this file's
   // header says must survive, quietly inverted on the most common shape in
   // grep output: the single-line hunk.
-  let buffer: { sep: string; text: string }[] = [];
+  let buffer: { sep: string; text: string; eol: string }[] = [];
   let matchedOffsets: number[] = [];
 
   const flush = (): void => {
@@ -203,7 +255,11 @@ export function compressSearchResults(
       // separator, so the line's own leading whitespace is already in `text`,
       // and inserting another doubled it on every restored line.
       buffer.forEach((line, i) =>
-        out.push(`${path}:${start + i}${line.sep}${line.text}`)
+        out.push({
+          path,
+          raw: `:${start + i}${line.sep}${line.text}`,
+          eol: line.eol,
+        })
       );
     } else {
       const range = start === previous ? `${start}` : `${start}-${previous}`;
@@ -211,13 +267,32 @@ export function compressSearchResults(
       // from a `:` hit without a prefix on every line.
       const marks = matchNote(matchedOffsets, start, previous);
       const declarations = declarationRows(buffer);
+      // Every line in the hunk shares one terminator, so the synthesised header
+      // can only be written with that one.
+      const eol = buffer[0].eol;
       if (declarations) {
-        out.push(`${path}:${range}${marks}${declarations.note}`);
-        for (const row of declarations.rows) out.push(row);
+        out.push({
+          path,
+          raw: `:${range}${marks}${declarations.note}`,
+          eol,
+        });
+        // The hunk's LAST emitted line carries the last source line's own
+        // terminator, which is absent when the text ends without one.
+        declarations.rows.forEach((row, i) =>
+          out.push({
+            path: null,
+            raw: row,
+            eol:
+              i === declarations.rows.length - 1
+                ? buffer[buffer.length - 1].eol
+                : eol,
+          })
+        );
         factoredDeclarations = true;
       } else {
-        out.push(`${path}:${range}${marks}`);
-        for (const line of buffer) out.push(line.text);
+        out.push({ path, raw: `:${range}${marks}`, eol });
+        for (const line of buffer)
+          out.push({ path: null, raw: line.text, eol: line.eol, content: true });
       }
     }
     path = null;
@@ -225,26 +300,88 @@ export function compressSearchResults(
     matchedOffsets = [];
   };
 
-  for (const raw of lines) {
-    const hit = parseHit(raw);
+  for (const line of lines) {
+    const hit = parseHit(line.raw);
     if (!hit) {
       flush();
-      out.push(raw);
+      out.push({ path: null, ...line });
       continue;
     }
-    const contiguous = path === hit.path && hit.line === previous + 1;
+    // AN ABSENT TERMINATOR IS NOT A TERMINATOR CHANGE. Only the last line of
+    // the text can have one, and there is nothing after it for a header to
+    // describe wrongly. Excluding it split that line out of its hunk and
+    // restored its full prefix, costing compression on every block that does
+    // not end with a newline -- which is most of them.
+    const sameEnding = line.eol === hunkEol || line.eol === '';
+    const contiguous =
+      path === hit.path && hit.line === previous + 1 && sameEnding;
     if (!contiguous) {
       flush();
       path = hit.path;
       start = hit.line;
+      hunkEol = line.eol;
     }
     previous = hit.line;
     if (hit.matched) matchedOffsets.push(hit.line);
-    buffer.push({ sep: hit.sep, text: hit.text });
+    buffer.push({ sep: hit.sep, text: hit.text, eol: line.eol });
   }
   flush();
 
-  const body = out.join(newline);
+  // THE SAME LINE OF CODE COMES BACK HIT AFTER HIT. A grep for a symbol
+  // returns its call sites, and a call site in one file reads the same as a
+  // call site in another: on the grep-output fixture 300 body lines repeated
+  // one already above them, 4,883 characters of it.
+  //
+  // The ordinal is the line's position among the body lines of this block, so
+  // both sides count the same set in the same order and neither has to be told
+  // the numbering. A back-reference is only written where it is shorter than
+  // the line it replaces, and the whole pass stands down if any real body line
+  // already reads as one -- a document must never be able to forge a reference
+  // into itself.
+  const bodyLines = out.filter((line) => line.content);
+  const firstAt = new Map<string, number>();
+  bodyLines.forEach((line, ordinal) => {
+    const original = line.raw;
+    const seen = firstAt.get(original);
+    if (seen === undefined) firstAt.set(original, ordinal);
+    else {
+      const reference = `[=${seen}]`;
+      if (reference.length < original.length) {
+        line.raw = reference;
+        return;
+      }
+    }
+    const collision = COLLIDING_REFERENCE.exec(original);
+    if (collision) line.raw = `[==${collision[1]}]`;
+  });
+
+  // THE PATH IS STATED ONCE PER HUNK, AND A REPO PATH IS LONG. On the
+  // grep-output fixture 68 headers carried 3,019 characters of path over 17
+  // distinct files -- 11% of the compressed block spent re-typing directory
+  // names the reader already has. A table at the top and a short id on each
+  // header says the same thing in 1,038.
+  //
+  // It only pays above a handful of hunks, and it is refused outright if any
+  // real path in the input looks like an id this pass would mint, so an id can
+  // never be read as a path or a path as an id.
+  const used = new Set<string>();
+  for (const line of out) if (line.path) used.add(line.path);
+  const table = [...used];
+  const ids = new Map(table.map((p, i) => [p, `${PATH_ID_PREFIX}${i}`]));
+  const minted = new Set(ids.values());
+  const folded =
+    table.length > 1 &&
+    out.filter((line) => line.path).length > table.length &&
+    !table.some((p) => minted.has(p));
+  const render = (line: Emitted): string =>
+    (line.path === null ? '' : folded ? ids.get(line.path) : line.path) +
+    line.raw +
+    line.eol;
+  const eol = out.find((line) => line.eol)?.eol ?? '\n';
+  const header = folded
+    ? `[paths ${table.map((p) => `${ids.get(p)}=${p}`).join(' ')}]${eol}`
+    : '';
+  const body = header + out.map(render).join('');
   if (body.length >= text.length) return unchanged(text);
 
   return {
@@ -253,9 +390,13 @@ export function compressSearchResults(
     // stated once and every line number is recoverable from the header.
     elisions: [
       {
-        removed: factoredDeclarations
-          ? 'repeated path prefixes and exact declaration boilerplate'
-          : 'repeated path prefixes',
+        removed: [
+          'repeated path prefixes',
+          factoredDeclarations ? 'exact declaration boilerplate' : '',
+          folded ? 'whole paths, into the table above' : '',
+        ]
+          .filter(Boolean)
+          .join(' and '),
         recoverAt: null,
         lossless: true,
       },

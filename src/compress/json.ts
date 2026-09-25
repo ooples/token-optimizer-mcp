@@ -433,8 +433,29 @@ export function compressJson(
   // way, so it is a common shape rather than an exotic one. Tried here as
   // another candidate; `best` keeps whichever answer is smaller.
   {
+    // BOTH EXACT ENCODINGS, OFFERED ONCE, UNCONDITIONALLY.
+    //
+    // The array encoder used to be reached only from inside the numeric-table
+    // branch further down, behind `extrema.keep.size && !hasRareBooleans &&
+    // !categories.keep.size`. A search result carries a `source` column drawn
+    // from a handful of values, so `rareStringGroups` claimed it and the exact
+    // encoding was never even computed -- forty identical records went out
+    // minified while a competitor folded them to a header and rows. Nothing
+    // about that gate was protecting an answer: `best()` substitutes `exact`
+    // only when it is SMALLER, so offering a lossless candidate can lower the
+    // output and can never raise it.
+    //
+    // HELD, NOT RETURNED. Returning the moment an exact encoding beats the
+    // MINIFIED text compares it against the wrong alternative: further down,
+    // the row elision can put 85 of 90 rows in a spill and come out smaller
+    // still. Making the exact path reachable for one-line records took one
+    // block from 12.9% to 50.9% and simultaneously took v3-history from 73.3%
+    // to 60.4%, because the better lossless encoding preempted a much better
+    // lossy one. So the candidate is carried to every exit instead.
     const asMap = compressJsonObjectMap(text);
-    if (asMap.text.length < text.length) exact = asMap;
+    const asArray = compressJsonArray(text);
+    const smaller = asArray.text.length < asMap.text.length ? asArray : asMap;
+    if (smaller.text.length < text.length) exact = smaller;
   }
   /** Whichever is smaller: this answer, or the exact lossless encoding. */
   const best = (candidate: CompressionResult): CompressionResult =>
@@ -484,30 +505,9 @@ export function compressJson(
       tuning.keepRows
     );
     const keep = rareBooleanRows(stripped);
-    const hasRareBooleans = keep.size > 0;
     const extrema = numericExtrema(stripped);
     for (const i of extrema.keep) keep.add(i);
     const categories = rareStringGroups(parsed as unknown[]);
-    // Numeric tables have no rare categorical population to summarize. Keeping
-    // every record in an exact compact form avoids forcing verification reads
-    // for aggregate queries. Prefer it only when it materially beats minification.
-    if (
-      extrema.keep.size &&
-      !hasRareBooleans &&
-      !categories.keep.size &&
-      !nestedElisions.length
-    ) {
-      // HELD, NOT RETURNED. Returning here the moment the exact encoding
-      // beat MINIFIED compared it against the wrong alternative: further
-      // down, the row elision can put 85 of 90 rows in a spill and come out
-      // far smaller still. Measured, making the exact path reachable for
-      // one-line records took a block from 12.9% to 50.9% on its own and
-      // simultaneously took v3-history from 73.3% to 60.4% on the
-      // conversation, because the better lossless encoding preempted a much
-      // better lossy one. So the candidate is carried to every exit and the
-      // smaller answer wins there.
-      exact = compressJsonArray(text);
-    }
     for (const i of categories.keep) keep.add(i);
     // 1. Content that a reader would come back for -- identifiers, failure
     //    vocabulary -- which structure cannot see. Bounded, so an array made

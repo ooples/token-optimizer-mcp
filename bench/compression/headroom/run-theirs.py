@@ -38,6 +38,12 @@ that happen to disagree.
 
 Usage:
     python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir>
+    python bench/compression/headroom/run-theirs.py - <out-dir> --extra <payloads.json>
+
+`--extra` carries payloads this script did not generate -- our own twelve
+fixtures, exported by `node bench/compression/export-payloads.mjs`. Carried and
+generated payloads are driven identically: the same three entry points, the
+same budget sweep, the same best-of. A clone of `-` skips their generators.
 
 Writes <out-dir>/payloads.json (the exact bytes our side must compress) and
 <out-dir>/theirs.json (their best result per workload, with the arm named).
@@ -46,19 +52,33 @@ Writes <out-dir>/payloads.json (the exact bytes our side must compress) and
 import json
 import os
 import sys
+import time
 
 # APPENDED, NOT PREPENDED. The clone ships a `headroom` package without the
 # compiled _core extension; the installed wheel has it. Prepending the clone
 # shadows the wheel and the router fails to import, so the clone goes LAST and
 # supplies only `benchmarks`, which the wheel does not ship.
+# A CLONE OF `-` MEANS "NOT GENERATING THEIR FIXTURES HERE". Every compressor
+# this script drives comes from the installed wheel; the clone supplies only
+# `benchmarks`, their fixture generators. A run that carries its own payloads
+# therefore needs no clone, and refusing to start without one would mean their
+# binary could never be measured on anybody else's workload.
 CLONE = sys.argv[1]
 OUT = sys.argv[2]
-sys.path.append(CLONE)
+EXTRA = sys.argv[sys.argv.index("--extra") + 1] if "--extra" in sys.argv else None
+if CLONE != "-":
+    sys.path.append(CLONE)
 
 import random  # noqa: E402
 
-from benchmarks.scenarios import conversations as C  # noqa: E402
-from benchmarks.scenarios import tool_outputs as T  # noqa: E402
+try:
+    from benchmarks.scenarios import conversations as C  # noqa: E402
+    from benchmarks.scenarios import tool_outputs as T  # noqa: E402
+
+    HAVE_THEIR_FIXTURES = True
+except ImportError:
+    C = T = None
+    HAVE_THEIR_FIXTURES = False
 
 
 def tokens(text):
@@ -79,14 +99,38 @@ random.seed(42)
 # `native` is the generator's own return value -- a message list for the two
 # conversation workloads, which is what their pipeline consumes. `text` is the
 # serialisation both sides are scored on.
-WORKLOADS = {
-    "log-entries": T.generate_log_entries(400),
-    "search-results": T.generate_search_results(300),
-    "api-responses": T.generate_api_responses(200),
-    "database-rows": T.generate_database_rows(300),
-    "agentic-conversation": C.generate_anthropic_agentic_conversation(12),
-    "rag-conversation": C.generate_rag_conversation(40000),
-}
+WORKLOADS = {}
+if HAVE_THEIR_FIXTURES:
+    WORKLOADS.update(
+        {
+            "log-entries": T.generate_log_entries(400),
+            "search-results": T.generate_search_results(300),
+            "api-responses": T.generate_api_responses(200),
+            "database-rows": T.generate_database_rows(300),
+            "agentic-conversation": C.generate_anthropic_agentic_conversation(12),
+            "rag-conversation": C.generate_rag_conversation(40000),
+        }
+    )
+
+# CARRIED PAYLOADS GET THE IDENTICAL TREATMENT, which is the only reason they
+# may be compared. They enter as `native` -- the generator's own shape -- so a
+# message list stays a message list and their pipeline sees its native path,
+# exactly as their own fixtures do. Serialising ours to a flat string first
+# would hand them a worse entry point on our workloads than on theirs, and the
+# difference would read as their capability rather than as our harness.
+if EXTRA:
+    with open(EXTRA, encoding="utf-8") as handle:
+        carried = json.load(handle)
+    for name in sorted(carried):
+        if name in WORKLOADS:
+            raise SystemExit("carried payload %r collides with one of theirs" % name)
+        WORKLOADS[name] = carried[name]
+
+if not WORKLOADS:
+    raise SystemExit(
+        "no workloads. Pass a headroom clone for their fixtures, "
+        "--extra <payloads.json> for carried ones, or both."
+    )
 
 PAYLOADS = {name: text_of(value) for name, value in WORKLOADS.items()}
 
@@ -274,18 +318,31 @@ def run(name, native, text):
     """Every arm, best (smallest) output wins. Failures are reported, not hidden."""
     attempts = []
     notes = {}
+    # WALL TIME PER ARM, so the scorer can compare speed instead of assuming it.
+    # `perf_counter` and not `time.time`: several of these arms finish in well
+    # under a millisecond, and a coarse clock reports those as zero, which reads
+    # as an arm that never ran. Only the winning arm's time is published, since
+    # that is the arm whose output the comparison uses.
+    timings = {}
     question = question_of(native)
 
+    # KEPT AS CALLABLES, because the winning arm is re-timed below and a
+    # median needs the function, not just its first reading.
+    callables = {}
     for label, fn in (
         ("router", lambda t: arm_router(t, question=None)),
         ("router+question", lambda t: arm_router(t, question=question)),
         ("crusher", arm_crusher),
         ("crusher-lossy-ccr", arm_crusher_lossy),
     ):
+        callables[label] = (fn, (text,))
         if label == "router+question" and not question:
             continue
         try:
-            attempts.append((label, fn(text)))
+            started = time.perf_counter()
+            got = fn(text)
+            timings[label] = (time.perf_counter() - started) * 1000.0
+            attempts.append((label, got))
         except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
             notes[label] = "%s: %s" % (type(exc).__name__, exc)
 
@@ -304,8 +361,14 @@ def run(name, native, text):
     for fraction in (0.1, 0.25, 0.5, 0.75, 1.0, 2.0):
         limit = max(1, int(before_tokens * fraction))
         label = "pipeline@%.2f" % fraction
+        callables[label] = (
+            lambda t, lim=limit: arm_pipeline(native, t, lim),
+            (text,),
+        )
         try:
+            started = time.perf_counter()
             got = arm_pipeline(native, text, limit)
+            timings[label] = (time.perf_counter() - started) * 1000.0
             if got is None:
                 continue
             attempts.append((label, got))
@@ -320,6 +383,10 @@ def run(name, native, text):
             "beforeTokens": before_tokens,
             "afterTokens": before_tokens,
             "arm": "none",
+            "ms": 0.0,
+            "msMin": 0.0,
+            "msMax": 0.0,
+            "msSamples": [],
             "bestText": text,
             "notes": notes,
         }
@@ -334,12 +401,42 @@ def run(name, native, text):
 
     arm, best = min(attempts, key=reduction)
     ratio = reduction((arm, best))
+    # REPEATED READINGS OF THE WINNING ARM, MEDIAN PUBLISHED. The sweep above
+    # times each arm once, which is enough to pick a winner and not enough to
+    # compare against ours: a single reading of a sub-second call is partly a
+    # reading of the machine. Only the winner is repeated, because only the
+    # winner is the arm the comparison uses, and repeating all ten would spend
+    # ten times the wall clock to time nine arms nobody scores.
+    samples = [timings.get(arm, 0.0)]
+    fn_args = callables.get(arm)
+    if fn_args is not None:
+        fn, args = fn_args
+        # THIRTY MORE, FOR THIRTY-ONE IN ALL. The node side takes the same
+        # number for the same reason: the scorer compares tails, not just
+        # medians, and eleven readings put a lone spike on the tail it reads.
+        for _ in range(30):
+            try:
+                started = time.perf_counter()
+                fn(*args)
+                samples.append((time.perf_counter() - started) * 1000.0)
+            except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
+                notes["retime:" + arm] = "%s: %s" % (type(exc).__name__, exc)
+                break
+    # RUN ORDER PRESERVED for the same reason the node side preserves it: the
+    # first reading carries the import and the first-call cost, and a consumer
+    # that cannot see which one was first cannot tell warm-up from variance.
+    ordered = [round(v, 3) for v in samples]
+    samples = sorted(samples)
     return {
         "before": len(text),
         "after": round(len(text) * ratio),
         "beforeTokens": before_tokens,
         "afterTokens": max(1, round(before_tokens * ratio)),
         "arm": arm,
+        "ms": round(samples[(len(samples) - 1) // 2], 3),
+        "msMin": round(samples[0], 3),
+        "msMax": round(samples[-1], 3),
+        "msSamples": ordered,
         "arms": {label: round(reduction((label, out)) * len(text)) for label, out in attempts},
         # The actual bytes, so the scorer can tokenise their output with the
         # same real tokeniser it uses on ours instead of trusting a proxy.

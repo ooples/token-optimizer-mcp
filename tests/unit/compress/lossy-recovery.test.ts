@@ -4,8 +4,9 @@ import { compressProse } from '../../../src/compress/prose.js';
 import { compressJson } from '../../../src/compress/json.js';
 import { foldRepeatedSegments } from '../../../src/compress/segments.js';
 import { DEFAULT_TUNING } from '../../../src/compress/options.js';
-import { expandLog } from '../../helpers/expand-log.js';
-import { rehydrate } from '../../support/rehydrate.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
+import { PathAddressedError } from '../../../src/compress/annotate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 /**
  * THE LOSSY PATH, held to the promise its marker makes.
@@ -200,7 +201,17 @@ describe('a lossy elision delivers what its marker promises', () => {
     });
     expect(lossy.lossless).toBe(false);
     expect(lossy.text).toContain(`-> ${SOURCE}:`);
-    expect(() => expandLog(lossy.text)).toThrow(/unrecognised marker/);
+    // The refusal is unchanged; it now carries the path it refused in favour
+    // of, so a caller can score that content as one `Read` away, not lost.
+    let refusal: unknown = null;
+    try {
+      expandLog(lossy.text);
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal instanceof PathAddressedError).toBe(true);
+    if (refusal instanceof PathAddressedError)
+      expect(refusal.recoverAt.startsWith(`${SOURCE}:`)).toBe(true);
 
     // The positive control: the same decoder on output it CAN rebuild.
     // Without this the assertion above passes on a decoder that throws on

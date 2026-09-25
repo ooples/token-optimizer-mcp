@@ -1,5 +1,5 @@
 import { compressSearchResults } from '../../../src/compress/search.js';
-import { rehydrate } from '../../support/rehydrate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 /**
  * The gate for the engine's ORDINARY output.
@@ -78,12 +78,78 @@ describe('plain search hunks reconstruct from the output alone', () => {
 
   it('writes each match note shape, so the round trip exercised all of them', () => {
     const text = compressSearchResults(fixture('\n')).text;
-    expect(text).toContain('src/proxy/supervisor.ts:10-15 (matched 10,12,15)');
-    expect(text).toContain('src/proxy/supervisor.ts:20-23 (matched 21-23)');
-    expect(text).toContain('hooks-core/derive.mjs:30-32 (matched 31)');
-    expect(text).toContain('hooks-core/derive.mjs:40-42 (context)');
-    expect(text).toContain('a/b.txt:50-53\n');
-    expect(text).toContain('a/b.txt:99-lone');
+    // Three files over six hunks, so the path table pays and every header
+    // carries an id. The table is what makes the ids resolvable, so assert it
+    // alongside them rather than only the shapes it renames.
+    expect(text).toContain(
+      '[paths @0=src/proxy/supervisor.ts @1=hooks-core/derive.mjs @2=a/b.txt]'
+    );
+    expect(text).toContain('@0:10-15 (matched 10,12,15)');
+    expect(text).toContain('@0:20-23 (matched 21-23)');
+    expect(text).toContain('@1:30-32 (matched 31)');
+    expect(text).toContain('@1:40-42 (context)');
+    expect(text).toContain('@2:50-53\n');
+    expect(text).toContain('@2:99-lone');
+  });
+});
+
+/** A hunk of `texts` under `path`, every line a match, starting at `start`. */
+function hits(path: string, start: number, texts: readonly string[]): string[] {
+  return texts.map((text, i) => `${path}:${start + i}:${text}`);
+}
+
+describe('a body line repeating an earlier one is written as a reference', () => {
+  // A grep for a symbol returns its call sites, and a call site in one file
+  // reads the same as a call site in another. These are the repeats.
+  const shared = '    return this.cache.get(key) ?? this.load(key);';
+  const other = '    this.metrics.record(key, Date.now() - started);';
+
+  const repeated = (): string =>
+    [
+      ...hits('src/a/store.ts', 10, ['function get(key: string) {', shared, '}']),
+      '--',
+      ...hits('src/b/store.ts', 20, ['function fetch(key: string) {', shared, '}']),
+      '--',
+      ...hits('src/c/store.ts', 30, ['function tap(key: string) {', other, shared]),
+    ].join('\n');
+
+  it('folds the repeat and rebuilds it from the reference alone', () => {
+    const result = compressSearchResults(repeated());
+    // Ordinals count body lines across the whole block: 0,1,2 then 3,4,5 then
+    // 6,7,8. The first `shared` is 1, so both later copies name 1.
+    expect(result.text).toContain('[=1]');
+    // Folded, not merely mentioned: the line itself survives exactly once.
+    expect(result.text.split(shared).length - 1).toBe(1);
+    expect(result.lossless).toBe(true);
+    expect(rehydrate(result.text)).toBe(repeated());
+  });
+
+  it('escapes a line that would otherwise read as a reference', () => {
+    // THE DECODER IS HANDED THE OUTPUT ALONE. It cannot tell a block that
+    // declined to fold from one that folded, so declining is no defence
+    // against a literal `[=0]`; one more `=` makes the two forms disjoint
+    // and leaves the genuine repeat still worth folding.
+    const forged = [
+      ...hits('src/a/store.ts', 10, ['[=0]', shared, '}']),
+      '--',
+      ...hits('src/b/store.ts', 20, ['[==7]', shared, '}']),
+    ].join('\n');
+    const result = compressSearchResults(forged);
+    expect(result.text).toContain('[==0]');
+    expect(result.text).toContain('[===7]');
+    expect(result.text).toContain('[=1]');
+    expect(rehydrate(result.text)).toBe(forged);
+  });
+
+  it('leaves a repeat alone where the reference would not be shorter', () => {
+    const tiny = [
+      ...hits('src/a/store.ts', 10, ['aa', 'b', 'cc']),
+      '--',
+      ...hits('src/b/store.ts', 20, ['dd', 'b', 'ee']),
+    ].join('\n');
+    const result = compressSearchResults(tiny);
+    expect(result.text).not.toContain('[=1]');
+    expect(rehydrate(result.text)).toBe(tiny);
   });
 });
 
@@ -108,6 +174,15 @@ describe('the search decoder refuses what it cannot rebuild', () => {
     // helper reject documents the engine never touched.
     const text = '{"note":"[exact declaration rows: name=rhs]"}';
     expect(rehydrate(text)).toBe(text);
+  });
+
+  it('refuses a reference to a line that never arrived', () => {
+    // A FORWARD OR DANGLING REFERENCE IS A TRUNCATED BLOCK. Passing the
+    // marker through as content would report a successful reconstruction
+    // carrying a line the original never held.
+    expect(() => rehydrate('src/a.ts:1-2\nhello\n[=5]')).toThrow(
+      /references no earlier line/
+    );
   });
 
   it('refuses a descending range instead of walking it for ever', () => {

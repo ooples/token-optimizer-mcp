@@ -1,5 +1,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressLog } from '../../../src/compress/log.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 import { compressProse } from '../../../src/compress/prose.js';
 import { compressSearchResults } from '../../../src/compress/search.js';
 import { compressCode } from '../../../src/compress/code.js';
@@ -35,10 +37,19 @@ describe('log folding keeps the timestamps it removes', () => {
     // -- the whole reason this engine beats a naive one on the most repetitive
     // logs there are. The stamps were then simply gone, and the result still
     // said `lossless: true`. On a log, WHEN is often the question.
-    const out = compressLog(clocked(9, 'connection pool warmed'));
+    // ASSERTED THROUGH THE DECODER, not as a substring, because two encodings
+    // both satisfy the requirement and only one of them writes a stamp
+    // contiguously. The duplicate marker lists `12:00:01` whole; a template
+    // states `12:00:#` once and `01` among its values. Both keep WHEN, which
+    // is what this test defends -- the defect it pins is stamps being dropped
+    // outright while the result still claimed `lossless: true`. Rebuilding the
+    // input from the output alone proves every one survived, and proves it
+    // whichever encoding the size comparison picked.
+    const input = clocked(9, 'connection pool warmed');
+    const out = compressLog(input);
 
-    expect(out.text).toContain('12:00:01');
-    expect(out.text).toContain('12:00:08');
+    expect(expandLog(out.text)).toBe(input);
+    expect(out.text.length).toBeLessThan(input.length);
     expect(out.elisions.some((e) => e.lossless)).toBe(true);
   });
 
@@ -62,18 +73,29 @@ describe('log folding keeps the timestamps it removes', () => {
     expect(out.elisions.some((e) => !e.lossless && e.recoverAt)).toBe(true);
   });
 
-  it('leaves the run whole when it can neither list nor spill', () => {
-    // The honest last resort: no annotation it can afford, nowhere to put the
-    // original, so nothing is removed.
+  it('keeps every timestamp when it can neither list nor spill', () => {
+    // The honest last resort: nowhere to put the original, so nothing may be
+    // lost. That is the invariant, and it is unchanged.
+    //
+    // IT IS CHECKED WITH THE DECODER, NOT WITH `toContain`. This run used to
+    // be left verbatim because a template over it cost more than it saved, so
+    // asking whether `12:00:07` was still a substring happened to answer the
+    // right question. Hoisting the fixed columns made the template pay, and a
+    // folded `2026-09-09T12:00:#Z` plus `07.000` contains every one of those
+    // timestamps without containing any of them as text -- which is the
+    // substring oracle reporting healthy compression as data loss, the exact
+    // failure `src/compress/rehydrate.ts` was written to stop. Rebuilding the
+    // input is a stronger question than thirty substrings: it covers all of
+    // them, every other byte, and the lossless contract they travel under.
     const terse = Array.from(
       { length: 30 },
       (_, i) => `2026-09-09T12:00:${String(i).padStart(2, '0')}.000Z ok`
     ).join('\n');
     const out = compressLog(terse);
 
-    for (let i = 0; i < 30; i += 1) {
-      expect(out.text).toContain(`12:00:${String(i).padStart(2, '0')}`);
-    }
+    expect(rehydrate(out.text)).toBe(terse);
+    expect(out.lossless).toBe(true);
+    expect(out.elisions.every((e) => e.lossless || e.recoverAt)).toBe(true);
   });
 
   it('does not fold scattered duplicates it cannot place', () => {
@@ -238,7 +260,6 @@ describe('a concise arrow body is not a brace-delimited body', () => {
     expect(out.text.length).toBeLessThan(source.length);
   });
 });
-
 
 describe('the ONNX adapter rejects an output shape it cannot slice', () => {
   // A stand-in runtime. `runBatch` only ever constructs a tensor and reads the

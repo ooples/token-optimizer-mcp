@@ -1,6 +1,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressJson, looksLikeJson } from '../../../src/compress/json.js';
 import { compressLog, looksLikeLog } from '../../../src/compress/log.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
 import {
   compressCode,
   looksLikeCode,
@@ -199,9 +200,16 @@ describe('log', () => {
       lines.push(stamped(i, 'WARN peer dependency mismatch'));
       lines.push(stamped(i, `DEBUG unique step ${i}`));
     }
-    const out = compressLog(lines.join('\n'));
-    expect(out.text).toContain('elsewhere');
-    expect(out.text.length).toBeLessThan(lines.join('\n').length);
+    const input = lines.join('\n');
+    const out = compressLog(input);
+    // THE DEFECT IS 0%, NOT A MISSING MARKER. Consecutive-only folding left a
+    // log like this untouched; what matters is that the interleaved repetition
+    // is gone and every line still comes back. Which encoding removes it is a
+    // size decision made per block -- scattered folding states the repeat in
+    // one marker, templating states the shape once and lists the values -- so
+    // naming one of them here would pin the choice rather than the outcome.
+    expect(out.text.length).toBeLessThan(input.length / 2);
+    expect(expandLog(out.text)).toBe(input);
   });
 
   // PRESERVATION.
@@ -314,6 +322,47 @@ describe('code', () => {
       '+f',
     ].join('\n');
     expect(compressCode(diff, { sourcePath: 'x.ts' }).text).toBe(diff);
+  });
+
+  // A hashbang is legal only at offset 0, and concatenation puts one anywhere.
+  // When the parse for the whole block threw on it, the generic line heuristic
+  // took over and -- as the second expectation here pins -- elides nothing at
+  // all on this shape, so an entire multi-file block came back uncompressed.
+  it('elides bodies in a block whose SECOND file opens with a hashbang', () => {
+    const first = [
+      'export function first(input) {',
+      "  const parts = input.split(' ');",
+      '  const out = [];',
+      '  for (const p of parts) out.push(p);',
+      "  return out.join('-');",
+      '}',
+    ].join('\n');
+    const second = [
+      'export function second(limit) {',
+      '  let total = 0;',
+      '  for (let i = 0; i < limit; i += 1) total += i;',
+      '  if (total > 10) total = 10;',
+      '  return total;',
+      '}',
+    ].join('\n');
+    const block = `${first}\n\n#!/usr/bin/env node\n${second}`;
+
+    const out = compressCode(block, { sourcePath: 'x.ts' });
+
+    // BOTH bodies go, not just the one before the hashbang.
+    expect(out.elisions).toHaveLength(2);
+    expect(out.text).toContain('export function first(input) {');
+    expect(out.text).toContain('export function second(limit) {');
+    expect(out.text).not.toContain('total += i');
+
+    // The mask exists only for the parser: the line itself is still there,
+    // spelled exactly as it was.
+    expect(out.text).toContain('#!/usr/bin/env node');
+    expect(out.text).not.toContain('//!/usr/bin/env node');
+
+    // The fallback that used to handle this block finds nothing to elide,
+    // which is what made the regression silent rather than merely worse.
+    expect(compressCode(block, { language: 'generic' }).text).toBe(block);
   });
 
   // PRESERVATION.

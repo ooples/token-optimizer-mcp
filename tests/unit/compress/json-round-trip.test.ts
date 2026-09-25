@@ -2,7 +2,8 @@ import { describe, it, expect } from '@jest/globals';
 import { compressBlock } from '../../../src/compress/router.js';
 import { DEFAULT_TUNING } from '../../../src/compress/options.js';
 import { jsonLexemes } from '../../support/json-lexemes.js';
-import { rehydrate } from '../../support/rehydrate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
+import { PathAddressedError } from '../../../src/compress/annotate.js';
 
 /**
  * THE JSON ENGINE HAS THE LARGEST MEASURED REDUCTION AND, UNTIL NOW, NO GATE.
@@ -265,9 +266,20 @@ describe('rehydrate refuses what it cannot rebuild', () => {
   });
 
   it('refuses a lossy marker, whose content is not in the output at all', () => {
-    expect(() =>
-      rehydrate('head\n[... 900 lines -> /spill/log.txt]\ntail')
-    ).toThrow(/unrecognised marker/);
+    // REFUSES, AND SAYS WHERE IT WENT. The refusal is the invariant and it is
+    // unchanged; what is asserted here is that it is distinguishable from an
+    // unregistered family WITHOUT reading its message, because a caller forced
+    // to match on message text cannot tell the design working from a defect --
+    // and one that could not tell filed six of these on a defect queue.
+    let refusal: unknown = null;
+    try {
+      rehydrate('head\n[... 900 lines -> /spill/log.txt]\ntail');
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal instanceof PathAddressedError).toBe(true);
+    if (refusal instanceof PathAddressedError)
+      expect(refusal.recoverAt).toBe('/spill/log.txt');
   });
 
   it('refuses a json marker no grammar consumed', () => {

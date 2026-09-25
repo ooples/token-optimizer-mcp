@@ -25,7 +25,7 @@ import { activeRanker } from './ranking.js';
 import type { EmbeddingCache } from './embedding.js';
 import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
-import { unchanged } from './types.js';
+import { spillFor, unchanged } from './types.js';
 
 /**
  * Bodies shorter than this stay: the marker would cost more than the code.
@@ -144,10 +144,35 @@ export function looksLikeCode(text: string, ctx: EngineContext = {}): boolean {
  * fall back rather than emit something wrong -- a compressor that mangles code
  * it misparsed is worse than one that declines.
  */
+/**
+ * A HASHBANG IS ONLY LEGAL AT OFFSET 0, and a concatenated block puts one
+ * anywhere.
+ *
+ * Babel accepts `#!/usr/bin/env node` as the first two bytes of a program and
+ * nowhere else. A tool result that reads several files hands us one string, so
+ * the second executable in it carries its hashbang into the middle, and the
+ * parse for the WHOLE block throws on that one line. Measured on this
+ * repository's own `src/server` as the codebase-exploration fixture
+ * concatenates it -- `daemon.ts` is the third of four files -- the AST was
+ * lost and the generic line heuristic took over: 52.9% where parsing each file
+ * separately reaches 72.9%. Four of this repository's 272 sources begin with a
+ * hashbang, so it is not a rarity, and it costs the entire block, not the file.
+ *
+ * MASK, DO NOT STRIP. `//` is exactly as wide as `#!`, so the masked copy has
+ * the same length, the same line count and the same columns, and every span the
+ * parser reports still addresses the ORIGINAL text -- which is the text we
+ * elide. Stripping the line would shift every span after it by one.
+ *
+ * A `#!` at offset 0 is left alone: there it is what Babel already expects.
+ */
+function maskInteriorHashbangs(text: string): string {
+  return text.replace(/(?<=\n)#!/g, '//');
+}
+
 function babelBodies(text: string): Array<[number, number]> | null {
   let ast: ReturnType<typeof parse>;
   try {
-    ast = parse(text, {
+    ast = parse(maskInteriorHashbangs(text), {
       sourceType: 'unambiguous',
       allowReturnOutsideFunction: true,
       errorRecovery: true,
@@ -416,8 +441,11 @@ export function compressCode(
   //
   // It is also better for the reader: one file holding the original in order,
   // rather than N fragments they would have to reassemble.
-  const anchorPath =
-    ctx.sourcePath ?? (ctx.spill ? ctx.spill(text, 'block.txt') : null);
+  // THROUGH `spillFor`, NOT AROUND IT. Calling the sink directly skipped both
+  // the empty-string check and the one-path-per-content memo, which is how the
+  // same file read three times in one request became three spill files and
+  // three round trips.
+  const anchorPath = ctx.sourcePath ?? spillFor(ctx, text, 'block.txt');
 
   for (const [from, to] of spans) {
     const lineCount = to - from + 1;
