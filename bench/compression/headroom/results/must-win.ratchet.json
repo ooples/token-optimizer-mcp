@@ -1,0 +1,24 @@
+{
+  "note": "pairs recorded as passing; a pass here may never regress",
+  "enforced": {
+    "browser-session/cost": true,
+    "browser-session/retention": true,
+    "codebase-exploration/retention": true,
+    "grep-output/retention": true,
+    "raw-build-log/retention": true,
+    "sre-debugging/retention": true
+  },
+  "retentionFloors": {
+    "agent-loop-logs": 87,
+    "browser-session": 336,
+    "code-search": 65,
+    "codebase-exploration": 509,
+    "grep-output": 1046,
+    "human-authored-json": 18,
+    "issue-triage": 34,
+    "raw-build-log": 430,
+    "relevance-probe": 24,
+    "repeated-reads": 361,
+    "sre-debugging": 89
+  }
+}
