@@ -2,10 +2,10 @@
   "harness": "bench/compression/head-to-head.mjs",
   "regenerate": "python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && node bench/compression/head-to-head.mjs <out-dir> --record bench/compression/headroom/results/head-to-head.json",
   "recordedAt": "2026-09-25",
-  "commit": "4d6afc376dfaf8319b6c0af087bdae87112f42c7",
+  "commit": "e7d8c0ff5490bb441e5033459c103c5e88fea0f0",
   "capture": {
-    "dir": "hr5/out",
-    "theirsDigest": "0c2663858b875373"
+    "dir": "hr6/out",
+    "theirsDigest": "60e287260e71e395"
   },
   "workloads": [
     {
@@ -65,8 +65,8 @@
         }
       },
       "speed": {
-        "oursMs": "29.434",
-        "theirsMs": null
+        "oursMs": "29.123",
+        "theirsMs": "317.320"
       }
     },
     {
@@ -126,8 +126,8 @@
         }
       },
       "speed": {
-        "oursMs": "26.016",
-        "theirsMs": null
+        "oursMs": "23.341",
+        "theirsMs": "208.502"
       }
     },
     {
@@ -187,8 +187,8 @@
         }
       },
       "speed": {
-        "oursMs": "127.228",
-        "theirsMs": null
+        "oursMs": "113.133",
+        "theirsMs": "315.109"
       }
     },
     {
@@ -248,8 +248,8 @@
         }
       },
       "speed": {
-        "oursMs": "8.483",
-        "theirsMs": null
+        "oursMs": "8.589",
+        "theirsMs": "94.308"
       }
     },
     {
@@ -309,8 +309,8 @@
         }
       },
       "speed": {
-        "oursMs": "142.756",
-        "theirsMs": null
+        "oursMs": "88.972",
+        "theirsMs": "79.957"
       }
     },
     {
@@ -370,8 +370,8 @@
         }
       },
       "speed": {
-        "oursMs": "17.240",
-        "theirsMs": null
+        "oursMs": "12.112",
+        "theirsMs": "58.301"
       }
     },
     {
@@ -431,8 +431,8 @@
         }
       },
       "speed": {
-        "oursMs": "23.488",
-        "theirsMs": null
+        "oursMs": "14.381",
+        "theirsMs": "56.171"
       }
     },
     {
@@ -492,8 +492,8 @@
         }
       },
       "speed": {
-        "oursMs": "10.620",
-        "theirsMs": null
+        "oursMs": "9.073",
+        "theirsMs": "79.479"
       }
     },
     {
@@ -553,8 +553,8 @@
         }
       },
       "speed": {
-        "oursMs": "68.311",
-        "theirsMs": null
+        "oursMs": "57.829",
+        "theirsMs": "86.331"
       }
     },
     {
@@ -614,8 +614,8 @@
         }
       },
       "speed": {
-        "oursMs": "7.926",
-        "theirsMs": null
+        "oursMs": "5.140",
+        "theirsMs": "49.020"
       }
     },
     {
@@ -675,8 +675,8 @@
         }
       },
       "speed": {
-        "oursMs": "69.153",
-        "theirsMs": null
+        "oursMs": "54.574",
+        "theirsMs": "79.164"
       }
     },
     {
@@ -736,8 +736,8 @@
         }
       },
       "speed": {
-        "oursMs": "30.715",
-        "theirsMs": null
+        "oursMs": "17.721",
+        "theirsMs": "92.707"
       }
     }
   ],
