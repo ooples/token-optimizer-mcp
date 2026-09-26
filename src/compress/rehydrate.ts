@@ -51,7 +51,17 @@ import { readImageBackReference } from './images.js';
  */
 export function expandJsonRecords(text: string): string {
   return text.replace(
-    /\[JSON array records; ALL \d+ records preserved(?:, \d+ encoded here)?\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: (\[[^\n]+?\])(; slots ([^\]\n]+) count from 0)?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
+    // FOUR HEADERS, ONE BODY. `compressRecords` writes the same rows under
+    // four different prose headers -- a keyed map says `object map` and
+    // `entries` where a list says `array records` and `records`, a partial
+    // group says `missing records remain unknown`, and the short-header
+    // variant drops the sentence entirely. This pattern matched only the
+    // list header, so an object map reached `UNCONSUMED` and rehydrate threw
+    // `unconsumed marker "[JSON object map; ALL 40 entries preserved ..."`,
+    // losing the whole block rather than the rows it could not state. The
+    // body is byte-identical across all four, so the alternation is on the
+    // header alone and the capture groups stay where the handler expects.
+    /(?:\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: |\[JSON (?:array records; ALL \d+ records|object map; ALL \d+ entries) preserved(?:, \d+ encoded here)?\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: |\[JSON fragment records; missing records remain unknown\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: )(\[[^\n]+?\])(; slots ([^\]\n]+) count from 0)?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
     (
       _all,
       encoded: string,
