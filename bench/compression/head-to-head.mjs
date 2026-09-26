@@ -76,6 +76,7 @@ import { reproducibilityRefusal } from './reproducibility.mjs';
 // stay direct because they are instruments, not the thing being measured.
 import {
   compressBlock,
+  engineNameFor,
   compressBody,
   KNOWN_ANSWER_OURS,
   stubbedScorerRefusal,
@@ -1013,6 +1014,11 @@ for (const [name, text] of Object.entries(payloads)) {
     oursTok: 1 - tokens(out.text) / tokens(text),
     theirsTok: 1 - theirAfter / theirBefore,
     arm: t ? t.arm : 'n/a',
+    // WHICH OF OUR ENGINES CLAIMED THIS PAYLOAD, or null when none did.
+    // An unclaimed payload is returned untouched, so `ours` reads 0% --
+    // our product declining the input, not our product examining it and
+    // finding nothing. See engineNameFor in ours-engine.mjs.
+    oursEngine: engineNameFor(text),
     ids: want.size,
     // Scraped but too short to score by substring. Printed rather than dropped,
     // so a denominator that shrank is visible instead of merely smaller.
@@ -1537,6 +1543,32 @@ const oursDerived = sum((r) => r.derived);
 const oursSpilled = sum((r) => r.inSpill);
 const theirsIn = sum((r) => r.theirIn);
 const theirsRedeemed = sum((r) => r.theirRedeemed);
+// OUR OWN COLUMN, DISCLOSED THE SAME WAY THEIRS IS.
+//
+// A payload no engine of ours claims comes back untouched, so it scores a 0%
+// saving. Printed beside eleven rows that WERE compressed, that zero reads as
+// "our engine found nothing here" when what happened is "our engine declined
+// to look". Both are legitimate outcomes to publish -- a user pasting that
+// content really does save nothing -- but they are different claims, and only
+// one of them is also what a malformed fixture looks like. Every payload in
+// every capture is claimed today, so this block prints nothing; it exists so
+// that a fixture regenerated tomorrow cannot quietly become a measured zero.
+//
+// Silent on a known-answer run: the stub is not an engine, so the question
+// does not apply and `engineNameFor` returns null for every row by design.
+const oursDeclined = KNOWN_ANSWER_OURS ? [] : rows.filter((r) => r.oursEngine === null);
+if (oursDeclined.length) {
+  console.log('');
+  console.log(
+    `  OUR ENGINE DECLINED ${oursDeclined.length} of ${rows.length} workload(s). Their 0% saving is ` +
+      'our product refusing the input, NOT our product examining it and finding nothing:'
+  );
+  for (const r of oursDeclined) console.log(`    ${r.name}: no engine claimed this payload`);
+  console.log(
+    '    Check the fixture before reading the row: a payload truncated or rewrapped ' +
+      'so it no longer parses loses its claim, and then measures a no-op.'
+  );
+}
 const theirsUnmeasured = rows.filter((r) => !r.theirMeasured);
 const allIds = sum((r) => r.ids);
 console.log(`retention units           ${allIds}`);

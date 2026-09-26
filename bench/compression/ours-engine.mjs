@@ -38,8 +38,34 @@ if (KNOWN_ANSWER_OURS) {
     import('../../dist/compress/router.js'),
     import('../../dist/proxy/server.js'),
   ]);
-  impl = { compressBlock: router.compressBlock, compressBody: server.compressBody };
+  impl = {
+    compressBlock: router.compressBlock,
+    compressBody: server.compressBody,
+    engineNameFor: router.engineNameFor,
+  };
 }
+
+/**
+ * Which of our engines claims this text, or null when none of them does.
+ *
+ * WHY A BENCHMARK NEEDS THIS. An unclaimed block is returned untouched, so our
+ * column reads a 0% saving -- which is indistinguishable, in the published
+ * table, from an engine that ran and found nothing to remove. The two are not
+ * the same claim: the first says our product declined the input, the second
+ * says it examined it. A malformed fixture lands in the first case and would
+ * publish as the second.
+ *
+ * MEASURED, not hypothetical: every payload in every capture under an `hr<n>` out-dir
+ * is claimed by `json` today, and truncating one of those payloads to 98% of
+ * its length makes it invalid JSON, drops the claim to null, and cuts its
+ * measured time by ~3x. A scaling sweep built on prefixes of these payloads
+ * therefore compares a real run against a no-op and reads as superlinear cost.
+ *
+ * Null on a known-answer run, where the question does not apply: the stub is
+ * not an engine and head-to-head already refuses to publish such a record.
+ */
+export const engineNameFor = (text) =>
+  typeof impl.engineNameFor === 'function' ? impl.engineNameFor(text) : null;
 
 /** Compress one text block. Returns at least `{ text }`. */
 export const compressBlock = (text, options) => impl.compressBlock(text, options);
