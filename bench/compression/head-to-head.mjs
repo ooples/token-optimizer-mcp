@@ -1604,6 +1604,22 @@ if (carriedList === null) {
         `chars ours ${pct(1 - o / b)} theirs ${pct(1 - t / b)}   ` +
         `tokens ours ${pct(1 - ot / bt)} theirs ${pct(1 - tt / bt)}`
     );
+    // AND THE LIKE-FOR-LIKE HALF OF IT, for the same reason the corpus line carries
+    // one: the `theirs` figures just printed are best-of-any, so on a half where
+    // their winning arm offloads to their store, that column is their substitution
+    // arm against our encoding arm. Scored only over the rows of this half where a
+    // non-offloading arm of theirs was actually measured, and says how many.
+    const clean = set.filter((r) => r.theirCleanState === 'measured');
+    if (clean.length > 0) {
+      const cb = clean.reduce((a, r) => a + r.oursTokBefore, 0);
+      const co = clean.reduce((a, r) => a + r.oursTokAfter, 0);
+      const ctb = clean.reduce((a, r) => a + r.theirCleanBeforeTok, 0);
+      const ct = clean.reduce((a, r) => a + r.theirCleanTok, 0);
+      console.log(
+        `    ${''.padEnd(20)} ${String(clean.length).padStart(2)} of those   ` +
+          `like4like ours ${pct(1 - co / cb)} theirs ${pct(1 - ct / ctb)}   (tokens, their non-offloading arm)`
+      );
+    }
   };
   part('their own fixtures', theirFixtureRows);
   part('our fixtures', rows.filter((r) => r.fixtureOwner === 'ours'));
