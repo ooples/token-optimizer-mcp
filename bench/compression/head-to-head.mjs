@@ -1640,6 +1640,11 @@ if (process.argv[3] === '--record') {
         // seven of these rows, which is only visible once the total is here.
         ids: String(r.ids),
         unsafeIds: String(r.unsafe),
+        // Recorded beside the denominator for the same reason it is printed:
+        // this many units were dropped as not being substrings of their own
+        // payload, and a record that shows a narrower denominator without
+        // saying why is a record that cannot be audited.
+        phantomIds: String(r.phantoms),
         inContext: String(r.inOut),
         reconstructible: String(r.derived),
         // null, not "null": a sinkless arm never measured this, and a JSON

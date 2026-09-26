@@ -30,10 +30,19 @@
  *                      reports none has under-measured rather than the engine
  *                      having declined.
  *
- * Nothing here uses Math.random: the generator is a fixed LCG, so two runs on
+ *   ka-escaped         one quoted path inside a longer string, so the payload
+ *                      text escapes a backslash the parsed value does not.
+ *                      The unit is real text at one depth and absent at the
+ *                      depth retention is scored, so NO arm could ever be
+ *                      credited with keeping it. The scorer must drop it from
+ *                      the denominator and say how many it dropped.
+ * * Nothing here uses Math.random: the generator is a fixed LCG, so two runs on
  * two machines produce identical bytes and a diff between captures can only be
  * the harness.
  */
+
+/** One backslash, built so no source line of this file has to escape one. */
+const BS = String.fromCharCode(92);
 
 const ALPHABET =
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
@@ -125,6 +134,27 @@ export function knownAnswerFixtures() {
       kind: 'messages',
       armRaises: 'ka-fragile',
       native: [{ role: 'user', content: `KA-RAISE ${entropyText(600, 90002)}` }],
+    },
+    {
+      name: 'ka-escaped',
+      kind: 'messages',
+      // BS is built rather than written so the source carries no escape of its
+      // own: the value below holds ONE backslash per separator, and
+      // `json.dumps` writes TWO into payloads.json. That gap is the whole
+      // fixture. The line is deliberately longer than MAX_UNIT so the keyed
+      // rule does not also admit the whole string -- leaving exactly one
+      // phantom, which is a right answer rather than a count.
+      phantom: `C:${BS}proj${BS}svc${BS}run.py`,
+      native: [
+        { role: 'user', content: 'Why did the run fail?' },
+        {
+          role: 'assistant',
+          content:
+            `Traceback (most recent call last): File "C:${BS}proj${BS}svc${BS}run.py", ` +
+            'line 4, in <module> raise Timeout; request KA-ESC-9f2b41 exited ' +
+            'status 1 after 30s of waiting on the upstream index shard',
+        },
+      ],
     },
     {
       name: 'ka-repeated',

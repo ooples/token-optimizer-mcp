@@ -446,6 +446,16 @@ const MUTANTS = [
     from: '      if (inner.length >= MIN_SYMBOL && inner.length <= MAX_UNIT) into.add(inner);\n    }',
     to: '      if (inner.length >= MIN_SYMBOL) into.add(inner);\n    }',
   },
+  {
+    name: 'the dropped-unit count is recorded as a constant zero',
+    defect:
+      'a published record whose denominator narrowed with nothing saying it had',
+    caughtBy: 'scorer: the record says how many were dropped',
+    file: H2H,
+    check: SCORER,
+    from: 'phantomIds: String(r.phantoms),',
+    to: "phantomIds: '0',",
+  },
 ];
 
 // The files to snapshot come from the table, so adding a mutant against a new

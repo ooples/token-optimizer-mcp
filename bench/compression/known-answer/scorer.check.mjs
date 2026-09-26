@@ -33,7 +33,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { knownAnswerFixtures, IDENTIFIER_COUNT } from './fixtures.mjs';
-import { identifiers } from '../identifiers.mjs';
+import { identifiers, scanIdentifiers } from '../identifiers.mjs';
 import { DROP, ID_CHARS } from './ours-lossy.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -252,6 +252,34 @@ try {
       num(items.unsafeIds) === short.length && num(items.ids) === scraped.length - short.length,
       'and it is excluded from the denominator and reported, not quietly counted',
       `ids ${items.ids}, unsafe ${items.unsafeIds}, scraped ${scraped.length}`
+    );
+    // AND A UNIT NO ARM COULD EVER BE CREDITED WITH KEEPING MUST BE DROPPED
+    // *AND COUNTED*. ka-escaped quotes a path inside a longer string:
+    // `JSON.parse` unescapes one level, so the unit holds one backslash where
+    // the payload text holds two, and `includes` can never find it on any
+    // output. 283 of 14,067 units were of this shape on the real capture and
+    // every one of them was charged to every arm as a loss.
+    //
+    // THE COUNT IS ASSERTED, NOT JUST THE EXCLUSION, because a denominator
+    // that quietly shrinks is the same defect as one that quietly holds
+    // phantoms: without this the recorded field could be a hardcoded zero and
+    // every other assertion here would still pass.
+    const escaped = scanIdentifiers(payloads['ka-escaped']);
+    const esc = byName(identity)['ka-escaped'].retention;
+    check(
+      escaped.phantoms.length > 0,
+      'the fixture really does carry a unit absent from its own payload',
+      JSON.stringify(escaped.phantoms)
+    );
+    check(
+      num(esc.phantomIds) === escaped.phantoms.length,
+      'and the record says how many were dropped, not merely a narrower total',
+      `phantomIds ${esc.phantomIds} vs ${escaped.phantoms.length}`
+    );
+    check(
+      num(esc.ids) + num(esc.unsafeIds) === escaped.units.size,
+      'the denominator is what survived, with nothing else lost on the way',
+      `ids ${esc.ids} + unsafe ${esc.unsafeIds} vs ${escaped.units.size}`
     );
     const w = byName(identity)['ka-identifiers'].retention;
     check(
