@@ -42,6 +42,7 @@ import { degradationRefusal } from './competitor-health.mjs';
 import { reproducibilityRefusal } from './reproducibility.mjs';
 import { inputParity } from './input-parity.mjs';
 import { retentionVerdict, tightenFloor } from './retention-floor.mjs';
+import { bothColumns, columnsFor } from './arm-selection.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RESULTS = join(here, 'headroom', 'results', 'head-to-head.json');
@@ -96,6 +97,29 @@ const num = (v) => (v === null || v === undefined ? null : Number(v));
  * NEVER A PASS -- that distinction is the whole reason speed is reported
  * separately instead of being quietly treated as satisfied.
  */
+/**
+ * Why the comparable column cannot be decided on this row, or `null` when it
+ * can. Three cases, kept apart because they are different facts:
+ *   - the record predates the column -> re-run the scorer;
+ *   - the record has no comparable arm -> no arm of theirs retained what we
+ *     retained, which is a real and reportable outcome but NOT a win for us;
+ *   - the row was fed different bytes from ours -> not a comparison at all.
+ * Every one of them is UNDECIDED. None of them is agreement.
+ */
+function comparableRefusal(row) {
+  if (row.comparable === undefined || row.comparable === null)
+    return 'comparable arm UNRECORDED (re-run head-to-head)';
+  if (row.comparable.arm === null || row.comparable.arm === undefined)
+    return (
+      'no comparable arm: ' + String(row.comparable.detail ?? 'no detail')
+    );
+  if (row.input?.comparableSame === false)
+    return `${row.comparable.arm} was handed different bytes from ours`;
+  if (row.input?.comparableSame === undefined)
+    return `${row.comparable.arm}: input parity UNRECORDED`;
+  return null;
+}
+
 function judge(row, cfg, floors) {
   const c = row.cost;
   const p0o = num(c.session.p0.ours);
@@ -140,7 +164,7 @@ function judge(row, cfg, floors) {
       : tie && Number(w.fetchRate) === 0
         ? wo <= wt
         : wo < wt;
-  const cost = {
+  const costBest = {
     pass: p0ok && p1o < p1t && wok,
     detail:
       `p0 ${p0o} ${tie ? '<=' : '<'} ${p0t} ${p0ok ? 'ok' : 'NO'}; ` +
@@ -150,18 +174,65 @@ function judge(row, cfg, floors) {
         : `worst@${(Number(w.fetchRate) * 100).toFixed(0)}% ${wo} < ${wt} ${wok ? 'ok' : 'NO'}`),
   };
 
+  // THE SAME THREE CLAUSES AGAINST THE COMPARABLE ARM. Their redeem tokens are
+  // unmeasured and priced at zero, so every figure here is a LOWER bound on
+  // their cost -- which can only make the bar harder for us, never easier, and
+  // is why a one-sided bound is still decidable. It is labelled as a bound in
+  // the detail so nobody reads it back as their measured total.
+  const costComp = (() => {
+    const why = comparableRefusal(row);
+    if (why !== null) return { pass: null, detail: why };
+    const arm = row.comparable.arm;
+    const p0c = num(c.session.p0.theirsComparableAtLeast);
+    const p1c = num(c.session.p1.theirsComparableAtLeast);
+    const wc = c.session.worstComparable;
+    if (p0c === null || p1c === null || wc === null || wc === undefined)
+      return {
+        pass: null,
+        detail: `${arm}: cost UNRECORDED (re-run head-to-head)`,
+      };
+    const woc = num(wc.ours);
+    const wtc = num(wc.theirsAtLeast);
+    const p0okc = tie ? p0o <= p0c : p0o < p0c;
+    const wokc =
+      tie && Number(wc.fetchRate) === 0 ? woc <= wtc : woc < wtc;
+    return {
+      pass: p0okc && p1o < p1c && wokc,
+      detail:
+        `${arm} (their redeem priced at 0, a LOWER bound on their cost): ` +
+        `p0 ${p0o} ${tie ? '<=' : '<'} ${p0c} ${p0okc ? 'ok' : 'NO'}; ` +
+        `p1 ${p1o} < ${p1c} ${p1o < p1c ? 'ok' : 'NO'}; ` +
+        `worst@${(Number(wc.fetchRate) * 100).toFixed(0)}% ` +
+        `${woc} < ${wtc} ${wokc ? 'ok' : 'NO'}`,
+    };
+  })();
+
   // ITS OWN CRITERION, because what it measures is not tokens. The one real
   // cost of a round trip the model cannot see is the wall clock, and speed
   // times compression rather than retrieval, so nothing else here presses on
   // chattiness. Kept visible and scored separately so a row reads `cheaper but
   // chattier` in the open, instead of a win by moving five blocks out of the
   // request passing quietly as a win by compressing them.
-  const turns = {
+  const turnsBest = {
     pass: turnsO <= turnsT,
     detail: `${turnsO} round trip(s) vs ${turnsT}`,
   };
+  const turnsComp = (() => {
+    const why = comparableRefusal(row);
+    if (why !== null) return { pass: null, detail: why };
+    const turnsC = num(c.turns.theirsComparable);
+    if (turnsC === null)
+      return {
+        pass: null,
+        detail: `${row.comparable.arm}: round trips UNRECORDED`,
+      };
+    return {
+      pass: turnsO <= turnsC,
+      detail: `${turnsO} round trip(s) vs ${turnsC} (${row.comparable.arm})`,
+    };
+  })();
 
-  const speed = speedVerdict({
+  const speedBest = speedVerdict({
     ourSamples: row.speed?.oursMsSamples,
     ourPasses: row.speed?.oursMsPasses,
     theirSamples: row.speed?.theirsMsSamples,
@@ -169,18 +240,64 @@ function judge(row, cfg, floors) {
     ms: num(row.speed?.oursMs),
     theirMs: num(row.speed?.theirsMs),
   });
+  // THE SAME ESTIMATOR ON THE COMPARABLE ARM, from the readings `run-theirs.py`
+  // now takes for every arm. Reusing `speedVerdict` rather than writing a
+  // second comparison is the point: a column judged by a softer test than the
+  // one beside it is not a second bar, it is a loophole.
+  const speedComp = (() => {
+    const why = comparableRefusal(row);
+    if (why !== null) return { pass: null, detail: why };
+    const v = speedVerdict({
+      ourSamples: row.speed?.oursMsSamples,
+      ourPasses: row.speed?.oursMsPasses,
+      theirSamples: row.speed?.theirsComparableMsSamples,
+      theirPasses: row.speed?.theirsComparableMsPasses,
+      ms: num(row.speed?.oursMs),
+      theirMs: num(row.speed?.theirsComparableMs),
+    });
+    return { pass: v.pass, detail: `${row.comparable.arm}: ${v.detail}` };
+  })();
 
   // THE RETENTION BAR AND ITS RATCHET LIVE IN THEIR OWN MODULE, because they
   // were decided here for months in units that belong to the instrument: an
   // absolute count of identifiers, whose denominator the scan defines. See
   // `retention-floor.mjs` for what that cost and what replaced it.
-  const retention = retentionVerdict({
+  const retentionBest = retentionVerdict({
     ids: num(row.retention?.ids),
     ours: num(row.retention?.oursZeroTurn),
     theirs: num(row.retention?.theirsZeroTurn),
     story: cfg.retention,
     floor: floors[row.name],
   });
+
+  // RETENTION KEEPS ONE COLUMN, and `columnsFor` says so in code rather than
+  // here in a comment, so the decision is something a mutant can flip and a
+  // check can catch. The narrowing is not a concession: the comparable arm is
+  // DEFINED as retaining at least what we retained, so a retention comparison
+  // against it returns the same answer on every row, for every engine, forever.
+  // Requiring it would turn eleven recorded passes into permanent losses while
+  // measuring nothing about the code under test. This branch honours whatever
+  // `columnsFor` returns, so flipping it changes the verdicts rather than
+  // leaving a dead comment behind.
+  const retCols = columnsFor('retention');
+  let retention = retentionBest;
+  if (retCols.columns.includes('comparable')) {
+    const why = comparableRefusal(row);
+    const rc =
+      why !== null
+        ? { pass: null, detail: why }
+        : retentionVerdict({
+            ids: num(row.retention?.ids),
+            ours: num(row.retention?.oursZeroTurn),
+            theirs: num(row.retention?.theirsComparableZeroTurn),
+            story: cfg.retention,
+            floor: floors[row.name],
+          });
+    retention = {
+      ...bothColumns(retentionBest, rc),
+      lost: retentionBest.lost ?? null,
+    };
+  }
 
   // NONE OF THE FOUR IS A COMPARISON IF THE TWO COLUMNS WERE HANDED DIFFERENT
   // BYTES, so the precondition is checked once and collapses all four rather
@@ -200,7 +317,16 @@ function judge(row, cfg, floors) {
       retention: { ...undecided, lost: null },
     };
   }
-  return { cost, turns, speed, retention };
+  // WIN BOTH OR IT IS NOT A WIN. A decided loss on either column outranks an
+  // undecided one -- a measurement that refutes the claim refutes it whatever
+  // the other column says -- and a MISSING second column is undecided, never
+  // agreement.
+  return {
+    cost: bothColumns(costBest, costComp),
+    turns: bothColumns(turnsBest, turnsComp),
+    speed: bothColumns(speedBest, speedComp),
+    retention,
+  };
 }
 
 const results = JSON.parse(readFileSync(RESULTS, 'utf8'));

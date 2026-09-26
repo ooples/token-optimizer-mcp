@@ -1939,6 +1939,15 @@ if (process.argv[3] === '--record') {
           Array.isArray(theirs[r.name]?.armMsPasses?.[r.compArm])
             ? theirs[r.name].armMsPasses[r.compArm]
             : null,
+        // THE POOL, FLATTENED FROM THOSE PASSES rather than recorded twice.
+        // `armMs` above is the capture's median of exactly this pool, so
+        // deriving the samples here keeps one source of truth: a capture cannot
+        // disagree with itself about which readings the median came from.
+        theirsComparableMsSamples:
+          r.compArm !== null &&
+          Array.isArray(theirs[r.name]?.armMsPasses?.[r.compArm])
+            ? theirs[r.name].armMsPasses[r.compArm].flat()
+            : null,
       },
     })),
     totals: {
