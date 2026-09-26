@@ -155,3 +155,6 @@ hr[0-9]*/
 # evidence, not source, and a fit must be reproduced by re-observing rather than
 # by inheriting someone else's file.
 bench/subscription/observations.jsonl
+
+# The mutation battery holds this while it runs; it is never committed.
+bench/compression/known-answer/.mutants.lock

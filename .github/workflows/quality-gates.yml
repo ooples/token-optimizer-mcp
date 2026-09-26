@@ -672,6 +672,7 @@ jobs:
           status=0
           for check in \
             bench/compression/identifiers.check.mjs \
+            bench/compression/retention-floor.check.mjs \
             bench/compression/retention.check.mjs \
             bench/compression/offload.check.mjs \
             bench/compression/cost-model.check.mjs \

@@ -40,6 +40,7 @@ import { fileURLToPath } from 'node:url';
 import { speedVerdict } from './speed-verdict.mjs';
 import { degradationRefusal } from './competitor-health.mjs';
 import { reproducibilityRefusal } from './reproducibility.mjs';
+import { retentionVerdict, tightenFloor } from './retention-floor.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RESULTS = join(here, 'headroom', 'results', 'head-to-head.json');
@@ -63,6 +64,8 @@ const asJson = process.argv.includes('--json');
  *   'ceiling' -- their arm holds 100% of the identifiers, so the achievable form
  *                of "beat theirs" is to hold all of them too.
  *   a number  -- an explicit floor, from a story that traded retention for cost.
+ *                It is a retained count, so it is capped at the units the
+ *                payload actually holds; see `retention-floor.mjs`.
  *   null      -- not a must-win on this row; the ratchet still guards it.
  */
 const ROWS = {
@@ -166,36 +169,17 @@ function judge(row, cfg, floors) {
     theirMs: num(row.speed?.theirsMs),
   });
 
-  const ids = num(row.retention?.ids);
-  const oursZt = num(row.retention?.oursZeroTurn);
-  let retention;
-  if (cfg.retention === null) {
-    retention = {
-      pass: null,
-      detail: `${oursZt}/${ids} - not a must-win here`,
-    };
-  } else if (ids === null) {
-    retention = { pass: null, detail: 'ids not recorded' };
-  } else {
-    // THE STORY'S BAR OR TODAY'S SCORE, WHICHEVER IS HIGHER. Two of the floors
-    // were set below a score that is already perfect -- `grep-output` holds all
-    // 1,046 identifiers against a floor of 837, `raw-build-log` all 430 against
-    // 344 -- so taking the bar literally would license giving up a fifth of a
-    // perfect result. The recorded floor is what stops that.
-    const stated = cfg.retention === 'ceiling' ? ids : cfg.retention;
-    const bar = Math.max(stated, floors[row.name] ?? 0);
-    const note =
-      cfg.retention === 'ceiling'
-        ? ' (their ceiling)'
-        : bar > stated
-          ? ` (story says ${stated}; ratcheted to ${bar})`
-          : '';
-    retention = {
-      pass: oursZt >= bar,
-      value: oursZt,
-      detail: `${oursZt} of ${ids}, bar ${bar}${note}`,
-    };
-  }
+  // THE RETENTION BAR AND ITS RATCHET LIVE IN THEIR OWN MODULE, because they
+  // were decided here for months in units that belong to the instrument: an
+  // absolute count of identifiers, whose denominator the scan defines. See
+  // `retention-floor.mjs` for what that cost and what replaced it.
+  const retention = retentionVerdict({
+    ids: num(row.retention?.ids),
+    ours: num(row.retention?.oursZeroTurn),
+    theirs: num(row.retention?.theirsZeroTurn),
+    story: cfg.retention,
+    floor: floors[row.name],
+  });
 
   return { cost, turns, speed, retention };
 }
@@ -224,8 +208,17 @@ for (const row of results.workloads) {
   const cfg = ROWS[row.name];
   if (!cfg) continue;
   for (const [criterion, v] of Object.entries(judge(row, cfg, floors))) {
-    if (criterion === 'retention' && typeof v.value === 'number')
-      nextFloors[row.name] = Math.max(nextFloors[row.name] ?? 0, v.value);
+    // THE FLOOR IS THE FEWEST UNITS EVER LOST, not the most ever retained, and
+    // it carries the denominator that count was taken over. A ratchet may only
+    // tighten, which `tightenFloor` is responsible for.
+    if (criterion === 'retention') {
+      const next = tightenFloor(nextFloors[row.name], {
+        ids: num(row.retention?.ids),
+        lost: v.lost,
+      });
+      if (next === undefined) delete nextFloors[row.name];
+      else nextFloors[row.name] = next;
+    }
     const key = `${row.name}/${criterion}`;
     const was = ratchet.enforced?.[key] === true;
     (report[row.name] ??= { issue: cfg.issue })[criterion] = {

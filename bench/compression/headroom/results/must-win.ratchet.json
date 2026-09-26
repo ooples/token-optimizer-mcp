@@ -44,16 +44,53 @@
     "sre-debugging/turns": true
   },
   "retentionFloors": {
-    "agent-loop-logs": 2050,
-    "browser-session": 336,
-    "code-search": 470,
-    "codebase-exploration": 590,
-    "grep-output": 1046,
-    "human-authored-json": 129,
-    "issue-triage": 504,
-    "raw-build-log": 430,
-    "relevance-probe": 527,
-    "repeated-reads": 405,
-    "sre-debugging": 3133
+    "agent-loop-logs": {
+      "lost": 0,
+      "ids": 2034
+    },
+    "browser-session": {
+      "lost": 0,
+      "ids": 334
+    },
+    "code-search": {
+      "lost": 0,
+      "ids": 201
+    },
+    "codebase-exploration": {
+      "lost": 0,
+      "ids": 537
+    },
+    "grep-output": {
+      "lost": 0,
+      "ids": 1005
+    },
+    "human-authored-json": {
+      "lost": 38,
+      "ids": 154
+    },
+    "issue-triage": {
+      "lost": 0,
+      "ids": 59
+    },
+    "raw-build-log": {
+      "lost": 0,
+      "ids": 430
+    },
+    "relevance-probe": {
+      "lost": 0,
+      "ids": 225
+    },
+    "repeated-reads": {
+      "lost": 0,
+      "ids": 391
+    },
+    "sre-debugging": {
+      "lost": 0,
+      "ids": 3116
+    },
+    "agent-loop": {
+      "lost": 0,
+      "ids": 185
+    }
   }
 }

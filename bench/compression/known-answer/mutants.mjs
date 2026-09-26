@@ -31,11 +31,32 @@
  * a finally block, and verified by digest afterwards -- because a restore that
  * silently did not happen would leave the working tree broken and the next run
  * measuring a file nobody meant to change.
+ *
+ * TWO WAYS THIS SCORE CAN BE A FICTION, both of which happened before they were
+ * guarded, and both of which report a PERFECT score rather than an error.
+ *
+ *   two runs at once   Each process snapshots the instruments, mutates them and
+ *                      restores its own snapshot. Run two and the second
+ *                      snapshots a file the first has mutated, calls those bytes
+ *                      the original, and restores the tree to them on the way
+ *                      out -- leaving a mutant sitting in the working copy while
+ *                      the digest check passes, because that digest is taken
+ *                      inside the same process. A lock file is the fix, and
+ *                      refusing is the only safe behaviour: a battery that
+ *                      queued would still be editing files the other one reads.
+ *
+ *   a poisoned         If an instrument is ALREADY broken when the run starts,
+ *   baseline           its check is already red, so every mutant against it
+ *                      "fails the check" and is scored as caught. That is how a
+ *                      tree left mutated by the clobber above reported 46/46.
+ *                      So each distinct check runs once unmutated first and must
+ *                      pass: the control arm, without which a caught mutant is
+ *                      not evidence of anything.
  */
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { openSync, closeSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -53,6 +74,7 @@ const SPEED = comp('speed-verdict.mjs');
 const REPRO = comp('reproducibility.mjs');
 const HEALTH = comp('competitor-health.mjs');
 const IDS = comp('identifiers.mjs');
+const FLOOR = comp('retention-floor.mjs');
 
 /** The check that is supposed to refuse each defect. */
 const SCORER = join(HERE, 'scorer.check.mjs');
@@ -63,6 +85,7 @@ const SPEED_CHECK = comp('speed-verdict.check.mjs');
 const REPRO_CHECK = comp('reproducibility.check.mjs');
 const HEALTH_CHECK = comp('competitor-health.check.mjs');
 const IDS_CHECK = comp('identifiers.check.mjs');
+const FLOOR_CHECK = comp('retention-floor.check.mjs');
 
 const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
@@ -456,14 +479,120 @@ const MUTANTS = [
     from: 'phantomIds: String(r.phantoms),',
     to: "phantomIds: '0',",
   },
+  {
+    name: 'the story bar is not capped at the denominator',
+    defect:
+      'nine rows reported a retention regression while holding every unit available to them',
+    caughtBy: 'retention floor: the wider denominator passes, the story bar capped',
+    file: FLOOR,
+    check: FLOOR_CHECK,
+    from: "  const bar = story === 'ceiling' ? ids : Math.min(story, ids);",
+    to: "  const bar = story === 'ceiling' ? ids : story;",
+  },
+  {
+    name: 'the loss ratchet is removed',
+    defect:
+      'a perfect row could give up a fifth of its identifiers and still clear a low story bar',
+    caughtBy: 'retention floor: one unit lost against a recorded zero fails',
+    file: FLOOR,
+    check: FLOOR_CHECK,
+    from: '  const lostOk = lostBar === null || lost <= lostBar;',
+    to: '  const lostOk = true;',
+  },
+  {
+    name: 'a floor with no denominator is compared anyway',
+    defect:
+      'a bar in units the instrument no longer uses, read as a fact about the engine',
+    caughtBy: 'retention floor: a floor with no denominator is refused, not compared',
+    file: FLOOR,
+    check: FLOOR_CHECK,
+    from: "  if (typeof floor === 'number')",
+    to: '  if (false)',
+  },
+  {
+    name: 'an empty denominator counts as a perfect score',
+    defect:
+      'the "0 for us, 0 for them" tie this project published once, restored',
+    caughtBy: 'retention floor: an empty denominator is not a perfect score',
+    file: FLOOR,
+    check: FLOOR_CHECK,
+    from: '  if (ids === 0)',
+    to: '  if (false)',
+  },
+  {
+    name: 'the ceiling label is not checked against their column',
+    defect:
+      'a bar named for their ceiling still called that after their column fell below it',
+    caughtBy: 'retention floor: a bar named for their ceiling is refused once their column leaves it',
+    file: FLOOR,
+    check: FLOOR_CHECK,
+    from: "  if (story === 'ceiling' && theirs !== ids)",
+    to: '  if (false)',
+  },
+  {
+    name: 'the ratchet loosens on a worse run',
+    defect:
+      'a floor that follows the latest run downward, which is no ratchet at all',
+    caughtBy: 'retention floor: a worse run never loosens the floor',
+    file: FLOOR,
+    check: FLOOR_CHECK,
+    from: '  if (had !== null && had <= lost) return floor;',
+    to: '  if (false) return floor;',
+  },
 ];
 
 // The files to snapshot come from the table, so adding a mutant against a new
 // instrument cannot forget to protect that instrument's bytes.
+// ONE BATTERY AT A TIME, enforced rather than requested. `wx` fails if the path
+// exists, so the second run refuses instead of snapshotting files the first has
+// already mutated. Stale lock after a hard kill: delete the file the message
+// names -- it is printed in full for exactly that reason.
+const LOCK = join(HERE, '.mutants.lock');
+let lockFd = null;
+try {
+  lockFd = openSync(LOCK, 'wx');
+  writeFileSync(LOCK, `pid ${process.pid} started ${new Date().toISOString()}`, 'utf8');
+} catch (err) {
+  if (err && err.code === 'EEXIST') {
+    console.log('another mutation battery holds the lock, so this run refuses:');
+    console.log('  ' + LOCK);
+    console.log(readFileSync(LOCK, 'utf8').trim());
+    console.log('two batteries at once leave a mutant in the working tree and still');
+    console.log('report a perfect score; wait for it, or delete that file if it is stale.');
+    process.exit(3);
+  }
+  throw err;
+}
+
+const releaseLock = () => {
+  if (lockFd === null) return;
+  closeSync(lockFd);
+  lockFd = null;
+  rmSync(LOCK, { force: true });
+};
+process.on('exit', releaseLock);
 const originals = new Map();
 for (const m of MUTANTS) if (!originals.has(m.file)) originals.set(m.file, readFileSync(m.file, 'utf8'));
 const before = new Map([...originals.keys()].map((f) => [f, digest(f)]));
 
+// THE CONTROL ARM. A mutant is scored as caught when its check exits non-zero,
+// so a check that was ALREADY failing catches everything and proves nothing. Run
+// each distinct check once against the untouched instruments first: if any of
+// them is red before a single byte has been changed, there is no score to report.
+const checks = [...new Set(MUTANTS.map((m) => m.check))];
+const red = [];
+for (const c of checks) {
+  const run = spawnSync('node', [c], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (run.status !== 0) red.push(c.slice(REPO.length + 1).split(sep).join('/'));
+}
+if (red.length) {
+  console.log('NO SCORE: these checks are red before anything was mutated, so every');
+  console.log('mutant against them would be counted as caught without being tested:');
+  for (const c of red) console.log('  ' + c);
+  console.log('restore the instruments (git status, then git checkout --) and re-run.');
+  process.exit(4);
+}
+console.log(`control arm: ${checks.length} check(s) pass unmutated`);
 let caught = 0;
 let survived = 0;
 let stale = 0;
