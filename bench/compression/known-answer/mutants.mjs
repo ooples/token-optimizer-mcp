@@ -76,6 +76,7 @@ const HEALTH = comp('competitor-health.mjs');
 const IDS = comp('identifiers.mjs');
 const FLOOR = comp('retention-floor.mjs');
 const PARITY = comp('input-parity.mjs');
+const ARM = comp('arm-selection.mjs');
 
 /** The check that is supposed to refuse each defect. */
 const SCORER = join(HERE, 'scorer.check.mjs');
@@ -88,6 +89,7 @@ const HEALTH_CHECK = comp('competitor-health.check.mjs');
 const IDS_CHECK = comp('identifiers.check.mjs');
 const FLOOR_CHECK = comp('retention-floor.check.mjs');
 const PARITY_CHECK = comp('input-parity.check.mjs');
+const ARM_CHECK = comp('arm-selection.check.mjs');
 
 const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
@@ -590,6 +592,101 @@ const MUTANTS = [
     check: PARITY_CHECK,
     from: '  if (typeof input.same === ',
     to: '  if (false && typeof input.same === ',
+  },
+
+  // WHICH OF THEIR ARMS EVERY CLAIM IS MEASURED AGAINST. An instrument with no
+  // mutants is untested, and this one decides the opponent for cost, speed and
+  // round trips on every row -- so each way it could quietly substitute an
+  // easier bar gets an entry.
+  {
+    name: 'comparable means strictly more retained, not at least as much',
+    defect:
+      'an arm that kept exactly what we kept is the tightest honest bar and was skipped',
+    caughtBy: 'ties break by name and input order does not change the selection',
+    file: ARM,
+    check: ARM_CHECK,
+    from: 'ordered.filter((c) => c.retained >= ourRetained)',
+    to: 'ordered.filter((c) => c.retained > ourRetained)',
+  },
+  {
+    name: 'no comparable arm falls back to the next best arm',
+    defect:
+      'a row with no honest opponent silently gets a destructive one instead of saying so',
+    caughtBy: 'an arm that kept less than ours is never comparable',
+    file: ARM,
+    check: ARM_CHECK,
+    from: 'const comparable = eligible.length > 0 ? eligible[0] : null;',
+    to: 'const comparable = eligible.length > 0 ? eligible[0] : best;',
+  },
+  {
+    name: 'an unknown retained count defaults to zero',
+    defect:
+      'every arm becomes comparable, including the one that kept 4 of 1045',
+    caughtBy: 'an unknown retained count refuses instead of defaulting to zero',
+    file: ARM,
+    check: ARM_CHECK,
+    from: 'if (!Number.isFinite(ourRetained) || ourRetained < 0)',
+    to: 'if (false)',
+  },
+  {
+    name: 'an unscannable arm is skipped rather than refusing the selection',
+    defect:
+      'the skipped arm could have been the comparable one, so a worse bar is substituted in silence',
+    caughtBy: 'a capture that cannot be ranked is refused, not ranked anyway',
+    file: ARM,
+    check: ARM_CHECK,
+    from: 'if (!Number.isFinite(c.retained) || c.retained < 0)',
+    to: 'if (false)',
+  },
+  {
+    name: 'an undecided column resolves as a pass',
+    defect:
+      'a column with no reading counts as agreement, which is the whole reason the verdicts are three-valued',
+    caughtBy: 'win both or it is not a win',
+    file: ARM,
+    check: ARM_CHECK,
+    from: '  if (b.pass === null || c.pass === null) return { pass: null, detail };',
+    to: '  if (b.pass === null || c.pass === null) return { pass: true, detail };',
+  },
+  {
+    name: 'a decided loss beside an undecided column resolves as undecided',
+    defect:
+      'a measurement that refutes the claim is outranked by a column that was never read',
+    caughtBy: 'win both or it is not a win',
+    file: ARM,
+    check: ARM_CHECK,
+    from: '  if (b.pass === false || c.pass === false) return { pass: false, detail };',
+    to: '  if (b.pass === false && c.pass === false) return { pass: false, detail };',
+  },
+  {
+    name: 'a missing second column reads as agreement',
+    defect:
+      'the classic spelling: `comparable && comparable.pass === false` treats an absent column as a pass on it',
+    caughtBy: 'win both or it is not a win',
+    file: ARM,
+    check: ARM_CHECK,
+    from: "      ? { pass: null, detail: 'no ' + which + ' column recorded for this row' }",
+    to: "      ? { pass: true, detail: 'no ' + which + ' column recorded for this row' }",
+  },
+  {
+    name: 'retention is judged on both columns after all',
+    defect:
+      'a bar that cannot be failed for any reason to do with the code under test is reported as one',
+    caughtBy: 'retention keeps one column and says why',
+    file: ARM,
+    check: ARM_CHECK,
+    from: "      columns: ['best'],",
+    to: "      columns: ['best', 'comparable'],",
+  },
+  {
+    name: 'the arms are taken in capture order instead of ranked',
+    defect:
+      'the opponent becomes whichever arm their sweep happened to try first, so two runs of the same capture can pick different bars',
+    caughtBy: 'ties break by name and input order does not change the selection',
+    file: ARM,
+    check: ARM_CHECK,
+    from: 'const ordered = [...scored].sort(rank);',
+    to: 'const ordered = [...scored];',
   },
 ];
 

@@ -76,6 +76,36 @@ console.log('\nan arm that kept less than ours is never comparable');
   );
 }
 
+console.log('\nan arm that kept exactly what we kept is the tightest honest bar');
+{
+  // THE BOUNDARY, PINNED. "Comparable" is `retained >= ours`, and the arm that
+  // kept EXACTLY what we kept is the best opponent that exists: it concedes us
+  // nothing on retention and gives their compression its strongest showing.
+  // Spelling the test `>` instead of `>=` skips it and falls through to a looser
+  // arm or to no column at all -- a substitution that reads as a stricter rule
+  // while actually discarding the hardest bar. Nothing else in this file fails
+  // if that boundary moves, so it is asserted here on its own.
+  const EXACT = [
+    { arm: 'exact', before: 1000, after: 400, retained: 1005 },
+    { arm: 'generous', before: 1000, after: 900, retained: 1045 },
+    { arm: 'lossy', before: 1000, after: 10, retained: 4 },
+  ];
+  const s = selectArms(EXACT, { ourRetained: 1005 });
+  check(s.best.arm === 'lossy', 'their best-of-any arm is still the lossy one', s.detail);
+  check(
+    s.comparable !== null && s.comparable.arm === 'exact',
+    'and the arm that tied our retention IS the comparable one',
+    s.detail
+  );
+  // And it wins the comparable slot on ratio even though a looser arm also
+  // qualifies, so the boundary case is not being reached by accident.
+  check(
+    s.comparable !== null && s.comparable.ratio === 0.4,
+    'chosen on ratio among the arms that qualified, not merely first in the list',
+    s.detail
+  );
+}
+
 console.log('\nan unknown retained count refuses instead of defaulting to zero');
 {
   for (const [label, ours] of [
