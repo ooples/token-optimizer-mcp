@@ -75,6 +75,7 @@ const REPRO = comp('reproducibility.mjs');
 const HEALTH = comp('competitor-health.mjs');
 const IDS = comp('identifiers.mjs');
 const FLOOR = comp('retention-floor.mjs');
+const PARITY = comp('input-parity.mjs');
 
 /** The check that is supposed to refuse each defect. */
 const SCORER = join(HERE, 'scorer.check.mjs');
@@ -86,6 +87,7 @@ const REPRO_CHECK = comp('reproducibility.check.mjs');
 const HEALTH_CHECK = comp('competitor-health.check.mjs');
 const IDS_CHECK = comp('identifiers.check.mjs');
 const FLOOR_CHECK = comp('retention-floor.check.mjs');
+const PARITY_CHECK = comp('input-parity.check.mjs');
 
 const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
@@ -538,6 +540,56 @@ const MUTANTS = [
     check: FLOOR_CHECK,
     from: '  if (had !== null && had <= lost) return floor;',
     to: '  if (false) return floor;',
+  },
+  {
+    name: 'the missing parity field is read as agreement',
+    defect:
+      'a capture from before the precondition existed, scored as though it had been met',
+    caughtBy: 'input parity: an absent parity field is undecided',
+    file: PARITY,
+    check: PARITY_CHECK,
+    from: '  if (input === null || input === undefined)',
+    to: '  if (false)',
+  },
+  {
+    name: 'the recorded flag outranks the digests it was written beside',
+    defect:
+      'one bug in the recorder, and every row vouches for its own comparability',
+    caughtBy: 'input parity: a flag that claims agreement cannot override the digests',
+    file: PARITY,
+    check: PARITY_CHECK,
+    from: '  const agree = ours === theirs;',
+    to: '  const agree = input.same === true || ours === theirs;',
+  },
+  {
+    name: 'a wrapped input on their side is called a comparison',
+    defect:
+      'a ratio taken over an input 15% larger than ours, published as like-for-like',
+    caughtBy: 'input parity: a wrapped input on their side is not a comparison',
+    file: PARITY,
+    check: PARITY_CHECK,
+    from: '  if (agree) return { ok: true, detail:',
+    to: '  if (true) return { ok: true, detail:',
+  },
+  {
+    name: 'a half-recorded row is compared against nothing',
+    defect:
+      'a row with one digest missing, decided by comparing a string with null',
+    caughtBy: 'input parity: one digest missing is undecided too',
+    file: PARITY,
+    check: PARITY_CHECK,
+    from: '  if (ours === null || theirs === null)',
+    to: '  if (false)',
+  },
+  {
+    name: 'a record that contradicts itself is resolved rather than refused',
+    defect:
+      'the flag and the digests disagree, and the gate picks the flattering one',
+    caughtBy: 'input parity: digests that agree under a flag that says they do not',
+    file: PARITY,
+    check: PARITY_CHECK,
+    from: '  if (typeof input.same === ',
+    to: '  if (false && typeof input.same === ',
   },
 ];
 

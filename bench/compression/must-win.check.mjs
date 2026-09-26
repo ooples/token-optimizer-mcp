@@ -40,6 +40,7 @@ import { fileURLToPath } from 'node:url';
 import { speedVerdict } from './speed-verdict.mjs';
 import { degradationRefusal } from './competitor-health.mjs';
 import { reproducibilityRefusal } from './reproducibility.mjs';
+import { inputParity } from './input-parity.mjs';
 import { retentionVerdict, tightenFloor } from './retention-floor.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -181,6 +182,24 @@ function judge(row, cfg, floors) {
     floor: floors[row.name],
   });
 
+  // NONE OF THE FOUR IS A COMPARISON IF THE TWO COLUMNS WERE HANDED DIFFERENT
+  // BYTES, so the precondition is checked once and collapses all four rather
+  // than being argued per criterion: a ratio over a larger input is a larger
+  // ratio, and a millisecond spent on more text is not a slower engine. It is
+  // UNDECIDED and not failed, because the engine has done nothing wrong when the
+  // harness measured two different things. `input-parity.mjs` holds the rest --
+  // which of their arms see a wrapped input, why an absent field is undecided
+  // rather than agreement, and why the digests outrank the flag beside them.
+  const parity = inputParity(row.input);
+  if (parity.ok !== true) {
+    const undecided = { pass: null, detail: parity.detail };
+    return {
+      cost: undecided,
+      turns: undecided,
+      speed: undecided,
+      retention: { ...undecided, lost: null },
+    };
+  }
   return { cost, turns, speed, retention };
 }
 

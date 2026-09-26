@@ -404,6 +404,13 @@ function recoverable(text, label) {
   return parts.join('\n');
 }
 
+// A SHORT DIGEST, for facts that are only useful if they can be re-checked.
+// Sixteen hex characters of sha256: long enough that two different payloads do
+// not collide in a record of eighteen rows, short enough to read in a diff.
+const sha = (text) =>
+  typeof text === 'string'
+    ? createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 16)
+    : null;
 const rows = [];
 let lost = 0;
 
@@ -1616,6 +1623,29 @@ if (process.argv[3] === '--record') {
       // picked is the difference between "they compressed it" and "they moved
       // it to a store". A ratio alone cannot say that.
       arm: theirs[r.name]?.arm ?? null,
+      // AND WHETHER THAT ARM WAS FED WHAT OURS WAS FED, which is the
+      // precondition for every other number on this row and was nowhere
+      // recorded. Their sweep wraps a non-transcript payload into a role/content
+      // envelope for the `pipeline@*` arms: on four of these workloads six of
+      // their nine arms therefore run on an input 13-15% LARGER than ours, and a
+      // ratio taken over a bigger denominator is a bigger ratio. No credited
+      // winner is one of those arms today -- all eighteen match byte for byte,
+      // which is why this records `true` rather than refusing -- but nothing
+      // made that so, and the day a wrapped arm wins, its inflated percentage
+      // would be published as a like-for-like comparison. The digests are here
+      // so the claim can be checked rather than believed.
+      input: (() => {
+        const theirInput =
+          theirs[r.name]?.armBeforeTexts?.[theirs[r.name]?.arm] ??
+          theirs[r.name]?.bestBeforeText ??
+          null;
+        const mine = payloads[r.name];
+        return {
+          oursDigest: sha(mine),
+          theirsDigest: typeof theirInput === 'string' ? sha(theirInput) : null,
+          same: typeof theirInput === 'string' && theirInput === mine,
+        };
+      })(),
       chars: {
         ours: pct(r.ours),
         body: r.bodyRatio === null ? null : pct(r.bodyRatio),
