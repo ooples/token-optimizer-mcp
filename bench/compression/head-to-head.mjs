@@ -57,6 +57,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { classifyIds, splitScorable } from './retention.mjs';
 import { scanIdentifiers } from './identifiers.mjs';
 import { bestByRatio, selectArms } from './arm-selection.mjs';
+import { witness, witnessesAgree } from './load-witness.mjs';
 import { classifyArms, declaredOffloadBytes } from './offload.mjs';
 import { stubbedCaptureRefusal } from './capture-guard.mjs';
 import { baseContextReadiness, measureBaseContext } from '../subscription/base-context.mjs';
@@ -499,7 +500,22 @@ function timeEveryWorkload(byName) {
   // out, and the cost is linear: this is the whole runtime of the harness.
   const SPEED_PASSES = 3;
   const passes = new Map(Object.keys(byName).map((n) => [n, []]));
+  // THE SAME LOAD CONTROL THEIR SWEEP TAKES, TAKEN THE SAME WAY. A reading
+  // before each pass, pooled to a median, from the identical script
+  // run-theirs.py spawns -- see bench/compression/load-witness.mjs for the 33%
+  // to 122% drift between two runs of THIS function that forced it.
+  const witnessReadings = [];
+  const witnessErrors = [];
+  const takeWitness = (when) => {
+    try {
+      const r = witness(1);
+      witnessReadings.push({ at: when, ms: r.ms, checksum: r.checksum });
+    } catch (err) {
+      witnessErrors.push({ at: when, error: String(err && err.message ? err.message : err) });
+    }
+  };
   for (let pass = 0; pass < SPEED_PASSES; pass += 1) {
+    takeWitness(`before-pass-${pass}`);
     for (const [name, text] of Object.entries(byName)) {
       // MEASURED WITH `performance.now`, NOT `Date.now`. Several of these
       // payloads compress in under a millisecond, and a 1 ms clock reports
@@ -518,13 +534,24 @@ function timeEveryWorkload(byName) {
       passes.get(name).push(samples.map((v) => Number(v.toFixed(3))));
     }
   }
-  return passes;
+  takeWitness('after-sweep');
+  const sorted = [...witnessReadings.map((r) => r.ms)].sort((a, b) => a - b);
+  return {
+    passes,
+    loadWitness: {
+      ms: sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : null,
+      readings: witnessReadings,
+      errors: witnessErrors,
+    },
+  };
 }
 
 // TIMED BEFORE ANYTHING ELSE RUNS, so the passes see a comparable machine and
 // not a process that has been compressing, tokenising and writing JSON for a
 // minute by the time the last workload is reached.
-const speedPasses = timeEveryWorkload(payloads);
+const timed = timeEveryWorkload(payloads);
+const speedPasses = timed.passes;
+const ourLoadWitness = timed.loadWitness;
 
 for (const [name, text] of Object.entries(payloads)) {
   // THE PUBLISHED ARM IS HANDED NO SINK, and that is the product default --
@@ -1962,6 +1989,23 @@ if (process.argv[3] === '--record') {
       // in the process that runs it. A null here means UNMEASURED, and the gate
       // treats it as unmeasured rather than as a pass.
       speed: {
+        // WHETHER THIS ROW'S TWO TIMES DESCRIBE THE SAME MACHINE. Our medians
+        // moved 33% to 122% between two runs of the same recording, minutes
+        // apart, with no code change -- more than most of the margins below. So
+        // both sides now spawn the same calibration loop and the scorer refuses
+        // the criterion when their readings disagree. A capture taken before the
+        // witness existed has none, which is a refusal, not a quiet machine.
+        loadWitness: {
+          ours: ourLoadWitness,
+          theirs: theirs.__provenance__?.loadWitness ?? null,
+          verdict: (() => {
+            const v = witnessesAgree(
+              ourLoadWitness?.ms ?? null,
+              theirs.__provenance__?.loadWitness?.ms ?? null
+            );
+            return { ok: v.ok, detail: v.detail };
+          })(),
+        },
         oursMs: r.ms.toFixed(3),
         oursMsMin: r.msMin.toFixed(3),
         oursMsMax: r.msMax.toFixed(3),

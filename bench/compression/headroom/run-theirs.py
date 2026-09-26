@@ -540,6 +540,62 @@ RETIME = {}
 SPEED_PASSES = 3
 
 
+# IS THE MACHINE THE SAME MACHINE OUR SIDE WILL BE TIMED ON?
+#
+# Their arms are timed here, in this Python process, at whatever hour the sweep
+# runs. Ours are timed later by head-to-head.mjs in a Node process. Two runs of
+# that Node recording, minutes apart on the same capture, moved our own medians
+# by 33% to 122% with no code change -- larger than most of the margins the speed
+# criterion decides. So a cross-session comparison with no load control is
+# decided by the machine rather than by either engine, and the scorer refuses it.
+#
+# The control is bench/compression/load-witness.mjs: a fixed integer-mixing loop
+# with a checksum, spawned HERE, from Python, so that both sides record readings
+# of the same work by the same runtime and the two are directly comparable. A
+# per-language witness would not be -- 45ms of Python and 45ms of Node measure
+# different things.
+#
+# A reading is taken before the sweep and once more after each pass, and the
+# median over all of them is this session's witness. The median, not the minimum:
+# the minimum is the best estimate of what the machine CAN do and the wrong one
+# here, because a briefly idle moment on a loaded machine yields a clean minimum
+# while the long sweep beside it runs slow throughout.
+#
+# A witness that cannot be taken is recorded as its error, never as a number.
+# `witnessesAgree` in the same module treats a missing witness as a refusal, so a
+# sweep on a machine without Node produces speed rows that read NOT MEASURED
+# instead of rows that read as a controlled comparison.
+WITNESS = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "load-witness.mjs"
+)
+witness_readings = []
+witness_errors = []
+
+
+def take_witness(when):
+    """One witness reading, appended to the session pool. Errors are recorded."""
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["node", WITNESS, "1"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=True,
+        )
+        parsed = json.loads(out.stdout)
+    except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
+        witness_errors.append({"at": when, "error": repr(exc)[:400]})
+        return None
+    reading = parsed.get("ms")
+    if not isinstance(reading, (int, float)) or reading <= 0:
+        witness_errors.append({"at": when, "error": "witness ms was %r" % (reading,)})
+        return None
+    witness_readings.append({"at": when, "ms": reading, "checksum": parsed.get("checksum")})
+    return reading
+
+
 def run(name, native, text):
     """Every arm, best (smallest) output wins. Failures are reported, not hidden."""
     attempts = []
@@ -727,6 +783,11 @@ def run(name, native, text):
     }
 
 
+# THE FIRST READING, BEFORE ANY ARM HAS RUN. Taken here rather than beside the
+# later passes so the pool spans the whole sweep: a machine that was quiet at the
+# start and loaded by the end is the case a single reading cannot describe.
+take_witness("before-pass-0")
+
 results = {}
 for name, native in WORKLOADS.items():
     results[name] = run(name, native, PAYLOADS[name])
@@ -750,6 +811,7 @@ for name, native in WORKLOADS.items():
 # published median is a median of 93 readings taken at three different moments
 # rather than 31 taken at one.
 for extra_pass in range(1, SPEED_PASSES):
+    take_witness("before-pass-%d" % extra_pass)
     for name in WORKLOADS:
         entry = RETIME.get(name)
         if entry is None:
@@ -902,8 +964,27 @@ for entry in competitor_warnings["degraded"]:
         % (entry["count"], entry["logger"], entry["message"])
     )
 
+take_witness("after-sweep")
+
 provenance = {
     "headroomVersion": _headroom_version(),
+    # THE LOAD CONTROL, WITHOUT WHICH NO SPEED ROW IS DECIDABLE. See the
+    # take_witness block above and bench/compression/load-witness.mjs. `ms` is
+    # the median over every reading of this session; `readings` keeps them
+    # individually so a sweep whose load changed part way through can be seen to
+    # have done so rather than averaged into one number. `errors` non-empty with
+    # `ms` null means the witness could not be taken, which the scorer treats as
+    # an uncontrolled machine -- never as a quiet one.
+    "loadWitness": {
+        "ms": (
+            sorted(r["ms"] for r in witness_readings)[len(witness_readings) // 2]
+            if witness_readings
+            else None
+        ),
+        "readings": witness_readings,
+        "errors": witness_errors,
+        "script": os.path.relpath(WITNESS, os.path.dirname(os.path.dirname(WITNESS))),
+    },
     "python": sys.version.split()[0],
     # AFTER the run, deliberately: the arms write to it, so the state that
     # matters for reproducing this capture is the one the next run inherits.

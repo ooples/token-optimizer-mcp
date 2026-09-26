@@ -232,19 +232,53 @@ function judge(row, cfg, floors) {
     };
   })();
 
-  const speedBest = speedVerdict({
-    ourSamples: row.speed?.oursMsSamples,
-    ourPasses: row.speed?.oursMsPasses,
-    theirSamples: row.speed?.theirsMsSamples,
-    theirPasses: row.speed?.theirsMsPasses,
-    ms: num(row.speed?.oursMs),
-    theirMs: num(row.speed?.theirsMs),
-  });
+  // NO LOAD CONTROL, NO SPEED VERDICT -- ON EITHER COLUMN.
+  //
+  // Their arms are timed by run-theirs.py in a Python process; ours by
+  // head-to-head.mjs in a Node process, later. Two runs of that Node recording,
+  // minutes apart against the same capture, moved our own medians by 33%
+  // (grep-output) to 122% (agent-loop-logs) with no change to the code under
+  // test. The three-pass jitter band saw none of it, because passes inside one
+  // run share the ambient load: run one's passes were 25/22/22, tight and all
+  // three equally contaminated.
+  //
+  // A drift that large is bigger than most of the margins this criterion
+  // decides, so a cross-session comparison with no load control is decided by
+  // the machine rather than by either engine. Both sides now spawn the same
+  // calibration loop (bench/compression/load-witness.mjs) and record it; when
+  // the two readings disagree, or when either is missing, the speed criterion is
+  // UNDECIDED on both columns. That is the honest reading and it is not a pass:
+  // `bothColumns` resolves an undecided column to undecided, and the gate counts
+  // it under NOT MEASURED.
+  const load = (() => {
+    const v = row.speed?.loadWitness?.verdict;
+    if (v === null || v === undefined)
+      return {
+        ok: false,
+        detail:
+          'no load witness on this row (recorded before the witness existed) -- ' +
+          're-run run-theirs.py and head-to-head.mjs back to back',
+      };
+    return { ok: v.ok === true, detail: String(v.detail ?? 'no detail') };
+  })();
+
+  const speedBest =
+    load.ok === false
+      ? { pass: null, detail: load.detail }
+      : speedVerdict({
+          ourSamples: row.speed?.oursMsSamples,
+          ourPasses: row.speed?.oursMsPasses,
+          theirSamples: row.speed?.theirsMsSamples,
+          theirPasses: row.speed?.theirsMsPasses,
+          ms: num(row.speed?.oursMs),
+          theirMs: num(row.speed?.theirsMs),
+        });
   // THE SAME ESTIMATOR ON THE COMPARABLE ARM, from the readings `run-theirs.py`
   // now takes for every arm. Reusing `speedVerdict` rather than writing a
   // second comparison is the point: a column judged by a softer test than the
   // one beside it is not a second bar, it is a loophole.
   const speedComp = (() => {
+    if (load.ok === false) return { pass: null, detail: load.detail };
     const why = comparableRefusal(row);
     if (why !== null) return { pass: null, detail: why };
     const v = speedVerdict({
