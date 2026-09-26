@@ -1,48 +1,186 @@
 {
   "note": "pairs recorded as passing; a pass here may never regress",
   "enforced": {
-    "agent-loop-logs/cost": true,
-    "agent-loop-logs/retention": true,
-    "agent-loop-logs/speed": true,
-    "agent-loop-logs/turns": true,
-    "agent-loop/cost": true,
-    "agent-loop/speed": true,
-    "agent-loop/turns": true,
-    "browser-session/cost": true,
-    "browser-session/retention": true,
-    "browser-session/speed": true,
-    "browser-session/turns": true,
-    "code-search/cost": true,
-    "code-search/retention": true,
-    "code-search/speed": true,
-    "code-search/turns": true,
-    "codebase-exploration/retention": true,
-    "codebase-exploration/speed": true,
-    "codebase-exploration/turns": true,
-    "grep-output/retention": true,
-    "grep-output/speed": true,
-    "grep-output/turns": true,
-    "human-authored-json/cost": true,
-    "human-authored-json/retention": true,
-    "human-authored-json/speed": true,
-    "human-authored-json/turns": true,
-    "issue-triage/cost": true,
-    "issue-triage/retention": true,
-    "issue-triage/speed": true,
-    "issue-triage/turns": true,
-    "raw-build-log/retention": true,
-    "raw-build-log/speed": true,
-    "raw-build-log/turns": true,
-    "relevance-probe/retention": true,
-    "relevance-probe/speed": true,
-    "relevance-probe/turns": true,
-    "repeated-reads/cost": true,
-    "repeated-reads/retention": true,
-    "repeated-reads/speed": true,
-    "repeated-reads/turns": true,
-    "sre-debugging/retention": true,
-    "sre-debugging/speed": true,
-    "sre-debugging/turns": true
+    "agent-loop-logs/cost": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "agent-loop-logs/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "agent-loop-logs/speed": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "agent-loop-logs/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "agent-loop/cost": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "agent-loop/speed": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "agent-loop/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "browser-session/cost": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "browser-session/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "browser-session/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "code-search/cost": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "code-search/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "code-search/speed": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "code-search/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "codebase-exploration/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "codebase-exploration/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "grep-output/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "grep-output/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "human-authored-json/cost": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "human-authored-json/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "human-authored-json/speed": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "human-authored-json/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "issue-triage/cost": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "issue-triage/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "issue-triage/speed": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "issue-triage/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "raw-build-log/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "raw-build-log/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "relevance-probe/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "relevance-probe/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "repeated-reads/cost": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "repeated-reads/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "repeated-reads/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "sre-debugging/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "sre-debugging/speed": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "sre-debugging/turns": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    }
   },
   "retentionFloors": {
     "agent-loop-logs": {
@@ -92,6 +230,38 @@
     "agent-loop": {
       "lost": 0,
       "ids": 185
+    }
+  },
+  "retracted": {
+    "browser-session/speed": {
+      "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
+      "verdict": "vs best: our p90 117.5ms vs their p10 13.7ms (medians of 3 passes: ours 151.8 / 117.5 / 117.1, theirs 12.4 / 14.7 / 13.7; published medians 115.025 / 14.881) | vs comparable: crusher: our p90 117.5ms vs their p10 13.7ms (medians of 3 passes: ours 151.8 / 117.5 / 117.1, theirs 12.4 / 14.7 / 13.7; published medians 115.025 / 14.881)",
+      "pass": false
+    },
+    "codebase-exploration/speed": {
+      "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
+      "verdict": "vs best: our p90 65.0ms vs their p10 4.7ms (medians of 3 passes: ours 94.0 / 63.1 / 65.0, theirs 3.9 / 4.7 / 5.7; published medians 61.189 / 5.912) | vs comparable: pipeline@0.25: our p90 65.0ms vs their p10 42.5ms (medians of 3 passes: ours 94.0 / 63.1 / 65.0, theirs 42.5 / 37.1 / 44.6; published medians 61.189 / 45.419)",
+      "pass": false
+    },
+    "grep-output/speed": {
+      "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
+      "verdict": "vs best: our p90 8.0ms vs their p10 2.8ms (medians of 3 passes: ours 14.1 / 7.7 / 8.0, theirs 3.0 / 2.3 / 2.8; published medians 6.496 / 3.373) | vs comparable: pipeline@2.00: our p90 8.0ms vs their p10 30.9ms (medians of 3 passes: ours 14.1 / 7.7 / 8.0, theirs 30.9 / 38.3 / 30.5; published medians 6.496 / 40.017)",
+      "pass": false
+    },
+    "raw-build-log/speed": {
+      "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
+      "verdict": "vs best: our p90 81.2ms vs their p10 3.0ms (medians of 3 passes: ours 79.0 / 81.2 / 110.7, theirs 3.0 / 4.2 / 3.0; published medians 76.565 / 4.436) | vs comparable: pipeline@0.10: our p90 81.2ms vs their p10 37.4ms (medians of 3 passes: ours 79.0 / 81.2 / 110.7, theirs 38.6 / 37.4 / 31.8; published medians 76.565 / 42.377)",
+      "pass": false
+    },
+    "relevance-probe/speed": {
+      "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
+      "verdict": "vs best: our p90 13.3ms vs their p10 12.0ms (medians of 3 passes: ours 13.3 / 9.6 / 16.2, theirs 14.1 / 11.8 / 12.0; published medians 10.237 / 15.15) | vs comparable: crusher: our p90 13.3ms vs their p10 12.0ms (medians of 3 passes: ours 13.3 / 9.6 / 16.2, theirs 14.1 / 11.8 / 12.0; published medians 10.237 / 15.15)",
+      "pass": false
+    },
+    "repeated-reads/speed": {
+      "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
+      "verdict": "vs best: our p90 75.7ms vs their p10 3.6ms (medians of 3 passes: ours 75.7 / 68.1 / 94.0, theirs 4.1 / 3.6 / 3.3; published medians 69.072 / 5.343) | vs comparable: crusher: our p90 75.7ms vs their p10 3.6ms (medians of 3 passes: ours 75.7 / 68.1 / 94.0, theirs 4.1 / 3.6 / 3.3; published medians 69.072 / 5.343)",
+      "pass": false
     }
   }
 }
