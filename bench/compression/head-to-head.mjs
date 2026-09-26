@@ -1589,6 +1589,20 @@ console.log(
   `spill store: ${(sum((r) => r.spillRatio * r.before) / beforeAll).toFixed(2)}x the input, on disk, ` +
     `read only when an elision is followed up`
 );
+// Said out loud for the same reason: a reader comparing these columns is
+// entitled to know we configured their side, and which way that cuts.
+{
+  const backend = theirs.__provenance__?.detectBackend ?? null;
+  const byUs = theirs.__provenance__?.detectBackendSetByHarness ?? null;
+  if (backend)
+    console.log(
+      `their detector: ${backend}${byUs === true ? ' -- set by this harness' : ' -- preset by the operator'}` +
+        (byUs === true
+          ? ', not their Windows default. It is their fastest and best-routing backend, ' +
+            'so their column here is the strongest version of them.'
+          : '')
+    );
+}
 console.log(
   // THE SUBSTITUTION ARM'S STORE, PRINTED BESIDE ITS RATIO, because a column
   // reading 100.0% has to be readable as what it is. Nothing was compressed
@@ -1740,6 +1754,13 @@ if (process.argv[3] === '--record') {
     theirsDigest: null,
     headroomVersion: theirs.__provenance__?.headroomVersion ?? null,
     python: theirs.__provenance__?.python ?? null,
+    // THEIR DETECTOR WAS OUR CHOICE, AND THE RECORD SAYS SO. Their content
+    // detector falls back to a slower, worse-routing pure-Python backend on
+    // Windows; the sweep asks for their native one instead. That is the strongest
+    // version of them and therefore the right opponent, but it is not what a
+    // reader would assume, so it is stated rather than left in a comment.
+    theirDetectBackend: theirs.__provenance__?.detectBackend ?? null,
+    theirDetectBackendSetByUs: theirs.__provenance__?.detectBackendSetByHarness ?? null,
     speedPasses: {
       ours: ourPassCounts.length ? Math.min(...ourPassCounts) : 0,
       theirs: theirPassCounts.length ? Math.min(...theirPassCounts) : 0,

@@ -102,6 +102,11 @@ import logging  # noqa: E402
 # the value that actually ran is recorded either way. If the native detector
 # fails on this machine, the capture fails loudly instead of quietly measuring
 # a degraded competitor -- which is the whole point of the block below.
+# Whether the value below is OURS or the operator's, recorded so the published
+# note can say "we set their detector to rust" rather than leaving a reader to
+# assume it was their default. It is not their default on Windows; it is their
+# fastest and strongest backend, which is why we ask for it.
+_DETECT_BACKEND_PRESET = os.environ.get("HEADROOM_DETECT_BACKEND")
 os.environ.setdefault("HEADROOM_DETECT_BACKEND", "rust")
 
 ADVISORY_SIGNATURES = (
@@ -1010,6 +1015,10 @@ provenance = {
     # allow-listed remainder, recorded because it is still an asymmetry.
     "competitorWarnings": competitor_warnings,
     "detectBackend": os.environ.get("HEADROOM_DETECT_BACKEND"),
+    # True means this harness chose their backend; a string means the operator
+    # had already pinned one and we left it alone.
+    "detectBackendSetByHarness": _DETECT_BACKEND_PRESET is None,
+    "detectBackendPreset": _DETECT_BACKEND_PRESET,
     "kompressWarmup": KOMPRESS_WARMUP,
     # NOT NULL MEANS NOT A MEASUREMENT. A known-answer capture drives this same
     # path with arms whose output is arithmetic, so its numbers are correct and
