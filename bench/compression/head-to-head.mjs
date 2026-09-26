@@ -56,6 +56,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { classifyIds, splitScorable } from './retention.mjs';
 import { scanIdentifiers } from './identifiers.mjs';
+import { selectArms } from './arm-selection.mjs';
 import { classifyArms, declaredOffloadBytes } from './offload.mjs';
 import { stubbedCaptureRefusal } from './capture-guard.mjs';
 import { baseContextReadiness, measureBaseContext } from '../subscription/base-context.mjs';
@@ -838,6 +839,45 @@ for (const [name, text] of Object.entries(payloads)) {
       theirCleanTok = tokens(t.armTexts[split.clean.label]);
     }
   }
+  // THEIR TWO ARMS, NOT JUST THEIR BEST ONE.
+  //
+  // `arm-selection.mjs` carries the measurement that forced this: their ratio
+  // winner keeps 4 of 1045 identifiers on grep-output, 3 of 430 on
+  // raw-build-log, 5 of 590 on codebase-exploration. Chars, cost and speed were
+  // all scored against an arm that had deleted the payload, and the speed
+  // criterion in particular was comparing our encode against their delete.
+  //
+  // So both arms are named and recorded: their ratio winner, and their best arm
+  // that kept at least as much as we kept. The selection rule lives in the
+  // instrument so it can be mutated and caught; this block only feeds it.
+  const armCandidates = [];
+  for (const [label, armText] of Object.entries(t.armTexts ?? {})) {
+    const armBefore = t.armBeforeTexts?.[label] ?? text;
+    // A NON-STRING ARM IS HANDED OVER AS UNRANKABLE, NOT SKIPPED. Skipping it
+    // would quietly substitute a worse comparable arm; the instrument refuses
+    // the whole selection instead, and the row then says why.
+    let kept = Number.NaN;
+    if (typeof armText === 'string') {
+      kept = 0;
+      for (const id of want) if (armText.includes(id)) kept += 1;
+    }
+    armCandidates.push({
+      arm: label,
+      before: typeof armBefore === 'string' ? armBefore.length : Number.NaN,
+      after: typeof armText === 'string' ? armText.length : Number.NaN,
+      retained: kept,
+    });
+  }
+  const picked = selectArms(armCandidates, { ourRetained: inOut + derived });
+  const compArm = picked.comparable === null ? null : picked.comparable.arm;
+  const compText = compArm === null ? null : t.armTexts[compArm];
+  const compBeforeText =
+    compArm === null ? null : (t.armBeforeTexts?.[compArm] ?? text);
+  const compMarkers =
+    compText === null ? [] : [...new Set(compText.match(/<<ccr:[^>]*>>/g) ?? [])];
+  let compIn = 0;
+  if (compText !== null) for (const id of want) if (compText.includes(id)) compIn += 1;
+
   // What their published arm claims it put on disk, so the substitution
   // comparison can print a store size beside its ratio the way ours does.
   const theirOffloadBytes = declaredOffloadBytes(theirText);
@@ -916,6 +956,22 @@ for (const [name, text] of Object.entries(payloads)) {
     theirCleanTok,
     theirCleanBeforeTok,
     theirOffloadBytes,
+    // THE COMPARABLE COLUMN. `compArm === null` means either that no arm of
+    // theirs retained what we retained, or that the capture could not be ranked;
+    // `compDetail` says which. It is never filled in with the next-best arm.
+    compArm,
+    compDetail: picked.detail,
+    compRatio: picked.comparable === null ? null : 1 - picked.comparable.ratio,
+    compRetained: picked.comparable === null ? null : picked.comparable.retained,
+    compTokBefore: compBeforeText === null ? null : tokens(compBeforeText),
+    compTokAfter: compText === null ? null : tokens(compText),
+    compIn: compText === null ? null : compIn,
+    compTurns: compText === null ? null : compMarkers.length,
+    compMarkerBytes: compMarkers.map(markerBytes),
+    compBeforeDigest: compBeforeText === null ? null : sha(compBeforeText),
+    // Their BEST arm's retention, recorded beside its ratio, so no row can show
+    // a 99.6% next to a speed loss again without showing what it kept.
+    bestRetained: picked.best === null ? null : picked.best.retained,
     subAfter: sub.text.length,
     subStore: subSpilled.reduce((n, c) => n + c.length, 0),
     subRatio: 1 - sub.text.length / before,
@@ -1120,10 +1176,18 @@ const armsFor = (r, params) => {
     byteSum === 0 ? 0 : (r.theirTokRedeem * b) / byteSum
   );
   const L = (handed, blocks) => costLine({ handed, blocks, params });
+  // The comparable arm is not one we resolved, so its redeem cost is UNMEASURED.
+  // Pricing every one of its markers at zero redeem tokens is a LOWER BOUND on
+  // their cost, which can only make the bar we have to clear harder, never
+  // easier -- so the comparison stays sound and decidable. It must be reported
+  // as a bound, not as their measured cost.
+  const compBlocks = r.compMarkerBytes.map(() => 0);
   return {
     none: L(r.oursTokBefore, []),
     ours: L(r.oursTokAfter, r.oursBlockTok),
     theirs: L(theirHanded, theirBlocks),
+    theirsComparable:
+      r.compTokAfter === null ? null : L(r.compTokAfter, compBlocks),
     preset: L(r.presetTokAfter, r.presetBlockTok),
   };
 };
@@ -1134,13 +1198,34 @@ const armsFor = (r, params) => {
 // per-session row above it stayed right.
 const sessionCosts = rows.map((r) => {
   const arms = armsFor(r, PARAMS);
-  return { name: r.name, r, arms, cross: breakEven(arms.ours, arms.theirs) };
+  return {
+    name: r.name,
+    r,
+    arms,
+    cross: breakEven(arms.ours, arms.theirs),
+    crossComparable:
+      arms.theirsComparable === null
+        ? null
+        : breakEven(arms.ours, arms.theirsComparable),
+  };
 });
 const foldCorpus = (all) => {
   const keys = ['none', 'ours', 'theirs', 'preset'];
   const out = {};
   for (const key of keys) out[key] = sumLines(all.map((a) => a[key]));
+  // A total over a SUBSET of rows is not comparable with a total over all of
+  // them, so the comparable arm folds only when every row has one. Otherwise
+  // it is null -- unmeasured, never quietly summed over the rows that happen
+  // to have it.
+  const comps = all.map((a) => a.theirsComparable);
+  out.theirsComparable = comps.every((c) => c !== null && c !== undefined)
+    ? sumLines(comps)
+    : null;
   out.cross = breakEven(out.ours, out.theirs);
+  out.crossComparable =
+    out.theirsComparable === null
+      ? null
+      : breakEven(out.ours, out.theirsComparable);
   return out;
 };
 const corpus = foldCorpus(sessionCosts.map((c) => c.arms));
@@ -1148,6 +1233,9 @@ const corpus = foldCorpus(sessionCosts.map((c) => c.arms));
 const byName = Object.fromEntries(sessionCosts.map((c) => [c.name, c.arms]));
 const crossByName = Object.fromEntries(
   sessionCosts.map((c) => [c.name, c.cross])
+);
+const crossComparableByName = Object.fromEntries(
+  sessionCosts.map((c) => [c.name, c.crossComparable])
 );
 
 const k = (t) => `${(t / 1000).toFixed(1)}k`;
@@ -1623,6 +1711,19 @@ if (process.argv[3] === '--record') {
       // picked is the difference between "they compressed it" and "they moved
       // it to a store". A ratio alone cannot say that.
       arm: theirs[r.name]?.arm ?? null,
+      // THE TWO OPPONENTS, NAMED. `arm` is their lowest-ratio arm whatever it
+      // retained; `comparable.arm` is their lowest-ratio arm that retained at
+      // least what we did. A compression, cost or speed claim is only honest
+      // against the second, and the 2026-09-25 decision is to require BOTH.
+      // `comparable.arm === null` means no arm of theirs held our identifiers,
+      // which is an UNMEASURED second column, never an agreement.
+      comparable: {
+        arm: r.compArm,
+        detail: r.compDetail,
+        retained: r.compRetained === null ? null : String(r.compRetained),
+        oursRetained: String(r.inOut + r.derived),
+        bestRetained: r.bestRetained === null ? null : String(r.bestRetained),
+      },
       // AND WHETHER THAT ARM WAS FED WHAT OURS WAS FED, which is the
       // precondition for every other number on this row and was nowhere
       // recorded. Their sweep wraps a non-transcript payload into a role/content
@@ -1644,6 +1745,11 @@ if (process.argv[3] === '--record') {
           oursDigest: sha(mine),
           theirsDigest: typeof theirInput === 'string' ? sha(theirInput) : null,
           same: typeof theirInput === 'string' && theirInput === mine,
+          // THE COMPARABLE ARM'S INPUT, digested separately. A second column is
+          // only a bar if it was fed the same bytes we were; a different input
+          // makes it undecidable, exactly as it does for the best-of-any arm.
+          comparableDigest: r.compBeforeDigest,
+          comparableSame: r.compBeforeDigest === sha(mine),
         };
       })(),
       chars: {
@@ -1652,6 +1758,7 @@ if (process.argv[3] === '--record') {
         preset: pct(r.presetRatio),
         sub: pct(r.subRatio),
         theirs: pct(r.theirs),
+        theirsComparable: r.compRatio === null ? null : pct(r.compRatio),
       },
       tokens: {
         ours: pct(r.oursTok),
@@ -1662,6 +1769,10 @@ if (process.argv[3] === '--record') {
         preset: pct(r.presetTok),
         sub: pct(r.subTok),
         theirs: pct(r.theirsTok),
+        theirsComparable:
+          r.compTokAfter === null
+            ? null
+            : pct(1 - r.compTokAfter / r.compTokBefore),
       },
       retention: {
         // THE DENOMINATOR. Every other number in this object is a count of
@@ -1684,6 +1795,13 @@ if (process.argv[3] === '--record') {
         oursZeroTurn: String(r.inOut + r.derived),
         presetZeroTurn: String(r.presetFree),
         theirsZeroTurn: String(r.theirIn),
+        // RECORDED, NOT GATED. The comparable arm is DEFINED as retaining at
+        // least what we do, so a retention comparison against it has the same
+        // answer on every row for every engine and can never fail for any
+        // reason to do with the code under test. It is kept here as provenance
+        // -- it should always be >= oursZeroTurn, and a row where it is not is
+        // a bug in the selection, not a win.
+        theirsComparableZeroTurn: r.compIn === null ? null : String(r.compIn),
         subUnrecoverable: String(r.subGone),
       },
       // THE TWO BOUNDS, RECORDED. `handed` is the text the agent is given;
@@ -1693,17 +1811,26 @@ if (process.argv[3] === '--record') {
         turns: {
           ours: String(r.oursTurns),
           theirs: String(r.theirTurns),
+          theirsComparable: r.compTurns === null ? null : String(r.compTurns),
           preset: String(r.presetTurns),
         },
         handedTokens: {
           ours: String(r.oursTokAfter),
           theirs: String(tokens(theirs[r.name].bestText ?? '')),
+          theirsComparable:
+            r.compTokAfter === null ? null : String(r.compTokAfter),
         },
         wholeTokens: {
           ours: String(r.oursTokAfter + r.oursTokSpill),
           theirs: String(
             tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem
           ),
+          // A LOWER BOUND, NOT A MEASUREMENT. We never resolved the comparable
+          // arm, so its redeem tokens are unknown and priced at zero here.
+          // Their whole cost is therefore AT LEAST this, which only makes our
+          // bar harder -- but it must not be read as their measured total.
+          theirsComparableAtLeast:
+            r.compTokAfter === null ? null : String(r.compTokAfter),
         },
         // THE SESSION MODEL, which is what a subscription is metered on.
         // `p0` assumes nothing is ever fetched back and `p1` that everything
@@ -1716,13 +1843,29 @@ if (process.argv[3] === '--record') {
             ours: String(Math.round(costAt(byName[r.name].ours, 0))),
             preset: String(Math.round(costAt(byName[r.name].preset, 0))),
             theirs: String(Math.round(costAt(byName[r.name].theirs, 0))),
+            theirsComparableAtLeast:
+              byName[r.name].theirsComparable === null
+                ? null
+                : String(
+                    Math.round(costAt(byName[r.name].theirsComparable, 0))
+                  ),
           },
           p1: {
             ours: String(Math.round(costAt(byName[r.name].ours, 1))),
             preset: String(Math.round(costAt(byName[r.name].preset, 1))),
             theirs: String(Math.round(costAt(byName[r.name].theirs, 1))),
+            theirsComparableAtLeast:
+              byName[r.name].theirsComparable === null
+                ? null
+                : String(
+                    Math.round(costAt(byName[r.name].theirsComparable, 1))
+                  ),
           },
           breakEven: rate(crossByName[r.name]),
+          breakEvenComparable:
+            crossComparableByName[r.name] === null
+              ? null
+              : rate(crossComparableByName[r.name]),
           // THE RATE THAT FLATTERS US LEAST, so a gate has something to stand
           // on. Cost is quadratic in the fetch rate, so the two endpoints no
           // longer bound the interval between them: a difference that opens
@@ -1735,6 +1878,20 @@ if (process.argv[3] === '--record') {
               fetchRate: w.p.toFixed(4),
               ours: String(Math.round(costAt(byName[r.name].ours, w.p))),
               theirs: String(Math.round(costAt(byName[r.name].theirs, w.p))),
+            };
+          })(),
+          // THE SAME WORST POINT against the comparable arm, found separately:
+          // the two arms are different quadratics, so the rate that flatters us
+          // least against one is not the rate that flatters us least against
+          // the other.
+          worstComparable: (() => {
+            const comp = byName[r.name].theirsComparable;
+            if (comp === null) return null;
+            const w = worstAgainst(byName[r.name].ours, comp);
+            return {
+              fetchRate: w.p.toFixed(4),
+              ours: String(Math.round(costAt(byName[r.name].ours, w.p))),
+              theirsAtLeast: String(Math.round(costAt(comp, w.p))),
             };
           })(),
         },
@@ -1768,6 +1925,20 @@ if (process.argv[3] === '--record') {
         theirsMsPasses: Array.isArray(theirs[r.name]?.msPasses)
           ? theirs[r.name].msPasses
           : null,
+        // THE COMPARABLE ARM'S READINGS. `run-theirs.py` times EVERY arm, not
+        // just the ratio winner, precisely so that this column arrives measured
+        // -- an arm the scorer may select but the capture never timed would
+        // have to be refused, which is the same as not measuring it at all.
+        theirsComparableMs:
+          r.compArm !== null &&
+          typeof theirs[r.name]?.armMs?.[r.compArm] === 'number'
+            ? theirs[r.name].armMs[r.compArm].toFixed(3)
+            : null,
+        theirsComparableMsPasses:
+          r.compArm !== null &&
+          Array.isArray(theirs[r.name]?.armMsPasses?.[r.compArm])
+            ? theirs[r.name].armMsPasses[r.compArm]
+            : null,
       },
     })),
     totals: {

@@ -528,8 +528,10 @@ print(
     )
 )
 
-# THE WINNING ARM OF EACH WORKLOAD, KEPT CALLABLE SO IT CAN BE TIMED AGAIN
-# LATER. Filled by `run`, drained by the pass sweep at the bottom of the file.
+# EVERY ARM OF EVERY WORKLOAD, KEPT CALLABLE SO IT CAN BE TIMED AGAIN LATER.
+# Shape: {workload: {arm: (fn, args)}}. Filled by `run`, drained by the pass
+# sweep at the bottom of the file. Every arm, not just the winner, because the
+# scorer chooses a second column of its own and an untimed arm cannot be scored.
 RETIME = {}
 
 # THREE, THE SAME NUMBER THE NODE SIDE TAKES. The two sides are compared pass
@@ -545,8 +547,8 @@ def run(name, native, text):
     # WALL TIME PER ARM, so the scorer can compare speed instead of assuming it.
     # `perf_counter` and not `time.time`: several of these arms finish in well
     # under a millisecond, and a coarse clock reports those as zero, which reads
-    # as an arm that never ran. Only the winning arm's time is published, since
-    # that is the arm whose output the comparison uses.
+    # as an arm that never ran. This first reading picks the winner; every arm is
+    # then re-timed properly below, because the scorer scores two of them.
     timings = {}
     question = question_of(native)
 
@@ -621,54 +623,70 @@ def run(name, native, text):
 
     arm, best = min(attempts, key=reduction)
     ratio = reduction((arm, best))
-    # REPEATED READINGS OF THE WINNING ARM, MEDIAN PUBLISHED. The sweep above
-    # times each arm once, which is enough to pick a winner and not enough to
-    # compare against ours: a single reading of a sub-second call is partly a
-    # reading of the machine. Only the winner is repeated, because only the
-    # winner is the arm the comparison uses, and repeating all ten would spend
-    # ten times the wall clock to time nine arms nobody scores.
-    samples = [timings.get(arm, 0.0)]
-    fn_args = callables.get(arm)
-    if fn_args is not None:
+    # REPEATED READINGS OF EVERY ARM, NOT ONLY THE WINNER.
+    #
+    # It was the winner alone, on the reasoning that the winner is the arm the
+    # comparison uses. That reasoning held while the comparison had one column.
+    # It now has two -- their best-ratio arm, and their best arm that retains at
+    # least what ours retains -- and the second is chosen by the scorer, from
+    # `armTexts`, on the node side. An arm the scorer may select but this file
+    # never timed would arrive with no speed reading at all, and a criterion
+    # with a reading on one side only cannot be decided; it would have to be
+    # refused, which is the same as not measuring it.
+    #
+    # WHAT THIS COSTS. Every arm was already run once each, above, to pick the
+    # winner; this adds 30 more readings per arm per pass. The expensive part of
+    # the harness is their model load, which happens once, before any of this.
+    arm_samples = {}
+    for label, _out in attempts:
+        fn_args = callables.get(label)
+        if fn_args is None:
+            continue
         fn, args = fn_args
         # THIRTY MORE, FOR THIRTY-ONE IN ALL. The node side takes the same
         # number for the same reason: the scorer compares tails, not just
         # medians, and eleven readings put a lone spike on the tail it reads.
+        readings = [timings.get(label, 0.0)]
         for _ in range(30):
             try:
                 started = time.perf_counter()
                 fn(*args)
-                samples.append((time.perf_counter() - started) * 1000.0)
+                readings.append((time.perf_counter() - started) * 1000.0)
             except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
-                notes["retime:" + arm] = "%s: %s" % (type(exc).__name__, exc)
+                notes["retime:" + label] = "%s: %s" % (type(exc).__name__, exc)
                 break
+        # RUN ORDER PRESERVED for the same reason the node side preserves it:
+        # the first reading carries the import and the first-call cost, and a
+        # consumer that cannot see which one was first cannot tell warm-up from
+        # variance.
+        arm_samples[label] = [round(v, 3) for v in readings]
         # AND TWO MORE PASSES, TAKEN LATER, INTERLEAVED WITH EVERY OTHER
-        # WORKLOAD. This is a pass, not the whole reading: the driver at the
-        # bottom of this file sweeps all the winners again, twice, so the
-        # passes are separated in time by seconds of other work.
+        # WORKLOAD AND EVERY OTHER ARM. This is a pass, not the whole reading:
+        # the driver at the bottom of this file sweeps them all again, twice, so
+        # the passes are separated in time by seconds of other work.
         #
-        # WHY IT IS NOT ENOUGH TO TAKE 93 READINGS HERE. The spread that
-        # decides the speed criterion is BETWEEN runs, not inside one -- the
-        # node side measured its own p90 moving 34ms between runs against 7ms
-        # within one, and interference is common-mode, hitting every workload
-        # at once. Ninety-three back-to-back readings inside one interference
-        # event are ninety-three contaminated readings that look perfectly
-        # consistent. Three separated passes show it as one pass that
-        # disagrees with its neighbours.
+        # WHY IT IS NOT ENOUGH TO TAKE 93 READINGS HERE. The spread that decides
+        # the speed criterion is BETWEEN runs, not inside one -- the node side
+        # measured its own p90 moving 34ms between runs against 7ms within one,
+        # and interference is common-mode, hitting every workload at once.
+        # Ninety-three back-to-back readings inside one interference event are
+        # ninety-three contaminated readings that look perfectly consistent.
+        # Three separated passes show it as one pass that disagrees with its
+        # neighbours.
         #
         # WHY THEIR SIDE NEEDS IT AT ALL. The node side has taken three passes
         # since #435 and this side took one, so the between-run spread was
-        # measured for ours and assumed away for theirs -- and the direction
-        # of that error flatters us. Their statistic is a FAST percentile;
+        # measured for ours and assumed away for theirs -- and the direction of
+        # that error flatters us. Their statistic is a FAST percentile;
         # interference only adds time; an inflated p10 widens the gap; and the
-        # gate reads a wider gap as our win. A criterion that can be won by
-        # the opponent's run being noisy is not a speed criterion.
-        RETIME[name] = (arm, fn, args)
+        # gate reads a wider gap as our win. A criterion that can be won by the
+        # opponent's run being noisy is not a speed criterion.
+        RETIME.setdefault(name, {})[label] = (fn, args)
     # RUN ORDER PRESERVED for the same reason the node side preserves it: the
     # first reading carries the import and the first-call cost, and a consumer
     # that cannot see which one was first cannot tell warm-up from variance.
-    ordered = [round(v, 3) for v in samples]
-    samples = sorted(samples)
+    ordered = arm_samples.get(arm) or [round(timings.get(arm, 0.0), 3)]
+    samples = sorted(ordered)
     return {
         "before": len(text),
         "after": round(len(text) * ratio),
@@ -683,6 +701,9 @@ def run(name, native, text):
         # from the pool, so `msSamples` stays what every existing consumer
         # reads and `msPasses` is what the gate needs.
         "msPasses": [ordered],
+        # EVERY ARM'S READINGS, KEYED BY ARM. `ms`/`msSamples`/`msPasses` stay
+        # the winner's, so every existing consumer reads what it always read.
+        "armMsPasses": {label: [readings] for label, readings in arm_samples.items()},
         "arms": {label: round(reduction((label, out)) * len(text)) for label, out in attempts},
         # EVERY ARM'S BYTES, NOT ONLY THE WINNER'S.
         #
@@ -733,24 +754,28 @@ for extra_pass in range(1, SPEED_PASSES):
         entry = RETIME.get(name)
         if entry is None:
             continue
-        arm, fn, args = entry
-        readings = []
-        for _ in range(31):
-            try:
-                started = time.perf_counter()
-                fn(*args)
-                readings.append(round((time.perf_counter() - started) * 1000.0, 3))
-            except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
-                results[name].setdefault("notes", {})["retime:" + arm] = "%s: %s" % (
-                    type(exc).__name__,
-                    exc,
-                )
-                break
-        # A PASS THAT DIED PART WAY IS NOT A PASS. Appending a short one would
-        # let a 3-reading pass carry the same weight in the across-pass median
-        # as a 31-reading one, and the scorer has no way to see the difference.
-        if len(readings) == 31:
-            results[name]["msPasses"].append(readings)
+        for arm, (fn, args) in entry.items():
+            readings = []
+            for _ in range(31):
+                try:
+                    started = time.perf_counter()
+                    fn(*args)
+                    readings.append(round((time.perf_counter() - started) * 1000.0, 3))
+                except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
+                    results[name].setdefault("notes", {})["retime:" + arm] = "%s: %s" % (
+                        type(exc).__name__,
+                        exc,
+                    )
+                    break
+            # A PASS THAT DIED PART WAY IS NOT A PASS. Appending a short one
+            # would let a 3-reading pass carry the same weight in the
+            # across-pass median as a 31-reading one, and the scorer has no way
+            # to see the difference.
+            if len(readings) != 31:
+                continue
+            results[name].setdefault("armMsPasses", {}).setdefault(arm, []).append(readings)
+            if arm == results[name].get("arm"):
+                results[name]["msPasses"].append(readings)
 
 for name, row in results.items():
     passes = row.get("msPasses") or []
@@ -767,6 +792,26 @@ for name, row in results.items():
         # be compared pass-for-pass and the scorer refuses it rather than
         # quietly falling back to the pooled reading.
         print("    %s: %d speed pass(es) of %d" % (name, len(passes), SPEED_PASSES))
+
+# AND THE SAME POOLING, PER ARM. `armMs` is the median of that arm's pooled
+# readings and `armMsPasses` keeps the passes separate, exactly as `ms` and
+# `msPasses` do for the winner -- so a scorer that selects a non-winning arm
+# reads the same statistic, computed the same way, and not a different estimator
+# that happens to be available for the arm it picked.
+for name, row in results.items():
+    arm_passes = row.get("armMsPasses") or {}
+    for label, passes in arm_passes.items():
+        pooled = [v for p in passes for v in p]
+        if not pooled:
+            continue
+        ordered_pool = sorted(pooled)
+        row.setdefault("armMs", {})[label] = round(ordered_pool[(len(ordered_pool) - 1) // 2], 3)
+        if len(passes) < SPEED_PASSES:
+            # SAID OUT LOUD for the same reason the winner's shortfall is: an
+            # arm with fewer passes than asked for cannot be compared
+            # pass-for-pass, and a silently short arm is the one way this file
+            # could hand the scorer a reading it will treat as equivalent.
+            print("    %s/%s: %d speed pass(es) of %d" % (name, label, len(passes), SPEED_PASSES))
 
 os.makedirs(OUT, exist_ok=True)
 with open(os.path.join(OUT, "payloads.json"), "w", encoding="utf-8") as handle:
