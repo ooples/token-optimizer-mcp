@@ -57,6 +57,66 @@
  * @param {{ourRetained: number}} ours
  * @returns {{best: object|null, comparable: object|null, detail: string}}
  */
+/**
+ * HOW TWO ARMS ARE ORDERED, AND WHY A TIE IS NOT A COIN FLIP.
+ *
+ * Lower ratio first -- that is what "their best arm" means for a compression
+ * claim. What matters is the tie, because ties are not rare: on browser-session
+ * three of their arms (router, crusher, crusher-lossy-ccr) emit the SAME 611859
+ * bytes from the same 782294, so all three sit at 0.7821 and the ratio cannot
+ * separate them. Their measured times there are 284.4ms, 16.7ms and 15.8ms.
+ *
+ * Breaking that tie by name picks `crusher`; breaking it the way the capture
+ * happened to enumerate picks `router`. The second is 18x slower for identical
+ * output, so a speed claim scored against it is scored against the slowest arm
+ * that produced their best bytes -- our own result inflated by their arm
+ * selection rather than by our code. THE FASTER ARM IS THE HONEST OPPONENT, so
+ * a ratio tie is broken by measured time, and only an unmeasured or equal time
+ * falls through to the name (which keeps the choice deterministic, so a ratchet
+ * entry means the same thing tomorrow).
+ *
+ * An arm with no recorded time cannot win the tie-break against one that has a
+ * time: `null` sorts after any number here. It is not refused, because a tie in
+ * ratio with a missing time is still decidable on the arms that do have one.
+ */
+export const rankArms = (a, b) => {
+  if (a.ratio !== b.ratio) return a.ratio - b.ratio;
+  const am = Number.isFinite(a.ms) ? a.ms : Number.POSITIVE_INFINITY;
+  const bm = Number.isFinite(b.ms) ? b.ms : Number.POSITIVE_INFINITY;
+  if (am !== bm) return am - bm;
+  return a.arm < b.arm ? -1 : 1;
+};
+
+/**
+ * THEIR BEST ARM ALONE, WITHOUT A RETENTION QUESTION.
+ *
+ * `selectArms` needs our retained count, because comparability is defined
+ * against it. The best-of-any arm is not: it is the lowest ratio, full stop. The
+ * capture is normalised through this before any workload is scored, so that
+ * `bestText`, `ms` and the recorded chars/tokens all name the SAME arm that
+ * `selectArms` will later call `best`. Two definitions of "their best arm" in
+ * one record is how a 284ms arm came to stand in for a 16.7ms one.
+ *
+ * Returns null when no arm can be ranked -- the caller then keeps whatever the
+ * capture already said and says so, rather than silently picking.
+ */
+export function bestByRatio(candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const scored = [];
+  for (const c of candidates) {
+    const arm = c === null || c === undefined ? undefined : c.arm;
+    if (typeof arm !== 'string' || arm === '') return null;
+    if (!Number.isFinite(c.before) || c.before <= 0) return null;
+    if (!Number.isFinite(c.after) || c.after < 0) return null;
+    scored.push({
+      arm,
+      ratio: c.after / c.before,
+      ms: Number.isFinite(c.ms) ? c.ms : null,
+    });
+  }
+  return [...scored].sort(rankArms)[0];
+}
+
 export function selectArms(candidates, ours) {
   if (!Array.isArray(candidates) || candidates.length === 0)
     return {
@@ -109,11 +169,14 @@ export function selectArms(candidates, ours) {
           'arm ' + arm + ' has no retained count, so it cannot be ruled in or out ' +
           'of comparability',
       };
-    scored.push({ arm, ratio: c.after / c.before, retained: c.retained });
+    scored.push({
+      arm,
+      ratio: c.after / c.before,
+      retained: c.retained,
+      ms: Number.isFinite(c.ms) ? c.ms : null,
+    });
   }
-  // TIES BROKEN BY NAME, so two runs of the same capture select the same arm and
-  // a ratchet entry means the same thing tomorrow.
-  const rank = (a, b) => (a.ratio !== b.ratio ? a.ratio - b.ratio : a.arm < b.arm ? -1 : 1);
+  const rank = rankArms;
   const ordered = [...scored].sort(rank);
   const best = ordered[0];
   const eligible = ordered.filter((c) => c.retained >= ourRetained);

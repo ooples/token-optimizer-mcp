@@ -56,7 +56,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { classifyIds, splitScorable } from './retention.mjs';
 import { scanIdentifiers } from './identifiers.mjs';
-import { selectArms } from './arm-selection.mjs';
+import { bestByRatio, selectArms } from './arm-selection.mjs';
 import { classifyArms, declaredOffloadBytes } from './offload.mjs';
 import { stubbedCaptureRefusal } from './capture-guard.mjs';
 import { baseContextReadiness, measureBaseContext } from '../subscription/base-context.mjs';
@@ -105,6 +105,54 @@ if (!dir) {
 
 const payloads = JSON.parse(readFileSync(join(dir, 'payloads.json'), 'utf8'));
 const theirs = JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'));
+
+// ONE DEFINITION OF "THEIR BEST ARM", APPLIED BEFORE ANYTHING IS SCORED.
+//
+// `run-theirs.py` records a winner in `arm`, with its bytes in `bestText` and
+// its pooled timings in `ms`/`msSamples`/`msPasses`. The scorer separately ranks
+// every arm in `arm-selection.mjs`. On browser-session those two disagreed: the
+// capture's winner was `router` at 284.4ms, while three arms including `crusher`
+// at 16.7ms emitted byte-identical output, so the ratio could not separate them
+// and each file broke the tie its own way. The record then carried `router`'s
+// time as "their best arm" and `crusher`'s retained count as "their best arm",
+// and our speed row was scored against the slowest arm that produced their best
+// bytes.
+//
+// So the capture is re-pointed here, once, at the arm `arm-selection.mjs` ranks
+// first -- including its tie-break on measured time, which is the hard
+// direction for us. Every later `bestText`, `ms` and recorded chars/tokens then
+// names that same arm. Nothing is recomputed: the bytes and the timings all come
+// from the capture's own per-arm fields.
+//
+// A capture with no per-arm fields, or one whose arms cannot be ranked, is left
+// exactly as it was and named in `bestArmRepointed` so the record says which
+// rows this touched.
+const bestArmRepointed = {};
+for (const [name, t] of Object.entries(theirs)) {
+  if (name === '__provenance__' || t === null || typeof t !== 'object') continue;
+  if (!t.armTexts || !t.armBeforeTexts) continue;
+  const ranked = bestByRatio(
+    Object.entries(t.armTexts).map(([label, armText]) => ({
+      arm: label,
+      before: (t.armBeforeTexts[label] ?? '').length,
+      after: typeof armText === 'string' ? armText.length : Number.NaN,
+      ms: t.armMs?.[label],
+    }))
+  );
+  if (ranked === null || ranked.arm === t.arm) continue;
+  bestArmRepointed[name] = { from: t.arm, to: ranked.arm };
+  t.arm = ranked.arm;
+  t.bestText = t.armTexts[ranked.arm];
+  t.bestBeforeText = t.armBeforeTexts[ranked.arm] ?? t.bestBeforeText;
+  // THE TIMINGS MOVE WITH THE ARM OR THEY DESCRIBE A DIFFERENT ONE. `armMs` is
+  // the capture's median of exactly the pool in `armMsPasses`, so both are taken
+  // from there and the median cannot disagree with its own samples.
+  if (typeof t.armMs?.[ranked.arm] === 'number') t.ms = t.armMs[ranked.arm];
+  if (Array.isArray(t.armMsPasses?.[ranked.arm])) {
+    t.msPasses = t.armMsPasses[ranked.arm];
+    t.msSamples = t.armMsPasses[ranked.arm].flat();
+  }
+}
 
 // A KNOWN-ANSWER CAPTURE IS CORRECT AND MEANINGLESS AT THE SAME TIME, which is
 // the most dangerous thing a file in this directory can be. `run-theirs.py` can
@@ -866,6 +914,11 @@ for (const [name, text] of Object.entries(payloads)) {
       before: typeof armBefore === 'string' ? armBefore.length : Number.NaN,
       after: typeof armText === 'string' ? armText.length : Number.NaN,
       retained: kept,
+      // FED IN SO A RATIO TIE IS BROKEN ON MEASURED TIME, not on the name. An
+      // arm the capture never timed arrives as undefined and sorts last among
+      // the tied, which is the only honest place for it: an unmeasured time
+      // cannot be claimed to be faster.
+      ms: t.armMs?.[label],
     });
   }
   const picked = selectArms(armCandidates, { ourRetained: inOut + derived });
@@ -1711,6 +1764,14 @@ if (process.argv[3] === '--record') {
       // picked is the difference between "they compressed it" and "they moved
       // it to a store". A ratio alone cannot say that.
       arm: theirs[r.name]?.arm ?? null,
+      // AND WHETHER THAT IS THE ARM THE CAPTURE ITSELF NAMED. A ratio tie broken
+      // on measured time can move this off the capture's winner; when it does,
+      // both names are recorded so the row cannot be read as if one arm had been
+      // scored throughout.
+      armFromCapture:
+        bestArmRepointed[r.name] === undefined
+          ? (theirs[r.name]?.arm ?? null)
+          : bestArmRepointed[r.name].from,
       // THE TWO OPPONENTS, NAMED. `arm` is their lowest-ratio arm whatever it
       // retained; `comparable.arm` is their lowest-ratio arm that retained at
       // least what we did. A compression, cost or speed claim is only honest

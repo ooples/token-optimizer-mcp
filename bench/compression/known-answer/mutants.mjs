@@ -688,6 +688,46 @@ const MUTANTS = [
     from: 'const ordered = [...scored].sort(rank);',
     to: 'const ordered = [...scored];',
   },
+  {
+    name: 'a ratio tie is broken by arm name instead of by measured time',
+    defect:
+      'on browser-session three of their arms emit byte-identical output at 284ms, 16.7ms and 15.8ms, so the tie picks an arm 18x slower than the one that produced the same bytes and our speed row is scored against their arm selection',
+    caughtBy: 'the fastest of the tied arms is their best-of-any arm',
+    file: ARM,
+    check: ARM_CHECK,
+    from: 'if (am !== bm) return am - bm;',
+    to: 'if (false) return am - bm;',
+  },
+  {
+    name: 'an untimed arm counts as instantaneous in a tie',
+    defect:
+      'an arm the capture never timed wins every ratio tie, so the speed bar becomes an arm with no measurement behind it',
+    caughtBy: 'the timed arm wins the tie even though the untimed one sorts first by name',
+    file: ARM,
+    check: ARM_CHECK,
+    from: 'const am = Number.isFinite(a.ms) ? a.ms : Number.POSITIVE_INFINITY;',
+    to: 'const am = Number.isFinite(a.ms) ? a.ms : 0;',
+  },
+  {
+    name: 'the standalone best-arm picker ranks by its own rule',
+    defect:
+      'the capture is re-pointed at one arm while the scorer calls a different one best, which is the two-definitions bug this pass existed to close',
+    caughtBy: 'bestByRatio names the SAME arm selectArms calls best',
+    file: ARM,
+    check: ARM_CHECK,
+    from: '  return [...scored].sort(rankArms)[0];',
+    to: '  return [...scored].sort((a, b) => (a.arm < b.arm ? -1 : 1))[0];',
+  },
+  {
+    name: 'an unrankable arm list yields a best arm anyway',
+    defect:
+      'a capture whose arms cannot be ranked gets one picked for it, so the record names a best arm that no measurement supports',
+    caughtBy: 'bestByRatio refuses rather than guessing',
+    file: ARM,
+    check: ARM_CHECK,
+    from: 'if (!Number.isFinite(c.before) || c.before <= 0) return null;',
+    to: 'if (c.before === -1) return null;',
+  },
 ];
 
 // The files to snapshot come from the table, so adding a mutant against a new

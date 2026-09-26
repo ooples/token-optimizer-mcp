@@ -19,7 +19,7 @@
  *  - `a decided loss outranks an undecided column` -- the three-state ordering.
  *  - `a missing second column is undecided, never agreement`.
  */
-import { bothColumns, columnsFor, selectArms } from './arm-selection.mjs';
+import { bestByRatio, bothColumns, columnsFor, selectArms } from './arm-selection.mjs';
 
 let failures = 0;
 const ok = (name, detail = '') => console.log(`ok   ${name}${detail ? ` -- ${detail}` : ''}`);
@@ -233,6 +233,77 @@ console.log('\nwin both or it is not a win');
     d.includes('vs best:') && d.includes('vs comparable:'),
     'and the detail names both columns, so a red row says which arm beat us',
     d
+  );
+}
+
+console.log('\na ratio tie is broken on measured time, not on the name');
+{
+  // THE REAL browser-session SHAPE. Three of their arms emit byte-identical
+  // output there -- 611859 from 782294, so all three sit at exactly 0.7821 and
+  // the ratio cannot separate them -- while their measured times are 284.4ms,
+  // 16.7ms and 15.8ms. Broken by name this picks `crusher`; broken the way the
+  // capture enumerated it, `router`, which is 18x slower for THE SAME BYTES. A
+  // speed claim scored against that arm is inflated by their arm selection
+  // rather than by our code, so the fastest of the tied arms is the opponent.
+  const TIED = [
+    { arm: 'router', before: 782294, after: 611859, retained: 334, ms: 284.448 },
+    { arm: 'crusher', before: 782294, after: 611859, retained: 334, ms: 16.683 },
+    { arm: 'crusher-lossy-ccr', before: 782294, after: 611859, retained: 334, ms: 15.769 },
+    { arm: 'pipeline@0.10', before: 782294, after: 782294, retained: 334, ms: 58.497 },
+  ];
+  const s = selectArms(TIED, { ourRetained: 334 });
+  check(
+    s.best.arm === 'crusher-lossy-ccr',
+    'the fastest of the tied arms is their best-of-any arm',
+    s.detail
+  );
+  check(
+    s.comparable !== null && s.comparable.arm === 'crusher-lossy-ccr',
+    'and the comparable column lands on it too, since it kept what we kept',
+    s.detail
+  );
+  const b = bestByRatio(TIED);
+  check(
+    b !== null && b.arm === s.best.arm,
+    'bestByRatio names the SAME arm selectArms calls best, so the capture and the ' +
+      'scorer cannot each pick their own',
+    String(b === null ? 'refused' : b.arm) + ' vs ' + s.best.arm
+  );
+}
+
+console.log('\nan arm the capture never timed cannot win a tie on speed');
+{
+  // NOT REFUSED -- a tie in ratio with one missing time is still decidable on the
+  // arms that do have one. But an unmeasured time must not be treated as fast:
+  // `null` sorts after any number, or the tie-break would prefer exactly the arm
+  // nobody measured.
+  const UNTIMED = [
+    { arm: 'aaa-untimed', before: 1000, after: 400, retained: 50 },
+    { arm: 'zzz-timed', before: 1000, after: 400, retained: 50, ms: 99.0 },
+  ];
+  const s = selectArms(UNTIMED, { ourRetained: 50 });
+  check(
+    s.best.arm === 'zzz-timed',
+    'the timed arm wins the tie even though the untimed one sorts first by name',
+    s.detail
+  );
+}
+
+console.log('\nbestByRatio refuses rather than guessing');
+{
+  check(bestByRatio([]) === null, 'an empty arm list has no best arm');
+  check(bestByRatio(null) === null, 'and neither does a missing one');
+  check(
+    bestByRatio([{ arm: '', before: 10, after: 1 }]) === null,
+    'an unnamed arm refuses the whole ranking'
+  );
+  check(
+    bestByRatio([{ arm: 'a', before: 0, after: 1 }]) === null,
+    'so does a zero denominator, which is not a ratio'
+  );
+  check(
+    bestByRatio([{ arm: 'a', before: 10, after: Number.NaN }]) === null,
+    'and so does an arm whose output length was never recorded'
   );
 }
 
