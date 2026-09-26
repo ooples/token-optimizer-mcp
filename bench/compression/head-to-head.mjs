@@ -1,8 +1,15 @@
 /**
  * The head-to-head: both engines run over OUR corpus, scored by one instrument.
  *
- * WHOSE FIXTURES THESE ARE. All 12 workloads in `bench/compression/workloads/`
- * are ours -- captured from this project's own agent traffic. An earlier
+ * WHOSE FIXTURES THESE ARE, PER ROW. The 12 workloads in
+ * `bench/compression/workloads/` are ours -- captured from this project's own
+ * agent traffic. A capture may ALSO carry the six their own benchmark suite
+ * generates, and those rows carry a different, much stronger claim: beating them
+ * on fixtures they chose is not the same as beating them on fixtures we chose.
+ * So the two are never summed into one headline. The table marks their rows with
+ * `*`, the subtotals print separately, and the owner of each row is read from
+ * THEIR provenance (`carriedPayloads`) rather than from a list kept on this side
+ * that could drift away from what actually ran. An earlier
  * version of this comment called them "HeadRoom's own fixtures", which was
  * simply false, and it mattered: a corpus the opponent chose would make a win
  * far stronger evidence than a corpus we chose. Read every number below as
@@ -1138,12 +1145,19 @@ const bodyTokPct = (r) =>
 // one column here that is not a compression ratio. A block it moved is on disk
 // behind a path; nothing about it got smaller. It is the like-for-like against
 // their content-cache column, which works the same way.
+// Read once, here, because the table prints before the mixed-corpus block runs.
+// ABSENT IS NOT "ALL OURS": a capture written before this field existed cannot say
+// who generated a row, and defaulting it to ours would credit us with their
+// fixtures -- the stronger claim -- on exactly the captures that cannot support it.
+const carriedList = theirs?.__provenance__?.carriedPayloads ?? null;
+const carriedEarly = new Set(carriedList ?? rows.map((r) => r.name));
 console.log(
   'workload                  before     ours    body     sub   theirs |   ours    body     sub  theirs (tokens) |  ids | ours:  ctx  derv spill  gone | body: gone | sub: gone | theirs:  ctx   ccr  gone | their arm'
 );
 for (const r of rows) {
   console.log(
-    `${r.name.padEnd(22)} ${n(r.before, 8)}  ${pct(r.ours).padStart(6)}  ` +
+    // `*` marks a fixture THEY generated -- see the mixed-corpus block below.
+    `${(carriedEarly.has(r.name) ? r.name : r.name + ' *').padEnd(22)} ${n(r.before, 8)}  ${pct(r.ours).padStart(6)}  ` +
       `${bodyPct(r)}  ${pct(r.subRatio).padStart(6)}  ${pct(r.theirs).padStart(6)} | ` +
       `${pct(r.oursTok).padStart(6)} ` +
       `${bodyTokPct(r)} ${pct(r.subTok).padStart(6)} ${pct(r.theirsTok).padStart(6)} | ` +
@@ -1556,6 +1570,48 @@ const theirsRedeemed = sum((r) => r.theirRedeemed);
 //
 // Silent on a known-answer run: the stub is not an engine, so the question
 // does not apply and `engineNameFor` returns null for every row by design.
+// WHOSE FIXTURE EACH ROW IS, taken from the sweep's own provenance.
+// `carriedPayloads` is what run-theirs.py was handed by us; everything else in the
+// capture came from their generators. Read that way round, a fixture we stop
+// carrying cannot silently keep being credited as ours.
+for (const r of rows) r.fixtureOwner = carriedList === null ? null : carriedEarly.has(r.name) ? 'ours' : 'theirs';
+const theirFixtureRows = rows.filter((r) => r.fixtureOwner === 'theirs');
+if (carriedList === null) {
+  console.log('');
+  console.log(
+    '  FIXTURE OWNERSHIP UNKNOWN: this capture predates the carriedPayloads ' +
+      'provenance field, so no row here may be quoted as a win on their own corpus.'
+  );
+} else if (theirFixtureRows.length) {
+  console.log('');
+  console.log(
+    `  MIXED CORPUS: ${theirFixtureRows.length} of ${rows.length} row(s) are THEIR OWN ` +
+      'fixtures, marked * in the table above. Those rows and ours are not one headline:'
+  );
+  const part = (label, set) => {
+    if (!set.length) return;
+    const b = set.reduce((a, r) => a + r.before, 0);
+    const o = set.reduce((a, r) => a + r.after, 0);
+    const t = set.reduce((a, r) => a + r.before * (1 - r.theirs), 0);
+    // BOTH METRICS, NAMED. The two headlines disagree on this corpus -- we lead on
+    // chars and trail on tokens -- so a subtotal that printed one unnamed would be
+    // read as whichever half of the split the reader already had in mind.
+    const bt = set.reduce((a, r) => a + r.oursTokBefore, 0);
+    const ot = set.reduce((a, r) => a + r.oursTokAfter, 0);
+    const tt = set.reduce((a, r) => a + Math.round(r.oursTokBefore * (1 - r.theirsTok)), 0);
+    console.log(
+      `    ${label.padEnd(20)} ${String(set.length).padStart(2)} row(s)   ` +
+        `chars ours ${pct(1 - o / b)} theirs ${pct(1 - t / b)}   ` +
+        `tokens ours ${pct(1 - ot / bt)} theirs ${pct(1 - tt / bt)}`
+    );
+  };
+  part('their own fixtures', theirFixtureRows);
+  part('our fixtures', rows.filter((r) => r.fixtureOwner === 'ours'));
+  console.log(
+    '    Beating them on fixtures they chose is the stronger claim, beating them on ' +
+      'ours the weaker one. Quote whichever is being made, never the blend.'
+  );
+}
 const oursDeclined = KNOWN_ANSWER_OURS ? [] : rows.filter((r) => r.oursEngine === null);
 if (oursDeclined.length) {
   console.log('');
