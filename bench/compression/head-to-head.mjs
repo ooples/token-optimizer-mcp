@@ -61,6 +61,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
+import { unaccounted } from './conservation.mjs';
 import { classifyIds, splitScorable } from './retention.mjs';
 import { scanIdentifiers } from './identifiers.mjs';
 import { bestByRatio, selectArms } from './arm-selection.mjs';
@@ -729,7 +730,11 @@ for (const [name, text] of Object.entries(payloads)) {
   const spilledChars = spilled.reduce((n, s) => n + s.length, 0);
   const grew = after > before;
   const spillRatio = spilledChars / before;
-  const conserved = !grew && spillRatio <= 2;
+  // NAMED FOR WHAT IT CHECKS. It was called `conserved`, which reads as a
+  // statement about content and is not one: an arm could delete half the prose
+  // and still satisfy both bounds. Whole-payload content conservation is
+  // measured separately, below, by `conservation.mjs`.
+  const sizeSane = !grew && spillRatio <= 2;
 
   // SPLIT BEFORE ANYTHING COUNTS. `identifiers()` admits keyed and quoted values
   // down to MIN_SYMBOL (5), but an identifier is only scorable by `includes` at
@@ -792,6 +797,32 @@ for (const [name, text] of Object.entries(payloads)) {
     hasSink: OURS_HAS_SINK,
   });
   const { inOut, derived, inSpill, gone, missing } = classified;
+  // AND THE SAME QUESTION OVER EVERYTHING THE IDENTIFIER LIST LEAVES OUT.
+  // `want` is a scrape of paths, hashes and ids; the prose between them is
+  // outside its denominator, so this walks every word of the payload long enough
+  // to locate. Same three places count as survival, same sink semantics.
+  const kept = unaccounted({
+    before: text,
+    output: out.text,
+    reconstructed: recoveredOut,
+    spill: haveSpill,
+    hasSink: OURS_HAS_SINK,
+  });
+  // AND A POSITIVE CONTROL, BECAUSE A ZERO HAS TWO CAUSES. `gone 0` means either
+  // that the arm lost nothing or that this payload's vocabulary is too small for
+  // the oracle to notice a loss at all -- several of these fixtures repeat ten
+  // distinct long words across 100KB, and half of such a document still contains
+  // all ten. So the same oracle is run against a deliberately mutilated output,
+  // half the real one, with no expansion and no spill to fall back on. It MUST
+  // report loss. Where it does not, the row's real reading is not evidence of
+  // conservation and this harness says so instead of printing a clean zero.
+  const control = unaccounted({
+    before: text,
+    output: out.text.slice(0, Math.floor(out.text.length / 2)),
+    reconstructed: '',
+    spill: '',
+    hasSink: false,
+  });
   // THE BUCKETS MUST SUM TO THE DENOMINATOR, and until the split above they did
   // not: four buckets counted over one set, printed beside the size of a larger
   // one. `ka-items` read `25 | 24 0 null 0` under an identity arm and nothing
@@ -1088,7 +1119,15 @@ for (const [name, text] of Object.entries(payloads)) {
     presetFree,
     presetGone,
     missing,
-    conserved,
+    sizeSane,
+    // Whole-payload content conservation, carried per row so the gate and the
+    // table can both read it without recomputing.
+    wordsAll: kept.words,
+    wordsGone: kept.gone,
+    wordsGoneShare: kept.goneShare,
+    wordsMissing: kept.missing,
+    // What the mutilated-output control saw. Zero here invalidates the zero above.
+    wordsControlGone: control.gone,
     grew,
     spillRatio,
     // TURNS, and the tokens a turn drags back into context with it. The
@@ -1166,7 +1205,7 @@ for (const r of rows) {
       `${n(r.subGone, 9)} | ` +
       `${n(r.theirIn, 12)} ${r.theirMeasured ? n(r.theirRedeemed, 5) : '    ?'} ` +
       `${r.theirMeasured ? n(r.theirGone, 5) : '    ?'} | ${r.arm}` +
-      (r.conserved ? '' : '  !! CONSERVATION FAILED') +
+      (r.sizeSane ? '' : '  !! SIZE BOUND FAILED') +
       (r.bodyReason ? `  [body: ${r.bodyReason}]` : '')
   );
 }
@@ -1720,9 +1759,54 @@ console.log(
 const lostWorkloads = rows.filter((r) => r.ours <= r.theirs).map((r) => r.name);
 if (lostWorkloads.length)
   console.log(`LOST OR TIED ON: ${lostWorkloads.join(', ')}`);
-const unconserved = rows.filter((r) => !r.conserved).map((r) => r.name);
+// WHOLE-PAYLOAD CONSERVATION, printed whatever it says.
+//
+// The retention block above is scored over a scrape of identifiers. This is
+// scored over every word of every payload long enough to locate, which is the
+// denominator that includes the prose an identifier oracle cannot see. A row
+// with words gone is not automatically a defect -- an arm may be deliberately
+// lossy -- but it is the number that decides whether a reduction has been
+// EXPLAINED, and it was never measured before.
+{
+  const wAll = sum((r) => r.wordsAll);
+  const wGone = sum((r) => r.wordsGone);
+  const mass = sum((r) => r.wordsGoneShare * r.before);
+  console.log('');
+  console.log(
+    `content conservation   ${wAll} word(s) at ${8}+ chars   gone ${wGone}   ` +
+      `(${((wGone / Math.max(1, wAll)) * 100).toFixed(2)}% of words, ` +
+      `${((mass / beforeAll) * 100).toFixed(2)}% of the payload's bytes)`
+  );
+  const offenders = rows.filter((r) => r.wordsGone > 0);
+  for (const r of offenders)
+    console.log(
+      `  ${r.name.padEnd(22)} ${String(r.wordsGone).padStart(6)} of ${String(r.wordsAll).padStart(6)}   ` +
+        `${(r.wordsGoneShare * 100).toFixed(2)}% of its bytes   e.g. ${r.wordsMissing.join(', ')}`
+    );
+  if (offenders.length === 0)
+    console.log('  every word of every payload is in the output, its expansion, or the spill it points at');
+  // THE CONTROL, REPORTED BESIDE THE RESULT. A row whose control saw no loss is
+  // a row where this oracle cannot see one, so its clean reading is withdrawn
+  // rather than counted. The denominator is printed for every such row, because
+  // the reason is always the same and always checkable: too few distinct long
+  // words in the payload for a missing one to be detectable.
+  const blind = rows.filter((r) => r.wordsControlGone === 0);
+  if (blind.length)
+    console.log(
+      `  NOT EVIDENCE ON ${blind.length} of ${rows.length}: the control (half the output, no expansion, no spill) ` +
+        'lost nothing there either, so a clean reading on these rows means only that the oracle is blind to them -- ' +
+        blind.map((r) => `${r.name}(${r.wordsAll} word(s))`).join(', ')
+    );
+  else
+    console.log(
+      `  control: mutilating the output loses ${sum((r) => r.wordsControlGone)} word(s) across all ` +
+        `${rows.length} rows, so a clean reading above is a reading and not a blind spot`
+    );
+}
+
+const unconserved = rows.filter((r) => !r.sizeSane).map((r) => r.name);
 if (unconserved.length)
-  console.log(`CONSERVATION FAILED ON: ${unconserved.join(', ')}`);
+  console.log(`SIZE BOUND FAILED ON: ${unconserved.join(', ')}`);
 // NAMED, BECAUSE A DECODER GAP LOOKS EXACTLY LIKE DATA LOSS IN THE COLUMNS
 // ABOVE and the two want opposite fixes. Anything listed here was scored as if
 // unrecoverable, so the gap costs us and the list is the work queue.
@@ -2308,6 +2392,13 @@ if (process.argv[3] === '--record') {
 const failed =
   lost > 0 ||
   bodyLost > 0 ||
+  // Whole-payload conservation is a gate, not a note. A word of the payload that
+  // is in neither the output, its expansion nor the spill it points at is content
+  // this arm cannot give back, and no reduction figure is worth publishing beside
+  // one. Rows where the control says the oracle is blind are disclosed above and
+  // are deliberately NOT failed here: that is a limit of the instrument on that
+  // fixture, not a loss by the engine, and failing it would hide the difference.
+  sum((r) => r.wordsGone) > 0 ||
   lostWorkloads.length > 0 ||
   unconserved.length > 0 ||
   oursChars <= theirsChars ||
