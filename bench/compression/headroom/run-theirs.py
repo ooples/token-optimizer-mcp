@@ -968,6 +968,17 @@ take_witness("after-sweep")
 
 provenance = {
     "headroomVersion": _headroom_version(),
+    # WHEN THE CAPTURE HAPPENED, BECAUSE THEIR STORE FORGETS. Their CCR
+    # markers are redeemable from their store for a bounded time only (their
+    # own resolver reports the bound: "CCR TTL: 1800 seconds"). A resolution
+    # run after that window reports every marker unresolved -- which is
+    # indistinguishable, in the output alone, from a store that genuinely
+    # lost the content, and would score their retention at zero for what is
+    # really our own sequencing mistake. Stamping the sweep lets
+    # resolve-theirs.py compute the gap and lets the scorer refuse a
+    # resolution that was taken too late instead of banking the win.
+    "sweptAt": time.time(),
+    "sweptAtIso": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
     # THE LOAD CONTROL, WITHOUT WHICH NO SPEED ROW IS DECIDABLE. See the
     # take_witness block above and bench/compression/load-witness.mjs. `ms` is
     # the median over every reading of this session; `readings` keeps them

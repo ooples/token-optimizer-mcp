@@ -78,6 +78,7 @@ const FLOOR = comp('retention-floor.mjs');
 const PARITY = comp('input-parity.mjs');
 const ARM = comp('arm-selection.mjs');
 const WIT = comp('load-witness.mjs');
+const RES = comp('store-resolution.mjs');
 
 /** The check that is supposed to refuse each defect. */
 const SCORER = join(HERE, 'scorer.check.mjs');
@@ -92,6 +93,7 @@ const FLOOR_CHECK = comp('retention-floor.check.mjs');
 const PARITY_CHECK = comp('input-parity.check.mjs');
 const ARM_CHECK = comp('arm-selection.check.mjs');
 const WIT_CHECK = comp('load-witness.check.mjs');
+const RES_CHECK = comp('store-resolution.check.mjs');
 
 const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
@@ -735,6 +737,52 @@ const MUTANTS = [
   // tell a contaminated pair of sessions from a clean one, the speed rows go
   // back to comparing two machines instead of two implementations, which is the
   // defect that turned 12 timings into noise in the first place.
+  // THEIR STORE, AND THE ONE REFUSAL THAT COSTS US POINTS. Every other mutant here
+  // makes us look better by breaking a guard. These four make us look better by
+  // breaking a guard that exists to take a win AWAY from us: their CCR markers are
+  // redeemable for a bounded time, and a resolution taken after that window reports
+  // every marker unresolved, which scores as their loss. hr24 and hr25 are the same
+  // capture resolved fifty minutes apart; one hands us six retention wins.
+  {
+    name: 'zero of many redeemed counts as their loss',
+    defect:
+      'a resolution taken after their store TTL expired scores every elided identifier as unrecoverable for them, so six workloads report a retention win that is really our own sequencing',
+    caughtBy: 'a store that served none of many markers is unmeasured, not lost',
+    file: RES,
+    check: RES_CHECK,
+    from: '  if (unresolved === markers)',
+    to: '  if (false && unresolved === markers)',
+  },
+  {
+    name: 'a quoted TTL is not a refusal',
+    defect:
+      'their resolver saying "Entry not found (CCR TTL: 1800 seconds)" is read as a genuine miss, so their own statement that it refused for want of time is scored against them',
+    caughtBy: 'a reason quoting a TTL refuses whatever the counts are',
+    file: RES,
+    check: RES_CHECK,
+    from: '  if (quoted)',
+    to: '  if (false && quoted)',
+  },
+  {
+    name: 'a partial miss is excused as unmeasured',
+    defect:
+      'the refusal is widened to any unresolved marker at all, so their genuine losses are excused and THEIR retention column is flattered -- the same bug pointed the other way',
+    caughtBy: 'some redeemed and some not is a measurement and keeps their misses',
+    file: RES,
+    check: RES_CHECK,
+    from: '  if (unresolved === markers)',
+    to: '  if (unresolved > 0)',
+  },
+  {
+    name: 'an unrecognised resolution is assumed good',
+    defect:
+      'a resolution with no resolved text, or one their resolver raised on, is treated as a completed measurement and whatever it happens to contain is scored',
+    caughtBy: 'an unrecognised shape is unusable, not assumed good',
+    file: RES,
+    check: RES_CHECK,
+    from: "  if (typeof entry.text !== 'string')",
+    to: "  if (false && typeof entry.text !== 'string')",
+  },
   {
     name: 'a missing witness on one side counts as agreement',
     defect:

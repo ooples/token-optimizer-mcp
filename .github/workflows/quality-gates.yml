@@ -676,6 +676,7 @@ jobs:
             bench/compression/input-parity.check.mjs \
             bench/compression/arm-selection.check.mjs \
             bench/compression/load-witness.check.mjs \
+            bench/compression/store-resolution.check.mjs \
             bench/compression/retention.check.mjs \
             bench/compression/offload.check.mjs \
             bench/compression/cost-model.check.mjs \

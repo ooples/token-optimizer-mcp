@@ -58,6 +58,7 @@ import { classifyIds, splitScorable } from './retention.mjs';
 import { scanIdentifiers } from './identifiers.mjs';
 import { bestByRatio, selectArms } from './arm-selection.mjs';
 import { witness, witnessesAgree } from './load-witness.mjs';
+import { resolutionUsable } from './store-resolution.mjs';
 import { classifyArms, declaredOffloadBytes } from './offload.mjs';
 import { stubbedCaptureRefusal } from './capture-guard.mjs';
 import { baseContextReadiness, measureBaseContext } from '../subscription/base-context.mjs';
@@ -986,7 +987,15 @@ for (const [name, text] of Object.entries(payloads)) {
   // `headroom_retrieve` round trip. That is a turn, not a byte, and this file
   // measures bytes -- so it reports the counts and leaves the trade visible
   // rather than folding it into a score.
-  const theirResolved = resolved?.[name]?.text ?? null;
+  //
+  // AND A RESOLUTION IS NOT AUTOMATICALLY A MEASUREMENT. Their store keeps an
+  // entry for a bounded time, so a resolver run too late reports every marker
+  // unresolved and reads, in the file, exactly like a store that held nothing --
+  // handing us a retention win built out of our own sequencing. That case is
+  // refused as unmeasured rather than scored. See store-resolution.mjs.
+  const theirEntry = resolved?.[name] ?? null;
+  const theirUsable = resolutionUsable(theirEntry, resolved?.__provenance__ ?? null);
+  const theirResolved = theirUsable.usable ? (theirEntry?.text ?? null) : null;
   let theirRedeemed = 0;
   if (theirResolved !== null)
     for (const id of want)
@@ -1019,6 +1028,7 @@ for (const [name, text] of Object.entries(payloads)) {
     theirRedeemed,
     theirGone,
     theirMeasured: theirResolved !== null,
+    theirUnmeasuredWhy: theirUsable.usable ? null : theirUsable.detail,
     bodyBefore: body?.before ?? 0,
     bodyAfter: body?.after ?? 0,
     bodyRatio: body ? 1 - body.after / body.before : null,
@@ -1553,12 +1563,23 @@ console.log(
 console.log(
   `  unrecoverable  ours ${lost}   theirs ${sum((r) => (r.theirMeasured ? r.theirGone : 0))}`
 );
-if (theirsUnmeasured.length)
+if (theirsUnmeasured.length) {
   console.log(
-    `  THEIR STORE UNMEASURED on ${theirsUnmeasured.length} workload(s): no ${'theirs-resolved.json'}. ` +
-      'Their column is not comparable until ' +
-      'bench/compression/headroom/resolve-theirs.py has been run over this out-dir.'
+    `  THEIR STORE UNMEASURED on ${theirsUnmeasured.length} workload(s). Their column is not ` +
+      'comparable on those rows, and an unmeasured store is never scored as their loss.'
   );
+  // The reason, per row. "No resolution at all" and "a resolution taken after
+  // their store forgot" need different fixes, and only the second one can be
+  // mistaken for a win.
+  for (const r of theirsUnmeasured)
+    console.log(
+      `    ${r.name}: ${r.theirUnmeasuredWhy ?? 'no theirs-resolved.json for this out-dir'}`
+    );
+  console.log(
+    '    Fix: run the sweep and resolve-theirs.py back to back, in one session, ' +
+      'inside their store TTL.'
+  );
+}
 // SAID OUT LOUD. Most retained identifiers live in the spill, and the spill is
 // about the size of the input -- so the saving is a saving in CONTEXT, not on
 // disk. That is the design (context tokens are the billed resource and a spill
