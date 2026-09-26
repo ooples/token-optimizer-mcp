@@ -54,6 +54,13 @@ const NAMED_IMPORT = /\bimport\s+(?:type\s+)?\{([^}]*)\}/g;
 export const MAX_UNIT = 120;
 
 /**
+ * A quoted run, with NO length bound in the pattern. The bound belongs on what
+ * it captures: inside the pattern it makes the scan skip short runs and pair
+ * the wrong quotes together for the remainder of the string. See the call site.
+ */
+export const QUOTED_RUN = /"([^"\n]*)"/g;
+
+/**
  * Keys whose NUMERIC value names a record.
  *
  * Numbers are admitted only here, and only at four digits or more. An issue number
@@ -159,7 +166,30 @@ function collect(value, into, key) {
       !/[\r\n]/.test(value)
     )
       into.add(value);
-    for (const m of value.matchAll(/"([^"\n]{5,120})"/g)) into.add(m[1]);
+    // EVERY QUOTED RUN, THEN THE LENGTH FILTER -- NOT A LENGTH FILTER INSIDE THE
+    // PATTERN, which is what this line used to be and which broke the parity of
+    // the scan. A payload's tool results carry JSON as a string, so this rule is
+    // reading text like `{"id": 3, "user_id": 2345, "amount": -272.44}`. A
+    // pattern that only matches a quoted run of five characters or more skips
+    // `"id"` and then finds its next match starting at the CLOSING quote of
+    // `id`, capturing `: 3, ` -- the separator between two keys -- and from
+    // there it pairs every closing quote with the next opening one for the rest
+    // of the value.
+    //
+    // Measured on agentic-conversation: 272 of the 2,428 units this rule
+    // produced were separators of that shape, and 209 of them were charged
+    // against the body arm as identifiers it had lost. They are unretainable by
+    // construction: the unit is `: 2345, `, the value inside it IS still in the
+    // output, and what went missing is the whitespace around it, which any
+    // reserialisation removes. The same scan with no bound inside the pattern
+    // starts each match at a real opening quote, so it captures `user_id` and
+    // `amount` instead and the phantoms are never produced -- as opposed to
+    // being filtered out afterwards by a rule about whitespace, which would
+    // have left the wrong pairing in place everywhere else.
+    for (const m of value.matchAll(QUOTED_RUN)) {
+      const inner = m[1];
+      if (inner.length >= MIN_SYMBOL && inner.length <= MAX_UNIT) into.add(inner);
+    }
     return;
   }
   if (typeof value === 'number') {
@@ -179,12 +209,50 @@ function collect(value, into, key) {
   }
 }
 
-export function identifiers(text) {
+/**
+ * THE SCAN, WITH THE PHANTOMS IT DROPPED HANDED BACK RATHER THAN SWALLOWED.
+ *
+ * Every retention figure in this project is decided by `includes`: a unit
+ * counts as retained when it appears in the output as a literal substring. A
+ * unit that is not a literal substring of its own INPUT can therefore never be
+ * counted retained by any arm, on any output, ever. It is not a retention unit;
+ * it is a hole in the denominator that is charged against whoever is being
+ * scored.
+ *
+ * That invariant was already written down at the keyed rule above, and
+ * approximated there by rejecting values containing a newline. The
+ * approximation is not the invariant. Measured over the eighteen captured
+ * workloads, 283 of 14,067 units were not substrings of the payload they came
+ * from -- 220 of the 279 on issue-triage, and, on the body arm, exactly the 8
+ * on agent-loop-logs and 1 on grep-output that the harness was reporting as
+ * identifiers our pipeline had lost.
+ *
+ * They come from nesting. A tool result carries JSON as a string, that string
+ * carries a traceback with escaped newlines, and `JSON.parse` unescapes one
+ * level: the unit holds a real backslash-n where the payload text holds two
+ * characters more of escaping. The unit is real text at one depth and absent at
+ * the depth being searched.
+ *
+ * So the invariant is enforced here, once, on the way out -- and the dropped
+ * units are RETURNED, because a denominator that quietly shrinks is the same
+ * failure as one that quietly holds phantoms.
+ */
+export function scanIdentifiers(text) {
   const found = new Set();
   try {
     collect(JSON.parse(text), found, undefined);
   } catch {
     collect(text, found, undefined);
   }
-  return found;
+  const phantoms = [];
+  for (const unit of found)
+    if (!text.includes(unit)) {
+      phantoms.push(unit);
+      found.delete(unit);
+    }
+  return { units: found, phantoms };
+}
+
+export function identifiers(text) {
+  return scanIdentifiers(text).units;
 }

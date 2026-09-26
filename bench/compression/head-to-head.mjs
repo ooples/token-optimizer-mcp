@@ -55,7 +55,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { classifyIds, splitScorable } from './retention.mjs';
-import { identifiers } from './identifiers.mjs';
+import { scanIdentifiers } from './identifiers.mjs';
 import { classifyArms, declaredOffloadBytes } from './offload.mjs';
 import { stubbedCaptureRefusal } from './capture-guard.mjs';
 import { baseContextReadiness, measureBaseContext } from '../subscription/base-context.mjs';
@@ -646,7 +646,14 @@ for (const [name, text] of Object.entries(payloads)) {
   // this set directly. Until they did, our arm was scored on the safe subset and
   // theirs on the whole scrape, with the whole scrape printed as the denominator
   // for both.
-  const { want, unsafeIds } = splitScorable(identifiers(text));
+  // AND THE PHANTOMS ARE COUNTED, NOT DISCARDED QUIETLY. `scanIdentifiers`
+  // drops any unit that is not a literal substring of this payload, because
+  // `includes` can never find one; the number it dropped is carried up to the
+  // retention block so that a denominator narrowing by 283 units is a line of
+  // output rather than a silent improvement in every loss column at once.
+  const scan = scanIdentifiers(text);
+  const phantomIds = scan.phantoms.length;
+  const { want, unsafeIds } = splitScorable(scan.units);
 
   // RECOVER FIRST, THEN SEARCH -- on both arms -- because a substring oracle
   // cannot see factored content and was reporting healthy compression as
@@ -874,6 +881,9 @@ for (const [name, text] of Object.entries(payloads)) {
     // Scraped but too short to score by substring. Printed rather than dropped,
     // so a denominator that shrank is visible instead of merely smaller.
     unsafe: unsafeIds.length,
+    // Scraped at one level of escaping and searched for at another, so no arm
+    // could ever have been credited with keeping one. Same reason for printing.
+    phantoms: phantomIds,
     inOut,
     derived,
     inSpill,
@@ -1345,6 +1355,15 @@ const theirsRedeemed = sum((r) => r.theirRedeemed);
 const theirsUnmeasured = rows.filter((r) => !r.theirMeasured);
 const allIds = sum((r) => r.ids);
 console.log(`retention units           ${allIds}`);
+// THE TWO EXCLUSIONS, NAMED, because both of them make every loss column below
+// smaller and neither of them is a measurement of the compressor. `unsafe` is
+// too short to locate by substring; `phantom` is not a substring of its own
+// payload at the depth the search runs, so it is unretainable by construction
+// and was being charged to whichever arm normalised the escaping around it.
+console.log(
+  `  excluded       ${sum((r) => r.unsafe)} too short to locate, ` +
+    `${sum((r) => r.phantoms)} not literal in their own payload`
+);
 console.log(
   `  in context     ours ${oursIn}   theirs ${theirsIn}` +
     (theirsIn > oursIn ? '   <-- THEY keep more directly visible' : '')

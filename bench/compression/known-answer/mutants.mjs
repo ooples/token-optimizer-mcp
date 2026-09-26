@@ -52,6 +52,7 @@ const METER = sub('calibrate.mjs');
 const SPEED = comp('speed-verdict.mjs');
 const REPRO = comp('reproducibility.mjs');
 const HEALTH = comp('competitor-health.mjs');
+const IDS = comp('identifiers.mjs');
 
 /** The check that is supposed to refuse each defect. */
 const SCORER = join(HERE, 'scorer.check.mjs');
@@ -61,6 +62,7 @@ const METER_CHECK = sub('calibrate.check.mjs');
 const SPEED_CHECK = comp('speed-verdict.check.mjs');
 const REPRO_CHECK = comp('reproducibility.check.mjs');
 const HEALTH_CHECK = comp('competitor-health.check.mjs');
+const IDS_CHECK = comp('identifiers.check.mjs');
 
 const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
@@ -78,8 +80,8 @@ const MUTANTS = [
     caughtBy: 'the buckets must close, and the denominator is enumerated by name',
     file: H2H,
     check: SCORER,
-    from: 'const { want, unsafeIds } = splitScorable(identifiers(text));',
-    to: 'const { unsafeIds } = splitScorable(identifiers(text));\r\n  const want = identifiers(text);',
+    from: 'const { want, unsafeIds } = splitScorable(scan.units);',
+    to: 'const { unsafeIds } = splitScorable(scan.units);\n  const want = scan.units;',
   },
   {
     name: 'a sinkless arm reports a measured zero',
@@ -393,6 +395,56 @@ const MUTANTS = [
     check: HEALTH_CHECK,
     from: '    !Array.isArray(seen.degraded) ||',
     to: '    false ||',
+  },
+  {
+    name: 'the quoted-run scan loses its parity again',
+    defect:
+      'a length bound inside the pattern makes the scan skip short runs and pair every closing quote with the next opening one, capturing `: 2345, ` instead of `user_id`',
+    caughtBy: 'identifiers: the separator between two keys is not a unit',
+    file: IDS,
+    check: IDS_CHECK,
+    from: 'export const QUOTED_RUN = /"([^"\\n]*)"/g;',
+    to: 'export const QUOTED_RUN = /"([^"\\n]{5,120})"/g;',
+  },
+  {
+    name: 'units that are not in their own payload are admitted',
+    defect:
+      '283 of 14,067 units were not substrings of the payload they came from, so no arm could be credited with keeping them and every loss column carried them',
+    caughtBy: 'identifiers: every admitted unit is a literal substring of the payload',
+    file: IDS,
+    check: IDS_CHECK,
+    from: '    if (!text.includes(unit)) {',
+    to: '    if (false) {',
+  },
+  {
+    name: 'a phantom is dropped without being counted',
+    defect:
+      'the denominator narrows and nothing says by how much, which is the silent version of the same defect',
+    caughtBy: 'identifiers: and every dropped one really was not a substring',
+    file: IDS,
+    check: IDS_CHECK,
+    from: '      phantoms.push(unit);',
+    to: '      void unit;',
+  },
+  {
+    name: 'the identifier floor is lowered again',
+    defect:
+      'a four-character unit is found by `includes` anywhere, so admitting one inflates every arm at once',
+    caughtBy: 'identifiers: four characters is below the floor and excluded',
+    file: IDS,
+    check: IDS_CHECK,
+    from: '      if (inner.length >= MIN_SYMBOL && inner.length <= MAX_UNIT) into.add(inner);',
+    to: '      if (inner.length >= 1 && inner.length <= MAX_UNIT) into.add(inner);',
+  },
+  {
+    name: 'the unit ceiling is removed',
+    defect:
+      'a whole paragraph admitted as one identifier, which makes a single elision read as a single lost unit',
+    caughtBy: 'identifiers: 121 characters is over the ceiling and excluded',
+    file: IDS,
+    check: IDS_CHECK,
+    from: '      if (inner.length >= MIN_SYMBOL && inner.length <= MAX_UNIT) into.add(inner);\n    }',
+    to: '      if (inner.length >= MIN_SYMBOL) into.add(inner);\n    }',
   },
 ];
 
