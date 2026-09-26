@@ -43,6 +43,7 @@ import { reproducibilityRefusal } from './reproducibility.mjs';
 import { inputParity } from './input-parity.mjs';
 import { retentionVerdict, tightenFloor } from './retention-floor.mjs';
 import { bothColumns, columnsFor } from './arm-selection.mjs';
+import { instrumentFingerprint, inheritance, writeEntry } from './ratchet.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RESULTS = join(here, 'headroom', 'results', 'head-to-head.json');
@@ -374,12 +375,20 @@ const ratchet = existsSync(RATCHET)
       retentionFloors: {},
     };
 
+// THE INSTRUMENT THIS RUN MEASURED WITH, so that an entry recorded against a
+// different one is not silently carried. See ratchet.mjs for the promotion this
+// caught: five speed passes taken against their engine while its native
+// detector was off and its model had not loaded.
+const fingerprint = instrumentFingerprint(results.capture?.theirsProvenance ?? null);
+
 const report = {};
 const regressed = [];
+const stale = [];
 const unverified = [];
 const unpromoted = [];
 const open = [];
 const next = {};
+const retractions = {};
 const floors = { ...(ratchet.retentionFloors ?? {}) };
 const nextFloors = { ...floors };
 
@@ -399,15 +408,26 @@ for (const row of results.workloads) {
       else nextFloors[row.name] = next;
     }
     const key = `${row.name}/${criterion}`;
-    const was = ratchet.enforced?.[key] === true;
+    // ENFORCED IS NOT THE SAME QUESTION AS INHERITABLE. An entry recorded from a
+    // capture that said nothing about their engine's capabilities is a claim
+    // whose instrument is unknown, and a pass may not be carried out of one.
+    const carry = inheritance(ratchet.enforced?.[key], fingerprint);
+    const was = carry.inherit;
+    if (carry.reason !== null) stale.push(`${key} - ${carry.reason}`);
     (report[row.name] ??= { issue: cfg.issue })[criterion] = {
       pass: v.pass,
       detail: v.detail,
       enforced: was,
+      staleReason: carry.reason,
     };
     // A pair stays enforced once enforced, so a regression is reported on every
     // later run rather than only on the one that caused it.
-    if (v.pass === true || was) next[key] = true;
+    if (v.pass === true) next[key] = writeEntry(results.capture?.dir ?? 'unrecorded', fingerprint);
+    else if (was) next[key] = ratchet.enforced?.[key];
+    // A CLAIM WHOSE INSTRUMENT IS UNKNOWN AND THAT DOES NOT PASS NOW IS RETRACTED,
+    // in the file, with the verdict that replaced it. Deleting the key would
+    // leave no trace that the claim was ever made.
+    else if (carry.reason !== null) retractions[key] = { reason: carry.reason, verdict: v.detail, pass: v.pass };
     if (v.pass === true && !was) unpromoted.push(`${key} - ${v.detail}`);
     // AN ENFORCED PAIR THAT NO LONGER PASSES FAILS THE GATE EITHER WAY, but the
     // two ways are different facts and get reported as such. `false` means the
@@ -425,17 +445,38 @@ for (const row of results.workloads) {
 }
 
 if (promote) {
-  const enforced = Object.fromEntries(
-    Object.keys(next)
-      .sort()
-      .map((k) => [k, true])
-  );
+  // PROMOTE MAY NOT RESOLVE A REGRESSION. A pair whose instrument matches and
+  // whose claim lost is the one case the ratchet exists for, and re-recording
+  // the file around it is exactly the relaxation it is meant to prevent.
+  if (regressed.length) {
+    console.error(
+      `\nREFUSING TO PROMOTE - ${regressed.length} pair(s) were measured with this ` +
+        `instrument and lost:\n  ${regressed.join('\n  ')}\n  Fix the code, or reopen ` +
+        'the pair deliberately by hand.'
+    );
+    process.exit(1);
+  }
+  const enforced = Object.fromEntries(Object.keys(next).sort().map((k) => [k, next[k]]));
+  const retracted = { ...(ratchet.retracted ?? {}), ...retractions };
   writeFileSync(
     RATCHET,
-    `${JSON.stringify({ ...ratchet, enforced, retentionFloors: nextFloors }, null, 2)}
+    `${JSON.stringify(
+      {
+        ...ratchet,
+        note: ratchet.note,
+        enforced,
+        retracted,
+        retentionFloors: nextFloors,
+      },
+      null,
+      2
+    )}
 `
   );
-  console.log(`promoted ${Object.keys(enforced).length} pair(s) to ${RATCHET}`);
+  console.log(
+    `promoted ${Object.keys(enforced).length} pair(s) against ${fingerprint}, ` +
+      `retracted ${Object.keys(retractions).length} to ${RATCHET}`
+  );
   process.exit(0);
 }
 
@@ -468,9 +509,10 @@ const degraded = degradationRefusal(results.capture?.theirsProvenance ?? null);
 const enforcedCount = Object.keys(ratchet.enforced ?? {}).length;
 console.log(
   `must-win gate: ${enforcedCount} enforced, ${open.length} open, ` +
-    `${regressed.length} regressed, ${unverified.length} unverified, ` +
-    `${unpromoted.length} unrecorded pass(es)`
+    `${regressed.length} regressed, ${stale.length} stale, ` +
+    `${unverified.length} unverified, ${unpromoted.length} unrecorded pass(es)`
 );
+console.log(`instrument: ${fingerprint}`);
 if (open.length)
   console.log(
     `\nOPEN MUST-WINS (not a build failure):\n  ${open.join('\n  ')}`
@@ -490,6 +532,17 @@ if (regressed.length)
     `\nREGRESSED - these were enforced and now fail:\n  ${regressed.join('\n  ')}`
   );
 
+// NEITHER A PASS NOR A REGRESSION. The pair was recorded, the recording cannot
+// be tied to an instrument, and this run's verdict -- whatever it is -- is the
+// only one standing on measured provenance. Reported apart from a regression so
+// a reader is never told the code changed when what changed was the measurement.
+if (stale.length)
+  console.error(
+    `\nINSTRUMENT UNKNOWN - recorded passes that cannot be inherited:\n  ${stale.join('\n  ')}` +
+      `\n  Re-earn them with --promote against this capture; each one that no longer ` +
+      `passes is written to the ratchet as retracted, with the verdict that replaced it.`
+  );
+
 if (degraded)
   console.log(
     `\nNOT A COMPARISON - their engine was not whole, or the capture did not say:\n  ` +
@@ -504,7 +557,12 @@ if (notReproducible)
   );
 
 process.exit(
-  degraded || notReproducible || regressed.length || unverified.length || unpromoted.length
+  degraded ||
+  notReproducible ||
+  regressed.length ||
+  stale.length ||
+  unverified.length ||
+  unpromoted.length
     ? 1
     : 0
 );
