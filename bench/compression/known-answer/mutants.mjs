@@ -77,6 +77,7 @@ const IDS = comp('identifiers.mjs');
 const FLOOR = comp('retention-floor.mjs');
 const PARITY = comp('input-parity.mjs');
 const ARM = comp('arm-selection.mjs');
+const WIT = comp('load-witness.mjs');
 
 /** The check that is supposed to refuse each defect. */
 const SCORER = join(HERE, 'scorer.check.mjs');
@@ -90,6 +91,7 @@ const IDS_CHECK = comp('identifiers.check.mjs');
 const FLOOR_CHECK = comp('retention-floor.check.mjs');
 const PARITY_CHECK = comp('input-parity.check.mjs');
 const ARM_CHECK = comp('arm-selection.check.mjs');
+const WIT_CHECK = comp('load-witness.check.mjs');
 
 const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
@@ -727,6 +729,61 @@ const MUTANTS = [
     check: ARM_CHECK,
     from: 'if (!Number.isFinite(c.before) || c.before <= 0) return null;',
     to: 'if (c.before === -1) return null;',
+  },
+
+  // THE LOAD WITNESS. Every speed claim now rests on it: if the witness cannot
+  // tell a contaminated pair of sessions from a clean one, the speed rows go
+  // back to comparing two machines instead of two implementations, which is the
+  // defect that turned 12 timings into noise in the first place.
+  {
+    name: 'a missing witness on one side counts as agreement',
+    defect:
+      'a recording taken before the witness existed, or one whose witness failed to run, scores as load-controlled and every speed verdict is decided on uncontrolled timings',
+    caughtBy: 'a null, undefined, zero or NaN reading on either side is refused',
+    file: WIT,
+    check: WIT_CHECK,
+    from: "    return { ok: false, detail: [o.detail, t.detail].filter(Boolean).join('; ') };",
+    to: "    return { ok: true, detail: [o.detail, t.detail].filter(Boolean).join('; ') };",
+  },
+  {
+    name: 'the band is a difference in milliseconds, not a ratio',
+    defect:
+      'the band stops scaling with the witness cost, so a slow machine is refused for noise and a fast one admits contamination',
+    caughtBy: '4500 vs 4505 is inside the band while 45 vs 50 is not',
+    file: WIT,
+    check: WIT_CHECK,
+    from: '  const drift = Math.abs(o.ms - t.ms) / Math.min(o.ms, t.ms);',
+    to: '  const drift = Math.abs(o.ms - t.ms);',
+  },
+  {
+    name: 'the drift is measured against the larger reading',
+    defect:
+      'dividing by the slower session understates every drift, so contamination just outside the band is reported inside it',
+    caughtBy: 'the reported drift for 100 vs 112 is the 12.0% against 100',
+    file: WIT,
+    check: WIT_CHECK,
+    from: '  const drift = Math.abs(o.ms - t.ms) / Math.min(o.ms, t.ms);',
+    to: '  const drift = Math.abs(o.ms - t.ms) / Math.max(o.ms, t.ms);',
+  },
+  {
+    name: 'the witness loop is not the loop the checksum pins',
+    defect:
+      'the two sides can run different work and still be compared, which is exactly the comparison the witness exists to prevent',
+    caughtBy: 'the checksum guard throws rather than returning a time',
+    file: WIT,
+    check: WIT_CHECK,
+    from: 'const ITERATIONS = 40_000_000;',
+    to: 'const ITERATIONS = 39_000_000;',
+  },
+  {
+    name: 'the checksum guard is pinned to the wrong value',
+    defect:
+      'a witness reading is returned without proof the calibration loop ran to completion, so a short-circuited loop reads as a fast machine',
+    caughtBy: 'the checksum guard throws rather than returning a time',
+    file: WIT,
+    check: WIT_CHECK,
+    from: 'const EXPECTED = 3778163653;',
+    to: 'const EXPECTED = 3778163654;',
   },
 ];
 
