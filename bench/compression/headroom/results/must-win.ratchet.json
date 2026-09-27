@@ -86,6 +86,11 @@
       "capture": "hr27",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
     },
+    "grep-output/speed": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
     "grep-output/turns": {
       "pass": true,
       "capture": "hr27",
@@ -142,6 +147,11 @@
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
     },
     "relevance-probe/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "relevance-probe/speed": {
       "pass": true,
       "capture": "hr27",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
@@ -246,7 +256,11 @@
     "grep-output/speed": {
       "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
       "verdict": "vs best: our p90 8.0ms vs their p10 2.8ms (medians of 3 passes: ours 14.1 / 7.7 / 8.0, theirs 3.0 / 2.3 / 2.8; published medians 6.496 / 3.373) | vs comparable: pipeline@2.00: our p90 8.0ms vs their p10 30.9ms (medians of 3 passes: ours 14.1 / 7.7 / 8.0, theirs 30.9 / 38.3 / 30.5; published medians 6.496 / 40.017)",
-      "pass": false
+      "pass": false,
+      "supersededBy": {
+        "capture": "hr27",
+        "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+      }
     },
     "raw-build-log/speed": {
       "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
@@ -256,7 +270,11 @@
     "relevance-probe/speed": {
       "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
       "verdict": "vs best: our p90 13.3ms vs their p10 12.0ms (medians of 3 passes: ours 13.3 / 9.6 / 16.2, theirs 14.1 / 11.8 / 12.0; published medians 10.237 / 15.15) | vs comparable: crusher: our p90 13.3ms vs their p10 12.0ms (medians of 3 passes: ours 13.3 / 9.6 / 16.2, theirs 14.1 / 11.8 / 12.0; published medians 10.237 / 15.15)",
-      "pass": false
+      "pass": false,
+      "supersededBy": {
+        "capture": "hr27",
+        "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+      }
     },
     "repeated-reads/speed": {
       "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
