@@ -55,6 +55,53 @@ if (hookHealth.total === 0) {
     );
   }
 }
+// WHAT TELEMETRY IS DOING, SAID OUT LOUD.
+//
+// The two switches defaulted off and were documented nowhere the user reads, so
+// nobody could opt in even deliberately, and nobody opted in could tell whether
+// it was working. Both halves are a discoverability bug rather than a code one,
+// and `doctor` is where someone already goes to ask what this installation is up
+// to.
+//
+// READ FROM dist SO THERE IS ONE SOURCE OF TRUTH. The policy is compiled
+// TypeScript and re-implementing its three rules here is how a doctor ends up
+// reporting a policy the product does not follow. The tradeoff is that an
+// unbuilt tree cannot answer, which is said plainly rather than guessed at --
+// this command exists to diagnose broken installs, and a missing dist is one.
+console.log('');
+console.log('Anonymous usage data:');
+try {
+  const { describePolicy } = await import('../dist/telemetry/policy.js');
+  console.log(`  ${describePolicy()}`);
+  try {
+    const { recordedBytes, recorderLastError, eventsFile } = await import(
+      '../dist/telemetry/recorder.js'
+    );
+    const bytes = recordedBytes();
+    const failure = recorderLastError();
+    console.log(
+      bytes === null
+        ? '  Nothing recorded on this machine yet.'
+        : `  ${bytes} bytes recorded locally, at ${eventsFile()}.`
+    );
+    if (failure !== null) {
+      // THE CASE WORTH PRINTING LOUDLY. The recorder swallows its own failures
+      // so a full disk cannot break a tool call, which means an opted-in user
+      // whose home directory is read-only sees a working switch and collects
+      // nothing. This is the only place that says so.
+      console.log(`  WARNING: recording is failing silently -- ${failure}`);
+    }
+  } catch {
+    console.log('  Recorder not built; run `npm run build` to check it.');
+  }
+  console.log('  Off by default. To opt in:  TOKEN_OPTIMIZER_TELEMETRY=1');
+  console.log('  Upload is a separate opt-in: TOKEN_OPTIMIZER_BEACON=1');
+  console.log('  DO_NOT_TRACK=1 overrides both.');
+} catch {
+  console.log('  Cannot read the telemetry policy: dist is missing or broken.');
+  console.log('  Run `npm run build`, then ask again.');
+}
+
 console.log('');
 console.log(
   'Verify the release itself with `npm audit signatures` (provenance attestation),'

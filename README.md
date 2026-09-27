@@ -306,7 +306,17 @@ Gemini, and any other connected client get separate rows. Old records without
 identity remain explicitly unattributed instead of being assigned to whichever
 agent happens to be open now.
 
-No account, no telemetry, no hosted service. MIT, so it is usable at work.
+No account and no hosted service. MIT, so it is usable at work.
+
+Nothing is measured about you unless you ask for it. Anonymous usage data is
+off by default and takes two separate opt-ins: `TOKEN_OPTIMIZER_TELEMETRY=1`
+aggregates counts into a file on your own disk, and `TOKEN_OPTIMIZER_BEACON=1`
+is what would ever upload any of it. Setting the first opens no socket.
+`DO_NOT_TRACK=1` overrides both, whatever else is set. An event may only
+contain numbers and flags -- a string is dropped before it is written, so a
+path, a prompt or an error message cannot travel even by mistake -- and the
+machine identifier is a salted hash, never your hostname. `npm run doctor`
+prints exactly which of these is on and what has been recorded.
 
 ### What the dashboard proves on a real machine
 
