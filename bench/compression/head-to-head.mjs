@@ -981,7 +981,7 @@ for (const [name, text] of Object.entries(payloads)) {
   // handing us a retention win built out of our own sequencing. That case is
   // refused as unmeasured rather than scored. See store-resolution.mjs.
   const theirEntry = resolved?.[name] ?? null;
-  const theirUsable = resolutionUsable(theirEntry, resolved?.__provenance__ ?? null);
+  const theirUsable = resolutionUsable(theirEntry, resolved?.__provenance__ ?? null, name);
   const theirResolved = theirUsable.usable ? (theirEntry?.text ?? null) : null;
   let theirRedeemed = 0;
   if (theirResolved !== null)

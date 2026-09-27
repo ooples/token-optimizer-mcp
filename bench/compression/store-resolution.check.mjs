@@ -86,6 +86,43 @@ console.log('\nan unrecognised shape is unusable, not assumed good');
   );
 }
 
+console.log('\na partial miss is their answer only if we asked in time');
+{
+  const partial = { text: 'x', markers: 4, unresolved: 1, reasons: ['gone'] };
+  // Their resolver quoted 1800s SOMEWHERE in this run, so the bound is known; this
+  // row's own entries were older than it, so its misses are not evidence.
+  const late = resolutionUsable(partial, {
+    theirStatedTtlSeconds: 1800,
+    entryAgeSeconds: { slow: 2400, quick: 30 },
+  }, 'slow');
+  check(late.usable === false, 'a row older than the stated TTL is unmeasured', late.detail);
+  check(late.detail.includes('2400s'), 'and the age is named', late.detail);
+
+  // THE DISCRIMINATING CASE, and the reason the age is per workload. The same run,
+  // the same quoted bound, a row that was well inside it: refusing this one too
+  // would throw away a measurement because a DIFFERENT row expired.
+  const inTime = resolutionUsable(partial, {
+    theirStatedTtlSeconds: 1800,
+    entryAgeSeconds: { slow: 2400, quick: 30 },
+  }, 'quick');
+  check(inTime.usable === true, 'a row inside it is still a measurement', inTime.detail);
+
+  // No per-workload stamp to be had, so the oldest entry in the sweep stands in.
+  // That is the strict direction on purpose.
+  const noStamps = resolutionUsable(partial, {
+    theirStatedTtlSeconds: 1800,
+    elapsedSecondsOldestEntry: 3600,
+  }, 'quick');
+  check(noStamps.usable === false, 'an old capture falls back to the oldest entry', noStamps.detail);
+  check(noStamps.detail.includes('not this row'), 'and says whose age it used', noStamps.detail);
+
+  // A CLOCK ALONE DOES NOT CONDEMN A ROW. With no TTL quoted anywhere their store
+  // never refused anything, and our elapsed time is not evidence about their
+  // durability -- the same reason the header gives for not hardcoding a bound.
+  const noTtl = resolutionUsable(partial, { elapsedSecondsOldestEntry: 999999 }, 'quick');
+  check(noTtl.usable === true, 'no quoted bound means no lateness verdict', noTtl.detail);
+}
+
 console.log('\nthe two artifacts on disk, which differ only in when we asked');
 {
   // The whole file in one assertion pair: same capture, same corpus, same code,

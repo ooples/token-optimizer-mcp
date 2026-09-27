@@ -597,7 +597,18 @@ def take_witness(when):
     if not isinstance(reading, (int, float)) or reading <= 0:
         witness_errors.append({"at": when, "error": "witness ms was %r" % (reading,)})
         return None
-    witness_readings.append({"at": when, "ms": reading, "checksum": parsed.get("checksum")})
+    witness_readings.append(
+        {
+            "at": when,
+            # WHEN, AS A CLOCK AND NOT ONLY AS A LABEL. "before-pass-1" says where
+            # in the sweep a reading was taken and nothing at all about how long
+            # the sweep ran, so the file could not answer the one question that
+            # decides whether a chunk fits inside their store window.
+            "atEpoch": time.time(),
+            "ms": reading,
+            "checksum": parsed.get("checksum"),
+        }
+    )
     return reading
 
 
@@ -793,9 +804,20 @@ def run(name, native, text):
 # start and loaded by the end is the case a single reading cannot describe.
 take_witness("before-pass-0")
 
+# WHEN EACH WORKLOAD WROTE TO THEIR STORE, NOT ONLY WHEN THE SWEEP ENDED.
+# `sweptAt` below is stamped after the last pass, so the gap the resolver
+# computes from it is the age of the NEWEST store entry. The entries that
+# expire first are the oldest ones, written by the first workload of pass 0, and
+# their age is the sweep duration LONGER. On a sweep that outlasts their window
+# that difference is the whole answer: `pastTheirTtl` reads false while the early
+# workloads are already unredeemable.
+sweep_started_at = time.time()
+swept_per_workload = {}
+
 results = {}
 for name, native in WORKLOADS.items():
     results[name] = run(name, native, PAYLOADS[name])
+    swept_per_workload[name] = time.time()
     row = results[name]
     pct = (1 - row["after"] / row["before"]) * 100
     print("%-24s %8d -> %8d  %5.1f%%  via %s" % (name, row["before"], row["after"], pct, row["arm"]))
@@ -982,6 +1004,12 @@ provenance = {
     # really our own sequencing mistake. Stamping the sweep lets
     # resolve-theirs.py compute the gap and lets the scorer refuse a
     # resolution that was taken too late instead of banking the win.
+    "sweepStartedAt": sweep_started_at,
+    # Per workload, so the resolver can age the OLDEST entry rather than the
+    # newest one. A later pass re-runs their compressor and may refresh a store
+    # entry it re-writes; recording both stamps is what makes that answerable from
+    # the file instead of assumed in either direction.
+    "sweptPerWorkload": swept_per_workload,
     "sweptAt": time.time(),
     "sweptAtIso": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
     # THE LOAD CONTROL, WITHOUT WHICH NO SPEED ROW IS DECIDABLE. See the

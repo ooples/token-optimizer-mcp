@@ -47,7 +47,7 @@ const TTL_SAID = /CCR TTL: (\d+) seconds/;
  * `entry` is one value from theirs-resolved.json; `prov` is its
  * `__provenance__`, when the resolver that wrote it was new enough to add one.
  */
-export function resolutionUsable(entry, prov = null) {
+export function resolutionUsable(entry, prov = null, name = null) {
   if (entry === null || entry === undefined)
     return { usable: false, detail: 'no resolution recorded for this workload' };
   if (typeof entry.text !== 'string')
@@ -94,6 +94,32 @@ export function resolutionUsable(entry, prov = null) {
         (reasons.length ? ` (${reasons.join('; ')})` : ' and gave no reason') +
         (late ? ` (${late})` : '') +
         ' -- a reachable store serves at least one, so their retention is unmeasured',
+    };
+
+  // A PARTIAL MISS IS THEIR ANSWER ONLY IF WE ASKED IN TIME. Their resolver
+  // quotes a TTL only when it actually refuses something, so a TTL in the
+  // provenance is a bound established for the WHOLE run -- and a row whose own
+  // entries were older than it cannot have its misses read as their loss, even
+  // when it got a different message back. Without this, a late sweep whose early
+  // rows expired with one reason string and whose later rows expired with another
+  // put the second kind straight into their loss column.
+  //
+  // The age is this workload's own when the capture stamped it per workload, and
+  // the oldest entry in the sweep when it did not. The fallback is the strict
+  // direction: it refuses rows that may have been fine, never the reverse.
+  const ttl = prov?.theirStatedTtlSeconds;
+  const mine = name === null ? undefined : prov?.entryAgeSeconds?.[name];
+  const age = [mine, prov?.elapsedSecondsOldestEntry, prov?.elapsedSeconds].find(
+    (v) => typeof v === 'number' && Number.isFinite(v)
+  );
+  if (typeof ttl === 'number' && Number.isFinite(ttl) && age !== undefined && age > ttl)
+    return {
+      usable: false,
+      detail:
+        `${markers - unresolved} of ${markers} marker(s) came back, but this row's ` +
+        `entries were ${age.toFixed(0)}s old against a stated ${ttl}s TTL` +
+        (mine === undefined ? ' (oldest entry in the sweep, not this row)' : '') +
+        ' -- so the misses cannot be told from our own lateness',
     };
 
   // Some came back and some did not. The store answered, so the misses are its
