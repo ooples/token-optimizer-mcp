@@ -81,7 +81,35 @@ export function instrumentFingerprint(provenance) {
       : typeof merged === 'number' && Number.isFinite(merged)
         ? ` chunks=${merged}`
         : ' chunks=unrecorded';
-  return `${FINGERPRINT_VERSION}:detect=${detect} kompress=${kompress} degraded=${degraded} witness=${witness}${chunked}`;
+  // WHAT STATE THEIR STORE WAS IN WHEN THE SWEEP STARTED, for the same reason the
+  // chunk term exists. Their redeeming arms read out of a durable store, and a sweep
+  // that starts from an empty one measures an engine with nothing to redeem: the
+  // `pipeline@*` arms that decide the comparable cost and retention columns move by
+  // up to two orders of magnitude between the two. A pass earned against one of them
+  // is not evidence about the other.
+  //
+  // THE DIGEST IS DELIBERATELY NOT IN HERE, on the `waitedSeconds` rule from this
+  // file's header: every sweep ends by writing its own entries, so the next sweep
+  // starts from a store no earlier one ever saw. Keyed on the digest, no honest
+  // re-capture could ever inherit anything and the ratchet would degrade into a
+  // single-run report. What is stable between two honest warm re-captures, and what
+  // actually separates the two experiments, is whether there was anything in there
+  // at all.
+  //
+  // ABSENT MEANS NO TERM, as with chunking. `ccrStoreBeforeRun` was added after every
+  // capture recorded so far, so those produce the byte-identical string they produced
+  // before and none has to be re-earned. A capture that records the field earns its
+  // own pass -- which is the point, because what it earns is checkable.
+  const store = p.ccrStoreBeforeRun;
+  const storeTerm =
+    store === undefined || store === null
+      ? ''
+      : typeof store !== 'object' || typeof store.bytes !== 'number' || !Number.isFinite(store.bytes)
+        ? ' store=unrecorded'
+        : store.bytes === 0 || store.present === false
+          ? ' store=empty'
+          : ' store=warm';
+  return `${FINGERPRINT_VERSION}:detect=${detect} kompress=${kompress} degraded=${degraded} witness=${witness}${chunked}${storeTerm}`;
 }
 
 /**

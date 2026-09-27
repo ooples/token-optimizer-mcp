@@ -101,6 +101,58 @@ eq(
   `${WHOLE} chunks=unrecorded`
 );
 
+// WHAT THEIR STORE HELD WHEN THE SWEEP STARTED IS AN INSTRUMENT DIFFERENCE TOO. An
+// empty store leaves their redeeming arms nothing to redeem, and those arms decide
+// the comparable cost and retention columns.
+//
+// AS WITH CHUNKING, THE ABSENT CASE IS WHY FINGERPRINT_VERSION DID NOT MOVE: no
+// capture recorded before this field existed changes its string, so none has to be
+// re-earned.
+eq('an unstamped store adds nothing', instrumentFingerprint({ ...whole, ccrStoreBeforeRun: null }), WHOLE);
+eq(
+  'an empty store differs',
+  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: false, bytes: 0, sha256: null } }),
+  `${WHOLE} store=empty`
+);
+eq(
+  'a populated store differs from both',
+  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 3866624, sha256: 'ca912562bee4b038' } }),
+  `${WHOLE} store=warm`
+);
+// A ZERO-BYTE FILE IS AN EMPTY STORE, whatever `present` says about the path existing.
+eq(
+  'a present but zero-byte store is empty',
+  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 0, sha256: null } }),
+  `${WHOLE} store=empty`
+);
+// THE DIGEST IS NOT IN THE TERM, AND THESE TWO CASES ARE WHY. Every sweep writes its
+// own entries, so a second honest warm capture never starts from the store the first
+// one did -- keyed on the digest or the byte count, nothing could ever inherit and
+// the ratchet would degrade into a single-run report.
+eq(
+  'a bigger warm store still matches',
+  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 41000000, sha256: 'ffffffffffffffff' } }),
+  `${WHOLE} store=warm`
+);
+eq(
+  'the same size with different content matches',
+  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 3866624, sha256: '74a9a15a3a0f3236' } }),
+  `${WHOLE} store=warm`
+);
+// UNREADABLE IS NOT ASSUMED EMPTY OR WARM, on the store-resolution rule: the
+// direction of the default is the point.
+eq(
+  'an unreadable stamp says so',
+  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 'lots' } }),
+  `${WHOLE} store=unrecorded`
+);
+// THE TWO TERMS ARE INDEPENDENT, and a capture can differ in both at once.
+eq(
+  'chunking and store state compose',
+  instrumentFingerprint({ ...whole, chunk: null, mergedFromChunks: 6, ccrStoreBeforeRun: { present: false, bytes: 0 } }),
+  `${WHOLE} chunks=6 store=empty`
+);
+
 console.log('entries');
 eq('the legacy bare true', readEntry(true), { enforced: true, fingerprint: null, capture: null });
 eq('a provenanced entry', readEntry(writeEntry('hr27', WHOLE)), { enforced: true, fingerprint: WHOLE, capture: 'hr27' });
