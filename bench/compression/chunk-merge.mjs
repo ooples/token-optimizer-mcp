@@ -338,10 +338,61 @@ export function mergeChunks(chunks) {
       errors: witnessErrors,
       script: parts[0].prov.loadWitness?.script ?? null,
     },
-    // THE TWO ENDS OF THE WHOLE CAPTURE. The state it began from is the first
-    // chunk's before-stamp, and the state the next run inherits is the last chunk's
-    // after-stamp; taking both from one chunk would describe that chunk, not the run.
-    ccrStoreBeforeRun: ordered[0].prov.ccrStoreBeforeRun ?? null,
+    // THE STATE THE WHOLE CAPTURE BEGAN FROM, WHICH ONE CHUNK CANNOT SPEAK FOR.
+    // This was the first chunk's before-stamp, and in the default sweep that reads
+    // in the flattering direction: chunk 1 starts from nothing and writes entries,
+    // so chunks 2..n each begin with live rows, and a merged record built from
+    // chunk 1 claims `store=empty` for a run that was mixed. The fingerprint's
+    // whole purpose is to stop a capture claiming a store state it did not have.
+    //
+    // SO THE CHUNKS HAVE TO AGREE. All empty is an empty capture, all warm is a
+    // warm one, and a mix is `unrecorded` -- not the gentler of the two. A mixed
+    // capture still scores its cost and retention columns; what it loses is the
+    // right to be paired against its opposite by store-effect.mjs, which is
+    // exactly right, because there is no single state to attribute a difference to.
+    //
+    // A PAIRED SWEEP AGREES BY CONSTRUCTION, which is why it is the only mode that
+    // earns a store term: `--paired` clears their store before every cold arm and
+    // runs every warm arm over the payloads its own cold arm just wrote.
+    //
+    // LIVE ROWS ARE A PROXY, and a crude one: they say something was redeemable,
+    // not that THIS chunk's payloads were. A chunk holding none of its own content
+    // is functionally cold however many of its neighbours' rows are live. Counting
+    // the chunk's own payload hashes would say so exactly, and would need their
+    // hashes recorded per chunk; agreement is the sound half of that and is what a
+    // pair actually needs.
+    ccrStoreBeforeRun: (() => {
+      // THREE STATES, NOT TWO, because a chunk swept before this stamp counted rows
+      // has a store file and no count, and that is neither empty nor warm. hr28 is
+      // the real instance: chunk 1 recorded `present: false` and chunks 2 to 6
+      // recorded 913408 bytes and up with no count at all. Reading those five as
+      // comparable-to-nothing and falling back to chunk 1 would publish that capture
+      // as having swept an empty store, which is the claim it cannot support.
+      const states = ordered.map((p) => {
+        const s = p.prov.ccrStoreBeforeRun;
+        if (s === null || s === undefined || typeof s !== 'object') return 'absent';
+        const live = liveEntries(s);
+        if (live === null) return 'unknown';
+        return live === 0 ? 'empty' : 'warm';
+      });
+      // NO STAMP ANYWHERE IS NOT A MIX. A capture from before the stamp existed has
+      // nothing to disagree about, and the fingerprint gives it no store term at all,
+      // so its recorded passes still inherit. That promise is kept here.
+      if (states.every((s) => s === 'absent')) return ordered[0].prov.ccrStoreBeforeRun ?? null;
+      if (new Set(states).size === 1 && states[0] !== 'unknown')
+        return ordered[0].prov.ccrStoreBeforeRun ?? null;
+      // `present` IS OVERWRITTEN ON PURPOSE. The fingerprint reads `present: false`
+      // as an empty store and stops there, before it ever looks at a count -- so
+      // carrying chunk 1's absent file through would reinstate the exact bug this
+      // block exists to fix. A mixed capture had a store file by definition: that is
+      // what made its other chunks warm.
+      return {
+        ...(ordered[0].prov.ccrStoreBeforeRun ?? {}),
+        present: true,
+        liveEntries: null,
+        mixedAcrossChunks: ordered.map((p, i) => ({ chunk: p.label, state: states[i] })),
+      };
+    })(),
     ccrStoreAfterRun: ordered[ordered.length - 1].prov.ccrStoreAfterRun ?? null,
     carriedPayloads: [...new Set(ordered.flatMap((p) => p.prov.carriedPayloads ?? []))].sort(),
     inertArms,

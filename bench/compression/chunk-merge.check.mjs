@@ -19,6 +19,7 @@
  *  - `the ages survive the merge per workload` -- the whole reason for chunking.
  */
 
+import { instrumentFingerprint } from './ratchet.mjs';
 import { mergeChunks, mergePayloads } from './chunk-merge.mjs';
 
 let failures = 0;
@@ -400,6 +401,96 @@ console.log('\ntheir store is stamped at both ends of the capture, and between c
     'an unstamped chunk yields no verdict',
     JSON.stringify(r.theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks)
   );
+}
+
+console.log('');
+console.log('the store state a merged capture may claim');
+{
+  // THE MERGED STAMP IS WHAT THE FINGERPRINT READS, so these assert through it
+  // rather than through the field. The bug this covers shipped: the merged record
+  // took chunk 1's before-stamp, and in a default chunked sweep chunk 1 is the one
+  // chunk that started from nothing, so a mixed run was published as `store=empty`.
+  const setStores = (parts, lives) => {
+    parts.forEach((part, i) => {
+      part.theirs.__provenance__.ccrStoreBeforeRun =
+        lives[i] === null
+          ? { path: 'p', present: false, bytes: 0, entries: 0, liveEntries: 0, sha256: null }
+          : { path: 'p', present: true, bytes: 4096, entries: lives[i], liveEntries: lives[i], sha256: 'x' };
+    });
+    return parts;
+  };
+  const term = (lives) => {
+    const r = mergeChunks(setStores(two(), lives));
+    check(r.errors.length === 0, 'the merge produced a file', why(r));
+    return instrumentFingerprint(r.theirs.__provenance__);
+  };
+
+  check(term([0, 0]).endsWith(' store=empty'), 'both chunks empty makes an empty capture', term([0, 0]));
+  check(
+    term([7, 4]).endsWith(' store=warm'),
+    'both warm makes a warm one -- the counts need not match',
+    term([7, 4])
+  );
+
+  // THE CASE THE OLD CODE GOT WRONG, in both of its shapes. A capture whose chunks
+  // disagree has no single state to attribute a difference to, and the honest term
+  // says so rather than picking the gentler of the two states.
+  const mixed = term([0, 10]);
+  check(mixed.endsWith(' store=unrecorded'), 'a mixed capture claims neither state', mixed);
+  check(!mixed.includes('store=empty'), 'and does not inherit chunk 1 and call the run empty', mixed);
+  check(
+    term([10, 0]).endsWith(' store=unrecorded'),
+    'mixed the other way round too, so the rule is not about chunk order',
+    term([10, 0])
+  );
+
+  // THE SHORT-CIRCUIT. `present: false` is read as empty BEFORE any count, so a
+  // mixed capture whose first chunk had no store file has to stop claiming that
+  // file or the count-based refusal above never runs at all.
+  check(
+    term([null, 10]).endsWith(' store=unrecorded'),
+    'an absent file on chunk 1 does not make a mixed capture empty',
+    term([null, 10])
+  );
+
+  // AND THE MIX IS NAMED, because `unrecorded` alone tells a reader the stamp was
+  // unusable, not that the sweep design was what made it so.
+  const named = mergeChunks(setStores(two(), [0, 10])).theirs.__provenance__.ccrStoreBeforeRun;
+  check(
+    Array.isArray(named.mixedAcrossChunks) && named.mixedAcrossChunks.length === 2,
+    'the merged stamp lists each chunk state',
+    JSON.stringify(named.mixedAcrossChunks)
+  );
+  check(
+    named.mixedAcrossChunks.some((e) => e.state === 'empty') &&
+      named.mixedAcrossChunks.some((e) => e.state === 'warm'),
+    'naming both states it found'
+  );
+
+  // A STORE FILE WITH NO COUNT IS A THIRD STATE, and hr28 is why this case exists:
+  // its chunk 1 recorded `present: false` while chunks 2 to 6 recorded 913408 bytes
+  // and up with no count, because they were swept before this stamp counted rows.
+  // Treating those as comparable-to-nothing and keeping chunk 1 would publish that
+  // capture as an empty-store sweep, which is exactly the claim it cannot support.
+  const noCount = setStores(two(), [0, 10]);
+  delete noCount[1].theirs.__provenance__.ccrStoreBeforeRun.liveEntries;
+  const kept = instrumentFingerprint(mergeChunks(noCount).theirs.__provenance__);
+  check(kept.endsWith(' store=unrecorded'), 'an uncounted chunk is not an empty one', kept);
+
+  // AND UNANIMITY DOES NOT RESCUE IT EITHER. Every chunk holding a store file with
+  // no count is unanimous about nothing; the count is the thing under discussion.
+  const noneCounted = setStores(two(), [5, 10]);
+  for (const part of noneCounted) delete part.theirs.__provenance__.ccrStoreBeforeRun.liveEntries;
+  const allUnknown = instrumentFingerprint(mergeChunks(noneCounted).theirs.__provenance__);
+  check(allUnknown.endsWith(' store=unrecorded'), 'uncounted throughout is still unrecorded', allUnknown);
+
+  // THE INHERITANCE PROMISE, which this whole rule must not break. A capture from
+  // before the stamp existed has no store field on any chunk, so there is nothing to
+  // disagree about: it gets NO store term, and every pass recorded against it stands.
+  const unstamped = two();
+  for (const part of unstamped) delete part.theirs.__provenance__.ccrStoreBeforeRun;
+  const bare = instrumentFingerprint(mergeChunks(unstamped).theirs.__provenance__);
+  check(!bare.includes('store='), 'an unstamped capture gets no store term at all', bare);
 }
 
 console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`);
