@@ -102,6 +102,17 @@ const flatten = (node, into) => {
   return into;
 };
 
+// MEMBERSHIP, NOT PLACEMENT -- AND THAT IS A KNOWN HOLE. A figure passes if it
+// appears ANYWHERE in its row of the record, so a cell in the wrong column is
+// accepted. It is not hypothetical: agent-loop publishes 93.8% / 94.7% under
+// the `ours` column, where the record reads 55.9% / 50.7%, and it passes because
+// those two are the PRESET arm figures and the preset arm sits in the same row.
+//
+// Closing it needs a column-header-to-field map, which means deciding what the
+// `zero-turn ids` triple is meant to name -- a question about what the table
+// should publish, not about this check. It is written down here rather than
+// fixed quietly, because the table is being held until the claims settle and a
+// map guessed against a stale table would be checked against nothing.
 const missing = figures.filter(({ workload, figure }) => {
   const known = flatten(byName.get(workload), new Set());
   // The payload column is recorded unformatted, so a README that writes it with
@@ -113,6 +124,25 @@ console.log(
   `readme-headroom.check: ${figures.length} figures across ${dataRows.length} ` +
     `rows, against a record from ${record.recordedAt} (${record.commit.slice(0, 8)}).`
 );
+
+// BOTH ANSWERS, NOT THE FIRST ONE. This used to exit on the provenance gap
+// before it printed the figure comparison, and the gap has been open for as long
+// as the README has been held back -- so for that whole time a drifted figure
+// was computed, never printed, and the check looked like it was failing for the
+// reason it names. Mutating one cell of the table changed NOTHING about the
+// output. A check that finds two problems reports two problems.
+let failed = false;
+
+if (missing.length) {
+  console.error('\nreadme-headroom.check FAILED. Not found in the record:');
+  for (const { workload, figure } of missing)
+    console.error(`  ${workload}: ${figure}`);
+  console.error(
+    '\nEither the README drifted, or the record is stale. Regenerate it with:\n' +
+      `  ${record.regenerate}`
+  );
+  failed = true;
+}
 
 // THE TABLE IS NOT THE WHOLE CLAIM; WHEN IT WAS TAKEN IS PART OF IT. Every
 // figure above can agree with the record perfectly while the record describes a
@@ -135,18 +165,9 @@ if (provenance.length) {
       `the record it is checked against: ${provenance.join(' and ')} missing.\n` +
       'Say where the figures came from, beside the figures.'
   );
-  process.exit(1);
+  failed = true;
 }
 
-if (missing.length) {
-  console.error('\nreadme-headroom.check FAILED. Not found in the record:');
-  for (const { workload, figure } of missing)
-    console.error(`  ${workload}: ${figure}`);
-  console.error(
-    '\nEither the README drifted, or the record is stale. Regenerate it with:\n' +
-      `  ${record.regenerate}`
-  );
-  process.exit(1);
-}
+if (failed) process.exit(1);
 
 console.log('README HEADROOM TABLE AGREES with the recorded run.');
