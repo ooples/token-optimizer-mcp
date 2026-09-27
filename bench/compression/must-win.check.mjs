@@ -71,11 +71,23 @@ const RATCHET = join(here, 'headroom', 'results', 'must-win.ratchet.json');
 //
 // It exists so a speed verdict has to survive being measured twice. Absent, the
 // speed criteria read NOT ENFORCEABLE rather than passing on one reading.
-const REPLICATE = join(here, 'headroom', 'results', 'head-to-head.replicate.json');
+//
+// `--replicate <path>` overrides it for the same reason `--results` exists, and it
+// is the half that makes judging a second capture possible AT ALL for speed. The
+// replicate path is otherwise fixed, so scoring a new capture's second recording
+// into it would overwrite the published one -- and a speed pair whose two recordings
+// come from different captures is refused by `disqualify` anyway, so without this
+// flag every speed row of an unpublished capture reads NOT ENFORCEABLE no matter how
+// many times it was measured.
+const replicateFlag = process.argv.indexOf('--replicate');
+const REPLICATE =
+  replicateFlag === -1
+    ? join(here, 'headroom', 'results', 'head-to-head.replicate.json')
+    : process.argv[replicateFlag + 1];
 const promote = process.argv.includes('--promote');
-if (promote && resultsFlag !== -1) {
+if (promote && (resultsFlag !== -1 || replicateFlag !== -1)) {
   console.error(
-    'refusing to promote from --results: the ratchet records what a reader can check ' +
+    'refusing to promote from --results/--replicate: the ratchet records what a reader can check ' +
       'against the published record, so a pass earned from another one is unverifiable. ' +
       'Publish the record first, then promote.'
   );
@@ -84,6 +96,21 @@ if (promote && resultsFlag !== -1) {
 if (resultsFlag !== -1 && (RESULTS === undefined || RESULTS.startsWith('--'))) {
   console.error('--results needs a path');
   process.exit(2);
+}
+if (replicateFlag !== -1 && (REPLICATE === undefined || REPLICATE.startsWith('--'))) {
+  console.error('--replicate needs a path');
+  process.exit(2);
+}
+// A REPLICATE FROM THE PUBLISHED RECORD AGAINST AN UNPUBLISHED ONE IS NOT A PAIR, and
+// it is the mistake this flag makes easy to make. `disqualify` catches it by capture
+// dir, but it catches it row by row as NOT ENFORCEABLE, which reads like a missing
+// measurement rather than a mismatched one. Said plainly here instead.
+if (resultsFlag !== -1 && replicateFlag === -1) {
+  console.error(
+    'warning: --results without --replicate judges this capture against the PUBLISHED ' +
+      "replicate, so every speed row will read NOT ENFORCEABLE -- two captures are not two " +
+      'recordings of one. Record a second pass of the same capture dir and pass --replicate.'
+  );
 }
 // `--json` exists so anything that QUOTES these verdicts -- an issue body, a
 // summary, a dashboard -- can read them from the judge instead of restating
@@ -747,7 +774,9 @@ console.log(
 );
 console.log(
   `capture: ${results.capture?.dir ?? 'unrecorded'}` +
-    (resultsFlag === -1 ? '' : ` (--results ${RESULTS}, not the published record)`)
+    (resultsFlag === -1 ? '' : ` (--results ${RESULTS}, not the published record)`) +
+    ` | replicate: ${replicateFile?.capture?.dir ?? 'none'}` +
+    (replicateFlag === -1 ? '' : ` (--replicate ${REPLICATE})`)
 );
 console.log(`instrument: ${fingerprint}`);
 if (open.length)
