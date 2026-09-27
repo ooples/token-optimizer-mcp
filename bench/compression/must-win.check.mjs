@@ -47,7 +47,22 @@ import { agreeAcrossRecordings } from './replicate-agreement.mjs';
 import { instrumentFingerprint, inheritance, retractionMap, writeEntry } from './ratchet.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const RESULTS = join(here, 'headroom', 'results', 'head-to-head.json');
+// WHICH RECORD IS BEING JUDGED. The canonical one by default; `--results <path>`
+// exists so a SECOND capture of the same corpus can be judged without copying it
+// over the canonical record first. That copy is the trap `theirsDigest` was added
+// for -- a stale out-dir once reproduced a competitor column that had already been
+// retracted, and nothing in the record showed it.
+//
+// A RUN OVER AN OVERRIDDEN RECORD MAY NOT PROMOTE. Promotion writes the ratchet
+// that every later run inherits from, and the canonical record is what a reader can
+// check those entries against; earning a pass from a record that is not published
+// makes the entry unverifiable by exactly the person the ratchet exists for. So the
+// two flags refuse to combine rather than quietly recording the wrong provenance.
+const resultsFlag = process.argv.indexOf('--results');
+const RESULTS =
+  resultsFlag === -1
+    ? join(here, 'headroom', 'results', 'head-to-head.json')
+    : process.argv[resultsFlag + 1];
 const RATCHET = join(here, 'headroom', 'results', 'must-win.ratchet.json');
 // THE SECOND RECORDING. Produced by running head-to-head.mjs again against the
 // same capture dir, at the same commit, in a fresh process:
@@ -58,6 +73,18 @@ const RATCHET = join(here, 'headroom', 'results', 'must-win.ratchet.json');
 // speed criteria read NOT ENFORCEABLE rather than passing on one reading.
 const REPLICATE = join(here, 'headroom', 'results', 'head-to-head.replicate.json');
 const promote = process.argv.includes('--promote');
+if (promote && resultsFlag !== -1) {
+  console.error(
+    'refusing to promote from --results: the ratchet records what a reader can check ' +
+      'against the published record, so a pass earned from another one is unverifiable. ' +
+      'Publish the record first, then promote.'
+  );
+  process.exit(2);
+}
+if (resultsFlag !== -1 && (RESULTS === undefined || RESULTS.startsWith('--'))) {
+  console.error('--results needs a path');
+  process.exit(2);
+}
 // `--json` exists so anything that QUOTES these verdicts -- an issue body, a
 // summary, a dashboard -- can read them from the judge instead of restating
 // them by hand. A number copied by hand is a number that drifts.
@@ -717,6 +744,10 @@ console.log(
     `${regressed.length} regressed, ${stale.length} stale, ` +
     `${unverified.length} unverified, ${unpromoted.length} unrecorded pass(es), ` +
     `${unclaimed.length} unclaimed`
+);
+console.log(
+  `capture: ${results.capture?.dir ?? 'unrecorded'}` +
+    (resultsFlag === -1 ? '' : ` (--results ${RESULTS}, not the published record)`)
 );
 console.log(`instrument: ${fingerprint}`);
 if (open.length)
