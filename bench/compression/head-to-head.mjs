@@ -1198,11 +1198,21 @@ for (const [name, text] of Object.entries(payloads)) {
     // Whole-payload content conservation, carried per row so the gate and the
     // table can both read it without recomputing.
     wordsAll: kept.words,
+    // THE BUCKETS, NOT JUST THE TOTALS, because `gone 0` has two readings and
+    // only the split tells them apart: a word still in the handed text is a word
+    // the reader has, while a word reached only through the decoder or only out
+    // of the spill costs something to get back.
+    wordsInOutput: kept.inOutput,
+    wordsInReconstruction: kept.inReconstruction,
+    wordsInSpill: kept.inSpill,
     wordsGone: kept.gone,
+    wordsGoneMass: kept.goneMass,
+    wordsBeforeMass: kept.beforeMass,
     wordsGoneShare: kept.goneShare,
     wordsMissing: kept.missing,
     // What the mutilated-output control saw. Zero here invalidates the zero above.
     wordsControlGone: control.gone,
+    wordsControlAll: control.words,
     grew,
     spillRatio,
     // TURNS, and the tokens a turn drags back into context with it. The
@@ -2248,6 +2258,41 @@ if (process.argv[3] === '--record') {
         // a bug in the selection, not a win.
         theirsComparableZeroTurn: r.compIn === null ? null : String(r.compIn),
         subUnrecoverable: String(r.subGone),
+      },
+      // WHOLE-PAYLOAD CONTENT CONSERVATION, RECORDED RATHER THAN ONLY PRINTED.
+      // Until now these figures existed for the length of one process: the
+      // harness computed them, gated on them, printed them, and wrote a record
+      // that said nothing about them. So no later check could verify the claim,
+      // no ratchet could hold it, and a reader of the record could not tell a
+      // conserving run from one whose oracle never looked. The gate inside the
+      // harness is not the problem -- a number nobody can re-read afterwards is.
+      //
+      // `controlGone` IS RECORDED BESIDE `gone`, AND IT IS THE ONE THAT SAYS
+      // WHETHER `gone` MEANS ANYTHING. The control mutilates the output (half of
+      // it, no expansion, no spill) and asks the same question; where it also
+      // loses nothing, this payload's vocabulary is too small for the oracle to
+      // resolve a loss and a clean reading is a blind spot wearing the shape of
+      // evidence. `blind` carries that conclusion so a consumer cannot read
+      // `gone: 0` without it.
+      conservation: {
+        words: String(r.wordsAll),
+        inOutput: String(r.wordsInOutput),
+        inReconstruction: String(r.wordsInReconstruction),
+        // null, not "0": an arm with no sink never looked in a spill.
+        inSpill: r.wordsInSpill === null ? null : String(r.wordsInSpill),
+        gone: String(r.wordsGone),
+        goneMass: String(r.wordsGoneMass),
+        beforeMass: String(r.wordsBeforeMass),
+        goneShare: pct(r.wordsGoneShare),
+        // A BOUNDED SAMPLE, not the whole list: `gone` is the count, and a row
+        // that loses thousands of words would otherwise write thousands of
+        // strings into a record that is read on every check. Twenty is enough
+        // to see WHAT was lost; the count is what is compared.
+        missingSample: r.wordsMissing.slice(0, 20),
+        missingSampleTruncated: r.wordsMissing.length > 20,
+        controlWords: String(r.wordsControlAll),
+        controlGone: String(r.wordsControlGone),
+        blind: r.wordsControlGone === 0,
       },
       // THE TWO BOUNDS, RECORDED. `handed` is the text the agent is given;
       // `whole` is that plus everything the arm moved out, fetched back.
