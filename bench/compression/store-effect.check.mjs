@@ -67,6 +67,26 @@ console.log('\nwhat disqualifies a pair from measuring the store');
   const code = notOneVariableApart(side('A', 'empty'), side('B', 'warm', { commit: 'd'.repeat(40) }));
   check(code !== null && String(code).includes('different code'), 'two commits', code);
   const corpus = notOneVariableApart(side('A', 'empty'), side('B', 'warm', { payloadsDigest: 'f00d' }));
+  // AND NEITHER GUARD MAY PASS FOR WANT OF A STAMP. A record with no reproduction
+  // block gives both sides null, the two comparisons above are then false, and the
+  // pair would read as having been checked for code and corpus when it was not.
+  const noCommit = notOneVariableApart(side('A', 'empty', { commit: null }), side('B', 'warm'));
+  check(noCommit !== null, 'an unrecorded commit is refused, not treated as a match', noCommit);
+  check(String(noCommit).includes('A '), 'and names the side missing it', noCommit);
+  const bothNoCommit = notOneVariableApart(
+    side('A', 'empty', { commit: null }),
+    side('B', 'warm', { commit: null })
+  );
+  check(bothNoCommit !== null, 'two unrecorded commits are still not equal commits', bothNoCommit);
+  const noCorpus = notOneVariableApart(
+    side('A', 'empty', { payloadsDigest: null }),
+    side('B', 'warm', { payloadsDigest: null })
+  );
+  check(
+    noCorpus !== null && String(noCorpus).includes('which payloads'),
+    'and the same for the corpus digest',
+    noCorpus
+  );
   check(corpus !== null && String(corpus).includes('different payload sets'), 'two corpora', corpus);
   // THE CLAUSE THE STRIPPED COMPARISON EXISTS FOR. A pair captured across a lost
   // native detector differs in the store term AND in a term that moves the same

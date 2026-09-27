@@ -79,6 +79,16 @@ export function notOneVariableApart(a, b) {
       `both captures started from a ${sa} store, so this pair holds the store state ` +
       'fixed and measures nothing about it'
     );
+  // A MISSING STAMP IS NOT A MATCH. Both sides reading null makes the two
+  // comparisons below false, so a record without its reproduction block would sail
+  // through the commit and corpus guards instead of being stopped by them -- and a
+  // guard that cannot fire is worse than none, because the pair reads as checked.
+  for (const rec of [a, b]) {
+    if (typeof rec.commit !== 'string' || rec.commit.length === 0)
+      return `${rec.label} does not record the commit it was measured at`;
+    if (typeof rec.payloadsDigest !== 'string' || rec.payloadsDigest.length === 0)
+      return `${rec.label} does not record which payloads it swept`;
+  }
   if (a.commit !== b.commit)
     return (
       `the two captures name commits ${String(a.commit).slice(0, 8)} and ` +
