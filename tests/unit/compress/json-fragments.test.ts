@@ -40,6 +40,18 @@ function expand(text: string): string {
     }
   );
 }
+
+/**
+ * The array header claims completeness; the fragment header does not. Swapping
+ * one for the other is how a complete encoding is fed to the fragment decoder.
+ */
+function asFragmentRecords(text: string): string {
+  return text.replace(
+    /\[JSON array records; ALL \d+ records preserved(?:, \d+ encoded here)?\./g,
+    '[JSON fragment records; missing records remain unknown.'
+  );
+}
+
 function fixture(nl = '\n'): string {
   const record = (i: number) =>
     JSON.stringify(
@@ -96,22 +108,33 @@ test.each(['\n', '\r\n'])(
     const out = compressJsonArray(input);
     expect(out.text).toContain('ALL 120 records preserved');
     expect(out.text.length).toBeLessThan(input.length * 0.5);
-    const normalized = out.text.replace(
-      /\[JSON array records; ALL \d+ records preserved(?:, \d+ encoded here)?\./g,
-      '[JSON fragment records; missing records remain unknown.'
-    );
-    expect(expand(normalized)).toBe(input);
+    expect(expand(asFragmentRecords(out.text))).toBe(input);
   }
 );
 
-test('incomplete and nested arrays cannot claim complete flat-record encoding', () => {
+test('an incomplete array still cannot claim complete flat-record encoding', () => {
+  // A TRUNCATED ARRAY IS LEFT ALONE, which is the safety property: the count in
+  // an array header is a promise that every record is accounted for, and a body
+  // that was cut off cannot keep it.
+  expect(compressJsonArray(fixture()).text).toBe(fixture());
+});
+
+test('a nested array is templated, and comes back byte for byte', () => {
+  // NESTING USED TO DISQUALIFY A RECORD from flat templating, and this test
+  // asserted the refusal. b71868df made the nesting part of the template text
+  // instead, so the refusal is gone -- but the promise in the header is not, and
+  // that promise is what is worth testing. Encoding without checking the decode
+  // would leave the count asserted and the contents unverified.
   const nested = JSON.stringify(
     Array.from({ length: 40 }, (_, i) => ({ i, nested: { i } })),
     null,
     2
   );
-  expect(compressJsonArray(nested).text).toBe(nested);
-  expect(compressJsonArray(fixture()).text).toBe(fixture());
+  const out = compressJsonArray(nested);
+  expect(out.text).not.toBe(nested);
+  expect(out.lossless).toBe(true);
+  expect(out.text).toContain('ALL 40 records preserved');
+  expect(expand(asFragmentRecords(out.text))).toBe(nested);
 });
 test.each(['\n', '\r\n', '\\n', '\\r\\n'])(
   'truncated JSON preserves all visible bytes, gap, and rare values %j',
@@ -162,11 +185,16 @@ test('ordinary JSON, nested values, changed keys, and short fragments cannot inv
     'ordinary output'
   );
   expect(compressJsonFragments(plain).text).toBe(plain);
+  // A NESTED VALUE IS NOW TEMPLATED RATHER THAN REFUSED (b71868df). What must
+  // not change is that no record is invented or lost on the way back, so the
+  // assertion moved from "left alone" to "restored exactly".
   const varied = fixture().replaceAll(
     '"region": "east"',
     '"region": {"code":"east"}'
   );
-  expect(compressJsonFragments(varied).text).toBe(varied);
+  const variedOut = compressJsonFragments(varied);
+  expect(variedOut.text).not.toBe(varied);
+  expect(expand(variedOut.text)).toBe(varied);
   const changed = fixture().replace('"enabled": false', '"other": false');
   expect(expand(compressJsonFragments(changed).text)).toBe(changed);
 });
