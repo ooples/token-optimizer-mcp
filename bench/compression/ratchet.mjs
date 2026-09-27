@@ -57,7 +57,31 @@ export function instrumentFingerprint(provenance) {
         ? 'none'
         : String(warnings.degraded.length);
   const witness = p.loadWitness === undefined || p.loadWitness === null ? 'no' : 'yes';
-  return `${FINGERPRINT_VERSION}:detect=${detect} kompress=${kompress} degraded=${degraded} witness=${witness}`;
+  // CHUNKING IS AN INSTRUMENT DIFFERENCE, so a pass may not be carried across it.
+  // A chunked capture sweeps each slice against a CCR store the earlier slices
+  // have already grown, and separates its speed passes by a chunk-sized sweep
+  // rather than a roster-sized one. Both move the columns this ratchet guards, so
+  // a pass earned on one sweep is not evidence about the other.
+  //
+  // THE TERM IS ABSENT ON AN UNCHUNKED CAPTURE, deliberately. This is therefore
+  // not the kind of field addition FINGERPRINT_VERSION exists for: every capture
+  // taken so far produces the byte-identical string it produced before, which the
+  // `a whole capture` case asserts by value, so no recorded entry changes meaning
+  // and none has to be re-earned. A chunked capture simply earns its own.
+  //
+  // WHAT COUNTS AS UNCHUNKED IS THE ABSENCE OF BOTH FIELDS, not just of the merge
+  // count. A single chunk's own file carries `chunk: {index, of}` and no merge
+  // count, and it holds part of a roster: reading that as a whole sweep is the
+  // flattering direction, so anything that is not plainly one sweep gets a term.
+  const merged = p.mergedFromChunks;
+  const chunk = p.chunk;
+  const chunked =
+    merged === undefined && (chunk === undefined || chunk === null)
+      ? ''
+      : typeof merged === 'number' && Number.isFinite(merged)
+        ? ` chunks=${merged}`
+        : ' chunks=unrecorded';
+  return `${FINGERPRINT_VERSION}:detect=${detect} kompress=${kompress} degraded=${degraded} witness=${witness}${chunked}`;
 }
 
 /**

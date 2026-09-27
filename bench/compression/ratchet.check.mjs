@@ -58,6 +58,48 @@ eq(
 eq('a degraded capture differs', instrumentFingerprint({ ...whole, competitorWarnings: { degraded: ['kompress'], advisory: [] } }), `${FINGERPRINT_VERSION}:detect=rust kompress=ready degraded=1 witness=yes`);
 eq('the python detector differs', instrumentFingerprint({ ...whole, detectBackend: 'python' }), `${FINGERPRINT_VERSION}:detect=python kompress=ready degraded=none witness=yes`);
 eq('an unloaded model differs', instrumentFingerprint({ ...whole, kompressWarmup: { ready: false, why: 'download' } }), `${FINGERPRINT_VERSION}:detect=rust kompress=notready degraded=none witness=yes`);
+// A CHUNKED CAPTURE IS A DIFFERENT INSTRUMENT. Each slice sweeps against a CCR
+// store the earlier slices have already grown, and the speed passes are separated
+// by a chunk-sized sweep rather than a roster-sized one -- both move the columns
+// this ratchet guards, so a pass earned on one sweep is not evidence about the
+// other.
+//
+// THE FIRST CASE IS WHY FINGERPRINT_VERSION DID NOT MOVE FOR THIS FIELD. `a whole
+// capture` above asserts WHOLE by value, and this asserts that the other shape a
+// non-chunked capture comes in -- the explicit `chunk: null` a post-chunking whole
+// sweep writes -- produces exactly that string too. So no recorded entry changes
+// meaning and none has to be re-earned; a chunked capture simply earns its own.
+eq('a whole sweep says so explicitly and still matches', instrumentFingerprint({ ...whole, chunk: null }), WHOLE);
+eq(
+  'a merged capture differs',
+  instrumentFingerprint({ ...whole, chunk: null, mergedFromChunks: 4 }),
+  `${WHOLE} chunks=4`
+);
+// A LEGITIMATE RE-CAPTURE OF A CHUNKED SWEEP MUST STILL INHERIT, on the same
+// grounds as `a second warm capture matches`: the seam's own numbers differ
+// between two runs, the number of chunks does not.
+eq(
+  'the same split twice matches',
+  instrumentFingerprint({
+    ...whole,
+    chunk: null,
+    mergedFromChunks: 4,
+    chunkSeam: { warmupsPaid: 4, speedPassSeparation: 'chunk' },
+  }),
+  `${WHOLE} chunks=4`
+);
+eq(
+  'a different split differs',
+  instrumentFingerprint({ ...whole, chunk: null, mergedFromChunks: 6 }),
+  `${WHOLE} chunks=6`
+);
+// ONE CHUNK'S OWN FILE IS NOT A SWEEP. It holds part of a roster and no merge
+// count; reading it as a whole capture is the flattering direction.
+eq(
+  'an unmerged chunk is not a whole capture',
+  instrumentFingerprint({ ...whole, chunk: { selector: '--chunk 2/4', index: 2, of: 4 } }),
+  `${WHOLE} chunks=unrecorded`
+);
 
 console.log('entries');
 eq('the legacy bare true', readEntry(true), { enforced: true, fingerprint: null, capture: null });
