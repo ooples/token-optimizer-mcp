@@ -1397,17 +1397,36 @@ const armsFor = (r, params) => {
     // about what we are claiming, not a detail; this records the proxy arm's
     // cost so that decision can be made against measured numbers.
     //
-    // `null` where the arm does not apply or declined: a payload that is not a
-    // message list has no proxy arm, and the proxy refuses to rewrite content
-    // behind the client's cache marker, which is correct behaviour and not a
-    // zero-saving result. `bodyTokBefore` counts the `model`/`max_tokens`
-    // envelope the harness wraps around the messages, so this arm is charged
-    // about 15 tokens the other arms are not -- a bias against us, kept rather
-    // than corrected so the number cannot be accused of being tuned.
-    proxy:
-      r.bodyRatio === null || r.bodyRatio === 0
-        ? null
-        : L(r.bodyTokAfter, r.bodyBlockTok),
+    // `null` ONLY WHERE THERE IS NO PROXY ARM, AND EVERY ZERO IS PRICED. This
+    // also nulled `bodyRatio === 0`, on the reasoning that the proxy declines
+    // to rewrite content behind the client's cache marker and a refusal is not
+    // a zero-saving result. The reasoning is sound and it covered the wrong
+    // rows. Seven rows here read 0.0%, and on five of them `bodyBehind` is
+    // exactly 0.000000: nothing was behind a marker, the arm was handed the
+    // whole payload, and it returned it unchanged. Nulling those took a
+    // zero-saving arm off the board rather than pricing it, which is a credit
+    // to us on rows where we earned nothing.
+    //
+    // NO THRESHOLD SEPARATES THE TWO KINDS OF ZERO, which is why the fix is to
+    // price both rather than to test for a refusal. `bodyBehind` on agent-loop
+    // is 0.999537 and on agent-loop-logs 0.999771 -- never exactly 1, because
+    // the marker sits on the second-to-last turn and the turns after it are
+    // real bytes -- so `=== 1` matches neither, and any cutoff above 0.99 is a
+    // number I would be choosing to make two rows disappear. `summary.reason`
+    // cannot separate them either: all seven say "compression did not pay".
+    //
+    // AND THE COLUMN ASKS A QUESTION THE REASON DOES NOT CHANGE. This prices
+    // how much of a subscription a user stops spending. A payload the proxy was
+    // right to leave alone is a payload the user still pays for in full, so its
+    // price is zero either way; `bodyBehind` is recorded per row so the reason
+    // for each zero stays visible, and the disclosure is the place for it.
+    //
+    // `bodyTokBefore` counts the `model`/`max_tokens` envelope the harness
+    // wraps around the messages, so this arm is charged about 15 tokens the
+    // other arms are not -- a bias against us, kept rather than corrected so
+    // the number cannot be accused of being tuned. On a 0.0% row that bias is
+    // the whole difference: rag-conversation prices ABOVE doing nothing.
+    proxy: r.bodyRatio === null ? null : L(r.bodyTokAfter, r.bodyBlockTok),
   };
 };
 
@@ -2143,6 +2162,16 @@ if (process.argv[3] === '--record') {
       chars: {
         ours: pct(r.ours),
         body: r.bodyRatio === null ? null : pct(r.bodyRatio),
+        // THE SHARE OF THE PAYLOAD THE PROXY ARM WAS NOT ALLOWED TO TOUCH.
+        // Without it a `body` of 0.0% is two different results wearing one
+        // number: an arm that refused because the client's cache marker covers
+        // the payload, and an arm that was handed all of it and achieved
+        // nothing. Both are priced -- see the proxy arm in `armsFor` for why no
+        // threshold separates them -- so this is what tells a reader which
+        // happened. SIX DECIMALS, not three: the two refusals in this corpus
+        // read 0.999537 and 0.999771, and rounding either to 1.000 would print
+        // the exact claim the arm cannot support.
+        bodyBehind: r.bodyRatio === null ? null : r.bodyBehind.toFixed(6),
         preset: pct(r.presetRatio),
         sub: pct(r.subRatio),
         theirs: pct(r.theirs),
