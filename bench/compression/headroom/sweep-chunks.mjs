@@ -37,6 +37,7 @@
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -64,11 +65,12 @@ const OUT = positional[1];
 const N = Number(flag('--chunks'));
 const EXTRA = flag('--extra');
 const MERGE_INTO = flag('--merge-into') ?? OUT;
+const PAIRED = args.includes('--paired');
 
 if (CLONE === undefined || OUT === undefined || !Number.isInteger(N) || N < 1) {
   console.error(
     'usage: node bench/compression/headroom/sweep-chunks.mjs <clone|-> <out-dir> ' +
-      '--chunks <n> [--extra <natives.json>] [--merge-into <dir>]'
+      '--chunks <n> [--paired] [--extra <natives.json>] [--merge-into <dir>]'
   );
   process.exit(2);
 }
@@ -100,11 +102,41 @@ const run = (cmd, argv, label) => {
   return seconds;
 };
 
+// THE SAME PATH run-theirs.py STAMPS, and the only three files SQLite keeps for it.
+// A stale `-wal` left behind by an aborted sweep would overlay a store we just
+// cleared, so it goes with the db rather than being left as a surprise.
+const STORE = path.join(os.homedir(), '.headroom', 'ccr_store.db');
+const clearStore = () => {
+  const removed = [];
+  for (const suffix of ['', '-wal', '-shm']) {
+    const file = STORE + suffix;
+    if (!fs.existsSync(file)) continue;
+    try {
+      fs.rmSync(file);
+      removed.push(path.basename(file));
+    } catch (err) {
+      // A HOLDER STOPS THE RUN. Their store refuses deletion while a process has it
+      // open ("Device or resource busy"), and carrying on would sweep what is meant
+      // to be the cold arm against a store still holding the previous chunk. That is
+      // the one thing this mode exists to prevent, so it fails loudly instead.
+      console.error(`
+could not clear ${file}: ${err.message}`);
+      console.error('Something still holds their store. Stopping rather than sweeping');
+      console.error('a cold arm against a warm store.');
+      process.exit(1);
+    }
+  }
+  console.log(
+    `    cleared their store: ${removed.length === 0 ? 'nothing to remove' : removed.join(', ')}`
+  );
+};
+
 fs.mkdirSync(OUT, { recursive: true });
 const dirs = [];
 const timings = [];
-for (let i = 1; i <= N; i += 1) {
-  const dir = path.join(OUT, `chunk${i}of${N}`);
+/** One chunk swept and resolved into `dir`, with the resolve counted in its window. */
+const sweepChunk = (i, dir, arm) => {
+  const label = arm === null ? `chunk ${i}/${N}` : `chunk ${i}/${N} ${arm}`;
   const sweptSeconds = run(
     PYTHON,
     [
@@ -115,7 +147,7 @@ for (let i = 1; i <= N; i += 1) {
       `${i}/${N}`,
       ...(EXTRA === null ? [] : ['--extra', EXTRA]),
     ],
-    `chunk ${i}/${N}: sweep`
+    `${label}: sweep`
   );
   // IMMEDIATELY, AND IN ITS OWN PROCESS. Every second between these two lines is
   // a second of the TTL spent, so nothing else goes here -- not a merge, not a
@@ -123,10 +155,29 @@ for (let i = 1; i <= N; i += 1) {
   const resolveSeconds = run(
     PYTHON,
     [path.join(HERE, 'resolve-theirs.py'), CLONE, dir],
-    `chunk ${i}/${N}: resolve`
+    `${label}: resolve`
   );
   dirs.push(dir);
-  timings.push({ chunk: `${i}/${N}`, sweptSeconds, resolveSeconds });
+  timings.push({ chunk: `${i}/${N}`, arm, sweptSeconds, resolveSeconds });
+  return dir;
+};
+
+const coldDirs = [];
+const warmDirs = [];
+for (let i = 1; i <= N; i += 1) {
+  if (!PAIRED) {
+    sweepChunk(i, path.join(OUT, `chunk${i}of${N}`), null);
+    continue;
+  }
+  // COLD, WARM, IN THAT ORDER, WITH NOTHING BETWEEN THEM. The clear makes the cold
+  // arm's label true; the second sweep follows the first with no gap, so the entries
+  // it reads are the ones the first sweep just wrote -- minutes old against their
+  // 1800s window, which is the only way this axis can be varied at all.
+  console.log(`
+=== chunk ${i}/${N}: clearing their store for the cold arm`);
+  clearStore();
+  coldDirs.push(sweepChunk(i, path.join(OUT, 'cold', `chunk${i}of${N}`), 'cold'));
+  warmDirs.push(sweepChunk(i, path.join(OUT, 'warm', `chunk${i}of${N}`), 'warm'));
 }
 
 // WHETHER EACH CHUNK ACTUALLY FIT, read back from what the resolver wrote rather
@@ -157,17 +208,28 @@ for (const t of timings) {
           : `inside their stated ${ttl}s`;
   if (prov === null || prov.pastTheirTtl === true) late += 1;
   console.log(
-    `  chunk ${t.chunk}: swept ${t.sweptSeconds}s, resolved in ${t.resolveSeconds}s, ` +
+    `  chunk ${t.chunk}${t.arm === null ? '' : ` ${t.arm}`}: swept ${t.sweptSeconds}s, ` +
+      `resolved in ${t.resolveSeconds}s, ` +
       `oldest entry ${age === null ? 'unknown' : `${age}s`} -- ${verdict}`
   );
 }
 
-const merged = run(
-  process.execPath,
-  [path.join(HERE, '..', 'chunk-merge.mjs'), `--out=${MERGE_INTO}`, ...dirs],
-  'merge'
-);
-void merged;
+// ONE MERGE PER ARM, and never one merge across both. A file holding a cold chunk
+// beside a warm one would describe a capture that was never run, and the whole point
+// of the pair is that each side is internally one instrument.
+const merges = PAIRED
+  ? [
+      { label: 'merge (cold arm)', out: path.join(MERGE_INTO, 'empty'), parts: coldDirs },
+      { label: 'merge (warm arm)', out: path.join(MERGE_INTO, 'warm'), parts: warmDirs },
+    ]
+  : [{ label: 'merge', out: MERGE_INTO, parts: dirs }];
+for (const m of merges) {
+  run(
+    process.execPath,
+    [path.join(HERE, '..', 'chunk-merge.mjs'), `--out=${m.out}`, ...m.parts],
+    m.label
+  );
+}
 
 // SAID LAST, BECAUSE IT IS THE ONE THING THAT DECIDES WHETHER THIS CAPTURE CAN
 // CARRY A RETENTION VERDICT. A chunk that went past their TTL still merges -- the

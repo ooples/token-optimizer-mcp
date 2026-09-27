@@ -85,6 +85,8 @@ if CLONE != "-":
     sys.path.append(CLONE)
 
 import hashlib  # noqa: E402
+import pathlib  # noqa: E402
+import sqlite3  # noqa: E402
 import random  # noqa: E402
 
 # A DEGRADED COMPETITOR MEASURES AS A WEAKER COMPETITOR, SILENTLY, and until
@@ -895,22 +897,92 @@ take_witness("before-pass-0")
 STORE_PATH = os.path.join(os.path.expanduser("~"), ".headroom", "ccr_store.db")
 
 
+def _store_rows():
+    """How many entries their store holds, and how many are still redeemable.
+
+    THE BYTE COUNT DOES NOT SAY WHAT IS REDEEMABLE, and this is not a hypothetical:
+    the 3.87 MB store on this machine held six rows and every one was expired, ages
+    4223-4662s against their own ttl of 1800, with 53% of the file free pages. Their
+    `headroom/cache/backends/sqlite.py` runs
+
+        DELETE FROM ccr_entries WHERE created_at + ttl < ?
+
+    on every open as startup hygiene, so their engine empties exactly those rows
+    before the first workload of a sweep. A sweep started there has nothing to
+    redeem, however large the file is.
+
+    So the live count uses their own predicate, and it is also the one quantity in
+    this stamp that survives a checkpoint: `ccr_store.db` is a WAL database, so
+    committed rows sit in `ccr_store.db-wal` until SQLite moves them and the file's
+    size and digest both change with the store unchanged.
+
+    READ-ONLY, BY URI. The instrument must not write to the thing it measures: a
+    read-write open would let SQLite recover the WAL, run their hygiene, or create
+    the file, and the stamp would then describe a store this function had altered.
+    `mode=ro` fails rather than creating, and `immutable` is deliberately NOT used --
+    it would let us read a stale snapshot past a concurrent write.
+    """
+    rows = {"entries": None, "liveEntries": None, "readError": None}
+    try:
+        conn = sqlite3.connect(
+            "file:%s?mode=ro" % pathlib.Path(STORE_PATH).as_posix(),
+            uri=True,
+            timeout=5.0,
+        )
+    except Exception as exc:  # pragma: no cover - a locked or absent store
+        rows["readError"] = "%s: %s" % (type(exc).__name__, exc)
+        return rows
+    try:
+        cur = conn.execute("SELECT count(*) FROM ccr_entries")
+        rows["entries"] = int(cur.fetchone()[0])
+        cur = conn.execute(
+            "SELECT count(*) FROM ccr_entries WHERE created_at + ttl >= ?", (time.time(),)
+        )
+        rows["liveEntries"] = int(cur.fetchone()[0])
+    except Exception as exc:
+        # A SHAPE WE DO NOT RECOGNISE IS NOT AN EMPTY STORE. Leaving the counts None
+        # makes the fingerprint read `store=unrecorded`, which is the direction that
+        # refuses to claim anything rather than the one that flatters a capture.
+        rows["readError"] = "%s: %s" % (type(exc).__name__, exc)
+    finally:
+        conn.close()
+    return rows
+
+
 def _store_state():
     state = {"path": STORE_PATH, "present": os.path.exists(STORE_PATH)}
     if state["present"]:
         with open(STORE_PATH, "rb") as handle:
             state["bytes"] = os.path.getsize(STORE_PATH)
             state["sha256"] = hashlib.sha256(handle.read()).hexdigest()[:16]
+        # The sidecars are kept because they explain a digest that moved on its own,
+        # and because a stale `-wal` left by an aborted run overlays a restored store.
+        for suffix, key in (("-wal", "walBytes"), ("-shm", "shmBytes")):
+            side = STORE_PATH + suffix
+            state[key] = os.path.getsize(side) if os.path.exists(side) else 0
+        state.update(_store_rows())
     else:
         state["bytes"] = 0
         state["sha256"] = None
+        state["walBytes"] = 0
+        state["shmBytes"] = 0
+        # NO FILE IS NO ROWS, and that needs no query to establish.
+        state["entries"] = 0
+        state["liveEntries"] = 0
+        state["readError"] = None
     return state
 
 
 store_before = _store_state()
 print(
-    "ccr store before run: %d bytes, sha %s"
-    % (store_before["bytes"], store_before["sha256"])
+    "ccr store before run: %d bytes, %s of %s entries still live, sha %s%s"
+    % (
+        store_before["bytes"],
+        store_before["liveEntries"],
+        store_before["entries"],
+        store_before["sha256"],
+        "" if store_before["readError"] is None else " (%s)" % store_before["readError"],
+    )
 )
 
 sweep_started_at = time.time()
@@ -1154,7 +1226,16 @@ provenance = {
     # published table. The scorer refuses a capture that carries this.
     "stubArms": KNOWN_ANSWER_ARMS,
 }
-print("ccr store after run: %s bytes, sha %s" % (store["bytes"], store["sha256"]))
+print(
+    "ccr store after run: %d bytes, %s of %s entries still live, sha %s%s"
+    % (
+        store["bytes"],
+        store["liveEntries"],
+        store["entries"],
+        store["sha256"],
+        "" if store["readError"] is None else " (%s)" % store["readError"],
+    )
+)
 
 with open(os.path.join(OUT, "theirs.json"), "w", encoding="utf-8") as handle:
     json.dump({"__provenance__": provenance, **results}, handle, indent=2)
