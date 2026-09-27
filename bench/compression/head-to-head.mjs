@@ -512,10 +512,17 @@ for (const [name, text] of Object.entries(payloads)) {
   // mixing the two into one column is how a headline stops being checkable.
   //
   // It is a THIRD COLUMN rather than a new default because the two arms are not
-  // the same product. The default arm leaves those blocks in the request, where
-  // 1,274 of the 1,582 identifiers a reader can rebuild from the output alone
-  // happen to live. Publishing one number would mean choosing which of those
-  // facts to hide.
+  // the same product, and the record says so in units a reader can re-derive:
+  // the default arm leaves every one of the 13,784 scorable identifiers in the
+  // request, available with no extra turn, where the preset arm below leaves 455
+  // of them there and puts the rest behind a `Read`. Publishing one number would
+  // mean choosing which of those facts to hide.
+  //
+  // (This used to cite "1,274 of the 1,582 identifiers". That split is not
+  // measured any more and was never checkable -- see the header of
+  // identifiers.mjs, which records that the 1,582 denominator named neither the
+  // set nor the rule that admitted a member. The two counts above come straight
+  // out of `retention` in the record.)
   const subSpilled = [];
   const sub = compressBlock(text, {
     spill: (content, hint) => {

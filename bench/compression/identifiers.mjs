@@ -50,6 +50,17 @@ const NAMED_IMPORT = /\bimport\s+(?:type\s+)?\{([^}]*)\}/g;
  * as one identifier -- almost always reported gone -- and drown the real ones. A
  * hundred and twenty characters is longer than any title, path or label in these
  * payloads and shorter than any block of them.
+ *
+ * THE CAP IS NOT APPLIED ON EVERY PATH, AND THAT ASYMMETRY IS MEASURED RATHER
+ * THAN ASSUMED HARMLESS. The keyed and quoted rules below enforce it; the
+ * DISTINCTIVE rule in `collect` does not, so a string long enough to be a
+ * document still enters through that one. Swept over the whole corpus, exactly 1
+ * of 15,406 units is longer than MAX_UNIT: the 160,032-character base64 PNG in
+ * browser-session. Both arms keep it -- that row reads ids 334, ours 334, theirs
+ * 334 -- so no verdict anywhere depends on which side of the cap it falls, and
+ * adding the bound to the DISTINCTIVE path would change one denominator and no
+ * result. Left as it is, with the number written down, so that a later payload
+ * that does depend on it is a change to this comment and not a silent one.
  */
 export const MAX_UNIT = 120;
 
