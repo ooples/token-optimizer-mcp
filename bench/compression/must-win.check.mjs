@@ -102,6 +102,24 @@ const ROWS = {
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
 /**
+ * A CRITERION NO ISSUE CLAIMED IS NOT AN OPEN MUST-WIN, and counting it as one
+ * puts a false entry on the board. #438 claims cost, speed and turns; its
+ * recorded baseline shows retention as a LOSS on that row -- 69 units against
+ * their 254 -- so no issue ever approved a retention bar for `agent-loop`, and
+ * `retention: null` above says exactly that. Reported as open it read
+ * `#438 agent-loop/retention - UNMEASURED: 185/185 - not a must-win here`, which
+ * is a line telling the reader both that it is open work and that it is not.
+ *
+ * THE TEST READS THE CONFIGURATION, NEVER THE VERDICT TEXT. A criterion leaves
+ * the board only because a `ROWS` entry declares it out of scope, so a row that
+ * was genuinely unmeasurable -- readings missing, instrument degraded, two
+ * recordings disagreeing -- can never reach this branch and slip off the board
+ * quietly. Nothing here can turn into a pass either: an unclaimed criterion is
+ * never promoted and never enforced.
+ */
+const outOfScope = (criterion, cfg) => criterion === 'retention' && cfg.retention === null;
+
+/**
  * The four must-wins for one row, each as `{ pass, detail }`, with `pass: null`
  * when the inputs to decide it are not recorded. AN UNMEASURED CRITERION IS
  * NEVER A PASS -- that distinction is the whole reason speed is reported
@@ -533,6 +551,8 @@ const stale = [];
 const unverified = [];
 const unpromoted = [];
 const open = [];
+const unclaimed = [];
+const unclaimedKeys = [];
 const next = {};
 const retractions = {};
 const floors = { ...(ratchet.retentionFloors ?? {}) };
@@ -567,6 +587,9 @@ for (const row of results.workloads) {
       detail: v.detail,
       enforced: was,
       staleReason: carry.reason,
+      // So a consumer of --json can tell "no issue claims this" apart from "we
+      // could not measure it", which the verdict text alone does not separate.
+      claimed: !outOfScope(criterion, cfg),
     };
     // A pair stays enforced once enforced, so a regression is reported on every
     // later run rather than only on the one that caused it.
@@ -587,7 +610,12 @@ for (const row of results.workloads) {
     if (v.pass === null && was) unverified.push(`${key} - ${v.detail} (was enforced)`);
     if (v.pass === false && !was)
       open.push(`#${cfg.issue} ${key} - ${v.detail}`);
-    if (v.pass === null && !was)
+    if (v.pass === null && !was && outOfScope(criterion, cfg))
+    {
+      unclaimed.push(`#${cfg.issue} ${key} - ${v.detail}`);
+      unclaimedKeys.push(key);
+    }
+    else if (v.pass === null && !was)
       open.push(`#${cfg.issue} ${key} - UNMEASURED: ${v.detail}`);
   }
 }
@@ -663,15 +691,42 @@ const notReproducible = reproducibilityRefusal(results.reproduction ?? null);
 // engine that was not all there.
 const degraded = degradationRefusal(results.capture?.theirsProvenance ?? null);
 const enforcedCount = Object.keys(ratchet.enforced ?? {}).length;
+// THE UNCLAIMED SET IS DERIVED TWICE, AND THE TWO DERIVATIONS MUST AGREE: once
+// by the branch that routed each verdict, and once straight from `ROWS`. If a
+// later edit widens `outOfScope`, or sends anything else down that branch, a
+// criterion could leave the board without any issue having declined to claim it,
+// and the board would then understate the open work while looking healthier. The
+// check is one pass over a handful of strings, so there is no reason not to run
+// it on every invocation rather than in a test that a future edit can forget.
+const declaredUnclaimed = new Set(
+  Object.entries(ROWS)
+    .filter(([, cfg]) => cfg.retention === null)
+    .map(([name]) => `${name}/retention`)
+);
+const undeclared = unclaimedKeys.filter((k) => !declaredUnclaimed.has(k));
+if (undeclared.length) {
+  console.error(
+    `\nBOARD IS WRONG - ${undeclared.length} criterion(s) left the board that no ` +
+      `ROWS entry declares out of scope:\n  ${undeclared.join(`\n  `)}`
+  );
+  process.exit(1);
+}
+
 console.log(
   `must-win gate: ${enforcedCount} enforced, ${open.length} open, ` +
     `${regressed.length} regressed, ${stale.length} stale, ` +
-    `${unverified.length} unverified, ${unpromoted.length} unrecorded pass(es)`
+    `${unverified.length} unverified, ${unpromoted.length} unrecorded pass(es), ` +
+    `${unclaimed.length} unclaimed`
 );
 console.log(`instrument: ${fingerprint}`);
 if (open.length)
   console.log(
     `\nOPEN MUST-WINS (not a build failure):\n  ${open.join('\n  ')}`
+  );
+if (unclaimed.length)
+  console.log(
+    `\nNOT CLAIMED BY ANY ISSUE - measured, reported, and not counted as open ` +
+      `work:\n  ${unclaimed.join('\n  ')}`
   );
 if (unpromoted.length)
   console.log(
