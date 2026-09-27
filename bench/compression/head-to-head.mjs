@@ -705,12 +705,40 @@ for (const [name, text] of Object.entries(payloads)) {
   let body = null;
   try {
     const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) {
-      const wrapped = JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 1024,
-        messages: parsed,
-      });
+    // A MESSAGE LIST, NOT MERELY AN ARRAY. `Array.isArray` alone let the four
+    // raw-data payloads here -- log-entries, search-results, api-responses,
+    // database-rows, which are arrays of log lines and API records with no
+    // `role` and no `content` -- be wrapped as `messages` and handed to the
+    // proxy. No client sends that, so the arm was being scored on a request
+    // shape that cannot occur, and it was scored generously: those four are the
+    // four rows stored pretty-printed, so the re-serialisation this used to do
+    // handed them 18.4% to 32.9% before any compression ran. One wrong gate
+    // produced both, which is why the fix is the gate.
+    const isMessageList =
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every(
+        (m) => m !== null && typeof m === 'object' && typeof m.role === 'string' && m.content !== undefined
+      );
+    if (isMessageList) {
+      // THE CAPTURED BYTES, NOT A RE-SERIALISATION OF THEM. This built the
+      // request body with `JSON.stringify({ ..., messages: parsed })`, which
+      // discards the payload's own formatting and rebuilds it compact. On the
+      // four raw-data rows in this corpus that alone is worth 18.4%, 18.9%,
+      // 32.9% and 24.5% of the characters BEFORE any compression runs, because
+      // those captures are indented and `JSON.stringify` is not. The proxy arm
+      // was then priced on that smaller baseline against the other arms' price
+      // on the original, so it collected up to a third of a row as a saving it
+      // had not made -- a bias in OUR favour, which is the direction that has
+      // to be caught here rather than explained later.
+      //
+      // Concatenating keeps `text` byte for byte, so the arm is handed exactly
+      // what a client sent and exactly what `compressBlock` above was handed.
+      // The envelope is the only difference between the two denominators, which
+      // is the ~15 tokens the cost model already discloses as charged against
+      // us. `parsed` is still what decides whether there is a proxy arm at all:
+      // the payload has to be a message list.
+      const wrapped = `{"model":"claude-sonnet-5","max_tokens":1024,"messages":${text}}`;
       const result = compressBody(Buffer.from(wrapped, 'utf8'), (c, hint) => {
         bodySpilled.push(c);
         return `.token-optimizer/spill/b${bodySpilled.length}-${hint}`;
