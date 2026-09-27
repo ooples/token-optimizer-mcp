@@ -61,7 +61,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
-import { unaccounted } from './conservation.mjs';
+import { contentChunks, unaccounted } from './conservation.mjs';
 import { classifyIds, splitScorable } from './retention.mjs';
 import { scanIdentifiers } from './identifiers.mjs';
 import { bestByRatio, selectArms } from './arm-selection.mjs';
@@ -894,6 +894,33 @@ for (const [name, text] of Object.entries(payloads)) {
     spill: '',
     hasSink: false,
   });
+  // THE SECOND UNIT, MEASURED AND NOT GATED -- the 2026-09-27 decision on the
+  // three rows the control calls blind. A 48-byte segment has no vocabulary to be
+  // poor in, so code-search, issue-triage and relevance-probe get a denominator
+  // of 999 to 1663 where words gave them 10 to 25. It is reported beside the word
+  // oracle on ALL eighteen rows rather than only on the blind three, because the
+  // fifteen rows where the word oracle already resolves are the only place the
+  // new unit's false-positive rate can be observed: a segment spans whatever
+  // token boundary it lands on, so an arm that REFORMATS breaks segments without
+  // losing anything, and a row where words say conserved and segments say lost is
+  // that effect and not a regression. Gating waits on that set being empty.
+  const segUnits = contentChunks(text);
+  const keptSeg = unaccounted({
+    before: text,
+    output: out.text,
+    reconstructed: recoveredOut,
+    spill: haveSpill,
+    hasSink: OURS_HAS_SINK,
+    units: segUnits,
+  });
+  const controlSeg = unaccounted({
+    before: text,
+    output: out.text.slice(0, Math.floor(out.text.length / 2)),
+    reconstructed: '',
+    spill: '',
+    hasSink: false,
+    units: segUnits,
+  });
   // THE BUCKETS MUST SUM TO THE DENOMINATOR, and until the split above they did
   // not: four buckets counted over one set, printed beside the size of a larger
   // one. `ka-items` read `25 | 24 0 null 0` under an identity arm and nothing
@@ -1213,6 +1240,16 @@ for (const [name, text] of Object.entries(payloads)) {
     // What the mutilated-output control saw. Zero here invalidates the zero above.
     wordsControlGone: control.gone,
     wordsControlAll: control.words,
+    // The second unit's readings, carried separately so nothing can average the
+    // two into one number that is neither.
+    segsAll: keptSeg.words,
+    segsInOutput: keptSeg.inOutput,
+    segsInReconstruction: keptSeg.inReconstruction,
+    segsInSpill: keptSeg.inSpill,
+    segsGone: keptSeg.gone,
+    segsGoneShare: keptSeg.goneShare,
+    segsMissing: keptSeg.missing,
+    segsControlGone: controlSeg.gone,
     grew,
     spillRatio,
     // TURNS, and the tokens a turn drags back into context with it. The
@@ -1929,6 +1966,41 @@ if (lostWorkloads.length)
       `  control: mutilating the output loses ${sum((r) => r.wordsControlGone)} word(s) across all ` +
         `${rows.length} rows, so a clean reading above is a reading and not a blind spot`
     );
+  // THE SECOND UNIT, REPORTED AND NOT GATED. Nothing below can fail the run; the
+  // only decision it feeds is whether this unit is ever allowed to.
+  const sAll = sum((r) => r.segsAll);
+  const sGone = sum((r) => r.segsGone);
+  const sBlind = rows.filter((r) => r.segsControlGone === 0);
+  console.log(
+    `  second unit (48-byte segments, NOT GATED)   ${sAll} segment(s)   gone ${sGone}   ` +
+      `blind on ${sBlind.length} of ${rows.length}` +
+      (sBlind.length ? ` -- ${sBlind.map((r) => r.name).join(', ')}` : '')
+  );
+  for (const r of blind)
+    console.log(
+      `    ${r.name.padEnd(22)} words ${String(r.wordsAll).padStart(5)} (blind)   ` +
+        `segments ${String(r.segsAll).padStart(5)}   gone ${String(r.segsGone).padStart(5)}   ` +
+        `control ${String(r.segsControlGone).padStart(5)}`
+    );
+  // THE NUMBER THAT DECIDES WHETHER THIS UNIT MAY BECOME A GATE. Disagreement is
+  // only interpretable where the WORD oracle resolves: there, words-conserved and
+  // segments-lost is the segment unit breaking on a reformatted span rather than
+  // a loss. An empty set here across several captures is what would justify
+  // gating; a non-empty one names the rows that must be understood first.
+  const disagree = rows.filter((r) => r.wordsControlGone > 0 && (r.segsGone === 0) !== (r.wordsGone === 0));
+  if (disagree.length)
+    console.log(
+      `    THE TWO UNITS DISAGREE ON ${disagree.length} of the ${rows.length - blind.length} rows where the word ` +
+        `oracle resolves, so the segment unit is not yet a gate: ` +
+        disagree
+          .map((r) => `${r.name}(words ${r.wordsGone}/${r.wordsAll}, segments ${r.segsGone}/${r.segsAll})`)
+          .join(', ')
+    );
+  else
+    console.log(
+      `    the two units agree on all ${rows.length - blind.length} rows where the word oracle resolves, ` +
+        'which is the evidence a gate on the segment unit would need'
+    );
 }
 
 const unconserved = rows.filter((r) => !r.sizeSane).map((r) => r.name);
@@ -2293,6 +2365,29 @@ if (process.argv[3] === '--record') {
         controlWords: String(r.wordsControlAll),
         controlGone: String(r.wordsControlGone),
         blind: r.wordsControlGone === 0,
+        // THE SECOND UNIT, RECORDED AND NOT GATED. Kept in its own object rather
+        // than merged into the figures above, because the two units answer the
+        // same question over different denominators and a reader who cannot tell
+        // which one produced a number cannot check either. `controlGone` is here
+        // for the same reason it is there: it is what says whether `gone` means
+        // anything on this row.
+        segments: {
+          unit: '48 bytes, non-overlapping',
+          units: String(r.segsAll),
+          inOutput: String(r.segsInOutput),
+          inReconstruction: String(r.segsInReconstruction),
+          inSpill: r.segsInSpill === null ? null : String(r.segsInSpill),
+          gone: String(r.segsGone),
+          goneShare: pct(r.segsGoneShare),
+          missingSampleTruncated: r.segsMissing.length > 0,
+          controlGone: String(r.segsControlGone),
+          blind: r.segsControlGone === 0,
+          // The two units on one row disagree when one says conserved and the
+          // other says lost. On a row where the WORD oracle resolves, that is the
+          // segment unit's false-positive rate showing itself; it is the number
+          // that decides whether this unit may ever become a gate.
+          agreesWithWords: (r.segsGone === 0) === (r.wordsGone === 0),
+        },
       },
       // THE TWO BOUNDS, RECORDED. `handed` is the text the agent is given;
       // `whole` is that plus everything the arm moved out, fetched back.
