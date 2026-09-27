@@ -44,64 +44,91 @@ const WORD = /[A-Za-z0-9_]+/g;
 /**
  * The words of a document, with how many times each occurs.
  */
-export function contentWords(text) {
+export function contentWords(text, minLen = MIN_WORD_LEN) {
   const counts = new Map();
   if (typeof text !== 'string' || text.length === 0) return counts;
   for (const m of text.matchAll(WORD)) {
     const w = m[0];
-    if (w.length < MIN_WORD_LEN) continue;
+    if (w.length < minLen) continue;
     counts.set(w, (counts.get(w) ?? 0) + 1);
   }
   return counts;
 }
 
-export const CHUNK_LEN = 48;
+/**
+ * THE FLOORS TRIED, LARGEST FIRST. Eight is where every other row already
+ * resolves; four is as low as the survey went, and below it a run matches
+ * somewhere in a 700KB document often enough that a coincidence would be counted
+ * as survival.
+ */
+export const FLOORS = [8, 7, 6, 5, 4];
 
 /**
- * THE SECOND UNIT, FOR THE PAYLOADS THE FIRST ONE CANNOT SEE.
+ * THE FLOOR A ROW CAN ACTUALLY BE JUDGED AT, chosen by the control rather than
+ * fixed by this file.
  *
- * The control reports the word oracle blind on three of the eighteen fixtures --
- * code-search with 25 distinct long words, issue-triage with 16, relevance-probe
- * with 10 -- because their variety lives in tokens too short for the floor
- * (`evt_0`, `tenant 3`) while the long words are a handful of repeated template
- * strings. Half of such a document still contains every one of them, so a clean
- * reading there says nothing at all.
+ * At eight characters the control -- half the output, no expansion, no spill --
+ * loses nothing on code-search, issue-triage and relevance-probe. Their variety
+ * lives in short tokens (`evt_0`, `tenant 3`) while their long words are a
+ * handful of repeated template strings, so half such a document still contains
+ * every one of them. `gone: 0` there is a blind spot wearing the shape of
+ * evidence.
  *
- * A fixed-length segment has no vocabulary to be poor in: 48 bytes of any
- * document is distinctive by construction, and the same three payloads yield 999
- * to 1663 distinct segments where they yielded 10 to 25 words.
+ * A 48-byte segment was tried as a second unit and measured on all eighteen rows
+ * before being gated on any. It failed, and the measurement is why: on the
+ * fifteen rows where the word oracle resolves the two units disagreed on
+ * thirteen -- api-responses read 1332 of 1332 segments gone where no word was --
+ * and on the three blind rows it tracked its own control to within 1 to 20%.
+ * The cause is not subtle: the engine templates values,
  *
- * WHY THIS IS MEASURED BEFORE IT IS GATED. A 48-byte window crosses token
- * boundaries wherever it happens to land, so an arm that REFORMATS rather than
- * removes -- rewriting a hunk header, re-indenting a block -- breaks every
- * segment that spans the rewrite and would read as a loss although nothing was
- * lost. That risk is a measurement, not a judgement: run this beside the word
- * oracle on the fifteen rows where the word oracle already resolves, and the
- * rows where the two disagree are the false positives. Nothing is gated on this
- * unit until that disagreement is known to be empty.
+ *   Template: ["  {
+    \"id\": \"doc_",0,"\",
+    \"score\": ",1,...]
  *
- * NON-OVERLAPPING, because overlapping windows would count the same bytes 48
- * times over and turn the mass figure into a multiple of the payload's size. The
- * tail shorter than one segment is dropped rather than padded, since a padded
- * segment is not a substring of the original and could never be found.
+ * so `doc_100` is not a literal substring of an output that decodes back
+ * exactly, and a 48-byte window breaks on every reformat. Reformatting is the
+ * one thing this engine always does, so the unit measured framing, not content.
+ *
+ * A WORD SURVIVES A REFORMAT, which is why the fix is the floor and not the
+ * unit. Lowering it costs power, not soundness: a shorter word has more chance
+ * of matching somewhere by accident, and an accidental match makes the oracle
+ * LENIENT -- it credits us with content we dropped. It cannot invent a loss.
+ * Excluding short words from the denominator entirely, which is what a fixed
+ * floor of 8 does on these three rows, credits us too, and does it without
+ * measuring anything.
+ *
+ * So the floor is the LARGEST one at which the control still detects a loss.
+ * Largest, because that is the least coincidence risk that still leaves the
+ * oracle any power; and chosen by the control, because the control is the
+ * known-answer arm -- content really was removed from it. A row where no floor
+ * discriminates is reported as blind rather than given a number.
+ *
+ * @param {string} before the original payload
+ * @param {string} control the deliberately mutilated output
+ * @param {number[]} floors candidates, largest first
+ * @returns {{minLen: number|null, tried: Array<{minLen: number, words: number,
+ *   controlGone: number}>}} `minLen` is null when the control detects nothing at
+ *   any floor, which is the only honest reading of such a row.
  */
-export function contentChunks(text, len = CHUNK_LEN) {
-  const counts = new Map();
-  if (typeof text !== 'string' || text.length < len) return counts;
-  for (let i = 0; i + len <= text.length; i += len) {
-    const c = text.slice(i, i + len);
-    counts.set(c, (counts.get(c) ?? 0) + 1);
+export function discriminatingFloor(before, control, floors = FLOORS) {
+  const tried = [];
+  let chosen = null;
+  for (const minLen of floors) {
+    const words = contentWords(before, minLen);
+    let controlGone = 0;
+    for (const w of words.keys()) if (!control.includes(w)) controlGone++;
+    tried.push({ minLen, words: words.size, controlGone });
+    if (chosen === null && controlGone > 0) chosen = minLen;
   }
-  return counts;
+  return { minLen: chosen, tried };
 }
 
 /**
  * What an arm dropped and could not give back.
  *
- * `units` overrides the unit the question is asked in -- a Map of unit to
- * occurrence count, as `contentWords` and `contentChunks` both return. The
- * default is words, so every existing caller is unchanged, and the mass
- * arithmetic is the same either way because it is denominated in bytes.
+ * `minLen` is the word floor, and it is not always 8: `discriminatingFloor`
+ * below picks it per payload, because on three fixtures the 8-character floor
+ * admits so few words that no reading over them means anything.
  *
  * `hasSink` separates "nothing was in the spill" from "this arm has no spill to
  * look in", the same third state `retention.mjs` reports as null, so a zero here
@@ -114,9 +141,9 @@ export function unaccounted({
   spill = '',
   hasSink = false,
   sampleMissing = 5,
-  units = null,
+  minLen = MIN_WORD_LEN,
 }) {
-  const words = units ?? contentWords(before);
+  const words = contentWords(before, minLen);
   let inOutput = 0;
   let inReconstruction = 0;
   let inSpill = 0;
@@ -138,6 +165,7 @@ export function unaccounted({
   }
 
   return {
+    minLen,
     words: words.size,
     inOutput,
     inReconstruction,

@@ -8,7 +8,13 @@
  * that stub is precisely the instrument defect this file exists to rule out.
  */
 
-import { CHUNK_LEN, contentChunks, contentWords, unaccounted, MIN_WORD_LEN } from './conservation.mjs';
+import {
+  contentWords,
+  discriminatingFloor,
+  unaccounted,
+  FLOORS,
+  MIN_WORD_LEN,
+} from './conservation.mjs';
 
 let failures = 0;
 const ok = (name, detail = '') => console.log(`ok   ${name}${detail ? ` -- ${detail}` : ''}`);
@@ -112,70 +118,85 @@ console.log('the floor is the documented one');
 check(MIN_WORD_LEN === 8, 'eight characters, as retention.mjs uses', String(MIN_WORD_LEN));
 check(contentWords('abcdefgh abcdefg').size === 1, 'eight in, seven out');
 
-console.log('the segment unit is non-overlapping and drops the short tail');
+console.log('the floor a row is judged at is chosen by the control, not by this file');
 {
-  // 100 bytes at 48 gives two whole segments and a 4-byte tail that is dropped:
-  // a padded tail is not a substring of the original and could never be found.
-  const t = 'x'.repeat(48) + 'y'.repeat(48) + 'zzzz';
-  const c = contentChunks(t);
-  check(c.size === 2, 'two distinct segments, tail dropped', `size=${c.size}`);
-  check(CHUNK_LEN === 48, 'the documented length', String(CHUNK_LEN));
-  check(contentChunks('short').size === 0, 'a document shorter than one segment yields none');
-}
+  // THE SHAPE OF relevance-probe: every long word is one of two repeated
+  // template strings, so deleting most of the document leaves both behind and
+  // the oracle reads clean at eight characters. The variety is in `evt_0`.
+  const rows = [];
+  for (let i = 0; i < 400; i += 1) rows.push(`{"identifier": "evt_${i}", "elapsed_ms": ${i}}`);
+  const before = rows.join('\n');
+  const control = before.slice(0, Math.floor(before.length / 2));
 
-console.log('a repeated segment is one unit with a count, so mass is not multiplied');
-{
-  const t = 'q'.repeat(48).repeat(3);
-  const c = contentChunks(t);
-  check(c.size === 1, 'one distinct segment', `size=${c.size}`);
-  check(c.get('q'.repeat(48)) === 3, 'occurring three times', String(c.get('q'.repeat(48))));
-  const r = unaccounted({ before: t, output: t, units: c });
-  check(r.beforeMass === 144, 'mass is the original bytes, not 48 times the count', String(r.beforeMass));
-}
-
-console.log('THE CASE THAT MATTERS: the segment unit resolves a payload the word oracle cannot');
-{
-  // A payload whose variety is in SHORT tokens -- the shape of relevance-probe.
-  // Every long word is one of two repeated template strings, so deleting most of
-  // the document leaves both of them behind and the word oracle reads clean.
-  const lines = [];
-  for (let i = 0; i < 400; i += 1) lines.push(`{"identifier": "evt_${i}", "elapsed_ms": ${i}}`);
-  const before = lines.join('\n');
-  const half = before.slice(0, Math.floor(before.length / 2));
-
-  const byWord = unaccounted({ before, output: half });
-  check(byWord.gone === 0, 'the word oracle loses nothing -- it is blind here', `words=${byWord.words} gone=${byWord.gone}`);
-
-  const bySeg = unaccounted({ before, output: half, units: contentChunks(before) });
-  check(bySeg.words > 100, 'the segment unit has a real denominator', `units=${bySeg.words}`);
-  check(bySeg.gone > 0, 'AND IT REPORTS THE LOSS', `gone=${bySeg.gone}`);
-  // Half the document removed should cost close to half the segments; a unit that
-  // reported one or two would be technically non-blind and practically useless.
+  const atEight = unaccounted({ before, output: control });
   check(
-    bySeg.gone > bySeg.words * 0.4,
+    atEight.gone === 0,
+    'at the default floor the control loses nothing -- this is the blind spot',
+    `words=${atEight.words} gone=${atEight.gone}`
+  );
+
+  const f = discriminatingFloor(before, control);
+  check(f.minLen !== null, 'a floor is found', `minLen=${f.minLen}`);
+  check(f.minLen < MIN_WORD_LEN, 'and it is lower than the default', `minLen=${f.minLen}`);
+  check(
+    f.tried.length === FLOORS.length && f.tried[0].minLen === FLOORS[0],
+    'every candidate is reported, largest first',
+    f.tried.map((t) => t.minLen).join(',')
+  );
+  // LARGEST, NOT SMALLEST. Every floor below the chosen one also discriminates
+  // here, and taking the lowest would admit short words for no extra power.
+  const discriminating = f.tried.filter((t) => t.controlGone > 0).map((t) => t.minLen);
+  check(
+    f.minLen === Math.max(...discriminating),
+    'the largest discriminating floor is the one chosen',
+    `chosen=${f.minLen} of ${discriminating.join(',')}`
+  );
+
+  const atChosen = unaccounted({ before, output: control, minLen: f.minLen });
+  check(atChosen.gone > 0, 'AND AT THAT FLOOR THE LOSS IS REPORTED', `gone=${atChosen.gone} of ${atChosen.words}`);
+  check(
+    atChosen.gone > atChosen.words * 0.2,
     'in proportion to what was removed, not a token amount',
-    `gone=${bySeg.gone} of ${bySeg.words}`
+    `gone=${atChosen.gone} of ${atChosen.words}`
+  );
+  check(atChosen.minLen === f.minLen, 'and the reading carries the floor it was taken at', String(atChosen.minLen));
+}
+
+console.log('a payload no floor can read is reported as such rather than given a number');
+{
+  // One word, repeated. Half of it still contains the word at every floor, so
+  // there is no floor at which the control detects a loss -- and the honest
+  // answer is null, not 4.
+  const before = 'aaaa '.repeat(500);
+  const f = discriminatingFloor(before, before.slice(0, 200));
+  check(f.minLen === null, 'no floor discriminates', String(f.minLen));
+  check(
+    f.tried.every((t) => t.controlGone === 0),
+    'and every candidate is recorded as having seen nothing',
+    f.tried.map((t) => `${t.minLen}:${t.controlGone}`).join(' ')
   );
 }
 
-console.log('a segment unit still cannot be fooled by an output that dropped nothing');
+console.log('lowering the floor cannot invent a loss, and a reading carries its floor');
 {
-  const before = Array.from({ length: 200 }, (_, i) => `row ${i} value ${i * 7}`).join('\n');
-  const r = unaccounted({ before, output: before, units: contentChunks(before) });
-  check(r.gone === 0, 'an untouched output loses nothing', `gone=${r.gone} of ${r.words}`);
-  check(r.words > 50, 'over a denominator worth having', `units=${r.words}`);
+  // The direction that matters: a shorter word has more chance of matching
+  // somewhere by accident, which makes the oracle LENIENT. So at any floor, a
+  // word this output really holds is never charged as lost.
+  const before = Array.from({ length: 200 }, (_, i) => `row ${i} value ${i * 7} tag_${i} correlation_${i}`).join('\n');
+  for (const minLen of FLOORS) {
+    const r = unaccounted({ before, output: before, minLen });
+    // OVER A DENOMINATOR WORTH HAVING. `gone === 0` over an empty word set is
+    // a vacuous pass, and at floor 8 this fixture had exactly that until the
+    // longer token was added.
+    check(r.words > 100, `floor ${minLen} has a real denominator`, `words=${r.words}`);
+    check(r.gone === 0, `an untouched output loses nothing at floor ${minLen}`, `gone=${r.gone} of ${r.words}`);
+    check(r.minLen === minLen, 'and says which floor it used', String(r.minLen));
+  }
+  const four = unaccounted({ before, output: before, minLen: 4 });
+  const eight = unaccounted({ before, output: before, minLen: 8 });
+  check(four.words > eight.words, 'a lower floor admits strictly more words', `${four.words} > ${eight.words}`);
 }
 
-console.log('the spill is searched in the segment unit too, and only when there is a sink');
-{
-  const before = 'a'.repeat(48) + 'b'.repeat(48);
-  const units = contentChunks(before);
-  const held = unaccounted({ before, output: 'a'.repeat(48), spill: 'b'.repeat(48), hasSink: true, units });
-  check(held.gone === 0 && held.inSpill === 1, 'found in the spill', `gone=${held.gone} inSpill=${held.inSpill}`);
-  const sinkless = unaccounted({ before, output: 'a'.repeat(48), spill: 'b'.repeat(48), hasSink: false, units });
-  check(sinkless.gone === 1, 'a sinkless arm may not claim it', `gone=${sinkless.gone}`);
-  check(sinkless.inSpill === null, 'and reports null rather than 0', String(sinkless.inSpill));
-}
 
 console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -61,7 +61,15 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
-import { contentChunks, unaccounted } from './conservation.mjs';
+import {
+  discriminatingFloor,
+  unaccounted,
+  FLOORS,
+  MIN_WORD_LEN,
+} from './conservation.mjs';
+
+/** The lowest floor `discriminatingFloor` will try, named for the message. */
+const MIN_FLOOR = Math.min(...FLOORS);
 import { classifyIds, splitScorable } from './retention.mjs';
 import { scanIdentifiers } from './identifiers.mjs';
 import { bestByRatio, selectArms } from './arm-selection.mjs';
@@ -720,12 +728,25 @@ for (const [name, text] of Object.entries(payloads)) {
   // `want` is a scrape of paths, hashes and ids; the prose between them is
   // outside its denominator, so this walks every word of the payload long enough
   // to locate. Same three places count as survival, same sink semantics.
+  //
+  // THE FLOOR IS CHOSEN BY THE CONTROL BELOW, NOT FIXED HERE, because at eight
+  // characters the control loses nothing on code-search, issue-triage and
+  // relevance-probe -- their long words are a few repeated template strings and
+  // half the document still holds every one. `discriminatingFloor` takes the
+  // LARGEST floor at which the control still detects a loss, so a row is judged
+  // with the least coincidence risk that still leaves the oracle any power, and
+  // a row where no floor discriminates gets `null` rather than a number. See
+  // that function for why a 48-byte segment was measured here and rejected.
+  const mutilated = out.text.slice(0, Math.floor(out.text.length / 2));
+  const floor = discriminatingFloor(text, mutilated);
+  const minLen = floor.minLen ?? MIN_WORD_LEN;
   const kept = unaccounted({
     before: text,
     output: out.text,
     reconstructed: recoveredOut,
     spill: haveSpill,
     hasSink: OURS_HAS_SINK,
+    minLen,
   });
   // AND A POSITIVE CONTROL, BECAUSE A ZERO HAS TWO CAUSES. `gone 0` means either
   // that the arm lost nothing or that this payload's vocabulary is too small for
@@ -737,37 +758,11 @@ for (const [name, text] of Object.entries(payloads)) {
   // conservation and this harness says so instead of printing a clean zero.
   const control = unaccounted({
     before: text,
-    output: out.text.slice(0, Math.floor(out.text.length / 2)),
+    output: mutilated,
     reconstructed: '',
     spill: '',
     hasSink: false,
-  });
-  // THE SECOND UNIT, MEASURED AND NOT GATED -- the 2026-09-27 decision on the
-  // three rows the control calls blind. A 48-byte segment has no vocabulary to be
-  // poor in, so code-search, issue-triage and relevance-probe get a denominator
-  // of 999 to 1663 where words gave them 10 to 25. It is reported beside the word
-  // oracle on ALL eighteen rows rather than only on the blind three, because the
-  // fifteen rows where the word oracle already resolves are the only place the
-  // new unit's false-positive rate can be observed: a segment spans whatever
-  // token boundary it lands on, so an arm that REFORMATS breaks segments without
-  // losing anything, and a row where words say conserved and segments say lost is
-  // that effect and not a regression. Gating waits on that set being empty.
-  const segUnits = contentChunks(text);
-  const keptSeg = unaccounted({
-    before: text,
-    output: out.text,
-    reconstructed: recoveredOut,
-    spill: haveSpill,
-    hasSink: OURS_HAS_SINK,
-    units: segUnits,
-  });
-  const controlSeg = unaccounted({
-    before: text,
-    output: out.text.slice(0, Math.floor(out.text.length / 2)),
-    reconstructed: '',
-    spill: '',
-    hasSink: false,
-    units: segUnits,
+    minLen,
   });
   // THE BUCKETS MUST SUM TO THE DENOMINATOR, and until the split above they did
   // not: four buckets counted over one set, printed beside the size of a larger
@@ -1088,16 +1083,13 @@ for (const [name, text] of Object.entries(payloads)) {
     // What the mutilated-output control saw. Zero here invalidates the zero above.
     wordsControlGone: control.gone,
     wordsControlAll: control.words,
-    // The second unit's readings, carried separately so nothing can average the
-    // two into one number that is neither.
-    segsAll: keptSeg.words,
-    segsInOutput: keptSeg.inOutput,
-    segsInReconstruction: keptSeg.inReconstruction,
-    segsInSpill: keptSeg.inSpill,
-    segsGone: keptSeg.gone,
-    segsGoneShare: keptSeg.goneShare,
-    segsMissing: keptSeg.missing,
-    segsControlGone: controlSeg.gone,
+    // THE FLOOR THIS ROW WAS JUDGED AT, and every floor tried to get there, so a
+    // reader can see that the choice was the control's and not this file's.
+    // `wordsFloorChosen` is null where no floor discriminated, which is the only
+    // row shape that stays blind.
+    wordsMinLen: minLen,
+    wordsFloorChosen: floor.minLen,
+    wordsFloorTried: floor.tried,
     grew,
     spillRatio,
     // TURNS, and the tokens a turn drags back into context with it. The
@@ -1799,14 +1791,32 @@ if (lostWorkloads.length)
     console.log('  every word of every payload is in the output, its expansion, or the spill it points at');
   // THE CONTROL, REPORTED BESIDE THE RESULT. A row whose control saw no loss is
   // a row where this oracle cannot see one, so its clean reading is withdrawn
-  // rather than counted. The denominator is printed for every such row, because
-  // the reason is always the same and always checkable: too few distinct long
-  // words in the payload for a missing one to be detectable.
-  const blind = rows.filter((r) => r.wordsControlGone === 0);
+  // rather than counted. Blindness is now a much stronger statement than it was,
+  // because the floor was already lowered as far as four characters looking for a
+  // reading: a row here is one where the control found nothing at ANY floor.
+  const blind = rows.filter((r) => r.wordsFloorChosen === null);
+  // THE TWO WAYS OF SAYING IT MUST AGREE. `minLen` falls back to the default when
+  // no floor discriminates, so a row with a chosen floor whose control saw
+  // nothing would mean the floor was picked from a reading nobody can reproduce.
+  const floorMismatch = rows.filter(
+    (r) => (r.wordsFloorChosen === null) !== (r.wordsControlGone === 0)
+  );
+  if (floorMismatch.length) {
+    console.error(
+      `
+FLOOR AND CONTROL DISAGREE on ${floorMismatch.length} row(s), so one of ` +
+        'them is not measuring what it claims: ' +
+        floorMismatch
+          .map((r) => `${r.name}(chosen ${r.wordsFloorChosen}, controlGone ${r.wordsControlGone})`)
+          .join(', ')
+    );
+    process.exit(1);
+  }
   if (blind.length)
     console.log(
       `  NOT EVIDENCE ON ${blind.length} of ${rows.length}: the control (half the output, no expansion, no spill) ` +
-        'lost nothing there either, so a clean reading on these rows means only that the oracle is blind to them -- ' +
+        `lost nothing there at any floor down to ${MIN_FLOOR}, so a clean reading on these rows means only that the ` +
+        'oracle is blind to them -- ' +
         blind.map((r) => `${r.name}(${r.wordsAll} word(s))`).join(', ')
     );
   else
@@ -1814,40 +1824,32 @@ if (lostWorkloads.length)
       `  control: mutilating the output loses ${sum((r) => r.wordsControlGone)} word(s) across all ` +
         `${rows.length} rows, so a clean reading above is a reading and not a blind spot`
     );
-  // THE SECOND UNIT, REPORTED AND NOT GATED. Nothing below can fail the run; the
-  // only decision it feeds is whether this unit is ever allowed to.
-  const sAll = sum((r) => r.segsAll);
-  const sGone = sum((r) => r.segsGone);
-  const sBlind = rows.filter((r) => r.segsControlGone === 0);
+  // THE FLOOR EACH ROW WAS JUDGED AT. Eight is where fifteen rows resolve, so
+  // anything else named here is a row the control could not read at eight and
+  // the floor it could be read at instead. This is the whole of what replaced
+  // the 48-byte segment unit, which was measured on all eighteen rows and
+  // rejected: it disagreed with the word oracle on thirteen of the fifteen rows
+  // where the word oracle resolves, because a segment breaks on a reformat and
+  // this engine reformats everything.
+  const lowered = rows.filter((r) => r.wordsMinLen !== MIN_WORD_LEN);
   console.log(
-    `  second unit (48-byte segments, NOT GATED)   ${sAll} segment(s)   gone ${sGone}   ` +
-      `blind on ${sBlind.length} of ${rows.length}` +
-      (sBlind.length ? ` -- ${sBlind.map((r) => r.name).join(', ')}` : '')
+    `  floors: ${rows.length - lowered.length} row(s) judged at the ${MIN_WORD_LEN}-character floor` +
+      (lowered.length
+        ? `, ${lowered.length} lowered by the control -- ` +
+          lowered
+            .map(
+              (r) =>
+                `${r.name}(floor ${r.wordsMinLen}, ${r.wordsAll} word(s), gone ${r.wordsGone}, control ${r.wordsControlGone})`
+            )
+            .join(', ')
+        : '')
   );
   for (const r of blind)
     console.log(
-      `    ${r.name.padEnd(22)} words ${String(r.wordsAll).padStart(5)} (blind)   ` +
-        `segments ${String(r.segsAll).padStart(5)}   gone ${String(r.segsGone).padStart(5)}   ` +
-        `control ${String(r.segsControlGone).padStart(5)}`
-    );
-  // THE NUMBER THAT DECIDES WHETHER THIS UNIT MAY BECOME A GATE. Disagreement is
-  // only interpretable where the WORD oracle resolves: there, words-conserved and
-  // segments-lost is the segment unit breaking on a reformatted span rather than
-  // a loss. An empty set here across several captures is what would justify
-  // gating; a non-empty one names the rows that must be understood first.
-  const disagree = rows.filter((r) => r.wordsControlGone > 0 && (r.segsGone === 0) !== (r.wordsGone === 0));
-  if (disagree.length)
-    console.log(
-      `    THE TWO UNITS DISAGREE ON ${disagree.length} of the ${rows.length - blind.length} rows where the word ` +
-        `oracle resolves, so the segment unit is not yet a gate: ` +
-        disagree
-          .map((r) => `${r.name}(words ${r.wordsGone}/${r.wordsAll}, segments ${r.segsGone}/${r.segsAll})`)
-          .join(', ')
-    );
-  else
-    console.log(
-      `    the two units agree on all ${rows.length - blind.length} rows where the word oracle resolves, ` +
-        'which is the evidence a gate on the segment unit would need'
+      `    ${r.name.padEnd(22)} NO FLOOR DISCRIMINATES -- ` +
+        r.wordsFloorTried
+          .map((t) => `${t.minLen}:${t.words}w/ctl${t.controlGone}`)
+          .join('  ')
     );
 }
 
@@ -2212,30 +2214,19 @@ if (process.argv[3] === '--record') {
         missingSampleTruncated: r.wordsMissing.length > 20,
         controlWords: String(r.wordsControlAll),
         controlGone: String(r.wordsControlGone),
-        blind: r.wordsControlGone === 0,
-        // THE SECOND UNIT, RECORDED AND NOT GATED. Kept in its own object rather
-        // than merged into the figures above, because the two units answer the
-        // same question over different denominators and a reader who cannot tell
-        // which one produced a number cannot check either. `controlGone` is here
-        // for the same reason it is there: it is what says whether `gone` means
-        // anything on this row.
-        segments: {
-          unit: '48 bytes, non-overlapping',
-          units: String(r.segsAll),
-          inOutput: String(r.segsInOutput),
-          inReconstruction: String(r.segsInReconstruction),
-          inSpill: r.segsInSpill === null ? null : String(r.segsInSpill),
-          gone: String(r.segsGone),
-          goneShare: pct(r.segsGoneShare),
-          missingSampleTruncated: r.segsMissing.length > 0,
-          controlGone: String(r.segsControlGone),
-          blind: r.segsControlGone === 0,
-          // The two units on one row disagree when one says conserved and the
-          // other says lost. On a row where the WORD oracle resolves, that is the
-          // segment unit's false-positive rate showing itself; it is the number
-          // that decides whether this unit may ever become a gate.
-          agreesWithWords: (r.segsGone === 0) === (r.wordsGone === 0),
-        },
+        blind: r.wordsFloorChosen === null,
+        // THE FLOOR THIS READING WAS TAKEN AT, recorded beside it, because a
+        // count of lost words means nothing without the floor that defined the
+        // word set -- and the floor is not a constant any more. `floorTried` is
+        // every candidate with what the control saw at it, so the choice can be
+        // re-derived from the record rather than trusted.
+        minLen: String(r.wordsMinLen),
+        floorChosen: r.wordsFloorChosen === null ? null : String(r.wordsFloorChosen),
+        floorTried: r.wordsFloorTried.map((t) => ({
+          minLen: String(t.minLen),
+          words: String(t.words),
+          controlGone: String(t.controlGone),
+        })),
       },
       // THE TWO BOUNDS, RECORDED. `handed` is the text the agent is given;
       // `whole` is that plus everything the arm moved out, fetched back.
