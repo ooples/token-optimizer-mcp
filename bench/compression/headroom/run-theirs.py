@@ -66,6 +66,21 @@ import time
 CLONE = sys.argv[1]
 OUT = sys.argv[2]
 EXTRA = sys.argv[sys.argv.index("--extra") + 1] if "--extra" in sys.argv else None
+
+# A SLICE OF THE ROSTER, BECAUSE THEIR STORE FORGETS WHILE THE SWEEP IS STILL
+# RUNNING. A full sweep takes longer than the 1800s their resolver quotes, so the
+# workloads it measures first are already unredeemable by the time it finishes --
+# the defect `sweptPerWorkload` below exists to make visible. Running the roster
+# in chunks, each resolved before the next starts, is how a capture stays inside
+# that window; `merge-chunks.mjs` reassembles them and records the seam.
+ONLY = (
+    [n for n in sys.argv[sys.argv.index("--only") + 1].split(",") if n]
+    if "--only" in sys.argv
+    else None
+)
+CHUNK = sys.argv[sys.argv.index("--chunk") + 1] if "--chunk" in sys.argv else None
+if ONLY is not None and CHUNK is not None:
+    raise SystemExit("--only and --chunk both select workloads; pass one")
 if CLONE != "-":
     sys.path.append(CLONE)
 
@@ -299,6 +314,59 @@ if not WORKLOADS:
         "--extra <payloads.json> for carried ones, or both."
     )
 
+
+# THE ROSTER, RECORDED BEFORE IT IS CUT. A merge of chunks can only tell a
+# complete capture from three quarters of one if every chunk names the whole set
+# it was cut from. Without it a missing chunk merges into a file that looks
+# finished and quietly drops a workload from every total -- which is the same
+# class of error as a green gate that ran no tests.
+ROSTER = sorted(WORKLOADS)
+CHUNK_PROV = None
+if ONLY is not None:
+    _missing = [n for n in ONLY if n not in WORKLOADS]
+    if _missing:
+        raise SystemExit("--only names workloads this run does not have: %s" % ", ".join(_missing))
+    CHUNK_PROV = {
+        "selector": "--only " + ",".join(ONLY),
+        "index": None,
+        "of": None,
+        "names": sorted(set(ONLY)),
+    }
+if CHUNK is not None:
+    try:
+        _i, _n = (int(x) for x in CHUNK.split("/"))
+    except ValueError:
+        raise SystemExit("--chunk wants i/n, got %r" % CHUNK)
+    if _n < 1 or not 1 <= _i <= _n:
+        raise SystemExit("--chunk wants i/n with 1 <= i <= n, got %r" % CHUNK)
+    # CONTIGUOUS OVER THE SORTED ROSTER, so `--chunk 2/4` names the same
+    # workloads on every machine and in every rerun. Insertion order would not:
+    # their fixtures arrive from their generators and ours from `--extra`, so the
+    # boundaries would move with whatever order the payload file happened to be
+    # built in, and two chunks of one sweep could then overlap or skip a row.
+    _per, _rem = divmod(len(ROSTER), _n)
+    _start = (_i - 1) * _per + min(_i - 1, _rem)
+    _size = _per + (1 if _i - 1 < _rem else 0)
+    CHUNK_PROV = {
+        "selector": "--chunk " + CHUNK,
+        "index": _i,
+        "of": _n,
+        "names": ROSTER[_start : _start + _size],
+    }
+if CHUNK_PROV is not None:
+    _keep = set(CHUNK_PROV["names"])
+    WORKLOADS = {name: value for name, value in WORKLOADS.items() if name in _keep}
+    # AN EMPTY CHUNK IS A BUG IN THE SPLIT, NOT A RUN WITH NOTHING TO DO. Asking
+    # for 16 chunks of a 12-workload roster hands four of them nothing, and each
+    # would otherwise write a capture that reads as valid with no rows in it.
+    if not WORKLOADS:
+        raise SystemExit(
+            "%s selected none of the %d workloads" % (CHUNK_PROV["selector"], len(ROSTER))
+        )
+    print(
+        "chunk %s: %d of %d workloads -- %s"
+        % (CHUNK_PROV["selector"], len(WORKLOADS), len(ROSTER), ", ".join(sorted(WORKLOADS)))
+    )
 PAYLOADS = {name: text_of(value) for name, value in WORKLOADS.items()}
 
 
@@ -1035,6 +1103,11 @@ provenance = {
     "ccrStoreAfterRun": store,
     "theirFixtures": HAVE_THEIR_FIXTURES,
     "carriedPayloads": sorted(set(WORKLOADS) - set(THEIR_FIXTURE_NAMES)),
+    # THE WHOLE ROSTER AND THE SLICE OF IT THIS FILE HOLDS. `chunk` null means
+    # one process measured everything; anything else means the numbers here are
+    # part of a capture and `merge-chunks.mjs` has to put the rest beside them.
+    "roster": ROSTER,
+    "chunk": CHUNK_PROV,
     "inertArms": inert,
     # WHAT RAN DEGRADED, SPLIT BY WHOSE FAULT IT IS. `degraded` means a
     # capability of theirs was missing while they were being measured, so

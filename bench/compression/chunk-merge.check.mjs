@@ -1,0 +1,289 @@
+/**
+ * MERGING CHUNKS, ON CASES WHOSE ANSWER IS KNOWN IN ADVANCE.
+ *
+ * The decision under test assembles ONE published capture out of several runs, so
+ * its failure mode is a file that reads as complete and is not. Every refusal
+ * below corresponds to a way that has already happened somewhere in this harness:
+ * a capture compared against another taken with a different instrument, a green
+ * gate that ran no tests, a total computed over a set nobody checked the size of.
+ *
+ * The cases that carry the weight:
+ *
+ *  - `a gap is refused` -- three chunks of a four-way split merge into a file
+ *    short a workload, and every other field looks right.
+ *  - `an overlap is refused` -- the converse, which double-counts a row.
+ *  - `a different instrument is refused` -- the hr6/hr7 lesson: two captures of
+ *    their engine with different capabilities are not one capture.
+ *  - `a chunk that does not hold what it claims is refused` -- coverage is checked
+ *    against the DECLARATIONS, so this is the hole coverage cannot see.
+ *  - `the ages survive the merge per workload` -- the whole reason for chunking.
+ */
+
+import { mergeChunks, mergePayloads } from './chunk-merge.mjs';
+
+let failures = 0;
+const check = (cond, what, detail) => {
+  if (cond) console.log(`ok   ${what}${detail === undefined ? '' : ` -- ${detail}`}`);
+  else {
+    failures += 1;
+    console.log(`FAIL ${what}${detail === undefined ? '' : ` -- ${detail}`}`);
+  }
+};
+
+const ROSTER = ['alpha', 'bravo', 'charlie', 'delta'];
+
+/** One chunk, with every field the merge reads, and nothing it does not. */
+const chunk = (index, names, over = {}) => ({
+  dir: `hrc${index}`,
+  theirs: {
+    __provenance__: {
+      headroomVersion: '0.37.0',
+      python: '3.12.1',
+      theirFixtures: true,
+      detectBackend: 'rust',
+      detectBackendPreset: null,
+      stubArms: null,
+      roster: ROSTER,
+      chunk: { selector: `--chunk ${index}/2`, index, of: 2, names },
+      sweepStartedAt: 1000 + index * 100,
+      sweptAt: 1050 + index * 100,
+      sweptAtIso: `2026-09-27T0${index}:00:00`,
+      sweptPerWorkload: Object.fromEntries(names.map((n, i) => [n, 1000 + index * 100 + i])),
+      loadWitness: { ms: 40 + index, readings: names.map(() => ({ at: 'before-pass-0', ms: 40 + index })), errors: [], script: 'compression/load-witness.mjs' },
+      ccrStoreAfterRun: { bytes: 100 * index, sha256: `sha${index}` },
+      carriedPayloads: names.slice(0, 1),
+      inertArms: { router: { ranOn: names.length, returnedInputUnchanged: 1 } },
+      competitorWarnings: { degraded: [], advisory: [{ message: 'advice', count: index }] },
+      kompressWarmup: { ready: true, waitedSeconds: 10 * index, why: null },
+      ...over,
+    },
+    ...Object.fromEntries(names.map((n) => [n, { before: 100, after: 50, arm: 'router' }])),
+  },
+  resolved: {
+    __provenance__: {
+      resolvedAt: 1060 + index * 100,
+      resolvedAtIso: `2026-09-27T0${index}:01:00`,
+      entryAgeSeconds: Object.fromEntries(names.map((n, i) => [n, 20 + i])),
+      theirStatedTtlSeconds: null,
+      elapsedSecondsOldestEntry: 25,
+      elapsedSeconds: 10,
+      ageBasis: 'oldest-entry',
+      pastTheirTtl: false,
+    },
+    ...Object.fromEntries(names.map((n) => [n, { text: n, markers: 2, unresolved: 0 }])),
+  },
+});
+
+const two = () => [chunk(1, ['alpha', 'bravo']), chunk(2, ['charlie', 'delta'])];
+const why = (r) => r.errors.join(' | ');
+
+console.log('two disjoint chunks that tile the roster merge');
+{
+  const r = mergeChunks(two());
+  check(r.ok === true, 'the happy path merges', why(r));
+  check(
+    Object.keys(r.theirs).filter((k) => !k.startsWith('__')).length === 4,
+    'all four workloads are present'
+  );
+  check(r.theirs.__provenance__.chunk === null, 'the merged file is not itself a chunk');
+  check(r.theirs.__provenance__.mergedFromChunks === 2, 'and says how many it came from');
+  check(r.theirs.__provenance__.sweepStartedAt === 1100, 'the sweep starts at the earliest chunk');
+  check(r.theirs.__provenance__.sweptAt === 1250, 'and ends at the latest');
+}
+
+console.log('\na gap is refused');
+{
+  const r = mergeChunks([chunk(1, ['alpha', 'bravo']), chunk(2, ['charlie'])]);
+  check(r.ok === false, 'three of four workloads is not a capture', why(r));
+  check(why(r).includes('delta'), 'and the missing one is named', why(r));
+}
+
+console.log('\nan overlap is refused');
+{
+  const r = mergeChunks([chunk(1, ['alpha', 'bravo']), chunk(2, ['bravo', 'charlie', 'delta'])]);
+  check(r.ok === false, 'a workload in two chunks is not merged', why(r));
+  check(why(r).includes('bravo is claimed by both'), 'and the duplicate is named', why(r));
+}
+
+console.log('\na different instrument is refused');
+{
+  const parts = two();
+  parts[1].theirs.__provenance__.detectBackend = 'python';
+  const r = mergeChunks(parts);
+  check(r.ok === false, 'two detector backends are two engines', why(r));
+  check(why(r).includes('detectBackend differs'), 'and the field is named', why(r));
+
+  const ver = two();
+  ver[1].theirs.__provenance__.headroomVersion = '0.38.0';
+  check(mergeChunks(ver).ok === false, 'so are two engine versions', why(mergeChunks(ver)));
+}
+
+console.log('\na chunk that does not hold what it claims is refused');
+{
+  const parts = two();
+  delete parts[1].theirs.delta;
+  const r = mergeChunks(parts);
+  check(r.ok === false, 'a declared workload with no row refuses', why(r));
+  check(why(r).includes('missing delta'), 'and says which row is absent', why(r));
+}
+
+console.log('\na whole-sweep capture is not a chunk');
+{
+  const parts = two();
+  parts[1].theirs.__provenance__.chunk = null;
+  const r = mergeChunks(parts);
+  check(r.ok === false, 'mixing one in would double-count', why(r));
+  check(why(r).includes('WHOLE-sweep'), 'and it is named as such', why(r));
+
+  const old = two();
+  delete old[1].theirs.__provenance__.chunk;
+  check(mergeChunks(old).ok === false, 'a capture predating chunking is refused too');
+  const noRoster = two();
+  delete noRoster[1].theirs.__provenance__.roster;
+  check(mergeChunks(noRoster).ok === false, 'so is one that records no roster');
+}
+
+console.log('\na known-answer capture is refused, as it is everywhere else');
+{
+  const parts = two();
+  parts[1].theirs.__provenance__.stubArms = 'bench/ka-arms.py';
+  const r = mergeChunks(parts);
+  check(r.ok === false, 'it measures the harness, not an engine', why(r));
+}
+
+console.log('\nthe declared split size is its own check');
+{
+  // The coverage check above is satisfied here: these two chunks tile the roster.
+  // What is wrong is that they say they are two of THREE, so a third exists and
+  // was not passed -- and the roster they tile is the one they agreed on, which a
+  // hand-edited chunk can also agree on.
+  const parts = two();
+  for (const p of parts) p.theirs.__provenance__.chunk.of = 3;
+  const r = mergeChunks(parts);
+  check(r.ok === false, 'two chunks of a three-way split refuse', why(r));
+  check(why(r).includes('3-way split'), 'and the shortfall is named', why(r));
+
+  const disagree = two();
+  disagree[1].theirs.__provenance__.chunk.of = 3;
+  check(mergeChunks(disagree).ok === false, 'chunks disagreeing on the count refuse');
+}
+
+console.log('\nthe entry ages survive the merge per workload');
+{
+  // THE REASON THE SWEEP IS CHUNKED AT ALL. `resolutionUsable` decides one row at
+  // a time from this map, so a merge that collapsed it to one number would put
+  // every row back on the oldest entry -- the exact defect chunking exists to fix.
+  const r = mergeChunks(two());
+  const ages = r.resolved.__provenance__.entryAgeSeconds;
+  check(Object.keys(ages).length === 4, 'every workload keeps its own age', JSON.stringify(ages));
+  check(ages.alpha === 20 && ages.delta === 21, 'and the values are its own', JSON.stringify(ages));
+}
+
+console.log('\na bound one chunk was told applies to all of them');
+{
+  // Their TTL is a property of their store, and a chunk that was never refused
+  // anything quotes nothing. Letting the absent quote win would erase the only
+  // bound in the run -- and `resolutionUsable` refuses a late row ONLY when a
+  // bound is present, so erasing it turns every late row back into their loss.
+  const parts = two();
+  parts[0].resolved.__provenance__.theirStatedTtlSeconds = 1800;
+  parts[0].resolved.__provenance__.pastTheirTtl = true;
+  const r = mergeChunks(parts);
+  check(r.resolved.__provenance__.theirStatedTtlSeconds === 1800, 'the quoted bound survives');
+  check(r.resolved.__provenance__.pastTheirTtl === true, 'and one late chunk makes the run late');
+  check(
+    r.resolved.__provenance__.elapsedSecondsOldestEntry === 25,
+    'the fallback age is the worst across chunks, not the newest'
+  );
+}
+
+console.log('\nthe seam is recorded, not smoothed over');
+{
+  const r = mergeChunks(two());
+  const seam = r.theirs.__provenance__.chunkSeam;
+  check(seam.warmupsPaid === 2, 'each chunk paid its own warm-up and the file says so');
+  check(seam.storeGrewBetweenChunks === true, 'their store grew between chunks', 'sha1 -> sha2');
+  check(seam.chunks.length === 2, 'and every chunk is listed with its own store state');
+  check(
+    seam.chunks[0].ccrStoreAfterRun.sha256 === 'sha1' && seam.chunks[1].ccrStoreAfterRun.sha256 === 'sha2',
+    'so a pipeline row can be told which store it ran against'
+  );
+  // A store that did NOT grow is the comparable case, and must not be reported as
+  // if it had -- the flag is a fact about this capture, not a property of chunking.
+  const same = two();
+  same[1].theirs.__provenance__.ccrStoreAfterRun = { bytes: 100, sha256: 'sha1' };
+  check(
+    mergeChunks(same).theirs.__provenance__.chunkSeam.storeGrewBetweenChunks === false,
+    'an unchanged store is reported unchanged'
+  );
+}
+
+console.log('\nthe pooled witness names which chunk each reading came from');
+{
+  const r = mergeChunks(two());
+  const w = r.theirs.__provenance__.loadWitness;
+  check(w.readings.length === 4, 'every reading is kept', String(w.readings.length));
+  check(
+    w.readings.every((x) => x.at.startsWith('--chunk ')),
+    'and carries its chunk, so the label still identifies a moment',
+    w.readings[0].at
+  );
+  check(w.ms === 42, 'the median is taken over the pooled readings', String(w.ms));
+}
+
+console.log('\nthe additive provenance is added, not re-derived');
+{
+  const r = mergeChunks(two());
+  const p = r.theirs.__provenance__;
+  // Both counts are per workload and the chunks are disjoint, so the sum is what a
+  // single sweep would have computed. Re-deriving the rule in a second language is
+  // how the two would drift.
+  check(p.inertArms.router.ranOn === 4, 'inert-arm denominators sum', JSON.stringify(p.inertArms));
+  check(p.inertArms.router.returnedInputUnchanged === 2, 'and so do the numerators');
+  check(p.kompressWarmup.ready === true, 'two warm chunks are a warm capture');
+  check(p.kompressWarmup.waitedSeconds === 30, 'and the waits sum', String(p.kompressWarmup.waitedSeconds));
+  check(p.competitorWarnings.advisory[0].count === 3, 'warning counts sum per message');
+  check(p.carriedPayloads.join(',') === 'alpha,charlie', 'carried payloads union', p.carriedPayloads.join(','));
+
+  // ONE COLD CHUNK DEGRADES THE CAPTURE IT IS PART OF. instrumentFingerprint reads
+  // this single boolean, so a merged file that reported `ready` because most chunks
+  // were warm would let a ratchet entry be inherited across a changed instrument.
+  const cold = two();
+  cold[1].theirs.__provenance__.kompressWarmup = { ready: false, waitedSeconds: 240, why: 'download' };
+  const c = mergeChunks(cold).theirs.__provenance__.kompressWarmup;
+  check(c.ready === false, 'one cold chunk makes the capture not-ready', JSON.stringify(c.why));
+  check(String(c.why).includes('download'), 'and the reason names its chunk', String(c.why));
+}
+
+console.log('\na chunk with no resolution is named, not quietly dropped');
+{
+  const parts = two();
+  parts[1].resolved = null;
+  const r = mergeChunks(parts);
+  check(r.ok === true, 'the merge still succeeds -- an unresolved chunk is a known state');
+  check(
+    r.theirs.__provenance__.chunkSeam.chunksWithoutResolution.join(',') === 'hrc2',
+    'and the chunk is listed'
+  );
+  check(
+    r.resolved.charlie === undefined,
+    'its rows have no resolution, which the scorer reads as unmeasured'
+  );
+}
+
+console.log('\npayload sets union, and a collision refuses');
+{
+  const ok = mergePayloads([
+    { dir: 'a', data: { alpha: 'x' } },
+    { dir: 'b', data: { bravo: 'y' } },
+  ]);
+  check(ok.errors.length === 0 && Object.keys(ok.out).length === 2, 'disjoint sets union');
+  const clash = mergePayloads([
+    { dir: 'a', data: { alpha: 'x' } },
+    { dir: 'b', data: { alpha: 'DIFFERENT' } },
+  ]);
+  check(clash.errors.length === 1, 'two different bytes for one name refuse', clash.errors[0]);
+}
+
+console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`);
+process.exit(failures === 0 ? 0 : 1);
