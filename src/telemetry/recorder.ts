@@ -27,7 +27,7 @@
  * recent data is the data kept.
  */
 
-import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -83,6 +83,40 @@ function homeOf(env: NodeJS.ProcessEnv): string {
  */
 export const MAX_BYTES = 4 * 1024 * 1024;
 
+/**
+ * The version an event is stamped with, resolved once from our own manifest.
+ *
+ * RESOLVED HERE RATHER THAN PASSED IN, because three different binaries can be
+ * the process that records: `server/index.js`, `proxy/cli.js` and
+ * `server/daemon.js`. Handing the version in from the entry point means each of
+ * the three has to remember to, and the two that forget stamp every event
+ * 'unknown' while looking perfectly correct -- the same failure mode the consent
+ * gate inside `record` exists to avoid. A module-relative read works from all
+ * three, and from the tests, because the path is relative to this file.
+ *
+ * 'unknown' IS AN ACCEPTABLE ANSWER, not an error to raise: an event stamped
+ * 'unknown' is still a usable event, and a telemetry module that threw because
+ * it could not find a manifest would take a tool call down with it -- the one
+ * thing this file may not do.
+ */
+let cachedVersion: string | null = null;
+
+export function libraryVersion(): string {
+  if (cachedVersion !== null) return cachedVersion;
+  try {
+    const manifest = new URL('../../package.json', import.meta.url);
+    const parsed: unknown = JSON.parse(readFileSync(manifest, 'utf8'));
+    const version =
+      typeof parsed === 'object' && parsed !== null
+        ? (parsed as { version?: unknown }).version
+        : undefined;
+    cachedVersion = typeof version === 'string' ? version : 'unknown';
+  } catch {
+    cachedVersion = 'unknown';
+  }
+  return cachedVersion;
+}
+
 /** The last failure, for `doctor` to report. Null once something succeeds. */
 let lastError: string | null = null;
 
@@ -133,7 +167,7 @@ function rotateIfFull(env: NodeJS.ProcessEnv): void {
  */
 export function record(
   eventType: string,
-  version: string,
+  version: string = libraryVersion(),
   properties: Readonly<Record<string, unknown>> = {},
   env: NodeJS.ProcessEnv = process.env
 ): TelemetryEvent | null {

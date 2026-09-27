@@ -6,7 +6,7 @@
  * switch was readable and nothing read it.
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { hostname } from 'node:os';
@@ -18,6 +18,7 @@ import {
   eventsFile,
   rotatedFile,
   MAX_BYTES,
+  libraryVersion,
 } from '../../../src/telemetry/recorder.js';
 
 const OPTED_IN = { TOKEN_OPTIMIZER_TELEMETRY: '1' } as NodeJS.ProcessEnv;
@@ -127,5 +128,20 @@ describe('the file is bounded', () => {
     // event -- a fixed two-file cost rather than unbounded growth.
     expect(existsSync(rotatedFile(env))).toBe(true);
     expect(readFileSync(eventsFile(env), 'utf8').trim().split('\n')).toHaveLength(1);
+  });
+});
+
+describe('the version an event is stamped with', () => {
+  it('is our real one, not the fallback', () => {
+    // THE ASSERTION THAT MATTERS. 'unknown' is a legal answer the code returns
+    // rather than throwing, which means a broken resolution degrades silently and
+    // every event still looks well formed. Only comparing against the manifest
+    // catches that, so this reads package.json by a different route than the code
+    // under test does.
+    const manifest = JSON.parse(
+      readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
+    ) as { version: string };
+    expect(manifest.version).toMatch(/^\d+\.\d+\.\d+/);
+    expect(libraryVersion()).toBe(manifest.version);
   });
 });

@@ -56,6 +56,7 @@ import {
   type CompressionFacts,
 } from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
+import { record, libraryVersion } from '../telemetry/recorder.js';
 import type { SpillSink } from '../compress/types.js';
 import { captureDir, captureRequest } from './capture.js';
 import { compressResponses } from './responses.js';
@@ -527,6 +528,27 @@ export function compressBody(
     enabled: shaperEnabled(),
     holdout: holdoutFraction(),
     conversationKey: conversationKeyFor(asRecord),
+  });
+  // THE HOLDOUT ARM'S OUTCOME, WHICH IS THE ONE NUMBER WE CANNOT GET ANY OTHER
+  // WAY. The shaper leaves a fraction of conversations alone so that the shaped
+  // arm has something to be compared against, and whether shaping actually pays
+  // is a question about the DIFFERENCE between the two arms -- which no single
+  // machine sees enough of to answer. Today we learn it one machine at a time,
+  // by asking.
+  //
+  // RECORDED HERE, NOT INSIDE shapeOutput, so the shaper stays a pure function
+  // of its inputs. A pure function is what makes the arm assignment testable,
+  // and testable arm assignment is what makes the comparison mean anything.
+  //
+  // NOTHING IS WRITTEN UNLESS THE USER OPTED IN: `record` checks the policy
+  // itself rather than trusting each call site to remember, and it returns null
+  // and swallows on any failure, so this line cannot fail a request. The
+  // properties are a flag and two counts; a string could not be written even if
+  // one were passed.
+  record('output_shaper_arm', libraryVersion(), {
+    holdout: shaped.skipped === 'holdout arm',
+    shaped: shaped.body !== asRecord,
+    labels: shaped.labels.length,
   });
   if (shaped.body !== asRecord) {
     parsed = shaped.body as unknown as ProviderRequest;

@@ -9,9 +9,16 @@
  * bytes it returns for forwarding.
  */
 import { describe, it, expect, afterEach } from '@jest/globals';
+import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { eventsFile } from '../../../src/telemetry/recorder.js';
 import { compressBody } from '../../../src/proxy/server.js';
 
 const PRIOR = {
+  telemetry: process.env.TOKEN_OPTIMIZER_TELEMETRY,
+  home: process.env.USERPROFILE,
+  unixHome: process.env.HOME,
   shaper: process.env.TOKEN_OPTIMIZER_OUTPUT_SHAPER,
   holdout: process.env.TOKEN_OPTIMIZER_OUTPUT_HOLDOUT,
 };
@@ -22,6 +29,12 @@ afterEach(() => {
   else process.env.TOKEN_OPTIMIZER_OUTPUT_SHAPER = PRIOR.shaper;
   if (PRIOR.holdout === undefined) delete process.env.TOKEN_OPTIMIZER_OUTPUT_HOLDOUT;
   else process.env.TOKEN_OPTIMIZER_OUTPUT_HOLDOUT = PRIOR.holdout;
+  if (PRIOR.telemetry === undefined) delete process.env.TOKEN_OPTIMIZER_TELEMETRY;
+  else process.env.TOKEN_OPTIMIZER_TELEMETRY = PRIOR.telemetry;
+  if (PRIOR.home === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = PRIOR.home;
+  if (PRIOR.unixHome === undefined) delete process.env.HOME;
+  else process.env.HOME = PRIOR.unixHome;
 });
 
 /** A request big enough to clear the proxy's size floor. */
@@ -89,5 +102,68 @@ describe('the shaper is reachable through compressBody', () => {
     expect(out.model).toBe('claude-sonnet-4');
     expect(Array.isArray(out.messages)).toBe(true);
     expect((out.messages as unknown[]).length).toBe(1);
+  });
+});
+
+/**
+ * The arm the shaper took is the one number we cannot recover after the fact.
+ *
+ * These tests exist for the same reason as the ones above: `record` being tested
+ * in isolation says nothing about whether the proxy ever calls it, and an opt-in
+ * that collects nothing is worse than no opt-in, because `doctor` will happily
+ * report the switch as on. So they go through `compressBody` and read the file
+ * off disk -- redirecting HOME first, so a test never writes to the real one.
+ */
+describe('the shaper arm reaches the recorder', () => {
+  let home: string;
+
+  const runWithHome = (extra: Record<string, string>) => {
+    home = mkdtempSync(join(tmpdir(), 'wiring-telemetry-'));
+    process.env.USERPROFILE = home;
+    process.env.HOME = home;
+    for (const [k, v] of Object.entries(extra)) process.env[k] = v;
+    forward(request());
+    const at = eventsFile(process.env);
+    const lines = existsSync(at)
+      ? readFileSync(at, 'utf8')
+          .trim()
+          .split('\n')
+          .filter((l) => l.length > 0)
+      : [];
+    rmSync(home, { recursive: true, force: true });
+    return lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+  };
+
+  it('records the arm when the user opted in', () => {
+    const events = runWithHome({
+      TOKEN_OPTIMIZER_OUTPUT_SHAPER: '1',
+      TOKEN_OPTIMIZER_TELEMETRY: '1',
+    });
+    const arms = events.filter((e) => e.event_type === 'output_shaper_arm');
+    expect(arms).toHaveLength(1);
+    const props = arms[0].properties as Record<string, unknown>;
+    expect(props.holdout).toBe(false);
+    expect(props.shaped).toBe(true);
+    expect(arms[0].library_version).not.toBe('unknown');
+  });
+
+  it('marks the holdout arm as held out rather than skipping the event', () => {
+    const events = runWithHome({
+      TOKEN_OPTIMIZER_OUTPUT_SHAPER: '1',
+      TOKEN_OPTIMIZER_OUTPUT_HOLDOUT: '1',
+      TOKEN_OPTIMIZER_TELEMETRY: '1',
+    });
+    // THE HOLDOUT ARM IS THE POINT. Dropping its event would leave only the
+    // treated arm on record, which is a comparison with one side missing.
+    const arms = events.filter((e) => e.event_type === 'output_shaper_arm');
+    expect(arms).toHaveLength(1);
+    const props = arms[0].properties as Record<string, unknown>;
+    expect(props.holdout).toBe(true);
+    expect(props.shaped).toBe(false);
+  });
+
+  it('writes nothing at all when the user did not opt in', () => {
+    const events = runWithHome({ TOKEN_OPTIMIZER_OUTPUT_SHAPER: '1' });
+    expect(events).toHaveLength(0);
   });
 });
