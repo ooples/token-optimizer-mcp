@@ -76,9 +76,14 @@ these figures against `bench/compression/headroom/results/head-to-head.json` ins
 
 <!-- HEADROOM-TABLE:END -->
 
+<!-- HEADROOM-CORPUS:START -- every figure between a CORPUS:START and its CORPUS:END
+     must appear in `totals` of
+     `bench/compression/headroom/results/head-to-head.json`. Guarded by
+     `node bench/compression/readme-headroom.check.mjs`; do not hand-edit. -->
 Over the corpus the shipped default takes **89.4%** of the characters and
 **80.9%** of the tokens; theirs takes 51.3% and 62.8%. Of the 9,919 identifiers
 planted in the corpus, 45 end up unrecoverable on our side and 8 on theirs.
+<!-- HEADROOM-CORPUS:END -->
 
 **Read the rows, though, because the ones we lose are not compression
 results.** On `grep-output`, `codebase-exploration` and `raw-build-log` they
@@ -96,8 +101,8 @@ marker leaves almost none of it behind, our skeleton leaves all of it. **We lose
 eight rows** -- `agent-loop`, `agent-loop-logs`, `code-search`,
 `human-authored-json`, `issue-triage`, `relevance-probe`, `repeated-reads` and
 `sre-debugging` -- because our reduction there comes from spilling too, and a
-spill costs the same turn theirs does; `browser-session` ties at 336-336. Over
-the corpus it is 3,068 of 9,919 for us against 5,238 for them: **this column
+spill costs the same turn theirs does; `browser-session` ties at 336-336. <!-- HEADROOM-CORPUS:START -->Over
+the corpus it is 3,068 of 9,919 for us against 5,238 for them:<!-- HEADROOM-CORPUS:END --> **this column
 goes to them**, and the two columns have to be read together or each one
 flatters somebody.
 
@@ -161,9 +166,9 @@ count is untouched. On the other five it matches their headline -- 100.0% on
 `codebase-exploration`, 99.9% on `grep-output`, 100.0% on `raw-build-log` -- and
 it buys that the same way they do. **Those five rows are exactly where our
 zero-turn wins live**, and the column takes all of them: 509, 1046, 430, 361
-and 336 go to 0. Over the corpus it is 98.1% of the characters against 89.4%, and
+and 336 go to 0. <!-- HEADROOM-CORPUS:START -->Over the corpus it is 98.1% of the characters against 89.4%, and
 386 zero-turn identifiers against 3,068. It also puts 46 identifiers beyond
-anything in the output, against 45 shipped -- but a moved block is a turn, and the preset
+anything in the output, against 45 shipped<!-- HEADROOM-CORPUS:END --> -- but a moved block is a turn, and the preset
 column is published so that trade is visible rather than folded into a
 headline. It is off by default for the same reason.
 
@@ -209,6 +214,7 @@ number in prose is a fact about the tree it was measured on, which is why
 `bench/compression/readme-table.check.mjs` re-derives every figure in the block
 above from the harness rather than trusting it.
 
+<!-- HEADROOM-CORPUS:START -->
 **Reduction is not the only column, and the other one goes to them.** Scored
 symmetrically on their own fixtures, of 9,919 retention units they keep
 **5,238** directly visible in the text they send and we keep **734** — we reach
@@ -218,6 +224,7 @@ alone with no extra turn, and **6,806** are behind a path in the output, one
 `Read` away; theirs redeems **4,673** through its store, one retrieval call away.
 **45 are unrecoverable on our side and 8 on theirs.** All of those numbers belong in any
 quote of any of them.
+<!-- HEADROOM-CORPUS:END -->
 
 Against the four comparators in this reimplemented arm: **ours on all four.**
 Against their real implementation on all twelve workloads, the table at the top

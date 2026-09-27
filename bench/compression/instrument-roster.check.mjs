@@ -51,8 +51,10 @@ const RUNS_ELSEWHERE = {
  */
 const NOT_IN_CI = {
   'bench/compression/readme-headroom.check.mjs':
-    'red today by design -- it asks the README to name the record its table was ' +
-    'read from, and that edit is being held until the claims settle',
+    'red today by design, on three counts -- 27 of the table figures and all 25 ' +
+    'of the corpus figures are absent from the record, and the table does not name ' +
+    'the record it was read from. All three need the README rewritten, and that ' +
+    'edit is being held until the claims settle',
 };
 
 const walk = (dir, out = []) => {
