@@ -88,27 +88,46 @@ export function instrumentFingerprint(provenance) {
   // up to two orders of magnitude between the two. A pass earned against one of them
   // is not evidence about the other.
   //
-  // THE DIGEST IS DELIBERATELY NOT IN HERE, on the `waitedSeconds` rule from this
+  // THE TERM IS KEYED ON LIVE ENTRIES, NOT ON BYTES, because a byte count does not
+  // say what is redeemable. The first version of this term read `store.bytes > 0` as
+  // warm, and the 3.87 MB store on this machine holds SIX rows, every one expired
+  // (ages 4223-4662s against their own ttl of 1800) with 53% of the file free pages.
+  // Their `sqlite.py` deletes `created_at + ttl < now` on every open as startup
+  // hygiene, so their engine would empty that file before the first workload: the
+  // sweep would have nothing to redeem while the term called it warm. `liveEntries`
+  // is counted with their own predicate, and it is also checkpoint-invariant, which
+  // a digest of `ccr_store.db` is not -- WAL keeps committed rows out of the db file
+  // until checkpoint, so two of our own processes read the same size and different
+  // content.
+  //
+  // THE COUNT IS DELIBERATELY NOT IN HERE, on the `waitedSeconds` rule from this
   // file's header: every sweep ends by writing its own entries, so the next sweep
-  // starts from a store no earlier one ever saw. Keyed on the digest, no honest
+  // starts from a store no earlier one ever saw. Keyed on the count, no honest
   // re-capture could ever inherit anything and the ratchet would degrade into a
   // single-run report. What is stable between two honest warm re-captures, and what
-  // actually separates the two experiments, is whether there was anything in there
-  // at all.
+  // actually separates the two experiments, is whether there was anything redeemable
+  // in there at all.
   //
-  // ABSENT MEANS NO TERM, as with chunking. `ccrStoreBeforeRun` was added after every
-  // capture recorded so far, so those produce the byte-identical string they produced
-  // before and none has to be re-earned. A capture that records the field earns its
-  // own pass -- which is the point, because what it earns is checkable.
+  // ABSENT MEANS NO TERM, as with chunking, so no capture recorded before the stamp
+  // existed has to be re-earned. NO FILE AT ALL IS EMPTY WITHOUT A COUNT, because
+  // `present: false` is not ambiguous in the way a byte count is -- there is nothing
+  // to redeem and nothing to miscount. A file that IS there without a live-entry
+  // count reads `unrecorded`: that is exactly the case the byte rule got wrong, and
+  // guessing it in the flattering direction is what this term exists to stop.
   const store = p.ccrStoreBeforeRun;
+  const live = typeof store === 'object' && store !== null ? store.liveEntries : undefined;
   const storeTerm =
     store === undefined || store === null
       ? ''
-      : typeof store !== 'object' || typeof store.bytes !== 'number' || !Number.isFinite(store.bytes)
+      : typeof store !== 'object'
         ? ' store=unrecorded'
-        : store.bytes === 0 || store.present === false
+        : store.present === false
           ? ' store=empty'
-          : ' store=warm';
+          : typeof live !== 'number' || !Number.isFinite(live)
+            ? ' store=unrecorded'
+            : live === 0
+              ? ' store=empty'
+              : ' store=warm';
   return `${FINGERPRINT_VERSION}:detect=${detect} kompress=${kompress} degraded=${degraded} witness=${witness}${chunked}${storeTerm}`;
 }
 

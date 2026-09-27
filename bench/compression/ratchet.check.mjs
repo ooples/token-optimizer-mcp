@@ -109,41 +109,80 @@ eq(
 // capture recorded before this field existed changes its string, so none has to be
 // re-earned.
 eq('an unstamped store adds nothing', instrumentFingerprint({ ...whole, ccrStoreBeforeRun: null }), WHOLE);
+// NO FILE AT ALL IS EMPTY WITH NO COUNT NEEDED. This is the case a fresh capture
+// starts from, and it is the one unambiguous reading available: there is no store, so
+// there is nothing to redeem and nothing to miscount.
 eq(
-  'an empty store differs',
+  'an absent store file is empty',
   instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: false, bytes: 0, sha256: null } }),
   `${WHOLE} store=empty`
 );
 eq(
-  'a populated store differs from both',
-  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 3866624, sha256: 'ca912562bee4b038' } }),
+  'a store with live entries differs from both',
+  instrumentFingerprint({
+    ...whole,
+    ccrStoreBeforeRun: { present: true, bytes: 913408, entries: 6, liveEntries: 6, sha256: 'ca912562bee4b038' },
+  }),
   `${WHOLE} store=warm`
 );
-// A ZERO-BYTE FILE IS AN EMPTY STORE, whatever `present` says about the path existing.
+// THE CASE THE BYTE RULE GOT WRONG, and the reason this term counts rows. These are
+// the real numbers off this machine: 3.87 MB, six rows, every one of them older than
+// their own ttl of 1800s, 53% free pages. Their `sqlite.py` deletes expired rows on
+// every open, so their engine starts this sweep with nothing to redeem. A term that
+// called this warm would have labelled an empty-store capture a warm one.
 eq(
-  'a present but zero-byte store is empty',
-  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 0, sha256: null } }),
+  'a big file of expired rows is an empty store',
+  instrumentFingerprint({
+    ...whole,
+    ccrStoreBeforeRun: { present: true, bytes: 3866624, entries: 6, liveEntries: 0, sha256: 'ca912562bee4b038' },
+  }),
   `${WHOLE} store=empty`
 );
-// THE DIGEST IS NOT IN THE TERM, AND THESE TWO CASES ARE WHY. Every sweep writes its
-// own entries, so a second honest warm capture never starts from the store the first
-// one did -- keyed on the digest or the byte count, nothing could ever inherit and
-// the ratchet would degrade into a single-run report.
+// A ZERO-BYTE FILE HAS NO ROWS EITHER, and the count says so directly.
 eq(
-  'a bigger warm store still matches',
-  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 41000000, sha256: 'ffffffffffffffff' } }),
+  'a present but zero-byte store is empty',
+  instrumentFingerprint({
+    ...whole,
+    ccrStoreBeforeRun: { present: true, bytes: 0, entries: 0, liveEntries: 0, sha256: null },
+  }),
+  `${WHOLE} store=empty`
+);
+// NEITHER THE COUNT NOR THE DIGEST IS IN THE TERM, AND THESE TWO CASES ARE WHY. Every
+// sweep writes its own entries, so a second honest warm capture never starts from the
+// store the first one did -- keyed on the count, the bytes or the digest, nothing could
+// ever inherit and the ratchet would degrade into a single-run report.
+eq(
+  'a differently populated warm store still matches',
+  instrumentFingerprint({
+    ...whole,
+    ccrStoreBeforeRun: { present: true, bytes: 41000000, entries: 220, liveEntries: 181, sha256: 'ffffffffffffffff' },
+  }),
   `${WHOLE} store=warm`
 );
+// THE WAL CASE, on real data: chunk 1 left 913408 bytes with sha 485cfcc04a1715ae and
+// chunk 2 read the same 913408 bytes with sha 18b2b9f548c3566d, because committed rows
+// sit in `ccr_store.db-wal` until SQLite checkpoints them. Two of our own processes,
+// one store. A term that moved here would refuse every chunked capture.
 eq(
   'the same size with different content matches',
-  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 3866624, sha256: '74a9a15a3a0f3236' } }),
+  instrumentFingerprint({
+    ...whole,
+    ccrStoreBeforeRun: { present: true, bytes: 913408, entries: 6, liveEntries: 6, sha256: '74a9a15a3a0f3236' },
+  }),
   `${WHOLE} store=warm`
 );
 // UNREADABLE IS NOT ASSUMED EMPTY OR WARM, on the store-resolution rule: the
-// direction of the default is the point.
+// direction of the default is the point. A FILE WITH NO LIVE COUNT IS UNREADABLE --
+// this is the shape the byte-only stamp wrote, and reading it as warm is precisely
+// the error above.
 eq(
-  'an unreadable stamp says so',
-  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 'lots' } }),
+  'a present file with no live count says so',
+  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 3866624, sha256: 'ca9' } }),
+  `${WHOLE} store=unrecorded`
+);
+eq(
+  'an unreadable count says so',
+  instrumentFingerprint({ ...whole, ccrStoreBeforeRun: { present: true, bytes: 12, liveEntries: 'lots' } }),
   `${WHOLE} store=unrecorded`
 );
 // THE TWO TERMS ARE INDEPENDENT, and a capture can differ in both at once.
