@@ -41,7 +41,17 @@
       "capture": "hr27",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
     },
+    "browser-session/cost-proxy": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
     "browser-session/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "browser-session/speed": {
       "pass": true,
       "capture": "hr27",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
@@ -97,6 +107,11 @@
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
     },
     "human-authored-json/cost": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "human-authored-json/cost-proxy": {
       "pass": true,
       "capture": "hr27",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
@@ -166,7 +181,17 @@
       "capture": "hr27",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
     },
+    "repeated-reads/cost-proxy": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
     "repeated-reads/retention": {
+      "pass": true,
+      "capture": "hr27",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+    },
+    "repeated-reads/speed": {
       "pass": true,
       "capture": "hr27",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
@@ -246,7 +271,11 @@
     "browser-session/speed": {
       "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
       "verdict": "vs best: our p90 117.5ms vs their p10 13.7ms (medians of 3 passes: ours 151.8 / 117.5 / 117.1, theirs 12.4 / 14.7 / 13.7; published medians 115.025 / 14.881) | vs comparable: crusher: our p90 117.5ms vs their p10 13.7ms (medians of 3 passes: ours 151.8 / 117.5 / 117.1, theirs 12.4 / 14.7 / 13.7; published medians 115.025 / 14.881)",
-      "pass": false
+      "pass": false,
+      "supersededBy": {
+        "capture": "hr27",
+        "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+      }
     },
     "codebase-exploration/speed": {
       "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
@@ -279,7 +308,11 @@
     "repeated-reads/speed": {
       "reason": "recorded before the instrument was fingerprinted, so what it was measured against is unknown",
       "verdict": "vs best: our p90 75.7ms vs their p10 3.6ms (medians of 3 passes: ours 75.7 / 68.1 / 94.0, theirs 4.1 / 3.6 / 3.3; published medians 69.072 / 5.343) | vs comparable: crusher: our p90 75.7ms vs their p10 3.6ms (medians of 3 passes: ours 75.7 / 68.1 / 94.0, theirs 4.1 / 3.6 / 3.3; published medians 69.072 / 5.343)",
-      "pass": false
+      "pass": false,
+      "supersededBy": {
+        "capture": "hr27",
+        "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes"
+      }
     }
   }
 }
