@@ -43,7 +43,7 @@ import { reproducibilityRefusal } from './reproducibility.mjs';
 import { inputParity } from './input-parity.mjs';
 import { retentionVerdict, tightenFloor } from './retention-floor.mjs';
 import { bothColumns, columnsFor } from './arm-selection.mjs';
-import { instrumentFingerprint, inheritance, writeEntry } from './ratchet.mjs';
+import { instrumentFingerprint, inheritance, retractionMap, writeEntry } from './ratchet.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RESULTS = join(here, 'headroom', 'results', 'head-to-head.json');
@@ -485,7 +485,15 @@ if (promote) {
     process.exit(1);
   }
   const enforced = Object.fromEntries(Object.keys(next).sort().map((k) => [k, next[k]]));
-  const retracted = { ...(ratchet.retracted ?? {}), ...retractions };
+  // A RETRACTION THAT HAS SINCE BEEN RE-EARNED IS STAMPED, NOT DELETED -- see
+  // `retractionMap` in ratchet.mjs, and ratchet.check.mjs for the cases.
+  const retracted = retractionMap(
+    ratchet.retracted,
+    retractions,
+    next,
+    results.capture?.dir ?? 'unrecorded',
+    fingerprint
+  );
   writeFileSync(
     RATCHET,
     `${JSON.stringify(

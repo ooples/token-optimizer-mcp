@@ -115,3 +115,27 @@ export function inheritance(value, current) {
 export function writeEntry(capture, fingerprint) {
   return { pass: true, capture, fingerprint };
 }
+
+/**
+ * The retraction map to write, given the one on disk and the ones this run made.
+ *
+ * A KEY CAN BE RETRACTED AND LATER RE-EARNED, and both facts matter. Writing the
+ * new pass to `enforced` while leaving the old retraction alone puts the same key
+ * in both maps with nothing to say which came last; deleting the retraction
+ * erases that the claim was once made against an instrument we could not verify.
+ * So a superseded retraction stays and names the capture that replaced it.
+ *
+ * `enforcedNow` is the map about to be written, so membership in it -- not a
+ * verdict re-derived here -- decides what counts as re-earned.
+ */
+export function retractionMap(existing, made, enforcedNow, capture, fingerprint) {
+  const out = {};
+  for (const [key, value] of Object.entries(existing ?? {})) {
+    out[key] =
+      (enforcedNow ?? {})[key] === undefined
+        ? value
+        : { ...value, supersededBy: { capture, fingerprint } };
+  }
+  for (const [key, value] of Object.entries(made ?? {})) out[key] = value;
+  return out;
+}

@@ -11,6 +11,7 @@ import {
   instrumentFingerprint,
   readEntry,
   inheritance,
+  retractionMap,
   writeEntry,
 } from './ratchet.mjs';
 
@@ -76,6 +77,40 @@ eq('a changed instrument does not inherit', inheritance(writeEntry('hr7', `${FIN
   reason: `recorded against ${FINGERPRINT_VERSION}:detect=python kompress=notready degraded=unrecorded witness=no, this capture is ${WHOLE}`,
 });
 eq('an unenforced key has no reason', inheritance(undefined, WHOLE), { inherit: false, reason: null });
+
+console.log('retraction map');
+// THE BUG THIS RULE FIXES: a key that was retracted and has now passed again was
+// left in both maps at once, with nothing to say which verdict was current.
+eq(
+  'a re-earned retraction is stamped, not dropped',
+  retractionMap(
+    { 'a/speed': { reason: 'unknown instrument', pass: false } },
+    {},
+    { 'a/speed': writeEntry('hr27', WHOLE) },
+    'hr27',
+    WHOLE
+  ),
+  { 'a/speed': { reason: 'unknown instrument', pass: false, supersededBy: { capture: 'hr27', fingerprint: WHOLE } } }
+);
+eq(
+  'a retraction with no matching pass is left exactly as it was',
+  retractionMap({ 'b/speed': { reason: 'unknown instrument', pass: false } }, {}, {}, 'hr27', WHOLE),
+  { 'b/speed': { reason: 'unknown instrument', pass: false } }
+);
+// A FRESH RETRACTION WINS OVER A CARRIED ONE, so a key that failed again this run
+// records THIS run's verdict rather than keeping a stale reason with a stamp.
+eq(
+  'a fresh retraction replaces the carried one',
+  retractionMap(
+    { 'c/speed': { reason: 'old', pass: false } },
+    { 'c/speed': { reason: 'new', pass: false } },
+    {},
+    'hr27',
+    WHOLE
+  ),
+  { 'c/speed': { reason: 'new', pass: false } }
+);
+eq('no retractions at all', retractionMap(undefined, undefined, {}, 'hr27', WHOLE), {});
 
 console.log(failed === 0 ? 'ratchet provenance: all cases hold' : `ratchet provenance: ${failed} case(s) FAILED`);
 process.exit(failed === 0 ? 0 : 1);
