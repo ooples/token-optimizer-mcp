@@ -36,6 +36,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -229,6 +230,48 @@ for (const m of merges) {
     [path.join(HERE, '..', 'chunk-merge.mjs'), `--out=${m.out}`, ...m.parts],
     m.label
   );
+}
+
+// DO THE TWO ARMS ACTUALLY HOLD THE SAME CORPUS? The whole point of a paired
+// sweep is that ONE variable moved, and the scorer enforces that by refusing a
+// pair whose payload sets differ. It refused a real pair for exactly that reason:
+// their fixtures mint ids with uuid4, which no seed reaches, so four of the six
+// workloads they publish came out different on every sweep while staying the same
+// length and shape. Nothing in the columns looked wrong; only the digest differed.
+//
+// THE COST OF FINDING THAT LATE IS THE REASON THIS IS HERE. The sweep is about
+// ninety minutes and the refusal arrives after it, from a different script, so the
+// failure reads as a scorer problem rather than as the corpus drifting under the
+// experiment. Comparing the two payload files takes milliseconds and names the
+// workloads that moved.
+//
+// IT IS THE SAME BYTES THE SCORER HASHES -- payloads.json of each merged arm --
+// so this cannot pass while the scorer refuses. The per-workload breakdown is the
+// part the scorer does not give, and it is what points at the generator.
+if (PAIRED) {
+  const digest = (p) =>
+    crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex').slice(0, 16);
+  const emptyAt = path.join(MERGE_INTO, 'empty', 'payloads.json');
+  const warmAt = path.join(MERGE_INTO, 'warm', 'payloads.json');
+  const de = digest(emptyAt);
+  const dw = digest(warmAt);
+  console.log(`\n=== the two arms' corpus\n    cold ${de}\n    warm ${dw}`);
+  if (de !== dw) {
+    const a = JSON.parse(fs.readFileSync(emptyAt, 'utf8'));
+    const b = JSON.parse(fs.readFileSync(warmAt, 'utf8'));
+    const moved = Object.keys(a).filter(
+      (k) => JSON.stringify(a[k]) !== JSON.stringify(b[k])
+    );
+    console.error(
+      '\nthe two arms were swept over DIFFERENT payloads, so this pair cannot measure'
+    );
+    console.error('their store -- one variable did not move, two did.');
+    console.error(`  drifted: ${moved.join(', ') || '(whole-file difference only)'}`);
+    console.error('A workload that drifts at identical length is a generator minting ids');
+    console.error('from an unseeded source; fix the generator, do not re-run and hope.');
+    process.exit(1);
+  }
+  console.log('    identical, so the store is the only variable between the arms');
 }
 
 // SAID LAST, BECAUSE IT IS THE ONE THING THAT DECIDES WHETHER THIS CAPTURE CAN

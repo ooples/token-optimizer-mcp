@@ -237,6 +237,40 @@ def text_of(payload):
 # Their own seed, so the fixtures are the ones their published numbers use.
 random.seed(42)
 
+import uuid  # noqa: E402
+
+# THEIR FIXTURES MINT IDS WITH uuid4, WHICH THEIR SEED DOES NOT REACH. The seed
+# above makes their `random` draws reproducible; it does nothing for the five
+# call sites that mint ids through `uuid.uuid4()` -- tool_outputs.py lines 72,
+# 174 and 443, conversations.py lines 80 and 242 -- because uuid4 reads
+# os.urandom and takes no seed.
+#
+# SO FOUR OF THE SIX FIXTURES THEY PUBLISH CAME OUT DIFFERENT ON EVERY SWEEP:
+# log-entries (trace_id), search-results (uuid), database-rows (reference) and
+# agentic-conversation (call_id, tool_use_id). The other two, api-responses and
+# rag-conversation, mint nothing and were stable -- which is how this was found.
+# The payloads were the same LENGTH and the same shape down to the byte, so
+# nothing about the columns looked wrong; only `payloadsDigest` differed, and
+# that made two sweeps incomparable. It cost the store-state pair outright:
+# store-effect.mjs refuses two captures swept over different payload sets, and
+# correctly refused a pair whose arms differed in nothing but their store. It
+# would equally have refused any future re-capture of a published record.
+#
+# A SEEDED DRAW IS NOT A DIFFERENT FIXTURE. Each of those ids is a random hex
+# string of a fixed width in their code too; seeding changes which random one,
+# never the width, and the width is the only part a compressor can see. The
+# seed is ours because they never set one, and it is fixed rather than derived
+# so that a capture taken next year is comparable to one taken today.
+#
+# PATCHING THE MODULE ATTRIBUTE IS ENOUGH, and only because all five sites call
+# `uuid.uuid4()` through the module instead of importing the name -- checked, not
+# assumed. A site doing `from uuid import uuid4` would keep its own reference and
+# stay unseeded, so the digest agreement asserted by the paired sweeper is what
+# actually proves this worked.
+_UUID_SEED = 42
+_uuid_stream = random.Random(_UUID_SEED)
+uuid.uuid4 = lambda: uuid.UUID(int=_uuid_stream.getrandbits(128), version=4)
+
 # `native` is the generator's own return value -- a message list for the two
 # conversation workloads, which is what their pipeline consumes. `text` is the
 # serialisation both sides are scored on.
