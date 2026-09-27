@@ -670,26 +670,57 @@ jobs:
             echo '```'
           } >> $GITHUB_STEP_SUMMARY
           status=0
-          for check in \
-            bench/compression/identifiers.check.mjs \
-            bench/compression/retention-floor.check.mjs \
-            bench/compression/input-parity.check.mjs \
-            bench/compression/arm-selection.check.mjs \
-            bench/compression/load-witness.check.mjs \
-            bench/compression/store-resolution.check.mjs \
-            bench/compression/retention.check.mjs \
-            bench/compression/offload.check.mjs \
-            bench/compression/cost-model.check.mjs \
-            bench/compression/speed-verdict.check.mjs \
-            bench/compression/reproducibility.check.mjs \
-            bench/compression/competitor-health.check.mjs \
-            bench/subscription/base-context.check.mjs \
-            bench/subscription/cost-split.check.mjs \
-            bench/subscription/calibrate.check.mjs
-          do
-            echo "== $check" | tee -a $GITHUB_STEP_SUMMARY
-            node "$check" 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
-          done
+          # THE ROSTER IS THE SCRIPT, NOT A COPY OF IT. This job used to enumerate the
+          # checks itself, and the two lists drifted: conservation, replicate-agreement
+          # and ratchet ran locally and nowhere here, and the job still printed fifteen
+          # green checks and exited 0. The check above refuses that shape now; the line
+          # below is what lets it.
+          npm run -s bench:instruments 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
+
+  # THE TWO CHECKS THAT GUARD PUBLISHED FIGURES, which ran nowhere until now.
+  #
+  # `proof-metrics` asks whether the proof harness computes what it says, and
+  # `readme-table` re-derives every figure in the README's table from the harness
+  # and refuses a README that has drifted from it. Both were in the tree, neither
+  # was in a CI job, so the numbers a reader sees first were the least guarded
+  # ones in the repository.
+  #
+  # They need the install and the build, which is why they are not in the
+  # dependency-free job above: the proof harness imports the compiled engine.
+  bench-proof:
+    name: Proof Harness and README Figures
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Check the proof harness and the figures it publishes
+        run: |
+          set -o pipefail
+          {
+            echo "## Proof Harness and README Figures"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/proof-metrics.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          node bench/compression/readme-table.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           echo '```' >> $GITHUB_STEP_SUMMARY
           exit $status
 
