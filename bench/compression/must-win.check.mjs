@@ -263,17 +263,42 @@ function judge(row, cfg, floors) {
     return { ok: v.ok === true, detail: String(v.detail ?? 'no detail') };
   })();
 
-  const speedBest =
-    load.ok === false
-      ? { pass: null, detail: load.detail }
-      : speedVerdict({
-          ourSamples: row.speed?.oursMsSamples,
-          ourPasses: row.speed?.oursMsPasses,
-          theirSamples: row.speed?.theirsMsSamples,
-          theirPasses: row.speed?.theirsMsPasses,
-          ms: num(row.speed?.oursMs),
-          theirMs: num(row.speed?.theirsMs),
-        });
+  // THE BEST-OF-ANY SPEED COLUMN PAIRS MECHANISMS, MIRRORING WHAT COST DOES.
+  // Their best-of-any arm reaches its ratio by writing a content-store key and
+  // reads 3 to 15ms; it is not analysing the block at all. Judging our
+  // COMPRESSING arm against that asks whether compression is slower than
+  // hashing, which needs no benchmark. So this column judges our REFERENCING
+  // arm -- `spillWholeBlockBelow` 1, the published `sub` arm, the same arm the
+  // cost column's best-of-any opponent is priced against -- and the comparable
+  // column below keeps our compressing arm against their non-offloading
+  // `pipeline@*` arms. Both of our readings are in the record either way, so
+  // this is a pairing rule, not a selection of the flattering number.
+  //
+  // A capture from before the second arm was timed has no `oursSubMs*`, and the
+  // verdict is refused rather than silently falling back to the default arm:
+  // that fallback is exactly the mismatched pairing this replaced.
+  const speedBest = (() => {
+    if (load.ok === false) return { pass: null, detail: load.detail };
+    if (!Array.isArray(row.speed?.oursSubMsPasses))
+      return {
+        pass: null,
+        detail:
+          'our referencing arm was not timed in this capture -- re-record with ' +
+          'head-to-head.mjs so both arms of ours are measured in the same passes',
+      };
+    const v = speedVerdict({
+      ourSamples: row.speed?.oursSubMsSamples,
+      ourPasses: row.speed?.oursSubMsPasses,
+      theirSamples: row.speed?.theirsMsSamples,
+      theirPasses: row.speed?.theirsMsPasses,
+      ms: num(row.speed?.oursSubMs),
+      theirMs: num(row.speed?.theirsMs),
+    });
+    return {
+      pass: v.pass,
+      detail: `ours-movewhole vs ${row.speed?.theirsArm ?? 'unnamed'}: ${v.detail}`,
+    };
+  })();
   // THE SAME ESTIMATOR ON THE COMPARABLE ARM, from the readings `run-theirs.py`
   // now takes for every arm. Reusing `speedVerdict` rather than writing a
   // second comparison is the point: a column judged by a softer test than the
@@ -290,7 +315,10 @@ function judge(row, cfg, floors) {
       ms: num(row.speed?.oursMs),
       theirMs: num(row.speed?.theirsComparableMs),
     });
-    return { pass: v.pass, detail: `${row.comparable.arm}: ${v.detail}` };
+    return {
+      pass: v.pass,
+      detail: `ours-default vs ${row.speed?.theirsComparableArm ?? row.comparable.arm}: ${v.detail}`,
+    };
   })();
 
   // THE RETENTION BAR AND ITS RATCHET LIVE IN THEIR OWN MODULE, because they

@@ -510,6 +510,26 @@ function timeEveryWorkload(byName) {
   // out, and the cost is linear: this is the whole runtime of the harness.
   const SPEED_PASSES = 3;
   const passes = new Map(Object.keys(byName).map((n) => [n, []]));
+  // THE SUBSTITUTION ARM IS TIMED TOO, because the speed column was pairing our
+  // COMPRESSING arm against their REFERENCING one. Their best-of-any arm writes
+  // a 24-character content-cache key and reads 3 to 15ms; our default engines
+  // analyse the block and read 6 to 117ms. Comparing those two answers the
+  // question "is compression slower than hashing", which needs no benchmark.
+  //
+  // The cost column already splits this: best-of-any against comparable. Speed
+  // now does the same, with the SAME two arms of ours that cost uses -- `sub`
+  // (spillWholeBlockBelow 1, every block moved, like-for-like with a content
+  // cache) against their best, and the default against their non-offloading
+  // pipeline arms. Both readings are published, so neither column is a choice
+  // about which fact to show.
+  const subPasses = new Map(Object.keys(byName).map((n) => [n, []]));
+  // A SINK THAT COSTS WHAT THE REAL ONE COSTS, MINUS THE DISK. The published
+  // `sub` arm pushes the content onto an array and returns a path; timing a sink
+  // that writes files would measure the filesystem, and timing one that returns
+  // null would measure a code path that never moves anything. This keeps the
+  // array push so the allocation is paid, and is fresh per call so the memo in
+  // `spillFor` cannot turn the second pass into a lookup.
+  const subTuning = resolveTuning({ spillWholeBlockBelow: 1 });
   // THE SAME LOAD CONTROL THEIR SWEEP TAKES, TAKEN THE SAME WAY. A reading
   // before each pass, pooled to a median, from the identical script
   // run-theirs.py spawns -- see bench/compression/load-witness.mjs for the 33%
@@ -542,12 +562,28 @@ function timeEveryWorkload(byName) {
       // with that; the harness hands over the readings, not the flattering
       // ones.
       passes.get(name).push(samples.map((v) => Number(v.toFixed(3))));
+      const subSamples = [];
+      for (let i = 0; i < SPEED_SAMPLES; i += 1) {
+        const held = [];
+        const t0 = performance.now();
+        compressBlock(text, {
+          spill: (content, hint) => {
+            held.push(content);
+            return `.token-optimizer/spill/t${held.length}-${hint}`;
+          },
+          query: queryOf(text),
+          tuning: subTuning,
+        });
+        subSamples.push(performance.now() - t0);
+      }
+      subPasses.get(name).push(subSamples.map((v) => Number(v.toFixed(3))));
     }
   }
   takeWitness('after-sweep');
   const sorted = [...witnessReadings.map((r) => r.ms)].sort((a, b) => a - b);
   return {
     passes,
+    subPasses,
     loadWitness: {
       ms: sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : null,
       readings: witnessReadings,
@@ -561,6 +597,7 @@ function timeEveryWorkload(byName) {
 // minute by the time the last workload is reached.
 const timed = timeEveryWorkload(payloads);
 const speedPasses = timed.passes;
+const subSpeedPasses = timed.subPasses;
 const ourLoadWitness = timed.loadWitness;
 
 for (const [name, text] of Object.entries(payloads)) {
@@ -593,6 +630,12 @@ for (const [name, text] of Object.entries(payloads)) {
   const ms = sorted[(sorted.length - 1) >> 1];
   const msMin = sorted[0];
   const msMax = sorted[sorted.length - 1];
+  // THE SUBSTITUTION ARM'S OWN TIMINGS, taken in the same passes on the same
+  // machine, so the two arms of ours cannot be separated by machine state.
+  const subMsPasses = subSpeedPasses.get(name);
+  const subMsSamples = subMsPasses.flat();
+  const subSorted = [...subMsSamples].sort((a, b) => a - b);
+  const subMs = subSorted[(subSorted.length - 1) >> 1];
   const out = compressBlock(text, { query: queryOf(text) });
 
   // THE SUBSTITUTION ARM, MEASURED SEPARATELY AND NAMED FOR WHAT IT IS. HeadRoom
@@ -1157,6 +1200,9 @@ for (const [name, text] of Object.entries(payloads)) {
     msMax,
     msSamples,
     msPasses,
+    subMs,
+    subMsSamples,
+    subMsPasses,
   });
 }
 
@@ -2244,6 +2290,25 @@ if (process.argv[3] === '--record') {
         // event into the reading instead of exposing it; the gate compares the
         // passes with each other and refuses to decide when they disagree.
         oursMsPasses: r.msPasses,
+        // THE SECOND ARM OF OURS, so the speed column can pair mechanisms the
+        // way the cost column already does. `oursMs` above is our COMPRESSING
+        // arm and is judged against their non-offloading `pipeline@*` arms;
+        // these three fields are our REFERENCING arm (`spillWholeBlockBelow` 1,
+        // the published `sub` arm) and are judged against their best-of-any,
+        // which reaches its ratio by writing a content-store key. Both are
+        // recorded, so the pairing is a stated rule rather than a choice about
+        // which of our numbers to show.
+        oursSubMs: r.subMs.toFixed(3),
+        oursSubMsSamples: r.subMsSamples,
+        oursSubMsPasses: r.subMsPasses,
+        // WHICH OF THEIR ARMS EACH COLUMN IS, NAMED IN THE ROW. Their arms
+        // differ by more than a percentage: a 13.7ms `crusher` reading and a
+        // 37.4ms `pipeline@0.10` reading are different mechanisms, and a reader
+        // who only sees a number cannot tell which verdict used which. The cost
+        // block records these names too; repeating them here means the speed
+        // verdict is legible without cross-referencing another block.
+        theirsArm: theirs[r.name]?.arm ?? null,
+        theirsComparableArm: r.compArm ?? null,
         theirsMs:
           typeof theirs[r.name]?.ms === 'number'
             ? theirs[r.name].ms.toFixed(3)
