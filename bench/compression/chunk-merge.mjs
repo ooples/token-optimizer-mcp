@@ -36,6 +36,23 @@
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const median = (xs) => (xs.length === 0 ? null : xs.slice().sort((a, b) => a - b)[xs.length >> 1]);
+/**
+ * How many redeemable entries their store held at a stamp, or null if not counted.
+ *
+ * THE LIVE COUNT IS THE ONLY CHECKPOINT-INVARIANT THING IN THE STAMP. `ccr_store.db`
+ * is a WAL database, so committed rows sit in `ccr_store.db-wal` until SQLite
+ * checkpoints them and the db file's size and digest both move without the store
+ * changing -- measured here between two of our own processes, chunk 1 leaving 913408
+ * bytes / sha 485cfcc04a1715ae and chunk 2 reading 913408 bytes / sha 18b2b9f548c3566d.
+ * It is also the quantity their arms actually depend on: an expired row is not
+ * redeemable, and their `sqlite.py` deletes it on the next open.
+ */
+const liveEntries = (stamp) =>
+  stamp === null || stamp === undefined || typeof stamp !== 'object'
+    ? null
+    : stamp.present === false
+      ? 0
+      : num(stamp.liveEntries);
 
 // FACTS THAT MUST BE IDENTICAL ACROSS CHUNKS, because a difference in any of them
 // means two engines were measured rather than one. `detectBackend` is on the list
@@ -248,31 +265,45 @@ export function mergeChunks(chunks) {
       ),
     })),
     // Named, not inferred: a reader should not have to work these out from the
-    // chunk list to know what the split changed.
-    storeGrewBetweenChunks:
-      new Set(ordered.map((p) => p.prov.ccrStoreAfterRun?.sha256 ?? null)).size > 1,
+    // chunk list to know what the split changed. Both fields below are keyed on the
+    // live entry count rather than the store's digest, for the reason `liveEntries`
+    // gives: a digest moves when SQLite checkpoints, with nothing having changed.
+    storeGrewBetweenChunks: (() => {
+      const counts = ordered.map((p) => liveEntries(p.prov.ccrStoreAfterRun));
+      return counts.some((c) => c === null) ? null : new Set(counts).size > 1;
+    })(),
     // SOMETHING ELSE USED THEIR ENGINE WHILE THIS CAPTURE WAS RUNNING.
     //
-    // Chunk N is expected to start from exactly the store chunk N-1 left behind:
-    // that is the growth this capture knows about and records. A before-stamp that
-    // does NOT match the previous after-stamp means a third party wrote to their
-    // store between the two, so a later chunk's `pipeline@*` rows were measured
-    // against a state nothing in this file describes. That is unrecoverable after
-    // the fact and invisible in the numbers, which is exactly why it is named here
-    // rather than checked for and ignored. An unstamped chunk yields null: not
-    // known to be continuous, and not claimed to be broken either.
+    // Chunk N is expected to start from the store chunk N-1 left behind: that is the
+    // growth this capture knows about and records. A before-stamp holding MORE than
+    // the previous after-stamp means a third party wrote to their store between the
+    // two, so a later chunk's `pipeline@*` rows were measured against a state nothing
+    // in this file describes. That is unrecoverable after the fact and invisible in
+    // the numbers, which is exactly why it is named here rather than checked for and
+    // ignored. An unstamped chunk yields null: not known to be continuous, and not
+    // claimed to be broken either.
+    //
+    // THE RULE IS ONE-SIDED, which is a fact about their store and not a convenience.
+    // The live count may legitimately FALL between two chunks: entries age past the
+    // 1800s ttl and their `sqlite.py` purges them on every open, and at roughly twelve
+    // minutes a chunk the rows chunk 1 wrote are already gone by chunk 4. Nothing in
+    // this stamp separates that from a third party deleting rows, so a fall is not
+    // reported as a break -- claiming one would fire on every capture long enough to
+    // cross their ttl. It cannot legitimately RISE, because only a writer adds rows and
+    // the only writer this capture knows about is the chunk that just finished. So the
+    // rise is the signal, and it is the direction that actually corrupts a reading.
     storeContinuousBetweenChunks: (() => {
       const seen = ordered.map((p) => ({
-        before: p.prov.ccrStoreBeforeRun?.sha256 ?? null,
-        after: p.prov.ccrStoreAfterRun?.sha256 ?? null,
+        before: liveEntries(p.prov.ccrStoreBeforeRun),
+        after: liveEntries(p.prov.ccrStoreAfterRun),
       }));
       const breaks = [];
       for (let i = 1; i < seen.length; i += 1) {
         if (seen[i].before === null || seen[i - 1].after === null) return null;
-        if (seen[i].before !== seen[i - 1].after)
+        if (seen[i].before > seen[i - 1].after)
           breaks.push(
-            `${ordered[i].label} started from ${seen[i].before} but ` +
-              `${ordered[i - 1].label} left ${seen[i - 1].after}`
+            `${ordered[i].label} started from ${seen[i].before} live entr${seen[i].before === 1 ? 'y' : 'ies'} ` +
+              `but ${ordered[i - 1].label} left ${seen[i - 1].after}, so something else wrote to their store`
           );
       }
       return breaks.length === 0 ? true : breaks;

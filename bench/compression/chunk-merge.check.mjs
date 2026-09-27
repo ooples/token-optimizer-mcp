@@ -52,8 +52,13 @@ const chunk = (index, names, over = {}) => ({
       loadWitness: { ms: 40 + index, readings: names.map(() => ({ at: 'before-pass-0', ms: 40 + index })), errors: [], script: 'compression/load-witness.mjs' },
       // CONTINUOUS BY CONSTRUCTION: chunk N starts from what chunk N-1 left, which is
       // what the merge expects and what the break case below deliberately violates.
-      ccrStoreBeforeRun: { bytes: 100 * (index - 1), sha256: `sha${index - 1}` },
-      ccrStoreAfterRun: { bytes: 100 * index, sha256: `sha${index}` },
+      ccrStoreBeforeRun: {
+        bytes: 100 * (index - 1),
+        entries: 10 * (index - 1),
+        liveEntries: 10 * (index - 1),
+        sha256: `sha${index - 1}`,
+      },
+      ccrStoreAfterRun: { bytes: 100 * index, entries: 10 * index, liveEntries: 10 * index, sha256: `sha${index}` },
       carriedPayloads: names.slice(0, 1),
       inertArms: { router: { ranOn: names.length, returnedInputUnchanged: 1 } },
       competitorWarnings: { degraded: [], advisory: [{ message: 'advice', count: index }] },
@@ -205,7 +210,7 @@ console.log('\nthe seam is recorded, not smoothed over');
   const r = mergeChunks(two());
   const seam = r.theirs.__provenance__.chunkSeam;
   check(seam.warmupsPaid === 2, 'each chunk paid its own warm-up and the file says so');
-  check(seam.storeGrewBetweenChunks === true, 'their store grew between chunks', 'sha1 -> sha2');
+  check(seam.storeGrewBetweenChunks === true, 'their store grew between chunks', '10 -> 20 live entries');
   check(seam.chunks.length === 2, 'and every chunk is listed with its own store state');
   check(
     seam.chunks[0].ccrStoreAfterRun.sha256 === 'sha1' && seam.chunks[1].ccrStoreAfterRun.sha256 === 'sha2',
@@ -214,10 +219,28 @@ console.log('\nthe seam is recorded, not smoothed over');
   // A store that did NOT grow is the comparable case, and must not be reported as
   // if it had -- the flag is a fact about this capture, not a property of chunking.
   const same = two();
-  same[1].theirs.__provenance__.ccrStoreAfterRun = { bytes: 100, sha256: 'sha1' };
+  same[1].theirs.__provenance__.ccrStoreAfterRun = { bytes: 100, entries: 10, liveEntries: 10, sha256: 'sha1' };
   check(
     mergeChunks(same).theirs.__provenance__.chunkSeam.storeGrewBetweenChunks === false,
     'an unchanged store is reported unchanged'
+  );
+  // THE WAL CASE, and the reason neither store field is keyed on the digest. SQLite
+  // keeps committed rows in `ccr_store.db-wal` until it checkpoints, so the db file's
+  // digest moves with the store unchanged: measured between two of our own processes
+  // on this capture, 913408 bytes / sha 485cfcc04a1715ae left by chunk 1 and the same
+  // 913408 bytes / sha 18b2b9f548c3566d read by chunk 2. Keyed on the digest this
+  // reads as growth on every chunked capture.
+  const checkpointed = two();
+  checkpointed[1].theirs.__provenance__.ccrStoreAfterRun = {
+    bytes: 100,
+    entries: 10,
+    liveEntries: 10,
+    sha256: 'checkpointed-since',
+  };
+  check(
+    mergeChunks(checkpointed).theirs.__provenance__.chunkSeam.storeGrewBetweenChunks === false,
+    'a checkpoint is not growth',
+    'same rows, different digest'
   );
 }
 
@@ -309,15 +332,60 @@ console.log('\ntheir store is stamped at both ends of the capture, and between c
   // merged file describes. Invisible in the numbers, so it is named rather than
   // refused: the rows are still what they are, and a reader has to be told.
   const parts = two();
-  parts[1].theirs.__provenance__.ccrStoreBeforeRun = { bytes: 999, sha256: 'someone-else' };
+  parts[1].theirs.__provenance__.ccrStoreBeforeRun = {
+    bytes: 999,
+    entries: 99,
+    liveEntries: 99,
+    sha256: 'someone-else',
+  };
   const r = mergeChunks(parts);
   check(r.errors.length === 0, 'the merge still produces a file -- this is a fact, not a refusal', why(r));
   const broke = r.theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks;
   check(Array.isArray(broke) && broke.length === 1, 'the break is reported', JSON.stringify(broke));
   check(
-    String(broke).includes('someone-else') && String(broke).includes('sha1'),
+    String(broke).includes('99') && String(broke).includes('left 10'),
     'naming both the state it found and the one it should have',
     String(broke)
+  );
+}
+{
+  // A FALL IS NOT A BREAK, and this is the case that makes the rule one-sided. Their
+  // `sqlite.py` deletes `created_at + ttl < now` on every open, their ttl is 1800s and
+  // a chunk takes roughly twelve minutes, so by chunk 4 the rows chunk 1 wrote are
+  // gone. Nothing in the stamp separates that from a third party deleting rows -- but
+  // reporting it as a break would fire on every capture long enough to cross their
+  // ttl, and a detector that fires on every capture cannot report the real case.
+  const expired = two();
+  expired[1].theirs.__provenance__.ccrStoreBeforeRun = {
+    bytes: 100,
+    entries: 10,
+    liveEntries: 3,
+    sha256: 'sha1',
+  };
+  check(
+    mergeChunks(expired).theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks === true,
+    'entries expiring between chunks is not a third party',
+    '10 left, 3 still live'
+  );
+  // Their whole store purged away, by their own hygiene or by a `rm`: still a fall.
+  const gone = two();
+  gone[1].theirs.__provenance__.ccrStoreBeforeRun = { present: false, bytes: 0, sha256: null };
+  check(
+    mergeChunks(gone).theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks === true,
+    'and neither is an absent store file, which needs no count to read as zero'
+  );
+}
+{
+  // A FILE THAT IS THERE WITH NO LIVE COUNT IS NOT A VERDICT EITHER. This is the shape
+  // the byte-only stamp wrote, and it is the one case where guessing has a direction:
+  // reading it as continuous would inherit a claim about a store nobody counted.
+  const uncounted = two();
+  uncounted[1].theirs.__provenance__.ccrStoreBeforeRun = { present: true, bytes: 3866624, sha256: 'ca9' };
+  const seam = mergeChunks(uncounted).theirs.__provenance__.chunkSeam;
+  check(
+    seam.storeContinuousBetweenChunks === null,
+    'an uncounted store file yields no continuity verdict',
+    JSON.stringify(seam.storeContinuousBetweenChunks)
   );
 }
 {
