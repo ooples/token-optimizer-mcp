@@ -879,6 +879,40 @@ take_witness("before-pass-0")
 # their age is the sweep duration LONGER. On a sweep that outlasts their window
 # that difference is the whole answer: `pastTheirTtl` reads false while the early
 # workloads are already unredeemable.
+# WHAT STATE THEIR STORE WAS IN WHEN THIS SWEEP STARTED, not only where it ended.
+#
+# `ccrStoreAfterRun` below has recorded the end state since the pipeline-arm
+# variance was found, and an end state alone cannot say which experiment was run:
+# every sweep ends with its own entries in the store, so two captures that began
+# from completely different states still end up looking like two ordinary runs.
+# The digest that makes them VISIBLY incomparable has to be the one taken BEFORE
+# the first block goes in.
+#
+# It matters more now that the roster is swept in chunks. Each chunk starts from
+# a store the earlier chunks already grew, so `chunk-merge.mjs` can only say what
+# that growth was -- and that a later chunk was not handed a fresh store -- if
+# every chunk stamps both ends.
+STORE_PATH = os.path.join(os.path.expanduser("~"), ".headroom", "ccr_store.db")
+
+
+def _store_state():
+    state = {"path": STORE_PATH, "present": os.path.exists(STORE_PATH)}
+    if state["present"]:
+        with open(STORE_PATH, "rb") as handle:
+            state["bytes"] = os.path.getsize(STORE_PATH)
+            state["sha256"] = hashlib.sha256(handle.read()).hexdigest()[:16]
+    else:
+        state["bytes"] = 0
+        state["sha256"] = None
+    return state
+
+
+store_before = _store_state()
+print(
+    "ccr store before run: %d bytes, sha %s"
+    % (store_before["bytes"], store_before["sha256"])
+)
+
 sweep_started_at = time.time()
 swept_per_workload = {}
 
@@ -1001,15 +1035,7 @@ def _headroom_version():
         return "unknown"
 
 
-store_path = os.path.join(os.path.expanduser("~"), ".headroom", "ccr_store.db")
-store = {"path": store_path, "present": os.path.exists(store_path)}
-if store["present"]:
-    with open(store_path, "rb") as handle:
-        store["bytes"] = os.path.getsize(store_path)
-        store["sha256"] = hashlib.sha256(handle.read()).hexdigest()[:16]
-else:
-    store["bytes"] = 0
-    store["sha256"] = None
+store = _store_state()
 
 # AN ARM THAT RETURNS ITS INPUT IS NOT THE SAME AS AN ARM THAT DECLINES, AND
 # THE DIFFERENCE IS INVISIBLE IN THE SCORE. Both land at ratio 1.0, so both are
@@ -1100,6 +1126,7 @@ provenance = {
     "python": sys.version.split()[0],
     # AFTER the run, deliberately: the arms write to it, so the state that
     # matters for reproducing this capture is the one the next run inherits.
+    "ccrStoreBeforeRun": store_before,
     "ccrStoreAfterRun": store,
     "theirFixtures": HAVE_THEIR_FIXTURES,
     "carriedPayloads": sorted(set(WORKLOADS) - set(THEIR_FIXTURE_NAMES)),

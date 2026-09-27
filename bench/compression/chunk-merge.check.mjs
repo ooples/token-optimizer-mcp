@@ -50,6 +50,9 @@ const chunk = (index, names, over = {}) => ({
       sweptAtIso: `2026-09-27T0${index}:00:00`,
       sweptPerWorkload: Object.fromEntries(names.map((n, i) => [n, 1000 + index * 100 + i])),
       loadWitness: { ms: 40 + index, readings: names.map(() => ({ at: 'before-pass-0', ms: 40 + index })), errors: [], script: 'compression/load-witness.mjs' },
+      // CONTINUOUS BY CONSTRUCTION: chunk N starts from what chunk N-1 left, which is
+      // what the merge expects and what the break case below deliberately violates.
+      ccrStoreBeforeRun: { bytes: 100 * (index - 1), sha256: `sha${index - 1}` },
       ccrStoreAfterRun: { bytes: 100 * index, sha256: `sha${index}` },
       carriedPayloads: names.slice(0, 1),
       inertArms: { router: { ranOn: names.length, returnedInputUnchanged: 1 } },
@@ -283,6 +286,52 @@ console.log('\npayload sets union, and a collision refuses');
     { dir: 'b', data: { alpha: 'DIFFERENT' } },
   ]);
   check(clash.errors.length === 1, 'two different bytes for one name refuse', clash.errors[0]);
+}
+
+
+console.log('\ntheir store is stamped at both ends of the capture, and between chunks');
+{
+  // THE INPUT THIS CAPTURE DELIBERATELY VARIES. Their `pipeline@*` arms read a
+  // durable store, so which state a row was measured against is part of the
+  // measurement -- and an after-stamp alone cannot say it, because every sweep
+  // ends with its own entries in there.
+  const p = mergeChunks(two()).theirs.__provenance__;
+  check(p.ccrStoreBeforeRun?.sha256 === 'sha0', 'the whole run begins where its first chunk began', p.ccrStoreBeforeRun?.sha256);
+  check(p.ccrStoreAfterRun?.sha256 === 'sha2', 'and ends where its last chunk left off', p.ccrStoreAfterRun?.sha256);
+  const pairs = p.chunkSeam.chunks.map((c) => `${c.ccrStoreBeforeRun?.sha256}->${c.ccrStoreAfterRun?.sha256}`).join(' ');
+  check(pairs === 'sha0->sha1 sha1->sha2', 'each chunk keeps its own pair', pairs);
+  check(p.chunkSeam.storeGrewBetweenChunks === true, 'the growth is named');
+  check(p.chunkSeam.storeContinuousBetweenChunks === true, "and the growth is this run's own");
+}
+{
+  // A THIRD PARTY WROTE TO THEIR STORE MID-CAPTURE. Chunk 2 did not start from
+  // what chunk 1 left, so its rows were measured against a state nothing in the
+  // merged file describes. Invisible in the numbers, so it is named rather than
+  // refused: the rows are still what they are, and a reader has to be told.
+  const parts = two();
+  parts[1].theirs.__provenance__.ccrStoreBeforeRun = { bytes: 999, sha256: 'someone-else' };
+  const r = mergeChunks(parts);
+  check(r.errors.length === 0, 'the merge still produces a file -- this is a fact, not a refusal', why(r));
+  const broke = r.theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks;
+  check(Array.isArray(broke) && broke.length === 1, 'the break is reported', JSON.stringify(broke));
+  check(
+    String(broke).includes('someone-else') && String(broke).includes('sha1'),
+    'naming both the state it found and the one it should have',
+    String(broke)
+  );
+}
+{
+  // AN UNSTAMPED CHUNK IS NOT A BREAK. A capture taken before run-theirs.py
+  // stamped the start has nothing to compare, and claiming continuity there would
+  // be the flattering direction -- so the verdict is null, which is neither.
+  const parts = two();
+  delete parts[1].theirs.__provenance__.ccrStoreBeforeRun;
+  const r = mergeChunks(parts);
+  check(
+    r.theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks === null,
+    'an unstamped chunk yields no verdict',
+    JSON.stringify(r.theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks)
+  );
 }
 
 console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`);

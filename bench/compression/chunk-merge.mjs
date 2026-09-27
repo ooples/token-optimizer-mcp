@@ -235,9 +235,11 @@ export function mergeChunks(chunks) {
         num(p.prov.sweptAt) === null || num(p.prov.sweepStartedAt) === null
           ? null
           : Math.round((p.prov.sweptAt - p.prov.sweepStartedAt) * 10) / 10,
-      // THE STATE THEIR ARMS RAN AGAINST, per chunk, because it is an input that
-      // this capture deliberately varies. A `pipeline@*` row from a later chunk was
-      // measured against a fuller store than the same arm in chunk 1.
+      // THE STATE THEIR ARMS RAN AGAINST, per chunk and at BOTH ENDS, because it is
+      // an input that this capture deliberately varies. A `pipeline@*` row from a
+      // later chunk was measured against a fuller store than the same arm in chunk 1,
+      // and only the before-stamp says what that chunk actually started from.
+      ccrStoreBeforeRun: p.prov.ccrStoreBeforeRun ?? null,
       ccrStoreAfterRun: p.prov.ccrStoreAfterRun ?? null,
       resolved: p.resolved !== null,
       resolvedAt: num(p.resolved?.__provenance__?.resolvedAt),
@@ -249,6 +251,32 @@ export function mergeChunks(chunks) {
     // chunk list to know what the split changed.
     storeGrewBetweenChunks:
       new Set(ordered.map((p) => p.prov.ccrStoreAfterRun?.sha256 ?? null)).size > 1,
+    // SOMETHING ELSE USED THEIR ENGINE WHILE THIS CAPTURE WAS RUNNING.
+    //
+    // Chunk N is expected to start from exactly the store chunk N-1 left behind:
+    // that is the growth this capture knows about and records. A before-stamp that
+    // does NOT match the previous after-stamp means a third party wrote to their
+    // store between the two, so a later chunk's `pipeline@*` rows were measured
+    // against a state nothing in this file describes. That is unrecoverable after
+    // the fact and invisible in the numbers, which is exactly why it is named here
+    // rather than checked for and ignored. An unstamped chunk yields null: not
+    // known to be continuous, and not claimed to be broken either.
+    storeContinuousBetweenChunks: (() => {
+      const seen = ordered.map((p) => ({
+        before: p.prov.ccrStoreBeforeRun?.sha256 ?? null,
+        after: p.prov.ccrStoreAfterRun?.sha256 ?? null,
+      }));
+      const breaks = [];
+      for (let i = 1; i < seen.length; i += 1) {
+        if (seen[i].before === null || seen[i - 1].after === null) return null;
+        if (seen[i].before !== seen[i - 1].after)
+          breaks.push(
+            `${ordered[i].label} started from ${seen[i].before} but ` +
+              `${ordered[i - 1].label} left ${seen[i - 1].after}`
+          );
+      }
+      return breaks.length === 0 ? true : breaks;
+    })(),
     warmupsPaid: ordered.length,
     witnessSessionsPooled: ordered.length,
     speedPassSeparation:
@@ -257,7 +285,11 @@ export function mergeChunks(chunks) {
   };
 
   const provenance = {
-    ...parts[0].prov,
+    // THE CHRONOLOGICALLY FIRST CHUNK, not whichever was passed first. Every field
+    // a verdict turns on is either in MUST_AGREE or overridden below, so the choice
+    // only shows up in the rest -- and for those, the run's own start is the honest
+    // base. `ordered` is sorted by `sweptAt`; the argument order is the caller's.
+    ...ordered[0].prov,
     roster,
     // NOT A CHUNK AND NOT A SINGLE SWEEP. `chunk` is cleared because this file
     // holds the whole roster, and `mergedFromChunks` is what says so -- a merged
@@ -275,8 +307,10 @@ export function mergeChunks(chunks) {
       errors: witnessErrors,
       script: parts[0].prov.loadWitness?.script ?? null,
     },
-    // The state the NEXT run inherits, which is the last chunk's -- the same reason
-    // run-theirs.py records it after its own sweep rather than before.
+    // THE TWO ENDS OF THE WHOLE CAPTURE. The state it began from is the first
+    // chunk's before-stamp, and the state the next run inherits is the last chunk's
+    // after-stamp; taking both from one chunk would describe that chunk, not the run.
+    ccrStoreBeforeRun: ordered[0].prov.ccrStoreBeforeRun ?? null,
     ccrStoreAfterRun: ordered[ordered.length - 1].prov.ccrStoreAfterRun ?? null,
     carriedPayloads: [...new Set(ordered.flatMap((p) => p.prov.carriedPayloads ?? []))].sort(),
     inertArms,
