@@ -357,9 +357,16 @@ export function mergePayloads(sets) {
   return { out, errors };
 }
 
+// COMPARED AGAINST THIS FILE'S OWN PATH, not against a suffix of it. A suffix
+// test fails silently the moment the file is run from anywhere but the repo
+// layout it was written for -- a copy under a different parent directory exits 0
+// having done nothing, which is the one failure mode a CLI must not have. Found
+// exactly that way, by driving this module from a staging copy.
+const { fileURLToPath } = await import('node:url');
+const { resolve } = await import('node:path');
 const invokedDirectly =
   process.argv[1] !== undefined &&
-  process.argv[1].split(String.fromCharCode(92)).join('/').endsWith('bench/compression/chunk-merge.mjs');
+  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 
 if (invokedDirectly) {
   const fs = await import('node:fs');
