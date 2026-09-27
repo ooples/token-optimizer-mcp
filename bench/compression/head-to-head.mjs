@@ -1124,6 +1124,10 @@ for (const [name, text] of Object.entries(payloads)) {
     bodyReason: body?.reason ?? '',
     bodyBehind: body?.behind ?? 0,
     bodyGone,
+    // WHAT THE PROXY ARM PUT ON DISK, tokenised per block the way the block
+    // arm's `oursBlockTok` is, so the cost model can price its round trips
+    // instead of assuming it never spills.
+    bodyBlockTok: bodySpilled.map(tokens),
     // THEIR LIKE-FOR-LIKE ARM. See `theirCleanState` above for why this is
     // three-valued: null here means either "no such arm" or "this capture
     // cannot be asked", and the state says which. Summing null as zero would
@@ -1384,6 +1388,26 @@ const armsFor = (r, params) => {
     theirsComparable:
       r.compTokAfter === null ? null : L(r.compTokAfter, compBlocks),
     preset: L(r.presetTokAfter, r.presetBlockTok),
+    // THE PROXY ARM, PRICED BUT NOT YET THE PUBLISHED COLUMN. `ours` above is
+    // `compressBlock`, which is what the MCP tools apply to one block of text.
+    // Every payload in this corpus is a request BODY, and the surface that
+    // shrinks a request body -- the one an AI subscription is billed for -- is
+    // the proxy, `compressBody`. The two arms disagree by up to 60 points in
+    // BOTH directions, so which one the published column prices is a decision
+    // about what we are claiming, not a detail; this records the proxy arm's
+    // cost so that decision can be made against measured numbers.
+    //
+    // `null` where the arm does not apply or declined: a payload that is not a
+    // message list has no proxy arm, and the proxy refuses to rewrite content
+    // behind the client's cache marker, which is correct behaviour and not a
+    // zero-saving result. `bodyTokBefore` counts the `model`/`max_tokens`
+    // envelope the harness wraps around the messages, so this arm is charged
+    // about 15 tokens the other arms are not -- a bias against us, kept rather
+    // than corrected so the number cannot be accused of being tuned.
+    proxy:
+      r.bodyRatio === null || r.bodyRatio === 0
+        ? null
+        : L(r.bodyTokAfter, r.bodyBlockTok),
   };
 };
 
@@ -2205,6 +2229,15 @@ if (process.argv[3] === '--record') {
           p0: {
             none: String(Math.round(costAt(byName[r.name].none, 0))),
             ours: String(Math.round(costAt(byName[r.name].ours, 0))),
+            // THE PROXY ARM, MEASURED AND NOT YET PUBLISHED AS `ours`. See
+            // `armsFor` for why this exists: `ours` is the block arm the MCP
+            // tools apply, and this is the arm a proxy user is actually billed
+            // for. `null` means the arm does not apply to this payload or the
+            // proxy declined to rewrite cached content.
+            proxy:
+              byName[r.name].proxy === null
+                ? null
+                : String(Math.round(costAt(byName[r.name].proxy, 0))),
             preset: String(Math.round(costAt(byName[r.name].preset, 0))),
             theirs: String(Math.round(costAt(byName[r.name].theirs, 0))),
             theirsComparableAtLeast:
@@ -2216,6 +2249,10 @@ if (process.argv[3] === '--record') {
           },
           p1: {
             ours: String(Math.round(costAt(byName[r.name].ours, 1))),
+            proxy:
+              byName[r.name].proxy === null
+                ? null
+                : String(Math.round(costAt(byName[r.name].proxy, 1))),
             preset: String(Math.round(costAt(byName[r.name].preset, 1))),
             theirs: String(Math.round(costAt(byName[r.name].theirs, 1))),
             theirsComparableAtLeast:
@@ -2309,6 +2346,14 @@ if (process.argv[3] === '--record') {
         // verdict is legible without cross-referencing another block.
         theirsArm: theirs[r.name]?.arm ?? null,
         theirsComparableArm: r.compArm ?? null,
+        // WHETHER THE COMPARABLE ARM OFFLOADS ON THIS ROW, counted from its own
+        // output rather than from a list of arm names: `compTurns` is how many
+        // `<<ccr:...>>` markers that arm's text carries, so a non-zero count is
+        // that arm moving content to a store on this payload. The retention
+        // selection picks the comparable arm by what it KEPT, which on some rows
+        // is an offloading arm; the speed verdict needs to know so it does not
+        // re-create the mechanism mismatch it was built to remove.
+        theirsComparableTurns: r.compTurns ?? null,
         theirsMs:
           typeof theirs[r.name]?.ms === 'number'
             ? theirs[r.name].ms.toFixed(3)

@@ -303,28 +303,47 @@ function judge(row, cfg, floors) {
   // now takes for every arm. Reusing `speedVerdict` rather than writing a
   // second comparison is the point: a column judged by a softer test than the
   // one beside it is not a second bar, it is a loophole.
+  // AND THE COMPARABLE COLUMN CARRIES THE SAME PAIRING RULE, because the arm it
+  // opposes is selected by RETENTION, not by mechanism -- on two rows the arm
+  // that retained what we retained is `crusher` with its content store switched
+  // on (2 markers on browser-session, 1 on repeated-reads). Judging our
+  // compressing arm against that is the mismatch the best-of-any column was just
+  // fixed to avoid, so when the comparable arm offloads on this row, this column
+  // judges our referencing arm too.
+  //
+  // The test is the arm's OWN output -- how many `<<ccr:...>>` markers it wrote
+  // -- not a list of arm names, so an arm that offloads on one payload and not
+  // another is read correctly on each. A capture recorded before that count
+  // existed has `theirsComparableTurns === null` and keeps the default arm,
+  // which is what it was measured as.
   const speedComp = (() => {
     if (load.ok === false) return { pass: null, detail: load.detail };
     const why = comparableRefusal(row);
     if (why !== null) return { pass: null, detail: why };
+    const offloads = (row.speed?.theirsComparableTurns ?? 0) > 0;
+    if (offloads && !Array.isArray(row.speed?.oursSubMsPasses))
+      return {
+        pass: null,
+        detail:
+          'their comparable arm offloads here and our referencing arm was not ' +
+          'timed in this capture -- re-record with head-to-head.mjs',
+      };
     const v = speedVerdict({
-      ourSamples: row.speed?.oursMsSamples,
-      ourPasses: row.speed?.oursMsPasses,
+      ourSamples: offloads ? row.speed?.oursSubMsSamples : row.speed?.oursMsSamples,
+      ourPasses: offloads ? row.speed?.oursSubMsPasses : row.speed?.oursMsPasses,
       theirSamples: row.speed?.theirsComparableMsSamples,
       theirPasses: row.speed?.theirsComparableMsPasses,
-      ms: num(row.speed?.oursMs),
+      ms: num(offloads ? row.speed?.oursSubMs : row.speed?.oursMs),
       theirMs: num(row.speed?.theirsComparableMs),
     });
+    const arm = row.speed?.theirsComparableArm ?? row.comparable.arm;
     return {
       pass: v.pass,
-      detail: `ours-default vs ${row.speed?.theirsComparableArm ?? row.comparable.arm}: ${v.detail}`,
+      detail: offloads
+        ? `ours-movewhole vs ${arm} (offloads here: ${row.speed?.theirsComparableTurns} marker(s)): ${v.detail}`
+        : `ours-default vs ${arm}: ${v.detail}`,
     };
   })();
-
-  // THE RETENTION BAR AND ITS RATCHET LIVE IN THEIR OWN MODULE, because they
-  // were decided here for months in units that belong to the instrument: an
-  // absolute count of identifiers, whose denominator the scan defines. See
-  // `retention-floor.mjs` for what that cost and what replaced it.
   const retentionBest = retentionVerdict({
     ids: num(row.retention?.ids),
     ours: num(row.retention?.oursZeroTurn),
