@@ -2352,6 +2352,39 @@ if (process.argv[3] === '--record') {
               theirsAtLeast: String(Math.round(costAt(comp, w.p))),
             };
           })(),
+          // THE PROXY ARM'S OWN WORST POINTS, because the two columns are now
+          // gated separately and a column without a worst point cannot be
+          // gated at all. `worst` above is the block arm's quadratic; the proxy
+          // arm is a different quadratic with a different vertex, so reusing
+          // one rate for the other would price the proxy arm at a rate chosen
+          // to flatter a different arm.
+          //
+          // `null` propagates the shape test rather than a zero: four payloads
+          // in this corpus are arrays of log lines and API records with no
+          // `role` and no `content`, so there is no request body for a proxy to
+          // rewrite and no arm to price. That is a different statement from an
+          // arm that ran and saved nothing.
+          worstProxy: (() => {
+            const px = byName[r.name].proxy;
+            if (px === null) return null;
+            const w = worstAgainst(px, byName[r.name].theirs);
+            return {
+              fetchRate: w.p.toFixed(4),
+              proxy: String(Math.round(costAt(px, w.p))),
+              theirs: String(Math.round(costAt(byName[r.name].theirs, w.p))),
+            };
+          })(),
+          worstProxyComparable: (() => {
+            const px = byName[r.name].proxy;
+            const comp = byName[r.name].theirsComparable;
+            if (px === null || comp === null) return null;
+            const w = worstAgainst(px, comp);
+            return {
+              fetchRate: w.p.toFixed(4),
+              proxy: String(Math.round(costAt(px, w.p))),
+              theirsAtLeast: String(Math.round(costAt(comp, w.p))),
+            };
+          })(),
         },
       },
       // SPEED, THE SECOND MUST-WIN. Ours is measured; theirs is null until a

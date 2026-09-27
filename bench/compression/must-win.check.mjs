@@ -43,11 +43,20 @@ import { reproducibilityRefusal } from './reproducibility.mjs';
 import { inputParity } from './input-parity.mjs';
 import { retentionVerdict, tightenFloor } from './retention-floor.mjs';
 import { bothColumns, columnsFor } from './arm-selection.mjs';
+import { agreeAcrossRecordings } from './replicate-agreement.mjs';
 import { instrumentFingerprint, inheritance, retractionMap, writeEntry } from './ratchet.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RESULTS = join(here, 'headroom', 'results', 'head-to-head.json');
 const RATCHET = join(here, 'headroom', 'results', 'must-win.ratchet.json');
+// THE SECOND RECORDING. Produced by running head-to-head.mjs again against the
+// same capture dir, at the same commit, in a fresh process:
+//
+//   node bench/compression/head-to-head.mjs hr27 --record //     bench/compression/headroom/results/head-to-head.replicate.json
+//
+// It exists so a speed verdict has to survive being measured twice. Absent, the
+// speed criteria read NOT ENFORCEABLE rather than passing on one reading.
+const REPLICATE = join(here, 'headroom', 'results', 'head-to-head.replicate.json');
 const promote = process.argv.includes('--promote');
 // `--json` exists so anything that QUOTES these verdicts -- an issue body, a
 // summary, a dashboard -- can read them from the judge instead of restating
@@ -208,6 +217,82 @@ function judge(row, cfg, floors) {
     };
   })();
 
+  // THE SECOND COLUMN, GATED SEPARATELY. `cost` above prices the block arm --
+  // what `compressBlock` does to one block of text, which is the surface the MCP
+  // tools apply. This prices `compressBody` -- the proxy arm, which rewrites an
+  // actual request body, and is the surface an AI subscription is metered on.
+  //
+  // TWO COLUMNS RATHER THAN ONE, and the reason is that no user pays both. A
+  // user on the MCP tools pays the block arm; a user behind the proxy pays the
+  // proxy arm. A single column would have to either change arm between rows --
+  // and then a reader cannot tell which engine produced a number -- or price
+  // the worse of the two on every row, which prices a user who runs both
+  // surfaces over the same payload and is billed for the more expensive result.
+  // Nobody is billed that way, so the honest shape is two columns, each with its
+  // own must-win, and neither borrowing the other's wins.
+  //
+  // The same three clauses apply, against the same two opponents, because the
+  // question is identical: is a subscriber cheaper at every fetch rate. What
+  // differs is only which of our arms is being asked.
+  //
+  // `pass: null` where the payload has no proxy arm at all. Four rows in this
+  // corpus are arrays of log lines and API records with no `role` and no
+  // `content`: there is no request body to rewrite, so the arm does not apply.
+  // That is UNMEASURED, not a loss, and it is not a pass either.
+  const proxyRefusal = (() => {
+    if (c.session.p0.proxy === null || c.session.p0.proxy === undefined)
+      return 'no proxy arm on this payload: it is not a message list, so there ' +
+        'is no request body for the proxy to rewrite';
+    if (c.session.worstProxy === undefined)
+      return 'proxy worst point UNRECORDED (re-run head-to-head)';
+    return null;
+  })();
+  const px0 = num(c.session.p0.proxy);
+  const px1 = num(c.session.p1.proxy);
+  const proxyBest = (() => {
+    if (proxyRefusal !== null) return { pass: null, detail: proxyRefusal };
+    const wp = c.session.worstProxy;
+    if (wp === null) return { pass: null, detail: 'proxy worst point UNRECORDED' };
+    const wpo = num(wp.proxy);
+    const wpt = num(wp.theirs);
+    const p0okp = tie ? px0 <= p0t : px0 < p0t;
+    const wokp = tie && Number(wp.fetchRate) === 0 ? wpo <= wpt : wpo < wpt;
+    return {
+      pass: p0okp && px1 < p1t && wokp,
+      detail:
+        `proxy arm: p0 ${px0} ${tie ? '<=' : '<'} ${p0t} ${p0okp ? 'ok' : 'NO'}; ` +
+        `p1 ${px1} < ${p1t} ${px1 < p1t ? 'ok' : 'NO'}; ` +
+        `worst@${(Number(wp.fetchRate) * 100).toFixed(0)}% ${wpo} < ${wpt} ${wokp ? 'ok' : 'NO'}`,
+    };
+  })();
+  const proxyComp = (() => {
+    if (proxyRefusal !== null) return { pass: null, detail: proxyRefusal };
+    const why = comparableRefusal(row);
+    if (why !== null) return { pass: null, detail: why };
+    const arm = row.comparable.arm;
+    const p0c = num(c.session.p0.theirsComparableAtLeast);
+    const p1c = num(c.session.p1.theirsComparableAtLeast);
+    const wc = c.session.worstProxyComparable;
+    if (p0c === null || p1c === null || wc === null || wc === undefined)
+      return {
+        pass: null,
+        detail: `${arm}: proxy-vs-comparable cost UNRECORDED (re-run head-to-head)`,
+      };
+    const woc = num(wc.proxy);
+    const wtc = num(wc.theirsAtLeast);
+    const p0okc = tie ? px0 <= p0c : px0 < p0c;
+    const wokc = tie && Number(wc.fetchRate) === 0 ? woc <= wtc : woc < wtc;
+    return {
+      pass: p0okc && px1 < p1c && wokc,
+      detail:
+        `proxy arm vs ${arm} (their redeem priced at 0, a LOWER bound on their cost): ` +
+        `p0 ${px0} ${tie ? '<=' : '<'} ${p0c} ${p0okc ? 'ok' : 'NO'}; ` +
+        `p1 ${px1} < ${p1c} ${px1 < p1c ? 'ok' : 'NO'}; ` +
+        `worst@${(Number(wc.fetchRate) * 100).toFixed(0)}% ` +
+        `${woc} < ${wtc} ${wokc ? 'ok' : 'NO'}`,
+    };
+  })();
+
   // ITS OWN CRITERION, because what it measures is not tokens. The one real
   // cost of a round trip the model cannot see is the wall clock, and speed
   // times compression rather than retrieval, so nothing else here presses on
@@ -277,9 +362,16 @@ function judge(row, cfg, floors) {
   // A capture from before the second arm was timed has no `oursSubMs*`, and the
   // verdict is refused rather than silently falling back to the default arm:
   // that fallback is exactly the mismatched pairing this replaced.
-  const speedBest = (() => {
+  // TWO AGREEING RECORDINGS, OR THE SPEED PAIR IS NOT ENFORCEABLE. The rule and
+  // the measurements that forced it live in replicate-agreement.mjs, which has
+  // its own known-answer suite -- including the arm that proves a copied record
+  // is rejected as a second recording.
+  const mustAgreeAcrossRecordings = (judge) =>
+    agreeAcrossRecordings({ judge, primary: results, replicate: replicateFile, name: row.name });
+
+  const speedBestOf = (speed) => {
     if (load.ok === false) return { pass: null, detail: load.detail };
-    if (!Array.isArray(row.speed?.oursSubMsPasses))
+    if (!Array.isArray(speed?.oursSubMsPasses))
       return {
         pass: null,
         detail:
@@ -287,18 +379,19 @@ function judge(row, cfg, floors) {
           'head-to-head.mjs so both arms of ours are measured in the same passes',
       };
     const v = speedVerdict({
-      ourSamples: row.speed?.oursSubMsSamples,
-      ourPasses: row.speed?.oursSubMsPasses,
-      theirSamples: row.speed?.theirsMsSamples,
-      theirPasses: row.speed?.theirsMsPasses,
-      ms: num(row.speed?.oursSubMs),
-      theirMs: num(row.speed?.theirsMs),
+      ourSamples: speed?.oursSubMsSamples,
+      ourPasses: speed?.oursSubMsPasses,
+      theirSamples: speed?.theirsMsSamples,
+      theirPasses: speed?.theirsMsPasses,
+      ms: num(speed?.oursSubMs),
+      theirMs: num(speed?.theirsMs),
     });
     return {
       pass: v.pass,
-      detail: `ours-movewhole vs ${row.speed?.theirsArm ?? 'unnamed'}: ${v.detail}`,
+      detail: `ours-movewhole vs ${speed?.theirsArm ?? 'unnamed'}: ${v.detail}`,
     };
-  })();
+  };
+  const speedBest = mustAgreeAcrossRecordings(speedBestOf);
   // THE SAME ESTIMATOR ON THE COMPARABLE ARM, from the readings `run-theirs.py`
   // now takes for every arm. Reusing `speedVerdict` rather than writing a
   // second comparison is the point: a column judged by a softer test than the
@@ -316,12 +409,12 @@ function judge(row, cfg, floors) {
   // another is read correctly on each. A capture recorded before that count
   // existed has `theirsComparableTurns === null` and keeps the default arm,
   // which is what it was measured as.
-  const speedComp = (() => {
+  const speedCompOf = (speed) => {
     if (load.ok === false) return { pass: null, detail: load.detail };
     const why = comparableRefusal(row);
     if (why !== null) return { pass: null, detail: why };
-    const offloads = (row.speed?.theirsComparableTurns ?? 0) > 0;
-    if (offloads && !Array.isArray(row.speed?.oursSubMsPasses))
+    const offloads = (speed?.theirsComparableTurns ?? 0) > 0;
+    if (offloads && !Array.isArray(speed?.oursSubMsPasses))
       return {
         pass: null,
         detail:
@@ -329,21 +422,22 @@ function judge(row, cfg, floors) {
           'timed in this capture -- re-record with head-to-head.mjs',
       };
     const v = speedVerdict({
-      ourSamples: offloads ? row.speed?.oursSubMsSamples : row.speed?.oursMsSamples,
-      ourPasses: offloads ? row.speed?.oursSubMsPasses : row.speed?.oursMsPasses,
-      theirSamples: row.speed?.theirsComparableMsSamples,
-      theirPasses: row.speed?.theirsComparableMsPasses,
-      ms: num(offloads ? row.speed?.oursSubMs : row.speed?.oursMs),
-      theirMs: num(row.speed?.theirsComparableMs),
+      ourSamples: offloads ? speed?.oursSubMsSamples : speed?.oursMsSamples,
+      ourPasses: offloads ? speed?.oursSubMsPasses : speed?.oursMsPasses,
+      theirSamples: speed?.theirsComparableMsSamples,
+      theirPasses: speed?.theirsComparableMsPasses,
+      ms: num(offloads ? speed?.oursSubMs : speed?.oursMs),
+      theirMs: num(speed?.theirsComparableMs),
     });
-    const arm = row.speed?.theirsComparableArm ?? row.comparable.arm;
+    const arm = speed?.theirsComparableArm ?? row.comparable.arm;
     return {
       pass: v.pass,
       detail: offloads
-        ? `ours-movewhole vs ${arm} (offloads here: ${row.speed?.theirsComparableTurns} marker(s)): ${v.detail}`
+        ? `ours-movewhole vs ${arm} (offloads here: ${speed?.theirsComparableTurns} marker(s)): ${v.detail}`
         : `ours-default vs ${arm}: ${v.detail}`,
     };
-  })();
+  };
+  const speedComp = mustAgreeAcrossRecordings(speedCompOf);
   const retentionBest = retentionVerdict({
     ids: num(row.retention?.ids),
     ours: num(row.retention?.oursZeroTurn),
@@ -394,6 +488,7 @@ function judge(row, cfg, floors) {
     const undecided = { pass: null, detail: parity.detail };
     return {
       cost: undecided,
+      'cost-proxy': undecided,
       turns: undecided,
       speed: undecided,
       retention: { ...undecided, lost: null },
@@ -405,6 +500,7 @@ function judge(row, cfg, floors) {
   // agreement.
   return {
     cost: bothColumns(costBest, costComp),
+    'cost-proxy': bothColumns(proxyBest, proxyComp),
     turns: bothColumns(turnsBest, turnsComp),
     speed: bothColumns(speedBest, speedComp),
     retention,
@@ -412,6 +508,9 @@ function judge(row, cfg, floors) {
 }
 
 const results = JSON.parse(readFileSync(RESULTS, 'utf8'));
+const replicateFile = existsSync(REPLICATE)
+  ? JSON.parse(readFileSync(REPLICATE, 'utf8'))
+  : null;
 const ratchet = existsSync(RATCHET)
   ? JSON.parse(readFileSync(RATCHET, 'utf8'))
   : {
@@ -442,7 +541,9 @@ const nextFloors = { ...floors };
 for (const row of results.workloads) {
   const cfg = ROWS[row.name];
   if (!cfg) continue;
-  for (const [criterion, v] of Object.entries(judge(row, cfg, floors))) {
+  for (const [criterion, v] of Object.entries(
+    judge(row, cfg, floors)
+  )) {
     // THE FLOOR IS THE FEWEST UNITS EVER LOST, not the most ever retained, and
     // it carries the denominator that count was taken over. A ratchet may only
     // tighten, which `tightenFloor` is responsible for.
