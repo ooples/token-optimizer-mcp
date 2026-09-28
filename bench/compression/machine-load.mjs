@@ -102,18 +102,6 @@ export function loadRefusal(sample, maxBusyFraction = DEFAULT_MAX_BUSY) {
 }
 
 /**
- * Two `os.cpus()` readings `ms` apart.
- *
- * @param {number} ms
- * @returns {Promise<ReturnType<typeof busySample>>}
- */
-export async function sampleBusy(ms = 2000) {
-  const before = cpus().map((c) => ({ ...c.times }));
-  await new Promise((r) => setTimeout(r, ms));
-  const after = cpus().map((c) => ({ ...c.times }));
-  return busySample(before, after);
-}
-/**
  * The same reading, without an await.
  *
  * WHY A SYNCHRONOUS FORM EXISTS. The sweep driver is built on `spawnSync` and
