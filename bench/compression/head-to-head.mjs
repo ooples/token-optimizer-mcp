@@ -96,6 +96,7 @@ import {
   compressBlock,
   engineNameFor,
   compressBody,
+  anchorStore,
   KNOWN_ANSWER_OURS,
   stubbedScorerRefusal,
 } from './ours-engine.mjs';
@@ -611,10 +612,30 @@ for (const [name, text] of Object.entries(payloads)) {
       // with the guard off and once on, differs in 0 non-timing leaves across all 18
       // workloads. Publishing a second column would be publishing the same number
       // twice and implying the guard had been exercised.
-      const result = compressBody(Buffer.from(wrapped, 'utf8'), (c, hint) => {
-        bodySpilled.push(c);
-        return `.token-optimizer/spill/b${bodySpilled.length}-${hint}`;
-      });
+      // WITH THE ANCHOR STORE, BECAUSE THE SHIPPED PROXY HAS NO WAY TO RUN
+      // WITHOUT ONE. src/proxy/server.ts builds a store at startup (:1306) and
+      // passes it on every request, with no env flag to turn it off, so an arm
+      // measured with two arguments is an arm that does not exist. It is not a
+      // small difference: with no store the arm respects the client's marker on
+      // every payload, and with one, a request at or below `coldMessageLimit`
+      // comes back `first-turn` with `reanchor` set, which clears `respect` in
+      // src/compress/strategy.ts:784 and lets it rewrite the cached prefix.
+      // Priced through cost-model.mjs that re-anchoring is cheaper on eight of
+      // the nine rows where the two differ -- even against a marker-respecting
+      // arm credited with a spliced, byte-identical prefix it does not yet
+      // produce -- so this is the stronger arm as well as the real one.
+      //
+      // ONE COLUMN, NOT TWO. A second pass through the same store returns a
+      // byte-identical body on every payload here, so there is no warm column
+      // to report: whatever the store is worth, it is worth on turn one.
+      const result = compressBody(
+        Buffer.from(wrapped, 'utf8'),
+        (c, hint) => {
+          bodySpilled.push(c);
+          return `.token-optimizer/spill/b${bodySpilled.length}-${hint}`;
+        },
+        anchorStore()
+      );
       // WHY A ZERO IS A ZERO. compressBody declines to rewrite anything behind
       // the client's own cache_control marker, because a rewritten prefix costs
       // a 1.25x cache write. Claude Code puts that marker on the second-to-last
@@ -626,6 +647,29 @@ for (const [name, text] of Object.entries(payloads)) {
       // responses. Printing the share behind the marker is what makes the
       // difference visible instead of leaving a bare zero to be read as a
       // missing engine.
+      // THE CACHE CREDIT IS MEASURED FROM THE BYTES, NOT INFERRED FROM THE
+      // MARKER. cost-model.mjs bills a prefix an arm passed through byte for
+      // byte at R*(N+1) instead of W + R*N, and byte-identical is the whole
+      // condition: a prefix that was re-indented or re-encoded is a cache miss,
+      // not a cheap read. Deriving this from `behind` would hand the arm a 25%
+      // discount for a hit it does not get, so it is the actual common prefix
+      // of what went in and what came out.
+      //
+      // IT COMES OUT AT 57 CHARACTERS ON EVERY ROW THAT COMPRESSES -- the
+      // `{"model":...,"messages":` envelope and nothing more -- because the
+      // proxy rebuilds the request with `JSON.stringify(result.request)` and
+      // these captures are indented. The arm can leave a prefix alone in every
+      // sense that matters and still destroy the cache hit on the way out. The
+      // two rows that keep a real prefix are the two that return their input
+      // untouched. This is recorded rather than corrected for: it is a true
+      // statement about what the arm hands the provider today.
+      const identical = (() => {
+        const outText = result.body.toString('utf8');
+        const n = Math.min(wrapped.length, outText.length);
+        let i = 0;
+        while (i < n && wrapped[i] === outText[i]) i++;
+        return outText.slice(0, i);
+      })();
       let marker = -1;
       parsed.forEach((m, i) => {
         if (Array.isArray(m.content))
@@ -638,6 +682,8 @@ for (const [name, text] of Object.entries(payloads)) {
             JSON.stringify(parsed).length;
       body = {
         behind,
+        cachedPrefixChars: identical.length,
+        cachedPrefixTok: tokens(identical),
         before: Buffer.byteLength(wrapped, 'utf8'),
         after: result.body.length,
         text: result.body.toString('utf8'),
@@ -1037,6 +1083,8 @@ for (const [name, text] of Object.entries(payloads)) {
     bodyTokAfter: body?.tokAfter ?? 0,
     bodyReason: body?.reason ?? '',
     bodyBehind: body?.behind ?? 0,
+    bodyCachedPrefixChars: body?.cachedPrefixChars ?? 0,
+    bodyCachedPrefixTok: body?.cachedPrefixTok ?? 0,
     bodyGone,
     // WHAT THE PROXY ARM PUT ON DISK, tokenised per block the way the block
     // arm's `oursBlockTok` is, so the cost model can price its round trips
@@ -1305,7 +1353,8 @@ const armsFor = (r, params) => {
   const theirBlocks = bytes.map((b) =>
     byteSum === 0 ? 0 : (r.theirTokRedeem * b) / byteSum
   );
-  const L = (handed, blocks) => costLine({ handed, blocks, params });
+  const L = (handed, blocks, cachedPrefix = 0) =>
+    costLine({ handed, blocks, cachedPrefix, params });
   // The comparable arm is not one we resolved, so its redeem cost is UNMEASURED.
   // Pricing every one of its markers at zero redeem tokens is a LOWER BOUND on
   // their cost, which can only make the bar we have to clear harder, never
@@ -1357,7 +1406,14 @@ const armsFor = (r, params) => {
     // other arms are not -- a bias against us, kept rather than corrected so
     // the number cannot be accused of being tuned. On a 0.0% row that bias is
     // the whole difference: rag-conversation prices ABOVE doing nothing.
-    proxy: r.bodyRatio === null ? null : L(r.bodyTokAfter, r.bodyBlockTok),
+    proxy:
+      r.bodyRatio === null
+        ? null
+        : L(
+            r.bodyTokAfter,
+            r.bodyBlockTok,
+            Math.min(r.bodyCachedPrefixTok, r.bodyTokAfter)
+          ),
   };
 };
 
@@ -2160,6 +2216,14 @@ if (process.argv[3] === '--record') {
         // read 0.999537 and 0.999771, and rounding either to 1.000 would print
         // the exact claim the arm cannot support.
         bodyBehind: r.bodyRatio === null ? null : r.bodyBehind.toFixed(6),
+        // WHAT THE PROVIDER ACTUALLY SERVED FROM CACHE, in characters and in
+        // the tokens cost-model.mjs discounts. Near-zero on every row that
+        // compresses, because the proxy re-serialises the request; recorded so
+        // the gap between "left the prefix alone" and "kept the cache hit" is
+        // visible in the record rather than only in the code.
+        bodyCachedPrefixChars:
+          r.bodyRatio === null ? null : r.bodyCachedPrefixChars,
+        bodyCachedPrefixTok: r.bodyRatio === null ? null : r.bodyCachedPrefixTok,
         preset: pct(r.presetRatio),
         sub: pct(r.subRatio),
         theirs: pct(r.theirs),

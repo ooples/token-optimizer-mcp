@@ -34,14 +34,16 @@ if (KNOWN_ANSWER_OURS) {
     `KNOWN-ANSWER SCORER RUN via ${KNOWN_ANSWER_OURS} -- this measures the scorer, not any engine`
   );
 } else {
-  const [router, server] = await Promise.all([
+  const [router, server, anchor] = await Promise.all([
     import('../../dist/compress/router.js'),
     import('../../dist/proxy/server.js'),
+    import('../../dist/compress/anchor.js'),
   ]);
   impl = {
     compressBlock: router.compressBlock,
     compressBody: server.compressBody,
     engineNameFor: router.engineNameFor,
+    anchorStore: anchor.anchorStore,
   };
 }
 
@@ -70,8 +72,28 @@ export const engineNameFor = (text) =>
 /** Compress one text block. Returns at least `{ text }`. */
 export const compressBlock = (text, options) => impl.compressBlock(text, options);
 
-/** Compress a whole request buffer. Returns at least `{ body, summary }`. */
-export const compressBody = (buffer, spill) => impl.compressBody(buffer, spill);
+/**
+ * Compress a whole request buffer. Returns at least `{ body, summary }`.
+ *
+ * `anchors` IS NOT OPTIONAL IN PRODUCTION, so a harness that omits it is not
+ * measuring the shipped arm. src/proxy/server.ts builds one store at startup
+ * (`const anchors = anchorStore()`, :1306) and passes it on every request with
+ * no env flag to turn it off, so every request after the first sees a warm
+ * store. A benchmark that calls this with two arguments measures a permanently
+ * cold proxy -- the first turn of a session, over and over.
+ */
+export const compressBody = (buffer, spill, anchors) =>
+  impl.compressBody(buffer, spill, anchors);
+
+/**
+ * A fresh anchor store, or null when this run cannot have one.
+ *
+ * Null on a known-answer run: the stub is not an engine, it does not read a
+ * store, and a warm column taken against it would be the cold column printed
+ * twice under a second name.
+ */
+export const anchorStore = () =>
+  typeof impl.anchorStore === 'function' ? impl.anchorStore() : null;
 
 /**
  * A refusal message, or null when our column came from the real engine.
