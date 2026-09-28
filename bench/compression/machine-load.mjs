@@ -26,6 +26,8 @@
  * it.
  */
 
+import { cpus } from 'node:os';
+
 /** @typedef {{user:number,nice:number,sys:number,idle:number,irq:number}} CpuTimes */
 
 const total = (t) => t.user + t.nice + t.sys + t.idle + t.irq;
@@ -106,9 +108,27 @@ export function loadRefusal(sample, maxBusyFraction = DEFAULT_MAX_BUSY) {
  * @returns {Promise<ReturnType<typeof busySample>>}
  */
 export async function sampleBusy(ms = 2000) {
-  const { cpus } = await import('node:os');
   const before = cpus().map((c) => ({ ...c.times }));
   await new Promise((r) => setTimeout(r, ms));
+  const after = cpus().map((c) => ({ ...c.times }));
+  return busySample(before, after);
+}
+/**
+ * The same reading, without an await.
+ *
+ * WHY A SYNCHRONOUS FORM EXISTS. The sweep driver is built on `spawnSync` and
+ * runs its chunks in a plain loop; making it async to take a load reading would
+ * restructure the one file whose ordering guarantees (clear the store, sweep,
+ * resolve, in that order) are the point of it. `Atomics.wait` blocks the main
+ * thread in Node, which is exactly what is wanted here -- the process should be
+ * doing nothing at all while it measures how busy the machine is.
+ *
+ * @param {number} ms
+ * @returns {ReturnType<typeof busySample>}
+ */
+export function sampleBusySync(ms = 2000) {
+  const before = cpus().map((c) => ({ ...c.times }));
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
   const after = cpus().map((c) => ({ ...c.times }));
   return busySample(before, after);
 }

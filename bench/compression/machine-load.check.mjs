@@ -22,7 +22,8 @@
  *    exact failure this file exists to prevent.
  */
 
-import { busySample, loadRefusal, DEFAULT_MAX_BUSY } from './machine-load.mjs';
+import { readFileSync } from 'node:fs';
+import { busySample, loadRefusal, sampleBusySync, DEFAULT_MAX_BUSY } from './machine-load.mjs';
 
 let failures = 0;
 const check = (cond, what, detail) => {
@@ -76,5 +77,34 @@ check('error' in back && back.error.includes('backwards'), 'counters that go bac
 check(String(loadRefusal(qs, 0)).includes('--max-busy'), 'a ceiling of 0 is refused as a bad flag', String(loadRefusal(qs, 0)));
 check(String(loadRefusal(qs, 1.5)).includes('--max-busy'), 'so is a ceiling above 1', String(loadRefusal(qs, 1.5)));
 
+// THE LIVE SAMPLER, ON THE ONLY THING THAT IS TRUE WHATEVER THIS BOX IS DOING.
+// The fraction itself is not assertable here -- that is the whole reason every
+// case above is synthetic -- but a reading that came back as an error, or with
+// no cores, or outside [0, 1], is broken regardless of the machine.
+const live = sampleBusySync(250);
+check(!('error' in live), 'the live sampler returns a reading, not an error', JSON.stringify(live));
+check(
+  !('error' in live) && live.cores > 0 && live.busyFraction >= 0 && live.busyFraction <= 1,
+  'and it is a fraction of a real core count',
+  JSON.stringify(live)
+);
+// AND IS IT ACTUALLY WIRED? This module's predecessor problem was not a wrong
+// answer, it was an unread one: competitor-health.mjs knew how to refuse a
+// degraded capture for weeks while head-to-head.mjs, the file that prints the
+// quotable table, never called it. A gate nothing calls is a comment. So the
+// sweep driver is read from disk and checked for the call, not trusted to keep
+// it.
+const sweep = readFileSync(
+  new URL('./headroom/sweep-chunks.mjs', import.meta.url),
+  'utf8'
+);
+check(sweep.includes("from '../machine-load.mjs'"), 'the sweep driver imports this module', undefined);
+check(/const requireQuietMachine = /.test(sweep), 'and defines the gate', undefined);
+const calls = (sweep.match(/requireQuietMachine\(/g) ?? []).length;
+check(calls >= 2, 'and calls it at the start AND once per chunk', `${calls} call site(s)`);
+// THE PATTERN IS QUOTED, NOT BARE. A bare /--allow-loaded/ matches the comment
+// in that file explaining why the flag does not exist, so the check would fail
+// on the prose that documents it passing. Only a parsed flag is quoted.
+check(!/'--allow-loaded'/.test(sweep), 'with no blanket bypass flag parsed', undefined);
 console.log(failures === 0 ? 'machine-load: all checks passed' : `machine-load: ${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

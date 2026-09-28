@@ -41,6 +41,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { sampleBusySync, loadRefusal, DEFAULT_MAX_BUSY } from '../machine-load.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -52,7 +53,7 @@ const flag = (name) => {
 // are what is left. Filtering on "the previous argument began with --" instead
 // would read `--chunks 4 - out` as one positional, and silently swallow the
 // clone path the moment a valueless flag is added.
-const VALUED = new Set(['--chunks', '--extra', '--merge-into', '--separators']);
+const VALUED = new Set(['--chunks', '--extra', '--merge-into', '--separators', '--max-busy']);
 const consumed = new Set();
 args.forEach((a, i) => {
   if (VALUED.has(a)) {
@@ -71,12 +72,17 @@ const PAIRED = args.includes('--paired');
 // it does not know, so validating it a second time here would only create a
 // second place for the two lists to drift apart.
 const SEPARATORS = flag('--separators');
+// THE CEILING, AND THE ONLY WAY PAST IT. There is deliberately no boolean
+// bypass: raising a number is explicit, quantified and printed into the log,
+// where `--allow-loaded` would be a blanket that records nothing about how
+// loaded the box actually was.
+const MAX_BUSY = flag('--max-busy') === null ? DEFAULT_MAX_BUSY : Number(flag('--max-busy'));
 
 if (CLONE === undefined || OUT === undefined || !Number.isInteger(N) || N < 1) {
   console.error(
     'usage: node bench/compression/headroom/sweep-chunks.mjs <clone|-> <out-dir> ' +
       '--chunks <n> [--paired] [--extra <natives.json>] [--merge-into <dir>] ' +
-      '[--separators default|compact]'
+      '[--separators default|compact] [--max-busy <fraction>]'
   );
   process.exit(2);
 }
@@ -137,6 +143,40 @@ could not clear ${file}: ${err.message}`);
   );
 };
 
+// IS THE BOX FREE ENOUGH TO MEASURE THEM ON? Their transform is wall-clock
+// budgeted, so on a busy machine it gives up and passes content through
+// uncompressed: their COLUMN changes, not just their clock. That has already
+// happened once -- hr31 carries sixteen time-budget warnings -- and the
+// instrument that was supposed to catch it, load-witness.mjs, read that capture
+// as no busier than the clean one and read a forty-MSBuild-node box as quieter
+// than both. It times one single-threaded loop, and on 32 cores that loop always
+// gets a core. This reads idle time across all of them instead.
+//
+// IT GUARDS, IT DOES NOT PROVE. Only `competitorWarnings.degraded` can show a
+// capture was clean, and that is already a hard refusal in run-theirs.py and in
+// head-to-head.mjs. This is here so a four-hour sweep does not start on a box
+// that was never going to produce one.
+const requireQuietMachine = (when) => {
+  const sample = sampleBusySync(2000);
+  const refusal = loadRefusal(sample, MAX_BUSY);
+  console.log(
+    `    machine load ${when}: ${
+      'error' in sample
+        ? sample.error
+        : `${(sample.busyFraction * 100).toFixed(1)}% busy of ${sample.cores} core(s)` +
+          `, ceiling ${(MAX_BUSY * 100).toFixed(1)}%`
+    }`
+  );
+  if (refusal === null) return;
+  console.error(`\nNOT SWEEPING: ${refusal}`);
+  console.error('Quiesce the box -- no other builds, test runs or agent sessions -- and');
+  console.error('start again. If this machine has a permanent background service, raise the');
+  console.error('ceiling explicitly with --max-busy <fraction>; there is no blanket bypass.');
+  process.exit(1);
+};
+
+console.log('\n=== before anything is swept');
+requireQuietMachine('at the start');
 fs.mkdirSync(OUT, { recursive: true });
 const dirs = [];
 const timings = [];
@@ -172,6 +212,11 @@ const sweepChunk = (i, dir, arm) => {
 const coldDirs = [];
 const warmDirs = [];
 for (let i = 1; i <= N; i += 1) {
+  // PER CHUNK, AND POINTEDLY NOT INSIDE sweepChunk. In paired mode the cold and
+  // warm sweeps must follow each other with nothing in between -- every second
+  // there is a second of their TTL -- so the reading is taken here, before the
+  // clear, where it costs the experiment nothing.
+  requireQuietMachine(`before chunk ${i}/${N}`);
   if (!PAIRED) {
     sweepChunk(i, path.join(OUT, `chunk${i}of${N}`), null);
     continue;
