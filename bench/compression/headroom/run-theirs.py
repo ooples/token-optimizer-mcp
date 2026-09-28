@@ -228,10 +228,24 @@ def tokens(text):
 
 
 def text_of(payload):
-    """The compressors take text; their generators return dicts and lists."""
+    """The compressors take text; their generators return dicts and lists.
+
+    COMPACT, BECAUSE THAT IS WHAT THEIR OWN HARNESS FEEDS. This used to emit
+    `indent=2`, which handed BOTH arms 18-33% of a payload that was nothing but
+    whitespace -- a reduction either compressor collects by reserialising and
+    neither has to earn. Their two runners that consume these same generators,
+    benchmarks/bench_latency.py and benchmarks/agent_cost_benchmark.py, call
+    bare `json.dumps` at every single call site; the only `indent=2` in either
+    is bench_latency.py:1271, which writes the results file, not the payload.
+
+    It also stopped being neutral once the proxy started handing back the
+    client's own bytes for the prefix it did not touch (src/proxy/cached-prefix.ts):
+    preserving those bytes means declining to re-indent them, so indentation
+    that nobody sends showed up as a penalty for protecting a cache hit.
+    """
     if isinstance(payload, str):
         return payload
-    return json.dumps(payload, indent=2)
+    return json.dumps(payload)
 
 
 # Their own seed, so the fixtures are the ones their published numbers use.
@@ -403,6 +417,73 @@ if CHUNK_PROV is not None:
         "chunk %s: %d of %d workloads -- %s"
         % (CHUNK_PROV["selector"], len(WORKLOADS), len(ROSTER), ", ".join(sorted(WORKLOADS)))
     )
+# A CONVERSATION WITHOUT A BREAKPOINT MEASURES NOTHING ABOUT THE BREAKPOINT.
+#
+# Their generators are protocol fixtures, not client traffic: they emit the
+# message list and stop. A real Anthropic client marks a turn with
+# `cache_control`, and our proxy arm exists to RESPECT that mark -- so a fixture
+# that carries none never exercises the path it is there to test, and its 0% is
+# a request that was never asked rather than an arm that could not answer.
+#
+# ONLY THE TWO CONVERSATIONS ARE MARKED. api-responses, database-rows,
+# log-entries and search-results are single bulk tool results; a client places
+# no breakpoint inside one, and putting one there would measure a shape nobody
+# sends.
+#
+# THE MARK GOES IN BEFORE `PAYLOADS` AND BEFORE `natives.json`, so both arms are
+# handed the same bytes -- input parity is a gate in this roster, and marking
+# only our side would break it while quietly crediting us for a payload their
+# compressor never saw.
+MARK_BREAKPOINT = ("agentic-conversation", "rag-conversation")
+
+
+def mark_breakpoint(messages):
+    """Mark the SECOND-TO-LAST user turn, which is where a client puts it.
+
+    Claude Code leaves the newest turn unmarked so it is still fresh when the
+    request goes out; marking the last one would move the breakpoint every turn
+    and throw the prefix away each time. `content` arrives as a string on some
+    of their fixtures and as blocks on others -- Anthropic accepts both, but
+    `cache_control` attaches to a block, so a string turn becomes the one text
+    block a client would have sent.
+    """
+    if not isinstance(messages, list):
+        return messages, None
+    users = [i for i, m in enumerate(messages)
+             if isinstance(m, dict) and m.get("role") == "user"]
+    if len(users) < 2:
+        return messages, None
+    at = users[-2]
+    turn = dict(messages[at])
+    content = turn.get("content")
+    if isinstance(content, str):
+        content = [{"type": "text", "text": content}]
+    if not isinstance(content, list) or not content:
+        return messages, None
+    blocks = [dict(b) if isinstance(b, dict) else b for b in content]
+    last = blocks[-1]
+    if not isinstance(last, dict):
+        return messages, None
+    last["cache_control"] = {"type": "ephemeral"}
+    turn["content"] = blocks
+    out = list(messages)
+    out[at] = turn
+    return out, at
+
+
+for _name in MARK_BREAKPOINT:
+    if _name not in WORKLOADS:
+        continue
+    WORKLOADS[_name], _at = mark_breakpoint(WORKLOADS[_name])
+    if _at is None:
+        raise SystemExit(
+            "could not place a cache breakpoint on %r: its turns are not a "
+            "message list with two user turns. The fixture shape changed, and "
+            "scoring it unmarked would report a refusal as an inability." % _name
+        )
+    print("marked %s: cache_control on message %d (second-to-last user turn)"
+          % (_name, _at))
+
 PAYLOADS = {name: text_of(value) for name, value in WORKLOADS.items()}
 
 
