@@ -1959,7 +1959,17 @@ if (unconserved.length)
   console.log(`SIZE BOUND FAILED ON: ${unconserved.join(', ')}`);
 // NAMED, BECAUSE A DECODER GAP LOOKS EXACTLY LIKE DATA LOSS IN THE COLUMNS
 // ABOVE and the two want opposite fixes. Anything listed here was scored as if
-// unrecoverable, so the gap costs us and the list is the work queue.
+// unrecoverable, so the gap costs us.
+//
+// AND NOW A GATE, NOT A WORK QUEUE. It was left ungating while the queue had
+// entries on it, so that the gap stayed visible while it was being worked
+// rather than blocking every run. The queue is empty: hr30 and hr31 both score
+// with zero refusals. A list that is empty and ungated is one silent
+// regression away from being neither, and the two things this catches are both
+// disqualifying -- our own shipped decoder unable to read our own output, or
+// the harness mis-addressing it, which is the `harness: n of m
+// back-references` case and means the recovery column was measuring less than
+// it claimed.
 for (const [label, reason] of refusals)
   console.log(`DECODER REFUSED on ${label}: ${reason}`);
 
@@ -2705,6 +2715,9 @@ const failed =
   // Their side having run degraded is a gate, not a note: see the record
   // refusal above. Scoring without `--record` lands here.
   competitorDegraded !== null ||
+  // A decoder that refuses our own output, or a harness that never handed it
+  // the marker, ratcheted from a printed note to a gate on an empty queue.
+  refusals.size > 0 ||
   lost > 0 ||
   bodyLost > 0 ||
   // Whole-payload conservation is a gate, not a note. A word of the payload that
