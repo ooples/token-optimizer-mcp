@@ -311,7 +311,13 @@ No account and no hosted service. MIT, so it is usable at work.
 Nothing is measured about you unless you ask for it. Anonymous usage data is
 off by default and takes two separate opt-ins: `TOKEN_OPTIMIZER_TELEMETRY=1`
 aggregates counts into a file on your own disk, and `TOKEN_OPTIMIZER_BEACON=1`
-is what would ever upload any of it. Setting the first opens no socket.
+is what uploads any of it. Setting the first opens no socket. With both set,
+the events already on disk are sent once per session at start-up -- in a batch,
+never on the hot path -- and the file is cleared only after the receiver has
+accepted them. `install_doctor` prints which of the two is on, how many events
+are waiting and where they would go; it reports without sending. A package
+built without the upload key cannot transmit at all, and the doctor says so
+rather than letting an opt-in look like it is working.
 `DO_NOT_TRACK=1` overrides both, whatever else is set. An event may only
 contain numbers and flags -- a string is dropped before it is written, so a
 path, a prompt or an error message cannot travel even by mistake -- and the
@@ -946,7 +952,7 @@ signal, a power cut -- the directory is left behind in your OS temp directory
 and is safe to delete by hand. Running with the proxy off writes no spills at
 all.
 
-### Three switches, and what each one trades
+### Four switches, and what each one trades
 
 | variable                          | default    | what it does                                               |
 | --------------------------------- | ---------- | ---------------------------------------------------------- |
@@ -965,6 +971,24 @@ the rest of the session, which pays on a long conversation and does not on a sho
 one. Turn it on and the block is dropped on any turn where sending it would hand
 upstream more bytes than the client handed us -- the wire never inflates, and the
 prefix knowledge is what you give up for that.
+
+### The telemetry switches
+
+| variable                        | default | what it does                                          |
+| ------------------------------- | ------- | ----------------------------------------------------- |
+| `TOKEN_OPTIMIZER_TELEMETRY`     | off     | aggregate counts into a file in your home directory   |
+| `TOKEN_OPTIMIZER_BEACON`        | off     | upload that file; requires the one above as well      |
+| `DO_NOT_TRACK`                  | unset   | overrides both, whatever else is set                  |
+| `TOKEN_OPTIMIZER_BEACON_URL`    | project | send somewhere else, for a fork or a self-hosted table |
+| `TOKEN_OPTIMIZER_BEACON_KEY`    | packed  | the key to send with; empty in a build without one    |
+| `TOKEN_OPTIMIZER_BEACON_TABLE`  | `telemetry_events` | the table to insert into                   |
+
+The key is not in this repository. It is public and the package is published, so
+a committed key would be handed to everyone who runs `npm view` and could not be
+rotated out of the copies already installed; the release workflow stamps it into
+the tarball instead. A build without it still works and still aggregates locally
+-- it just cannot upload, and `install_doctor` prints `packed without a key`
+rather than letting an opt-in look like it is working.
 
 `lossless` is worth knowing about: it forbids every transform that removes
 something the output cannot reconstruct -- function bodies, array tails,
