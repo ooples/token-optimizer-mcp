@@ -194,7 +194,17 @@ export function storeEffect({ empty, warm }) {
 // judge written here, and the store state and the corpus digest come out of the
 // record, so nothing about the pair is asserted by whoever runs it.
 //
-//   node bench/compression/store-effect.mjs --empty=<record.json> --warm=<record.json>
+// EACH SIDE NEEDS ITS OWN SECOND RECORDING. The gate reads a speed row only when
+// it can see two recordings of the SAME capture, so an arm passed without one is
+// judged against whatever replicate happens to be published -- a different capture
+// entirely -- and every speed row on that arm comes back NOT ENFORCEABLE. That is
+// not a small hole: speed is twelve of the sixty criteria here, and their redeem
+// path is precisely where a warm store would show up, so a pair without replicates
+// is blind in the place it was built to look.
+//
+//   node bench/compression/store-effect.mjs \
+//     --empty=<record.json> --empty-replicate=<second recording of the same capture> \
+//     --warm=<record.json>  --warm-replicate=<second recording of the same capture>
 // ---------------------------------------------------------------------------
 const { fileURLToPath } = await import('node:url');
 const { resolve } = await import('node:path');
@@ -209,21 +219,42 @@ if (invokedDirectly) {
   const flag = (n) => args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3);
   const emptyPath = flag('empty');
   const warmPath = flag('warm');
+  const emptySecond = flag('empty-replicate');
+  const warmSecond = flag('warm-replicate');
   if (emptyPath === undefined || warmPath === undefined) {
     console.error(
-      'usage: node bench/compression/store-effect.mjs --empty=<record.json> --warm=<record.json>'
+      'usage: node bench/compression/store-effect.mjs --empty=<record.json> --warm=<record.json>\n' +
+        '       [--empty-replicate=<path> --warm-replicate=<path>], without which every ' +
+        'speed row reads undecided'
     );
     process.exit(2);
   }
+  // SAID OUT LOUD RATHER THAN LEFT TO THE READER TO NOTICE. A pair run without
+  // replicates still reports sixty criteria and quietly decides forty-eight.
+  for (const [side, second] of [
+    ['empty', emptySecond],
+    ['warm', warmSecond],
+  ]) {
+    if (second === undefined) {
+      console.error(
+        `warning: no --${side}-replicate, so the ${side} arm is judged against the published ` +
+          'replicate of another capture and its speed rows will all read undecided'
+      );
+    }
+  }
   const gate = resolve(fileURLToPath(import.meta.url), '..', 'must-win.check.mjs');
-  const load = (label, p) => {
+  const load = (label, p, second) => {
     const record = JSON.parse(fs.readFileSync(p, 'utf8'));
     // THE JUDGE'S OWN VERDICTS. `--json` prints them and exits non-zero while any
     // must-win is open, which is the normal state, so the status is not an error
     // here -- an unparseable stdout is.
     let stdout = '';
     try {
-      stdout = execFileSync(process.execPath, [gate, '--results', p, '--json'], { encoding: 'utf8' });
+      stdout = execFileSync(
+        process.execPath,
+        [gate, '--results', p, '--json', ...(second === undefined ? [] : ['--replicate', second])],
+        { encoding: 'utf8' }
+      );
     } catch (e) {
       stdout = e.stdout ?? '';
     }
@@ -243,8 +274,8 @@ if (invokedDirectly) {
       verdicts,
     };
   };
-  const empty = load('empty-store', emptyPath);
-  const warm = load('warm-store', warmPath);
+  const empty = load('empty-store', emptyPath, emptySecond);
+  const warm = load('warm-store', warmPath, warmSecond);
   console.log(`empty-store: capture ${empty.capture}, ${empty.fingerprint}`);
   console.log(`warm-store:  capture ${warm.capture}, ${warm.fingerprint}`);
   const r = storeEffect({ empty, warm });
