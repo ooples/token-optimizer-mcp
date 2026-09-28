@@ -16,6 +16,10 @@ import path from 'path';
 import os from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname } from 'path';
+import { describePolicy } from '../telemetry/policy.js';
+import { recordedBytes, recorderLastError } from '../telemetry/recorder.js';
+import { pendingEvents } from '../telemetry/beacon.js';
+import { beaconKey, beaconTable, beaconUrl } from '../telemetry/credentials.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -44,6 +48,41 @@ async function modules() {
   } catch {
     return null;
   }
+}
+
+/**
+ * What the telemetry switches are actually doing, in the doctor's own words.
+ *
+ * REPORTED, NEVER SENT: the doctor is run by people checking whether we are
+ * uploading anything, and a diagnostic that uploaded while answering that
+ * question would be the exact thing they were checking for. It reads the local
+ * log and the resolved endpoint and prints them.
+ *
+ * It also states whether a key was packed, because a policy of "local and
+ * upload: both explicitly enabled" with no key is a build that will never send
+ * a byte, and an operator who opted in deserves to be told that rather than
+ * left to wonder.
+ */
+export async function telemetrySection(
+  env: NodeJS.ProcessEnv = process.env
+): Promise<string[]> {
+  const bytes = recordedBytes(env);
+  const pending = (await pendingEvents(env)).length;
+  const key = beaconKey(env);
+  const lines = [
+    '',
+    'Telemetry',
+    `  policy: ${describePolicy(env)}`,
+    bytes === null
+      ? '  local log: not written yet'
+      : `  local log: ${bytes} bytes, ${pending} event(s) pending`,
+    key
+      ? `  upload target: ${beaconUrl(env)}/rest/v1/${beaconTable(env)}`
+      : '  upload target: none -- this build was packed without a key, so nothing can be sent',
+  ];
+  const err = recorderLastError();
+  if (err) lines.push(`  last recorder error: ${err}`);
+  return lines;
 }
 
 const say = (body: string, isError = false) => ({
@@ -143,7 +182,9 @@ export async function installDoctor(input: {
     cacheDegradedReason: input?.cacheDegradedReason ?? null,
   });
 
-  return say(mods.doctor.renderDiagnosis(result));
+  return say(
+    [mods.doctor.renderDiagnosis(result), ...(await telemetrySection())].join('\n')
+  );
 }
 
 export const DOCTOR_TOOL = {

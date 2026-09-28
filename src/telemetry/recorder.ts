@@ -27,6 +27,14 @@
  * recent data is the data kept.
  */
 
+/* eslint-disable n/no-sync -- DELIBERATE, and asynchronous I/O here would be a
+ * defect rather than an improvement. `record` is called from synchronous hot
+ * paths (the compressor and the output shaper), so a promise-returning write
+ * would either be left unawaited -- losing events at exit and reordering the
+ * log -- or force those call sites to become async, which is a far larger change
+ * than instrumentation is entitled to impose. These are appends of a few hundred
+ * bytes to a local file, already inside a try/catch that swallows every failure.
+ * `beacon.ts`, which is async and off the hot path, uses the promise API. */
 import { appendFileSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';

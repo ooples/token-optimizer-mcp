@@ -96,8 +96,15 @@ describe('what is on disk cannot carry content', () => {
 
   it('does not record the hostname anywhere in the line', () => {
     const env = optedIn();
-    record('tool_call', '1.0.0', {}, env);
-    expect(readFileSync(eventsFile(env), 'utf8')).not.toContain(hostname());
+    const event = record('tool_call', '1.0.0', {}, env);
+    const written = readFileSync(eventsFile(env), 'utf8');
+    // A LINE WAS WRITTEN FIRST. `not.toContain` on an empty file passes for the
+    // wrong reason: it would also pass if `record` had refused, thrown, or written
+    // nowhere, and this test would then go on passing after the hash was replaced
+    // by the hostname itself.
+    expect(event?.machine_id_hash).toMatch(/^[0-9a-f]{32}$/);
+    expect(JSON.parse(written.trim()).machine_id_hash).toBe(event?.machine_id_hash);
+    expect(written).not.toContain(hostname());
   });
 });
 

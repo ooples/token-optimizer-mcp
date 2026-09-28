@@ -3095,6 +3095,20 @@ async function main() {
     });
   startManagedInstallRepair();
 
+  // WHAT WAS RECORDED EARLIER GOES NOW, NOT AT EXIT. A flush on shutdown has a
+  // bounded window and then exits unconditionally, so the request it starts is
+  // usually cut off mid-flight -- which is indistinguishable, from here, from a
+  // receiver that is down. Sending at boot gives the request the whole session;
+  // the cost is that the last session's events arrive one session late. It
+  // refuses on its own when the policy, the opt-in or the packed key says no,
+  // and the import is dynamic to keep it off the cold handshake path.
+  void import('../telemetry/beacon.js')
+    .then(({ flushBeacon }) => flushBeacon())
+    .catch(() => {
+      /* Optional telemetry cannot fail MCP startup. */
+    });
+
+
   // All termination paths (SIGINT/SIGTERM/SIGHUP + stdin end/close/error) run
   // through one guarded shutdown. See ./lifecycle.ts for the full rationale
   // (the stdin handlers are the Windows orphan-leak fix from PR #177).
