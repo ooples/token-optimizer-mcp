@@ -19,6 +19,7 @@ import { dirname } from 'path';
 import { describePolicy } from '../telemetry/policy.js';
 import { recordedBytes, recorderLastError } from '../telemetry/recorder.js';
 import { pendingEvents } from '../telemetry/beacon.js';
+import { pendingCounts } from '../telemetry/rollup.js';
 import { beaconKey, beaconTable, beaconUrl } from '../telemetry/credentials.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -80,6 +81,14 @@ export async function telemetrySection(
       ? `  upload target: ${beaconUrl(env)}/rest/v1/${beaconTable(env)}`
       : '  upload target: none -- this build was packed without a key, so nothing can be sent',
   ];
+  // COUNTED BUT NOT YET WRITTEN. Usage is accumulated in memory and emitted one
+  // rollup per window, so a proxy that has served fewer requests than a window
+  // has nothing on disk and is not therefore failing to record. Shown only when
+  // there is something to show, so the common case stays quiet.
+  const counted = pendingCounts().requests;
+  if (counted > 0) {
+    lines.push(`  counted since the last rollup: ${counted} request(s)`);
+  }
   const err = recorderLastError();
   if (err) lines.push(`  last recorder error: ${err}`);
   return lines;

@@ -57,6 +57,7 @@ import {
 } from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import { record, libraryVersion } from '../telemetry/recorder.js';
+import { noteRequest, flushRollup } from '../telemetry/rollup.js';
 import type { SpillSink } from '../compress/types.js';
 import { captureDir, captureRequest } from './capture.js';
 import { compressResponses } from './responses.js';
@@ -1281,7 +1282,22 @@ export async function startProxy(
   // NO SINK UNLESS ASKED. `undefined` reaches every engine as "keep it in the
   // request", which is the zero-round-trip arm -- see SpillSink in
   // compress/types.ts for why that is the default rather than the fallback.
-  const spill = options.spill === true ? spillTo(spillRoot) : undefined;
+  // COUNTED AT THE SINK BECAUSE THE SUMMARY DOES NOT CARRY IT. How many blocks
+  // a request elided is the one usage figure no field of ProxySummary reports,
+  // and adding it there would mean threading a count back out of every engine.
+  // Wrapping the sink counts the same event at the only place all of them go
+  // through. Exact per request, not approximately: `compressBody` is
+  // synchronous, so nothing else can increment this between the two reads
+  // either side of the call.
+  let spilledBlocks = 0;
+  const sink = options.spill === true ? spillTo(spillRoot) : undefined;
+  const spill: SpillSink =
+    sink === undefined
+      ? undefined
+      : (content, hint) => {
+          spilledBlocks += 1;
+          return sink(content, hint);
+        };
   // One store per proxy, holding a hash and a boolean per conversation.
   // Per-conversation, never per-request, and passed in explicitly rather
   // than reached for -- HeadRoom's #3486 is a shared router keeping request
@@ -1420,6 +1436,7 @@ export async function startProxy(
         });
 
       const transformStarted = performance.now();
+      const spilledBefore = spilledBlocks;
       const { body: next, summary } = compressBody(
         body,
         spill,
@@ -1435,6 +1452,20 @@ export async function startProxy(
       );
       refreshFindings();
       options.onSummary?.({ path: req.url || '/', ...summary });
+      // OPT-IN USAGE COUNTERS. Accumulated in memory and written as one rolled-up
+      // event per window -- see telemetry/rollup.ts for why not one per request.
+      // `noteRequest` counts unconditionally and `record` decides whether any of
+      // it is ever written, so this line is not a consent decision; it also
+      // cannot throw, because a failed instrument must not fail a request.
+      noteRequest({
+        beforeBytes: summary.beforeBytes,
+        afterBytes: summary.afterBytes,
+        compressed: summary.compressed,
+        injectedChars: summary.injectedChars,
+        elisions: summary.elisions,
+        spilledBlocks: spilledBlocks - spilledBefore,
+        losslessMode: options.spill !== true,
+      });
       // SPREAD, NOT RE-LISTED. This was seventeen fields copied across by hand,
       // and the ledger is only as good as that list is complete: injectedChars
       // was missing from it, so the proxy printed `+1927 injected` to its log
@@ -1458,6 +1489,10 @@ export async function startProxy(
   // temp directory that nothing ever removes. Cleared when the proxy stops, which is
   // also when the last agent that could still `Read` one of those paths has gone.
   server.on('close', () => {
+    // WHAT WAS COUNTED SINCE THE LAST ROLLUP GOES NOW. A clean stop is the only
+    // chance to record the tail of the window; a kill loses it, which is the
+    // reason the rollups are periodic rather than one per session.
+    flushRollup();
     try {
       // eslint-disable-next-line n/no-sync
       rmSync(spillRoot, { recursive: true, force: true });
