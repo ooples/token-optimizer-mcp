@@ -89,6 +89,25 @@ export class CacheEngine {
   >;
   private dbPath!: string;
   /**
+   * The last recency stamp this engine issued, so the next one is strictly larger.
+   *
+   * `Date.now()` HAS MILLISECOND RESOLUTION AND A CACHE DOES NOT. Twenty writes
+   * and three reads take well under a millisecond, so every row carried the same
+   * `last_accessed_at` and the eviction order fell through to the `key ASC`
+   * tiebreaker -- which evicted entries that had just been read in favour of
+   * entries nobody had touched, because "key10" sorts before "key15". The LRU
+   * eviction test was skipped for "timing-dependent behavior" rather than fixed,
+   * so the behaviour went unasserted.
+   *
+   * Per engine, not per database: two processes on one file can still interleave,
+   * which was already true and strictly worse at millisecond resolution. Seeded
+   * from the stored maximum on first use so a reopened cache does not hand out
+   * stamps below rows already on disk. It can run ahead of the wall clock by one
+   * millisecond per operation in a burst, which is harmless -- these values are
+   * only ever compared with each other.
+   */
+  private recencyStamp = 0;
+  /**
    * Set when the on-disk database could not be opened and an in-memory
    * database was used instead. Read by the doctor and by `cache_audit` so a
    * degraded server says so rather than silently losing every cache write.
@@ -481,7 +500,11 @@ export class CacheEngine {
     originalSize: number,
     compressedSize: number
   ): void {
-    const now = Date.now();
+    // TWO DIFFERENT CLOCKS ON PURPOSE. `created_at` is a wall-clock fact that
+    // reports get printed against; `last_accessed_at` is an ordering key, and
+    // only the ordering key may run ahead of the clock to break a tie.
+    const createdAt = Date.now();
+    const accessedAt = this.nextRecencyStamp();
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO cache
@@ -492,7 +515,16 @@ export class CacheEngine {
         ?)
     `);
 
-    stmt.run(key, value, compressedSize, originalSize, key, key, now, now);
+    stmt.run(
+      key,
+      value,
+      compressedSize,
+      originalSize,
+      key,
+      key,
+      createdAt,
+      accessedAt
+    );
 
     // Add to memory cache
     this.memoryCache.set(key, { content: value, compressedSize });
@@ -715,13 +747,26 @@ export class CacheEngine {
   /**
    * Update hit count and last accessed time
    */
+  /** Strictly increasing, and never below what is already stored. */
+  private nextRecencyStamp(): number {
+    if (this.recencyStamp === 0) {
+      const row = this.db
+        .prepare('SELECT MAX(last_accessed_at) as high FROM cache')
+        .get() as { high: number | null } | undefined;
+      this.recencyStamp = row?.high ?? 0;
+    }
+    const now = Date.now();
+    this.recencyStamp = now > this.recencyStamp ? now : this.recencyStamp + 1;
+    return this.recencyStamp;
+  }
+
   private updateHitCount(key: string): void {
     const stmt = this.db.prepare(`
       UPDATE cache
       SET hit_count = hit_count + 1, last_accessed_at = ?
       WHERE key = ?
     `);
-    stmt.run(Date.now(), key);
+    stmt.run(this.nextRecencyStamp(), key);
   }
 
   /**
