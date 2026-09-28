@@ -29,6 +29,7 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Real source from this repository, for the code workloads.
@@ -42,7 +43,7 @@ import { join } from 'node:path';
  *
  * Deterministic: sorted by path, taken in order, capped by character budget.
  */
-function realSources(root, budget) {
+export function realSourcesLive(root, budget) {
   const out = [];
   let total = 0;
   const walk = (dir) => {
@@ -76,7 +77,7 @@ function realSources(root, budget) {
   return out.join('\n\n');
 }
 
-const REPO = new URL('../..', import.meta.url).pathname.replace(
+export const REPO = new URL('../..', import.meta.url).pathname.replace(
   /^\/([A-Za-z]:)/,
   '$1'
 );
@@ -95,7 +96,7 @@ const REPO = new URL('../..', import.meta.url).pathname.replace(
  * Emitted the way ripgrep emits it, path and line number per hit, because
  * that is what actually lands in a tool result.
  */
-function searchResults(root, pattern, budget) {
+export function searchResultsLive(root, pattern, budget) {
   const files = [];
   const walk = (dir) => {
     let entries;
@@ -143,6 +144,114 @@ function searchResults(root, pattern, budget) {
   }
   return out.join('\n--\n');
 }
+
+/**
+ * THE CODE WORKLOADS READ A PINNED SNAPSHOT, NOT THE WORKING TREE.
+ *
+ * Walking the repository live made two fixtures a moving target. Between two
+ * recordings four days apart, commit 44b28702 added ~2 KB to
+ * src/core/cache-engine.ts and, with no benchmark change whatsoever,
+ * codebase-exploration grew by 2,088 canonical characters and repeated-reads
+ * by 6,264. `payloadsDigest` moves with those bytes, so every ratchet on those
+ * rows was unholdable, and a recorded win could not be reproduced from a
+ * different checkout -- or from a shallow clone, or a released tarball.
+ *
+ * The walkers above still define what the corpus IS; they just run once, in
+ * snapshot-corpus.mjs, and their output is committed. Regenerating is a
+ * deliberate act with a visible diff, which is exactly the property the live
+ * walk did not have.
+ *
+ * MISSING KEYS THROW. A snapshot that quietly fell back to the working tree
+ * would reintroduce the drift it exists to prevent, and would do it silently
+ * on the one machine whose tree happened to differ.
+ */
+const SNAPSHOT_PATH = fileURLToPath(
+  new URL('./corpus.snapshot.json', import.meta.url)
+);
+
+let snapshotCache = null;
+
+function snapshot() {
+  if (snapshotCache) return snapshotCache;
+  let raw;
+  try {
+    raw = readFileSync(SNAPSHOT_PATH, 'utf8');
+  } catch {
+    throw new Error(
+      `corpus snapshot missing at ${SNAPSHOT_PATH}; ` +
+        'run `node bench/compression/snapshot-corpus.mjs` to regenerate it'
+    );
+  }
+  snapshotCache = JSON.parse(raw);
+  return snapshotCache;
+}
+
+/**
+ * The repo-relative form of a walked root, so a key is machine-independent.
+ *
+ * BOTH SIDES ARE NORMALISED BEFORE COMPARING. `REPO` comes from a URL pathname
+ * and so uses forward slashes, while `join()` on Windows hands back
+ * backslashes; comparing them raw left the absolute path in the key, which
+ * would have pinned the snapshot to one checkout directory.
+ */
+export function corpusRoot(root) {
+  const slash = (v) => v.replace(/\\/g, '/').replace(/\/+$/, '');
+  const base = slash(REPO);
+  const full = slash(root);
+  const rel = full.startsWith(`${base}/`) ? full.slice(base.length) : full;
+  return rel.replace(/^\/+/, '');
+}
+
+export function sourcesKey(root, budget) {
+  return `sources|${corpusRoot(root)}|${budget}`;
+}
+
+export function searchKey(root, pattern, budget) {
+  return `search|${corpusRoot(root)}|${pattern.source}|${budget}`;
+}
+
+function fromSnapshot(key) {
+  const entries = snapshot().entries;
+  if (!Object.prototype.hasOwnProperty.call(entries, key)) {
+    throw new Error(
+      `corpus snapshot has no entry for ${key}; ` +
+        'run `node bench/compression/snapshot-corpus.mjs` to regenerate it'
+    );
+  }
+  return entries[key];
+}
+
+function realSources(root, budget) {
+  return fromSnapshot(sourcesKey(root, budget));
+}
+
+function searchResults(root, pattern, budget) {
+  return fromSnapshot(searchKey(root, pattern, budget));
+}
+
+/**
+ * EVERY WALK THE FIXTURES ASK FOR, IN ONE PLACE, so the snapshot generator and
+ * the call sites below cannot drift apart. A call site that asks for a walk
+ * missing from this list throws at bench time naming the key, rather than
+ * silently reading the working tree.
+ */
+export const CORPUS_SPEC = [
+  { kind: 'sources', root: ['src', 'core'], budget: 12_000 },
+  { kind: 'sources', root: ['src', 'core'], budget: 20_000 },
+  { kind: 'sources', root: ['src', 'server'], budget: 45_000 },
+  {
+    kind: 'search',
+    root: ['hooks-core'],
+    pattern: /function |=> \{/,
+    budget: 12_000,
+  },
+  {
+    kind: 'search',
+    root: ['src', 'tools'],
+    pattern: /function |=> \{/,
+    budget: 60_000,
+  },
+];
 
 /** Small deterministic PRNG -- mulberry32. No dependency, same output everywhere. */
 function rng(seed) {
