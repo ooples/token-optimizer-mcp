@@ -86,6 +86,39 @@ const arm = (text, beforeText) => ({ text, beforeText });
   );
 }
 
+{
+  // THE ROW FORM, TAKEN FROM A REAL CAPTURE. Their `crusher-lossy-ccr` arm
+  // writes one of these per elided block: a hex id and a row count, with no
+  // type and no size. It went unrecognised here for as long as this module
+  // existed, so `bestArm({ excludeOffload: true })` handed it back as their
+  // best NON-offloading arm on four workloads and the like-for-like line
+  // compared our encoding against their delete.
+  const row = '<<ccr:c79285d31fee 176_rows_offloaded>>';
+  check(isOffloading(`head ${row} tail`), 'the row form of the marker is an offload');
+  const found = offloadMarkers(row);
+  check(
+    found.length === 1 && found[0].id === 'c79285d31fee' && found[0].declaredBytes === null,
+    'the row form yields its id and declares no size',
+    JSON.stringify(found[0] ?? null)
+  );
+  check(
+    declaredOffloadBytes(`${mark('aa', '1')} ${row}`) === null,
+    'a text mixing a declared marker with an undeclared one has no total',
+    String(declaredOffloadBytes(`${mark('aa', '1')} ${row}`))
+  );
+  const base = 'x'.repeat(1000);
+  const arms = {
+    encoding: arm('y'.repeat(600), base),
+    offloading: arm(`${row}${'y'.repeat(40)}`, base),
+  };
+  const split = classifyArms(arms);
+  check(
+    split.any?.label === 'offloading' && split.clean?.label === 'encoding',
+    'the smaller row-form arm wins on ratio but is refused as the clean arm',
+    JSON.stringify({ any: split.any?.label, clean: split.clean?.label })
+  );
+}
+
 // ---------------------------------------------------------------------------
 // 2. Picking an arm, and refusing to pick one that does not exist.
 // ---------------------------------------------------------------------------

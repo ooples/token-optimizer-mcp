@@ -28,10 +28,23 @@
  */
 
 /**
- * The store marker HeadRoom leaves behind: `<<ccr:44e5f6344bfd,string,57.4KB>>`
- * -- an id, a type, and the size it claims to be holding.
+ * The store markers HeadRoom leaves behind. IT WRITES TWO FORMS, AND ONLY ONE
+ * OF THEM DECLARES A SIZE:
+ *
+ *   `<<ccr:44e5f6344bfd,string,57.4KB>>`   an id, a type, and a declared size
+ *   `<<ccr:c79285d31fee 176_rows_offloaded>>`   an id and a row count, no size
+ *
+ * MATCHING ONLY THE FIRST IS HOW THEIR OFFLOADING ARM GETS SCORED AS CLEAN.
+ * `bestArm({ excludeOffload: true })` asks this pattern whether an arm moved
+ * content to the store, so a form it does not recognise comes back as an
+ * encoding arm -- and on the row-form workloads that arm keeps 4.3% to 16.7% of
+ * the characters because it deleted the rows rather than compressed them. Every
+ * other marker reader in this tree already used the permissive `<<ccr:[^>]*>>`,
+ * so this module was the only one that could not see half of them.
+ *
+ * The id still has to be hex, because prose ABOUT the format is not a marker.
  */
-const MARKER = /<<ccr:([0-9a-f]+),([^,>]*),([0-9.]+)(B|KB|MB|GB)>>/g;
+const MARKER = /<<ccr:([0-9a-f]+)(?:,([^,>]*),([0-9.]+)(B|KB|MB|GB))?[^>]*>>/g;
 
 const SCALE = { B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3 };
 
@@ -46,7 +59,11 @@ export function offloadMarkers(text) {
       // on disk. It is the right number for "how much left the context" and
       // the wrong one for "how much is really in the store" -- only reading
       // the store answers that, and the caller names which it wanted.
-      declaredBytes: Math.round(Number(m[3]) * SCALE[m[4]]),
+      //
+      // NULL WHEN THE MARKER DECLARED NOTHING. The row form carries a count of
+      // rows, not a size, and calling that zero would report an arm that parked
+      // 176 rows on disk as having parked nothing.
+      declaredBytes: m[3] === undefined ? null : Math.round(Number(m[3]) * SCALE[m[4]]),
     });
   }
   return found;
@@ -57,9 +74,20 @@ export function isOffloading(text) {
   return offloadMarkers(text).length > 0;
 }
 
-/** Total bytes an arm's output claims to have parked on disk. */
+/**
+ * Total bytes an arm's output claims to have parked on disk, or `null` when it
+ * parked something without saying how much.
+ *
+ * A marker that declares no size is not a marker that parked nothing, and the
+ * two cannot share a return value: summing the declared ones alone would print
+ * a store size that is short by however much the row-form markers hold, and
+ * with no sign that anything was left out. Null is the honest answer and forces
+ * the caller to say out loud what it does with an undeclared offload.
+ */
 export function declaredOffloadBytes(text) {
-  return offloadMarkers(text).reduce((n, m) => n + m.declaredBytes, 0);
+  const markers = offloadMarkers(text);
+  if (markers.some((m) => m.declaredBytes === null)) return null;
+  return markers.reduce((n, m) => n + m.declaredBytes, 0);
 }
 
 /**
