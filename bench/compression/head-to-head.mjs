@@ -602,6 +602,14 @@ for (const [name, text] of Object.entries(payloads)) {
       // us. `parsed` is still what decides whether there is a proxy arm at all:
       // the payload has to be a message list.
       const wrapped = `{"model":"claude-sonnet-5","max_tokens":1024,"messages":${text}}`;
+      // NO FINDINGS, SO THE NET-SAVING GUARD CANNOT MOVE A FIGURE HERE, and this
+      // arm reports one column rather than two for that reason. The guard
+      // (TOKEN_OPTIMIZER_PROXY_NET_SAVING) only ever drops a cached-knowledge
+      // block, and a block is only composed from findings this call does not pass.
+      // Measured rather than argued: this corpus recorded twice at one commit, once
+      // with the guard off and once on, differs in 0 non-timing leaves across all 18
+      // workloads. Publishing a second column would be publishing the same number
+      // twice and implying the guard had been exercised.
       const result = compressBody(Buffer.from(wrapped, 'utf8'), (c, hint) => {
         bodySpilled.push(c);
         return `.token-optimizer/spill/b${bodySpilled.length}-${hint}`;

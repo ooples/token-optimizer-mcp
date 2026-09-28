@@ -953,10 +953,18 @@ all.
 | `TOKEN_OPTIMIZER_PROXY`           | on         | the compression proxy itself; set `0` to opt out           |
 | `TOKEN_OPTIMIZER_COMPRESSION`     | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`       |
 | `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | on         | put what this project already learned in the cached prefix |
+| `TOKEN_OPTIMIZER_PROXY_NET_SAVING` | off        | never send upstream more bytes than the client gave         |
 
 Both of the `on` rows said `off` here until 7.1.0, which was wrong about the
 shipped code rather than a change of default: an unset value has always meant
 enabled, and `0`, `false`, `no` and `off` are what turn either one off.
+
+`TOKEN_OPTIMIZER_PROXY_NET_SAVING` is off because the knowledge block is supposed
+to grow the request: it is charged once as a cache write and then read at 0.1x for
+the rest of the session, which pays on a long conversation and does not on a short
+one. Turn it on and the block is dropped on any turn where sending it would hand
+upstream more bytes than the client handed us -- the wire never inflates, and the
+prefix knowledge is what you give up for that.
 
 `lossless` is worth knowing about: it forbids every transform that removes
 something the output cannot reconstruct -- function bodies, array tails,
