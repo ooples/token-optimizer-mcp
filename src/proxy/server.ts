@@ -56,6 +56,7 @@ import {
   type CompressionFacts,
 } from './accounting.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
+import { serialiseKeepingPrefix } from './cached-prefix.js';
 import { record, libraryVersion } from '../telemetry/recorder.js';
 import { noteRequest, flushRollup } from '../telemetry/rollup.js';
 import type { SpillSink } from '../compress/types.js';
@@ -501,9 +502,10 @@ function compressBodyOnce(
   if (before < MIN_BYTES && !anchors && !findings?.length)
     return unchanged('below the size floor');
 
+  const text = body.toString('utf8');
   let parsed: ProviderRequest;
   try {
-    parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
+    parsed = JSON.parse(text) as ProviderRequest;
   } catch {
     // Not a JSON provider request -- a streaming upload, a form, something
     // else entirely. Forward it untouched.
@@ -746,7 +748,19 @@ function compressBodyOnce(
     return unchanged('compression threw');
   }
 
-  const next = Buffer.from(JSON.stringify(result.request), 'utf8');
+  // HANDING BACK THE PROVIDER'S OWN BYTES FOR THE PART WE DID NOT TOUCH.
+  // The cache is matched on bytes, so re-serialising a prefix the strategy
+  // deliberately left alone destroys the hit it was protecting and pays a
+  // 1.25x write for a 1.0x read. Whatever leading run of messages came back
+  // unchanged is therefore copied out of the request we were handed, at its
+  // original offsets. See cached-prefix.ts; it fails open, and then this is
+  // the plain stringify it has always been.
+  const compact = JSON.stringify(result.request);
+  const spliced = serialiseKeepingPrefix(
+    text,
+    result.request as unknown as { messages?: unknown[] } & Record<string, unknown>
+  );
+  const next = Buffer.from(spliced ?? compact, 'utf8');
   // Never send more than we were given -- UNLESS a knowledge block was
   // deliberately added, which is the one case where growing the request is
   // the point. It is charged in the summary either way, and it only
@@ -755,7 +769,13 @@ function compressBodyOnce(
   // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
   // shaves a couple of percent still plants elisions the agent may read back,
   // and one such turn costs more than the whole saving.
-  const saved = before - next.length;
+  // The gate below asks whether the rewrite removed enough CONTENT to be worth
+  // the elisions it plants, so it reads the COMPACT length. Bytes we hand back
+  // verbatim are the client's own formatting, and declining to re-indent them
+  // is not a saving anyone can spend -- crediting it would let whitespace alone
+  // carry a request over the floor. On a body that arrived compact, which is
+  // every real one, the two lengths are the same number.
+  const saved = before - Buffer.byteLength(compact, 'utf8');
   if (!added && saved < before * MIN_SAVING_SHARE) {
     // REMEMBERED EVEN THOUGH WE SENT THE CLIENT'S BYTES, and forgetting here was
     // a deadlock rather than a missed optimisation.
