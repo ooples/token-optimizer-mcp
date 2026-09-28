@@ -241,6 +241,7 @@ export const DEFAULTS = Object.freeze({
 
 /** The additive identity for `addLines`: an arm that costs nothing. */
 export const ZERO_LINE = Object.freeze({
+  cachedPrefix: 0,
   c0: 0,
   c1: 0,
   c2: 0,
@@ -262,6 +263,28 @@ export const ZERO_LINE = Object.freeze({
  *       request. This is the whole cost of an arm that spills nothing, and it
  *       is the only term that does not depend on p.
  *
+ *       EXCEPT FOR THE PART THE PROVIDER ALREADY HAS. `cachedPrefix` is the
+ *       share of `handed` an arm passed through byte for byte behind the
+ *       client's own cache_control marker. The provider does not re-read that
+ *       from the wire and does not re-write it: it is served from the cache at
+ *       R on this request and on each of the N after, so it costs R*(N+1)
+ *       rather than W + R*N.
+ *
+ *       WITHOUT THIS TERM THE MODEL CANNOT PRICE THE ONE DECISION THE PROXY
+ *       ARM IS BUILT AROUND. src/compress/strategy.ts declines to rewrite a
+ *       cached prefix precisely because a rewrite costs W where leaving it
+ *       alone costs R, and W/R is 20. Charging every arm W on everything it
+ *       hands over makes that refusal look like a failure to compress: the arm
+ *       is billed as though it had forced the write it went out of its way to
+ *       avoid, while an arm that DID force one is billed no more. At the
+ *       default rates the untouched share costs 5.7x its tokens against 7.6x,
+ *       so the term is worth 25% of whatever an arm leaves alone.
+ *
+ *       Byte-identical is the whole condition, and it is the caller's job to
+ *       establish it. A prefix that was re-indented, re-ordered or re-encoded
+ *       is a cache MISS, not a cheap read, and passing its length here would
+ *       hand an arm a discount for a hit it does not get.
+ *
  *   c1  per block, if fetched: the output tokens of the call that asks for it
  *       (F*O), the block written to cache and then resident for the rest of the
  *       session, and 1/b of an extra request re-reading the fixed part of the
@@ -278,7 +301,7 @@ export const ZERO_LINE = Object.freeze({
  * unbiased: a random subset of evenly spaced positions has the same mean
  * position as the whole set.
  */
-export function costLine({ handed, blocks = [], params = DEFAULTS }) {
+export function costLine({ handed, blocks = [], cachedPrefix = 0, params = DEFAULTS }) {
   // Refuses rather than returning NaN: an unmeasured base context that flows
   // through as NaN is a silent wrong answer, and one of these printed "0.0k".
   requireBaseContext(params);
@@ -294,7 +317,17 @@ export function costLine({ handed, blocks = [], params = DEFAULTS }) {
 
   if (!(b >= 1)) throw new Error(`fetchBatch must be >= 1, got ${b}`);
 
-  const c0 = handed * (W + R * N);
+  // REFUSED RATHER THAN CLAMPED. A cached prefix longer than the text it is a
+  // prefix OF is not a number this can round off: it means the caller measured
+  // the two against different texts, and clamping would turn that mistake into
+  // a plausible-looking discount instead of a stack trace.
+  if (!(cachedPrefix >= 0) || cachedPrefix > handed)
+    throw new Error(
+      `cachedPrefix must be within [0, handed]; got ${cachedPrefix} of ${handed}`
+    );
+
+  const fresh = handed - cachedPrefix;
+  const c0 = fresh * (W + R * N) + cachedPrefix * R * (N + 1);
 
   let c1 = 0;
   let c2 = 0;
@@ -315,6 +348,8 @@ export function costLine({ handed, blocks = [], params = DEFAULTS }) {
     c1,
     c2,
     blocks: n,
+    /** Tokens of `handed` that were billed as a cache read rather than a write. */
+    cachedPrefix,
     /** Expected retrieval rounds when every block is fetched. */
     roundsAtFullFetch: n / b,
     /** Kept so a caller reading the old field name gets the fixed cost. */
@@ -338,6 +373,7 @@ export function addLines(a, b) {
     c1: a.c1 + b.c1,
     c2: a.c2 + b.c2,
     blocks: (a.blocks ?? 0) + (b.blocks ?? 0),
+    cachedPrefix: (a.cachedPrefix ?? 0) + (b.cachedPrefix ?? 0),
     roundsAtFullFetch: (a.roundsAtFullFetch ?? 0) + (b.roundsAtFullFetch ?? 0),
     fixed: a.c0 + b.c0,
   };

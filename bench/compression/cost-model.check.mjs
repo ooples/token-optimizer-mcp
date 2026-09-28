@@ -573,5 +573,93 @@ function scanCrossings(a, b, steps = 2_000_000) {
   );
 }
 
+/**
+ * THE CACHE-HIT TERM. An arm that leaves the client's cached prefix byte for
+ * byte does not make the provider re-read or re-write it, so those tokens are
+ * billed at R on this request and on each of the N after it rather than at
+ * W + R*N. Without this the proxy arm was charged a full cache write for the
+ * rewrite it deliberately refused to make, and the block arm -- which rewrites
+ * the prefix and really does force that write -- was charged no more for it.
+ */
+{
+  const W = DEFAULTS.cacheWrite;
+  const R = DEFAULTS.cacheRead;
+  const N = DEFAULTS.turnsAfter;
+  // The file-local DEFAULTS above already carries a measured base context.
+  const P = DEFAULTS;
+  const H = 10000;
+
+  const rewrote = costLine({ handed: H, blocks: [], params: P });
+  const kept = costLine({ handed: H, cachedPrefix: H, blocks: [], params: P });
+  const half = costLine({ handed: H, cachedPrefix: H / 2, blocks: [], params: P });
+
+  check(
+    close(rewrote.c0, H * (W + R * N), 1e-6),
+    'cachedPrefix: rewriting everything still pays a write on everything',
+    `${rewrote.c0}`
+  );
+  check(
+    close(kept.c0, H * R * (N + 1), 1e-6),
+    'cachedPrefix: an untouched prefix is billed as N+1 reads',
+    `${kept.c0}`
+  );
+  check(
+    kept.c0 < rewrote.c0,
+    'cachedPrefix: leaving the prefix alone is cheaper than rewriting it',
+    `${kept.c0} < ${rewrote.c0}`
+  );
+  check(
+    close(kept.c0 / rewrote.c0, (R * (N + 1)) / (W + R * N), 1e-9),
+    'cachedPrefix: the discount is exactly R*(N+1) over W+R*N',
+    `${(kept.c0 / rewrote.c0).toFixed(6)}`
+  );
+  check(
+    close(half.c0, (rewrote.c0 + kept.c0) / 2, 1e-6),
+    'cachedPrefix: a half-cached prefix costs the average of the two ends',
+    `${half.c0}`
+  );
+
+  // BACKWARD COMPATIBILITY IS PART OF THE CONTRACT, not a convenience: every
+  // caller that does not establish a byte-identical prefix must keep paying the
+  // full write, so the default has to be zero rather than anything inferred.
+  const implicit = costLine({ handed: H, blocks: [700, 300], params: P });
+  const explicitZero = costLine({ handed: H, cachedPrefix: 0, blocks: [700, 300], params: P });
+  check(
+    close(implicit.c0, explicitZero.c0, 1e-9) &&
+      close(implicit.c1, explicitZero.c1, 1e-9) &&
+      close(implicit.c2, explicitZero.c2, 1e-9),
+    'cachedPrefix: omitting it reproduces the pre-term line exactly'
+  );
+
+  // The term touches what the text costs, not what fetching the spills costs.
+  const withBlocks = costLine({ handed: H, cachedPrefix: H / 4, blocks: [700, 300], params: P });
+  check(
+    close(withBlocks.c1, explicitZero.c1, 1e-9) && close(withBlocks.c2, explicitZero.c2, 1e-9),
+    'cachedPrefix: the per-fetch terms do not move',
+    `c1 ${withBlocks.c1} c2 ${withBlocks.c2}`
+  );
+
+  const summed = addLines(kept, half);
+  check(
+    summed.cachedPrefix === H + H / 2,
+    'cachedPrefix: addLines sums the cached share',
+    `${summed.cachedPrefix}`
+  );
+  check(ZERO_LINE.cachedPrefix === 0, 'cachedPrefix: the zero line carries a zero');
+
+  // REFUSED, NOT CLAMPED. A prefix longer than the text it prefixes means the
+  // caller measured the two against different texts; clamping would turn that
+  // into a plausible discount instead of a stack trace.
+  for (const bogus of [-1, H + 1]) {
+    let threw = false;
+    try {
+      costLine({ handed: H, cachedPrefix: bogus, blocks: [], params: P });
+    } catch {
+      threw = true;
+    }
+    check(threw, `cachedPrefix: ${bogus} is refused against handed ${H}`);
+  }
+}
+
 console.log(failures === 0 ? '\nall checks pass' : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);
