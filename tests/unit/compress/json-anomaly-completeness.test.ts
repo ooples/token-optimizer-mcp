@@ -24,10 +24,17 @@ test('unsafe integer lexemes survive with no parsed extrema', () => {
 });
 
 test('capped shape representatives do not claim the whole population survives', () => {
+  // THE DEVIATING ROWS ARE INTERLEAVED, so that this still reaches the capped
+  // path. They used to be one contiguous block (`i >= 140`), which the array
+  // templater now encodes whole and losslessly -- 74811 bytes to 2624, decoding
+  // byte for byte -- so that fixture stopped exercising capping at all and the
+  // `lossless` assertion below was passing for the wrong reason. Alternating the
+  // shape leaves no run of three alike for the templater to group, which is what
+  // sends the array down the anomaly path this test is about.
   const rows = Array.from({ length: 200 }, (_, i) => ({
     id: i,
     description: 'ordinary payload '.repeat(20),
-    ...(i >= 140 ? { relationships: [i] } : {}),
+    ...(i % 2 ? { relationships: [i] } : {}),
   }));
   let recovery = '';
   const result = compressJson(JSON.stringify(rows), {

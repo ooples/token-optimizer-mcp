@@ -8,6 +8,7 @@ import {
 import { compressBlock } from '../../../src/compress/router.js';
 import { compressJson } from '../../../src/compress/json.js';
 import { compressProse } from '../../../src/compress/prose.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 import { compressCode } from '../../../src/compress/code.js';
 
 /**
@@ -137,8 +138,17 @@ describe('lossless is lossless, not merely smaller', () => {
   it('removes no rows from an array', () => {
     const payload = rows(60);
     const out = compressJson(payload, { spill, tuning });
-    // Every id still present: nothing was dropped.
-    for (let i = 0; i < 60; i += 1) expect(out.text).toContain(`doc_${i}`);
+    // EVERY ID STILL RECOVERABLE: nothing was dropped. Checked through the
+    // decoder rather than by looking for `doc_0` in the encoded text, because
+    // the encoder now factors `doc_0..doc_59` into one arithmetic run and the
+    // literals are legitimately gone -- the substring was only ever a stand-in
+    // for this, and it stopped being a valid one when the run encoding reached
+    // this shape (9171 bytes to 728, decoding byte for byte). Decoding first is
+    // the stricter check: it fails if a row is dropped OR mis-encoded.
+    expect(out.lossless).toBe(true);
+    const restored = rehydrate(out.text);
+    expect(restored).toBe(payload);
+    for (let i = 0; i < 60; i += 1) expect(restored).toContain(`doc_${i}`);
   });
 
   it('leaves prose whole', () => {

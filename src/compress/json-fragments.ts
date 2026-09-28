@@ -82,6 +82,66 @@ interface RecordParts {
   values: string[];
   shape: string;
 }
+/**
+ * Every TOP-LEVEL object in the text, found by counting braces rather than
+ * by matching a pattern.
+ *
+ * THE PATTERN-BASED SCANNER COULD NOT SEE DEPTH, AND SILENTLY FOUND THE WRONG
+ * RECORDS. Its character class excluded braces, so on a row like
+ * `{"id":1,"meta":{"k":2}}` it matched the INNER `{"k":2}` -- which parses, and
+ * so was accepted as a record. On an eleven-row log array it reported sixteen
+ * records and on a thirteen-row one, nineteen. The count check then rejected the
+ * array, which is why the flat-rows gate had to exist at all: it kept nested
+ * input away from a scanner that would mis-read it. Counting depth removes the
+ * reason for that gate, and with it the refusal of every minified array whose
+ * rows hold an object -- measured at 62-77% on arrays that had been left whole.
+ *
+ * A backslash hides whatever follows it, which is what lets this read a record
+ * whose quotes are escaped (a serialized document) without a second pass. Braces
+ * inside a string value are skipped, so `"a {b} c"` does not open a record; a
+ * value holding one unbalanced brace still misreads a boundary, and that is what
+ * the parse and the exact-count check downstream are for.
+ */
+function balancedObjects(text: string): { raw: string; at: number }[] {
+  const out: { raw: string; at: number }[] = [];
+  const isSpace = (c: string): boolean =>
+    c === ' ' || c === '\t' || c === '\n' || c === '\r';
+  let depth = 0,
+    start = -1,
+    inString = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === BACKSLASH) {
+      i += 1;
+      continue;
+    }
+    if (ch === QUOTE) {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth += 1;
+      continue;
+    }
+    if (ch !== '}' || depth === 0) continue;
+    depth -= 1;
+    if (depth !== 0 || start < 0) continue;
+    // The trailing comma and whitespace belong to the record, exactly as the
+    // pattern scanner consumed them, so the spans of adjacent rows abut.
+    let end = i + 1;
+    while (end < text.length && isSpace(text[end])) end += 1;
+    if (text[end] === ',') {
+      end += 1;
+      while (end < text.length && isSpace(text[end])) end += 1;
+    }
+    out.push({ raw: text.slice(start, end), at: start });
+    start = -1;
+  }
+  return out;
+}
+
 function records(text: string, compact = false): RecordParts[] {
   const result: RecordParts[] = [];
   // An interrupted object may match through the truncation marker. JSON.parse
@@ -92,8 +152,10 @@ function records(text: string, compact = false): RecordParts[] {
   const object = compact
     ? /\{(?:"(?:\\.|[^"\\])*"|[^{}"])*\}\s*,?\s*/g
     : /(?:^|(?<=\\n))([ \t]+)\{(?:\r?\n|\\(?:r\\)?n)[\s\S]*?(?:^|(?<=\\n))\1\},?(?:\r?\n|\\(?:r\\)?n|$)/gm;
-  for (const match of text.matchAll(object)) {
-    const raw = match[0];
+  const scanned = compact
+    ? balancedObjects(text)
+    : [...text.matchAll(object)].map((m) => ({ raw: m[0], at: m.index ?? 0 }));
+  for (const { raw, at } of scanned) {
     let source = raw;
     let encode = (value: string): string => value;
     let parsed: Record<string, unknown>;
@@ -147,8 +209,8 @@ function records(text: string, compact = false): RecordParts[] {
     if (!values.length || values.length !== scalarLeaves(parsed)) continue;
     chunks.push(encode(source.slice(cursor)));
     result.push({
-      start: match.index!,
-      end: match.index! + raw.length,
+      start: at,
+      end: at + raw.length,
       chunks,
       values,
       shape: JSON.stringify(chunks),
@@ -176,27 +238,15 @@ export function compressJsonArray(
   if (!Array.isArray(parsed) || parsed.length < minimumRows)
     return unchanged(text);
   let found = records(text);
-  // Compact small arrays have no indented record boundaries. Use the lexical
-  // flat-object scanner only after validating the entire array and every row.
-  // This keeps original numeric and string spellings, including large integers.
-  if (
-    // THE ROW COUNT WAS NEVER THE SAFETY CONDITION. This used to require
-    // `minimumRows < 32`, false on the default call compressJson makes, so
-    // the lexical scanner was unreachable from the router and a one-line-
-    // per-record array -- what `jq -c` emits -- compressed 12.9% where the
-    // same rows over several lines reach 77%. What makes it safe is the
-    // validation below plus the exact-count check after it, both unchanged.
-    found.length !== parsed.length &&
-    parsed.every(
-      (row: unknown) =>
-        row !== null &&
-        typeof row === 'object' &&
-        !Array.isArray(row) &&
-        Object.values(row).every((v) => v === null || typeof v !== 'object')
-    )
-  ) {
-    found = records(text, true);
-  }
+  // Compact arrays have no indented record boundaries, so fall back to counting
+  // braces. This USED TO REQUIRE EVERY ROW TO BE FLAT, because the scanner it
+  // falls back to could not see depth and would return inner objects as records;
+  // now that it counts braces the flat-rows condition only refuses input the
+  // scanner reads correctly, so the count mismatch alone decides. What makes it
+  // safe is unchanged: every row is parsed and re-encoded below, and the exact
+  // count check after this rejects the array if a single record was missed.
+  if (found.length !== parsed.length) found = records(text, true);
+
   if (found.length !== parsed.length) return unchanged(text);
   return compressRecords(text, found, true, minimumRows < 32);
 }
@@ -281,6 +331,7 @@ export function compressJsonObjectMap(
 }
 /** A closing quote, as it appears raw and as it appears escaped. */
 const QUOTE = String.fromCharCode(34);
+const BACKSLASH = String.fromCharCode(92);
 const ESCAPED_QUOTE = String.fromCharCode(92, 34);
 
 function compressRecords(
