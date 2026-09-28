@@ -483,7 +483,12 @@ export function commonSessionCost(params = DEFAULTS) {
  * Pass `{ commonCost: 0 }` to recover the payload-only ratio deliberately.
  */
 export function usageMultiplier(baselineCost, armCost, { params = DEFAULTS, commonCost } = {}) {
-  requireBaseContext(params);
+  // THE MEASUREMENT IS ONLY NEEDED FOR THE NUMBER IT FEEDS, so the gate lives
+  // in `commonSessionCost` and not here. An explicit `commonCost` replaces that
+  // call outright, so nothing on this path reads `baseContextTokens`, and the
+  // unconditional guard that used to stand here refused over a parameter the
+  // caller had not used -- which made the documented `{ commonCost: 0 }`
+  // payload-only ratio impossible to obtain with the shipped defaults.
   const common = commonCost ?? commonSessionCost(params);
   if (armCost + common <= 0) return Infinity;
   return (baselineCost + common) / (armCost + common);

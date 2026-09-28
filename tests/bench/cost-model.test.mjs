@@ -18,13 +18,45 @@ import {
  * once. The properties below are the ones that distinguish those two cases.
  */
 
-const P = DEFAULTS;
+// `baseContextTokens` IS NULL IN THE SHIPPED DEFAULTS, ON PURPOSE. It is a
+// property of an environment -- its system prompt and its loaded tool schemas --
+// and there is no defensible default, so the model refuses to cost a session
+// rather than guess. The 12000 that used to ship understated this machine by
+// 5.4x, and understating it inflates every savings figure.
+//
+// The cases below are synthetic arithmetic, not a claim about any machine, so
+// they pin a fixture. It is deliberately that same 12000, so that the expected
+// values here are unchanged by the refusal work: what changed is that the number
+// must now be supplied out loud. cost-model.check.mjs pins the same fixture for
+// the same reason.
+const FIXTURE_BASE_CONTEXT = 12000;
+const P = Object.freeze({ ...DEFAULTS, baseContextTokens: FIXTURE_BASE_CONTEXT });
+
+describe('an unmeasured base context is refused, not defaulted', () => {
+  // WITHOUT THIS THE NULL COULD QUIETLY COME BACK AS A NUMBER NOBODY MEASURED,
+  // and every test above would keep passing because they all supply their own.
+  it('refuses to cost a session when the environment was never measured', () => {
+    expect(DEFAULTS.baseContextTokens).toBeNull();
+    expect(() => costLine({ handed: 1000, params: DEFAULTS })).toThrow(
+      /baseContextTokens has not been measured/
+    );
+  });
+
+  it('accepts the measured value once it is supplied', () => {
+    expect(() => costLine({ handed: 1000, params: P })).not.toThrow();
+  });
+});
 
 describe('a payload that spills nothing costs its residency and no more', () => {
   it('bills one cache write and one read per following turn', () => {
     const line = costLine({ handed: 1000, blocks: [], params: P });
-    expect(line.perFetch).toBe(0);
-    expect(line.fixed).toBeCloseTo(
+    // BOTH FETCH TERMS ZERO, not just the linear one. `perFetch` was the old
+    // single coefficient; with the quadratic term there are two ways for a
+    // nothing-to-fetch arm to be charged for fetching, and asserting only one
+    // of them would miss the other.
+    expect(line.c1).toBe(0);
+    expect(line.c2).toBe(0);
+    expect(line.c0).toBeCloseTo(
       1000 * (P.cacheWrite + P.cacheRead * P.turnsAfter),
       6
     );
@@ -36,20 +68,48 @@ describe('a payload that spills nothing costs its residency and no more', () => 
   });
 });
 
-describe('the cost of an arm is a straight line in the fetch rate', () => {
-  // Linearity is not a nicety -- the break-even rate is a single number only
-  // because both arms are lines. A term that curved would make the published
-  // "cheaper while fetch < X%" claim false away from the endpoints.
-  it('puts the midpoint exactly halfway between the two bounds', () => {
-    const line = costLine({
-      handed: 4000,
-      blocks: [900, 300, 1200],
-      params: P,
-    });
-    expect(costAt(line, 0.5)).toBeCloseTo(
-      (costAt(line, 0) + costAt(line, 1)) / 2,
-      6
+describe('the cost of an arm is a quadratic in the fetch rate, and convex', () => {
+  // IT USED TO BE ASSERTED AS A STRAIGHT LINE, AND THAT WAS THE APPROXIMATION.
+  // The second block's extra request re-reads a prefix that contains the first
+  // block only if the first block was also fetched, so that term carries p*p,
+  // not p. Treating it as linear overcharged the low fetch rates and
+  // undercharged the high ones, and the "cheaper while fetch < X%" claim is
+  // stated from a crossing that a linear model puts in the wrong place.
+  const line = costLine({ handed: 4000, blocks: [900, 300, 1200], params: P });
+
+  it('is exactly c0 + c1 p + c2 p^2, with no term left out of costAt', () => {
+    for (const p of [0, 0.25, 0.5, 0.75, 1]) {
+      expect(costAt(line, p)).toBeCloseTo(
+        line.c0 + p * line.c1 + p * p * line.c2,
+        6
+      );
+    }
+  });
+
+  it('curves upward, so the midpoint is below the chord', () => {
+    expect(line.c2).toBeGreaterThan(0);
+    expect(costAt(line, 0.5)).toBeLessThan(
+      (costAt(line, 0) + costAt(line, 1)) / 2
     );
+  });
+
+  it('only curves once a fetch can land on top of another fetch', () => {
+    // ONE block has no earlier block to re-read, so its cost IS linear. This
+    // pins the derivation rather than the coefficient: a c2 that appeared here
+    // would mean the term was attached to the wrong thing.
+    expect(costLine({ handed: 4000, blocks: [900], params: P }).c2).toBe(0);
+    expect(
+      costLine({ handed: 4000, blocks: [900, 300], params: P }).c2
+    ).toBeGreaterThan(0);
+  });
+
+  it('never costs less for fetching more', () => {
+    let previous = costAt(line, 0);
+    for (const p of [0.1, 0.3, 0.6, 0.9, 1]) {
+      const here = costAt(line, p);
+      expect(here).toBeGreaterThan(previous);
+      previous = here;
+    }
   });
 });
 
@@ -109,10 +169,14 @@ describe('break-even names the fetch rate where two arms cost the same', () => {
     expect(breakEven(strictlyBetter, strictlyWorse)).toEqual({
       p: null,
       cheaper: 'a',
+      cheaperAbove: 'a',
+      crossings: [],
     });
     expect(breakEven(strictlyWorse, strictlyBetter)).toEqual({
       p: null,
       cheaper: 'b',
+      cheaperAbove: 'b',
+      crossings: [],
     });
   });
 
@@ -126,7 +190,33 @@ describe('break-even names the fetch rate where two arms cost the same', () => {
 
 describe('the cap multiple is the cost ratio read the other way up', () => {
   it('turns "costs a quarter as much" into "the plan buys four times as much"', () => {
-    expect(usageMultiplier(4000, 1000)).toBe(4);
+    // `commonCost: 0` IS THE PAYLOAD-ONLY RATIO, and it has to be asked for.
+    // The bare ratio is what a published multiple used to be, and it is wrong
+    // for a subscription: the system prompt, the tool schemas and the turns
+    // neither arm changes are paid on both sides, so they belong in the
+    // denominator of both. Leaving them out states a 4x where a session sees
+    // less.
+    expect(usageMultiplier(4000, 1000, { commonCost: 0 })).toBe(4);
+  });
+
+  it('moves every multiple toward 1 once the shared cost is counted', () => {
+    // THE DIRECTION IS THE CLAIM. A fold that could raise a multiple would be
+    // a way to inflate a headline, so this asserts the inequality and not just
+    // that the number changed.
+    const bare = usageMultiplier(4000, 1000, { commonCost: 0 });
+    const folded = usageMultiplier(4000, 1000, { commonCost: 3000 });
+    expect(folded).toBeLessThan(bare);
+    expect(folded).toBeGreaterThan(1);
+    expect(folded).toBeCloseTo(7000 / 4000, 9);
+  });
+
+  it('refuses a multiple when the environment was never measured', () => {
+    // The default `commonCost` is computed from the params, so the refusal has
+    // to hold here too -- otherwise the one figure a subscriber reads is the
+    // one figure that could be printed off an unmeasured base context.
+    expect(() => usageMultiplier(4000, 1000)).toThrow(
+      /baseContextTokens has not been measured/
+    );
   });
 });
 
