@@ -630,12 +630,26 @@ function request(system, cachedTurns, freshBlocks) {
  * verifies it, and what the engines branch on is its presence.
  *
  * `turns` pairs of (assistant reasons + acts, user returns a result). The
- * breakpoint sits on the last cached turn, exactly as a client places it.
+ * breakpoint sits on the SECOND-TO-LAST turn, exactly as a client places it,
+ * so the newest tool result is still fresh when the request goes out.
  */
 function agenticRequest(system, turns, freshBlocks) {
   const messages = [];
+  // THE BREAKPOINT SITS ONE TURN BACK, WHICH IS WHERE A CLIENT PUTS IT AND
+  // NOT WHERE IT WAS CONVENIENT TO PUT IT. Claude Code marks the
+  // second-to-last user turn, so the NEWEST tool result is still fresh when
+  // the request goes out -- that is the point of leaving it unmarked, since
+  // marking it would move the breakpoint every single turn and throw the
+  // prefix away each time.
+  //
+  // Marking the LAST turn instead left 80 of agent-loop's 170,767 bytes in
+  // front of the breakpoint: a single 50-byte text block. An arm that
+  // declines to rewrite a cached prefix then has nothing to work on and
+  // scores 0.0%, which reads as a missing engine rather than as a fixture
+  // that never handed it a request. The shape was the zero, not the arm.
+  const mark = Math.max(0, turns.length - 2);
   for (const [i, turn] of turns.entries()) {
-    const last = i === turns.length - 1;
+    const last = i === mark;
     messages.push({
       role: 'assistant',
       content: [
