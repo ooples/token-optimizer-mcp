@@ -402,7 +402,7 @@ function conversationKeyFor(
     .digest('hex');
 }
 
-export function compressBody(
+function compressBodyOnce(
   body: Buffer,
   spill: SpillSink,
   anchors?: AnchorStore,
@@ -410,7 +410,8 @@ export function compressBody(
   tuning?: Tuning,
   /** True when `findings` came from a graph shared across projects. */
   sharedGraph?: boolean,
-  wireFormat?: 'chat-completions'
+  wireFormat?: 'chat-completions',
+  suppressKnowledge?: boolean
 ): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
   const before = body.length;
   const unchanged = (reason: string) => ({
@@ -738,6 +739,7 @@ export function compressBody(
       findings,
       sharedGraph,
       tuning,
+      suppressKnowledge,
     });
   } catch {
     return unchanged('compression threw');
@@ -819,6 +821,74 @@ export function compressBody(
       ...(added ? { injectedChars: result.injectedChars } : {}),
     },
   };
+}
+
+/**
+ * Is the proxy required to hand upstream no more bytes than it was given?
+ *
+ * OFF BY DEFAULT, because the cached-knowledge block is a deliberate purchase:
+ * it costs bytes on this request to save tool calls on the next few, and the
+ * trade is usually worth making. But it is a trade, and on a payload that
+ * compresses badly it can leave the wire carrying MORE than the client sent --
+ * which is a surprising thing for something called a compressing proxy to do,
+ * and a thing anyone measuring us should be able to turn off and compare.
+ */
+export function netSavingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = (env.TOKEN_OPTIMIZER_PROXY_NET_SAVING ?? '').trim().toLowerCase();
+  return raw === '1' || raw === 'on' || raw === 'true' || raw === 'yes';
+}
+
+/**
+ * Compress a request body, optionally refusing to grow it.
+ *
+ * THE GUARD IS HERE AND NOT AT EACH INJECTION SITE. Knowledge reaches the wire
+ * through three different formats (messages, Responses, Chat Completions), and a
+ * check per site is three places to keep in step; a check on the finished body is
+ * one, and it cannot be bypassed by a fourth format added later.
+ *
+ * The second pass only happens when the first one grew the body, so the ordinary
+ * path pays nothing for this. Dropping `findings` is what makes the retry
+ * smaller -- everything else about the two passes is identical.
+ */
+export function compressBody(
+  body: Buffer,
+  spill: SpillSink,
+  anchors?: AnchorStore,
+  findings?: readonly Finding[],
+  tuning?: Tuning,
+  sharedGraph?: boolean,
+  wireFormat?: 'chat-completions'
+): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
+  const first = compressBodyOnce(
+    body,
+    spill,
+    anchors,
+    findings,
+    tuning,
+    sharedGraph,
+    wireFormat
+  );
+  if (!netSavingEnabled() || first.body.length <= body.length) return first;
+  if (!findings?.length) return first;
+  // SUPPRESSED, NOT MERELY OMITTED. Dropping `findings` does not drop the block:
+  // it was remembered on the turn it was composed and is replayed from the anchor
+  // record on every turn after, so this retry came back byte-for-byte identical to
+  // the first pass -- 4506 bytes against 2760 given -- and the guard had nothing
+  // smaller to choose. The flag is what makes this pass genuinely block-free.
+  const withoutKnowledge = compressBodyOnce(
+    body,
+    spill,
+    anchors,
+    undefined,
+    tuning,
+    sharedGraph,
+    wireFormat,
+    true
+  );
+  // STILL THE SMALLER OF THE TWO, not unconditionally the second. Dropping the
+  // block is meant to remove the overshoot, and if it somehow does not, the
+  // first result was the better one and the guard should not make things worse.
+  return withoutKnowledge.body.length <= first.body.length ? withoutKnowledge : first;
 }
 
 /**

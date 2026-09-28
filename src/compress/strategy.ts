@@ -80,6 +80,17 @@ export interface StrategyOptions {
   readonly findings?: readonly Finding[];
   /** True when `findings` came from a graph shared across projects. */
   readonly sharedGraph?: boolean;
+  /**
+   * Inject no knowledge block on this pass, whatever the graph holds.
+   *
+   * PASSING NO FINDINGS IS NOT ENOUGH, which is the whole reason this exists. A
+   * block is composed on the turn the prefix is free and then REMEMBERED, and
+   * every later turn replays it from the anchor record so the cached prefix stays
+   * byte-identical -- so a caller that drops `findings` still gets the block back.
+   * The net-saving guard needs a pass that genuinely sends none, to compare
+   * against, and this is that pass.
+   */
+  readonly suppressKnowledge?: boolean;
   /** Characters of findings allowed in the prefix. */
   readonly knowledgeBudget?: number;
   /**
@@ -698,7 +709,9 @@ export function v1Frontier(
   const fresh =
     decision.reason === 'first-turn' ||
     decision.reason === 'client-invalidated';
-  const knowledge = fresh
+  const knowledge = options.suppressKnowledge
+    ? null
+    : fresh
     ? knowledgeBlock(
         options.findings ?? [],
         stableContext(request),
