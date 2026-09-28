@@ -521,14 +521,23 @@ export function rehydrateSequence(
 
     const reference = readBackReference(block);
     if (reference === null) {
-      const out = rehydrate(block);
       // KEPT AS IT ARRIVED, NOT AS IT REBUILT. A quote is computed over the
       // text that was EMITTED -- `quoteFor` separates the referent from the
       // other emitted blocks -- so matching it against a rebuilt original
       // would be comparing it with bytes the encoder never saw.
+      //
+      // AND RECORDED BEFORE IT IS REBUILT, which is not a tidy-up. A literal
+      // whose content was moved to a spill path throws `PathAddressedError`
+      // out of `rehydrate` -- by design, because the path IS the answer -- and
+      // with the push sitting after that call, such a block silently never
+      // joined `above`. Every later reference naming it then resolved to
+      // nothing, so the decoder refused a reference the encoder had written
+      // correctly. `above` is what a reader can SEE, not what this decoder
+      // managed to expand: a block whose bytes are one path-follow away is
+      // still a block the reader has been shown.
       above.push(block);
       walkedTo = -1;
-      return out;
+      return rehydrate(block);
     }
 
     const referent = reference.follows

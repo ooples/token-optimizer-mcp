@@ -19,6 +19,7 @@ import {
 } from '../../../src/compress/dedup.js';
 import { dedupImages } from '../../../src/compress/images.js';
 import { rehydrateSequence } from '../../../src/compress/rehydrate.js';
+import { PathAddressedError } from '../../../src/compress/annotate.js';
 
 /** A block comfortably over the floor, with a first line of its own. */
 function body(tag: string): string {
@@ -107,6 +108,30 @@ describe('rehydrateSequence', () => {
         '[... the same 8x8 image/png image already shown above (#3) -- not repeated here]'
       )
     ).toThrow(/no image #3/);
+  });
+
+  it('keeps a path-addressed literal above, so a later reference resolves', () => {
+    // THE DECODER USED TO LOSE THE BLOCK IT WAS ABOUT TO BE ASKED FOR. A
+    // literal whose content was spilled to a path answers `rehydrate` with
+    // `PathAddressedError` -- recognised, recoverable, just not from here --
+    // and the sequence recorded the block only AFTER that call returned, so
+    // the throw dropped it out of `above`. The reference below then named
+    // nothing and the whole payload was refused. Caught in the proxy arm,
+    // where the anchor store compresses the first block and spills part of
+    // it, which is every request production actually serves.
+    const spilled = `${body('spilled')}
+[... 41,000 bytes -> .token-optimizer/spill/b1-block.txt]`;
+    const other = body('other');
+    const { texts } = dedupBlocks([spilled, other, spilled].map(touchable));
+    expect(texts[2]).toMatch(/^\[\.\.\. [\d,]+ bytes, shown above: /);
+
+    const step = rehydrateSequence();
+    expect(() => step(texts[0])).toThrow(PathAddressedError);
+    expect(step(texts[1])).toBe(other);
+    // The reference is resolved, and the answer is the path -- not a refusal
+    // to name the block, which is what this regressed to.
+    expect(() => step(texts[2])).toThrow(PathAddressedError);
+    expect(() => step(texts[2])).not.toThrow(/no single block above/);
   });
 
   it('still refuses an unregistered marker family', () => {
