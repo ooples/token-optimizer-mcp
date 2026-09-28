@@ -321,7 +321,14 @@ rather than letting an opt-in look like it is working.
 `DO_NOT_TRACK=1` overrides both, whatever else is set. An event may only
 contain numbers and flags -- a string is dropped before it is written, so a
 path, a prompt or an error message cannot travel even by mistake -- and the
-machine identifier is a salted hash, never your hostname. `npm run doctor`
+machine identifier is a salted hash, never your hostname. Usage is
+counted as a rollup rather than a row per request: one event per 200 requests,
+holding the request count, bytes in and out, how often compression paid, how
+often knowledge was injected, and how many blocks were elided, plus one final
+event when the proxy stops. That keeps the totals exact -- a row per request
+would overflow the batch on a busy session and leave you reporting its first
+five hundred -- at the cost of the per-request distribution, which is not
+something anyone downstream needs. `npm run doctor`
 prints exactly which of these is on and what has been recorded.
 
 ### What the dashboard proves on a real machine
