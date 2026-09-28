@@ -86,6 +86,7 @@ import { get_encoding } from 'tiktoken';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { reproducibilityRefusal } from './reproducibility.mjs';
+import { instrumentFingerprint } from './ratchet.mjs';
 import { recoverable, refusals, pathRefusals } from './recovery.mjs';
 // THE ONE SEAM ON OUR SIDE. Both engines reach this scorer through a module
 // that can be swapped for stub arms, so every figure below has an answer that
@@ -2013,6 +2014,18 @@ if (process.argv[3] === '--record') {
     // reader would assume, so it is stated rather than left in a comment.
     theirDetectBackend: theirs.__provenance__?.detectBackend ?? null,
     theirDetectBackendSetByUs: theirs.__provenance__?.detectBackendSetByHarness ?? null,
+    // WHICH ENGINE, IN WHICH STATE, PRODUCED THEIR COLUMN. Their redeeming arms
+    // read out of a durable store, so a sweep that starts from an empty one is
+    // measuring an engine with nothing to redeem, and the arms that decide the
+    // comparable cost and retention columns move by up to two orders of magnitude
+    // between the two. That is a different experiment, not a noisier one.
+    //
+    // THIS IS THE STRING THE RATCHET ALREADY KEYS ITS PASSES ON, deliberately.
+    // The store state, the detector backend and the chunk count all move columns,
+    // and the ratchet has carried a fingerprint over all three for a while; a
+    // record that spelled the same facts out again in its own fields could drift
+    // out of agreement with the ratchet and neither would be wrong on its face.
+    instrument: instrumentFingerprint(theirs.__provenance__ ?? null),
     speedPasses: {
       ours: ourPassCounts.length ? Math.min(...ourPassCounts) : 0,
       theirs: theirPassCounts.length ? Math.min(...theirPassCounts) : 0,

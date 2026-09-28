@@ -29,6 +29,15 @@
  *   headroomVersion   their engine's own version, without which "theirs" names
  *                     nothing.
  *   python            their capture runs under it.
+ *   instrument        their engine reads its redeemable content out of a durable
+ *                     store, and the arms that decide the comparable cost and
+ *                     retention columns move by up to two orders of magnitude
+ *                     between a sweep that started from an empty store and one
+ *                     that started from a warm one. The detector backend and the
+ *                     chunk count move columns the same way, and all of it is
+ *                     already one string, so the record carries that string
+ *                     rather than a second copy of the same facts that could
+ *                     disagree with it.
  *   speedPasses       a speed verdict taken over fewer than two passes cannot
  *                     separate a regression from interference, on either side.
  *
@@ -44,6 +53,15 @@ const HEX16 = /^[0-9a-f]{16}$/;
 const SEMVER = /^[0-9]+[.][0-9]+[.][0-9]+/;
 const SHA40 = /^[0-9a-f]{40}$/;
 const NAME = /^[a-z0-9_]+$/;
+/**
+ * The instrument fingerprint `instrumentFingerprint` builds, REQUIRED TO END IN A
+ * STORE STATE. `store=unrecorded` is not a state, it is the admission that the
+ * capture did not look, and it is exactly the case a reader cannot reproduce: the
+ * term reads `unrecorded` when their store file exists with no live-entry count,
+ * which is when there is most to get wrong. A fingerprint with no store term at
+ * all predates the stamp and is refused for the same reason.
+ */
+const INSTRUMENT = /^v[0-9]+:.* store=(?:empty|warm)$/;
 
 /**
  * The required fields, each with the shape it must have and the reason a reader
@@ -58,6 +76,10 @@ export const FIELDS = {
   theirsDigest: { look: HEX16, says: 'sha256 of their output, first 16' },
   headroomVersion: { look: SEMVER, says: 'the competitor package version' },
   python: { look: SEMVER, says: 'the python their capture ran under' },
+  instrument: {
+    look: INSTRUMENT,
+    says: 'the instrument fingerprint, ending in the store state their engine started from',
+  },
 };
 
 /** Both sides of a speed verdict need at least this many separated passes. */

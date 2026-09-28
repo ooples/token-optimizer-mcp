@@ -34,6 +34,7 @@ const GOOD = {
   theirsDigest: 'fedcba9876543210',
   headroomVersion: '0.37.0',
   python: '3.13.2',
+  instrument: 'v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm',
   dirty: false,
   speedPasses: { ours: 3, theirs: 3 },
 };
@@ -59,6 +60,7 @@ const REQUIRED = [
   'theirsDigest',
   'headroomVersion',
   'python',
+  'instrument',
 ];
 check(
   Object.keys(FIELDS).length === REQUIRED.length &&
@@ -113,6 +115,13 @@ const unusable = [
   ['encoding', 'cl100k base'],
   ['headroomVersion', '0.37'],
   ['python', null],
+  // A STORE STATE THE CAPTURE DID NOT LOOK UP is the case this field exists
+  // for, and it is not absence: the string is well formed, the sweep ran, and
+  // the one term that separates their two engines says nothing.
+  ['instrument', 'v1:detect=rust kompress=ready degraded=none witness=yes store=unrecorded'],
+  // A FINGERPRINT FROM BEFORE THE STAMP, which is every capture taken so far.
+  ['instrument', 'v1:detect=rust kompress=ready degraded=none witness=yes'],
+  ['instrument', 'detect=rust store=warm'],
 ];
 for (const [field, value] of unusable) {
   const r = reproducibilityRefusal({ ...GOOD, [field]: value });
@@ -126,6 +135,19 @@ for (const [field, value] of unusable) {
     `${field} as ${JSON.stringify(value)} is refused`,
     String(r)
   );
+}
+
+// 4b. AND THE TWO INSTRUMENT STRINGS THAT MUST BE ACCEPTED. An empty store is a
+// state, not a gap -- it is one of the two experiments the store pair exists to
+// run -- and the chunk term is absent on a capture swept in one pass, so a gate
+// that required it would refuse every unchunked record.
+
+for (const instrument of [
+  'v1:detect=rust kompress=ready degraded=none witness=yes store=empty',
+  'v1:detect=python kompress=notready degraded=2 witness=no store=warm',
+]) {
+  const r = reproducibilityRefusal({ ...GOOD, instrument });
+  check(r === null, `${instrument} is accepted`, String(r));
 }
 
 // 5. The dirty tree. Its honest value is a refusal, and its absence is another
