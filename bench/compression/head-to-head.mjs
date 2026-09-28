@@ -113,6 +113,7 @@ import {
   usageMultiplier,
   worstAgainst,
 } from './cost-model.mjs';
+import { degradationRefusal } from './competitor-health.mjs';
 
 const dir = process.argv[2];
 if (!dir) {
@@ -124,6 +125,23 @@ if (!dir) {
 
 const payloads = JSON.parse(readFileSync(join(dir, 'payloads.json'), 'utf8'));
 const theirs = JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'));
+
+// THEIR ENGINE'S OWN HEALTH, READ BEFORE ANY OF ITS NUMBERS ARE USED.
+//
+// Their ML transform is wall-clock budgeted: when the box is loaded it logs
+// `Kompress giving up (time budget exhausted)` and passes the content through
+// UNCOMPRESSED. That does not merely slow their column down, it changes the
+// bytes it is made of -- so a capture taken under load measures a handicapped
+// opponent, and a win over one is not a win. hr30 recorded zero such warnings;
+// hr31, taken while another job on this machine held the CPU, recorded sixteen.
+//
+// The refusal logic lives in `competitor-health.mjs` and was already enforced
+// over the COMMITTED record by `must-win.check.mjs`. It was not enforced here,
+// which is the gap this closes. This file is what prints the table a reader
+// quotes and what writes the record in the first place, so a contaminated
+// capture could be scored, read aloud and recorded, and refused only afterwards
+// by a check that is not in `bench:instruments`.
+const competitorDegraded = degradationRefusal(theirs.__provenance__ ?? null);
 
 // ONE DEFINITION OF "THEIR BEST ARM", APPLIED BEFORE ANYTHING IS SCORED.
 //
@@ -1822,6 +1840,17 @@ console.log(
           : '')
     );
 }
+// SAID OUT LOUD, ABOVE THE SUBTOTALS, because the reader of a table is the one
+// who would otherwise quote it. A degraded capture is refused at the bottom of
+// this file too, but a refusal that only shows up as an exit code is invisible
+// to someone reading the output.
+if (competitorDegraded) {
+  console.log(
+    `THEIR SIDE IS NOT HEALTHY IN THIS CAPTURE: ${competitorDegraded}. Their column is ` +
+      'a floor on their engine, not a measurement of it, so no row here may be quoted ' +
+      'as a win. Re-capture on a quiesced machine.'
+  );
+}
 console.log(
   // THE SUBSTITUTION ARM'S STORE, PRINTED BESIDE ITS RATIO, because a column
   // reading 100.0% has to be readable as what it is. Nothing was compressed
@@ -2652,6 +2681,18 @@ if (process.argv[3] === '--record') {
   if (record.reproduction.refusal) {
     console.error('WARNING: this record is not re-runnable as written: ' + record.reproduction.refusal);
   }
+  // A DEGRADED CAPTURE IS NEVER WRITTEN. Everything else this file refuses, it
+  // records with the reason attached, because a disclosed limit is still
+  // evidence. This one is not: the bytes their engine produced under load are
+  // not the bytes their engine produces, so the record would be a measurement
+  // of this machine's scheduler. There is no disclosure that makes it quotable.
+  if (competitorDegraded) {
+    console.error(
+      `REFUSING to record: ${competitorDegraded}. ` +
+        'Re-capture with run-theirs.py on a quiesced machine.'
+    );
+    process.exit(1);
+  }
   writeFileSync(
     at,
     `${JSON.stringify(record, null, 2)}
@@ -2661,6 +2702,9 @@ if (process.argv[3] === '--record') {
 }
 
 const failed =
+  // Their side having run degraded is a gate, not a note: see the record
+  // refusal above. Scoring without `--record` lands here.
+  competitorDegraded !== null ||
   lost > 0 ||
   bodyLost > 0 ||
   // Whole-payload conservation is a gate, not a note. A word of the payload that
