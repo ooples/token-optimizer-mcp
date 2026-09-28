@@ -1394,3 +1394,25 @@ print(
     "TOTAL %d -> %d  %.1f%% chars" % (total_before, total_after, (1 - total_after / total_before) * 100)
 )
 print("wrote", OUT)
+
+# FAIL FAST, AFTER WRITING EVERYTHING. A chunk whose engine ran degraded is
+# already refused downstream -- head-to-head.mjs will not score it and will not
+# record it -- but that refusal arrives at the END of a sweep that takes hours,
+# by which time five more chunks have been measured against a handicapped
+# opponent. Exiting non-zero here stops sweep-chunks.mjs at the chunk that went
+# wrong, so the operator quiesces the machine and restarts having lost one
+# chunk instead of a whole capture.
+#
+# THE ARTIFACT IS WRITTEN FIRST, DELIBERATELY. The evidence for why the run was
+# stopped is in `theirs.json` under `competitorWarnings`, and a fail-fast that
+# throws that away would make the stop unexplainable.
+#
+# There is no override. A capture taken under load cannot be published by any
+# path, so a flag that let this one continue would only buy the hours it costs.
+if competitor_warnings["degraded"]:
+    raise SystemExit(
+        "REFUSING this capture: their engine ran with a capability missing "
+        "(%d distinct warning(s), see competitorWarnings in theirs.json). "
+        "Quiesce the machine -- no other builds, benchmarks or agent sessions "
+        "-- and sweep again." % len(competitor_warnings["degraded"])
+    )
