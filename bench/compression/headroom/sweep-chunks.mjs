@@ -52,7 +52,7 @@ const flag = (name) => {
 // are what is left. Filtering on "the previous argument began with --" instead
 // would read `--chunks 4 - out` as one positional, and silently swallow the
 // clone path the moment a valueless flag is added.
-const VALUED = new Set(['--chunks', '--extra', '--merge-into']);
+const VALUED = new Set(['--chunks', '--extra', '--merge-into', '--separators']);
 const consumed = new Set();
 args.forEach((a, i) => {
   if (VALUED.has(a)) {
@@ -67,11 +67,16 @@ const N = Number(flag('--chunks'));
 const EXTRA = flag('--extra');
 const MERGE_INTO = flag('--merge-into') ?? OUT;
 const PAIRED = args.includes('--paired');
+// PASSED THROUGH UNREAD. run-theirs.py owns the vocabulary and rejects anything
+// it does not know, so validating it a second time here would only create a
+// second place for the two lists to drift apart.
+const SEPARATORS = flag('--separators');
 
 if (CLONE === undefined || OUT === undefined || !Number.isInteger(N) || N < 1) {
   console.error(
     'usage: node bench/compression/headroom/sweep-chunks.mjs <clone|-> <out-dir> ' +
-      '--chunks <n> [--paired] [--extra <natives.json>] [--merge-into <dir>]'
+      '--chunks <n> [--paired] [--extra <natives.json>] [--merge-into <dir>] ' +
+      '[--separators default|compact]'
   );
   process.exit(2);
 }
@@ -147,6 +152,7 @@ const sweepChunk = (i, dir, arm) => {
       '--chunk',
       `${i}/${N}`,
       ...(EXTRA === null ? [] : ['--extra', EXTRA]),
+      ...(SEPARATORS === null ? [] : ['--separators', SEPARATORS]),
     ],
     `${label}: sweep`
   );
