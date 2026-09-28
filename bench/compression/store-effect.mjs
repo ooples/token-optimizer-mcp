@@ -27,6 +27,15 @@
  * that was ever performed.
  */
 
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, resolve } from 'node:path';
+import { instrumentFingerprint } from './ratchet.mjs';
+
+/** The gate whose verdicts both sides are read from. */
+const GATE = join(dirname(fileURLToPath(import.meta.url)), 'must-win.check.mjs');
+
 /** The fingerprint term this pair is supposed to differ in, and nothing else. */
 const STORE_TERM = / store=(empty|warm|unrecorded)$/;
 
@@ -186,6 +195,60 @@ export function storeEffect({ empty, warm }) {
   };
 }
 
+/**
+ * One side of the pair, read off a record and judged by the gate itself.
+ *
+ * THE VERDICTS COME FROM THE GATE, RUN AS A CHILD PROCESS, and not from a second
+ * judge written here. A reading judged by a softer test is not a second opinion,
+ * it is a loophole, and the two would be free to drift apart in exactly the
+ * direction that flatters us.
+ *
+ * `replicate` IS NOT OPTIONAL IN PRACTICE. The gate decides a speed row only when
+ * it can see two recordings of the SAME capture; an arm passed without one is
+ * judged against whatever replicate happens to be published, and every speed row
+ * on that arm comes back undecided.
+ *
+ * @param {string} label
+ * @param {string} path a head-to-head record
+ * @param {string|undefined} replicate a second recording of the same capture
+ */
+export function sideFromRecord(label, path, replicate) {
+  const record = JSON.parse(readFileSync(path, 'utf8'));
+  // `--json` prints the verdicts and exits non-zero while any must-win is open,
+  // which is the normal state, so a non-zero status is not an error here. An
+  // unparseable stdout is.
+  let stdout = '';
+  try {
+    stdout = execFileSync(
+      process.execPath,
+      [
+        GATE,
+        '--results',
+        path,
+        '--json',
+        ...(replicate === undefined ? [] : ['--replicate', replicate]),
+      ],
+      { encoding: 'utf8' }
+    );
+  } catch (e) {
+    stdout = e.stdout ?? '';
+  }
+  let verdicts;
+  try {
+    verdicts = JSON.parse(stdout);
+  } catch {
+    throw new Error(`the gate produced no readable verdicts for ${path}`);
+  }
+  return {
+    label,
+    fingerprint: instrumentFingerprint(record.capture?.theirsProvenance ?? null),
+    commit: record.reproduction?.commit ?? record.commit ?? null,
+    payloadsDigest: record.reproduction?.payloadsDigest ?? null,
+    capture: record.capture?.dir ?? 'unrecorded',
+    verdicts,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // THE PAIR, SCORED FROM TWO RECORDS ON DISK.
 //
@@ -206,15 +269,10 @@ export function storeEffect({ empty, warm }) {
 //     --empty=<record.json> --empty-replicate=<second recording of the same capture> \
 //     --warm=<record.json>  --warm-replicate=<second recording of the same capture>
 // ---------------------------------------------------------------------------
-const { fileURLToPath } = await import('node:url');
-const { resolve } = await import('node:path');
 const invokedDirectly =
   process.argv[1] !== undefined && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 
 if (invokedDirectly) {
-  const fs = await import('node:fs');
-  const { execFileSync } = await import('node:child_process');
-  const { instrumentFingerprint } = await import('./ratchet.mjs');
   const args = process.argv.slice(2);
   const flag = (n) => args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3);
   const emptyPath = flag('empty');
@@ -242,40 +300,8 @@ if (invokedDirectly) {
       );
     }
   }
-  const gate = resolve(fileURLToPath(import.meta.url), '..', 'must-win.check.mjs');
-  const load = (label, p, second) => {
-    const record = JSON.parse(fs.readFileSync(p, 'utf8'));
-    // THE JUDGE'S OWN VERDICTS. `--json` prints them and exits non-zero while any
-    // must-win is open, which is the normal state, so the status is not an error
-    // here -- an unparseable stdout is.
-    let stdout = '';
-    try {
-      stdout = execFileSync(
-        process.execPath,
-        [gate, '--results', p, '--json', ...(second === undefined ? [] : ['--replicate', second])],
-        { encoding: 'utf8' }
-      );
-    } catch (e) {
-      stdout = e.stdout ?? '';
-    }
-    let verdicts;
-    try {
-      verdicts = JSON.parse(stdout);
-    } catch {
-      console.error(`the gate produced no readable verdicts for ${p}`);
-      process.exit(2);
-    }
-    return {
-      label,
-      fingerprint: instrumentFingerprint(record.capture?.theirsProvenance ?? null),
-      commit: record.reproduction?.commit ?? record.commit ?? null,
-      payloadsDigest: record.reproduction?.payloadsDigest ?? null,
-      capture: record.capture?.dir ?? 'unrecorded',
-      verdicts,
-    };
-  };
-  const empty = load('empty-store', emptyPath, emptySecond);
-  const warm = load('warm-store', warmPath, warmSecond);
+  const empty = sideFromRecord('empty-store', emptyPath, emptySecond);
+  const warm = sideFromRecord('warm-store', warmPath, warmSecond);
   console.log(`empty-store: capture ${empty.capture}, ${empty.fingerprint}`);
   console.log(`warm-store:  capture ${warm.capture}, ${warm.fingerprint}`);
   const r = storeEffect({ empty, warm });
