@@ -1,10 +1,6 @@
 import { expandLongRepeats } from './runs.js';
 import { expandLog } from './expand-log.js';
-import {
-  BACK_REFERENCE,
-  ESCAPED_REFERENCE,
-  PATH_ID_PREFIX,
-} from './search.js';
+import { BACK_REFERENCE, ESCAPED_REFERENCE, PATH_ID_PREFIX } from './search.js';
 import { findReferent, readBackReference } from './dedup.js';
 import { readImageBackReference } from './images.js';
 
@@ -144,8 +140,7 @@ export function expandTapRecords(text: string): string {
 /** `[paths @0=src/a.ts @1=src/b.ts ...]`, as `compressSearchResults` writes it. */
 const PATH_TABLE = /^\[paths ((?:[^\s=]+=[^\s]+)(?: [^\s=]+=[^\s]+)*)\]$/;
 
-const SEARCH_PATH =
-  `(?:[A-Za-z]:[\\\\/][^\\s:]*|[^\\s:]*[\\\\/][^\\s:]*|[^\\s:]+\\.[A-Za-z0-9]+|${PATH_ID_PREFIX}\\d+)`;
+const SEARCH_PATH = `(?:[A-Za-z]:[\\\\/][^\\s:]*|[^\\s:]*[\\\\/][^\\s:]*|[^\\s:]+\\.[A-Za-z0-9]+|${PATH_ID_PREFIX}\\d+)`;
 
 /**
  * `path:start-end` plus the two optional suffixes the encoder can append.
@@ -338,6 +333,104 @@ export function expandSearchHunks(text: string): string {
     .join('');
 }
 
+/** One `rows` block header: the positions it fills, its rules, its template. */
+const BY_POSITION_ROWS =
+  /^\[rows at ([\d,]+)(?:; slots ((?:-?\d+=-?\d+\+-?\d+n ?)+)count from 0)?; Template: (\[[^\n]*)\]\n/;
+/** One preserved record: its position, and how many characters it is. */
+const BY_POSITION_RECORD = /^\[at (\d+); (\d+) chars\]\n/;
+
+/**
+ * Rebuilds a run whose records did not all share one shape.
+ *
+ * Each block states the positions it fills, so the rows of a class that was
+ * scattered through the run go back to the indices they came from rather than
+ * to wherever the block happened to sit. Nothing here searches for a delimiter:
+ * a row line and a block header both start with a bracket, and a preserved
+ * record can contain any line at all, so a `rows` block is read as exactly as
+ * many lines as it lists positions and a `record` block as exactly as many
+ * characters as it declares.
+ *
+ * Every refusal below is a refusal to guess. A position filled twice, a position
+ * never filled, a block header that does not parse: each of them means the
+ * output is not the input, and saying so is the only useful thing left to do.
+ */
+export function expandJsonRecordsByPosition(text: string): string {
+  return text.replace(
+    /\[JSON (?:array records|object map) by position; [^\n]*\]\n([\s\S]*?)\[\/JSON records by position\]\n/g,
+    (_all, body: string) => {
+      const filled = new Map<number, string>();
+      let rest = body;
+      while (rest.length) {
+        const rows = BY_POSITION_ROWS.exec(rest);
+        if (rows) {
+          const at = rows[1].split(',').map(Number);
+          const rules = new Map<number, { first: number; step: number }>();
+          for (const part of (rows[2] ?? '').split(' ').filter(Boolean)) {
+            const m = /^(\d+)=(-?\d+)\+(-?\d+)n$/.exec(part);
+            if (!m) throw new Error(`unreadable run clause ${part}`);
+            rules.set(Number(m[1]), {
+              first: Number(m[2]),
+              step: Number(m[3]),
+            });
+          }
+          // THE CAPTURE ALREADY ENDS AT THE TEMPLATE'S OWN BRACKET. The header's
+          // closing bracket is the one the pattern consumes, so appending one
+          // here fed `JSON.parse` a trailing `]` and it threw on the character
+          // after a complete value -- which reads as a corrupt template rather
+          // than as an off-by-one in the grammar.
+          const template = JSON.parse(rows[3]) as (number | string)[];
+          rest = rest.slice(rows[0].length);
+          for (const [index, position] of at.entries()) {
+            const cut = rest.indexOf('\n');
+            if (cut < 0) throw new Error('rows block ended mid-row');
+            const present = JSON.parse(rest.slice(0, cut)) as string[];
+            rest = rest.slice(cut + 1);
+            const values: string[] = [];
+            let next = 0;
+            for (let slot = 0; slot < present.length + rules.size; slot += 1) {
+              const rule = rules.get(slot);
+              values.push(
+                rule ? String(rule.first + rule.step * index) : present[next++]
+              );
+            }
+            if (filled.has(position))
+              throw new Error(`position ${position} stated twice`);
+            filled.set(
+              position,
+              template
+                .map((part) => (typeof part === 'number' ? values[part] : part))
+                .join('')
+            );
+          }
+          continue;
+        }
+        const one = BY_POSITION_RECORD.exec(rest);
+        if (!one)
+          throw new Error(
+            `unreadable by-position block ${JSON.stringify(rest.slice(0, 40))}`
+          );
+        const position = Number(one[1]),
+          length = Number(one[2]);
+        rest = rest.slice(one[0].length);
+        if (rest.length < length)
+          throw new Error(`record at ${position} is shorter than ${length}`);
+        if (filled.has(position))
+          throw new Error(`position ${position} stated twice`);
+        filled.set(position, rest.slice(0, length));
+        rest = rest.slice(length);
+      }
+      let out = '';
+      for (let position = 0; position < filled.size; position += 1) {
+        const record = filled.get(position);
+        if (record === undefined)
+          throw new Error(`position ${position} was never stated`);
+        out += record;
+      }
+      return out;
+    }
+  );
+}
+
 /** Markers this module must consume rather than pass through as text. */
 const UNCONSUMED = /^\s*\[\/?(?:JSON |All \d+ JSON |TAP )/;
 
@@ -371,7 +464,9 @@ export function rehydrate(text: string): string {
   // rewrites a line inside one.
   const out = expandLog(
     expandTapRecords(
-      expandJsonRecords(expandSearchHunks(expandLongRepeats(text)))
+      expandJsonRecords(
+        expandJsonRecordsByPosition(expandSearchHunks(expandLongRepeats(text)))
+      )
     )
   );
   for (const line of out.split('\n'))

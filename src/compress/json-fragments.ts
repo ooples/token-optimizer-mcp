@@ -334,6 +334,392 @@ const QUOTE = String.fromCharCode(34);
 const BACKSLASH = String.fromCharCode(92);
 const ESCAPED_QUOTE = String.fromCharCode(92, 34);
 
+/**
+ * A TOKEN PROXY, BECAUSE CHARACTERS ARE NOT WHAT ANYONE PAYS FOR.
+ *
+ * Two encodings of the same records can sit within a few characters of each
+ * other and still differ by scores of tokens, because one spends its bytes on
+ * English prose -- about four characters to the token -- and the other on dense
+ * JSON punctuation, which is closer to two. Choosing the shorter STRING therefore
+ * chose the dearer payload: on one transcript it saved 109 characters and cost 72
+ * tokens, and the corpus total moved the wrong way while every character count
+ * improved.
+ *
+ * This counts pretokens -- the pieces a tokeniser splits out before it merges
+ * anything -- using cl100k_base's own splitting rule. Every pretoken costs at
+ * least one token, so the count is a lower bound; it tracks prose almost exactly
+ * and understates long runs of punctuation, which is the safe direction here,
+ * because it makes the JSON-heavy candidate look cheaper than it is and so a
+ * marker has to earn the swap rather than win it by rounding. The tokeniser
+ * itself is not a dependency of this package and must not become one:
+ * `bench/compression/pretoken-proxy.check.mjs` is what keeps the two agreed.
+ */
+const PRETOKEN =
+  /'(?:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+/gu;
+// Exported only so `bench/compression/pretoken-proxy.check.mjs` scores the very
+// function the encoder decides with, rather than a copy of it that can drift.
+export function tokenCost(text: string): number {
+  let n = 0;
+  PRETOKEN.lastIndex = 0;
+  while (PRETOKEN.exec(text) !== null) n += 1;
+  return n;
+}
+
+/** The records of one adjacent run, grouped by shape and keeping their places. */
+interface ShapeClass {
+  rows: RecordParts[];
+  /** Where each of `rows` sat in the run, as an index from its start. */
+  at: number[];
+}
+
+/**
+ * TWO RECORDS OF THE SAME SHAPE NEED NOT BE NEIGHBOURS.
+ *
+ * The grouping below used to require them to be, which on a real agent
+ * transcript templated nothing at all: 47 records in 16 shapes, the largest
+ * class 21 records, and not one adjacent triple among them. Each class carries
+ * the positions it occupies, so a class is stated once while every record still
+ * decodes back to the index it came from -- nothing is reordered, and the
+ * decoder does not have to be told an order it could get wrong.
+ */
+function shapeClasses(run: RecordParts[]): ShapeClass[] {
+  const order: ShapeClass[] = [];
+  const byShape = new Map<string, ShapeClass>();
+  run.forEach((row, index) => {
+    let cls = byShape.get(row.shape);
+    if (cls === undefined) {
+      cls = { rows: [], at: [] };
+      byShape.set(row.shape, cls);
+      order.push(cls);
+    }
+    cls.rows.push(row);
+    cls.at.push(index);
+  });
+  return order;
+}
+
+/** One shape stated once: the literal parts, the slots, and the rules. */
+interface Templated {
+  /** Literal strings and slot numbers, in the order they are joined. */
+  template: (string | number)[];
+  /** Which value each slot takes, and how much of it the template holds. */
+  columns: { col: number; start: number; end: number }[];
+  /** Slots the rows omit because an arithmetic rule generates them. */
+  runs: Map<number, { first: number; step: number }>;
+}
+
+/**
+ * States one shape once, as literal template parts plus per-row fragments.
+ *
+ * Extracted from `compressRecords` unchanged so that a class found by shape and
+ * a class found by adjacency cannot be encoded by two different rules that
+ * drift apart. The caller decides WHICH records share a template; this decides
+ * what the template is.
+ */
+function templateOf(group: RecordParts[]): Templated {
+  const first = group[0];
+  const varying = first.values.map((value, col) =>
+    group.some((row) => row.values[col] !== value)
+  );
+  const template: (string | number)[] = [],
+    columns: { col: number; start: number; end: number }[] = [];
+  const runOf = (
+    col: number,
+    head: number,
+    tail: number
+  ): { first: number; step: number } | null => {
+    if (group.length < 4) return null;
+    const nums: number[] = [];
+    for (const row of group) {
+      // THE REMAINDER IS WHAT THE ROW CARRIES. Reading the whole value
+      // here made a factored column ineligible, which is backwards: once
+      // `/route-` is hoisted into the template the rows hold 0..39, and
+      // that is a cleaner run than the original strings ever were.
+      const raw = row.values[col].slice(head, tail ? -tail : undefined);
+      if (!/^-?(?:0|[1-9]\d*)$/.test(raw)) return null;
+      const n = Number(raw);
+      if (!Number.isSafeInteger(n) || String(n) !== raw) return null;
+      nums.push(n);
+    }
+    const step = nums[1] - nums[0];
+    for (let i = 2; i < nums.length; i += 1)
+      if (nums[i] - nums[i - 1] !== step) return null;
+    // A zero step is a constant column, which the template already hoists.
+    return step === 0 ? null : { first: nums[0], step };
+  };
+  let literal = first.chunks[0];
+  first.values.forEach((value, col) => {
+    if (varying[col]) {
+      // Factor shared lexical prefixes/suffixes as well as field names.
+      // IDs often differ only in their final digits; retaining the full
+      // escaped ID in every row needlessly repeats it across every turn.
+      let start = value.length,
+        suffix = value.length;
+      for (const row of group) {
+        const other = row.values[col];
+        let n = 0;
+        while (n < start && n < other.length && value[n] === other[n]) n++;
+        start = n;
+      }
+      for (const row of group) {
+        const other = row.values[col];
+        let n = 0;
+        while (
+          n < suffix &&
+          n < value.length - start &&
+          n < other.length - start &&
+          value[value.length - n - 1] === other[other.length - n - 1]
+        )
+          n++;
+        suffix = n;
+      }
+      // Keep booleans and numbers explicit: a number's digits ARE its
+      // content, and factoring them yields nothing a reader can use.
+      const quoted = value.startsWith('"') || value.startsWith('\\"');
+
+      // PREFIX AND SUFFIX ARE JUDGED SEPARATELY, and by whether they pay.
+      // They used to share one `start < 8` test, so a seven-character
+      // common prefix zeroed a SIXTEEN-character common suffix along with
+      // itself. On ninety rows of `"line N priced by hand"` the prefix
+      // `\"line ` is exactly seven, one short, and the whole ` priced by
+      // hand\"` tail was then repeated on every row -- about 2,500 bytes
+      // thrown away by an off-by-one in a magic number.
+      //
+      // The honest test is arithmetic rather than a constant: hoisting
+      // N characters out of R rows saves N * R and costs N once in the
+      // template, so it pays whenever R > 1 and N is not trivial. Two is
+      // the smallest run worth the indirection.
+      const pays = (shared: number): boolean =>
+        quoted && shared >= 2 && shared * (group.length - 1) > shared;
+      if (!pays(start)) start = 0;
+      if (!pays(suffix)) suffix = 0;
+
+      // A KEY COLUMN ENDS IN ITS CLOSING QUOTE -- one character -- and the
+      // `shared >= 2` floor above rejects it, leaving the row holding `0"`
+      // rather than `0`, so /route-0../route-39 was not read as the run it
+      // plainly is. One character is not worth hoisting on its own, which
+      // is why the floor exists; it IS worth hoisting when it turns a whole
+      // column into a rule. That judgement needs the run test, so it
+      // happens here rather than in `pays` -- and before the template is
+      // emitted, because widening the tail afterwards would leave the quote
+      // in neither the template nor the row.
+      if (!runOf(col, start, suffix))
+        for (const wider of [suffix + 1, suffix + 2]) {
+          const shared = group.every((row) => {
+            const v = row.values[col];
+            if (v.length - start - wider <= 0) return false;
+            const cut = v.slice(
+              v.length - wider,
+              suffix ? v.length - suffix : undefined
+            );
+            return cut === QUOTE || cut === ESCAPED_QUOTE;
+          });
+          if (shared && runOf(col, start, wider)) {
+            suffix = wider;
+            break;
+          }
+        }
+      template.push(literal + value.slice(0, start), columns.length);
+      columns.push({ col, start, end: suffix });
+      literal = suffix ? value.slice(-suffix) : '';
+    } else literal += value;
+    literal += first.chunks[col + 1];
+  });
+  template.push(literal);
+  // AN ARITHMETIC COLUMN IS A RULE, NOT A LIST.
+  //
+  // Sequential ids, byte offsets, line numbers and page cursors step by a
+  // constant, and both this engine and the competitor were spelling every
+  // one of them out digit by digit: measured on 120 records whose id,
+  // offset and line columns are perfect runs, their router gains 0.9
+  // points over the same shape with RANDOM values and we gain 0.8. The
+  // redundancy was simply not being read.
+  //
+  // `1000..1119 step 1` is a complete generator, not a summary: every
+  // value is derivable exactly and none is approximated. That is what
+  // separates this from factoring a shared prefix out of an identifier,
+  // which leaves a row holding a fragment of a token -- the failure
+  // json-anomaly-completeness guards. Here the guard is structural: a run
+  // requires every value to be a SAFE integer, so an unsafe id can never
+  // enter one.
+  const runs = new Map<number, { first: number; step: number }>();
+  columns.forEach((column, slot) => {
+    const { col, start } = column;
+    let { end } = column;
+    const run = runOf(col, start, end);
+    if (run) runs.set(slot, run);
+  });
+  return { template, columns, runs };
+}
+
+/** `; slots 0=1+1n count from 0`, or nothing when no column is a rule. */
+function slotClause(runs: Templated['runs']): string {
+  return runs.size
+    ? '; slots ' +
+        [...runs]
+          .map(([slot, r]) => `${slot}=${r.first}+${r.step}n`)
+          .join(' ') +
+        ' count from 0'
+    : '';
+}
+
+/** One JSON array per row, holding only the slots no rule generates. */
+function rowLines(group: RecordParts[], { columns, runs }: Templated): string {
+  return group
+    .map((row) =>
+      JSON.stringify(
+        columns
+          .map(({ col, start, end }, slot) =>
+            runs.has(slot)
+              ? null
+              : row.values[col].slice(start, end ? -end : undefined)
+          )
+          .filter((cell): cell is string => cell !== null)
+      )
+    )
+    .join('\n');
+}
+
+/**
+ * The marker for a run that is all one shape -- unchanged, byte for byte.
+ *
+ * Kept as its own form rather than folded into the by-position marker below,
+ * because the by-position marker pays for a position list per block and a
+ * single-shape run has nothing to spend it on: every position is covered by the
+ * one template, in order, which is exactly what this header already says.
+ */
+function oneShapeMarker(
+  group: RecordParts[],
+  found: RecordParts[],
+  complete: boolean,
+  shortHeader: boolean,
+  noun: string,
+  label: string
+): string | null {
+  if (group.length < 3) return null;
+  const shaped = templateOf(group);
+  // THE COUNT BELONGS TO THIS MARKER, NOT TO THE DOCUMENT. Each marker
+  // encodes one contiguous `group`; `found` is every record in the
+  // document. With two or more groups -- which is what a keyed map with
+  // unrelated properties between its entries produces -- every marker
+  // announced the document-wide total, so a reader counting rows under
+  // one marker found fewer than it claimed.
+  const whole = group.length === found.length;
+  return (
+    (shortHeader
+      ? `[All ${group.length} JSON records; join template strings and row[integer] verbatim. Template: `
+      : (complete
+          ? `[JSON ${label}; ALL ${found.length} ${noun} preserved${whole ? '' : `, ${group.length} encoded here`}. `
+          : '[JSON fragment records; missing records remain unknown. ') +
+        'Join template parts, replacing numeric slots with verbatim text fragments from each row. Template: ') +
+    JSON.stringify(shaped.template) +
+    slotClause(shaped.runs) +
+    ']\n' +
+    rowLines(group, shaped) +
+    '\n[/JSON fragment records]\n'
+  );
+}
+
+/**
+ * The marker for a run whose records do NOT all share one shape.
+ *
+ * Every position in the run is stated exactly once. A class of three or more
+ * records becomes a template that names the positions it fills; anything left
+ * over is carried verbatim, at its own position, with its length in front of it
+ * -- which costs about a dozen characters and, unlike escaping it into a JSON
+ * string, does not inflate the text it is preserving by a byte.
+ *
+ * THE LENGTH IS WHAT MAKES THE BODY PARSEABLE, not a fence. A row line and a
+ * block header both begin with a bracket, and a preserved record may contain any
+ * line at all, so nothing in the body can be found by looking for it: the header
+ * states how many rows follow, or how many characters, and the decoder counts.
+ *
+ * Returns null when no class is large enough to template, since the marker would
+ * then be a re-statement of the run with overhead on top.
+ */
+function byPositionMarker(
+  text: string,
+  run: RecordParts[],
+  classes: ShapeClass[],
+  found: RecordParts[],
+  complete: boolean,
+  noun: string,
+  label: string
+): string | null {
+  if (!classes.some((cls) => cls.rows.length >= 3)) return null;
+  const blocks: string[] = [];
+  for (const cls of classes)
+    if (cls.rows.length >= 3) {
+      const shaped = templateOf(cls.rows);
+      blocks.push(
+        `[rows at ${cls.at.join(',')}${slotClause(shaped.runs)}; Template: ` +
+          JSON.stringify(shaped.template) +
+          ']\n' +
+          rowLines(cls.rows, shaped) +
+          '\n'
+      );
+    } else
+      cls.rows.forEach((row, n) => {
+        const raw = text.slice(row.start, row.end);
+        blocks.push(`[at ${cls.at[n]}; ${raw.length} chars]\n${raw}`);
+      });
+  return (
+    `[JSON ${label} by position; ${found.length} ${noun}, ` +
+    `${run.length} here as positions 0-${run.length - 1}` +
+    (complete ? '' : ', with missing records still unknown') +
+    '. Each block fills the positions it names: rows from its template, ' +
+    'numeric slots taking its fragments in order; a record verbatim at the ' +
+    'stated length.]\n' +
+    blocks.join('') +
+    '[/JSON records by position]\n'
+  );
+}
+
+/**
+ * The legacy encoding of a run: maximal same-shape NEIGHBOURS, each on its own.
+ *
+ * Kept as a candidate rather than replaced, because it beats a position list
+ * whenever the shapes really are adjacent. The commonest run in any JSON array
+ * is N records with a trailing comma followed by one without: the odd record out
+ * is a shape of its own, and leaving it in place costs nothing at all, where
+ * carrying it inside a marker costs a block header. Byte-identical to what this
+ * function emitted before position lists existed, so that a payload the old
+ * grouping handled well is encoded exactly as it was.
+ */
+function legacyMarkers(
+  text: string,
+  run: RecordParts[],
+  found: RecordParts[],
+  complete: boolean,
+  shortHeader: boolean,
+  noun: string,
+  label: string
+): { out: string; counts: number[] } {
+  let out = '';
+  const counts: number[] = [];
+  for (let i = 0; i < run.length; ) {
+    let end = i + 1;
+    while (end < run.length && run[end].shape === run[i].shape) end++;
+    const group = run.slice(i, end),
+      from = group[0].start,
+      stop = group[group.length - 1].end;
+    const marker = oneShapeMarker(
+      group,
+      found,
+      complete,
+      shortHeader,
+      noun,
+      label
+    );
+    if (marker !== null && marker.length < stop - from) {
+      out += marker;
+      counts.push(group.length);
+    } else out += text.slice(from, stop);
+    i = end;
+  }
+  return { out, counts };
+}
+
 function compressRecords(
   text: string,
   found: RecordParts[],
@@ -343,199 +729,68 @@ function compressRecords(
   noun = 'records'
 ): CompressionResult {
   const elisions: Elision[] = [];
+  const label = noun === 'entries' ? 'object map' : 'array records';
   let result = '',
     cursor = 0;
   for (let i = 0; i < found.length; ) {
-    const first = found[i];
+    // ADJACENCY BOUNDS THE RUN; SHAPE PARTITIONS IT TWO WAYS, AND THE SHORTER
+    // ONE WINS.
+    //
+    // This scan used to carry `found[end].shape === first.shape` as well, so a
+    // run ended at the first record that differed and only NEIGHBOURING records
+    // of one shape were ever templated. On a real agent transcript that
+    // templated nothing at all: 47 records in 16 shapes, the largest class 21
+    // records, and not one adjacent triple among them.
+    //
+    // The span still has to be contiguous -- it is the byte range a marker
+    // replaces -- but which records inside it share a template is decided below,
+    // by measuring both answers. Neither is better in general: a position list
+    // reaches a scattered class, and costs a block header for every record that
+    // is not in one.
     let end = i + 1;
-    while (
-      end < found.length &&
-      found[end].start === found[end - 1].end &&
-      found[end].shape === first.shape
-    )
-      end++;
-    const group = found.slice(i, end),
-      stop = group[group.length - 1].end;
-    if (group.length >= 3) {
-      const varying = first.values.map((value, col) =>
-        group.some((row) => row.values[col] !== value)
-      );
-      const template: (string | number)[] = [],
-        columns: { col: number; start: number; end: number }[] = [];
-      const runOf = (
-        col: number,
-        head: number,
-        tail: number
-      ): { first: number; step: number } | null => {
-        if (group.length < 4) return null;
-        const nums: number[] = [];
-        for (const row of group) {
-          // THE REMAINDER IS WHAT THE ROW CARRIES. Reading the whole value
-          // here made a factored column ineligible, which is backwards: once
-          // `/route-` is hoisted into the template the rows hold 0..39, and
-          // that is a cleaner run than the original strings ever were.
-          const raw = row.values[col].slice(head, tail ? -tail : undefined);
-          if (!/^-?(?:0|[1-9]\d*)$/.test(raw)) return null;
-          const n = Number(raw);
-          if (!Number.isSafeInteger(n) || String(n) !== raw) return null;
-          nums.push(n);
-        }
-        const step = nums[1] - nums[0];
-        for (let i = 2; i < nums.length; i += 1)
-          if (nums[i] - nums[i - 1] !== step) return null;
-        // A zero step is a constant column, which the template already hoists.
-        return step === 0 ? null : { first: nums[0], step };
-      };
-      let literal = first.chunks[0];
-      first.values.forEach((value, col) => {
-        if (varying[col]) {
-          // Factor shared lexical prefixes/suffixes as well as field names.
-          // IDs often differ only in their final digits; retaining the full
-          // escaped ID in every row needlessly repeats it across every turn.
-          let start = value.length,
-            suffix = value.length;
-          for (const row of group) {
-            const other = row.values[col];
-            let n = 0;
-            while (n < start && n < other.length && value[n] === other[n]) n++;
-            start = n;
-          }
-          for (const row of group) {
-            const other = row.values[col];
-            let n = 0;
-            while (
-              n < suffix &&
-              n < value.length - start &&
-              n < other.length - start &&
-              value[value.length - n - 1] === other[other.length - n - 1]
-            )
-              n++;
-            suffix = n;
-          }
-          // Keep booleans and numbers explicit: a number's digits ARE its
-          // content, and factoring them yields nothing a reader can use.
-          const quoted = value.startsWith('"') || value.startsWith('\\"');
-
-          // PREFIX AND SUFFIX ARE JUDGED SEPARATELY, and by whether they pay.
-          // They used to share one `start < 8` test, so a seven-character
-          // common prefix zeroed a SIXTEEN-character common suffix along with
-          // itself. On ninety rows of `"line N priced by hand"` the prefix
-          // `\"line ` is exactly seven, one short, and the whole ` priced by
-          // hand\"` tail was then repeated on every row -- about 2,500 bytes
-          // thrown away by an off-by-one in a magic number.
-          //
-          // The honest test is arithmetic rather than a constant: hoisting
-          // N characters out of R rows saves N * R and costs N once in the
-          // template, so it pays whenever R > 1 and N is not trivial. Two is
-          // the smallest run worth the indirection.
-          const pays = (shared: number): boolean =>
-            quoted && shared >= 2 && shared * (group.length - 1) > shared;
-          if (!pays(start)) start = 0;
-          if (!pays(suffix)) suffix = 0;
-
-          // A KEY COLUMN ENDS IN ITS CLOSING QUOTE -- one character -- and the
-          // `shared >= 2` floor above rejects it, leaving the row holding `0"`
-          // rather than `0`, so /route-0../route-39 was not read as the run it
-          // plainly is. One character is not worth hoisting on its own, which
-          // is why the floor exists; it IS worth hoisting when it turns a whole
-          // column into a rule. That judgement needs the run test, so it
-          // happens here rather than in `pays` -- and before the template is
-          // emitted, because widening the tail afterwards would leave the quote
-          // in neither the template nor the row.
-          if (!runOf(col, start, suffix))
-            for (const wider of [suffix + 1, suffix + 2]) {
-              const shared = group.every((row) => {
-                const v = row.values[col];
-                if (v.length - start - wider <= 0) return false;
-                const cut = v.slice(
-                  v.length - wider,
-                  suffix ? v.length - suffix : undefined
-                );
-                return cut === QUOTE || cut === ESCAPED_QUOTE;
-              });
-              if (shared && runOf(col, start, wider)) {
-                suffix = wider;
-                break;
-              }
-            }
-          template.push(literal + value.slice(0, start), columns.length);
-          columns.push({ col, start, end: suffix });
-          literal = suffix ? value.slice(-suffix) : '';
-        } else literal += value;
-        literal += first.chunks[col + 1];
-      });
-      template.push(literal);
-      // AN ARITHMETIC COLUMN IS A RULE, NOT A LIST.
-      //
-      // Sequential ids, byte offsets, line numbers and page cursors step by a
-      // constant, and both this engine and the competitor were spelling every
-      // one of them out digit by digit: measured on 120 records whose id,
-      // offset and line columns are perfect runs, their router gains 0.9
-      // points over the same shape with RANDOM values and we gain 0.8. The
-      // redundancy was simply not being read.
-      //
-      // `1000..1119 step 1` is a complete generator, not a summary: every
-      // value is derivable exactly and none is approximated. That is what
-      // separates this from factoring a shared prefix out of an identifier,
-      // which leaves a row holding a fragment of a token -- the failure
-      // json-anomaly-completeness guards. Here the guard is structural: a run
-      // requires every value to be a SAFE integer, so an unsafe id can never
-      // enter one.
-      const runs = new Map<number, { first: number; step: number }>();
-      columns.forEach((column, slot) => {
-        const { col, start } = column;
-        let { end } = column;
-        const run = runOf(col, start, end);
-        if (run) runs.set(slot, run);
-      });
-
-      // THE COUNT BELONGS TO THIS MARKER, NOT TO THE DOCUMENT. Each marker
-      // encodes one contiguous `group`; `found` is every record in the
-      // document. With two or more groups -- which is what a keyed map with
-      // unrelated properties between its entries produces -- every marker
-      // announced the document-wide total, so a reader counting rows under
-      // one marker found fewer than it claimed.
-      const whole = group.length === found.length;
-      const label = noun === 'entries' ? 'object map' : 'array records';
-      const compact =
-        (shortHeader
-          ? `[All ${group.length} JSON records; join template strings and row[integer] verbatim. Template: `
-          : (complete
-              ? `[JSON ${label}; ALL ${found.length} ${noun} preserved${whole ? '' : `, ${group.length} encoded here`}. `
-              : '[JSON fragment records; missing records remain unknown. ') +
-            'Join template parts, replacing numeric slots with verbatim text fragments from each row. Template: ') +
-        JSON.stringify(template) +
-        (runs.size
-          ? '; slots ' +
-            [...runs]
-              .map(([slot, r]) => `${slot}=${r.first}+${r.step}n`)
-              .join(' ') +
-            ' count from 0'
-          : '') +
-        ']\n' +
-        group
-          .map((row) =>
-            JSON.stringify(
-              columns
-                .map(({ col, start, end }, slot) =>
-                  runs.has(slot)
-                    ? null
-                    : row.values[col].slice(start, end ? -end : undefined)
-                )
-                .filter((cell): cell is string => cell !== null)
-            )
-          )
-          .join('\n') +
-        '\n[/JSON fragment records]\n';
-      if (compact.length < stop - first.start) {
-        result += text.slice(cursor, first.start) + compact;
-        cursor = stop;
+    while (end < found.length && found[end].start === found[end - 1].end) end++;
+    const run = found.slice(i, end),
+      from = run[0].start,
+      stop = run[run.length - 1].end;
+    const classes = shapeClasses(run);
+    const legacy = legacyMarkers(
+      text,
+      run,
+      found,
+      complete,
+      shortHeader,
+      noun,
+      label
+    );
+    const scattered =
+      classes.length > 1
+        ? byPositionMarker(text, run, classes, found, complete, noun, label)
+        : null;
+    // EACH CANDIDATE PASSES ITS OWN PAY TEST, IN ITS OWN UNIT. The legacy form
+    // keeps the character test it has always used, so every payload the old
+    // grouping already handled is encoded byte for byte as it was; the position
+    // list, which buys its saving with prose, has to pay for that prose in
+    // tokens. A TIE GOES TO THE LEGACY FORM for the same reason.
+    const raw = text.slice(from, stop);
+    const legacyPays =
+      legacy.counts.length > 0 && legacy.out.length < raw.length;
+    const best: { out: string; counts: number[] } | null =
+      scattered !== null &&
+      tokenCost(scattered) < tokenCost(raw) &&
+      (!legacyPays || tokenCost(scattered) < tokenCost(legacy.out))
+        ? { out: scattered, counts: [run.length] }
+        : legacyPays
+          ? legacy
+          : null;
+    if (best !== null) {
+      result += text.slice(cursor, from) + best.out;
+      cursor = stop;
+      for (const count of best.counts)
         elisions.push({
-          removed: `${group.length} complete records${complete ? '' : ' within truncated JSON'} represented by exact template and rows`,
+          removed: `${count} complete records${complete ? '' : ' within truncated JSON'} represented by exact template and rows`,
           recoverAt: null,
           lossless: true,
         });
-      }
     }
     i = end;
   }
