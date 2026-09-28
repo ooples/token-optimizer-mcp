@@ -64,6 +64,12 @@ const MUST_AGREE = [
   'theirFixtures',
   'detectBackend',
   'detectBackendPreset',
+  // The JSON serialisation the payloads were built with (`--separators` in
+  // run-theirs.py). Two chunks that differ here were handed different bytes,
+  // so merging them would average two corpora into one column. Captures taken
+  // before the flag existed carry the key on no chunk, which agrees with
+  // itself and merges exactly as it did before.
+  'payloadSeparators',
 ];
 
 /**

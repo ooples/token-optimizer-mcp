@@ -125,6 +125,24 @@ console.log('\na different instrument is refused');
   const ver = two();
   ver[1].theirs.__provenance__.headroomVersion = '0.38.0';
   check(mergeChunks(ver).ok === false, 'so are two engine versions', why(mergeChunks(ver)));
+
+  // AND SO ARE TWO SERIALISATIONS. `--separators` changes the bytes handed to
+  // both engines, not the engine, which is exactly why a merge across it would
+  // look harmless: every version and backend field still agrees.
+  const sep = two();
+  sep[0].theirs.__provenance__.payloadSeparators = 'default';
+  sep[1].theirs.__provenance__.payloadSeparators = 'compact';
+  const sr = mergeChunks(sep);
+  check(sr.ok === false, 'so are two payload serialisations', why(sr));
+  check(why(sr).includes('payloadSeparators differs'), 'and that field is named too', why(sr));
+
+  // THE CONTROL FOR THE CASE ABOVE. A pair that agrees on the new field must
+  // still merge, or the check would pass for the wrong reason -- any refusal
+  // at all would satisfy it.
+  const same = two();
+  same[0].theirs.__provenance__.payloadSeparators = 'compact';
+  same[1].theirs.__provenance__.payloadSeparators = 'compact';
+  check(mergeChunks(same).ok === true, 'two chunks that agree on it still merge', why(mergeChunks(same)));
 }
 
 console.log('\na chunk that does not hold what it claims is refused');

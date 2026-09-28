@@ -67,6 +67,35 @@ CLONE = sys.argv[1]
 OUT = sys.argv[2]
 EXTRA = sys.argv[sys.argv.index("--extra") + 1] if "--extra" in sys.argv else None
 
+# THE JSON SERIALISATION THE PAYLOAD IS BUILT WITH, CAPTURED AS AN ARM.
+#
+# `json.dumps` defaults to separators `(", ", ": ")` -- one space after every
+# comma and every colon. A real Node client's `JSON.stringify` emits neither, so
+# the default form hands BOTH engines whitespace that no wire ever carries.
+# `--separators compact` emits the `JSON.stringify` form instead.
+#
+# WHICH FORM IS THE FAIR ONE IS NOT DECIDED HERE. Measured over our twelve, our
+# block arm reads 68.22% on the default form and 67.91% on the compact one: the
+# honest form is the one that flatters us less, by 0.30pp. Rather than argue the
+# point, both are captured and the arm that ran is written into the provenance,
+# so a reader sees the gap instead of taking a claim about it.
+#
+# SCOPE: this governs `text_of`, which defines `PAYLOADS` -- the bytes both
+# sides are handed. It deliberately does NOT touch the `indent=2` at the
+# `wrapped_before_text` site below: that is THEIR pipeline arm's own
+# denominator, it is generous to them, and it is identical under both arms, so
+# re-serialising it would move their column for a reason unrelated to this one.
+SEPARATORS_ARM = (
+    sys.argv[sys.argv.index("--separators") + 1]
+    if "--separators" in sys.argv
+    else "default"
+)
+if SEPARATORS_ARM not in ("default", "compact"):
+    raise SystemExit(
+        "--separators takes 'default' or 'compact', not %r" % (SEPARATORS_ARM,)
+    )
+SEPARATORS = (",", ":") if SEPARATORS_ARM == "compact" else (", ", ": ")
+
 # A SLICE OF THE ROSTER, BECAUSE THEIR STORE FORGETS WHILE THE SWEEP IS STILL
 # RUNNING. A full sweep takes longer than the 1800s their resolver quotes, so the
 # workloads it measures first are already unredeemable by the time it finishes --
@@ -245,7 +274,7 @@ def text_of(payload):
     """
     if isinstance(payload, str):
         return payload
-    return json.dumps(payload)
+    return json.dumps(payload, separators=SEPARATORS)
 
 
 # Their own seed, so the fixtures are the ones their published numbers use.
@@ -1311,6 +1340,10 @@ provenance = {
         "script": os.path.relpath(WITNESS, os.path.dirname(os.path.dirname(WITNESS))),
     },
     "python": sys.version.split()[0],
+    # WHICH SERIALISATION BUILT THESE BYTES. Two captures that differ only in
+    # this are not the same measurement, and merging them would average two
+    # corpora into one column, so `merge-chunks.mjs` refuses a mismatch.
+    "payloadSeparators": SEPARATORS_ARM,
     # AFTER the run, deliberately: the arms write to it, so the state that
     # matters for reproducing this capture is the one the next run inherits.
     "ccrStoreBeforeRun": store_before,
