@@ -772,14 +772,29 @@ function dictsOf(
     if (distinct.length === cells.length) continue;
     const index = new Map(distinct.map((value, i) => [value, i]));
     let before = 0,
-      after = 0;
+      after = 0,
+      beforeChars = 0,
+      afterChars = 0;
     for (const cell of cells) {
-      before += JSON.stringify(cell).length;
-      after += String(index.get(cell)).length;
+      const was = JSON.stringify(cell),
+        now = String(index.get(cell));
+      before += tokenCost(was);
+      after += tokenCost(now);
+      beforeChars += was.length;
+      afterChars += now.length;
     }
-    // 4= and the leading space the clause pays for this slot, plus the list.
-    const cost = JSON.stringify(distinct).length + String(slot).length + 2;
-    if (before - after - cost > 0) dicts.set(slot, distinct);
+    // `4=` and the leading space the clause pays for this slot, plus the list.
+    const list = JSON.stringify(distinct),
+      cost = tokenCost(list) + tokenCost(`${slot}=`) + 1,
+      costChars = list.length + String(slot).length + 2;
+    // DECIDED IN THE BILLED UNIT, with characters as a floor rather than as the
+    // judgement. A subscription is metered in tokens, so a swap that shortens
+    // the text while costing tokens is a loss the character count would have
+    // reported as a win. The character test is kept only to refuse the reverse
+    // case -- a token win paid for with a longer output -- because the corpus
+    // is judged on both columns and neither may be spent to buy the other.
+    if (before - after - cost > 0 && beforeChars - afterChars - costChars >= 0)
+      dicts.set(slot, distinct);
   }
   return dicts;
 }
