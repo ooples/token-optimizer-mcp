@@ -48,10 +48,16 @@ import { engineFor, registerEngine, runEngine } from './registry.js';
 import { readNumbering } from './numbering.js';
 import { foldLongRepeats } from './runs.js';
 import { foldRepeatedSegments, looksRepetitive } from './segments.js';
-import type { CompressionResult, ContentKind, EngineContext } from './types.js';
+import type {
+  CompressionResult,
+  ContentKind,
+  EngineContext,
+  SpillSink,
+} from './types.js';
 import { spillFor, unchanged } from './types.js';
+import { rehydrate } from './rehydrate.js';
 import { marker } from './annotate.js';
-import { DEFAULT_TUNING } from './options.js';
+import { DEFAULT_TUNING, resolveTuning } from './options.js';
 
 /**
  * A diff is claimed and then deliberately left alone.
@@ -374,10 +380,71 @@ function routed(
  * is still eligible: an unclaimed block is the one most likely to be a large
  * opaque payload sent twice.
  */
+/**
+ * The spill, compressed on its way out rather than written verbatim.
+ *
+ * A spilled block used to reach the sink exactly as it came in, which made an
+ * elision a MOVE and not a reduction: the handed text got smaller, and the
+ * moment the model followed the pointer it paid back every byte. Measured
+ * across the bench workloads, the three rows whose cost loses once a follow-up
+ * is certain are exactly the three that spill most of their payload
+ * (code-search 73%, issue-triage 71%, relevance-probe 64%), and every row that
+ * spills nothing wins that comparison.
+ *
+ * LOSSLESS PASSES ONLY, AND ONLY IF IT ROUND-TRIPS. The spill is the place the
+ * content is recovered FROM, so it is the one buffer that may never lose a
+ * byte. Rather than reason about which passes are reversible, this compresses
+ * with lossy transforms switched off and then rehydrates the result and
+ * compares: the compressed form is used only when it expands back to the
+ * original exactly. Anything else -- a pass rehydrate does not reverse, a
+ * throw, an output that did not get smaller -- falls back to the raw content,
+ * so the worst case is the behaviour this replaced.
+ */
+const LOSSLESS = resolveTuning({}, 'lossless');
+
+function packSpill(content: string): string {
+  let packed: string;
+  try {
+    // No sink in this context, so nothing nested can spill again.
+    packed = routed(content, { tuning: LOSSLESS }).text;
+  } catch {
+    return content;
+  }
+  if (packed.length >= content.length) return content;
+  try {
+    if (rehydrate(packed) !== content) return content;
+  } catch {
+    return content;
+  }
+  return packed;
+}
+
+/**
+ * Wrapped once per sink, because `spillFor` memoises on the sink's identity:
+ * handing it a fresh closure per call would silently turn its cross-call memo
+ * into a per-call one and re-spill content it had already placed.
+ */
+type LiveSink = NonNullable<SpillSink>;
+
+const PACKING_SINKS = new WeakMap<LiveSink, LiveSink>();
+
+function packingSink(sink: LiveSink): LiveSink {
+  const known = PACKING_SINKS.get(sink);
+  if (known) return known;
+  const wrapped: LiveSink = (content: string, hint: string) =>
+    sink(packSpill(content), hint);
+  PACKING_SINKS.set(sink, wrapped);
+  return wrapped;
+}
+
 export function compressBlock(
   text: string,
-  ctx: EngineContext = {}
+  options: EngineContext = {}
 ): CompressionResult {
+  const ctx: EngineContext =
+    options.spill === undefined
+      ? options
+      : { ...options, spill: packingSink(options.spill) };
   // A numbered read is detected on its BARE content and re-numbered
   // afterwards. Detecting on the numbered form finds nothing at all --
   // see readNumbering, where the measurement is recorded.
