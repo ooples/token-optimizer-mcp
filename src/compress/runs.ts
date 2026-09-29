@@ -48,15 +48,31 @@ const QUOTE_START = 24;
 /**
  * Mixing constants for the rolling window hash.
  *
- * SIZED FOR DOUBLES, NOT FOR ENTROPY. Every intermediate has to stay under
- * 2^53 or the modulus stops meaning anything: at a base of 16,777,619 the
- * product `hash * BASE` reaches 3.4e16, which rounds, and the rounding made
- * every position collide with every other. The symptom was not a wrong answer
- * -- the byte comparison below catches that -- but a scan that verified 256
- * characters at every one of three quarters of a million positions.
+ * INT32 ARITHMETIC, NOT A DOUBLE MODULUS. The earlier form reduced modulo
+ * 2,147,483,647 and had to keep every intermediate under 2^53 to mean
+ * anything, which is why the base is small: at 16,777,619 the product
+ * `hash * BASE` reaches 3.4e16, rounds, and every position collides with
+ * every other. `Math.imul` is exact on the low 32 bits by definition, so the
+ * reduction is free and the intermediates cannot overflow into a lie -- one
+ * multiply per character instead of a multiply and three `%` on doubles.
+ *
+ * SPREAD BEFORE MASKING. A polynomial over an odd base keeps its information
+ * in the high bits, and the table below indexes on the low ones, so the slot
+ * is taken from `hash ^ hash >>> 15` rather than from `hash` itself.
  */
 const BASE = 131;
-const MOD = 2_147_483_647;
+
+/** `BASE` raised to GRAIN - 1, the weight the character leaving a window has. */
+const POWER = (() => {
+  let power = 1;
+  for (let i = 1; i < GRAIN; i += 1) power = Math.imul(power, BASE);
+  return power;
+})();
+
+/** The slot a hash starts probing at, spread so the low bits carry the key. */
+function slotOf(hash: number, mask: number): number {
+  return ((hash ^ (hash >>> 15)) >>> 0) & mask;
+}
 
 /**
  * The hash of the GRAIN-wide window that starts at `at`.
@@ -67,7 +83,7 @@ const MOD = 2_147_483_647;
 function hashAt(text: string, at: number): number {
   let hash = 0;
   for (let i = at; i < at + GRAIN; i += 1)
-    hash = (hash * BASE + text.charCodeAt(i)) % MOD;
+    hash = (Math.imul(hash, BASE) + text.charCodeAt(i)) | 0;
   return hash;
 }
 
@@ -330,17 +346,15 @@ function findRepeats(text: string, document: boolean): Repeat[] {
   const firstAt = new Int32Array(size).fill(-1);
   for (let s = 0; s < stops; s += 1) {
     const key = probeHash[s];
-    let slot = (key >>> 0) & mask;
+    let slot = slotOf(key, mask);
     while (used[slot] === 1 && keys[slot] !== key) slot = (slot + 1) & mask;
     used[slot] = 1;
     keys[slot] = key;
   }
 
-  let power = 1;
-  for (let i = 1; i < GRAIN; i += 1) power = (power * BASE) % MOD;
   let hash = hashAt(text, 0);
   for (let i = 0; ; i += 1) {
-    let slot = (hash >>> 0) & mask;
+    let slot = slotOf(hash, mask);
     while (used[slot] === 1) {
       if (keys[slot] === hash) {
         if (firstAt[slot] < 0) firstAt[slot] = i;
@@ -349,13 +363,16 @@ function findRepeats(text: string, document: boolean): Repeat[] {
       slot = (slot + 1) & mask;
     }
     if (i >= last) break;
-    // The same recurrence the whole-array form used, one window forward.
-    hash = (hash - ((text.charCodeAt(i) * power) % MOD) + MOD) % MOD;
-    hash = (hash * BASE + text.charCodeAt(i + GRAIN)) % MOD;
+    // One window forward: drop the character leaving at its weight, shift the
+    // rest up a place, and take in the one arriving.
+    hash =
+      (Math.imul(hash - Math.imul(text.charCodeAt(i), POWER), BASE) +
+        text.charCodeAt(i + GRAIN)) |
+      0;
   }
 
   const sourceOf = (key: number): number => {
-    let slot = (key >>> 0) & mask;
+    let slot = slotOf(key, mask);
     while (used[slot] === 1) {
       if (keys[slot] === key) return firstAt[slot];
       slot = (slot + 1) & mask;
