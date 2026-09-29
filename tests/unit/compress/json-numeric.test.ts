@@ -1,3 +1,4 @@
+import { reassemble } from './spill-reassembly.js';
 import { test, expect } from '@jest/globals';
 import { numericExtrema } from '../../../src/compress/json-numeric.js';
 import { compressJson } from '../../../src/compress/json.js';
@@ -45,11 +46,14 @@ test('recovery preserves nulls in rows outside the retained sample', () => {
     value: null,
   }));
   let recovered = '';
-  compressJson(JSON.stringify(rows), {
+  const result = compressJson(JSON.stringify(rows), {
     spill: (text) => {
       recovered = text;
       return '/recovery.json';
     },
   });
-  expect(JSON.parse(recovered)).toEqual(rows);
+  // THROUGH THE REASSEMBLY, because the spill now holds only the rows that
+  // left. A null in a kept row is in the request and a null in a dropped row
+  // is in the spill; this test is about neither half losing one.
+  expect(reassemble(result.text, recovered)).toEqual(rows);
 });

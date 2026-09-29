@@ -1,3 +1,4 @@
+import { reassemble } from './spill-reassembly.js';
 import { expect, test } from '@jest/globals';
 import { compressJson } from '../../../src/compress/json.js';
 test('unsafe integer lexemes survive with no parsed extrema', () => {
@@ -46,7 +47,11 @@ test('capped shape representatives do not claim the whole population survives', 
   expect(result.lossless).toBe(false);
   expect(result.text).not.toContain('that differ are kept above');
   expect(result.text).not.toContain('"id":170,');
-  expect(JSON.parse(recovery)).toEqual(rows);
+  // THE WHOLE POPULATION, ACROSS BOTH HALVES. The claim under test is that the
+  // capped representatives do not silently stand in for the rows they capped,
+  // so what has to survive is every row -- not every row in the spill, which is
+  // only where the ones that left now live.
+  expect(reassemble(result.text, recovery)).toEqual(rows);
 });
 
 test('complete exceptional shapes still report the actual retained population', () => {

@@ -1,3 +1,4 @@
+import { reassemble } from './spill-reassembly.js';
 import { describe, it, expect } from '@jest/globals';
 import { compressCode } from '../../../src/compress/code.js';
 import { compressProse } from '../../../src/compress/prose.js';
@@ -293,7 +294,7 @@ describe('the spill is the only way back, so it must hold what went', () => {
     expect(result.elisions).toHaveLength(0);
   });
 
-  it('the json tail spill holds every row, kept and dropped alike', () => {
+  it('the json tail spill and the kept rows reassemble the whole array', () => {
     const sink = recordingSpill();
     const result = compressJson(ROWS, {
       spill: sink.spill,
@@ -309,10 +310,15 @@ describe('the spill is the only way back, so it must hold what went', () => {
     expect(lossy).not.toHaveLength(0);
     for (const elision of lossy) expect(elision.recoverAt).toBe(path);
 
-    // EVERY ROW, not just the dropped ones. The marker says "N more rows" and
-    // names one path; an agent that reads it has no offset to apply, so a
-    // spill holding only the tail would answer a question nobody can ask.
-    expect(JSON.parse(content)).toEqual(JSON.parse(ROWS));
+    // NOT EVERY ROW ANY MORE, AND THAT IS THE POINT. The spill used to hold the
+    // kept rows too, so a reader who followed the pointer was handed rows that
+    // were sitting beside the marker already and paid for them twice. The
+    // marker now names where the kept rows sat, which is the offset an agent
+    // was missing, so the two halves reassemble in order -- asserted here
+    // rather than assumed, because the reassembly is the property that
+    // "the spill holds everything" was ever standing in for.
+    expect(JSON.parse(content).length).toBeLessThan(JSON.parse(ROWS).length);
+    expect(reassemble(result.text, content)).toEqual(JSON.parse(ROWS));
   });
 
   it('the json tail spill keeps the lexemes the source wrote', () => {
@@ -333,8 +339,13 @@ describe('the spill is the only way back, so it must hold what went', () => {
     // dropped rows still exist -- so an agent recovering from it would read a
     // number the document never spelled that way. Deep-equality is blind to
     // this, which is why the lexeme is named here.
+    // AND THE KEPT HALF IS HELD TO THE SAME RULE. It used to be re-serialised
+    // from the parsed values while only the spill kept the source's bytes,
+    // which was survivable exactly while the spill also held the kept rows.
+    // Now that it does not, both halves are sliced from the source, and
+    // reassembly is what proves it.
     expect(content).toContain('"ratio":1.0');
-    expect(JSON.parse(content)).toEqual(JSON.parse(LEXEMES));
+    expect(reassemble(result.text, content)).toEqual(JSON.parse(LEXEMES));
   });
 
   it('json keeps the minification and the rows when the sink fails', () => {

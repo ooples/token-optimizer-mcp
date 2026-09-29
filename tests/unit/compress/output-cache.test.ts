@@ -1,3 +1,4 @@
+import { reassemble } from './spill-reassembly.js';
 import { expect, test } from '@jest/globals';
 import { cachedOutput } from '../../../src/proxy/output-cache.js';
 import { compressBlock } from '../../../src/compress/router.js';
@@ -23,7 +24,15 @@ test('repeated output matches uncached compression and restores recovery content
   expect(cachedOutput(text, spill)).toEqual(expected);
   files.clear();
   expect(cachedOutput(text, spill)).toEqual(expected);
-  expect(JSON.parse(files.get('/first.json')!)).toHaveLength(240);
+  // THE POINT IS THAT THE CACHE REPLAYED THE SPILL: `files` was cleared and the
+  // second call refilled it. The spill now carries only the rows that left, so
+  // what is asserted is that the two halves still put the whole array back --
+  // which is the recovery this test is named for, and is stronger than counting
+  // rows in the spill.
+  const restored = files.get('/first.json');
+  expect(restored).toBeDefined();
+  expect(JSON.parse(restored ?? '[]').length).toBeLessThan(240);
+  expect(reassemble(expected.text, restored ?? '[]')).toEqual(JSON.parse(text));
 });
 
 test('proxy scopes and changed recovery paths never reuse another path', () => {

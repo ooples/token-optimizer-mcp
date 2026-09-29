@@ -259,6 +259,93 @@ function minifyPreservingTokens(text: string): string | null {
   return out;
 }
 /**
+ * The span of every top-level element of a JSON array, as offsets into `text`.
+ *
+ * SPANS, NOT VALUES, for exactly the reason `minifyPreservingTokens` above
+ * exists: slicing the source hands back `19.90` as `19.90`, where re-serialising
+ * a parsed row hands back `19.9`. A caller that splits an array into the part it
+ * keeps and the part it spills needs BOTH halves written the way the source
+ * wrote them, and only offsets into the original give that.
+ *
+ * The string-skipping is deliberately the same shape as the two scans around
+ * it. Returns null when the scan cannot finish, when the text is not an array,
+ * or when anything follows the closing bracket -- in every one of those cases
+ * the caller has to fall back rather than emit a document it guessed at.
+ */
+function topLevelElementSpans(text: string): Array<[number, number]> | null {
+  if (text[0] !== '[') return null;
+  const spans: Array<[number, number]> = [];
+  let depth = 0;
+  let start = -1;
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"') {
+      i += 1;
+      let closed = false;
+      while (i < text.length) {
+        if (text[i] === '\\') {
+          i += 2;
+          continue;
+        }
+        if (text[i] === '"') {
+          i += 1;
+          closed = true;
+          break;
+        }
+        i += 1;
+      }
+      if (!closed) return null;
+      continue;
+    }
+    if (ch === '[' || ch === '{') {
+      depth += 1;
+      if (depth === 1) start = i + 1;
+      i += 1;
+      continue;
+    }
+    if (ch === ']' || ch === '}') {
+      depth -= 1;
+      if (depth < 0) return null;
+      if (depth === 0) {
+        // The outer opener was a bracket, so a brace closing it is malformed.
+        if (ch !== ']') return null;
+        if (i > start) spans.push([start, i]);
+        // Trailing bytes mean this was not the whole document and the offsets
+        // would be read against a text the caller does not have.
+        return i === text.length - 1 ? spans : null;
+      }
+      i += 1;
+      continue;
+    }
+    if (ch === ',' && depth === 1) {
+      spans.push([start, i]);
+      start = i + 1;
+      i += 1;
+      continue;
+    }
+    i += 1;
+  }
+  return null;
+}
+
+/**
+ * How to say where the rows still in the request sat in the original array.
+ *
+ * The marker names a count and a shape; without this the two halves of the
+ * array can be reassembled as a set but not in order, and for search results
+ * and log lines the order IS the content. The contiguous case gets the short
+ * form because it is the common one -- `keepRows` takes the head -- and because
+ * a run of indices is exactly what a reader would otherwise have to check.
+ */
+function keptPositions(keptAt: readonly number[], total: number): string {
+  const contiguous = keptAt.every((at, i) => at === i);
+  return contiguous
+    ? `the ${count(keptAt.length, 'row')} above are the first of ${total}`
+    : `the ${count(keptAt.length, 'row')} above were at index ${keptAt.join(', ')} of ${total}`;
+}
+
+/**
  * The number lexemes of a document, in order, ignoring anything inside a string.
  *
  * OUTSIDE STRINGS, AND POSITIONAL. The first version asked whether each
@@ -559,9 +646,41 @@ export function compressJson(
     // whitespace removed and every lexeme as the source wrote it, so prefer
     // it; it is null exactly when a nested string was compressed, and then the
     // values are what survived and serialising them is the honest answer.
+    // AND ONLY THE ROWS THAT ACTUALLY LEFT. The spill held the whole array,
+    // including the rows sitting in the request right beside the marker, so a
+    // reader who followed the pointer paid for those rows twice -- once in
+    // context and again on recovery. On the benchmark's agent loops that is 6
+    // of every 60 rows and 8 of every 200. Recovery only needs what is missing,
+    // and the positions below are what make the two halves reassemble in order.
+    //
+    // POSITIONS ARE NAMED ONLY WHEN NAMING THEM IS CHEAPER THAN RE-SENDING THE
+    // ROWS. That is the whole test: no cap, no dial, just the comparison that
+    // decides whether the clause pays. A kept set too scattered or too large to
+    // describe falls back to the whole-array spill, which is always correct.
+    const whole = scanned ?? JSON.stringify(stripped);
+    const spans = topLevelElementSpans(whole);
+    const keptAt = [...keep].sort((a, b) => a - b);
+    const verbatim =
+      spans !== null && spans.length === stripped.length ? spans : null;
+    const sliceRow = (i: number): string =>
+      verbatim === null ? '' : whole.slice(verbatim[i][0], verbatim[i][1]);
+    const positions = verbatim === null ? '' : keptPositions(keptAt, stripped.length);
+    const keptBytes =
+      verbatim === null
+        ? 0
+        : keptAt.reduce((a, i) => a + (verbatim[i][1] - verbatim[i][0]) + 1, 0);
+    const partial = verbatim !== null && positions.length < keptBytes;
     const recoverAt = spillFor(
       ctx,
-      scanned ?? JSON.stringify(stripped),
+      partial
+        ? '[' +
+            stripped
+              .map((_row, i) => i)
+              .filter((i) => !keep.has(i))
+              .map(sliceRow)
+              .join(',') +
+            ']'
+        : whole,
       'rows.json'
     );
     if (!recoverAt)
@@ -570,14 +689,20 @@ export function compressJson(
         elisions,
         lossless: !nestedLossy && lexemeSafe,
       });
-    const kept = [...keep].sort((a, b) => a - b).map((i) => stripped[i]);
     const sample = stripped.find((_row, i) => !keep.has(i));
-    const keptText = JSON.stringify(kept);
+    // THE KEPT ROWS COME FROM THE SOURCE TOO, on the same path. They used to be
+    // re-serialised from the parsed values, which is the very rewrite the
+    // comment above refuses for the spill: `19.90` went out as `19.9`, and once
+    // the spill stops carrying them there is nowhere else those bytes exist.
+    const keptText = partial
+      ? '[' + keptAt.map(sliceRow).join(',') + ']'
+      : JSON.stringify(keptAt.map((i) => stripped[i]));
     const body =
       keptText.slice(0, -1) +
       ',' +
       inlineMarker(
         `${count(dropped, 'more row')}, ${shapeOf(sample)}` +
+          (partial ? `; ${positions}` : '') +
           (differing.length && differing.every((i) => keep.has(i))
             ? `; all ${count(differing.length, 'row')} that differ are kept above`
             : '') +

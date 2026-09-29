@@ -1,3 +1,4 @@
+import { reassemble } from './spill-reassembly.js';
 import { describe, it, expect } from '@jest/globals';
 import { compressJson, looksLikeJson } from '../../../src/compress/json.js';
 import { compressLog, looksLikeLog } from '../../../src/compress/log.js';
@@ -162,11 +163,16 @@ describe('json', () => {
     expect(out.lossless).toBe(true);
   });
 
-  it('hands the whole array to the spill, so the elided rows are recoverable', () => {
+  it('hands the elided rows to the spill, so the array is recoverable', () => {
     const rec = recordingSpill();
-    compressJson(JSON.stringify(rows(60)), rec);
+    const all = rows(60);
+    const out = compressJson(JSON.stringify(all), rec);
     expect(rec.written).toHaveLength(1);
-    expect(JSON.parse(rec.written[0])).toHaveLength(60);
+    // FEWER THAN 60, because the rows still in the request are not written
+    // again -- and all 60 all the same, once the marker's positions put the
+    // two halves back together.
+    expect(JSON.parse(rec.written[0]).length).toBeLessThan(60);
+    expect(reassemble(out.text, rec.written[0])).toEqual(all);
   });
 });
 
