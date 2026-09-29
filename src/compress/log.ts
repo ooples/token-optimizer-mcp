@@ -316,10 +316,10 @@ function variableSpans(line: string): Array<[number, number]> {
 }
 
 /** The line with every variable span replaced by a single placeholder. */
-function shapeOf(line: string): string {
+function shapeOf(line: string, spans = variableSpans(line)): string {
   let out = '';
   let cursor = 0;
-  for (const [start, end] of variableSpans(line)) {
+  for (const [start, end] of spans) {
     if (start < cursor) continue;
     out += line.slice(cursor, start) + '#';
     cursor = end;
@@ -328,10 +328,10 @@ function shapeOf(line: string): string {
 }
 
 /** The values that shape stands in for, in order and verbatim. */
-function valuesOf(line: string): string[] {
+function valuesOf(line: string, spans = variableSpans(line)): string[] {
   const values: string[] = [];
   let cursor = 0;
-  for (const [start, end] of variableSpans(line)) {
+  for (const [start, end] of spans) {
     if (start < cursor) continue;
     values.push(line.slice(start, end));
     cursor = end;
@@ -430,6 +430,13 @@ function commonPrefix(values: readonly string[]): string {
  */
 function templated(lines: string[], elisions: Elision[]): string[] {
   const groups = new Map<string, number[]>();
+  // COMPUTED ONCE PER LINE. shapeOf and aluesOf both need the same spans,
+  // and finding them is the expensive half of this pass: ariableSpans runs
+  // structuralRanges, which entropy-scores every candidate identifier. The
+  // grouping loop below needs the spans of every line and the value rows need
+  // them again for the lines that survive into a group, so without this the
+  // whole scan happens twice on exactly the lines that matter most.
+  const spansByIndex = new Map<number, Array<[number, number]>>();
 
   lines.forEach((line, index) => {
     if (
@@ -438,7 +445,9 @@ function templated(lines: string[], elisions: Elision[]): string[] {
       line.trimStart().startsWith('[... ')
     )
       return;
-    const shape = shapeOf(line);
+    const spans = variableSpans(line);
+    spansByIndex.set(index, spans);
+    const shape = shapeOf(line, spans);
     // A line with nothing variable in it is not a template, it is a line.
     if (shape === line) return;
     const bucket = groups.get(shape);
@@ -453,7 +462,7 @@ function templated(lines: string[], elisions: Elision[]): string[] {
     if (members.length < MIN_TEMPLATE) continue;
 
     // One row of values per occurrence, in the order they appeared.
-    let valueRows = members.map((i) => valuesOf(lines[i]));
+    let valueRows = members.map((i) => valuesOf(lines[i], spansByIndex.get(i)));
 
     // A COLUMN THAT NEVER VARIES IS NOT A VARIABLE. `shapeOf` blanks every
     // digit run, so a build log covering a single day writes that day into
