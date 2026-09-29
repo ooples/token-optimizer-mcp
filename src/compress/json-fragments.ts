@@ -537,19 +537,18 @@ function templateOf(group: RecordParts[]): Templated {
   );
   const template: (string | number)[] = [],
     columns: Templated['columns'] = [];
-  const runOf = (
-    col: number,
-    head: number,
-    tail: number
+  // THE REMAINDER IS WHAT THE ROW CARRIES. Reading the whole value here made
+  // a factored column ineligible, which is backwards: once `/route-` is
+  // hoisted into the template the rows hold 0..39, and that is a cleaner run
+  // than the original strings ever were. So the test takes the cells the rows
+  // would actually carry, whether those come from an offset pair or from a
+  // piece of a split column.
+  const runOfCells = (
+    cells: string[]
   ): { first: number; step: number } | null => {
-    if (group.length < 4) return null;
+    if (cells.length < 4) return null;
     const nums: number[] = [];
-    for (const row of group) {
-      // THE REMAINDER IS WHAT THE ROW CARRIES. Reading the whole value
-      // here made a factored column ineligible, which is backwards: once
-      // `/route-` is hoisted into the template the rows hold 0..39, and
-      // that is a cleaner run than the original strings ever were.
-      const raw = row.values[col].slice(head, tail ? -tail : undefined);
+    for (const raw of cells) {
       if (!/^-?(?:0|[1-9]\d*)$/.test(raw)) return null;
       const n = Number(raw);
       if (!Number.isSafeInteger(n) || String(n) !== raw) return null;
@@ -561,6 +560,14 @@ function templateOf(group: RecordParts[]): Templated {
     // A zero step is a constant column, which the template already hoists.
     return step === 0 ? null : { first: nums[0], step };
   };
+  const cellsOf = (col: number, head: number, tail: number): string[] =>
+    group.map((row) => row.values[col].slice(head, tail ? -tail : undefined));
+  const runOf = (
+    col: number,
+    head: number,
+    tail: number
+  ): { first: number; step: number } | null =>
+    group.length < 4 ? null : runOfCells(cellsOf(col, head, tail));
   let literal = first.chunks[0];
   first.values.forEach((value, col) => {
     if (varying[col]) {
@@ -678,15 +685,25 @@ function templateOf(group: RecordParts[]): Templated {
   // requires every value to be a SAFE integer, so an unsafe id can never
   // enter one.
   const runs = new Map<number, { first: number; step: number }>();
+  // A PIECE OF A SPLIT COLUMN IS ELIGIBLE TOO. `... for tenant 1`, `... for
+  // tenant 2` is the shape interior factoring produces, and the piece left
+  // after ` for tenant ` is hoisted is exactly the run the rows should stop
+  // spelling. Testing the cells rather than an offset pair is what lets the
+  // same rule reach both kinds of slot.
+  const pieces = new Map<number, string[][]>();
   columns.forEach((column, slot) => {
-    // A split column's slot holds one PIECE of the value, and `runOf` reads
-    // the value by offsets, so it would test the wrong text and then tell the
-    // rows to omit a slot the template cannot regenerate. Interior pieces are
-    // not eligible for a rule until the rule test can address a piece.
-    if (column.parts !== undefined) return;
-    const { col, start } = column;
-    let { end } = column;
-    const run = runOf(col, start, end);
+    const { col, start, end, parts, piece } = column;
+    if (parts === undefined) {
+      const run = runOf(col, start, end);
+      if (run) runs.set(slot, run);
+      return;
+    }
+    let cut = pieces.get(col);
+    if (cut === undefined) {
+      cut = cellsOf(col, start, end).map((mid) => splitOn(mid, parts));
+      pieces.set(col, cut);
+    }
+    const run = runOfCells(cut.map((row) => row[piece ?? 0]));
     if (run) runs.set(slot, run);
   });
   return { template, columns, runs };
