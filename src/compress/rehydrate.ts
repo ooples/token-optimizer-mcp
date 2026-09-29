@@ -51,6 +51,40 @@ import { readImageBackReference } from './images.js';
  * than a list of values. `r-0` is then `"r-"` in the template joined to a slot
  * the rule generates: present to the byte, absent as a substring.
  */
+/**
+ * Reads a `; dict` clause: the closed set each listed slot indexes into.
+ *
+ * A member may itself contain ], so the list is not read as `up to the next
+ * bracket``. The lookahead says where the NEXT entry starts, which lets the
+ * lazy match grow past an interior bracket instead of stopping at one -- the
+ * difference between decoding `["a]b"]` and throwing on it.
+ */
+function readDicts(clause: string | undefined): Map<number, string[]> {
+  const dicts = new Map<number, string[]>();
+  for (const part of (clause ?? '').matchAll(/(\d+)=(\[.*?\])(?= \d+=\[|$)/g))
+    dicts.set(Number(part[1]), JSON.parse(part[2]) as string[]);
+  return dicts;
+}
+
+/**
+ * One slot of one row: the rule generates it, a dictionary names it, or the
+ * row spelled it out. A dictionary index that names no member is a refusal,
+ * not a hole -- the row said which member it was and the list does not have it,
+ * so anything returned here would be invented.
+ */
+function slotValue(
+  slot: number,
+  raw: string | number | undefined,
+  dicts: Map<number, string[]>
+): string {
+  const set = dicts.get(slot);
+  if (set === undefined) return String(raw);
+  const got = set[Number(raw)];
+  if (got === undefined)
+    throw new Error(`dict slot ${slot} has no member ${String(raw)}`);
+  return got;
+}
+
 export function expandJsonRecords(text: string): string {
   return text.replace(
     // FOUR HEADERS, ONE BODY. `compressRecords` writes the same rows under
@@ -63,15 +97,17 @@ export function expandJsonRecords(text: string): string {
     // losing the whole block rather than the rows it could not state. The
     // body is byte-identical across all four, so the alternation is on the
     // header alone and the capture groups stay where the handler expects.
-    /(?:\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: |\[JSON (?:array records; ALL \d+ records|object map; ALL \d+ entries) preserved(?:, \d+ encoded here)?\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: |\[JSON fragment records; missing records remain unknown\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: )(\[[^\n]+?\])(; slots ([^\]\n]+) count from 0)?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
+    /(?:\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: |\[JSON (?:array records; ALL \d+ records|object map; ALL \d+ entries) preserved(?:, \d+ encoded here)?\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: |\[JSON fragment records; missing records remain unknown\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: )(\[[^\n]+?\])(; slots ([^\]\n]+) count from 0)?(?:; dict (.+?))?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
     (
       _all,
       encoded: string,
       _clause,
       slots: string | undefined,
+      dict: string | undefined,
       rows: string
     ) => {
       const template = JSON.parse(encoded) as (number | string)[];
+      const dicts = readDicts(dict);
       const rules = new Map<number, { first: number; step: number }>();
       for (const part of (slots ?? '').split(' ').filter(Boolean)) {
         const m = /^(\d+)=(-?\d+)\+(-?\d+)n$/.exec(part);
@@ -82,7 +118,7 @@ export function expandJsonRecords(text: string): string {
         .trim()
         .split('\n')
         .map((row, index) => {
-          const present = JSON.parse(row) as string[];
+          const present = JSON.parse(row) as (string | number)[];
           // Slots carrying a rule were omitted from the row; the rest arrive in
           // order, so the two streams are interleaved by slot number.
           const slotCount =
@@ -92,7 +128,11 @@ export function expandJsonRecords(text: string): string {
           for (let slot = 0; slot < slotCount; slot += 1) {
             const rule = rules.get(slot);
             values.push(
-              rule ? String(rule.first + rule.step * index) : present[next++]
+              slotValue(
+                slot,
+                rule ? rule.first + rule.step * index : present[next++],
+                dicts
+              )
             );
           }
           return template
@@ -341,7 +381,7 @@ export function expandSearchHunks(text: string): string {
 
 /** One `rows` block header: the positions it fills, its rules, its template. */
 const BY_POSITION_ROWS =
-  /^\[rows at ([\d,]+)(?:; slots ((?:-?\d+=-?\d+\+-?\d+n ?)+)count from 0)?; Template: (\[[^\n]*)\]\n/;
+  /^\[rows at ([\d,]+)(?:; slots ((?:-?\d+=-?\d+\+-?\d+n ?)+)count from 0)?(?:; dict (.+?))?; Template: (\[[^\n]*)\]\n/;
 /** One preserved record: its position, and how many characters it is. */
 const BY_POSITION_RECORD = /^\[at (\d+); (\d+) chars\]\n/;
 
@@ -384,19 +424,27 @@ export function expandJsonRecordsByPosition(text: string): string {
           // here fed `JSON.parse` a trailing `]` and it threw on the character
           // after a complete value -- which reads as a corrupt template rather
           // than as an off-by-one in the grammar.
-          const template = JSON.parse(rows[3]) as (number | string)[];
+          const dicts = readDicts(rows[3]);
+          const template = JSON.parse(rows[4]) as (number | string)[];
           rest = rest.slice(rows[0].length);
           for (const [index, position] of at.entries()) {
             const cut = rest.indexOf('\n');
             if (cut < 0) throw new Error('rows block ended mid-row');
-            const present = JSON.parse(rest.slice(0, cut)) as string[];
+            const present = JSON.parse(rest.slice(0, cut)) as (
+              | string
+              | number
+            )[];
             rest = rest.slice(cut + 1);
             const values: string[] = [];
             let next = 0;
             for (let slot = 0; slot < present.length + rules.size; slot += 1) {
               const rule = rules.get(slot);
               values.push(
-                rule ? String(rule.first + rule.step * index) : present[next++]
+                slotValue(
+                  slot,
+                  rule ? rule.first + rule.step * index : present[next++],
+                  dicts
+                )
               );
             }
             if (filled.has(position))
