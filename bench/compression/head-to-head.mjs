@@ -59,7 +59,8 @@
  * unrecoverable.
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 import {
   discriminatingFloor,
@@ -75,6 +76,7 @@ import { scanIdentifiers } from './identifiers.mjs';
 import { bestByRatio, selectArms } from './arm-selection.mjs';
 import { witness, witnessesAgree } from './load-witness.mjs';
 import { resolutionUsable } from './store-resolution.mjs';
+import { measureOurFetch, slowEstimate } from './fetch-latency.mjs';
 import { classifyArms, declaredOffloadBytes } from './offload.mjs';
 import { stubbedCaptureRefusal } from './capture-guard.mjs';
 import { baseContextReadiness, measureBaseContext } from '../subscription/base-context.mjs';
@@ -552,6 +554,36 @@ for (const [name, text] of Object.entries(payloads)) {
     query: queryOf(text),
     tuning: resolveTuning({ spillWholeBlockBelow: 1 }),
   });
+  // OUR HALF OF MUST-WIN 2b, ON THE BLOCKS THIS ARM ACTUALLY MOVED OUT.
+  //
+  // This is the arm with fetches to price. The default arm above has no sink at
+  // all (`OURS_HAS_SINK` is false), so its round trips are zero and its
+  // per-fetch latency multiplies nothing at every fetch rate -- see
+  // `fetch-latency.mjs` for why a figure that cannot change the answer is not
+  // demanded rather than defaulted to one.
+  //
+  // The sink the arm ran with returns a fake `.token-optimizer/spill/...` path,
+  // because what the cost model needs from it is the block's SIZE, not a file.
+  // Latency needs the file: so the same bytes are written here, the way
+  // `spillTo` in src/proxy/server.ts writes them, and read back the way the
+  // agent reads them. The directory is removed immediately afterwards -- this
+  // measures a retrieval, it is not a store.
+  const fetchRoot = mkdtempSync(join(tmpdir(), 'to-h2h-fetch-'));
+  let subFetch = null;
+  try {
+    subFetch = measureOurFetch(
+      { blocks: subSpilled, root: join(fetchRoot, 'spill') },
+      {
+        mkdir: (at) => mkdirSync(at, { recursive: true }),
+        write: (at, content) =>
+          writeFileSync(at, content, { encoding: 'utf8', mode: 0o600 }),
+        read: (at) => readFileSync(at, 'utf8'),
+        now: () => Number(process.hrtime.bigint()) / 1e6,
+      }
+    );
+  } finally {
+    rmSync(fetchRoot, { recursive: true, force: true });
+  }
 
   // THE PRESET ARM: THE DIAL AT THE SETTING A CALLER WOULD ACTUALLY RUN.
   //
@@ -1180,6 +1212,10 @@ for (const [name, text] of Object.entries(payloads)) {
     // for if it needs all of it back.
     oursTurns: spilled.length,
     subTurns: subSpilled.length,
+    // THE TIMED RETRIEVAL FOR THOSE TURNS. `subTurns` says how many round trips
+    // this arm forces; this says what one of them costs in milliseconds, so the
+    // two can be multiplied instead of one of them being assumed.
+    subFetch,
     presetTurns: presetSpilled.length,
     theirTurns,
     // PER BLOCK, not just the total. A session cost model has to know how
@@ -1982,6 +2018,26 @@ for (const [label, reason] of refusals)
 for (const [label, n] of pathRefusals)
   console.log(`moved to a spill path on ${label}: ${n}`);
 
+// MUST-WIN 2b prices the round trips this arm forces, and the figure it prices
+// them at can only be taken while the sweep is running. A figure that came back
+// null would otherwise surface days later as an UNMEASURED gate, long after the
+// only run that could have measured it. So say here what was timed, and name the
+// rows that moved content out without a figure to multiply.
+const fetchTimed = rows.filter((r) => r.subFetch != null);
+const fetchMissing = rows.filter((r) => r.subTurns > 0 && r.subFetch == null);
+if (fetchTimed.length > 0) {
+  const per = fetchTimed.map((r) => slowEstimate(r.subFetch.passes));
+  console.log(
+    `our per-fetch latency: ${fetchTimed.length} row(s) timed, ` +
+      `${Math.min(...per).toFixed(3)}-${Math.max(...per).toFixed(3)}ms per read ` +
+      `(p90 within a pass, median of ${fetchTimed[0].subFetch.passes.length} passes)`
+  );
+}
+if (fetchMissing.length > 0)
+  console.log(
+    `our per-fetch latency UNMEASURED on ${fetchMissing.length} row(s) that moved ` +
+      `content out: ${fetchMissing.map((r) => r.name).join(', ')}`
+  );
 // A body-arm loss fails the run even though the body RATIO does not gate it.
 // The ratio is published side by side because the locked decision was to show
 // the difference rather than pick a column; a lost identifier is not a column,
@@ -2365,6 +2421,12 @@ if (process.argv[3] === '--record') {
       cost: {
         turns: {
           ours: String(r.oursTurns),
+          // THE REFERENCING ARM'S TURNS, RECORDED BESIDE THE DEFAULT ARM'S.
+          // The speed column already pairs `ours-movewhole` against their
+          // best-of-any because that is the arm whose mechanism matches theirs;
+          // must-win 2b prices that same pairing, and it cannot without the
+          // round-trip count for the arm being timed.
+          oursSub: String(r.subTurns),
           theirs: String(r.theirTurns),
           theirsComparable: r.compTurns === null ? null : String(r.compTurns),
           preset: String(r.presetTurns),
@@ -2538,6 +2600,14 @@ if (process.argv[3] === '--record') {
         oursSubMs: r.subMs.toFixed(3),
         oursSubMsSamples: r.subMsSamples,
         oursSubMsPasses: r.subMsPasses,
+        // THE PER-FETCH LATENCY OF THAT ARM'S RETRIEVAL, MEASURED. `null` where
+        // the arm moved nothing out on this row, which is not a zero: an arm
+        // with no round trips has no retrieval to time, and must-win 2b asks for
+        // the figure only where it multiplies something. Their side of the same
+        // measurement is in `theirsFetch` below, taken by `resolve-theirs.py`
+        // inside their TTL with their own resolver.
+        oursSubFetch: r.subFetch,
+        theirsFetch: theirs.__provenance__?.perFetch ?? null,
         // WHICH OF THEIR ARMS EACH COLUMN IS, NAMED IN THE ROW. Their arms
         // differ by more than a percentage: a 13.7ms `crusher` reading and a
         // 37.4ms `pipeline@0.10` reading are different mechanisms, and a reader

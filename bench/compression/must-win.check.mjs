@@ -5,12 +5,23 @@
  * decides them from the recorded results rather than from a reading of the
  * tables. This is that check.
  *
- * FOUR CRITERIA, NOT THE THREE #435 WAS FILED WITH. Round trips began as a
+ * FIVE CRITERIA, NOT THE THREE #435 WAS FILED WITH. Round trips began as a
  * clause of the cost criterion and were split out on 2026-09-25, because the
  * cost model already prices every one of them and the clause was the sole
  * reason four rows that win at BOTH ends of the fetch rate were failing. What
  * a round trip costs beyond tokens is the wall clock, which is a different
  * claim and now has to carry itself.
+ *
+ * `latency` is where it carries itself: #435's must-win 2b, added 2026-09-29.
+ * The `speed` criterion compares transform time, which is the whole wall clock
+ * only for an arm that hands the agent everything it will need, and neither arm
+ * does. So an arm can win `speed` by deferring work into retrievals nobody
+ * timed. `latency` adds the retrievals -- a MEASURED per-fetch figure times the
+ * round trips the arm forces -- and states the comparison at both ends of the
+ * fetch rate: p=0 is `speed` exactly, and p=1 is where a deferred win shows up.
+ * It is UNMEASURED on every row until a sweep and `resolve-theirs.py` run back
+ * to back inside their TTL, because a store past its TTL answers every lookup
+ * with a refusal and a refusal is fast. See `fetch-latency.mjs`.
  *
  * IT IS A RATCHET, NOT A WALL. Nine of the twelve rows fail at least one
  * must-win today, and a gate that failed the build for all of them would be
@@ -38,6 +49,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { speedVerdict } from './speed-verdict.mjs';
+import { latencyVerdict } from './fetch-latency.mjs';
 import { degradationRefusal } from './competitor-health.mjs';
 import { reproducibilityRefusal } from './reproducibility.mjs';
 import { inputParity } from './input-parity.mjs';
@@ -510,6 +522,59 @@ function judge(row, cfg, floors) {
     };
   };
   const speedComp = mustAgreeAcrossRecordings(speedCompOf);
+
+  // MUST-WIN 2b, PAIRING THE SAME ARMS THE SPEED COLUMN PAIRS. The arm choice
+  // here is not a new rule and deliberately is not: `ours-movewhole` against
+  // their best-of-any, because that is the arm whose mechanism matches theirs,
+  // and `ours-default` against their comparable arm unless that arm offloads.
+  // Inventing a different pairing for the latency column would let the gate pick
+  // whichever of our arms wins each claim.
+  //
+  // The load witness gates this exactly as it gates `speed`. A modelled session
+  // millisecond is a sum of wall-clock readings, so if the two arms' readings do
+  // not describe the same machine, neither does the sum.
+  const latencyBestOf = (speed) => {
+    if (load.ok === false) return { pass: null, detail: load.detail };
+    const v = latencyVerdict({
+      ourTransformPasses: speed?.oursSubMsPasses,
+      theirTransformPasses: speed?.theirsMsPasses,
+      ourTurns: num(row.cost?.turns?.oursSub),
+      theirTurns: turnsT,
+      ourFetch: speed?.oursSubFetch ?? null,
+      theirFetch: speed?.theirsFetch ?? null,
+    });
+    return {
+      pass: v.pass,
+      detail: `ours-movewhole vs ${speed?.theirsArm ?? 'unnamed'}: ${v.detail}`,
+    };
+  };
+  const latencyBest = mustAgreeAcrossRecordings(latencyBestOf);
+  const latencyCompOf = (speed) => {
+    if (load.ok === false) return { pass: null, detail: load.detail };
+    const why = comparableRefusal(row);
+    if (why !== null) return { pass: null, detail: why };
+    const offloads = (speed?.theirsComparableTurns ?? 0) > 0;
+    const v = latencyVerdict({
+      ourTransformPasses: offloads ? speed?.oursSubMsPasses : speed?.oursMsPasses,
+      theirTransformPasses: speed?.theirsComparableMsPasses,
+      ourTurns: num(offloads ? row.cost?.turns?.oursSub : row.cost?.turns?.ours),
+      theirTurns: num(c.turns.theirsComparable),
+      ourFetch: offloads ? (speed?.oursSubFetch ?? null) : null,
+      // THEIR RETRIEVAL IS THEIR STORE WHICHEVER ARM WROTE THE MARKER, so the
+      // one per-fetch figure `resolve-theirs.py` took serves both columns. An
+      // arm that offloads nothing here needs no figure at all, and asking for a
+      // per-arm one would refuse the column over a number that multiplies zero.
+      theirFetch: speed?.theirsFetch ?? null,
+    });
+    const arm = speed?.theirsComparableArm ?? row.comparable.arm;
+    return {
+      pass: v.pass,
+      detail: offloads
+        ? `ours-movewhole vs ${arm} (offloads here: ${speed?.theirsComparableTurns} marker(s)): ${v.detail}`
+        : `ours-default vs ${arm}: ${v.detail}`,
+    };
+  };
+  const latencyComp = mustAgreeAcrossRecordings(latencyCompOf);
   const retentionBest = retentionVerdict({
     ids: num(row.retention?.ids),
     ours: num(row.retention?.oursZeroTurn),
@@ -563,6 +628,7 @@ function judge(row, cfg, floors) {
       'cost-proxy': undecided,
       turns: undecided,
       speed: undecided,
+      latency: undecided,
       retention: { ...undecided, lost: null },
     };
   }
@@ -575,6 +641,7 @@ function judge(row, cfg, floors) {
     'cost-proxy': bothColumns(proxyBest, proxyComp),
     turns: bothColumns(turnsBest, turnsComp),
     speed: bothColumns(speedBest, speedComp),
+    latency: bothColumns(latencyBest, latencyComp),
     retention,
   };
 }
