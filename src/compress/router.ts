@@ -55,7 +55,7 @@ import type {
   SpillSink,
 } from './types.js';
 import { spillFor, unchanged } from './types.js';
-import { rehydrate } from './rehydrate.js';
+import { expandSpill, SPILL_HEADER_PREFIX } from './rehydrate.js';
 import { marker } from './annotate.js';
 import { DEFAULT_TUNING, resolveTuning } from './options.js';
 
@@ -402,7 +402,38 @@ function routed(
  */
 const LOSSLESS = resolveTuning({}, 'lossless');
 
-function packSpill(content: string): string {
+/**
+ * Every unit of `text` that a reader could search for, split on the
+ * characters an identifier never contains.
+ */
+function tokensOf(text: string): Set<string> {
+  const out = new Set<string>();
+  for (const unit of text.split(/[^A-Za-z0-9_./:@-]+/)) if (unit) out.add(unit);
+  return out;
+}
+
+/**
+ * NO TOKEN MAY LEAVE THE SPILL. Lossless means the output DETERMINES the
+ * input, which is not the same as a reader being able to find a path or a
+ * hash in it: a back-reference satisfies the first and fails the second. The
+ * spill is read by an agent doing a plain `Read`, so folding it is only safe
+ * where every unit it could search for is still literally there. Measured:
+ * without this clause the head-to-head body arm lost 2,589 identifiers across
+ * agentic-conversation, code-search, issue-triage and sre-debugging -- all of
+ * them recoverable in principle and none of them findable.
+ */
+function keepsEveryToken(original: string, packed: string): boolean {
+  const have = tokensOf(packed);
+  for (const unit of tokensOf(original)) if (!have.has(unit)) return false;
+  return true;
+}
+
+function packSpill(content: string, hint: string): string {
+  // THE MOVE ARM STAYS A MOVE. `spillWholeBlockBelow` is documented as a
+  // substitution and is measured as one -- 1.00x the input on disk, the
+  // like-for-like against a content cache. Folding what it writes would make
+  // that figure a compression ratio wearing a move\u0027s name.
+  if (hint === 'block') return content;
   let packed: string;
   try {
     // No sink in this context, so nothing nested can spill again.
@@ -410,14 +441,19 @@ function packSpill(content: string): string {
   } catch {
     return content;
   }
-  if (packed.length >= content.length) return content;
+  if (!keepsEveryToken(content, packed)) return content;
+  const file =
+    `${SPILL_HEADER_PREFIX} ${content.length.toLocaleString('en-US')} bytes, ` +
+    `folded losslessly -- every identifier below is verbatim\n${packed}`;
+  if (file.length >= content.length) return content;
   try {
-    if (rehydrate(packed) !== content) return content;
+    if (expandSpill(file) !== content) return content;
   } catch {
     return content;
   }
-  return packed;
+  return file;
 }
+
 
 /**
  * Wrapped once per sink, because `spillFor` memoises on the sink's identity:
@@ -432,8 +468,16 @@ function packingSink(sink: LiveSink): LiveSink {
   const known = PACKING_SINKS.get(sink);
   if (known) return known;
   const wrapped: LiveSink = (content: string, hint: string) =>
-    sink(packSpill(content), hint);
+    sink(packSpill(content, hint), hint);
   PACKING_SINKS.set(sink, wrapped);
+  // IDEMPOTENT, BECAUSE THE ROUTER HANDS ITSELF TO THE ENGINES. A string found
+  // inside a document re-enters `compressBlock` with the ALREADY WRAPPED sink,
+  // and wrapping that again mints a fresh closure per nested call -- which is
+  // precisely the cross-call memo `spillFor` keys on the sink identity to keep.
+  // Measured: without this the proxy arm re-spilled content it had already
+  // placed and its handed text moved on 13 of 18 workloads, from a change that
+  // is only supposed to touch what goes on disk.
+  PACKING_SINKS.set(wrapped, wrapped);
   return wrapped;
 }
 
