@@ -25,6 +25,7 @@ import { describe, it, expect } from '@jest/globals';
 import { anchorStore } from '../../../src/compress/anchor.js';
 import {
   breakEvenRewriteShare,
+  JOINED_TURNS_ASSUMED,
   minRewriteShare,
   v1Frontier,
 } from '../../../src/compress/strategy.js';
@@ -32,18 +33,26 @@ import { DEFAULT_TUNING } from '../../../src/compress/options.js';
 import type { ProviderRequest } from '../../../src/compress/frontier.js';
 
 describe('the exact break-even share', () => {
-  it('is 65.7% at the five turns the joined path bets on', () => {
-    // 1 - 0.1*6 / (1.25 + 0.5). Pinned rather than recomputed: this single
+  it('is 21.9% at the horizon the joined path bets on', () => {
+    // 1 - 0.1*41 / (1.25 + 4.0). Pinned rather than recomputed: this single
     // number is what separates a rewrite that is taken from one that is not.
-    expect(breakEvenRewriteShare(5)).toBeCloseTo(0.6571, 4);
+    // It moves only when `JOINED_TURNS_ASSUMED` is re-measured, so it is
+    // written against the constant rather than against a literal 40.
+    expect(JOINED_TURNS_ASSUMED).toBe(40);
+    expect(breakEvenRewriteShare(JOINED_TURNS_ASSUMED)).toBeCloseTo(0.219, 3);
   });
 
   it('is why this is not minRewriteShare', () => {
-    // THE APPROXIMATION BREAKS DOWN HERE, which is the whole reason for a
-    // second function. `W/R/turns` is honest at a hundred turns and asks for
-    // 250% of the payload at five -- a threshold nothing can ever clear, so
-    // reusing it would have left the joined path refusing every time while
-    // looking as though it had been given a chance.
+    // THE APPROXIMATION IS WRONG IN BOTH REGIMES, which is the whole reason for
+    // a second function. `W/R/turns` is honest at a hundred turns; at the
+    // measured forty it is half again too strict, and at five it asks for 250%
+    // of the payload -- a threshold nothing can ever clear, so reusing it there
+    // would have left the joined path refusing every time while looking as
+    // though it had been given a chance. The horizon is measured and can move,
+    // so the exact form is what the decision is written against.
+    expect(
+      minRewriteShare({ ...DEFAULT_TUNING, assumedSessionTurns: JOINED_TURNS_ASSUMED })
+    ).toBeGreaterThan(breakEvenRewriteShare(JOINED_TURNS_ASSUMED));
     expect(
       minRewriteShare({ ...DEFAULT_TUNING, assumedSessionTurns: 5 })
     ).toBeGreaterThan(1);
@@ -143,7 +152,7 @@ describe('a joined conversation is tried rather than refused', () => {
 
   it('rewrites the cached prefix when the saving clears the break-even', () => {
     const { result, removed } = run(winner);
-    expect(removed).toBeGreaterThan(breakEvenRewriteShare(5));
+    expect(removed).toBeGreaterThan(breakEvenRewriteShare(JOINED_TURNS_ASSUMED));
     // AND IT IS COMMITTED. Without this the next turn re-derives the prefix
     // from scratch and changes bytes the provider is now holding as ours.
     expect(result.anchor?.reanchor).toBe(true);
@@ -173,23 +182,23 @@ describe('a joined conversation that does not pay is left exactly alone', () => 
   });
 
   it('brackets the threshold at the break-even, not at 12.5%', () => {
-    // TWO NEIGHBOURS, TWENTY LINES APART out of five hundred and forty. The
-    // first clears 65.7% by a whisker and is kept; the second falls under it
-    // and is reverted whole -- which is only possible if the bar really is the
-    // break-even. `minRewriteShare`'s 12.5% would have kept both.
+    // TWO NEIGHBOURS, A HUNDRED LINES APART out of three thousand. The first
+    // clears 21.9% by a whisker and is kept; the second falls under it and is
+    // reverted whole -- which is only possible if the bar really is the
+    // break-even at the measured horizon. `minRewriteShare`'s 12.5% would have
+    // kept both, and its 31.2% at forty turns would have refused both.
     //
     // Deliberately tight, and it is the tightness that makes it a measurement
     // rather than a restatement: a bar anywhere else in [0, 1] fails one arm.
-    const kept = run(repeated(200) + '\n' + distinct(320));
-    expect(kept.removed).toBeGreaterThan(breakEvenRewriteShare(5));
-    expect(kept.removed).toBeLessThan(breakEvenRewriteShare(5) + 0.01);
+    const bar = breakEvenRewriteShare(JOINED_TURNS_ASSUMED);
+    const kept = run(repeated(200) + '\n' + distinct(2800));
+    expect(kept.removed).toBeGreaterThan(bar);
+    expect(kept.removed).toBeLessThan(bar + 0.01);
     expect(kept.result.anchor?.reanchor).toBe(true);
 
-    const reverted = run(repeated(200) + '\n' + distinct(340));
+    const reverted = run(repeated(200) + '\n' + distinct(2900));
     expect(reverted.untouched).toBe(true);
     expect(reverted.result.anchor?.reanchor).toBe(false);
-    expect(minRewriteShare(DEFAULT_TUNING)).toBeLessThan(
-      breakEvenRewriteShare(5)
-    );
+    expect(minRewriteShare(DEFAULT_TUNING)).toBeLessThan(bar);
   });
 });

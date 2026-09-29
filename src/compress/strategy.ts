@@ -747,21 +747,54 @@ export function breakEvenRewriteShare(turns: number): number {
 /**
  * How many more turns a JOINED conversation is assumed to have left.
  *
- * Five, against `ASSUMED_SESSION_TURNS`' hundred, and the asymmetry is the whole
- * safety argument. Joining mid-conversation is the one case where the provider
+ * MEASURED, NOT CHOSEN, AND SET TO THE WEAKEST CONVERSATION RATHER THAN THE
+ * AVERAGE ONE. Joining mid-conversation is the one case where the provider
  * demonstrably holds a prefix in its ORIGINAL form, so a rewrite that does not
- * pay is money spent for nothing. Betting on five turns demands the rewrite
- * remove 65.7%: a bar only a payload that compresses overwhelmingly can clear,
- * and one that is still repaid if the session turns out to be far shorter --
- * the break-even at the measured ratios below lands at about one and a half
- * turns, not five.
+ * pay is money spent for nothing, and the loss is one-sided: betting too low
+ * refuses a rewrite and forfeits a saving, betting too high buys a cache write
+ * nobody re-reads. A bet with that shape belongs at the floor of the
+ * distribution, not at its middle.
  *
- * Measured on the benchmark captures, where Claude Code's cache_control marker
- * sits on the second-to-last user turn and puts the entire history behind it:
- * agent-loop leaves 17.0% of its bytes and agent-loop-logs 11.1%, against the
- * 0.0% that refusing outright leaves on both.
+ * `bench/subscription/session-horizon.mjs` re-derives the floor. It groups every
+ * request in the local transcripts by conversation and takes each conversation
+ * ENTIRE -- a time window truncates the ones that straddle its edges and
+ * manufactures low outliers, inventing a conversation at 37.5 that does not
+ * exist -- then divides each one's cache reads by its cache writes. That ratio
+ * is, by the cost model's own definition, the number of turns a written token is
+ * re-read over. The census below is that measurement; `SESSION_HORIZON_CENSUS`
+ * carries its provenance and `bench/compression/cost-model.mjs` documents the
+ * same derivation for its pooled sibling.
+ *
+ * Forty is the floor of fourteen conversations, 41.1, rounded DOWN -- the only
+ * direction a floor estimated from fourteen samples can be moved without
+ * risking the thing it protects. It sets the bar at 21.9%, against the 65.7%
+ * that the previous unmeasured five demanded.
+ *
+ * WHAT THE CORPUS CANNOT SEE. It is one user's agentic transcripts, and the
+ * smallest conversation in it is 140 requests, so a three-turn chat -- the case a
+ * high bet hurts most -- is not represented. What the corpus does show is that
+ * length barely predicts horizon within it: the shortest conversation, 140
+ * requests over 1.4 hours, has nearly the HIGHEST ratio at 93.8, because a short
+ * session still re-reads its whole prefix on every turn. A population that
+ * disagrees overrides this through `tuning.assumedSessionTurns`.
  */
-const JOINED_TURNS_ASSUMED = 5;
+export const JOINED_TURNS_ASSUMED = 40;
+
+/**
+ * The measurement `JOINED_TURNS_ASSUMED` is read off, frozen with its provenance
+ * so the constant above is checkable rather than merely asserted. Re-derive with
+ * `node bench/subscription/session-horizon.mjs`; nothing in the shipped path
+ * reads this, and it deliberately does not import from `bench/`.
+ */
+export const SESSION_HORIZON_CENSUS = Object.freeze({
+  measuredOn: '2026-09-29',
+  basis: 'whole conversations, sidechains excluded, no time window',
+  conversations: 14,
+  requests: 45_042,
+  /** Reads per written token, per conversation. The floor is what the bet uses. */
+  horizon: Object.freeze({ floor: 41.1, p10: 44.8, p25: 59.7, median: 69.2, pooled: 71.5 }),
+  smallestConversation: Object.freeze({ requests: 140, spanHours: 1.4, horizon: 93.8 }),
+});
 
 export function v1Frontier(
   request: ProviderRequest,
@@ -930,8 +963,10 @@ export function v1Frontier(
     // this comparison. The bar is a share of a prefix the provider is already
     // holding; letting fresh bytes into the numerator lets a rewrite clear a
     // horizon it does not repay at. Measured on the benchmark captures: the
-    // code-search capture reads 67.4% whole and clears the 65.7% bar, while the
-    // prefix it would actually rewrite gives up 58.6% and does not.
+    // issue-triage capture reads 62.7% whole and clears the 21.9% bar easily,
+    // while the prefix it would actually rewrite gives up 20.1% and does not --
+    // and 20.1% is right: that prefix only repays after 45 turns, and
+    // JOINED_TURNS_ASSUMED bets on 40.
     const frontier = floor ?? lastCacheBreakpoint(request);
     const before = cachedPrefixBytes(request, frontier);
     const removed = before - cachedPrefixBytes(out.request, frontier);
