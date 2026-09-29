@@ -403,9 +403,123 @@ interface Templated {
   /** Literal strings and slot numbers, in the order they are joined. */
   template: (string | number)[];
   /** Which value each slot takes, and how much of it the template holds. */
-  columns: { col: number; start: number; end: number }[];
+  columns: {
+    col: number;
+    start: number;
+    end: number;
+    /** Interior literals hoisted out of this column, in order. */
+    parts?: string[];
+    /** Which piece of the split this slot holds. */
+    piece?: number;
+  }[];
   /** Slots the rows omit because an arithmetic rule generates them. */
   runs: Map<number, { first: number; step: number }>;
+}
+
+/**
+ * The longest run of characters that every one of `mids` contains somewhere.
+ *
+ * Binary search rather than a scan from the top, because the property is
+ * monotone: if a common substring of length k exists then so does one of
+ * length k - 1, being any of its prefixes. That turns a quadratic walk down
+ * the lengths into log2(probe) rounds, which is what makes this affordable to
+ * run on every varying column of every templated class.
+ */
+function commonSubstring(mids: string[]): string | null {
+  const probe = mids.reduce((a, b) => (b.length < a.length ? b : a));
+  const others = mids.filter((m) => m !== probe);
+  if (others.length === 0 || probe.length === 0) return null;
+  const find = (len: number): string | null => {
+    for (let i = 0; i + len <= probe.length; i += 1) {
+      const candidate = probe.slice(i, i + len);
+      if (others.every((m) => m.includes(candidate))) return candidate;
+    }
+    return null;
+  };
+  let lo = 1,
+    hi = probe.length,
+    best: string | null = null;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const got = find(mid);
+    if (got === null) hi = mid - 1;
+    else {
+      best = got;
+      lo = mid + 1;
+    }
+  }
+  return best;
+}
+
+/** At most this many interior literals per column, so one pathological
+ * column cannot turn every row into a list of two-character shards. */
+const INTERIOR_PARTS = 4;
+
+/**
+ * The interior literals worth hoisting out of one column's values.
+ *
+ * THE SHARED PREFIX AND SUFFIX ARE NOT THE WHOLE SHARED TEXT. A column of
+ * `"deploy the worker for tenant 3"` against `"restart the queue for tenant 7"`
+ * shares no prefix past the opening quote and no suffix past the digit, so the
+ * prefix/suffix factoring above hoists nothing and every row carries ` the `
+ * and ` for tenant ` again. On the relevance-probe fixture that was about
+ * 3,900 characters of a 20,360-character output: text stated once in the shape
+ * and then repeated once per row anyway.
+ *
+ * The split is exact by construction rather than by alignment. Each row is cut
+ * at its OWN first occurrence of each literal, so left + literal + right is the
+ * row's value whatever the literal meant there; a literal that lines up badly
+ * costs compression, never content.
+ *
+ * Whether it pays is arithmetic, in the same spirit as the prefix test above.
+ * Hoisting N characters out of R rows removes N from each row but adds one more
+ * cell to every row's array -- two quotes and a comma, three characters -- and
+ * adds the literal once to the template as an array element of its own, another
+ * N + 3. So it pays when R * (N - 3) > N + 3, which is why a three-character
+ * separator is never worth a slot however many rows share it.
+ */
+function interiorParts(mids: string[], budget: number): string[] {
+  if (budget <= 0) return [];
+  const found = commonSubstring(mids);
+  if (found === null || mids.length * (found.length - 3) <= found.length + 3)
+    return [];
+  const lefts: string[] = [],
+    rights: string[] = [];
+  for (const mid of mids) {
+    const at = mid.indexOf(found);
+    lefts.push(mid.slice(0, at));
+    rights.push(mid.slice(at + found.length));
+  }
+  const before = interiorParts(lefts, budget - 1);
+  return [
+    ...before,
+    found,
+    ...interiorParts(rights, budget - 1 - before.length),
+  ];
+}
+
+/**
+ * Cuts one value at each literal in turn, yielding `parts.length + 1` pieces.
+ *
+ * A literal the encoder found in every row must be here, so a miss is a bug in
+ * the encoder rather than a row to be tolerated -- and tolerating it would drop
+ * the text silently, which is the one failure this whole format exists to make
+ * impossible. It throws instead.
+ */
+function splitOn(mid: string, parts: string[]): string[] {
+  const out: string[] = [];
+  let rest = mid;
+  for (const part of parts) {
+    const at = rest.indexOf(part);
+    if (at < 0)
+      throw new Error(
+        `template part ${JSON.stringify(part)} is not in row ${JSON.stringify(mid)}`
+      );
+    out.push(rest.slice(0, at));
+    rest = rest.slice(at + part.length);
+  }
+  out.push(rest);
+  return out;
 }
 
 /**
@@ -422,7 +536,7 @@ function templateOf(group: RecordParts[]): Templated {
     group.some((row) => row.values[col] !== value)
   );
   const template: (string | number)[] = [],
-    columns: { col: number; start: number; end: number }[] = [];
+    columns: Templated['columns'] = [];
   const runOf = (
     col: number,
     head: number,
@@ -519,8 +633,29 @@ function templateOf(group: RecordParts[]): Templated {
             break;
           }
         }
-      template.push(literal + value.slice(0, start), columns.length);
-      columns.push({ col, start, end: suffix });
+      // A COLUMN IS NOT NECESSARILY ONE SLOT. Once the shared prefix and
+      // suffix are off, what is left may still be mostly shared text with a
+      // few varying pieces in it, and `interiorParts` finds those. A column
+      // an arithmetic rule already generates is left alone: its rows carry
+      // nothing to split. See `interiorParts` for why this pays.
+      const parts =
+        quoted && !runOf(col, start, suffix)
+          ? interiorParts(
+              group.map((row) =>
+                row.values[col].slice(start, suffix ? -suffix : undefined)
+              ),
+              INTERIOR_PARTS
+            )
+          : [];
+      const base = columns.length;
+      template.push(literal + value.slice(0, start), base);
+      parts.forEach((part, j) => template.push(part, base + j + 1));
+      for (let j = 0; j <= parts.length; j += 1)
+        columns.push(
+          parts.length === 0
+            ? { col, start, end: suffix }
+            : { col, start, end: suffix, parts, piece: j }
+        );
       literal = suffix ? value.slice(-suffix) : '';
     } else literal += value;
     literal += first.chunks[col + 1];
@@ -544,6 +679,11 @@ function templateOf(group: RecordParts[]): Templated {
   // enter one.
   const runs = new Map<number, { first: number; step: number }>();
   columns.forEach((column, slot) => {
+    // A split column's slot holds one PIECE of the value, and `runOf` reads
+    // the value by offsets, so it would test the wrong text and then tell the
+    // rows to omit a slot the template cannot regenerate. Interior pieces are
+    // not eligible for a rule until the rule test can address a piece.
+    if (column.parts !== undefined) return;
     const { col, start } = column;
     let { end } = column;
     const run = runOf(col, start, end);
@@ -566,17 +706,28 @@ function slotClause(runs: Templated['runs']): string {
 /** One JSON array per row, holding only the slots no rule generates. */
 function rowLines(group: RecordParts[], { columns, runs }: Templated): string {
   return group
-    .map((row) =>
-      JSON.stringify(
-        columns
-          .map(({ col, start, end }, slot) =>
-            runs.has(slot)
-              ? null
-              : row.values[col].slice(start, end ? -end : undefined)
-          )
-          .filter((cell): cell is string => cell !== null)
-      )
-    )
+    .map((row) => {
+      // One split per column per row, not one per slot: the pieces of a column
+      // are consecutive slots reading the same value, and cutting it again for
+      // each of them would be the same work repeated `parts.length` times.
+      const split = new Map<number, string[]>();
+      const cells: string[] = [];
+      columns.forEach(({ col, start, end, parts, piece }, slot) => {
+        if (runs.has(slot)) return;
+        const cut = row.values[col].slice(start, end ? -end : undefined);
+        if (parts === undefined) {
+          cells.push(cut);
+          return;
+        }
+        let pieces = split.get(col);
+        if (pieces === undefined) {
+          pieces = splitOn(cut, parts);
+          split.set(col, pieces);
+        }
+        cells.push(pieces[piece ?? 0]);
+      });
+      return JSON.stringify(cells);
+    })
     .join('\n');
 }
 
