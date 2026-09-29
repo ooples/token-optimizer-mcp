@@ -393,6 +393,19 @@ describe('v1 with an anchor store', () => {
   });
 });
 
+/**
+ * A cached block no engine can take a meaningful share of: nothing in it
+ * repeats and it has no recognisable shape. A fixture that needs a rewrite to
+ * be refused puts this behind the breakpoint, so the refusal is one the cost
+ * model actually reaches -- rather than one manufactured by measuring the
+ * saving against a system prompt the rewrite was never going to touch.
+ */
+const unrepeating = (() => {
+  let seed = 11;
+  const next = (): number => (seed = (seed * 1103515245 + 12345) % 2147483648);
+  return Array.from({ length: 900 }, () => next().toString(36)).join(' ');
+})();
+
 describe('a declined rewrite is reconsidered as the conversation grows', () => {
   // WHY THE FIRST REFUSAL MUST NOT BE FINAL. Rewriting the cached prefix has to
   // repay its own 1.25x cache write out of 0.1x reads, so it is refused while
@@ -417,6 +430,7 @@ describe('a declined rewrite is reconsidered as the conversation grows', () => {
         NEWLINE +
         `}`
     ).join(NEWLINE);
+
 
   const conversation = (turns: number): ProviderRequest => {
     const messages: unknown[] = [
@@ -443,7 +457,7 @@ describe('a declined rewrite is reconsidered as the conversation grows', () => {
           {
             type: 'tool_result',
             tool_use_id: `t${i}`,
-            content: [{ type: 'text', text: body(60) }],
+            content: [{ type: 'text', text: i === 0 ? unrepeating : body(60) }],
             ...(i === turns - 1
               ? { cache_control: { type: 'ephemeral' } }
               : {}),
@@ -452,15 +466,17 @@ describe('a declined rewrite is reconsidered as the conversation grows', () => {
       });
     }
     return {
-      // SIZED SO THE EARLY REFUSAL IS GENUINE. At repeat(400) this fixture
-      // removed 14.12% on its very first turn and the rewrite was adopted --
-      // so `early` came out non-zero and the test below stopped testing what
-      // it claims. That was not a policy change: the code engine had started
-      // firing on the tool_result once a sourcePath could be recovered from
-      // the matching tool_use, and the same fixture suddenly cleared the
-      // floor. At repeat(1200) the saving is 6.8% against a 12.5% floor, so
-      // the refusal is real, while turn 24 still clears it at 26.3% and the
-      // rewrite is still adopted. Both halves now discriminate.
+      // THE SYSTEM PROMPT IS BULK, NOT THE REASON THE REFUSAL HAPPENS. It was
+      // once both: the guard divided by the whole serialised request, so
+      // padding this made every share small and turn one refused at 6.8%
+      // against a 12.5% floor. That share was never the rewrite's to lose --
+      // refusing compresses the fresh region anyway, and no branch was ever
+      // going to touch this prompt -- so the guard now divides by the cached
+      // prefix alone, and this padding no longer moves it. Turn one refuses on
+      // its own merits instead: `unrepeating` is all that sits behind the
+      // breakpoint there and no engine can take a share of it, while by turn 24
+      // the prefix is repeated bodies and clears the floor. Both halves still
+      // discriminate -- with body(60) on turn one, `early` is 2554, not 0.
       system: 'You are a coding agent. '.repeat(1200),
       messages,
     } as unknown as ProviderRequest;

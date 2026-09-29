@@ -321,6 +321,26 @@ function toolResultPaths(request: ProviderRequest): Map<string, string> {
  * `tool_use` block also has structured fields and must NOT be rewritten -- its
  * input is an argument the model chose, not output to be summarised.
  */
+/**
+ * The bytes at or before `frontier` -- the region the provider is already
+ * holding, and the only region a re-anchor decision is ever about.
+ *
+ * Counted by walking with `mapBlocks` so the positions are the same ones
+ * `pathAddressed` tests against the frontier: a block counted here is exactly a
+ * block that rewrite was free to touch. The visitor returns null for every
+ * block, so nothing is rewritten -- this walks, it does not map.
+ */
+function cachedPrefixBytes(
+  request: ProviderRequest,
+  frontier: Position | null
+): number {
+  let bytes = 0;
+  mapBlocks(request, (text, at) => {
+    if (!isAfter(at, frontier)) bytes += text.length;
+    return null;
+  });
+  return bytes;
+}
 function isToolResult(block: unknown): boolean {
   return (
     typeof block === 'object' &&
@@ -903,8 +923,18 @@ export function v1Frontier(
       decision.reason === 'extended') &&
     decision.record.anchored;
   if (attempt && !alreadyOurs) {
-    const before = JSON.stringify(request).length;
-    const removed = before - JSON.stringify(out.request).length;
+    // MEASURED OVER THE CACHED PREFIX, NOT THE WHOLE REQUEST. Reverting hands
+    // back `pathAddressed(request, options, true, floor)`, which still
+    // compresses everything past the frontier, so the fresh region's savings are
+    // byte-for-byte identical under both branches and belong on neither side of
+    // this comparison. The bar is a share of a prefix the provider is already
+    // holding; letting fresh bytes into the numerator lets a rewrite clear a
+    // horizon it does not repay at. Measured on the benchmark captures: the
+    // code-search capture reads 67.4% whole and clears the 65.7% bar, while the
+    // prefix it would actually rewrite gives up 58.6% and does not.
+    const frontier = floor ?? lastCacheBreakpoint(request);
+    const before = cachedPrefixBytes(request, frontier);
+    const removed = before - cachedPrefixBytes(out.request, frontier);
     // THE SPECULATIVE PATH PAYS A HIGHER BAR, on the exact break-even rather
     // than the long-session approximation. Everywhere else we either chose to
     // anchor or the client invalidated its own prefix, so the 1.25x write is
@@ -915,7 +945,13 @@ export function v1Frontier(
     const share = speculative
       ? breakEvenRewriteShare(JOINED_TURNS_ASSUMED)
       : minRewriteShare(options.tuning);
-    if (removed < before * share) {
+    // NOTHING CACHED IS NOT A WON BET. With no frontier there is no prefix to
+    // rewrite, so the two branches produce the same bytes and the arithmetic
+    // above reads 0 removed of 0 -- which is not a share that cleared the bar.
+    // Letting it through would mark the conversation anchored on a turn where
+    // we anchored nothing, and `alreadyOurs` would then skip this guard for
+    // every turn that followed.
+    if (before === 0 || removed < before * share) {
       out = pathAddressed(request, options, true, floor);
       reanchored = false;
       respected = true;

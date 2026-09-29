@@ -14,6 +14,7 @@ import {
   questionIn,
 } from '../../../src/compress/strategy.js';
 import { classify, compressBlock } from '../../../src/compress/router.js';
+import { anchorStore } from '../../../src/compress/anchor.js';
 
 /**
  * The strategies, the cache frontier, and the two failure modes taken straight
@@ -526,5 +527,68 @@ describe('a message whose content is a plain string', () => {
     expect(questionIn(asString('which release regressed the p99?'))).toContain(
       'which release regressed the p99?'
     );
+  });
+});
+
+describe('the re-anchor guard weighs only the cached prefix', () => {
+  /**
+   * Text with no repeated structure and no recognisable shape, so the engines
+   * leave it as-is. Seeded, so every arm of a comparison sees the same bytes.
+   */
+  const noise = (n: number): string => {
+    let seed = 7;
+    const next = (): number => (seed = (seed * 1103515245 + 12345) % 2147483648);
+    return Array.from({ length: n }, () => next().toString(36)).join(' ');
+  };
+  const bulk = rows(400);
+
+  /**
+   * Long enough to be joined mid-conversation, which is the speculative path:
+   * the provider is holding the client's own prefix and reverting costs us
+   * nothing, so a rewrite has to repay the 1.25x write on its own.
+   *
+   * `pad` is the last cached block, so the prefix is `bulk` plus `pad` -- one
+   * region the engines collapse and one they cannot touch. Sizing `pad` moves
+   * the prefix's own share across the bar without changing anything else.
+   */
+  const joinedWith = (pad: string): ProviderRequest => ({
+    system: 'You are an agent.',
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: 'Find the duplicates.' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'Reading it now.' }] },
+      { role: 'user', content: [{ type: 'text', text: bulk }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'Here is what I saw.' }] },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: pad, cache_control: { type: 'ephemeral' } }],
+      },
+      { role: 'assistant', content: [{ type: 'text', text: 'Understood.' }] },
+      { role: 'user', content: [{ type: 'text', text: bulk }] },
+    ],
+    tools: [],
+  });
+
+  const bulkIn = (r: ProviderRequest, at: number): string | undefined => {
+    const content = r.messages?.[at]?.content;
+    return Array.isArray(content) ? content[0]?.text : undefined;
+  };
+  const run = (pad: string): ProviderRequest =>
+    v1Frontier(joinedWith(pad), { spill, anchors: anchorStore() }).request;
+
+  it('refuses a rewrite the prefix does not pay for, however well the fresh region compresses', () => {
+    // The prefix gives up 54.3% of itself, under the 65.7% five-turn bar. The
+    // whole request gives up more than that, because the fresh copy of `bulk`
+    // collapses too -- but reverting compresses that copy either way, so those
+    // are not savings this decision gets to claim.
+    const out = run(noise(6000));
+    expect(bulkIn(out, 2) === bulk).toBe(true);
+    expect((bulkIn(out, 6) ?? '').length).toBeLessThan(bulk.length);
+  });
+
+  it('still rewrites a prefix that pays for itself', () => {
+    // The control. Same request, shorter pad, so the same `bulk` is now 80.9%
+    // of the prefix instead of 54.3%. A guard that had simply stopped
+    // rewriting prefixes would pass the test above for the wrong reason.
+    expect(bulkIn(run(noise(1500)), 2) === bulk).toBe(false);
   });
 });
