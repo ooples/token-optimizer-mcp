@@ -10,6 +10,7 @@ import { compressJson } from '../../../src/compress/json.js';
 import { compressProse } from '../../../src/compress/prose.js';
 import { rehydrate } from '../../../src/compress/rehydrate.js';
 import { compressCode } from '../../../src/compress/code.js';
+import { variedRows } from './varied-rows.js';
 
 /**
  * Expert presets, and the two claims that make them worth having.
@@ -105,7 +106,11 @@ describe('the dials actually move something', () => {
   });
 
   it('conservative keeps more rows than balanced', () => {
-    const payload = rows(60);
+    // VARIED ROWS, because how many rows a preset KEEPS is only observable
+    // where rows are dropped. `rows(60)` is folded losslessly by the array
+    // templater at every preset -- all 60 records preserved, identical output,
+    // and this assertion read 728 against 728.
+    const payload = JSON.stringify(variedRows(60));
     const balanced = compressJson(payload, {
       spill,
       tuning: resolveTuning({}, 'balanced'),

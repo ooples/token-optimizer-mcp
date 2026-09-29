@@ -1,4 +1,5 @@
 import { reassemble } from './spill-reassembly.js';
+import { variedRows } from './varied-rows.js';
 import { describe, it, expect } from '@jest/globals';
 import { compressJson, looksLikeJson } from '../../../src/compress/json.js';
 import { compressLog, looksLikeLog } from '../../../src/compress/log.js';
@@ -24,6 +25,7 @@ import {
   span,
 } from '../../../src/compress/annotate.js';
 import { unchanged } from '../../../src/compress/types.js';
+import { DEFAULT_TUNING } from '../../../src/compress/options.js';
 
 /**
  * The engines, one at a time.
@@ -114,7 +116,12 @@ describe('json', () => {
   });
 
   it('elides a long repeating tail and says how much went', () => {
-    const out = compressJson(JSON.stringify(rows(60)), recordingSpill());
+    // VARIED ROWS, because `rows(60)` no longer reaches an elision at all: the
+    // array templater folds sixty near-identical records into one pattern and
+    // a column of numbers, losslessly and with no retrieval, and the engine
+    // now prefers that to a marker. A fixture the templater can fold would
+    // make this test assert that the better answer was not taken.
+    const out = compressJson(JSON.stringify(variedRows(60)), recordingSpill());
     expect(out.text.length).toBeLessThan(2000);
     expect(out.text).toContain('more row');
     expect(out.elisions.some((e) => /repeating row/.test(e.removed))).toBe(
@@ -163,9 +170,32 @@ describe('json', () => {
     expect(out.lossless).toBe(true);
   });
 
+  it('refuses an elision that cannot pay for the round trip it costs', () => {
+    // A MARKER IS NOT FREE. Following it costs a whole extra request -- the
+    // call the model writes, plus the whole conversation re-read behind it --
+    // so an elision that saves less than that round is a loss dressed as a
+    // reduction. The gate is driven here rather than described: the SAME rows
+    // that elide at the default price stop eliding once the price is raised,
+    // which is what makes this a test of the gate and not of the fixture.
+    const rec = recordingSpill();
+    const all = JSON.stringify(variedRows(60));
+    const priced = compressJson(all, {
+      ...rec,
+      tuning: { ...DEFAULT_TUNING, retrievalCostTokens: 10_000_000 },
+    });
+
+    expect(priced.text).not.toContain('more row');
+    expect(priced.lossless).toBe(true);
+    // AND THE SINK WAS NEVER TOUCHED. A spill written for a candidate that is
+    // then discarded is a file on disk nothing points at -- the engine used to
+    // leave one, 3,233 bytes of it, because it wrote before it decided.
+    expect(rec.written).toHaveLength(0);
+    // It still compressed: refusing the marker is not giving up.
+    expect(priced.text.length).toBeLessThan(all.length);
+  });
   it('hands the elided rows to the spill, so the array is recoverable', () => {
     const rec = recordingSpill();
-    const all = rows(60);
+    const all = variedRows(60);
     const out = compressJson(JSON.stringify(all), rec);
     expect(rec.written).toHaveLength(1);
     // FEWER THAN 60, because the rows still in the request are not written

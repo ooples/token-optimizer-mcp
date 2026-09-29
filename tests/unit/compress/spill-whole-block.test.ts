@@ -12,7 +12,10 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import { compressBlock } from '../../../src/compress/router.js';
-import { DEFAULT_TUNING, resolveTuning } from '../../../src/compress/options.js';
+import {
+  DEFAULT_TUNING,
+  resolveTuning,
+} from '../../../src/compress/options.js';
 
 /** Random-ish text no engine can fold: no shape, no repeats, over the floor. */
 function incompressible(): string {
@@ -108,6 +111,10 @@ describe('spillWholeBlockBelow', () => {
       spill: () => '',
     });
 
+    // WHAT IS THERE, not only what is absent. A lone `not.toMatch` also holds
+    // when `out.text` is undefined or the call threw, so the block itself is
+    // pinned: the text came back, whole, with no path to nowhere in front of it.
+    expect(out.text).toBe(text);
     expect(out.text).not.toMatch(/^\[\.\.\. /);
   });
 

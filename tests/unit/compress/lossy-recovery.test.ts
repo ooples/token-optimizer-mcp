@@ -1,4 +1,5 @@
 import { reassemble } from './spill-reassembly.js';
+import { variedRows, variedRowsSource } from './varied-rows.js';
 import { describe, it, expect } from '@jest/globals';
 import { compressCode } from '../../../src/compress/code.js';
 import { compressProse } from '../../../src/compress/prose.js';
@@ -240,20 +241,15 @@ const SECTIONS = [
  * Uniform rows carrying a number lexeme `JSON.stringify` cannot produce, so a
  * spill re-serialised from the parsed values is visibly not the source.
  */
-const LEXEMES = `[${Array.from(
-  { length: 60 },
-  (_, i) =>
-    `{"id":${i},"region":"us-east-1","status":"ok","ratio":1.0,"latencyMs":${20 + (i % 7)}}`
-).join(',')}]`;
+// ROWS THE TEMPLATER CANNOT FOLD, because the subject here is the spill. A
+// column of near-identical rows is encoded losslessly and entirely in place,
+// with no spill written and nothing to recover, so a fixture like that would
+// leave every assertion below asserting the absence of the better outcome.
+// `variedRows` carries independent text per field, the way a real search
+// result does.
+const LEXEMES = variedRowsSource(60);
 
-const ROWS = JSON.stringify(
-  Array.from({ length: 60 }, (_, i) => ({
-    id: i,
-    region: 'us-east-1',
-    status: 'ok',
-    latencyMs: 20 + (i % 7),
-  }))
-);
+const ROWS = JSON.stringify(variedRows(60));
 
 describe('the spill is the only way back, so it must hold what went', () => {
   it('segments spills the original, not the folded result', () => {

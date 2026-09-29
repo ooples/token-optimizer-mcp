@@ -20,6 +20,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_KEEP_RELEVANT } from '../../../src/compress/tools.js';
+import { variedRows } from './varied-rows.js';
 
 /**
  * A project root with no graph in it.
@@ -124,7 +125,11 @@ it('forwards Anthropic tool-search references and beta headers unchanged', async
   const reference = { type: 'tool_reference', tool_name: 'mcp__wiki_query' };
   const response = JSON.stringify({ content: [reference] });
   const provider = await upstream(() => ({ body: response }));
-  const proxy = await startProxy({ projectRoot: EMPTY_PROJECT, upstream: provider.url, knowledge: false });
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+  });
   servers.push(proxy.server);
   const payload = {
     tools: [
@@ -207,7 +212,11 @@ describe('compressBody', () => {
     // leave a marker naming a row count and offering no way back -- the
     // dangling reference this whole design exists to avoid. The rows survive,
     // and the lossless half of the work is still done.
-    const payload = rows(80);
+    // VARIED ROWS. `rows(80)` is folded losslessly by the array templater, so
+    // the engine never reaches an elision and never asks the sink -- which
+    // would leave the spill-failure path below unexercised, the exact blind
+    // spot the counter under test exists to close.
+    const payload = JSON.stringify(variedRows(80));
     const body = bodyOf([
       { role: 'user', content: [{ type: 'text', text: payload }] },
     ]);
@@ -298,7 +307,10 @@ describe('compressBody', () => {
 describe('the proxy on the wire', () => {
   it('forwards the compressed body and returns the upstream response', async () => {
     const { url, seen } = await upstream();
-    const { server, port } = await startProxy({ projectRoot: EMPTY_PROJECT, upstream: url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: url,
+    });
     servers.push(server);
 
     const payload = JSON.stringify({
@@ -321,7 +333,10 @@ describe('the proxy on the wire', () => {
 
   it('forwards credentials verbatim, without storing them', async () => {
     const { url, seen } = await upstream();
-    const { server, port } = await startProxy({ projectRoot: EMPTY_PROJECT, upstream: url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: url,
+    });
     servers.push(server);
 
     await fetch(`http://127.0.0.1:${port}/v1/messages`, {
@@ -348,7 +363,10 @@ describe('the proxy on the wire', () => {
       status: 302,
       headers: { location: 'https://example.test/moved', 'x-trace': 'abc123' },
     }));
-    const { server, port } = await startProxy({ projectRoot: EMPTY_PROJECT, upstream: url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: url,
+    });
     servers.push(server);
 
     const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
@@ -414,7 +432,10 @@ describe('the proxy on the wire', () => {
   });
 
   it('binds loopback only', async () => {
-    const { server } = await startProxy({ projectRoot: EMPTY_PROJECT, upstream: 'http://127.0.0.1:1' });
+    const { server } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: 'http://127.0.0.1:1',
+    });
     servers.push(server);
     const address = server.address();
     expect(typeof address === 'object' && address ? address.address : '').toBe(
@@ -447,7 +468,10 @@ describe('the upstream a proxy will talk to', () => {
     // The one place in this file that does NOT fail open. Carrying on would
     // send credentials in cleartext, and doing that quietly is the harm.
     await expect(
-      startProxy({ projectRoot: EMPTY_PROJECT, upstream: 'http://api.example.com' })
+      startProxy({
+        projectRoot: EMPTY_PROJECT,
+        upstream: 'http://api.example.com',
+      })
     ).rejects.toThrow(/refusing to forward credentials/);
   });
 });
@@ -489,7 +513,10 @@ describe('hop-by-hop headers', () => {
     // is rewritten here, so content-length must be set -- and sending both is
     // two conflicting framing headers, which a strict upstream rejects.
     const { url, seen } = await upstream();
-    const { server, port } = await startProxy({ projectRoot: EMPTY_PROJECT, upstream: url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: url,
+    });
     servers.push(server);
 
     await sendChunked(
@@ -541,7 +568,10 @@ describe('the destination is ours to choose', () => {
     // arrive there, and the proxy must say why rather than forward it.
     const attacker = await upstream();
     const provider = await upstream();
-    const { server, port } = await startProxy({ projectRoot: EMPTY_PROJECT, upstream: provider.url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: provider.url,
+    });
     servers.push(server);
 
     await new Promise<void>((resolve, reject) => {
@@ -837,7 +867,10 @@ describe('the default upstream is a guess, and guesses are fenced', () => {
     // The fence applies to a GUESS. An operator who named the provider has said which
     // one it is, and every route is then theirs to serve.
     const { url, seen } = await upstream();
-    const { server, port } = await startProxy({ projectRoot: EMPTY_PROJECT, upstream: url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: url,
+    });
     servers.push(server);
 
     const response = await fetch(`http://127.0.0.1:${port}/chat/completions`, {
@@ -888,30 +921,41 @@ describe('the net-saving switch', () => {
   // everyone. It is a switch so that anyone measuring us can hold it either way.
   const PRIOR_NET = process.env.TOKEN_OPTIMIZER_PROXY_NET_SAVING;
   afterEach(() => {
-    if (PRIOR_NET === undefined) delete process.env.TOKEN_OPTIMIZER_PROXY_NET_SAVING;
+    if (PRIOR_NET === undefined)
+      delete process.env.TOKEN_OPTIMIZER_PROXY_NET_SAVING;
     else process.env.TOKEN_OPTIMIZER_PROXY_NET_SAVING = PRIOR_NET;
   });
 
   it('is off when unset, and off for anything that is not a yes', () => {
     expect(netSavingEnabled({})).toBe(false);
     for (const raw of ['', '0', 'off', 'false', 'no', 'maybe', 'ON1'])
-      expect(netSavingEnabled({ TOKEN_OPTIMIZER_PROXY_NET_SAVING: raw })).toBe(false);
+      expect(netSavingEnabled({ TOKEN_OPTIMIZER_PROXY_NET_SAVING: raw })).toBe(
+        false
+      );
   });
 
   it('reads the spellings of yes, whatever the case or padding', () => {
     for (const raw of ['1', 'on', 'true', 'yes', ' YES ', 'On'])
-      expect(netSavingEnabled({ TOKEN_OPTIMIZER_PROXY_NET_SAVING: raw })).toBe(true);
+      expect(netSavingEnabled({ TOKEN_OPTIMIZER_PROXY_NET_SAVING: raw })).toBe(
+        true
+      );
   });
 
   it('never hands upstream more bytes than it was given, once armed', () => {
     // A payload that compresses badly is where the block can overshoot, so the
     // guard is checked on one: prose with no repeated structure to template.
-    const prose = Array.from({ length: 40 }, (_, i) =>
-      `Paragraph ${i} of unrelated prose with no repeated shape at all, ${i * 7}.`
+    const prose = Array.from(
+      { length: 40 },
+      (_, i) =>
+        `Paragraph ${i} of unrelated prose with no repeated shape at all, ${i * 7}.`
     ).join(' ');
-    const body = bodyOf([{ role: 'user', content: [{ type: 'text', text: prose }] }]);
+    const body = bodyOf([
+      { role: 'user', content: [{ type: 'text', text: prose }] },
+    ]);
     const findings = Array.from({ length: 6 }, (_, i) => ({
-      claim: `established conclusion ${i} worth carrying forward, ` + 'x'.repeat(200),
+      claim:
+        `established conclusion ${i} worth carrying forward, ` +
+        'x'.repeat(200),
       key: `k${i}`,
       type: 'finding',
       confidence: 0.9,

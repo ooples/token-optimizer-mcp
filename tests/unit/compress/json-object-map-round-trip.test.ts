@@ -28,8 +28,10 @@ import { expandJsonRecords } from '../../../src/compress/rehydrate.js';
 describe('a keyed object map survives its own encoding', () => {
   /** Forty contiguous route entries, the shape the metrics fixture has. */
   const fixture = () => {
-    const rows = Array.from({ length: 40 }, (_, i) =>
-      `    "/route-${i}": { "p50": ${1000 + i}, "p95": 148.50, "count": ${i} }`
+    const rows = Array.from(
+      { length: 40 },
+      (_, i) =>
+        `    "/route-${i}": { "p50": ${1000 + i}, "p95": 148.50, "count": ${i} }`
     ).join(',\n');
     return `{\n  "byRoute": {\n${rows}\n  }\n}`;
   };
@@ -49,6 +51,10 @@ describe('a keyed object map survives its own encoding', () => {
   it('leaves no marker behind for the unconsumed guard to find', () => {
     const out = compressJsonObjectMap(fixture());
     const rebuilt = expandJsonRecords(out.text);
+    // PINNED POSITIVELY FIRST. Two `not.toContain`s also hold when `rebuilt`
+    // is undefined or the call never ran, so the absence of a marker is only
+    // evidence beside a statement of what IS there.
+    expect(rebuilt).toBe(fixture());
     expect(rebuilt).not.toContain('[JSON object map');
     expect(rebuilt).not.toContain('[/JSON fragment records]');
   });

@@ -47,6 +47,7 @@ import { needleRows, shapeRepresentatives } from './needles.js';
 import { compressNestedStrings } from './nested.js';
 import { activeRanker } from './ranking.js';
 import { DEFAULT_TUNING } from './options.js';
+import type { Tuning } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
 
@@ -425,6 +426,55 @@ function numbersKeptVerbatim(original: string, output: string): boolean {
   if (before.length !== after.length) return false;
   return before.every((lexeme, at) => lexeme === after[at]);
 }
+/**
+ * What one retrieval round costs, in characters of saving it has to beat.
+ *
+ * The dial is in tokens because tokens are what the round is billed in, and
+ * every comparison in this file is in characters, so the conversion has to
+ * happen once, somewhere, and be visible. 3.4 is the low end of what was
+ * measured on this project's own corpus -- 3.39 characters per token on dense
+ * log rows, 4.45 on search results -- and the low end is the permissive one:
+ * the same token cost becomes the SMALLER character threshold, so the gate
+ * refuses only what could not pay at any density that was actually seen.
+ */
+const CHARS_PER_TOKEN = 3.4;
+
+/**
+ * What a token costs while it sits in the request: written to the cache once
+ * at the 2.0x rate, then re-read on each of the 56 turns after it at 0.1x.
+ * The rates and the turn count are the cost model's
+ * (`bench/compression/cost-model.mjs`).
+ */
+const RESIDENT_RATE = 7.6;
+
+/**
+ * What the same token costs when it is spilled and then fetched back: the
+ * same write, but re-read only over the turns that REMAIN. Midway is the cost
+ * model's own assumption about when a fetch lands (`at = N * (i + 1) /
+ * (n + 1)`), and it is the neutral one -- a block fetched immediately saves
+ * nothing, one never fetched saves everything.
+ */
+const REFETCHED_RATE = 4.8;
+
+/**
+ * The smallest saving, in characters, that is worth a marker.
+ *
+ * Spilling saves `RESIDENT_RATE` per token, and at the assumed fetch rate it
+ * gives back `REFETCHED_RATE` per token plus the round trip itself. Setting
+ * the two equal gives the saving at which a marker starts to pay; anything
+ * under it is a reduction that costs more than it removes.
+ *
+ * The denominator cannot go non-positive while the rates keep their meaning
+ * -- fetching a token back is cheaper than never spilling it -- but it is
+ * guarded anyway, because these are dials and a caller may set them to
+ * anything.
+ */
+function retrievalCostChars(tuning: Tuning): number {
+  const p = Math.max(0, Math.min(1, tuning.assumedFetchRate));
+  const perToken = RESIDENT_RATE - p * REFETCHED_RATE;
+  if (perToken <= 0) return Number.POSITIVE_INFINITY;
+  return ((p * tuning.retrievalCostTokens) / perToken) * CHARS_PER_TOKEN;
+}
 export function compressJson(
   text: string,
   ctx: EngineContext = {}
@@ -664,31 +714,22 @@ export function compressJson(
       spans !== null && spans.length === stripped.length ? spans : null;
     const sliceRow = (i: number): string =>
       verbatim === null ? '' : whole.slice(verbatim[i][0], verbatim[i][1]);
-    const positions = verbatim === null ? '' : keptPositions(keptAt, stripped.length);
+    const positions =
+      verbatim === null ? '' : keptPositions(keptAt, stripped.length);
     const keptBytes =
       verbatim === null
         ? 0
         : keptAt.reduce((a, i) => a + (verbatim[i][1] - verbatim[i][0]) + 1, 0);
     const partial = verbatim !== null && positions.length < keptBytes;
-    const recoverAt = spillFor(
-      ctx,
-      partial
-        ? '[' +
-            stripped
-              .map((_row, i) => i)
-              .filter((i) => !keep.has(i))
-              .map(sliceRow)
-              .join(',') +
-            ']'
-        : whole,
-      'rows.json'
-    );
-    if (!recoverAt)
-      return best({
-        text: minified,
-        elisions,
-        lossless: !nestedLossy && lexemeSafe,
-      });
+    const spillContent = partial
+      ? '[' +
+        stripped
+          .map((_row, i) => i)
+          .filter((i) => !keep.has(i))
+          .map(sliceRow)
+          .join(',') +
+        ']'
+      : whole;
     const sample = stripped.find((_row, i) => !keep.has(i));
     // THE KEPT ROWS COME FROM THE SOURCE TOO, on the same path. They used to be
     // re-serialised from the parsed values, which is the very rewrite the
@@ -697,7 +738,7 @@ export function compressJson(
     const keptText = partial
       ? '[' + keptAt.map(sliceRow).join(',') + ']'
       : JSON.stringify(keptAt.map((i) => stripped[i]));
-    const body =
+    const bodyWith = (at: string): string =>
       keptText.slice(0, -1) +
       ',' +
       inlineMarker(
@@ -710,9 +751,49 @@ export function compressJson(
           nullFacts(parsed as unknown[]) +
           categories.facts +
           extrema.facts,
-        recoverAt
+        at
       ) +
       ']';
+    // PRICED BEFORE IT IS WRITTEN, on both counts.
+    //
+    // The comparison used to be `is the elided text shorter`, which measures
+    // the request it shrinks against nothing. An agent that follows the marker
+    // spends a whole extra request, and that request re-reads the conversation
+    // before it reads the spill -- `retrievalCostTokens` is what that is
+    // assumed to cost, and an elision saving less than it is a loss dressed as
+    // a reduction. The alternative it has to beat is the best answer that
+    // needs no round trip at all, which is the exact encoding when there is
+    // one and the minified document otherwise.
+    //
+    // AND THE SINK IS NOT TOUCHED UNTIL THE ANSWER IS DECIDED. `spillFor` used
+    // to run first and its file stayed on disk whether or not the candidate
+    // was kept, so a rejected elision left a spill nothing pointed at -- one
+    // of them, 3,233 bytes, on `agentic-conversation`. Deciding on
+    // `bodyWith('')` prices the body at its shortest possible marker, so the
+    // gate can only ever be more permissive than the text it finally emits;
+    // the exact length is re-checked by `best` below once the path is known.
+    const noFetch =
+      exact && exact.text.length < minified.length
+        ? exact.text.length
+        : minified.length;
+    if (noFetch - bodyWith('').length < retrievalCostChars(tuning))
+      return best({
+        text: minified,
+        elisions,
+        lossless: !nestedLossy && lexemeSafe,
+      });
+    const recoverAt = spillFor(ctx, spillContent, 'rows.json');
+    // NO HOME MEANS NO ELISION -- the marker would name a count and a shape and
+    // offer no way back, which is the dangling reference this design exists to
+    // avoid. The minified document is still a real saving, so keep it and keep
+    // the rows.
+    if (!recoverAt)
+      return best({
+        text: minified,
+        elisions,
+        lossless: !nestedLossy && lexemeSafe,
+      });
+    const body = bodyWith(recoverAt);
     return best({
       text: body,
       elisions: [

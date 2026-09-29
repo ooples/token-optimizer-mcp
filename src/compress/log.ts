@@ -449,8 +449,8 @@ function commonPrefix(values: readonly string[]): string {
  */
 function templated(lines: string[], elisions: Elision[]): string[] {
   const groups = new Map<string, number[]>();
-  // COMPUTED ONCE PER LINE. shapeOf and aluesOf both need the same spans,
-  // and finding them is the expensive half of this pass: ariableSpans runs
+  // COMPUTED ONCE PER LINE. shapeOf and valuesOf both need the same spans,
+  // and finding them is the expensive half of this pass: variableSpans runs
   // structuralRanges, which entropy-scores every candidate identifier. The
   // grouping loop below needs the spans of every line and the value rows need
   // them again for the lines that survive into a group, so without this the
