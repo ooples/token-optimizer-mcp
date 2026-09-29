@@ -48,16 +48,10 @@ import { engineFor, registerEngine, runEngine } from './registry.js';
 import { readNumbering } from './numbering.js';
 import { foldLongRepeats } from './runs.js';
 import { foldRepeatedSegments, looksRepetitive } from './segments.js';
-import type {
-  CompressionResult,
-  ContentKind,
-  EngineContext,
-  SpillSink,
-} from './types.js';
+import type { CompressionResult, ContentKind, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
-import { expandSpill, SPILL_HEADER_PREFIX } from './rehydrate.js';
 import { marker } from './annotate.js';
-import { DEFAULT_TUNING, resolveTuning } from './options.js';
+import { DEFAULT_TUNING } from './options.js';
 
 /**
  * A diff is claimed and then deliberately left alone.
@@ -380,115 +374,10 @@ function routed(
  * is still eligible: an unclaimed block is the one most likely to be a large
  * opaque payload sent twice.
  */
-/**
- * The spill, compressed on its way out rather than written verbatim.
- *
- * A spilled block used to reach the sink exactly as it came in, which made an
- * elision a MOVE and not a reduction: the handed text got smaller, and the
- * moment the model followed the pointer it paid back every byte. Measured
- * across the bench workloads, the three rows whose cost loses once a follow-up
- * is certain are exactly the three that spill most of their payload
- * (code-search 73%, issue-triage 71%, relevance-probe 64%), and every row that
- * spills nothing wins that comparison.
- *
- * LOSSLESS PASSES ONLY, AND ONLY IF IT ROUND-TRIPS. The spill is the place the
- * content is recovered FROM, so it is the one buffer that may never lose a
- * byte. Rather than reason about which passes are reversible, this compresses
- * with lossy transforms switched off and then rehydrates the result and
- * compares: the compressed form is used only when it expands back to the
- * original exactly. Anything else -- a pass rehydrate does not reverse, a
- * throw, an output that did not get smaller -- falls back to the raw content,
- * so the worst case is the behaviour this replaced.
- */
-const LOSSLESS = resolveTuning({}, 'lossless');
-
-/**
- * Every unit of `text` that a reader could search for, split on the
- * characters an identifier never contains.
- */
-function tokensOf(text: string): Set<string> {
-  const out = new Set<string>();
-  for (const unit of text.split(/[^A-Za-z0-9_./:@-]+/)) if (unit) out.add(unit);
-  return out;
-}
-
-/**
- * NO TOKEN MAY LEAVE THE SPILL. Lossless means the output DETERMINES the
- * input, which is not the same as a reader being able to find a path or a
- * hash in it: a back-reference satisfies the first and fails the second. The
- * spill is read by an agent doing a plain `Read`, so folding it is only safe
- * where every unit it could search for is still literally there. Measured:
- * without this clause the head-to-head body arm lost 2,589 identifiers across
- * agentic-conversation, code-search, issue-triage and sre-debugging -- all of
- * them recoverable in principle and none of them findable.
- */
-function keepsEveryToken(original: string, packed: string): boolean {
-  const have = tokensOf(packed);
-  for (const unit of tokensOf(original)) if (!have.has(unit)) return false;
-  return true;
-}
-
-function packSpill(content: string, hint: string): string {
-  // THE MOVE ARM STAYS A MOVE. `spillWholeBlockBelow` is documented as a
-  // substitution and is measured as one -- 1.00x the input on disk, the
-  // like-for-like against a content cache. Folding what it writes would make
-  // that figure a compression ratio wearing a move\u0027s name.
-  if (hint === 'block') return content;
-  let packed: string;
-  try {
-    // No sink in this context, so nothing nested can spill again.
-    packed = routed(content, { tuning: LOSSLESS }).text;
-  } catch {
-    return content;
-  }
-  if (!keepsEveryToken(content, packed)) return content;
-  const file =
-    `${SPILL_HEADER_PREFIX} ${content.length.toLocaleString('en-US')} bytes, ` +
-    `folded losslessly -- every identifier below is verbatim\n${packed}`;
-  if (file.length >= content.length) return content;
-  try {
-    if (expandSpill(file) !== content) return content;
-  } catch {
-    return content;
-  }
-  return file;
-}
-
-
-/**
- * Wrapped once per sink, because `spillFor` memoises on the sink's identity:
- * handing it a fresh closure per call would silently turn its cross-call memo
- * into a per-call one and re-spill content it had already placed.
- */
-type LiveSink = NonNullable<SpillSink>;
-
-const PACKING_SINKS = new WeakMap<LiveSink, LiveSink>();
-
-function packingSink(sink: LiveSink): LiveSink {
-  const known = PACKING_SINKS.get(sink);
-  if (known) return known;
-  const wrapped: LiveSink = (content: string, hint: string) =>
-    sink(packSpill(content, hint), hint);
-  PACKING_SINKS.set(sink, wrapped);
-  // IDEMPOTENT, BECAUSE THE ROUTER HANDS ITSELF TO THE ENGINES. A string found
-  // inside a document re-enters `compressBlock` with the ALREADY WRAPPED sink,
-  // and wrapping that again mints a fresh closure per nested call -- which is
-  // precisely the cross-call memo `spillFor` keys on the sink identity to keep.
-  // Measured: without this the proxy arm re-spilled content it had already
-  // placed and its handed text moved on 13 of 18 workloads, from a change that
-  // is only supposed to touch what goes on disk.
-  PACKING_SINKS.set(wrapped, wrapped);
-  return wrapped;
-}
-
 export function compressBlock(
   text: string,
-  options: EngineContext = {}
+  ctx: EngineContext = {}
 ): CompressionResult {
-  const ctx: EngineContext =
-    options.spill === undefined
-      ? options
-      : { ...options, spill: packingSink(options.spill) };
   // A numbered read is detected on its BARE content and re-numbered
   // afterwards. Detecting on the numbered form finds nothing at all --
   // see readNumbering, where the measurement is recorded.

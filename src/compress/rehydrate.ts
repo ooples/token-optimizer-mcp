@@ -568,21 +568,3 @@ export function rehydrateSequence(
     return rehydrate(referent);
   };
 }
-
-/**
- * The first line of a spilled file that was folded before it was written.
- *
- * A SPILL PATH IS A LIVE REFERENCE THE AGENT MAY FOLLOW WITH `Read`
- * (src/proxy/server.ts:1294), so a folded spill may not look like a raw one.
- * The header says what the file is and that nothing in it was dropped, which
- * is the difference between a reader knowing it holds a folded copy and a
- * reader quietly being handed one.
- */
-export const SPILL_HEADER_PREFIX = '[token-optimizer spill]';
-
-/** The original content of a spilled file, folded or not. */
-export function expandSpill(text: string): string {
-  if (!text.startsWith(SPILL_HEADER_PREFIX)) return text;
-  const nl = text.indexOf('\n');
-  return rehydrate(nl === -1 ? '' : text.slice(nl + 1));
-}
