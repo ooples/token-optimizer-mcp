@@ -18,7 +18,7 @@
 
 import { count, encodeGaps, inlineMarker } from './annotate.js';
 import { compressLogPeriods } from './log-periods.js';
-import { overlapsStructural, structuralRanges } from './structural.js';
+import { structuralRanges } from './structural.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
 
@@ -297,22 +297,34 @@ export function compressLog(
  * among the values, which is lossless and compresses like anything else.
  */
 function variableSpans(line: string): Array<[number, number]> {
-  const protectedRanges = structuralRanges(line);
-  const spans: Array<[number, number]> = protectedRanges.map(([a, b]) => [
-    a,
-    b,
-  ]);
+  // THE STRUCTURAL RANGES ARE THE FIRST SPANS, not a copy of them.
+  // `structuralRanges` returns a fresh array per call, so it can be grown in
+  // place; `guarded` remembers where its own entries stop, because the overlap
+  // test below must keep asking about identifiers only and would otherwise
+  // start matching the digit runs this loop is appending.
+  const spans = structuralRanges(line);
+  const guarded = spans.length;
 
   VARIABLE.lastIndex = 0;
   for (let m = VARIABLE.exec(line); m; m = VARIABLE.exec(line)) {
     const start = m.index;
     const end = start + m[0].length;
     // Digits inside an identifier are already covered by its own span.
-    if (overlapsStructural(protectedRanges, start, end)) continue;
+    let covered = false;
+    for (let i = 0; i < guarded; i += 1) {
+      if (start < spans[i][1] && end > spans[i][0]) {
+        covered = true;
+        break;
+      }
+    }
+    if (covered) continue;
     spans.push([start, end]);
   }
 
-  return spans.sort((a, b) => a[0] - b[0]);
+  // Both halves arrive in ascending order, so a line with no identifier in it
+  // -- which is most lines -- is already sorted and needs no pass at all.
+  if (guarded > 0 && spans.length > 1) spans.sort((a, b) => a[0] - b[0]);
+  return spans;
 }
 
 /** The line with every variable span replaced by a single placeholder. */
@@ -371,12 +383,19 @@ const VARIABLE = /"[^"\n]*"|0x[0-9a-f]+|\d+(?:\.\d+)?/gi;
  * cached prefix. `%` itself is encoded first so decoding is unambiguous.
  */
 function encodeValue(value: string): string {
+  // Nothing to encode is the overwhelmingly common case, and the four passes
+  // below each scan the whole value and each allocate a new one. One scan
+  // answers whether any of them has work to do.
+  if (!NEEDS_ENCODING.test(value)) return value;
   return value
     .replace(/%/g, '%25')
     .replace(/ /g, '%20')
     .replace(/\t/g, '%09')
     .replace(/\|/g, '%7C');
 }
+
+/** The characters `encodeValue` rewrites -- the delimiters and its own escape. */
+const NEEDS_ENCODING = /[%\t |]/;
 
 /** Below this a template costs more than the lines it replaces. */
 const MIN_TEMPLATE = 4;
