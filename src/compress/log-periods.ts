@@ -11,6 +11,19 @@ export function compressLogPeriods(
   if (lines.some((line) => line.trimStart().startsWith('[... '))) return null;
   const out: string[] = [];
   const elisions: Elision[] = [];
+  // MEMOISED PER LINE. protectedLine is a regex scan, and the loop below tries
+  // eight periods at every position, so a line sits inside the candidate block
+  // of all eight periods at up to eight positions -- up to 36 scans of the same
+  // line. It is a pure test of one string, so one scan answers all of them.
+  // Measured on raw-build-log it was the single hottest frame in the compressor.
+  const known = new Array<boolean | undefined>(lines.length);
+  const isProtected = (i: number): boolean => {
+    const cached = known[i];
+    if (cached !== undefined) return cached;
+    const found = protectedLine(lines[i]);
+    known[i] = found;
+    return found;
+  };
   let at = 0;
   while (at < lines.length) {
     let best:
@@ -21,8 +34,17 @@ export function compressLogPeriods(
       period <= 8 && at + period * 3 <= lines.length;
       period++
     ) {
+      let blocked = false;
+      for (let i = at; i < at + period; i += 1) {
+        if (!lines[i].trim() || isProtected(i)) {
+          blocked = true;
+          break;
+        }
+      }
+      // Sliced only once the block is known to be a candidate, so a rejected
+      // period costs no array.
+      if (blocked) continue;
       const block = lines.slice(at, at + period);
-      if (block.some((line) => !line.trim() || protectedLine(line))) continue;
       let end = at + period;
       while (end < lines.length && lines[end] === block[(end - at) % period])
         end++;
