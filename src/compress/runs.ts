@@ -59,32 +59,16 @@ const BASE = 131;
 const MOD = 2_147_483_647;
 
 /**
- * A rolling hash of every GRAIN-wide window, one entry per position.
+ * The hash of the GRAIN-wide window that starts at `at`.
  *
- * `Int32Array` rather than a `Map` of strings: the string form was correct and
- * held a quarter of a megabyte of keys for a payload of three quarters of one,
- * which is a lot of memory to spend on something the verification pass checks
- * anyway. A collision here costs one failed comparison, never a wrong fold.
+ * A collision here costs one failed comparison, never a wrong fold: every hash
+ * agreement below is checked byte for byte before anything is measured off it.
  */
-function windowHashes(text: string): Int32Array {
-  const last = text.length - GRAIN;
-  const hashes = new Int32Array(Math.max(0, last + 1));
-  if (last < 0) return hashes;
-
-  let power = 1;
-  for (let i = 1; i < GRAIN; i += 1) power = (power * BASE) % MOD;
-
+function hashAt(text: string, at: number): number {
   let hash = 0;
-  for (let i = 0; i < GRAIN; i += 1)
+  for (let i = at; i < at + GRAIN; i += 1)
     hash = (hash * BASE + text.charCodeAt(i)) % MOD;
-  hashes[0] = hash;
-
-  for (let i = 1; i <= last; i += 1) {
-    hash = (hash - ((text.charCodeAt(i - 1) * power) % MOD) + MOD) % MOD;
-    hash = (hash * BASE + text.charCodeAt(i + GRAIN - 1)) % MOD;
-    hashes[i] = hash;
-  }
-  return hashes;
+  return hash;
 }
 
 /**
@@ -316,23 +300,78 @@ function windowsAgree(text: string, a: number, b: number): boolean {
  * hundred characters of a fold.
  */
 function findRepeats(text: string, document: boolean): Repeat[] {
-  const hashes = windowHashes(text);
-  if (hashes.length === 0) return [];
+  const last = text.length - GRAIN;
+  if (last < 0) return [];
   const edges = document ? stringEdges(text) : [];
 
-  const firstAt = new Map<number, number>();
-  for (let i = 0; i < hashes.length; i += 1)
-    if (!firstAt.has(hashes[i])) firstAt.set(hashes[i], i);
+  // ONLY THE HASHES A PROBE CAN ASK ABOUT. `probe` starts at zero and every
+  // move it makes -- `+= STRIDE`, or up to the next whole stride past a fold --
+  // leaves it on a multiple of STRIDE, so the questions this pass asks number
+  // `length / STRIDE`: seventy-six of them on a 136,000-character payload. The
+  // table that answered them held one entry per CHARACTER, built with a `has`
+  // and a `set` apiece, and the quarter-megabyte `Int32Array` of every window
+  // hash existed only to feed it. Measured on codebase-exploration, that table
+  // and its array were a fifth of the whole block's time. Asking the stride
+  // positions directly costs seventy-six 256-character hashes, and the first
+  // position each of THOSE lands on comes out of one rolling pass that stores
+  // nothing.
+  const stops = Math.floor(last / STRIDE) + 1;
+  const probeHash = new Int32Array(stops);
+  for (let s = 0; s < stops; s += 1) probeHash[s] = hashAt(text, s * STRIDE);
+
+  // Open addressed on the hash itself rather than a `Map`: the keys are int32
+  // and the pass below looks one up per character, where a `Map` hit costs
+  // more than the two array reads a quarter-full table averages.
+  let size = 16;
+  while (size < stops * 4) size *= 2;
+  const mask = size - 1;
+  const keys = new Int32Array(size);
+  const used = new Uint8Array(size);
+  const firstAt = new Int32Array(size).fill(-1);
+  for (let s = 0; s < stops; s += 1) {
+    const key = probeHash[s];
+    let slot = (key >>> 0) & mask;
+    while (used[slot] === 1 && keys[slot] !== key) slot = (slot + 1) & mask;
+    used[slot] = 1;
+    keys[slot] = key;
+  }
+
+  let power = 1;
+  for (let i = 1; i < GRAIN; i += 1) power = (power * BASE) % MOD;
+  let hash = hashAt(text, 0);
+  for (let i = 0; ; i += 1) {
+    let slot = (hash >>> 0) & mask;
+    while (used[slot] === 1) {
+      if (keys[slot] === hash) {
+        if (firstAt[slot] < 0) firstAt[slot] = i;
+        break;
+      }
+      slot = (slot + 1) & mask;
+    }
+    if (i >= last) break;
+    // The same recurrence the whole-array form used, one window forward.
+    hash = (hash - ((text.charCodeAt(i) * power) % MOD) + MOD) % MOD;
+    hash = (hash * BASE + text.charCodeAt(i + GRAIN)) % MOD;
+  }
+
+  const sourceOf = (key: number): number => {
+    let slot = (key >>> 0) & mask;
+    while (used[slot] === 1) {
+      if (keys[slot] === key) return firstAt[slot];
+      slot = (slot + 1) & mask;
+    }
+    return -1;
+  };
 
   const found: Repeat[] = [];
   let probe = 0;
   let taken = 0;
-  while (probe < hashes.length) {
-    const source = firstAt.get(hashes[probe]);
+  while (probe <= last) {
+    const source = sourceOf(probeHash[probe / STRIDE]);
     // A HASH AGREEING IS NOT THE BYTES AGREEING. Verified before anything is
     // measured off it, so a collision costs one comparison and never a fold.
     if (
-      source === undefined ||
+      source < 0 ||
       source >= probe ||
       !windowsAgree(text, source, probe)
     ) {
