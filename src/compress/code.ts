@@ -169,6 +169,25 @@ function maskInteriorHashbangs(text: string): string {
   return text.replace(/(?<=\n)#!/g, '//');
 }
 
+/**
+ * The node types a body elision can start from.
+ *
+ * SETS, NOT AN ALTERNATION REGEX. The regexes these replace were tested once
+ * per node of the parsed file, and on the codebase-exploration fixture this
+ * walk was the single hottest thing in the whole block -- 21% of it. A set
+ * lookup on an interned type string is a hash, not a match.
+ */
+const FUNCTION_NODES = new Set([
+  'FunctionDeclaration',
+  'FunctionExpression',
+  'ArrowFunctionExpression',
+  'ClassMethod',
+  'ObjectMethod',
+  'ClassPrivateMethod',
+]);
+
+const LITERAL_NODES = new Set(['ObjectExpression', 'ArrayExpression']);
+
 function babelBodies(text: string): Array<[number, number]> | null {
   let ast: ReturnType<typeof parse>;
   try {
@@ -193,15 +212,10 @@ function babelBodies(text: string): Array<[number, number]> | null {
       loc?: { start: { line: number }; end: { line: number } };
     };
 
-    const isFunction =
-      typeof n.type === 'string' &&
-      /^(FunctionDeclaration|FunctionExpression|ArrowFunctionExpression|ClassMethod|ObjectMethod|ClassPrivateMethod)$/.test(
-        n.type
-      );
+    const type = typeof n.type === 'string' ? n.type : '';
+    const isFunction = FUNCTION_NODES.has(type);
     // A big literal is bulk data behind a declaration the model still sees.
-    const isLiteral =
-      typeof n.type === 'string' &&
-      /^(ObjectExpression|ArrayExpression)$/.test(n.type);
+    const isLiteral = LITERAL_NODES.has(type);
 
     // A BLOCK BODY, OR NOTHING. `n.body` on an arrow function with a CONCISE body is
     // the expression itself, not a BlockStatement -- there are no braces around it. The
@@ -234,9 +248,17 @@ function babelBodies(text: string): Array<[number, number]> | null {
       }
     }
 
-    for (const value of Object.values(n)) {
-      if (Array.isArray(value)) value.forEach(visit);
-      else if (value && typeof value === 'object') visit(value);
+    // `loc` IS NOT PART OF THE TREE. Every node carries one, it is three
+    // objects deep, and not one of them has a `type` or a `body` -- so
+    // descending into it roughly quadruples the node count to find nothing.
+    // The walk itself is keyed rather than run over `Object.values(n)`,
+    // which built an array of every property of every node in the file.
+    for (const key in n) {
+      if (key === 'loc') continue;
+      const value = n[key];
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i += 1) visit(value[i]);
+      } else if (value && typeof value === 'object') visit(value);
     }
   };
 
