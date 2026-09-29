@@ -675,6 +675,47 @@ export function minRewriteShare(tuning?: Tuning): number {
   return CACHE_WRITE_MULTIPLIER / CACHE_READ_MULTIPLIER / turns;
 }
 
+/**
+ * The exact share a rewrite must remove to repay itself over `turns` more turns.
+ *
+ * NOT `minRewriteShare`, and deliberately a second function rather than a
+ * correction to that one. `minRewriteShare` is `W/R/turns`, a first-order
+ * approximation that is honest at the hundred-turn prior it was written for and
+ * nonsense below about twelve -- at five turns it asks a rewrite to remove 250%
+ * of the payload. The speculative path below bets on a deliberately short
+ * horizon, so it needs the exact form; every existing caller keeps the dial it
+ * was measured against.
+ *
+ * Rewriting a prefix the provider already holds costs `r * (W + R*N)`, where `r`
+ * is the share that survives compression, against `R * (N+1)` for leaving it
+ * exactly where it is. Solving for the removed share `1 - r` gives this.
+ */
+export function breakEvenRewriteShare(turns: number): number {
+  const n = Number.isFinite(turns) && turns > 0 ? turns : 0;
+  const rewritten = CACHE_WRITE_MULTIPLIER + CACHE_READ_MULTIPLIER * n;
+  const left = CACHE_READ_MULTIPLIER * (n + 1);
+  return 1 - left / rewritten;
+}
+
+/**
+ * How many more turns a JOINED conversation is assumed to have left.
+ *
+ * Five, against `ASSUMED_SESSION_TURNS`' hundred, and the asymmetry is the whole
+ * safety argument. Joining mid-conversation is the one case where the provider
+ * demonstrably holds a prefix in its ORIGINAL form, so a rewrite that does not
+ * pay is money spent for nothing. Betting on five turns demands the rewrite
+ * remove 65.7%: a bar only a payload that compresses overwhelmingly can clear,
+ * and one that is still repaid if the session turns out to be far shorter --
+ * the break-even at the measured ratios below lands at about one and a half
+ * turns, not five.
+ *
+ * Measured on the benchmark captures, where Claude Code's cache_control marker
+ * sits on the second-to-last user turn and puts the entire history behind it:
+ * agent-loop leaves 17.0% of its bytes and agent-loop-logs 11.1%, against the
+ * 0.0% that refusing outright leaves on both.
+ */
+const JOINED_TURNS_ASSUMED = 5;
+
 export function v1Frontier(
   request: ProviderRequest,
   options: StrategyOptions = {}
@@ -751,8 +792,22 @@ export function v1Frontier(
   // continuing.
   const longEnough =
     (request.messages ?? []).length >= MIN_MESSAGES_TO_AMORTISE;
+  // A JOINED CONVERSATION IS TRIED, NOT REFUSED -- but only provisionally.
+  // `anchorDecision` answers no here because it cannot know what the provider
+  // holds, which is the right default for a decision taken before anything has
+  // been compressed, and the wrong final answer once it has been. The rewrite is
+  // attempted, measured, and kept only if it clears JOINED_TURNS_ASSUMED turns
+  // of break-even below; otherwise the original is restored and nothing is
+  // recorded, exactly as if this had never been tried.
+  //
+  // Refusing outright held the proxy at 0.0% on every multi-turn agent loop in
+  // the benchmark. The marker sits at the end of a real conversation, so the
+  // frontier rule -- correct for a single turn -- had nothing left to compress.
+  const speculative = decision.reason === 'joined-mid-conversation';
   const attempt =
-    decision.reanchor || (decision.reason === 'left-alone' && longEnough);
+    decision.reanchor ||
+    (decision.reason === 'left-alone' && longEnough) ||
+    speculative;
   // ONLY WHEN WE RECOGNISE THE CONVERSATION AND ITS PREFIX IS UNCHANGED.
   // 'already-anchored' and 'left-alone' are exactly the two states that say
   // the client sent us the same prefix we saw last time, so the breakpoint we
@@ -823,7 +878,17 @@ export function v1Frontier(
   if (attempt && !alreadyOurs) {
     const before = JSON.stringify(request).length;
     const removed = before - JSON.stringify(out.request).length;
-    if (removed < before * minRewriteShare(options.tuning)) {
+    // THE SPECULATIVE PATH PAYS A HIGHER BAR, on the exact break-even rather
+    // than the long-session approximation. Everywhere else we either chose to
+    // anchor or the client invalidated its own prefix, so the 1.25x write is
+    // happening regardless and `minRewriteShare`'s prior is the right one. Here
+    // the provider is holding the client's own bytes and reverting genuinely
+    // costs nothing, so the rewrite has to win on a horizon short enough that
+    // being wrong about the session length cannot hurt.
+    const share = speculative
+      ? breakEvenRewriteShare(JOINED_TURNS_ASSUMED)
+      : minRewriteShare(options.tuning);
+    if (removed < before * share) {
       out = pathAddressed(request, options, true, floor);
       reanchored = false;
       respected = true;
