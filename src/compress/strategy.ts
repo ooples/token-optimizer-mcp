@@ -181,6 +181,14 @@ export function questionIn(request: ProviderRequest): string {
   const blocks: { text: string }[] = [];
   for (const message of request.messages ?? []) {
     const content = message?.content;
+    // A STRING IS A TEXT BLOCK. `content: "..."` is the shorthand both provider
+    // APIs accept and the shape most clients actually send; reading only the
+    // array form left those messages out of the query, out of the frontier and
+    // out of compression -- see `mapBlocks`.
+    if (typeof content === 'string') {
+      blocks.push({ text: content });
+      continue;
+    }
     if (!Array.isArray(content)) continue;
     for (const raw of content) {
       const block = raw as Block;
@@ -241,6 +249,10 @@ const ELIDED = /\[\.\.\. body, [^\]]+\]/;
 /** The untouched text at a position in the request the strategy was given. */
 function blockTextAt(request: ProviderRequest, at: Position): string | null {
   const content = request.messages?.[at.message]?.content;
+  // String content is ONE block, at index 0 -- the same position `mapBlocks`
+  // gives it. The two have to agree or the frontier would name a block this
+  // cannot resolve.
+  if (typeof content === 'string') return at.block === 0 ? content : null;
   if (!Array.isArray(content)) return null;
   const block = content[at.block] as Block | undefined;
   return typeof block?.text === 'string' ? block.text : null;
@@ -328,6 +340,21 @@ function mapBlocks(
 ): ProviderRequest {
   const messages = (request.messages ?? []).map((message, mi) => {
     const content = message?.content;
+    // THE STRING FORM, COMPRESSED IN PLACE AND HANDED BACK AS A STRING.
+    // `content: "..."` is what a plain `{role, content}` message looks like on
+    // both provider APIs, and skipping it meant the proxy silently passed those
+    // messages through whole: on the corpus's rag-conversation, the one 161,967
+    // character message IS the payload, and the arm reported 0.0% against the
+    // 84.5% the same bytes give in array form.
+    //
+    // REWRITTEN AS A STRING, not normalised into a one-element block array.
+    // The two are equivalent to the provider, but only one of them is what the
+    // client sent, and a proxy that reshapes a request it did not need to
+    // reshape is changing bytes it was not asked to change.
+    if (typeof content === 'string') {
+      const replaced = visit(content, { message: mi, block: 0 }, message);
+      return replaced === null ? message : { ...message, content: replaced };
+    }
     if (!Array.isArray(content)) return message;
 
     const mapped = content.map((raw, bi) => {

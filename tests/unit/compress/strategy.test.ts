@@ -472,3 +472,59 @@ describe('taskIn steers tool deferral without moving the cached prefix', () => {
     expect(taskIn(imageOnly)).toContain('Describe the screenshot');
   });
 });
+
+/**
+ * `content: "..."` is a shape both provider APIs accept, and the one a plain
+ * `{role, content}` message takes. Reading only the array form meant the proxy
+ * walked straight past every such message: on the corpus's rag-conversation --
+ * 171,867 bytes, of which one 161,967-byte string message IS the payload --
+ * the arm reported 0.0% while the identical bytes in array form gave 84.5%.
+ */
+describe('a message whose content is a plain string', () => {
+  /** Fixed, so two arms of the same comparison get the same recovery path. */
+  const fixed = (): string => '/spill/rows.txt';
+
+  const asString = (text: string): ProviderRequest => ({
+    system: 'You are an agent.',
+    messages: [{ role: 'user', content: text }],
+    tools: [],
+  });
+
+  const asBlocks = (text: string): ProviderRequest => ({
+    system: 'You are an agent.',
+    messages: [{ role: 'user', content: [{ type: 'text', text }] }],
+    tools: [],
+  });
+
+  it('is compressed, and handed back as a string', () => {
+    const payload = rows(60);
+    const out = v1Frontier(asString(payload), { spill: fixed });
+    const content = (out.request.messages ?? [])[0].content;
+    // THE WIRE SHAPE IS NOT OURS TO CHANGE. A one-element block array would be
+    // equivalent to the provider, but it is not what the client sent, and a
+    // proxy that reshapes a request it did not need to reshape is changing
+    // bytes it was not asked to change.
+    expect(typeof content).toBe('string');
+    expect((content as string).length).toBeLessThan(payload.length);
+  });
+
+  it('gets exactly the treatment the array form gets', () => {
+    // THE CONTROL. Same bytes, same engine, two shapes. A string path that had
+    // quietly become a second and weaker implementation would show up here as a
+    // difference, and nowhere else.
+    const payload = rows(60);
+    const fromString = v1Frontier(asString(payload), { spill: fixed });
+    const fromBlocks = v1Frontier(asBlocks(payload), { spill: fixed });
+    const content = (fromString.request.messages ?? [])[0].content;
+    expect(content).toBe(textOf(fromBlocks.request));
+  });
+
+  it('is visible to the query the router steers on', () => {
+    // Same omission, different consequence: a question asked in string form was
+    // not merely left uncompressed, it never reached the relevance engines at
+    // all, so they scored the rest of the request against an empty query.
+    expect(questionIn(asString('which release regressed the p99?'))).toContain(
+      'which release regressed the p99?'
+    );
+  });
+});
