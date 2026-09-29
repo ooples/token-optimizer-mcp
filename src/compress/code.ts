@@ -172,21 +172,21 @@ function maskInteriorHashbangs(text: string): string {
 /**
  * The node types a body elision can start from.
  *
- * SETS, NOT AN ALTERNATION REGEX. The regexes these replace were tested once
+ * A MAP, NOT AN ALTERNATION REGEX. The regexes these replace were tested once
  * per node of the parsed file, and on the codebase-exploration fixture this
  * walk was the single hottest thing in the whole block -- 21% of it. A set
  * lookup on an interned type string is a hash, not a match.
  */
-const FUNCTION_NODES = new Set([
-  'FunctionDeclaration',
-  'FunctionExpression',
-  'ArrowFunctionExpression',
-  'ClassMethod',
-  'ObjectMethod',
-  'ClassPrivateMethod',
+const BODY_KINDS = new Map<string, 1 | 2>([
+  ['FunctionDeclaration', 1],
+  ['FunctionExpression', 1],
+  ['ArrowFunctionExpression', 1],
+  ['ClassMethod', 1],
+  ['ObjectMethod', 1],
+  ['ClassPrivateMethod', 1],
+  ['ObjectExpression', 2],
+  ['ArrayExpression', 2],
 ]);
-
-const LITERAL_NODES = new Set(['ObjectExpression', 'ArrayExpression']);
 
 /**
  * Properties of a parsed node that are not part of the tree.
@@ -217,6 +217,12 @@ function babelBodies(text: string): Array<[number, number]> | null {
       sourceType: 'unambiguous',
       allowReturnOutsideFunction: true,
       errorRecovery: true,
+      // NOTHING HERE READS A COMMENT. Attaching them hangs up to three extra
+      // properties on the nodes either side of every comment in the file, and
+      // the walk below has to step over all of them on every node it visits.
+      // They are still in `ast.comments`; they are just not copied onto the
+      // tree for a pass that skips them.
+      attachComment: false,
       plugins: ['typescript', 'jsx', 'decorators-legacy', 'classProperties'],
     });
   } catch {
@@ -234,10 +240,13 @@ function babelBodies(text: string): Array<[number, number]> | null {
       loc?: { start: { line: number }; end: { line: number } };
     };
 
-    const type = typeof n.type === 'string' ? n.type : '';
-    const isFunction = FUNCTION_NODES.has(type);
+    // ONE LOOKUP, NOT TWO. `visit` runs on every node of the parsed file and
+    // the two sets are disjoint, so asking both is asking the same question
+    // twice on every node that is neither -- which is nearly all of them.
+    const kind = BODY_KINDS.get(n.type as string);
+    const isFunction = kind === 1;
     // A big literal is bulk data behind a declaration the model still sees.
-    const isLiteral = LITERAL_NODES.has(type);
+    const isLiteral = kind === 2;
 
     // A BLOCK BODY, OR NOTHING. `n.body` on an arrow function with a CONCISE body is
     // the expression itself, not a BlockStatement -- there are no braces around it. The
@@ -274,11 +283,17 @@ function babelBodies(text: string): Array<[number, number]> | null {
     // walk itself is keyed rather than run over `Object.values(n)`, which
     // built an array of every property of every node in the file.
     for (const key in n) {
-      if (NOT_CHILDREN.has(key)) continue;
       const value = n[key];
+      // THE CHEAP TEST FIRST. `type`, `start` and `end` are on every node and
+      // are a string and two numbers; asking the set about them is a string
+      // hash to reject what one `typeof` rejects. Only the object-valued
+      // properties reach the set now, which on this fixture is about a third
+      // of the seven properties an average node carries.
+      if (!value || typeof value !== 'object') continue;
+      if (NOT_CHILDREN.has(key)) continue;
       if (Array.isArray(value)) {
         for (let i = 0; i < value.length; i += 1) visit(value[i]);
-      } else if (value && typeof value === 'object') visit(value);
+      } else visit(value);
     }
   };
 
