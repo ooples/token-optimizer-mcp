@@ -149,20 +149,49 @@ function wideEntropy(value: string): number {
 export function isSecretLike(token: string): boolean {
   if (token.length < MIN_SECRET_LENGTH) return false;
 
+  // ONE SCAN, NOT SIX. Every question below is about which characters the
+  // token contains, and this runs on every eight-character-or-longer run in
+  // the text -- which in source is nearly every identifier. Six regexes over
+  // the same string answer in six passes what one pass over it answers at
+  // once; the tests themselves are unchanged, only how they are computed.
+  let digit = false;
+  let lower = false;
+  let upper = false;
+  let padding = false;
+  let hexOnly = true;
+  for (let i = 0; i < token.length; i += 1) {
+    const c = token.charCodeAt(i);
+    if (c >= 48 && c <= 57) {
+      digit = true;
+      continue;
+    }
+    if (c >= 97 && c <= 122) {
+      lower = true;
+      if (c > 102) hexOnly = false;
+      continue;
+    }
+    if (c >= 65 && c <= 90) {
+      upper = true;
+      if (c > 70) hexOnly = false;
+      continue;
+    }
+    hexOnly = false;
+    // The rest of TOKEN's own class: + / = _ - . Anything else disqualifies
+    // the token outright, exactly as the anchored class test did.
+    if (c === 43 || c === 47 || c === 61) padding = true;
+    else if (c !== 95 && c !== 45) return false;
+  }
+
   // A long pure-hex run is a hash or an id whatever its composition, and the
   // hex alphabet makes the entropy test meaningful on its own.
-  if (/^[0-9a-f]+$/i.test(token)) return entropy(token) >= HEX_ENTROPY;
-  if (!/^[A-Za-z0-9+/=_-]+$/.test(token)) return false;
+  if (hexOnly) return entropy(token) >= HEX_ENTROPY;
 
   // Composition, per the note on the thresholds above: digits AND letters, plus
   // one of mixed case or base64 padding. `TOKEN_OPTIMIZER_HARVEST_ENDPOINT` and
   // `Content-Security-Policy` carry no digits; `internationalization` carries
   // neither digits nor case variety; a key carries both.
-  const hasDigit = /[0-9]/.test(token);
-  const hasLetter = /[A-Za-z]/.test(token);
-  const mixedCase = /[a-z]/.test(token) && /[A-Z]/.test(token);
-  const base64ish = /[+/=]/.test(token);
-  if (!hasDigit || !hasLetter || !(mixedCase || base64ish)) return false;
+  if (!digit || !(lower || upper) || !((lower && upper) || padding))
+    return false;
 
   return entropy(token) >= BASE64_ENTROPY;
 }
