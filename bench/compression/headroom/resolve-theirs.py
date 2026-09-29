@@ -77,6 +77,10 @@ from headroom.ccr.marker_resolution import resolve_markers_in_text  # noqa: E402
 # Their own marker grammar, copied from headroom/ccr/marker_resolution.py so the
 # count of what WAS there does not depend on the function that consumes it.
 MARKER = re.compile(r"<<ccr:([a-f0-9]{12,24})[^>]*>>")
+# THE WHOLE TOKEN, not just its hash, because the latency probe below has to hand
+# their resolver something their resolver will act on. A bare hash is not a
+# marker to them and would time a no-op.
+WHOLE = re.compile(r"<<ccr:[a-f0-9]{12,24}[^>]*>>")
 # Their resolver does not raise on a miss; it leaves the marker in place with a
 # reason appended. Counting that string is the only way to tell a redeemed
 # marker from one that was merely passed through.
@@ -95,6 +99,11 @@ with open(os.path.join(OUT, "theirs.json"), encoding="utf8") as handle:
     theirs = json.load(handle)
 
 out = {}
+# EVERY DISTINCT MARKER IN THE WHOLE SWEEP, keyed to the first workload it came
+# from. The per-fetch probe below walks these rather than re-asking for one
+# marker many times: a store is free to memoise the row it just served, and a
+# memo hit is not the retrieval an agent would pay for.
+distinct = {}
 # Every TTL their resolver quoted at us, so the provenance states THEIR bound.
 ttl_said = set()
 # `__provenance__` records the store state the capture ran against; it is not
@@ -105,6 +114,9 @@ for name, entry in sorted(theirs.items()):
         continue
     text = entry.get("bestText") or ""
     markers = len(MARKER.findall(text))
+    for token in WHOLE.findall(text):
+        if token not in distinct:
+            distinct[token] = name
     try:
         resolved = resolve_markers_in_text(text)
         error = None
@@ -132,6 +144,94 @@ for name, entry in sorted(theirs.items()):
         f"  chars {len(text):>8} -> {len(resolved):>8}"
         + (f"  ERROR {error}" if error else "")
     )
+
+# THEIR PER-FETCH LATENCY, MEASURED HERE AND NOWHERE ELSE.
+#
+# MUST-WIN 2b prices the round trips each arm forces, and a price needs a
+# measured retrieval rather than an assumed one. Their retrieval is a store
+# lookup behind `resolve_markers_in_text`, and this is the only process in the
+# harness that can time it: it is inside their TTL, it has their clone on the
+# path, and it is their code doing the work. A reimplementation of their lookup
+# would be our guess at their speed, and a guess that flattered us would be
+# indistinguishable from a measurement.
+#
+# ONE MARKER PER CALL, which is what makes it a PER-fetch figure. Resolving a
+# whole text is one call that serves many rows, and dividing that by the row
+# count would credit them with a batching an agent following a reference does
+# not get.
+#
+# THE WARM PASS IS UNTIMED, and it is not a favour to them. Our side is timed
+# against a spill file the OS has already paged in, so timing their first-ever
+# lookup -- their import, their connection, their expiry sweep -- would be
+# charging them for setup we do not charge ourselves for, and reporting the
+# difference as their design.
+#
+# A MISS IS NOT A FAST FETCH. Past their TTL every lookup returns the marker with
+# a reason appended, which is quick and measures nothing; only markers that came
+# back with content are timed, and a probe with no hits records itself as
+# unmeasured so the scorer refuses the criterion instead of pricing their
+# retrieval at the speed of their refusal.
+FETCH_PASSES = 3
+FETCH_MARKERS = 64
+fetch_hits = []
+fetch_misses = 0
+probe = sorted(distinct)[:FETCH_MARKERS]
+for token in probe:
+    try:
+        if UNRESOLVED.search(resolve_markers_in_text(token)):
+            fetch_misses += 1
+        else:
+            fetch_hits.append(token)
+    except Exception:  # noqa: BLE001 - their resolver, their failure modes
+        fetch_misses += 1
+
+fetch_passes = []
+for _ in range(FETCH_PASSES if fetch_hits else 0):
+    samples = []
+    for token in fetch_hits:
+        start = time.perf_counter()
+        got = resolve_markers_in_text(token)
+        samples.append((time.perf_counter() - start) * 1000.0)
+        # SERVED, AND PROVED TO HAVE BEEN SERVED. A lookup that started missing
+        # part-way through the probe would otherwise publish its refusal as their
+        # retrieval latency.
+        if UNRESOLVED.search(got):
+            samples.pop()
+            fetch_misses += 1
+    if samples:
+        fetch_passes.append(samples)
+
+if fetch_passes:
+    per_fetch = {
+        "passes": fetch_passes,
+        "markersProbed": len(probe),
+        "markersDistinct": len(distinct),
+        "hits": len(fetch_hits),
+        "misses": fetch_misses,
+        "resolver": "headroom.ccr.marker_resolution.resolve_markers_in_text",
+        "granularity": "one marker per call",
+        "warmedUntimed": True,
+    }
+    flat = sorted(v for xs in fetch_passes for v in xs)
+    print(
+        f"their per-fetch latency: {len(flat)} timed lookup(s) over "
+        f"{len(fetch_hits)} marker(s) in {len(fetch_passes)} pass(es), "
+        f"median {flat[len(flat) // 2]:.3f}ms"
+    )
+else:
+    per_fetch = {
+        "unmeasured": True,
+        "detail": (
+            f"their store served none of {len(probe)} probed marker(s)"
+            if probe
+            else "their output carries no markers, so there is no retrieval to time"
+        ),
+        "markersProbed": len(probe),
+        "markersDistinct": len(distinct),
+        "hits": 0,
+        "misses": fetch_misses,
+    }
+    print(f"their per-fetch latency UNMEASURED: {per_fetch['detail']}")
 
 # HOW LATE WE WERE, STATED IN THE FILE. `sweptAt` comes from the capture; the gap
 # between it and now is the only thing that separates a store that lost content
@@ -187,6 +287,9 @@ out["__provenance__"] = {
     ),
     # Their number, quoted back from their own failure message -- not ours.
     "theirStatedTtlSeconds": ttl,
+    # THEIR HALF OF MUST-WIN 2b. See the probe above for why it lives in this
+    # process and why a miss is recorded as unmeasured rather than as a reading.
+    "perFetch": per_fetch,
     "pastTheirTtl": None if (age is None or ttl is None) else age > ttl,
 }
 if age is not None:
