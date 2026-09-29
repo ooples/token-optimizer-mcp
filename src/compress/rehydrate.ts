@@ -1,4 +1,10 @@
 import { expandLongRepeats } from './runs.js';
+import {
+  HEADING,
+  SECTION_JOIN,
+  SECTION_ORDER_MARKER,
+  decodeOrder,
+} from './segments.js';
 import { expandLog } from './expand-log.js';
 import { BACK_REFERENCE, ESCAPED_REFERENCE, PATH_ID_PREFIX } from './search.js';
 import { findReferent, readBackReference } from './dedup.js';
@@ -456,6 +462,37 @@ const UNCONSUMED_SUFFIX = new RegExp(
  * same refusal for the json marker families, which do not use that prefix and
  * would otherwise survive as ordinary-looking lines.
  */
+/**
+ * Rebuilds the sections the lossless branch of `foldRepeatedSegments` folded.
+ *
+ * The encoder kept one copy of each distinct section, joined them with the
+ * single newline its cut consumed, and wrote where every section stood. So the
+ * inverse is exact: re-cut on the same boundary, then read the order back.
+ *
+ * DECLINES RATHER THAN GUESSES. A vector that does not describe the sections
+ * actually present is not something to repair -- rebuilding a document in the
+ * wrong order would be silently wrong output, which is worse than a refusal.
+ * Leaving the marker in place is the refusal: `rehydrate` below then throws on
+ * it as an unconsumed marker instead of returning a plausible wrong answer.
+ */
+export function expandFoldedSections(text: string): string {
+  const cut = text.lastIndexOf('\n[... ');
+  if (cut === -1) return text;
+  const marker = SECTION_ORDER_MARKER.exec(text.slice(cut + 1));
+  if (!marker) return text;
+
+  const order = decodeOrder(marker[2]);
+  if (!order) return text;
+  const kept = text.slice(0, cut).split(HEADING);
+  // The count the note states has to agree with the sections that are here and
+  // with the vector's length; all three come from one encode, so a disagreement
+  // means this marker does not belong to this text.
+  if (order.length - kept.length !== Number(marker[1])) return text;
+  if (order.some((i) => i < 0 || i >= kept.length)) return text;
+
+  return order.map((i) => kept[i]).join(SECTION_JOIN);
+}
+
 export function rehydrate(text: string): string {
   // Long repeats first of all, because the fold is the LAST thing the encoder
   // does and inverting in the other order would hand each grammar a block with
@@ -465,7 +502,9 @@ export function rehydrate(text: string): string {
   const out = expandLog(
     expandTapRecords(
       expandJsonRecords(
-        expandJsonRecordsByPosition(expandSearchHunks(expandLongRepeats(text)))
+        expandJsonRecordsByPosition(
+          expandSearchHunks(expandLongRepeats(expandFoldedSections(text)))
+        )
       )
     )
   );
