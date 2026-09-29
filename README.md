@@ -318,7 +318,11 @@ accepted them. `install_doctor` prints which of the two is on, how many events
 are waiting and where they would go; it reports without sending. A package
 built without the upload key cannot transmit at all, and the doctor says so
 rather than letting an opt-in look like it is working.
-`DO_NOT_TRACK=1` overrides both, whatever else is set. An event may only
+`DO_NOT_TRACK=1` overrides both, whatever else is set. The version check
+`npm run doctor` and `install_doctor` make is a plain GET to the registry npm
+installs from, carries nothing about you, and runs only when you ask for a
+diagnosis -- never during a session. `DO_NOT_TRACK=1` or
+`TOKEN_OPTIMIZER_UPDATE_CHECK=0` suppresses it before a socket is opened. An event may only
 contain numbers and flags -- a string is dropped before it is written, so a
 path, a prompt or an error message cannot travel even by mistake -- and the
 machine identifier is a salted hash, never your hostname. Usage is
@@ -989,6 +993,7 @@ prefix knowledge is what you give up for that.
 | `TOKEN_OPTIMIZER_BEACON_URL`    | project | send somewhere else, for a fork or a self-hosted table |
 | `TOKEN_OPTIMIZER_BEACON_KEY`    | packed  | the key to send with; empty in a build without one    |
 | `TOKEN_OPTIMIZER_BEACON_TABLE`  | `telemetry_events` | the table to insert into                   |
+| `TOKEN_OPTIMIZER_UPDATE_CHECK` | on      | ask npm for the latest version, in `doctor` only        |
 
 The key is not in this repository. It is public and the package is published, so
 a committed key would be handed to everyone who runs `npm view` and could not be

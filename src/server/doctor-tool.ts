@@ -22,6 +22,7 @@ import { pendingEvents } from '../telemetry/beacon.js';
 import { pendingCounts } from '../telemetry/rollup.js';
 import { pendingToolCounts } from '../telemetry/tool-rollup.js';
 import { beaconKey, beaconTable, beaconUrl } from '../telemetry/credentials.js';
+import { checkForUpdate, describeUpdate } from '../update/check.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -101,6 +102,33 @@ export async function telemetrySection(
   return lines;
 }
 
+/**
+ * WHETHER THIS COPY IS THE CURRENT ONE, and how to replace it if not.
+ *
+ * Asked here and nowhere else. The check is a GET to the registry npm already
+ * installs from, but it still reveals that this machine is running this package,
+ * so it happens only when a person has explicitly asked for a diagnosis -- never
+ * on the server's boot path, where nobody asked and a slow registry would delay
+ * every session. DO_NOT_TRACK and TOKEN_OPTIMIZER_UPDATE_CHECK=0 both suppress
+ * it; see latestVersion, which refuses before opening a socket.
+ *
+ * A failed lookup is reported as a failed lookup. Reporting "current" because
+ * the registry did not answer would be the one wrong answer, since it is the
+ * answer that stops a user from upgrading out of a bug.
+ */
+export async function versionSection(options: {
+  readonly env?: NodeJS.ProcessEnv;
+  readonly fetcher?: typeof fetch;
+} = {}): Promise<string[]> {
+  const report = await checkForUpdate({
+    env: options.env ?? process.env,
+    ...(options.fetcher ? { fetcher: options.fetcher } : {}),
+    // The install layout of THIS file, not of the doctor's caller: dist/server
+    // sits at the same depth under the package root wherever npm put it.
+    moduleUrl: import.meta.url,
+  });
+  return ['', 'Version', ...describeUpdate(report).map((line) => `  ${line}`)];
+}
 const say = (body: string, isError = false) => ({
   content: [{ type: 'text', text: body }],
   isError,
@@ -199,7 +227,11 @@ export async function installDoctor(input: {
   });
 
   return say(
-    [mods.doctor.renderDiagnosis(result), ...(await telemetrySection())].join('\n')
+    [
+      mods.doctor.renderDiagnosis(result),
+      ...(await versionSection()),
+      ...(await telemetrySection()),
+    ].join('\n')
   );
 }
 

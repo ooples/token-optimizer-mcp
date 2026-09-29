@@ -68,6 +68,23 @@ if (hookHealth.total === 0) {
 // reporting a policy the product does not follow. The tradeoff is that an
 // unbuilt tree cannot answer, which is said plainly rather than guessed at --
 // this command exists to diagnose broken installs, and a missing dist is one.
+// THE QUESTION A BROKEN INSTALL ASKS SECOND. Half the reports this command exists
+// to answer are a version that was fixed upstream weeks ago, and nothing else in
+// the output says which copy is running. The check is only made here, where a
+// person has asked, and never during a session; a lookup that fails says so
+// rather than claiming the copy is current.
+console.log('');
+console.log('Version:');
+try {
+  const { checkForUpdate, describeUpdate } = await import(
+    '../dist/update/check.js'
+  );
+  const report = await checkForUpdate();
+  for (const line of describeUpdate(report)) console.log(`  ${line}`);
+} catch {
+  console.log('  Cannot read the version: dist is missing or broken.');
+  console.log('  Run `npm run build`, then ask again.');
+}
 console.log('');
 console.log('Anonymous usage data:');
 try {
@@ -115,4 +132,24 @@ console.log(
 );
 
 // A broken install should fail a script that asks whether it is broken.
-process.exit(result.healthy ? 0 : 1);
+//
+// SET, NOT CALLED. `process.exit()` here aborts the whole process with
+// STATUS_STACK_BUFFER_OVERRUN on Node 25.6.0 whenever an https fetch has been
+// made in the run -- which the version check above now does. It reproduces in
+// eleven lines with no project code (fetch a URL, then process.exit), so it is
+// the runtime's bug, not ours; what is ours is not tripping it. Setting the code
+// and letting the loop drain reports the same result without the crash, and if a
+// stray handle ever holds this open the watchdog below is what says so.
+process.exitCode = result.healthy ? 0 : 1;
+
+// THE COST OF NOT CALLING process.exit: a leaked handle now hangs the command
+// instead of being killed by the exit. Rather than hang silently, say which
+// handles are still up and then go, so the symptom names its own cause.
+const watchdog = setTimeout(() => {
+  const held = (process.getActiveResourcesInfo?.() ?? []).join(', ');
+  console.error(
+    `doctor: finished but something is holding the process open (${held || 'unknown'})`
+  );
+  process.exit(process.exitCode ?? 0);
+}, 5000);
+watchdog.unref();
