@@ -34,6 +34,10 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import {
+  noteToolCall,
+  flushToolRollup,
+} from '../telemetry/tool-rollup.js';
 import { runUcrTool, UCR_TOOL_DEFINITIONS } from './ucr-tools.js';
 
 import { CacheEngine } from '../core/cache-engine.js';
@@ -2905,15 +2909,40 @@ async function observeMcpToolCall<T>(
 
   try {
     const result = await operation();
-    mcpEvidence.toolOutcome(
-      toolName,
-      Date.now() - started,
-      !(result as { isError?: boolean } | null)?.isError
-    );
+    const ok = !(result as { isError?: boolean } | null)?.isError;
+    mcpEvidence.toolOutcome(toolName, Date.now() - started, ok);
+    countToolCall(toolName, Date.now() - started, ok);
     return result;
   } catch (error) {
     mcpEvidence.toolOutcome(toolName, Date.now() - started, false);
+    countToolCall(toolName, Date.now() - started, false);
     throw error;
+  }
+}
+
+/**
+ * Feed one tool call to the opt-in rollup.
+ *
+ * THE ONE PLACE THE MCP SURFACE IS COUNTED, and it is here rather than in the
+ * request handler because a tool that throws is exactly the tool worth knowing
+ * about, and the handler's own body is what threw. Whether the name was
+ * advertised is passed through rather than re-derived inside the telemetry
+ * module: the catalog is this file's fact, and an unadvertised name -- which a
+ * client is free to send -- must never mint a property key.
+ *
+ * Instrumentation may not break a tool call. `record` already swallows its own
+ * write failures, so this catch is for the unforeseen rest of the path.
+ */
+function countToolCall(toolName: string, elapsedMs: number, ok: boolean): void {
+  try {
+    noteToolCall(
+      toolName,
+      elapsedMs,
+      ok,
+      ADVERTISED_TOOL_NAMES.has(toolName)
+    );
+  } catch {
+    /* Optional telemetry cannot fail a tool call. */
   }
 }
 
@@ -3053,6 +3082,9 @@ async function cleanup() {
   stopRoutingMaintenance?.();
   mcpEvidence.shutdown();
   await runCleanupOperations([
+    // Before anything else closes: a window's worth of counts is lost on a kill,
+    // and a clean exit is the one chance to narrow that to zero.
+    { fn: () => void flushToolRollup(), name: 'flushing tool rollup' },
     {
       fn: async () => await analyticsManager.close(),
       name: 'flushing analytics',

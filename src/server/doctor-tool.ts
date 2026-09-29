@@ -20,6 +20,7 @@ import { describePolicy } from '../telemetry/policy.js';
 import { recordedBytes, recorderLastError } from '../telemetry/recorder.js';
 import { pendingEvents } from '../telemetry/beacon.js';
 import { pendingCounts } from '../telemetry/rollup.js';
+import { pendingToolCounts } from '../telemetry/tool-rollup.js';
 import { beaconKey, beaconTable, beaconUrl } from '../telemetry/credentials.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -88,6 +89,12 @@ export async function telemetrySection(
   const counted = pendingCounts().requests;
   if (counted > 0) {
     lines.push(`  counted since the last rollup: ${counted} request(s)`);
+  }
+  // Reported separately because they are separate windows: the proxy may be
+  // idle while the tools are busy, and a single figure would hide which.
+  const tools = pendingToolCounts().calls;
+  if (typeof tools === 'number' && tools > 0) {
+    lines.push(`  counted since the last tool rollup: ${tools} tool call(s)`);
   }
   const err = recorderLastError();
   if (err) lines.push(`  last recorder error: ${err}`);
