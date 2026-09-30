@@ -1,5 +1,5 @@
 /**
- * Smart Config Read Tool - 83% token reduction through schema-aware configuration parsing
+ * Smart Config Read Tool - schema-aware configuration parsing
  *
  * Features:
  * - Schema-aware JSON, YAML, TOML parsing
@@ -19,6 +19,8 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
 import { compress } from '../shared/compression-utils.js';
 import { readCompressedJson } from '../../utils/cache-helper.js';
+import { displayPath, shortHash } from '../shared/report-shape.js';
+import { measured } from '../shared/savings.js';
 import { homedir } from 'os';
 import { join } from 'path';
 
@@ -93,19 +95,46 @@ export interface ConfigDiff {
 export interface SmartConfigReadResult {
   config: Record<string, unknown>;
   metadata: {
+    /** Relative to the working directory where that is shorter. */
     path: string;
     format: ConfigFormat;
     size: number;
+    /** The file's sha256, shortened by {@link shortHash}. */
     hash: string;
     fromCache: boolean;
     isDiff: boolean;
+    /**
+     * originalTokenCount - tokenCount. NEGATIVE when the response costs more
+     * than the file it read, which is a real outcome on a small config: the
+     * response restates the file's own keys and adds errors and suggestions on
+     * top. It is reported as measured rather than clamped to zero.
+     */
     tokensSaved: number;
+    /**
+     * Tokens of this response, not counting this metadata block -- which
+     * cannot be counted before it exists.
+     */
     tokenCount: number;
+    /** Tokens the config file itself costs, which is what reading it would have cost. */
     originalTokenCount: number;
     compressionRatio: number;
     parseTime: number;
   };
-  schema?: ConfigSchema;
+  // NO schema FIELD, DELIBERATELY.
+  //
+  // The schema this tool returned was always its OWN inference, never anything
+  // read from the file: inferSchema() walks the parse and writes down
+  // `typeof` per property, `required` for the non-null keys and a constant
+  // `additionalProperties: false`. Every character of it is recoverable from
+  // the config by looking at the values, so sending both sent the same
+  // information twice -- measured at 217 tokens against a 211-token
+  // package.json, and 3075 of 6876 on a large one, in both cases the single
+  // largest item in the response and in the second case larger than the file.
+  //
+  // What the inference is FOR is still returned: `errors`, from validating the
+  // config against it, and the 'Configuration schema has changed' suggestion,
+  // from comparing it with the previous read's. Both are conclusions the
+  // caller cannot reach on its own; the schema is not.
   diff?: ConfigDiff;
   errors?: ConfigValidationError[];
   suggestions?: string[];
@@ -193,15 +222,19 @@ export class SmartConfigReadTool {
     const parsedConfig = this.parseConfig(rawContent, detectedFormat);
     const parseTime = Date.now() - parseStartTime;
 
-    // Calculate original tokens
-    const originalTokens = this.tokenCounter.count(
-      JSON.stringify(parsedConfig, null, 2)
-    ).tokens;
+    // THE FILE IS THE BASELINE, AND THE RESPONSE IS COUNTED AS IT IS SENT.
+    //
+    // This used to count JSON.stringify(parsedConfig, null, 2): a re-serialised,
+    // re-indented copy of the parse, which is not what reading the file would
+    // have cost and not what this tool sends either. Two-space indentation on
+    // the large fixture inflates the figure it is measured against, so every
+    // ratio below was computed between two payloads that never existed. The
+    // file's own tokens are the cost this tool is supposed to be saving.
+    const originalTokens = this.tokenCounter.count(rawContent).tokens;
 
     let finalOutput: Record<string, unknown> = parsedConfig;
     let isDiff = false;
     let diffData: ConfigDiff | undefined;
-    let tokensSaved = 0;
     let inferredSchema: ConfigSchema | undefined;
     let validationErrors: ConfigValidationError[] = [];
     let suggestions: string[] = [];
@@ -234,9 +267,10 @@ export class SmartConfigReadTool {
     }
 
     // Validate against provided or inferred schema
-    if (validateSchema && (schema || inferredSchema)) {
-      const schemaToValidate =
-        (schema as unknown as ConfigSchema) || inferredSchema!;
+    const providedSchema =
+      schema === undefined ? undefined : (schema as unknown as ConfigSchema);
+    const schemaToValidate = providedSchema ?? inferredSchema;
+    if (validateSchema && schemaToValidate !== undefined) {
       validationErrors = this.validateConfig(
         parsedConfig,
         schemaToValidate,
@@ -270,11 +304,6 @@ export class SmartConfigReadTool {
           // Return diff instead of full config
           isDiff = true;
           finalOutput = this.transformOutput(diffData, validateOnly);
-
-          const diffTokens = this.tokenCounter.count(
-            JSON.stringify(finalOutput, null, 2)
-          ).tokens;
-          tokensSaved = Math.max(0, originalTokens - diffTokens);
         } else {
           // No changes - return minimal response
           isDiff = true;
@@ -282,11 +311,6 @@ export class SmartConfigReadTool {
             _status: 'unchanged',
             _message: 'No configuration changes detected',
           };
-          tokensSaved = Math.max(
-            0,
-            originalTokens -
-              this.tokenCounter.count(JSON.stringify(finalOutput)).tokens
-          );
         }
       } catch (error) {
         console.error('Cache decompression failed:', error);
@@ -303,10 +327,6 @@ export class SmartConfigReadTool {
         warnings: validationErrors.filter((e) => e.severity === 'warning')
           .length,
       };
-
-      tokensSaved =
-        originalTokens -
-        this.tokenCounter.count(JSON.stringify(finalOutput, null, 2)).tokens;
     }
 
     // Cache the parsed config and schema
@@ -338,11 +358,25 @@ export class SmartConfigReadTool {
       }
     }
 
-    // Calculate final metrics
-    const finalTokens = this.tokenCounter.count(
-      JSON.stringify(finalOutput, null, 2)
-    ).tokens;
-    const compressionRatio = finalTokens / originalTokens;
+    // COUNTED AS SENT: compact, and the whole response rather than one field of
+    // it. The server serialises the result with JSON.stringify and no indent,
+    // so a figure taken from a pretty-printed copy of `config` alone described
+    // neither what was sent nor what it replaced.
+    const report = {
+      config: finalOutput,
+      diff: diffData,
+      errors: validationErrors.length > 0 ? validationErrors : undefined,
+      suggestions: suggestions.length > 0 ? suggestions : undefined,
+    };
+    const finalTokens = this.tokenCounter.count(JSON.stringify(report)).tokens;
+
+    // ONE definition of the saving, from the house helper, for the metric and
+    // the response alike. Each branch above used to compute its own from
+    // whatever it had just put in `config`, clamped at zero, so a response
+    // that cost more than the file reported a saving of exactly nothing
+    // instead of a loss -- and the metric and the metadata could disagree
+    // about the same call.
+    const savings = measured(originalTokens, finalTokens);
 
     // Record metrics
     this.metrics.record({
@@ -353,12 +387,12 @@ export class SmartConfigReadTool {
       inputTokens: 0,
       outputTokens: finalTokens,
       cachedTokens: fromCache ? finalTokens : 0,
-      savedTokens: tokensSaved,
+      savedTokens: savings.tokensSaved,
       metadata: {
         path: filePath,
         format: detectedFormat,
         fileSize: stats.size,
-        tokensSaved,
+        tokensSaved: savings.tokensSaved,
         isDiff,
         validationErrors: validationErrors.length,
         parseTime,
@@ -366,24 +400,17 @@ export class SmartConfigReadTool {
     });
 
     return {
-      config: finalOutput,
+      ...report,
       metadata: {
-        path: filePath,
+        path: displayPath(filePath),
         format: detectedFormat,
         size: stats.size,
-        hash: fileHash,
+        hash: shortHash(fileHash),
         fromCache,
         isDiff,
-        tokensSaved,
-        tokenCount: finalTokens,
-        originalTokenCount: originalTokens,
-        compressionRatio,
+        ...savings,
         parseTime,
       },
-      schema: inferredSchema,
-      diff: diffData,
-      errors: validationErrors.length > 0 ? validationErrors : undefined,
-      suggestions: suggestions.length > 0 ? suggestions : undefined,
     };
   }
 
