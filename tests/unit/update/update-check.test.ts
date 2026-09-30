@@ -144,6 +144,23 @@ describe('where it asks', () => {
     );
   });
 
+  it('encodes every separator, not just the first one', () => {
+    // A valid npm name carries one slash, so a replace that stopped after the
+    // first was right for every name this package actually asks about and
+    // wrong for the one it was handed. What survives an incomplete encoding is
+    // not a malformed URL -- it is a well-formed request to a different path,
+    // built out of the tail of whatever name came in.
+    expect(latestUrl('@scope/name/extra', {})).toBe(
+      'https://registry.npmjs.org/@scope%2fname%2fextra/latest'
+    );
+  });
+
+  it('control: stopping at the first separator leaves the rest standing', () => {
+    // The shape that was there, stated outright, so the case above is known to
+    // be testing something: this is what the assertion would have read before.
+    expect('@scope/name/extra'.replace('/', '%2f')).toBe('@scope%2fname/extra');
+  });
+
   it('follows a configured https mirror and trims its trailing slash', () => {
     expect(registryBase({ npm_config_registry: 'https://npm.internal.test/' })).toBe(
       'https://npm.internal.test'

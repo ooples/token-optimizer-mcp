@@ -54,7 +54,15 @@ export function latestUrl(
 ): string {
   // A scoped name's slash is encoded: the registry serves
   // `/@scope%2fname/latest`, and an unencoded slash is a different route.
-  return `${registryBase(env)}/${name.replace('/', '%2f')}/latest`;
+  //
+  // EVERY SEPARATOR, NOT THE FIRST ONE. A two-argument replace with a string
+  // pattern rewrites one occurrence and leaves the rest standing, so a name
+  // carrying more than one separator produced a URL whose tail was read as
+  // further path segments -- a different route again, and one built out of
+  // whatever the name held. A valid npm name has a single slash, which is
+  // exactly why this went unnoticed; the encoding still has to be complete
+  // for the name it is actually handed.
+  return `${registryBase(env)}/${name.replace(/\//g, '%2f')}/latest`;
 }
 
 /**
