@@ -4,6 +4,7 @@
  * Encode observations in order, referencing only earlier copies in this request.
  * Appending a turn never rewrites the prefix based on later content or queries.
  */
+import { FeatureName, featureEnabled } from '../rollout/resolve.js';
 import { cachedOutput } from './output-cache.js';
 import { compactToolDefinitions } from './tool-code.js';
 import {
@@ -33,8 +34,7 @@ export function compressResponses(
   let elisions = 0;
   let dedupReferences = 0;
   let definitionsChanged = false;
-  const compactDefinitions =
-    process.env.TOKEN_OPTIMIZER_PROXY_TOOL_CODE === '1';
+  const compactDefinitions = featureEnabled(FeatureName.ToolCodeMode);
   const input = request.input as unknown[];
   const dedup = new ResponseDedup();
   const readCalls = new Map<string, boolean>();

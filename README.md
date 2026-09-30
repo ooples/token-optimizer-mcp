@@ -983,6 +983,46 @@ one. Turn it on and the block is dropped on any turn where sending it would hand
 upstream more bytes than the client handed us -- the wire never inflates, and the
 prefix knowledge is what you give up for that.
 
+### Rollout channels
+
+Each switch above is its own decision, which is fine until there are ten of them.
+A channel is one decision instead: `stable` is what is on by default today, and
+each wider channel carries everything the narrower ones do plus the features still
+being measured.
+
+| variable                            | default  | what it does                                              |
+| ----------------------------------- | -------- | --------------------------------------------------------- |
+| `TOKEN_OPTIMIZER_ROLLOUT_CHANNEL`   | `stable` | `stable`, `beta`, `canary`, `dev`                         |
+| `TOKEN_OPTIMIZER_FEATURES`          | unset    | a comma list of feature names to turn on within the channel |
+| `TOKEN_OPTIMIZER_DISABLE_FEATURES`  | unset    | a comma list to turn off, whatever else is set            |
+
+`beta` turns on install self-repair; `canary` adds compact tool definitions. Those
+two are staged: the channel is what enables them.
+
+Everything else a wider channel reaches is request-only, and a channel never turns
+one on for you -- it only lets you ask. `beta` makes the output shaper and the
+shared knowledge graph askable, `canary` adds identifier substitution and
+thinking-block dropping, and `dev` holds nothing back. Each of those either changes
+what the model writes or forces an answer the code otherwise works out from the
+directory it is running in, which is a decision worth naming rather than inheriting:
+
+```
+TOKEN_OPTIMIZER_ROLLOUT_CHANNEL=canary TOKEN_OPTIMIZER_FEATURES=substitution
+```
+
+A variable you already set still wins over the channel. If
+`TOKEN_OPTIMIZER_PROXY_SUBSTITUTE=1` is in your settings, substitution is on even
+on `stable`, because that switch shipped before channels existed and moving you to
+a channel is not supposed to quietly turn your own configuration off.
+`TOKEN_OPTIMIZER_DISABLE_FEATURES` is the one thing nothing overrides.
+
+A name this does not recognise turns nothing on, and a value it cannot read is not
+treated as yes. Both are reported rather than guessed at:
+
+```
+npm run doctor           # the channel and what it turned on
+npm run doctor -- --features   # every feature and the reason for each
+```
 ### The telemetry switches
 
 | variable                        | default | what it does                                          |

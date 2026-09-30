@@ -1,3 +1,4 @@
+import { FeatureName, featureEnabled } from '../rollout/resolve.js';
 import Database from 'better-sqlite3';
 import { LRUCache } from 'lru-cache';
 import path from 'path';
@@ -29,10 +30,6 @@ function isCorruptDatabaseError(err: unknown): boolean {
   );
 }
 
-/** Env flags are strings; treat only the usual affirmatives as on. */
-function isTruthyEnv(value: string | undefined): boolean {
-  return value !== undefined && /^(1|true|yes|on)$/i.test(value.trim());
-}
 
 /**
  * The cache table and its indexes. Shared by the on-disk path and the
@@ -277,7 +274,7 @@ export class CacheEngine {
         `after ${maxAttempts} attempts. Last error: ${lastError?.message || 'Unknown error'}. ` +
         `Check disk space, file permissions, and that the directory is writable.`;
 
-      if (isTruthyEnv(process.env.TOKEN_OPTIMIZER_CACHE_STRICT)) {
+      if (featureEnabled(FeatureName.StrictCache)) {
         throw new Error(
           `CRITICAL: ${diagnosis} ` +
             `TOKEN_OPTIMIZER_CACHE_STRICT is set, so no in-memory fallback was used.`

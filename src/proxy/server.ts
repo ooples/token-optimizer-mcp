@@ -80,6 +80,7 @@ import {
   type Tuning,
 } from '../compress/options.js';
 import type { ProviderRequest } from '../compress/frontier.js';
+import { FeatureName, featureEnabled } from '../rollout/resolve.js';
 
 /** Upstream, overridable for a gateway. */
 const UPSTREAM = (): string =>
@@ -691,7 +692,10 @@ function compressBodyOnce(
   ).toLowerCase();
   const keepNewestThinking = dropMode !== 'all';
   let droppedThinking = 0;
-  if (/^(1|true|yes|on|all)$/.test(dropMode)) {
+  // The rollout decides WHETHER; `all` above decides HOW FAR. Splitting them this
+  // way is what lets the inspector report the state without having to know that
+  // this one switch carries a mode as well.
+  if (featureEnabled(FeatureName.DropThinking)) {
     try {
       const msgs = parsed.messages ?? [];
       let lastAssistant = -1;
@@ -731,9 +735,7 @@ function compressBodyOnce(
   // Off unless asked. Substitution removes model reasoning from history, and
   // whether that costs the model something it needed is the one question no
   // offline instrument can answer.
-  const substitute = /^(1|true|yes|on)$/i.test(
-    (process.env.TOKEN_OPTIMIZER_PROXY_SUBSTITUTE || '').trim()
-  );
+  const substitute = featureEnabled(FeatureName.Substitution);
   let result: StrategyResult;
   try {
     result = (substitute ? v4Substitute : v1Frontier)(parsed, {
@@ -855,8 +857,7 @@ function compressBodyOnce(
  * and a thing anyone measuring us should be able to turn off and compare.
  */
 export function netSavingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  const raw = (env.TOKEN_OPTIMIZER_PROXY_NET_SAVING ?? '').trim().toLowerCase();
-  return raw === '1' || raw === 'on' || raw === 'true' || raw === 'yes';
+  return featureEnabled(FeatureName.NetSavingGuard, env);
 }
 
 /**
@@ -950,12 +951,10 @@ const HOP_BY_HOP = new Set([
 const FINDINGS_REFRESH_MS = 60_000;
 
 export function knowledgeEnabled(env: NodeJS.ProcessEnv): boolean {
-  return (
-    proxyEnabled(env) &&
-    !/^(0|false|no|off)$/i.test(
-      env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE?.trim() || ''
-    )
-  );
+  // The proxy gate stays out of the rollout registry on purpose: whether the
+  // proxy is running at all is not a feature flag, and a channel that could
+  // turn it on would be a channel that starts a listener nobody asked for.
+  return proxyEnabled(env) && featureEnabled(FeatureName.KnowledgeInjection, env);
 }
 
 /**
@@ -1009,9 +1008,7 @@ export function keepToolsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
 export function deferToolsEnabled(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
-  return !/^(0|false|no|off)$/i.test(
-    env.TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS || ''
-  );
+  return featureEnabled(FeatureName.DeferTools, env);
 }
 
 /**

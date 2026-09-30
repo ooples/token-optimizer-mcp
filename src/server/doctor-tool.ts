@@ -23,6 +23,7 @@ import { pendingCounts } from '../telemetry/rollup.js';
 import { pendingToolCounts } from '../telemetry/tool-rollup.js';
 import { beaconKey, beaconTable, beaconUrl } from '../telemetry/credentials.js';
 import { checkForUpdate, describeUpdate } from '../update/check.js';
+import { rolloutSection } from '../rollout/describe.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -230,6 +231,7 @@ export async function installDoctor(input: {
     [
       mods.doctor.renderDiagnosis(result),
       ...(await versionSection()),
+      ...rolloutSection(),
       ...(await telemetrySection()),
     ].join('\n')
   );

@@ -85,6 +85,23 @@ try {
   console.log('  Cannot read the version: dist is missing or broken.');
   console.log('  Run `npm run build`, then ask again.');
 }
+// WHICH BEHAVIOURS ARE ON, and why. Before this there were 129 TOKEN_OPTIMIZER_*
+// switches and no way to ask -- a user could only read the source to find out that
+// the flag they set does nothing, which is the one thing a diagnostic must not
+// leave them to do.
+try {
+  const { rolloutSection } = await import('../dist/rollout/describe.js');
+  for (const line of rolloutSection(process.env, {
+    verbose: process.argv.includes('--features'),
+  })) {
+    console.log(line);
+  }
+} catch {
+  console.log('');
+  console.log('Rollout');
+  console.log('  Cannot read the rollout state: dist is missing or broken.');
+}
+
 console.log('');
 console.log('Anonymous usage data:');
 try {
