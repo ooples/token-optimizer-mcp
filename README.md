@@ -1206,6 +1206,43 @@ It also runs the natural experiment nobody else can — enforcing clients versus
 directive ones — and reports it whichever way it falls, with the confound
 stated.
 
+### It learns from what already went wrong, offline
+
+Every failed tool call you have already paid for is sitting in your agent's own
+transcripts. `npx token-optimizer-learn` reads them locally, groups the failures
+that keep repeating, and writes the ones worth remembering into the instructions
+file that agent already reads -- `CLAUDE.md` for Claude Code, `AGENTS.md` for
+Codex.
+
+```bash
+npx token-optimizer-learn                  # what it found, printed, nothing written
+npx token-optimizer-learn --projects       # which projects have transcripts
+npx token-optimizer-learn --since 14 --write
+```
+
+`--agent <claude|codex|auto>`, `--project <path>`, `--since <days>`,
+`--max-sessions <n>`, `--json`. **Nothing is written without `--write`**, and a
+block it writes is delimited, so running it again replaces its own advice instead
+of appending another copy -- nothing outside those markers is ever touched.
+
+Three things it refuses to do, because each one produced a confidently wrong rule
+on a real corpus:
+
+- **It does not blame a chained command line.** A transcript records the line and
+  the exit code, not which of `cd X && git grep a && ls b` failed, so those are
+  counted as unattributable and reported as a number rather than pinned on the
+  first command.
+- **It does not turn your failing build into advice.** A failing test or compile
+  is the work going wrong, not a habit to avoid.
+- **It says what it could not read.** Transcripts it could not parse and failures
+  it could not categorise are printed as counts, because they bound how much of
+  the result to believe.
+
+It reads local files only -- no network, no upload -- and reduces your home
+directory to `~` before any recommendation text is written. `TOKEN_OPTIMIZER_LEARN_PLUGINS`
+takes a comma-separated list of module specifiers to add another agent's format;
+nothing is discovered or imported unless you name it.
+
 ---
 
 ## Trust: we ship hooks that refuse your tool calls
