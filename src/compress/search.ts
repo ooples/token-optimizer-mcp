@@ -369,10 +369,23 @@ export function compressSearchResults(
   const table = [...used];
   const ids = new Map(table.map((p, i) => [p, `${PATH_ID_PREFIX}${i}`]));
   const minted = new Set(ids.values());
+  // A PASS-THROUGH LINE CAN READ AS AN ID TOO, and the decoder does not know
+  // it was one. expandSearchHunks resolves the table over EVERY output line,
+  // not only the headers it rebuilt, so a line that was never a hit but happens
+  // to begin with a minted id and a colon comes back as that table entry's
+  // path: the round trip changes a line and still reports lossless: true.
+  // Checking the hit paths alone left that line unguarded, so the same refusal
+  // now covers it.
+  const readsAsMintedId = (line: Emitted): boolean => {
+    if (line.path !== null) return false;
+    const at = line.raw.indexOf(':');
+    return at > 0 && minted.has(line.raw.slice(0, at));
+  };
   const folded =
     table.length > 1 &&
     out.filter((line) => line.path).length > table.length &&
-    !table.some((p) => minted.has(p));
+    !table.some((p) => minted.has(p)) &&
+    !out.some(readsAsMintedId);
   const render = (line: Emitted): string =>
     (line.path === null ? '' : folded ? ids.get(line.path) : line.path) +
     line.raw +

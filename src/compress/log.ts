@@ -133,7 +133,15 @@ export function compressLog(
     lines.some(
       (line) =>
         line.trimStart().startsWith('[... ') ||
-        /\[\d+ occurrences, (?:positions|gaps)=\[/.test(line)
+        /\[\d+ occurrences, (?:positions|gaps)=\[/.test(line) ||
+        // THE ENCODER MUST REFUSE WHAT THE DECODER REFUSES. expandLog throws on
+        // any line carrying this announcement that does not then parse as a
+        // full template, so text that already contains one -- a log of a log,
+        // which the records engine now routes through here -- would compress
+        // without complaint and fail to come back. Matching the decoder's own
+        // shape keeps the pair in step: refuse it here, or it is a round trip
+        // that throws at the far end.
+        / {2}\[\d+ occurrences, /.test(line)
     )
   )
     return unchanged(text);

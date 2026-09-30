@@ -186,6 +186,8 @@ export function expandTapRecords(text: string): string {
 /** `[paths @0=src/a.ts @1=src/b.ts ...]`, as `compressSearchResults` writes it. */
 const PATH_TABLE = /^\[paths ((?:[^\s=]+=[^\s]+)(?: [^\s=]+=[^\s]+)*)\]$/;
 
+// A minted id is the prefix followed by digits and nothing else.
+const MINTED_PATH_ID = new RegExp(`^${PATH_ID_PREFIX}\\d+$`);
 const SEARCH_PATH = `(?:[A-Za-z]:[\\\\/][^\\s:]*|[^\\s:]*[\\\\/][^\\s:]*|[^\\s:]+\\.[A-Za-z0-9]+|${PATH_ID_PREFIX}\\d+)`;
 
 /**
@@ -275,8 +277,17 @@ export function expandSearchHunks(text: string): string {
   // AN ID WITH NO TABLE ENTRY IS A TRUNCATED BLOCK, NOT A FILE NAMED `@3`.
   // Passing it through would put a path the reader cannot resolve into a
   // reconstruction that claims to be the original.
+  //
+  // A MINTED ID IS THE PREFIX AND DIGITS, NOTHING ELSE. Testing only the
+  // prefix condemned every real path that begins with one: ripgrep inside
+  // node_modules reports @babel/parser/lib/index.js and @types/node/fs.d.ts,
+  // and when the encoder mints no path table the header carries that path
+  // unchanged -- so a block round-tripped fine until a scoped package appeared
+  // in the results, and then threw on a path that was never an id. The two
+  // shapes cannot collide: a hit path has to carry a separator or an
+  // extension, so it can never be the prefix followed only by digits.
   const resolve = (id: string): string => {
-    if (!id.startsWith(PATH_ID_PREFIX)) return id;
+    if (!MINTED_PATH_ID.test(id)) return id;
     const path = paths.get(id);
     if (path === undefined)
       throw new Error(`rehydrate: hunk path ${id} is not in the path table`);

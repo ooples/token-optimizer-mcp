@@ -30,7 +30,7 @@ export function expandLog(text: string): string {
     };
     for (const line of lines) {
       const template =
-        /^(.*)  \[(\d+) occurrences, (positions|gaps)=(\[[\d,*]*\]); # = (.*)\]$/s.exec(
+        /^(.*) {2}\[(\d+) occurrences, (positions|gaps)=(\[[\d,*]*\]); # = (.*)\]$/s.exec(
           line
         );
       // FAIL CLOSED ON A TEMPLATE THIS DECODER CANNOT READ. A grammar change
