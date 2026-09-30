@@ -77,18 +77,35 @@ export function claimFor(rows) {
   return { lo, hi, n: usable.length, text: lo === hi ? `${lo}%` : `${lo}-${hi}%` };
 }
 
-/** Each case names the payload a caller would otherwise have put in context. */
+/**
+ * Each case names the payload a caller would otherwise have put in context, and
+ * how that tool wants to be told about it. The argument shapes differ -- some
+ * take filePath, some path, some a file list -- so each case carries its own
+ * rather than a single shape being forced on all of them, which would record a
+ * refusal where the tool was simply asked the wrong question.
+ */
+const byFilePath = (path) => ({ filePath: path });
+const byPath = (path) => ({ path });
+const byFileList = (path) => ({ files: [path], cwd: FIXTURES });
+const byEnvFile = (path) => ({ envFile: path });
+
 export const CASES = [
-  { tool: 'smart_complexity', fixture: 'smart-complexity.ts' },
-  { tool: 'smart_complexity', fixture: 'token-counter.ts' },
-  { tool: 'smart_complexity', fixture: 'tool-profile.ts' },
-  { tool: 'smart_exports', fixture: 'token-counter.ts' },
-  { tool: 'smart_exports', fixture: 'tool-profile.ts' },
-  { tool: 'smart_imports', fixture: 'smart-complexity.ts' },
-  { tool: 'smart_imports', fixture: 'token-counter.ts' },
-  { tool: 'smart_symbols', fixture: 'smart-complexity.ts' },
-  { tool: 'smart_symbols', fixture: 'tool-profile.ts' },
-  { tool: 'smart_security', fixture: 'smart-complexity.ts' },
+  { tool: 'smart_complexity', fixture: 'smart-complexity.ts', args: byFilePath },
+  { tool: 'smart_complexity', fixture: 'token-counter.ts', args: byFilePath },
+  { tool: 'smart_complexity', fixture: 'tool-profile.ts', args: byFilePath },
+  { tool: 'smart_exports', fixture: 'token-counter.ts', args: byFilePath },
+  { tool: 'smart_exports', fixture: 'tool-profile.ts', args: byFilePath },
+  { tool: 'smart_imports', fixture: 'smart-complexity.ts', args: byFilePath },
+  { tool: 'smart_imports', fixture: 'token-counter.ts', args: byFilePath },
+  { tool: 'smart_symbols', fixture: 'smart-complexity.ts', args: byFilePath },
+  { tool: 'smart_symbols', fixture: 'tool-profile.ts', args: byFilePath },
+  { tool: 'smart_security', fixture: 'smart-complexity.ts', args: byFilePath },
+  { tool: 'smart_refactor', fixture: 'smart-complexity.ts', args: byFilePath },
+  { tool: 'smart_refactor', fixture: 'tool-profile.ts', args: byFilePath },
+  { tool: 'smart_config_read', fixture: 'package.json', args: byPath },
+  { tool: 'smart_env', fixture: 'example.env', args: byEnvFile },
+  { tool: 'smart_typescript', fixture: 'tool-profile.ts', args: byFileList },
+  { tool: 'smart_dependencies', fixture: 'package.json', args: byFileList },
 ];
 /** A minimal JSON-RPC client over the server's real stdio transport. */
 class Server {
@@ -172,22 +189,50 @@ export async function measure(server, testCase) {
   const baseline = countTokens(baselineText);
   const reply = await server.send('tools/call', {
     name: testCase.tool,
-    arguments: { filePath: path, projectRoot: ROOT, ...(testCase.args || {}) },
+    arguments: testCase.args(path),
   });
-  const payload = (reply.result?.content || [])
-    .map((part) => part.text || '')
-    .join('\n');
+  const payloadOf = (message) =>
+    (message.result?.content || []).map((part) => part.text || '').join('\n');
+  const payload = payloadOf(reply);
+  // A REFUSAL IS A SHAPE, NOT A SUBSTRING. Hunting for an "error" key anywhere
+  // in the payload threw away smart_refactor's readings, because a refactoring
+  // report legitimately carries error fields about the code it examined. The
+  // tools that really refuse answer with an error object and nothing else, so
+  // that is what this looks for.
+  const trimmed = payload.trim();
   const refused =
     !!reply.error ||
     reply.result?.isError === true ||
-    /No validation schema available|"error"\s*:/.test(payload);
+    payload.includes('No validation schema available') ||
+    /^\{\s*"error"\s*:/.test(trimmed);
   const treatment = countTokens(payload);
+
+  // THE SECOND READING IS THE ONE THE DESCRIPTIONS ARE ABOUT. Several of them
+  // credit their saving to "intelligent caching", and a single call never
+  // reaches that path -- it is the call that populates it. Asking twice is the
+  // difference between measuring what a tool costs and measuring what it claims.
+  const again = await server.send('tools/call', {
+    name: testCase.tool,
+    arguments: testCase.args(path),
+  });
+  const repeatPayload = payloadOf(again);
+  const repeatRefused =
+    !!again.error ||
+    again.result?.isError === true ||
+    repeatPayload.includes('No validation schema available') ||
+    /^\{\s*"error"\s*:/.test(repeatPayload.trim());
+  const repeatTreatment = countTokens(repeatPayload);
+
   return {
     tool: testCase.tool,
     fixture: testCase.fixture,
     baseline,
     treatment,
     reduction: refused ? null : reduction(baseline, treatment),
+    repeatTreatment,
+    repeatReduction: repeatRefused
+      ? null
+      : reduction(baseline, repeatTreatment),
     refused,
     detail: refused ? payload.slice(0, 160).replace(/\s+/g, ' ') : '',
   };
@@ -203,17 +248,16 @@ async function main() {
     server.stop();
   }
 
+  const pctOf = (value) =>
+    value === null ? 'NO MEASUREMENT' : `${(value * 100).toFixed(1)}%`;
+
   console.log(`encoding ${ENCODING_NAME}`);
   console.log(
-    'tool                 fixture                baseline  payload  reduction'
+    'tool                 fixture                baseline   first    again   first%    again%'
   );
   for (const r of rows) {
-    const pct =
-      r.reduction === null
-        ? 'NO MEASUREMENT'
-        : `${(r.reduction * 100).toFixed(1)}%`;
     console.log(
-      `${r.tool.padEnd(20)} ${r.fixture.padEnd(22)} ${String(r.baseline).padStart(8)} ${String(r.treatment).padStart(8)}  ${pct}`
+      `${r.tool.padEnd(20)} ${r.fixture.padEnd(22)} ${String(r.baseline).padStart(8)} ${String(r.treatment).padStart(7)} ${String(r.repeatTreatment).padStart(8)} ${pctOf(r.reduction).padStart(8)} ${pctOf(r.repeatReduction).padStart(9)}`
     );
     if (r.refused) console.log(`  refused: ${r.detail}`);
   }
@@ -226,9 +270,17 @@ async function main() {
   console.log('');
   console.log('what each description could honestly say:');
   for (const [tool, toolRows] of byTool) {
-    const claim = claimFor(toolRows);
+    const first = claimFor(toolRows);
+    const again = claimFor(
+      toolRows.map((r) => ({ reduction: r.repeatReduction }))
+    );
+    const repeated = again ? again.text : 'nothing measured';
     console.log(
-      `  ${tool.padEnd(20)} ${claim ? `${claim.text} over ${claim.n} fixture(s)` : 'nothing measured -- no claim available'}`
+      `  ${tool.padEnd(20)} ${
+        first
+          ? `${first.text} first read, ${repeated} repeated, over ${first.n} fixture(s)`
+          : 'nothing measured -- no claim available'
+      }`
     );
   }
 
