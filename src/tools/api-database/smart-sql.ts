@@ -829,7 +829,10 @@ export async function runSmartSql(options: SmartSqlOptions): Promise<string> {
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const sql = getSmartSql(cache, new TokenCounter(), new MetricsCollector());
 
   const result = await sql.run(options);
@@ -841,7 +844,7 @@ export async function runSmartSql(options: SmartSqlOptions): Promise<string> {
 export const SMART_SQL_TOOL_DEFINITION = {
   name: 'smart_sql',
   description:
-    'SQL query analyzer with optimization suggestions and execution plan analysis (83% token reduction)',
+    'SQL query analyzer with optimization suggestions and execution plan analysis (unmeasured design target: 83% token reduction)',
   inputSchema: {
     type: 'object' as const,
     properties: {

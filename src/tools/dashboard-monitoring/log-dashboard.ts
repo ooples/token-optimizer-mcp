@@ -1232,7 +1232,7 @@ export function getLogDashboard(
 export const LOG_DASHBOARD_TOOL_DEFINITION = {
   name: 'log_dashboard',
   description:
-    'Interactive log analysis dashboard with filtering, searching, pattern detection, and 90% token reduction through intelligent caching and compression',
+    'Interactive log analysis dashboard with filtering, searching, pattern detection, and an unmeasured design target of 90% token reduction through intelligent caching and compression',
   inputSchema: {
     type: 'object',
     properties: {

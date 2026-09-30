@@ -631,7 +631,10 @@ export function getSmartInstall(
 export async function runSmartInstall(
   options: SmartInstallOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const smartInstall = getSmartInstall(cache, options.projectRoot);
   try {
     const result = await smartInstall.run(options);

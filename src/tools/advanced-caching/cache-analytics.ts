@@ -2191,7 +2191,7 @@ export function getCacheAnalyticsTool(
 export const CACHE_ANALYTICS_TOOL_DEFINITION = {
   name: 'cache_analytics',
   description:
-    'Comprehensive cache analytics with 88%+ token reduction. Real-time dashboards, trend analysis, alerting, heatmaps, bottleneck detection, and cost optimization.',
+    'Comprehensive cache analytics with an unmeasured design target of 88%+ token reduction. Real-time dashboards, trend analysis, alerting, heatmaps, bottleneck detection, and cost optimization.',
   inputSchema: {
     type: 'object',
     properties: {

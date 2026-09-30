@@ -551,7 +551,10 @@ export async function runSmartDiff(
   // failed to open a path whose parent is a file -- surfacing as
   // "CRITICAL: Failed to initialize persistent cache database after 3 attempts"
   // on every single call to smart_diff.
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -565,7 +568,7 @@ export async function runSmartDiff(
 export const SMART_DIFF_TOOL_DEFINITION = {
   name: 'smart_diff',
   description:
-    'Get git diffs with 85% token reduction through diff-only output and smart filtering',
+    'Get git diffs with an unmeasured design target of 85% token reduction through diff-only output and smart filtering',
   inputSchema: {
     type: 'object',
     properties: {

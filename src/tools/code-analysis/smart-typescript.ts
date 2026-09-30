@@ -990,7 +990,9 @@ export function getSmartTypeScriptTool(
 export async function runSmartTypescript(
   options: SmartTypeScriptOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')));
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'))
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartTS = new SmartTypeScript(

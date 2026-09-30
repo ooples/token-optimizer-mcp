@@ -1801,7 +1801,7 @@ ${result.cached ? 'Cached result' : 'Fresh execution'}`;
 export const SMART_DATABASE_TOOL_DEFINITION = {
   name: 'smart_database',
   description:
-    'Database query optimizer with connection pooling, circuit breaking, and 83% token reduction. Supports query execution, EXPLAIN analysis, performance optimization, health monitoring, slow query detection, and batch operations.',
+    'Database query optimizer with connection pooling, circuit breaking, and an unmeasured design target of 83% token reduction. Supports query execution, EXPLAIN analysis, performance optimization, health monitoring, slow query detection, and batch operations.',
   inputSchema: {
     type: 'object',
     properties: {

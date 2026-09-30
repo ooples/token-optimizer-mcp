@@ -814,7 +814,10 @@ export async function runSmartEdit(
   operations: EditOperation | EditOperation[] | string,
   options: SmartEditOptions = {}
 ): Promise<SmartEditResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -828,7 +831,7 @@ export async function runSmartEdit(
 export const SMART_EDIT_TOOL_DEFINITION = {
   name: 'smart_edit',
   description:
-    'Edit files with 90% token reduction through line-based operations and diff-only output',
+    'Edit files with an unmeasured design target of 90% token reduction through line-based operations and diff-only output',
   inputSchema: {
     type: 'object',
     properties: {

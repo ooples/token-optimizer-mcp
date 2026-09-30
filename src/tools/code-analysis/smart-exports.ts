@@ -937,7 +937,9 @@ export function getSmartExportsTool(
 export async function runSmartExports(
   options: SmartExportsOptions
 ): Promise<SmartExportsResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')));
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'))
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartExportsTool(

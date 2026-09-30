@@ -868,7 +868,10 @@ export function getSmartLogs(
 export async function runSmartLogs(
   options: SmartLogsOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const smartLogs = getSmartLogs(cache, options.projectRoot);
   try {
     const result = await smartLogs.run(options);

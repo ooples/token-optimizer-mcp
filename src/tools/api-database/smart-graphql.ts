@@ -946,7 +946,10 @@ export async function runSmartGraphQL(
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const graphql = getSmartGraphQL(cache, tokenCounter, metrics);
@@ -960,7 +963,7 @@ export async function runSmartGraphQL(
 export const SMART_GRAPHQL_TOOL_DEFINITION = {
   name: 'smart_graphql',
   description:
-    'GraphQL query optimizer with complexity analysis and caching (83% token reduction)',
+    'GraphQL query optimizer with complexity analysis and caching (unmeasured design target: 83% token reduction)',
   inputSchema: {
     type: 'object' as const,
     properties: {

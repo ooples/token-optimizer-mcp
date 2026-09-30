@@ -1260,7 +1260,7 @@ ${result.cached ? `Cached (age: ${result.cached})` : 'Fresh analysis'}`;
 export const SMART_SCHEMA_TOOL_DEFINITION = {
   name: 'smart_schema',
   description:
-    'Database schema analyzer with intelligent caching and 83% token reduction. Supports PostgreSQL, MySQL, and SQLite. Provides schema introspection, relationship analysis, index recommendations, and schema diff.',
+    'Database schema analyzer with intelligent caching and an unmeasured design target of 83% token reduction. Supports PostgreSQL, MySQL, and SQLite. Provides schema introspection, relationship analysis, index recommendations, and schema diff.',
   inputSchema: {
     type: 'object',
     properties: {

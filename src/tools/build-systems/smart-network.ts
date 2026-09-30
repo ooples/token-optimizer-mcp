@@ -837,7 +837,10 @@ export function getSmartNetwork(
 export async function runSmartNetwork(
   options: SmartNetworkOptions
 ): Promise<string> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const smartNetwork = getSmartNetwork(cache, options.projectRoot);
   try {
     const result = await smartNetwork.run(options);

@@ -1513,7 +1513,7 @@ export function getCacheWarmupTool(
 export const CACHE_WARMUP_TOOL_DEFINITION = {
   name: 'cache_warmup',
   description:
-    'Intelligent cache pre-warming with 87%+ token reduction, featuring schedule-based warming, pattern analysis, dependency resolution, and progressive warming strategies',
+    'Intelligent cache pre-warming with an unmeasured design target of 87%+ token reduction, featuring schedule-based warming, pattern analysis, dependency resolution, and progressive warming strategies',
   inputSchema: {
     type: 'object',
     properties: {

@@ -1283,7 +1283,7 @@ export function getMetricCollector(
 export const METRIC_COLLECTOR_TOOL_DEFINITION = {
   name: 'metric_collector',
   description:
-    'Comprehensive metrics collection and aggregation with multi-source support, time-series compression, and 88% token reduction through delta encoding and intelligent caching',
+    'Comprehensive metrics collection and aggregation with multi-source support, time-series compression, and an unmeasured design target of 88% token reduction through delta encoding and intelligent caching',
   inputSchema: {
     type: 'object',
     properties: {

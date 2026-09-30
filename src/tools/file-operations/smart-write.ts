@@ -578,7 +578,10 @@ export async function runSmartWrite(
   content: string,
   options: SmartWriteOptions = {}
 ): Promise<SmartWriteResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -592,7 +595,7 @@ export async function runSmartWrite(
 export const SMART_WRITE_TOOL_DEFINITION = {
   name: 'smart_write',
   description:
-    'Write files with 85% token reduction through verification, atomic operations, and change tracking',
+    'Write files with an unmeasured design target of 85% token reduction through verification, atomic operations, and change tracking',
   inputSchema: {
     type: 'object',
     properties: {

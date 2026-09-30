@@ -1300,7 +1300,7 @@ export function getSmartCacheTool(
 export const SMART_CACHE_TOOL_DEFINITION = {
   name: 'smart_cache',
   description:
-    'Advanced multi-tier cache with 90%+ token reduction, 6 eviction strategies, stampede prevention, and automatic tier management',
+    'Advanced multi-tier cache with an unmeasured design target of 90%+ token reduction, 6 eviction strategies, stampede prevention, and automatic tier management',
   inputSchema: {
     type: 'object',
     properties: {

@@ -733,7 +733,10 @@ export function getSmartDocker(
 export async function runSmartDocker(
   options: SmartDockerOptions
 ): Promise<string> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const smartDocker = getSmartDocker(cache, options.projectRoot);
   try {
     const result = await smartDocker.run(options);

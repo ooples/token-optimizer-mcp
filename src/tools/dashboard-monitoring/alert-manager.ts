@@ -1218,7 +1218,7 @@ export function getAlertManager(
 export const ALERT_MANAGER_TOOL_DEFINITION = {
   name: 'alert_manager',
   description:
-    'Comprehensive alerting system with multi-channel notifications, intelligent routing, and 89% token reduction through aggressive caching and history aggregation',
+    'Comprehensive alerting system with multi-channel notifications, intelligent routing, and an unmeasured design target of 89% token reduction through aggressive caching and history aggregation',
   inputSchema: {
     type: 'object',
     properties: {

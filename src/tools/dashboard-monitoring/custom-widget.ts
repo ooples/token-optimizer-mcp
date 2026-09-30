@@ -1152,7 +1152,7 @@ export function getCustomWidget(
 export const CUSTOM_WIDGET_TOOL_DEFINITION = {
   name: 'custom_widget',
   description:
-    'Create and manage custom dashboard widgets with 88% token reduction through template caching and configuration compression',
+    'Create and manage custom dashboard widgets with an unmeasured design target of 88% token reduction through template caching and configuration compression',
   inputSchema: {
     type: 'object',
     properties: {

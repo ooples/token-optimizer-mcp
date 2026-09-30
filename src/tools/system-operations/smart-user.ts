@@ -1568,7 +1568,11 @@ export async function runSmartUser(
   const { join } = await import('path');
 
   const cacheInstance =
-    cache || new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+    cache ||
+    new CacheEngine(
+      resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+      100
+    );
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
@@ -1587,7 +1591,7 @@ export async function runSmartUser(
 export const SMART_USER_TOOL_DEFINITION = {
   name: 'smart_user',
   description:
-    'Intelligent user and permission management with smart caching (86%+ token reduction). Manage users, groups, permissions, ACLs, and perform security audits across Windows, Linux, and macOS.',
+    'Intelligent user and permission management with smart caching (unmeasured design target: 86%+ token reduction). Manage users, groups, permissions, ACLs, and perform security audits across Windows, Linux, and macOS.',
   inputSchema: {
     type: 'object' as const,
     properties: {

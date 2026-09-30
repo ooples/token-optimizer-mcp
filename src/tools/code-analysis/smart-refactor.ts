@@ -717,7 +717,9 @@ export function getSmartRefactorTool(
 export async function runSmartRefactor(
   options: SmartRefactorOptions
 ): Promise<SmartRefactorResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')));
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'))
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartRefactorTool(

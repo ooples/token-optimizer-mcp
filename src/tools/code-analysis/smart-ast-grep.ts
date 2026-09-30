@@ -1017,7 +1017,7 @@ export async function runSmartAstGrep(
 export const SMART_AST_GREP_TOOL_DEFINITION = {
   name: 'smart_ast_grep',
   description:
-    'Perform structural code search with 83% token reduction through AST indexing and caching',
+    'Perform structural code search with an unmeasured design target of 83% token reduction through AST indexing and caching',
   inputSchema: {
     type: 'object',
     properties: {

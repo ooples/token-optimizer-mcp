@@ -604,7 +604,9 @@ export function getSmartLintTool(
 export async function runSmartLint(
   options: SmartLintOptions = {}
 ): Promise<string> {
-  const cacheDir = resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'));
+  const cacheDir = resolveCacheLocation(
+    join(homedir(), '.hypercontext', 'cache')
+  );
   const cache = new CacheEngine(cacheDir, 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();

@@ -700,7 +700,11 @@ export async function runSmartProcess(
   const { join } = await import('path');
 
   const cacheInstance =
-    cache || new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+    cache ||
+    new CacheEngine(
+      resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+      100
+    );
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
@@ -716,7 +720,7 @@ export async function runSmartProcess(
 export const SMART_PROCESS_TOOL_DEFINITION = {
   name: 'smart_process',
   description:
-    'Intelligent process management with smart caching (88%+ token reduction). Start, stop, monitor processes with resource tracking and cross-platform support. ' +
+    'Intelligent process management with smart caching (unmeasured design target: 88%+ token reduction). Start, stop, monitor processes with resource tracking and cross-platform support. ' +
     'TRUST BOUNDARY: the "start" operation launches an arbitrary executable of the caller\'s choosing, with caller-supplied arguments, working directory and environment. ' +
     'It runs in argv mode with no shell, so there is no command injection, but granting this tool is equivalent to granting local command execution as the user running the server. ' +
     'Operators who do not want that should expose smart_processes (read-only monitoring) instead.',

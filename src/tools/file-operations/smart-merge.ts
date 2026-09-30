@@ -761,7 +761,10 @@ export function getSmartMergeTool(
 export async function runSmartMerge(
   options: SmartMergeOptions = {}
 ): Promise<SmartMergeResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -775,7 +778,7 @@ export async function runSmartMerge(
 export const SMART_MERGE_TOOL_DEFINITION = {
   name: 'smart_merge',
   description:
-    'Manage git merges with 80% token reduction through structured status and conflict management',
+    'Manage git merges with an unmeasured design target of 80% token reduction through structured status and conflict management',
   inputSchema: {
     type: 'object',
     properties: {

@@ -650,7 +650,10 @@ export async function runSmartBuild(
   options: SmartBuildOptions = {}
 ): Promise<string> {
   // Create standalone resources for CLI usage
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 

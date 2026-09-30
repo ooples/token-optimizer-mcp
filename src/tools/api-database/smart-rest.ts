@@ -789,7 +789,7 @@ export async function runSmartREST(options: SmartRESTOptions): Promise<string> {
 export const SMART_REST_TOOL_DEFINITION = {
   name: 'smart_rest',
   description:
-    'REST API analyzer with endpoint discovery and health scoring (83% token reduction)',
+    'REST API analyzer with endpoint discovery and health scoring (unmeasured design target: 83% token reduction)',
   inputSchema: {
     type: 'object',
     properties: {

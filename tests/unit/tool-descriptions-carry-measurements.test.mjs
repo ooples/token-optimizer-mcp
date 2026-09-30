@@ -48,6 +48,9 @@ function descriptionOf(tool) {
 
 const record = JSON.parse(readFileSync(RECORD, 'utf8'));
 const measured = Object.entries(record.claims);
+const measuredNames = new Set(Object.keys(record.claims));
+const DEFINITION =
+  /(name:\s*'([a-z0-9_]+)',\s*\n\s*description:\s*\n?\s*')((?:[^'\\]|\\.)*)'/g;
 
 describe('tool descriptions carry the measured figure', () => {
   it('has something to check', () => {
@@ -70,6 +73,39 @@ describe('tool descriptions carry the measured figure', () => {
     // The old copy read "83% token reduction", "75-85% token reduction",
     // "86%+ token reduction". None of those phrasings survives a measurement.
     expect(description).not.toMatch(/%\+?\s*token reduction/);
+  });
+
+  // A NEW PERCENTAGE MUST DECLARE WHAT IT IS.
+  //
+  // Fifty-two descriptions carried a figure and fourteen are measured. The
+  // other thirty-eight are design targets, which is a fine thing for a
+  // description to state and not a fine thing for it to imply. This is what
+  // stops a thirty-ninth arriving with a bare number: either the recording
+  // backs the figure, or the description says out loud that nothing does.
+  it('every percentage is either measured or declared unmeasured', () => {
+    const undeclared = [];
+    for (const source of SOURCES) {
+      for (const match of source.text.matchAll(DEFINITION)) {
+        const [, , tool, description] = match;
+        if (!/\d+%/.test(description)) continue;
+        if (measuredNames.has(tool)) continue;
+        if (description.includes('unmeasured design target')) continue;
+        undeclared.push(tool);
+      }
+    }
+    expect(undeclared).toEqual([]);
+  });
+
+  it('the scan sees the descriptions it is meant to police', () => {
+    // A scan that matched nothing would pass the case above without reading
+    // anything at all, which is the failure mode that matters here.
+    let withFigures = 0;
+    for (const source of SOURCES) {
+      for (const match of source.text.matchAll(DEFINITION)) {
+        if (/\d+%/.test(match[3])) withFigures += 1;
+      }
+    }
+    expect(withFigures).toBeGreaterThanOrEqual(52);
   });
 
   // THE ARMS THAT MUST FAIL. A lookup that answered for anything would pass

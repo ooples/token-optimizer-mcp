@@ -911,7 +911,7 @@ ${result.cached ? 'Cached result' : 'Fresh analysis'}`;
 export const SMART_MIGRATION_TOOL_DEFINITION = {
   name: 'smart_migration',
   description:
-    'Database migration tracker with status monitoring and 83% token reduction. Supports listing migrations, checking status, viewing history, rollback operations, and migration generation.',
+    'Database migration tracker with status monitoring and an unmeasured design target of 83% token reduction. Supports listing migrations, checking status, viewing history, rollback operations, and migration generation.',
   inputSchema: {
     type: 'object',
     properties: {

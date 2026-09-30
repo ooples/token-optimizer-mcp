@@ -1508,6 +1508,6 @@ export function getHealthMonitor(
 export const HEALTH_MONITOR_TOOL_DEFINITION = {
   name: 'health_monitor',
   description:
-    'Monitor system and application health with 91% token reduction through health state compression and metric aggregation',
+    'Monitor system and application health with an unmeasured design target of 91% token reduction through health state compression and metric aggregation',
   inputSchema: HEALTH_MONITOR_INPUT_SCHEMA,
 };

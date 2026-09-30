@@ -588,7 +588,10 @@ export function getSmartBranchTool(
 export async function runSmartBranch(
   options: SmartBranchOptions = {}
 ): Promise<SmartBranchResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -602,7 +605,7 @@ export async function runSmartBranch(
 export const SMART_BRANCH_TOOL_DEFINITION = {
   name: 'smart_branch',
   description:
-    'List and manage git branches with 60% token reduction through structured JSON output and smart filtering',
+    'List and manage git branches with an unmeasured design target of 60% token reduction through structured JSON output and smart filtering',
   inputSchema: {
     type: 'object',
     properties: {

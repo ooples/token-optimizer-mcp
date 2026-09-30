@@ -613,7 +613,10 @@ export function getSmartLogTool(
 export async function runSmartLog(
   options: SmartLogOptions = {}
 ): Promise<SmartLogResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -627,7 +630,7 @@ export async function runSmartLog(
 export const SMART_LOG_TOOL_DEFINITION = {
   name: 'smart_log',
   description:
-    'Get git commit history with 75% token reduction through structured JSON output and smart filtering',
+    'Get git commit history with an unmeasured design target of 75% token reduction through structured JSON output and smart filtering',
   inputSchema: {
     type: 'object',
     properties: {

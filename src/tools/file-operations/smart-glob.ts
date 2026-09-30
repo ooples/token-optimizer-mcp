@@ -736,7 +736,10 @@ export async function runSmartGlob(
   pattern: string,
   options: SmartGlobOptions = {}
 ): Promise<SmartGlobResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -750,7 +753,7 @@ export async function runSmartGlob(
 export const SMART_GLOB_TOOL_DEFINITION = {
   name: 'smart_glob',
   description:
-    'Search files with glob patterns and 75% token reduction through path-only results and smart filtering',
+    'Search files with glob patterns and an unmeasured design target of 75% token reduction through path-only results and smart filtering',
   annotations: {
     title: 'Find files efficiently',
     readOnlyHint: true,

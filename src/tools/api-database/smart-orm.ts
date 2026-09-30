@@ -837,7 +837,8 @@ export async function runSmartORM(options: SmartORMOptions): Promise<string> {
 
 export const SMART_ORM_TOOL_DEFINITION = {
   name: 'smart_orm',
-  description: 'ORM query optimizer with N+1 detection (83% token reduction)',
+  description:
+    'ORM query optimizer with N+1 detection (unmeasured design target: 83% token reduction)',
   inputSchema: {
     type: 'object',
     properties: {

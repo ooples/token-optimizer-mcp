@@ -1435,7 +1435,11 @@ export async function runSmartCron(
   const { join } = await import('path');
 
   const cacheInstance =
-    cache || new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+    cache ||
+    new CacheEngine(
+      resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+      100
+    );
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
@@ -1454,7 +1458,7 @@ export async function runSmartCron(
 export const SMART_CRON_TOOL_DEFINITION = {
   name: 'smart_cron',
   description:
-    'Intelligent scheduled task management with smart caching (85%+ token reduction). Manage cron jobs (Linux/macOS) and Windows Task Scheduler with validation, history tracking, and next run predictions.',
+    'Intelligent scheduled task management with smart caching (unmeasured design target: 85%+ token reduction). Manage cron jobs (Linux/macOS) and Windows Task Scheduler with validation, history tracking, and next run predictions.',
   inputSchema: {
     type: 'object' as const,
     properties: {

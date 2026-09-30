@@ -1954,6 +1954,6 @@ export const DATA_VISUALIZER_INPUT_SCHEMA = {
 export const DATA_VISUALIZER_TOOL_DEFINITION = {
   name: 'data_visualizer',
   description:
-    'Create and manage interactive data visualizations with 92% token reduction through SVG/Canvas optimization and configuration caching',
+    'Create and manage interactive data visualizations with an unmeasured design target of 92% token reduction through SVG/Canvas optimization and configuration caching',
   inputSchema: DATA_VISUALIZER_INPUT_SCHEMA,
 };

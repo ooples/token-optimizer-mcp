@@ -644,7 +644,10 @@ export function getSmartStatusTool(
 export async function runSmartStatus(
   options: SmartStatusOptions = {}
 ): Promise<SmartStatusResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -658,7 +661,7 @@ export async function runSmartStatus(
 export const SMART_STATUS_TOOL_DEFINITION = {
   name: 'smart_status',
   description:
-    'Get git status with 70% token reduction through status-only output and smart filtering',
+    'Get git status with an unmeasured design target of 70% token reduction through status-only output and smart filtering',
   inputSchema: {
     type: 'object',
     properties: {

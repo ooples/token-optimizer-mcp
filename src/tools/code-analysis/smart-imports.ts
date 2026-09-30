@@ -958,7 +958,9 @@ export function getSmartImportsTool(
 export async function runSmartImports(
   options: SmartImportsOptions
 ): Promise<SmartImportsResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')));
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'))
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartImportsTool(
