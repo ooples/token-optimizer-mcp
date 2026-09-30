@@ -2,7 +2,7 @@
 export const SMART_COMPLEXITY_TOOL_DEFINITION = {
   name: 'smart_complexity',
   description:
-    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index. Measured token reduction vs reading the file: -25% to 68% first read, -27% to 68% repeated (bench/tools, 3 fixtures).',
+    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index. Measured token reduction vs reading the file: -25% to 68% first read, -26% to 68% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
