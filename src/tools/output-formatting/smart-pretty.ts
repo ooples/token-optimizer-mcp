@@ -1460,7 +1460,10 @@ export async function runSmartPretty(
   // use it (or correctly find it absent) without each becoming async.
   await loadHighlighter();
 
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -1475,7 +1478,7 @@ export async function runSmartPretty(
 export const SMART_PRETTY_TOOL_DEFINITION = {
   name: 'smart_pretty',
   description:
-    'Syntax highlighting and code formatting with 86%+ token reduction. Supports 50+ languages, ANSI/HTML output, multiple themes, and Prettier integration.',
+    'Syntax highlighting and code formatting. Supports 50+ languages, ANSI/HTML output, multiple themes, and Prettier integration. Measured token reduction vs reading the file: 89-90% first read, 89-90% repeated (bench/tools, 1 fixture).',
   inputSchema: {
     type: 'object' as const,
     properties: {

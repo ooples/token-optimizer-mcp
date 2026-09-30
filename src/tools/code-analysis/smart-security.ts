@@ -1375,7 +1375,10 @@ export function getSmartSecurityTool(
 export async function runSmartSecurity(
   options: SmartSecurityOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartSec = new SmartSecurity(
@@ -1473,7 +1476,7 @@ export async function runSmartSecurity(
 export const SMART_SECURITY_TOOL_DEFINITION = {
   name: 'smart_security',
   description:
-    'Security vulnerability scanner with pattern detection and intelligent caching (83% token reduction)',
+    'Security vulnerability scanner with pattern detection and intelligent caching. Measured token reduction vs reading the file: 74-75% first read, 74-75% repeated (bench/tools, 1 fixture).',
   inputSchema: {
     type: 'object',
     properties: {

@@ -458,7 +458,10 @@ export async function runSmartRead(
   filePath: string,
   options: SmartReadOptions = {}
 ): Promise<SmartReadResult> {
-  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -470,7 +473,7 @@ export async function runSmartRead(
 export const SMART_READ_TOOL_DEFINITION = {
   name: 'smart_read',
   description:
-    'Read files with 80% token reduction through intelligent caching, diff-based updates, and syntax-aware optimization',
+    'Read files with intelligent caching, diff-based updates, and syntax-aware optimization. Measured token reduction vs reading the file, summed over every chunk returned: -43% to -31% first read, 85-97% repeated on an unchanged file (bench/tools, 3 fixtures).',
   annotations: {
     title: 'Read a file efficiently',
     readOnlyHint: true,

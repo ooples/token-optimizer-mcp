@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Dependencies Tool - 83% Token Reduction
  *
  * Achieves token reduction through:
@@ -1518,7 +1518,7 @@ export async function runSmartDependencies(
 export const SMART_DEPENDENCIES_TOOL_DEFINITION = {
   name: 'smart_dependencies',
   description:
-    'Analyze project dependencies with 83% token reduction through graph caching and incremental updates',
+    'Analyze project dependencies through graph caching and incremental updates. Measured token reduction vs reading the file: 37-38% first read, 37-38% repeated (bench/tools, 1 fixture).',
   inputSchema: {
     type: 'object',
     properties: {
