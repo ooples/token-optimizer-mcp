@@ -1392,13 +1392,14 @@ add the recommendations from [`integrations/AGENTS.md`](./integrations/AGENTS.md
 to your `CLAUDE.md` — but be aware that guidance in a context file is advisory,
 and models routinely read past it.
 
-A global installation automatically configures Claude Code hooks and managed Claude Code, Codex, and OpenCode commands:
+Installing the package changes nothing on your machine. Hooks and managed Claude Code, Codex, and OpenCode commands are wired by one explicit command:
 
 ```bash
 npm install -g @ooples/token-optimizer-mcp@latest
+token-optimizer-install
 ```
 
-Global installs run the packaged Node installer, including when npm pipes lifecycle output. CI and local dependency installs skip automatic setup. If your package manager disables lifecycle scripts, run `token-optimizer-install` explicitly. Open a new shell to activate managed CLI commands, or use `token-optimizer-run` directly. See the [hook installation guide](./docs/HOOKS-INSTALLATION.md).
+`token-optimizer-install` is the only thing that edits `~/.claude/settings.json`; the install itself prints the path it would write and exits. The hooks it adds match nearly every tool call in every project on the machine, so that is not a side effect an `npm install` should have. Undo it with `token-optimizer-uninstall`, which is a dry run until you pass `--apply`. To activate as part of a container image or provisioning script, set `TOKEN_OPTIMIZER_AUTO_INSTALL=1` before installing. Open a new shell to activate managed CLI commands, or use `token-optimizer-run` directly. See the [hook installation guide](./docs/HOOKS-INSTALLATION.md).
 
 ### GitHub Copilot CLI
 
