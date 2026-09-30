@@ -890,9 +890,16 @@ def run(name, native, text):
             "beforeTokens": before_tokens,
             "afterTokens": before_tokens,
             "arm": "none",
-            "ms": 0.0,
-            "msMin": 0.0,
-            "msMax": 0.0,
+            # NOT ZERO. Nothing ran, so there is no reading -- and a 0.0 here is
+            # a measured zero to everything downstream: the fastest possible time
+            # for their engine, published for a row on which their engine did not
+            # execute at all. Null is the shape this file already uses for a
+            # reading it could not take (see `loadWitness.ms`), and the scorer
+            # refuses a criterion it has no number for instead of scoring one
+            # that was never measured.
+            "ms": None,
+            "msMin": None,
+            "msMax": None,
             "msSamples": [],
             "msPasses": [],
             "bestText": text,
@@ -932,7 +939,11 @@ def run(name, native, text):
         # THIRTY MORE, FOR THIRTY-ONE IN ALL. The node side takes the same
         # number for the same reason: the scorer compares tails, not just
         # medians, and eleven readings put a lone spike on the tail it reads.
-        readings = [timings.get(label, 0.0)]
+        # EVERY ARM IN `attempts` WAS TIMED ABOVE, so there is nothing to fall
+        # back on here. A missing key could only mean the loop above appended an
+        # attempt it never timed, and standing a 0.0 in for it would publish the
+        # fastest reading obtainable for a run that was never made.
+        readings = [timings[label]]
         for _ in range(30):
             try:
                 started = time.perf_counter()
@@ -941,6 +952,16 @@ def run(name, native, text):
             except Exception as exc:  # noqa: BLE001 - recorded, never swallowed
                 notes["retime:" + label] = "%s: %s" % (type(exc).__name__, exc)
                 break
+        # A PASS THAT DIED PART WAY IS NOT A PASS -- the rule the later passes are
+        # already held to further down, missing here. A repeat that raised on its
+        # fourth call left four readings behind, and the median, min and max
+        # published from them were indistinguishable from a median of thirty-one,
+        # while the file went on claiming a 31-sample rule. The note above records
+        # what happened; dropping the pass is what stops the remains being scored
+        # as one. An arm dropped here is also left out of `RETIME`, so the later
+        # sweeps do not re-time a callable that has already raised.
+        if len(readings) != 31:
+            continue
         # RUN ORDER PRESERVED for the same reason the node side preserves it:
         # the first reading carries the import and the first-call cost, and a
         # consumer that cannot see which one was first cannot tell warm-up from
@@ -971,22 +992,28 @@ def run(name, native, text):
     # RUN ORDER PRESERVED for the same reason the node side preserves it: the
     # first reading carries the import and the first-call cost, and a consumer
     # that cannot see which one was first cannot tell warm-up from variance.
-    ordered = arm_samples.get(arm) or [round(timings.get(arm, 0.0), 3)]
-    samples = sorted(ordered)
+    # NO SAMPLES IS NOT A SAMPLE OF ONE. The winner has no readings in exactly
+    # one case -- its repeats raised and the short pass was dropped just above --
+    # and the lone first-pass timing that used to stand in for them was then
+    # published as a median, a min and a max, indistinguishable from a median of
+    # thirty-one. The row goes out with no speed on it instead, which the scorer
+    # refuses rather than scores.
+    ordered = arm_samples.get(arm)
+    samples = sorted(ordered) if ordered else []
     return {
         "before": len(text),
         "after": round(len(text) * ratio),
         "beforeTokens": before_tokens,
         "afterTokens": max(1, round(before_tokens * ratio)),
         "arm": arm,
-        "ms": round(samples[(len(samples) - 1) // 2], 3),
-        "msMin": round(samples[0], 3),
-        "msMax": round(samples[-1], 3),
-        "msSamples": ordered,
+        "ms": round(samples[(len(samples) - 1) // 2], 3) if samples else None,
+        "msMin": round(samples[0], 3) if samples else None,
+        "msMax": round(samples[-1], 3) if samples else None,
+        "msSamples": ordered or [],
         # PASS 0. The sweep below appends the rest and rewrites ms/msMin/msMax
         # from the pool, so `msSamples` stays what every existing consumer
         # reads and `msPasses` is what the gate needs.
-        "msPasses": [ordered],
+        "msPasses": [ordered] if ordered else [],
         # EVERY ARM'S READINGS, KEYED BY ARM. `ms`/`msSamples`/`msPasses` stay
         # the winner's, so every existing consumer reads what it always read.
         "armMsPasses": {label: [readings] for label, readings in arm_samples.items()},
@@ -1188,6 +1215,11 @@ for name, row in results.items():
     passes = row.get("msPasses") or []
     pooled = [v for p in passes for v in p]
     if not pooled:
+        # SAID OUT LOUD TOO. Every pass this row had died part way and was
+        # dropped, so the row keeps the `None` speed it was built with and the
+        # scorer refuses it. Silence here would be indistinguishable from a row
+        # that was simply not re-timed.
+        print("    %s: no speed pass survived; row published with no timing" % name)
         continue
     row["msSamples"] = pooled
     ordered_pool = sorted(pooled)
