@@ -325,7 +325,11 @@ diagnosis -- never during a session. `DO_NOT_TRACK=1` or
 `TOKEN_OPTIMIZER_UPDATE_CHECK=0` suppresses it before a socket is opened. An event may only
 contain numbers and flags -- a string is dropped before it is written, so a
 path, a prompt or an error message cannot travel even by mistake -- and the
-machine identifier is a salted hash, never your hostname. Usage is
+machine identifier is a salted hash, never your hostname. What the counts are
+about is the hook ledger your own project already keeps: how often the graph
+answered instead of a tool, what each arm of the holdout was delivered and
+withheld, and whether the saving exceeded the cost -- reduced to integers once
+every six hours, never the ledger itself, which names your files. Usage is
 counted as a rollup rather than a row per request: one event per 200 requests,
 holding the request count, bytes in and out, how often compression paid, how
 often knowledge was injected, and how many blocks were elided, plus one final

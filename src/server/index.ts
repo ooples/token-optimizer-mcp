@@ -3127,18 +3127,32 @@ async function main() {
     });
   startManagedInstallRepair();
 
-  // WHAT WAS RECORDED EARLIER GOES NOW, NOT AT EXIT. A flush on shutdown has a
-  // bounded window and then exits unconditionally, so the request it starts is
-  // usually cut off mid-flight -- which is indistinguishable, from here, from a
-  // receiver that is down. Sending at boot gives the request the whole session;
-  // the cost is that the last session's events arrive one session late. It
-  // refuses on its own when the policy, the opt-in or the packed key says no,
-  // and the import is dynamic to keep it off the cold handshake path.
-  void import('../telemetry/beacon.js')
-    .then(({ flushBeacon }) => flushBeacon())
-    .catch(() => {
+  // Both of these refuse on their own when the policy or the opt-in says no, and
+  // the imports are dynamic to keep them off the cold handshake path.
+  void (async () => {
+    // THE HOOKS CANNOT REPORT FOR THEMSELVES, so their ledger is read here. A
+    // hook is a process per tool call, so it holds no window, and it imports
+    // nothing from dist/ -- so it cannot reach the consent policy either. This
+    // reduces its log to counts and records one event. It runs BEFORE the flush
+    // below so the snapshot leaves on this boot instead of waiting for the next.
+    try {
+      const { flushHookSnapshot } = await import('../telemetry/hook-rollup.js');
+      await flushHookSnapshot();
+    } catch {
       /* Optional telemetry cannot fail MCP startup. */
-    });
+    }
+    // WHAT WAS RECORDED EARLIER GOES NOW, NOT AT EXIT. A flush on shutdown has a
+    // bounded window and then exits unconditionally, so the request it starts is
+    // usually cut off mid-flight -- which is indistinguishable, from here, from a
+    // receiver that is down. Sending at boot gives the request the whole session;
+    // the cost is that the last session's events arrive one session late.
+    try {
+      const { flushBeacon } = await import('../telemetry/beacon.js');
+      await flushBeacon();
+    } catch {
+      /* Optional telemetry cannot fail MCP startup. */
+    }
+  })();
 
 
   // All termination paths (SIGINT/SIGTERM/SIGHUP + stdin end/close/error) run
