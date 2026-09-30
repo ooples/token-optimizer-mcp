@@ -890,7 +890,7 @@ export async function runSmartCacheApi(
   const tool = getSmartCacheApi(cache, tokenCounter, metrics);
   const result = await tool.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 /**

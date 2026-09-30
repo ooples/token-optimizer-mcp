@@ -797,7 +797,7 @@ export async function runSmartWebSocket(
 
   const result = await websocket.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 export const SMART_WEBSOCKET_TOOL_DEFINITION = {

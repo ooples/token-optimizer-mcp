@@ -1578,7 +1578,7 @@ ${JSON.stringify(result.plan, null, 2)}
 Full execution plan shown above.`;
     }
 
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(result);
   }
 
   private formatCachedOutput(result: SmartDatabaseResult): string {

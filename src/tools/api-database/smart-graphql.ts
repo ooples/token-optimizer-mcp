@@ -956,7 +956,7 @@ export async function runSmartGraphQL(
 
   const result = await graphql.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 // MCP tool definition

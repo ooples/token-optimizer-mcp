@@ -783,7 +783,7 @@ export async function runSmartREST(options: SmartRESTOptions): Promise<string> {
   const rest = getSmartRest(cache, tokenCounter, metrics);
   const result = await rest.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 export const SMART_REST_TOOL_DEFINITION = {

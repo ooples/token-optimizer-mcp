@@ -743,7 +743,7 @@ ${result.generated.content}
 Complete migration file content shown above.`;
     }
 
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(result);
   }
 
   private formatCachedOutput(result: SmartMigrationResult): string {

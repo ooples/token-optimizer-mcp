@@ -837,7 +837,7 @@ export async function runSmartSql(options: SmartSqlOptions): Promise<string> {
 
   const result = await sql.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 // MCP tool definition

@@ -2,7 +2,7 @@
 export const SMART_COMPLEXITY_TOOL_DEFINITION = {
   name: 'smart_complexity',
   description:
-    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index. Measured token reduction vs reading the file: -25% to 68% first read, -27% to 68% repeated (bench/tools, 3 fixtures).',
+    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index. Measured token reduction vs reading the file: -25% to 68% first read, -26% to 68% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -204,7 +204,7 @@ export const SMART_REFACTOR_TOOL_DEFINITION = {
 export const SMART_SYMBOLS_TOOL_DEFINITION = {
   name: 'smart_symbols',
   description:
-    'Extract and analyze TypeScript/JavaScript symbols with scope, type, and reference information. Measured token reduction vs reading the file: 71-93% first read, 71-93% repeated (bench/tools, 2 fixtures).',
+    'Extract and analyze TypeScript/JavaScript symbols with scope, type, and reference information. Measured token reduction vs reading the file: 73-94% first read, 73-94% repeated (bench/tools, 2 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -252,7 +252,7 @@ export const SMART_SYMBOLS_TOOL_DEFINITION = {
 export const SMART_TYPESCRIPT_TOOL_DEFINITION = {
   name: 'smart_typescript',
   description:
-    'Incremental TypeScript compilation with dependency tracking and intelligent caching. Measured token reduction vs reading the file: 83-84% first read, 83-84% repeated (bench/tools, 1 fixture).',
+    'Incremental TypeScript compilation with dependency tracking and intelligent caching. Measured token reduction vs reading the file: 85-86% first read, 85-86% repeated (bench/tools, 1 fixture).',
   inputSchema: {
     type: 'object',
     properties: {

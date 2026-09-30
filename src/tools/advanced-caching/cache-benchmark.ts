@@ -1495,7 +1495,7 @@ export async function runCacheBenchmark(
   const tool = new CacheBenchmark(cache, tokenCounter, metrics);
   const result = await tool.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 /**

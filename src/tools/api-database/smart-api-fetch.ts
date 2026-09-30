@@ -676,7 +676,7 @@ export async function runSmartApiFetch(
 
   const output = await smartFetch.run(options);
 
-  return JSON.stringify(output, null, 2);
+  return JSON.stringify(output);
 }
 
 /**

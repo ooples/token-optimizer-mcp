@@ -974,6 +974,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
+/**
+ * A TOOL THAT ALREADY SPEAKS TEXT MUST NOT BE ENCODED TWICE.
+ *
+ * Twenty-six tools hand back a string rather than an object: twelve return
+ * JSON they serialised themselves, fourteen return a human-readable report.
+ * Every one of them was then passed to JSON.stringify here, which wrapped the
+ * whole thing in quotes and escaped it -- so smart_env's payload arrived as
+ * "{\n  \"success\": true,\n ...", a JSON document encoded as a JSON string.
+ * A caller had to parse it twice, every newline cost two characters instead of
+ * one, and every quote cost two. That is why the compact-wire change moved
+ * those tools not at all: their inflation was a layer underneath it.
+ *
+ * A string is already the text of the result, so it is sent as-is. Anything
+ * else is serialised once, compactly.
+ */
+function toResultText(result: unknown): string {
+  if (typeof result === 'string') {
+    return result;
+  }
+  return JSON.stringify(result);
+}
+
 // Handle tool calls
 async function handleToolCall(request: {
   params: { name: string; arguments?: unknown };
@@ -1050,9 +1072,7 @@ async function handleToolCall(request: {
                     cached: true,
                     compressionSkipped: true,
                     reason: `File too small (${originalSize} bytes < ${COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD} bytes threshold)`,
-                  },
-                  null,
-                  2
+                  }
                 ),
               },
             ],
@@ -1091,9 +1111,7 @@ async function handleToolCall(request: {
                     cached: true,
                     compressionSkipped: true,
                     reason: `Compression would increase tokens (${originalCount.tokens} → ${compressedCount.tokens})`,
-                  },
-                  null,
-                  2
+                  }
                 ),
               },
             ],
@@ -1133,9 +1151,7 @@ async function handleToolCall(request: {
                   compressedSize: compressionResult.compressedSize,
                   cached: true,
                   compressionUsed: true,
-                },
-                null,
-                2
+                }
               ),
             },
           ],
@@ -1222,9 +1238,7 @@ async function handleToolCall(request: {
               {
                 type: 'text',
                 text: JSON.stringify(
-                  { ...result, model: modelName ?? counter.model },
-                  null,
-                  2
+                  { ...result, model: modelName ?? counter.model }
                 ),
               },
             ],
@@ -1268,9 +1282,7 @@ async function handleToolCall(request: {
                           'Base64 output has MORE LLM tokens than the input. This tool reduces BYTES for at-rest storage/caching; do NOT inject the result into a model context expecting token savings (use optimize_text with a cache key for that).',
                       }
                     : {}),
-                },
-                null,
-                2
+                }
               ),
             },
           ],
@@ -1389,9 +1401,7 @@ async function handleToolCall(request: {
                       ? 'Compression will provide significant token savings'
                       : 'Text is too small or compression benefit is minimal',
                   },
-                },
-                null,
-                2
+                }
               ),
             },
           ],
@@ -1534,9 +1544,7 @@ async function handleToolCall(request: {
                       method: 'tiktoken-based (accurate)',
                       note: 'System reminders tracked with tiktoken via Node.js helper, tool costs use fixed estimates',
                     },
-                  },
-                  null,
-                  2
+                  }
                 ),
               },
             ],
@@ -1751,9 +1759,7 @@ async function handleToolCall(request: {
                       pathsRejected: debugInfo.securityRejected,
                       secureBaseDir: secureBaseDir,
                     },
-                  },
-                  null,
-                  2
+                  }
                 ),
               },
             ],
@@ -1859,7 +1865,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -1873,7 +1879,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -1891,7 +1897,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -1903,7 +1909,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -1915,7 +1921,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -1927,7 +1933,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -1939,7 +1945,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -1951,7 +1957,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -1968,7 +1974,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -1980,7 +1986,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -1997,7 +2003,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2009,7 +2015,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2021,7 +2027,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2033,7 +2039,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2045,7 +2051,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2062,7 +2068,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2079,7 +2085,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2092,7 +2098,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2106,7 +2112,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2125,7 +2131,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2139,7 +2145,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2153,7 +2159,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2167,7 +2173,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2181,7 +2187,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2195,7 +2201,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2209,7 +2215,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2223,7 +2229,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2237,7 +2243,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2251,7 +2257,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2265,7 +2271,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2279,7 +2285,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2293,7 +2299,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2307,7 +2313,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2321,7 +2327,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2335,7 +2341,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2349,7 +2355,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2362,7 +2368,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2375,7 +2381,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2388,7 +2394,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2401,7 +2407,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2414,7 +2420,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2427,7 +2433,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2440,7 +2446,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2453,7 +2459,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2466,7 +2472,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2479,7 +2485,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2492,7 +2498,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2505,7 +2511,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2519,7 +2525,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2532,7 +2538,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2545,7 +2551,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2558,7 +2564,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2571,7 +2577,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2584,7 +2590,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2601,7 +2607,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2615,7 +2621,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2628,7 +2634,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2640,7 +2646,7 @@ async function handleToolCall(request: {
         // reachability suite requires of everything advertised.
         const result = await wikiWrite(args as any);
         return {
-          content: [{ type: 'text', text: JSON.stringify(result) }],
+          content: [{ type: 'text', text: toResultText(result) }],
         };
       }
       case 'wiki_read': {
@@ -2649,7 +2655,7 @@ async function handleToolCall(request: {
         // never receives the SessionStart briefing -- could not reach it at all.
         const result = await wikiRead(args as any);
         return {
-          content: [{ type: 'text', text: JSON.stringify(result) }],
+          content: [{ type: 'text', text: toResultText(result) }],
         };
       }
       case 'wiki_query': {
@@ -2662,7 +2668,7 @@ async function handleToolCall(request: {
         // case here is the difference between an escape hatch and a dead end.
         const result = await wikiQuery(args as WikiQueryOptions);
         return {
-          content: [{ type: 'text', text: JSON.stringify(result) }],
+          content: [{ type: 'text', text: toResultText(result) }],
         };
       }
       case 'context_page':
@@ -2672,7 +2678,7 @@ async function handleToolCall(request: {
       case 'outcome_report': {
         const result = await runUcrTool(name, args);
         return {
-          content: [{ type: 'text', text: JSON.stringify(result) }],
+          content: [{ type: 'text', text: toResultText(result) }],
         };
       }
       case 'smart_grep': {
@@ -2682,7 +2688,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2694,7 +2700,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2706,7 +2712,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2719,7 +2725,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2732,7 +2738,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2745,7 +2751,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2758,7 +2764,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2771,7 +2777,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2784,7 +2790,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2797,7 +2803,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2810,7 +2816,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2823,7 +2829,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2836,7 +2842,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2849,7 +2855,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2862,7 +2868,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2875,7 +2881,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2887,7 +2893,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2900,7 +2906,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2913,7 +2919,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };
@@ -2926,7 +2932,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result),
+              text: toResultText(result),
             },
           ],
         };

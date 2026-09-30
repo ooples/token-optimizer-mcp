@@ -1181,7 +1181,7 @@ ${diff.migrationSuggestions.length > 5 ? `\n(+${diff.migrationSuggestions.length
   }
 
   private formatFullOutput(result: SmartSchemaResult): string {
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(result);
   }
 
   private formatBytes(bytes: number): string {

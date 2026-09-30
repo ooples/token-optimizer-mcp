@@ -832,7 +832,7 @@ export async function runSmartORM(options: SmartORMOptions): Promise<string> {
   const orm = getSmartOrm(cache, tokenCounter, metrics);
   const result = await orm.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 export const SMART_ORM_TOOL_DEFINITION = {
