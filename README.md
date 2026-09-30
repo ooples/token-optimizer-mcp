@@ -117,12 +117,12 @@ came from -- takes the corpus from 6,098 units to 9,919 and reverses this
 column, which read 2,717 against 2,278 before the fix.
 
 `browser-session` used to be the one genuine engine loss on this corpus, at 6.0%
-against their 21.8%. It is now 93.5%, from folding exact long repeats inside a
+against their 21.8%. It is now 93.7%, from folding exact long repeats inside a
 block rather than at a boundary someone else drew — a serialised message
 list with inline images is a single 780,000-character line, which every other
 pass here reads as one unit.
 
-**Most of that 93.5% is the fixture, and the honest number is lower.** This
+**Most of that 93.7% is the fixture, and the honest number is lower.** This
 payload holds four images, two of them distinct, and the base64 in them is
 generated rather than photographic: one distinct image alone folds from 160,032
 characters to 5,572, which no real PNG would do. What carries over to a real
@@ -134,7 +134,7 @@ generated base64 is worth about 49 points on top that we would not claim twice.
 
 The run the marker names is still in the output above it, so the reader rebuilds
 it without asking for anything, which is why the characters fall much further
-than the tokens (26.1%) — the image tokens are counted from pixels on both
+than the tokens (28.9%) — the image tokens are counted from pixels on both
 arms either way.
 
 **`ours, dial on` is that like-for-like, and it is substitution, not reduction.**
@@ -194,8 +194,8 @@ comparator can be checked without their clone. `node bench/compression/proof.mjs
 | workload             | payload | theirs | ours   | verdict |
 | -------------------- | ------: | -----: | -----: | ------- |
 | code-search          |  17765 |  92.1% |  97.6% | ours    |
-| sre-debugging        |  65694 |  92.2% |  98.4% | ours    |
-| issue-triage         |  54174 |  72.8% |  97.3% | ours    |
+| sre-debugging        |  65694 |  92.2% |  98.3% | ours    |
+| issue-triage         |  54174 |  72.8% |  97.2% | ours    |
 | codebase-exploration |  78502 |  47.4% |  64.9% | ours    |
 
 <!-- PROOF-TABLE:END -->
@@ -635,7 +635,7 @@ from truncation.
 
 Reduction over the content each strategy is permitted to rewrite, on fixtures
 matching the four workloads HeadRoom publishes, is the guarded table earlier in
-this section -- 97.3%, 97.6%, 98.4% and 48.8% against their 72.8%, 92.1%, 92.2%
+this section -- 97.2%, 97.6%, 98.3% and 64.9% against their 72.8%, 92.1%, 92.2%
 and 47.4%. It is stated once and checked there rather than restated here, which
 is how this copy came to claim 98.9%, 98.2%, 92.8% and 61.3% long after the
 tree had moved.
