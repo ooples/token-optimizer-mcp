@@ -169,10 +169,23 @@ describe('responses survive JSON', () => {
 
     it('keeps the length, so "is it set" is still answerable', async () => {
       const result = await analyze();
-      const dbPassword = result.parsed?.find((v) => v.key === 'DB_PASSWORD');
+      const columns = result.parsed?.columns ?? [];
+      const row = result.parsed?.rows.find((r) => r[0] === 'DB_PASSWORD');
 
-      expect(dbPassword?.value).toBe('[redacted]');
-      expect(dbPassword?.length).toBe(SECRETS.DB_PASSWORD.length);
+      // The column is found by NAME, not by position: a reordered table then
+      // fails here instead of quietly asserting a line number against a length.
+      expect(row).toBeDefined();
+      expect(row?.[columns.indexOf('length')]).toBe(SECRETS.DB_PASSWORD.length);
+    });
+
+    it('has no value field for a value to be returned in', async () => {
+      const result = await analyze(true);
+
+      // The redaction used to be a placeholder written OVER the value, so every
+      // path that built a response had to remember to apply it. A shape with no
+      // value field cannot leak one by a path that forgets.
+      expect(result.parsed?.columns).toEqual(['key', 'line', 'length']);
+      expect(JSON.stringify(result)).not.toContain('"value":');
     });
   });
 });
