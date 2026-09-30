@@ -639,7 +639,7 @@ export async function runSmartTsconfig(
 export const SMART_TSCONFIG_TOOL_DEFINITION = {
   name: 'smart_tsconfig',
   description:
-    'Parse and analyze TypeScript configuration. Resolves extends chains, detects issues, and caches results for 7 days. Measured token reduction vs reading the file: -311% to -310% first read, -269% to -268% repeated (bench/tools, 1 fixture).',
+    'Parse and analyze TypeScript configuration. Resolves extends chains, detects issues, and caches results for 7 days. Measured token reduction vs reading the file: -182% to -181% first read, -164% to -163% repeated (bench/tools, 1 fixture).',
   inputSchema: {
     type: 'object',
     properties: {

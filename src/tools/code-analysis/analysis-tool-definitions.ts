@@ -2,7 +2,7 @@
 export const SMART_COMPLEXITY_TOOL_DEFINITION = {
   name: 'smart_complexity',
   description:
-    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index. Measured token reduction vs reading the file: -25% to 68% first read, -26% to 68% repeated (bench/tools, 3 fixtures).',
+    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index. Measured token reduction vs reading the file: -25% to 68% first read, -27% to 68% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -53,7 +53,7 @@ export const SMART_COMPLEXITY_TOOL_DEFINITION = {
 export const SMART_EXPORTS_TOOL_DEFINITION = {
   name: 'smart_exports',
   description:
-    'Analyze TypeScript/JavaScript export statements with intelligent caching. Tracks exports, detects unused exports, and provides optimization suggestions. Measured token reduction vs reading the file: 42-95% first read, 42-95% repeated (bench/tools, 2 fixtures).',
+    'Analyze TypeScript/JavaScript export statements with intelligent caching. Tracks exports, detects unused exports, and provides optimization suggestions. Measured token reduction vs reading the file: 67-98% first read, 67-97% repeated (bench/tools, 2 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -104,7 +104,7 @@ export const SMART_EXPORTS_TOOL_DEFINITION = {
 export const SMART_IMPORTS_TOOL_DEFINITION = {
   name: 'smart_imports',
   description:
-    'Analyze TypeScript/JavaScript import statements with intelligent caching. Detects unused imports, missing imports, and provides optimization suggestions. Measured token reduction vs reading the file: 86-87% first read, 85-86% repeated (bench/tools, 2 fixtures).',
+    'Analyze TypeScript/JavaScript import statements with intelligent caching. Detects unused imports, missing imports, and provides optimization suggestions. Measured token reduction vs reading the file: 92-93% first read, 92-93% repeated (bench/tools, 2 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
