@@ -16,6 +16,7 @@ import { createHash } from 'crypto';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import type { TokenCounter } from '../../core/token-counter.js';
 import type { MetricsCollector } from '../../core/metrics.js';
+import { displayPath, shortHash } from '../shared/report-shape.js';
 
 // ===========================
 // Types & Interfaces
@@ -102,16 +103,6 @@ function tabulate(vars: EnvVariable[]): EnvVariableTable {
 }
 
 /**
- * Characters of the file digest the response carries.
- *
- * The full 64-character digest is what the cache key is built from and stays
- * inside this module; a caller uses the value only to tell one reading of a
- * file from another, and 16 hex characters are 64 bits of that. The other 48
- * characters cost 26 tokens and answer nothing.
- */
-const RESPONSE_HASH_CHARS = 16;
-
-/**
  * Bumped whenever the response shape changes.
  *
  * The cache lives in the user's home directory and outlives any release, and
@@ -121,23 +112,6 @@ const RESPONSE_HASH_CHARS = 16;
  * held an entry for that file, with no error and no way to tell.
  */
 const RESPONSE_VERSION = 2;
-
-/**
- * The shortest path that still identifies the file.
- *
- * An absolute Windows path costs about 25 tokens once JSON has escaped every
- * separator to \\, since each escape is its own token -- and it tells the caller
- * nothing it did not just pass in. A file inside the working directory is named
- * relative to it with forward slashes; anything outside stays absolute, because
- * a ../../.. chain is neither shorter nor clearer.
- */
-function displayPath(filePath: string): string {
-  const relative = path.relative(process.cwd(), filePath);
-  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
-    return filePath;
-  }
-  return relative.split(path.sep).join('/');
-}
 
 export interface SecurityIssue {
   severity: 'critical' | 'high' | 'medium' | 'low';
@@ -172,7 +146,7 @@ export interface SmartEnvResult {
   };
   suggestions?: string[];
   metadata: {
-    /** First {@link RESPONSE_HASH_CHARS} characters of the file's sha256. */
+    /** The file's sha256, shortened by {@link shortHash}. */
     fileHash?: string;
     filePath?: string;
     cached: boolean;
@@ -457,7 +431,7 @@ export class SmartEnv {
     return {
       ...report,
       metadata: {
-        fileHash: fileHash?.slice(0, RESPONSE_HASH_CHARS),
+        fileHash: fileHash === undefined ? undefined : shortHash(fileHash),
         filePath: filePath === undefined ? undefined : displayPath(filePath),
         cached: false,
         baselineTokens,
