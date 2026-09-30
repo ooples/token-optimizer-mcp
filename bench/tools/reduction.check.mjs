@@ -72,7 +72,7 @@ eq('no rows at all yield no claim', claimFor([]), null);
 
 // A loss must survive into the claim rather than being dropped as an outlier.
 const withLoss = claimFor([{ reduction: -0.246 }, { reduction: 0.677 }]);
-eq('a losing reading widens the range below zero', withLoss.text, '-25-68%');
+eq('a losing reading widens the range below zero', withLoss.text, '-25% to 68%');
 
 console.log('');
 console.log(

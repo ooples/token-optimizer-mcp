@@ -32,11 +32,16 @@
  * Fixtures are vendored under fixtures/ rather than read out of src/, so a row
  * measured today can be re-measured next month and still mean the same thing.
  *
- * Nothing here is timed, so nothing here needs a quiet machine.
+ * Nothing here is timed, so nothing here needs a quiet machine. The payloads
+ * are not quite byte-stable all the same: smart_complexity reports a "duration"
+ * field, so two runs of the same call differ by a digit and the reading moves
+ * by one or two tokens in sixteen hundred. That is 0.1% and it has never moved
+ * a bracket, but it is why these figures are stated to whole percent.
  */
 
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { get_encoding } from 'tiktoken';
@@ -74,7 +79,17 @@ export function claimFor(rows) {
   const pct = usable.map((r) => r.reduction * 100);
   const lo = Math.floor(Math.min(...pct));
   const hi = Math.ceil(Math.max(...pct));
-  return { lo, hi, n: usable.length, text: lo === hi ? `${lo}%` : `${lo}-${hi}%` };
+  // A hyphen between two numbers reads as a range until one of them is
+  // negative, at which point "-219--218%" is unreadable -- and a tool that
+  // costs more than it saves is exactly the case a description must state
+  // clearly rather than bury in punctuation.
+  const text =
+    lo === hi
+      ? `${lo}%`
+      : lo < 0
+        ? `${lo}% to ${hi}%`
+        : `${lo}-${hi}%`;
+  return { lo, hi, n: usable.length, text };
 }
 
 /**
@@ -121,12 +136,27 @@ export const CASES = [
   { tool: 'smart_pretty', fixture: 'tool-profile.ts', args: byFormatting },
 ];
 /** A minimal JSON-RPC client over the server's real stdio transport. */
-class Server {
+export class Server {
   constructor() {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'tool-reduction-'));
+    this.cacheDir = cacheDir;
     this.child = spawn(process.execPath, [join(ROOT, 'dist', 'server', 'index.js')], {
       cwd: ROOT,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, TOKEN_OPTIMIZER_TOOL_PROFILE: 'full' },
+      env: {
+        ...process.env,
+        TOKEN_OPTIMIZER_TOOL_PROFILE: 'full',
+        // A COLD CACHE, OR THE FIRST READING IS NOT A FIRST READING.
+        //
+        // The cache lives in the home directory and outlives the process, so a
+        // second run of this bench found every fixture already cached and
+        // reported the cached figure in the first-read column. It moved
+        // smart_read's first read from 8-78% to 85-97% between two runs of the
+        // same code -- a number that changes because of what a previous run
+        // left behind measures history, not the tool. Each run gets its own
+        // directory, so the two columns mean what they say.
+        TOKEN_OPTIMIZER_CACHE_DIR: cacheDir,
+      },
       windowsHide: true,
     });
     this.buffer = '';
@@ -188,6 +218,11 @@ class Server {
   stop() {
     this.child.stdin.end();
     this.child.kill();
+    try {
+      rmSync(this.cacheDir, { recursive: true, force: true });
+    } catch {
+      // A leftover temp directory is not worth failing a measurement over.
+    }
   }
 }
 
@@ -206,7 +241,33 @@ export async function measure(server, testCase) {
   });
   const payloadOf = (message) =>
     (message.result?.content || []).map((part) => part.text || '').join('\n');
-  const payload = payloadOf(reply);
+
+  /**
+   * A PAGE IS NOT A SAVING.
+   *
+   * smart_read answered a 21KB fixture with chunk 0 of 6 and the harness
+   * recorded a 96% reduction -- for one sixth of the file. A caller who wants
+   * the file pays for all six, so counting the first page as the cost of
+   * reading the file credits the tool with pagination. Where a payload declares
+   * more chunks, the rest are fetched and counted too, which is what reading
+   * the file through this tool actually costs.
+   */
+  const withAllChunks = async (first) => {
+    let text = payloadOf(first);
+    const declared = text.match(/"chunkCount":\s*(\d+)/);
+    const count = declared ? Number(declared[1]) : 1;
+    for (let index = 1; index < count; index += 1) {
+      const page = await server.send('tools/call', {
+        name: testCase.tool,
+        arguments: { ...testCase.args(path), chunkIndex: index },
+      });
+      text += '\n' + payloadOf(page);
+    }
+    return { text, chunks: count };
+  };
+
+  const firstRead = await withAllChunks(reply);
+  const payload = firstRead.text;
   // A REFUSAL IS A SHAPE, NOT A SUBSTRING. Hunting for an "error" key anywhere
   // in the payload threw away smart_refactor's readings, because a refactoring
   // report legitimately carries error fields about the code it examined. The
@@ -228,7 +289,8 @@ export async function measure(server, testCase) {
     name: testCase.tool,
     arguments: testCase.args(path),
   });
-  const repeatPayload = payloadOf(again);
+  const repeatRead = await withAllChunks(again);
+  const repeatPayload = repeatRead.text;
   const repeatRefused =
     !!again.error ||
     again.result?.isError === true ||
@@ -246,19 +308,29 @@ export async function measure(server, testCase) {
     repeatReduction: repeatRefused
       ? null
       : reduction(baseline, repeatTreatment),
+    chunks: firstRead.chunks,
     refused,
     detail: refused ? payload.slice(0, 160).replace(/\s+/g, ' ') : '',
   };
 }
 
 async function main() {
-  const server = new Server();
-  await server.start();
   const rows = [];
-  try {
-    for (const testCase of CASES) rows.push(await measure(server, testCase));
-  } finally {
-    server.stop();
+  // ONE SERVER PER CASE, BECAUSE THE CASES SHARE FIXTURES.
+  //
+  // A single server for the whole table gave every case after the first a
+  // cache another case had populated on the same fixture, so smart_read's
+  // "first read" of smart-complexity.ts was really its seventh: the harness
+  // recorded 189 tokens where a genuinely cold call returns 4647 characters.
+  // Whatever the run costs in startup, a first read has to be first.
+  for (const testCase of CASES) {
+    const server = new Server();
+    await server.start();
+    try {
+      rows.push(await measure(server, testCase));
+    } finally {
+      server.stop();
+    }
   }
 
   const pctOf = (value) =>
@@ -295,6 +367,35 @@ async function main() {
           : 'nothing measured -- no claim available'
       }`
     );
+  }
+
+  // --record writes the readings down so a description can be checked against
+  // them without spawning a server. Nothing here is timed, so a recording taken
+  // on a busy machine is as good as one taken on a quiet one.
+  if (process.argv.includes('--record')) {
+    const at = join(HERE, 'results', 'per-tool-reduction.json');
+    mkdirSync(dirname(at), { recursive: true });
+    const claims = {};
+    for (const [tool, toolRows] of byTool) {
+      const first = claimFor(toolRows);
+      const again = claimFor(
+        toolRows.map((r) => ({ reduction: r.repeatReduction }))
+      );
+      claims[tool] = {
+        first: first ? { lo: first.lo, hi: first.hi, text: first.text } : null,
+        repeated: again ? { lo: again.lo, hi: again.hi, text: again.text } : null,
+        fixtures: toolRows.length,
+      };
+    }
+    writeFileSync(
+      at,
+      JSON.stringify(
+        { encoding: ENCODING_NAME, recorded: new Date().toISOString(), claims, rows },
+        null,
+        2
+      ) + '\n'
+    );
+    console.log(`recorded ${rows.length} reading(s) to ${at}`);
   }
 
   const measured = rows.filter((r) => r.reduction !== null).length;
