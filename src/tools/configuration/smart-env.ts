@@ -802,7 +802,7 @@ export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
 export const SMART_ENV_TOOL_DEFINITION = {
   name: 'smart_env',
   description:
-    'Smart environment variable analyzer with security checking and suggestions. Measured token reduction vs reading the file: -287% to -286% first read, -295% to -294% repeated (bench/tools, 1 fixture) -- the report is several times larger than the env file it describes.',
+    'Smart environment variable analyzer with security checking and suggestions. Measured token reduction vs reading the file: -287% to 58% first read, -295% to 56% repeated (bench/tools, 2 fixtures) -- the loss is on an eight-line .env, the saving on a deployed one.',
   inputSchema: {
     type: 'object' as const,
     properties: {

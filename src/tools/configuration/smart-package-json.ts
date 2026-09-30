@@ -1297,7 +1297,7 @@ export async function runSmartPackageJson(
 export const SMART_PACKAGE_JSON_TOOL_DEFINITION = {
   name: 'smart_package_json',
   description:
-    'Analyze package.json with dependency resolution, version conflict detection, and security scanning. Measured token reduction vs reading the file: -22% to -21% first read, -13% to -12% repeated (bench/tools, 1 fixture).',
+    'Analyze package.json with dependency resolution, version conflict detection, and security scanning. Measured token reduction vs reading the file: -22% to 90% first read, -13% to 90% repeated (bench/tools, 2 fixtures) -- the loss is on a minimal package.json, the saving on a real one.',
   inputSchema: {
     type: 'object',
     properties: {

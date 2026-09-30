@@ -1518,7 +1518,7 @@ export async function runSmartDependencies(
 export const SMART_DEPENDENCIES_TOOL_DEFINITION = {
   name: 'smart_dependencies',
   description:
-    'Analyze project dependencies through graph caching and incremental updates. Measured token reduction vs reading the file: 61-62% first read, 61-62% repeated (bench/tools, 1 fixture).',
+    'Analyze project dependencies through graph caching and incremental updates. Measured token reduction vs reading the file: 61-99% first read, 61-99% repeated (bench/tools, 2 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {

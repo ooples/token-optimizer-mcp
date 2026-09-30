@@ -68,6 +68,17 @@ describe('tool descriptions carry the measured figure', () => {
     expect(description).toContain(`${claim.repeated.text} repeated`);
   });
 
+  // The fixture count drifted without anyone noticing: five descriptions still
+  // said "1 fixture" after a second one was added and every figure beside it
+  // had moved. A reader uses that number to weigh the range, so it is part of
+  // the claim, not decoration.
+  it.each(measured)('%s states how many fixtures it was measured over', (tool, claim) => {
+    const description = descriptionOf(tool);
+    expect(description).not.toBeNull();
+    const noun = claim.fixtures === 1 ? 'fixture' : 'fixtures';
+    expect(description).toContain(`(bench/tools, ${claim.fixtures} ${noun})`);
+  });
+
   it.each(measured)('%s no longer advertises an unmeasured figure', (tool) => {
     const description = descriptionOf(tool);
     // The old copy read "83% token reduction", "75-85% token reduction",

@@ -101,10 +101,14 @@ export function claimFor(rows) {
  */
 const byFilePath = (path) => ({ filePath: path });
 const byPath = (path) => ({ path });
-const byFileList = (path) => ({ files: [path], cwd: FIXTURES });
+const byFileList = (path) => ({ files: [path], cwd: dirname(path) });
 const byEnvFile = (path) => ({ envFile: path });
 const byPathKey = (path) => ({ path });
-const byProjectRoot = () => ({ projectRoot: FIXTURES });
+// A tool given a directory must be given the directory its own fixture is in.
+// Both of these used to name FIXTURES outright, so adding a second package.json
+// under large-project/ would have measured the small one twice and published a
+// range that never moved.
+const byProjectRoot = (path) => ({ projectRoot: dirname(path) });
 const byConfigPath = (path) => ({ configPath: path });
 const byFormatting = (path) => ({ operation: 'format-code', filePath: path });
 
@@ -122,14 +126,19 @@ export const CASES = [
   { tool: 'smart_refactor', fixture: 'smart-complexity.ts', args: byFilePath },
   { tool: 'smart_refactor', fixture: 'tool-profile.ts', args: byFilePath },
   { tool: 'smart_config_read', fixture: 'package.json', args: byPath },
+  { tool: 'smart_config_read', fixture: 'large-project/package.json', args: byPath },
   { tool: 'smart_env', fixture: 'example.env', args: byEnvFile },
+  { tool: 'smart_env', fixture: 'large.env', args: byEnvFile },
   { tool: 'smart_typescript', fixture: 'tool-profile.ts', args: byFileList },
   { tool: 'smart_dependencies', fixture: 'package.json', args: byFileList },
+  { tool: 'smart_dependencies', fixture: 'large-project/package.json', args: byFileList },
   { tool: 'smart_read', fixture: 'smart-complexity.ts', args: byPathKey },
   { tool: 'smart_read', fixture: 'token-counter.ts', args: byPathKey },
   { tool: 'smart_read', fixture: 'tool-profile.ts', args: byPathKey },
   { tool: 'smart_package_json', fixture: 'package.json', args: byProjectRoot },
+  { tool: 'smart_package_json', fixture: 'large-project/package.json', args: byProjectRoot },
   { tool: 'smart_tsconfig', fixture: 'tsconfig.json', args: byConfigPath },
+  { tool: 'smart_tsconfig', fixture: 'large-project/tsconfig.json', args: byConfigPath },
   // A syntax formatter cannot reduce anything -- it returns the same code, and
   // highlighting adds markup to it. Its 86% claim is measured here rather than
   // argued about.
