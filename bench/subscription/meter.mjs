@@ -37,7 +37,11 @@
  * THE TOKEN IS THE USER'S OWN, AND IT GOES ONLY TO ITS OWN ISSUER. This file
  * reads the credential Claude Code already stores and sends it to the Anthropic
  * endpoint that minted it. It must never be written to a log, a record, or any
- * other host -- `snapshot()` returns the response body and nothing else.
+ * other host -- `snapshot()` returns the response body and nothing else, and
+ * `readOAuthToken()` returns the token on its own. Where the token came from,
+ * when it expires and which plan it belongs to are not secrets and the CLI
+ * prints them, so they are read from `describeOAuth()`, which never holds the
+ * token: there is then no object in this file carrying both.
  */
 
 import { readFileSync } from 'node:fs';
@@ -55,16 +59,12 @@ export const WINDOWS = Object.freeze({
 });
 
 /**
- * The OAuth access token, in the same precedence order Claude Code uses.
+ * The credential file Claude Code writes, parsed once.
  *
- * `CLAUDE_CONFIG_DIR` is honoured because a machine with a relocated config
- * would otherwise silently fall back to a stale token in the default location,
- * and a stale token fails as a 401 rather than as an obviously wrong answer.
+ * Separate so that each reader below takes only the part it is entitled to,
+ * off the same parse, without either of them holding the other's.
  */
-export function readOAuthToken() {
-  const fromEnv = (process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '').trim();
-  if (fromEnv) return { token: fromEnv, source: 'CLAUDE_CODE_OAUTH_TOKEN' };
-
+function readCredentialFile() {
   const dir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
   const path = join(dir, '.credentials.json');
   let raw;
@@ -76,24 +76,74 @@ export function readOAuthToken() {
         `${path} exists (${error.code ?? error.message})`
     );
   }
+  return { path, oauth: JSON.parse(raw)?.claudeAiOauth ?? {} };
+}
 
-  const oauth = JSON.parse(raw)?.claudeAiOauth ?? {};
+/**
+ * The OAuth access token, in the same precedence order Claude Code uses.
+ *
+ * `CLAUDE_CONFIG_DIR` is honoured because a machine with a relocated config
+ * would otherwise silently fall back to a stale token in the default location,
+ * and a stale token fails as a 401 rather than as an obviously wrong answer.
+ *
+ * NOTHING ELSE RIDES ALONG WITH IT. This used to return the token together with
+ * where it came from, when it expires and which plan it belongs to -- and the
+ * CLI at the foot of this file printed three of those four off that same
+ * object. None of the printed fields was the token, but that shape is only safe
+ * for as long as every later edit remembers which field is which, and a line
+ * that prints a credential is not a mistake anyone gets to make twice. The
+ * token is now the only thing on this value, so there is nothing here to print
+ * by accident; everything printable comes from `describeOAuth` instead.
+ */
+export function readOAuthToken() {
+  const fromEnv = (process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '').trim();
+  if (fromEnv) return { token: fromEnv };
+
+  const { path, oauth } = readCredentialFile();
   const token = (oauth.accessToken ?? '').trim();
   if (!token) throw new Error(`no claudeAiOauth.accessToken in ${path}`);
+  return { token };
+}
 
-  // EXPIRY IS REPORTED, NOT ENFORCED. A token that expired a minute ago still
-  // often works, and refusing locally would turn a recoverable 401 into a hard
-  // stop with no diagnosis. The caller gets the fact and decides.
+/**
+ * Where the credential came from and what it says about the plan -- never the
+ * credential itself. Nothing this returns is a secret, and the token is not in
+ * scope anywhere it is built.
+ *
+ * EXPIRY IS REPORTED, NOT ENFORCED. A token that expired a minute ago still
+ * often works, and refusing locally would turn a recoverable 401 into a hard
+ * stop with no diagnosis. The caller gets the fact and decides.
+ */
+export function describeOAuth() {
+  const fromEnv = (process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '').trim();
+  if (fromEnv)
+    return {
+      source: 'CLAUDE_CODE_OAUTH_TOKEN',
+      expiresAt: null,
+      expired: null,
+      subscriptionType: null,
+      rateLimitTier: null,
+    };
+
+  const { path, oauth } = readCredentialFile();
   const expiresAt =
     typeof oauth.expiresAt === 'number' ? new Date(oauth.expiresAt) : null;
   return {
-    token,
     source: path,
     expiresAt,
     expired: expiresAt ? expiresAt.getTime() < Date.now() : null,
     subscriptionType: oauth.subscriptionType ?? null,
     rateLimitTier: oauth.rateLimitTier ?? null,
   };
+}
+
+/** The one line the CLI prints about the credential it is about to use. */
+export function provenanceLine(described) {
+  const parts = [`token from ${described.source}`];
+  if (described.subscriptionType) parts.push(`plan ${described.subscriptionType}`);
+  if (described.rateLimitTier) parts.push(`tier ${described.rateLimitTier}`);
+  if (described.expired) parts.push('EXPIRED');
+  return parts.join('  ');
 }
 
 /**
@@ -106,11 +156,11 @@ export function readOAuthToken() {
  * re-analysed for a plan we have not seen.
  */
 export async function snapshot({ token } = {}) {
-  const auth = token ? { token, source: 'argument' } : readOAuthToken();
+  const accessToken = token ?? readOAuthToken().token;
 
   const response = await fetch(USAGE_URL, {
     headers: {
-      authorization: `Bearer ${auth.token}`,
+      authorization: `Bearer ${accessToken}`,
       'anthropic-beta': BETA_HEADER,
       accept: 'application/json',
     },
@@ -161,13 +211,11 @@ export async function snapshot({ token } = {}) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  const auth = readOAuthToken();
+  // NOT `readOAuthToken()`. Everything printed here is read off a value that
+  // has never held the token, so no later edit to this line can leak one.
+  const described = describeOAuth();
   const shot = await snapshot();
-  const parts = [`token from ${auth.source}`];
-  if (auth.subscriptionType) parts.push(`plan ${auth.subscriptionType}`);
-  if (auth.rateLimitTier) parts.push(`tier ${auth.rateLimitTier}`);
-  if (auth.expired) parts.push('EXPIRED');
-  console.log(parts.join('  '));
+  console.log(provenanceLine(described));
   console.log(`read at ${shot.at}`);
   for (const [key, w] of Object.entries(shot.windows)) {
     const mins = w.secondsToReset === null ? '?' : Math.round(w.secondsToReset / 60);
