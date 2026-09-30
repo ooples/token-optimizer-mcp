@@ -239,7 +239,7 @@ describe('MCP tool profiles over the real stdio transport', () => {
     );
   });
 
-  it('keeps the complete 104-tool catalog behind the full profile', async () => {
+  it('keeps the complete 108-tool catalog behind the full profile', async () => {
     const [core, full] = await Promise.all([runServer(), runServer('full')]);
     expect(full.status).toBe(0);
 
@@ -247,8 +247,23 @@ describe('MCP tool profiles over the real stdio transport', () => {
       ?.tools as ListedTool[];
     const fullTools = full.responses.find((message) => message.id === 2)?.result
       ?.tools as ListedTool[];
-    expect(fullTools).toHaveLength(104);
+    // 104 until knowledge_graph, sentiment_analysis, anomaly_explainer and
+    // smart_workflow were registered. They were implemented and exported all
+    // along and advertised by no profile, so this count moving is the point of
+    // that change rather than drift to be absorbed. A bare number is a weak
+    // assertion either way, which is why tool-reachability.test.ts now fails on
+    // any definition under src/tools that no list names -- that check sees a
+    // tool going missing, which this one cannot distinguish from a count edit.
+    expect(fullTools).toHaveLength(108);
     expect(fullTools.map((tool) => tool.name)).toContain('cache_benchmark');
+    expect(fullTools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining([
+        'knowledge_graph',
+        'sentiment_analysis',
+        'anomaly_explainer',
+        'smart_workflow',
+      ])
+    );
     expect(JSON.stringify(coreTools).length).toBeLessThan(
       JSON.stringify(fullTools).length * 0.35
     );
