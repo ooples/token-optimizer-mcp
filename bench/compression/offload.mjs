@@ -63,7 +63,8 @@ export function offloadMarkers(text) {
       // NULL WHEN THE MARKER DECLARED NOTHING. The row form carries a count of
       // rows, not a size, and calling that zero would report an arm that parked
       // 176 rows on disk as having parked nothing.
-      declaredBytes: m[3] === undefined ? null : Math.round(Number(m[3]) * SCALE[m[4]]),
+      declaredBytes:
+        m[3] === undefined ? null : Math.round(Number(m[3]) * SCALE[m[4]]),
     });
   }
   return found;
@@ -106,7 +107,10 @@ export function declaredOffloadBytes(text) {
  * Returns null when no arm qualifies. See the header: that is an absent
  * measurement, not a zero.
  */
-export function bestArm(arms, { excludeOffload = false, size = (s) => s.length } = {}) {
+export function bestArm(
+  arms,
+  { excludeOffload = false, size = (s) => s.length } = {}
+) {
   let best = null;
   for (const [label, arm] of Object.entries(arms ?? {})) {
     const text = arm?.text ?? '';
@@ -118,7 +122,12 @@ export function bestArm(arms, { excludeOffload = false, size = (s) => s.length }
     if (!base) continue;
     const ratio = size(text) / base;
     if (best === null || ratio < best.ratio) {
-      best = { label, ratio, offloads, declaredOffloadBytes: declaredOffloadBytes(text) };
+      best = {
+        label,
+        ratio,
+        offloads,
+        declaredOffloadBytes: declaredOffloadBytes(text),
+      };
     }
   }
   return best;
@@ -136,4 +145,68 @@ export function classifyArms(arms, opts = {}) {
   const any = bestArm(arms, { ...opts, excludeOffload: false });
   const clean = bestArm(arms, { ...opts, excludeOffload: true });
   return { any, clean, comparable: clean !== null };
+}
+
+/**
+ * WHICH ROWS LOST, JUDGED UNDER ONE RULE FOR BOTH SIDES.
+ *
+ * This lived inline in the harness as `rows.filter((r) => r.ours <= r.theirs)`,
+ * where `theirs` is their best arm of ANY kind. That failed the run on every row
+ * whose winner had moved the payload to their store and left a marker -- which
+ * is precisely what this module exists to say is not reduction, and precisely
+ * what our own `sub` arm is refused credit for. The comparison held us to a
+ * rule it did not hold them to.
+ *
+ * Each row carries its own reduction `ours`, their best-of-any `theirs`, and
+ * `compRatio`, their comparable arm -- the one still holding the content.
+ * `compRatio` is null when no arm of theirs kept it.
+ *
+ * Three lists, because they answer three different questions and collapsing
+ * them loses the one that matters. A row with no comparable arm is NOT a win:
+ * it is unjudgeable, and it is named so that passing it cannot be mistaken for
+ * having measured it.
+ */
+export function judgeRows(rows) {
+  const named = (rs) => rs.map((r) => r.name);
+  return {
+    lost: named(
+      rows.filter((r) => r.compRatio !== null && r.ours <= r.compRatio)
+    ),
+    unjudgeable: named(rows.filter((r) => r.compRatio === null)),
+    behindOffload: named(rows.filter((r) => r.ours <= r.theirs)),
+  };
+}
+
+/**
+ * THE CORPUS VERDICT: every reason this run should fail, named.
+ *
+ * Two columns, judged separately and never mixed.
+ *
+ *   reduction  our encoding arm against their comparable arm. Neither side is
+ *              allowed to bank content it moved to a store.
+ *   store      our substitution arm against their best of any kind. Both sides
+ *              are allowed to, and the store is then part of what is measured.
+ *
+ * The old single gate was `oursTokens <= theirsTokens`: our encoding arm
+ * against their offloading one, the one pairing that is neither. It is still
+ * computed and still printed -- it is what their users receive -- but a figure
+ * the harness itself labels "not apples to apples" cannot be the verdict.
+ *
+ * A MISSING like-for-like number is a fault, not a pass. It means no arm of
+ * theirs stayed off the store anywhere, so the reduction claim has no evidence,
+ * and a claim must never pass because its evidence is absent.
+ *
+ * Returns the fault names, empty when the run is clean, so a caller prints them
+ * rather than reporting a bare boolean nobody can act on.
+ */
+export function corpusFaults(m) {
+  const faults = [];
+  if (m.subGone > 0) faults.push('sub-arm-lost-content');
+  if (m.oursChars <= m.theirsChars) faults.push('chars');
+  if (m.like4likeOurs === null || m.like4likeTheirs === null)
+    faults.push('no-like-for-like');
+  else if (m.like4likeOurs <= m.like4likeTheirs)
+    faults.push('reduction-like-for-like');
+  if (m.subTokens <= m.theirsTokens) faults.push('store-column');
+  return faults;
 }

@@ -59,7 +59,14 @@
  * unrecoverable.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 
 import {
@@ -77,9 +84,17 @@ import { bestByRatio, selectArms } from './arm-selection.mjs';
 import { witness, witnessesAgree } from './load-witness.mjs';
 import { resolutionUsable } from './store-resolution.mjs';
 import { measureOurFetch, slowEstimate } from './fetch-latency.mjs';
-import { classifyArms, declaredOffloadBytes } from './offload.mjs';
+import {
+  classifyArms,
+  declaredOffloadBytes,
+  judgeRows,
+  corpusFaults,
+} from './offload.mjs';
 import { stubbedCaptureRefusal } from './capture-guard.mjs';
-import { baseContextReadiness, measureBaseContext } from '../subscription/base-context.mjs';
+import {
+  baseContextReadiness,
+  measureBaseContext,
+} from '../subscription/base-context.mjs';
 import { loadRequests } from '../subscription/transcripts.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -169,7 +184,8 @@ const competitorDegraded = degradationRefusal(theirs.__provenance__ ?? null);
 // rows this touched.
 const bestArmRepointed = {};
 for (const [name, t] of Object.entries(theirs)) {
-  if (name === '__provenance__' || t === null || typeof t !== 'object') continue;
+  if (name === '__provenance__' || t === null || typeof t !== 'object')
+    continue;
   if (!t.armTexts || !t.armBeforeTexts) continue;
   const ranked = bestByRatio(
     Object.entries(t.armTexts).map(([label, armText]) => ({
@@ -238,14 +254,22 @@ if (KNOWN_ANSWER_OURS && !stubRefusal) {
 // environment -- its system prompt and its loaded tool schemas -- and not of
 // the code. So this refuses rather than falling back, the same way
 // `weeklyClaimReadiness` refuses a weekly claim with no offset-immune row.
-const baseMeasured = measureBaseContext({ requests: (await loadRequests()).requests });
+const baseMeasured = measureBaseContext({
+  requests: (await loadRequests()).requests,
+});
 const baseReady = baseContextReadiness(baseMeasured);
 if (!baseReady.ready) {
-  console.error(`REFUSED: base context has not been measured for this environment.`);
+  console.error(
+    `REFUSED: base context has not been measured for this environment.`
+  );
   console.error(`  ${baseReady.reason}`);
   console.error('');
-  console.error('  Every cost figure this harness prints adds base context to both arms, so');
-  console.error('  quoting one without it would publish a saving nobody measured. Run:');
+  console.error(
+    '  Every cost figure this harness prints adds base context to both arms, so'
+  );
+  console.error(
+    '  quoting one without it would publish a saving nobody measured. Run:'
+  );
   console.error('    node bench/subscription/base-context.mjs');
   process.exit(2);
 }
@@ -342,7 +366,6 @@ function queryOf(text) {
   return undefined;
 }
 
-
 // A SHORT DIGEST, for facts that are only useful if they can be re-checked.
 // Sixteen hex characters of sha256: long enough that two different payloads do
 // not collide in a record of eighteen rows, short enough to read in a diff.
@@ -420,7 +443,10 @@ function timeEveryWorkload(byName) {
       const r = witness(1);
       witnessReadings.push({ at: when, ms: r.ms, checksum: r.checksum });
     } catch (err) {
-      witnessErrors.push({ at: when, error: String(err && err.message ? err.message : err) });
+      witnessErrors.push({
+        at: when,
+        error: String(err && err.message ? err.message : err),
+      });
     }
   };
   for (let pass = 0; pass < SPEED_PASSES; pass += 1) {
@@ -634,7 +660,11 @@ for (const [name, text] of Object.entries(payloads)) {
       Array.isArray(parsed) &&
       parsed.length > 0 &&
       parsed.every(
-        (m) => m !== null && typeof m === 'object' && typeof m.role === 'string' && m.content !== undefined
+        (m) =>
+          m !== null &&
+          typeof m === 'object' &&
+          typeof m.role === 'string' &&
+          m.content !== undefined
       );
     if (isMessageList) {
       // THE CAPTURED BYTES, NOT A RE-SERIALISATION OF THEM. This built the
@@ -1048,9 +1078,12 @@ for (const [name, text] of Object.entries(payloads)) {
   const compBeforeText =
     compArm === null ? null : (t.armBeforeTexts?.[compArm] ?? text);
   const compMarkers =
-    compText === null ? [] : [...new Set(compText.match(/<<ccr:[^>]*>>/g) ?? [])];
+    compText === null
+      ? []
+      : [...new Set(compText.match(/<<ccr:[^>]*>>/g) ?? [])];
   let compIn = 0;
-  if (compText !== null) for (const id of want) if (compText.includes(id)) compIn += 1;
+  if (compText !== null)
+    for (const id of want) if (compText.includes(id)) compIn += 1;
 
   // What their published arm claims it put on disk, so the substitution
   // comparison can print a store size beside its ratio the way ours does.
@@ -1087,7 +1120,11 @@ for (const [name, text] of Object.entries(payloads)) {
   // handing us a retention win built out of our own sequencing. That case is
   // refused as unmeasured rather than scored. See store-resolution.mjs.
   const theirEntry = resolved?.[name] ?? null;
-  const theirUsable = resolutionUsable(theirEntry, resolved?.__provenance__ ?? null, name);
+  const theirUsable = resolutionUsable(
+    theirEntry,
+    resolved?.__provenance__ ?? null,
+    name
+  );
   const theirResolved = theirUsable.usable ? (theirEntry?.text ?? null) : null;
   let theirRedeemed = 0;
   if (theirResolved !== null)
@@ -1156,7 +1193,8 @@ for (const [name, text] of Object.entries(payloads)) {
     compArm,
     compDetail: picked.detail,
     compRatio: picked.comparable === null ? null : 1 - picked.comparable.ratio,
-    compRetained: picked.comparable === null ? null : picked.comparable.retained,
+    compRetained:
+      picked.comparable === null ? null : picked.comparable.retained,
     compTokBefore: compBeforeText === null ? null : tokens(compBeforeText),
     compTokAfter: compText === null ? null : tokens(compText),
     compIn: compText === null ? null : compIn,
@@ -1601,12 +1639,16 @@ console.log(
 // the same ratio on every row and prove only that it had been divided out.
 console.log('\nsensitivity, at a 50% fetch rate');
 console.log('turns after   prior ctx |  ours x   theirs x | ours wins below');
+// THE GRID IS DERIVED FROM THE MEASUREMENT, NOT PINNED TO ROUND NUMBERS.
+// It was [4000, 12000, 40000], every value of which is below what this
+// machine actually carries -- a sensitivity band that does not contain the
+// real parameter tests nothing about the real claim.
 for (const turnsAfter of [5, 20, 60])
-  // THE GRID IS DERIVED FROM THE MEASUREMENT, NOT PINNED TO ROUND NUMBERS.
-  // It was [4000, 12000, 40000], every value of which is below what this
-  // machine actually carries -- a sensitivity band that does not contain the
-  // real parameter tests nothing about the real claim.
-  for (const baseContextTokens of [baseMeasured.min, baseMeasured.p50, baseMeasured.max]) {
+  for (const baseContextTokens of [
+    baseMeasured.min,
+    baseMeasured.p50,
+    baseMeasured.max,
+  ]) {
     const params = { ...PARAMS, turnsAfter, baseContextTokens };
     const c = foldCorpus(rows.map((r) => armsFor(r, params)));
     const none = costAt(c.none, 0.5);
@@ -1643,32 +1685,60 @@ console.log(
 // those are. Counting a workload where every arm of theirs offloaded as "their
 // non-offload arm reduced 0%" would invent a measurement, and it would invent
 // one on their side of the table, which flatters us.
-{
+// HOISTED OUT OF A BARE BLOCK so the record and the gate can both reach these.
+// They were computed where only console.log could see them, so the one
+// comparison this harness calls apples-to-apples could be neither published
+// nor enforced -- and the gate below judged our non-offloading arm against
+// their offloading one.
+const like4like = (() => {
   const measured = rows.filter((r) => r.theirCleanState === 'measured');
   const noClean = rows.filter((r) => r.theirCleanState === 'none');
   const unrecorded = rows.filter((r) => r.theirCleanState === 'unrecorded');
-  if (measured.length > 0) {
-    const ourSide = 1 - sum2(measured, (r) => r.oursTokAfter) / sum2(measured, (r) => r.oursTokBefore);
-    const theirSide =
-      1 - sum2(measured, (r) => r.theirCleanTok) / sum2(measured, (r) => r.theirCleanBeforeTok);
-    console.log(
-      `like4like  ours ${pct(ourSide)}   theirs ${pct(theirSide)}   ` +
-        `(tokens, over the ${measured.length} of ${rows.length} workloads where they have a ` +
-        'non-offloading arm; their column above is best-of-any and includes offload)'
-    );
-  }
-  if (noClean.length > 0)
-    console.log(
-      `           no like-for-like number on ${noClean.length}: ` +
-        `${noClean.map((r) => r.name).join(', ')} -- every arm of theirs moved bytes to the store`
-    );
-  if (unrecorded.length > 0)
-    console.log(
-      `           cannot be asked on ${unrecorded.length}: ` +
-        `${unrecorded.map((r) => r.name).join(', ')} -- captured before run-theirs.py recorded ` +
-        'every arm; re-capture to score these'
-    );
-}
+  if (measured.length === 0)
+    return { ours: null, theirs: null, measured, noClean, unrecorded };
+  return {
+    ours:
+      1 -
+      sum2(measured, (r) => r.oursTokAfter) /
+        sum2(measured, (r) => r.oursTokBefore),
+    theirs:
+      1 -
+      sum2(measured, (r) => r.theirCleanTok) /
+        sum2(measured, (r) => r.theirCleanBeforeTok),
+    measured,
+    noClean,
+    unrecorded,
+  };
+})();
+if (like4like.ours !== null)
+  console.log(
+    `like4like  ours ${pct(like4like.ours)}   theirs ${pct(like4like.theirs)}   ` +
+      `(tokens, over the ${like4like.measured.length} of ${rows.length} workloads where they have a ` +
+      'non-offloading arm; their column above is best-of-any and includes offload)'
+  );
+if (like4like.noClean.length > 0)
+  console.log(
+    `           no like-for-like number on ${like4like.noClean.length}: ` +
+      `${like4like.noClean.map((r) => r.name).join(', ')} -- every arm of theirs moved bytes to the store`
+  );
+if (like4like.unrecorded.length > 0)
+  console.log(
+    `           cannot be asked on ${like4like.unrecorded.length}: ` +
+      `${like4like.unrecorded.map((r) => r.name).join(', ')} -- captured before run-theirs.py recorded ` +
+      'every arm; re-capture to score these'
+  );
+// TRAILING ON THE OFFLOAD-INCLUSIVE FIGURE IS SAID OUT LOUD. It stopped being
+// the gate because it compares arms that are not comparable, and a number that
+// is no longer enforced is exactly the kind that goes quiet. This line keeps it
+// audible: it is what a user of their tool actually receives, whatever the
+// like-for-like row says.
+if (oursTokens <= theirsTokens)
+  console.log(
+    `NOTE  offload included, their best arm takes ${pct(theirsTokens)} of tokens off to our ` +
+      `${pct(oursTokens)}. We lead like-for-like above; on the store column our sub arm ` +
+      `takes ${pct(1 - subTokAll / beforeTokAll)} off with ${sum((r) => r.subGone)} identifier(s) unrecoverable. ` +
+      'Both columns are gated; this mixed one is disclosure, not a verdict.'
+  );
 console.log(
   `free    ours ${sum((r) => r.inOut + r.derived)}   theirs ${sum((r) => r.theirIn)}   ` +
     `of ${sum((r) => r.ids)} identifiers, available with no extra turn`
@@ -1730,7 +1800,9 @@ const theirsRedeemed = sum((r) => r.theirRedeemed);
 // `carriedPayloads` is what run-theirs.py was handed by us; everything else in the
 // capture came from their generators. Read that way round, a fixture we stop
 // carrying cannot silently keep being credited as ours.
-for (const r of rows) r.fixtureOwner = carriedList === null ? null : carriedEarly.has(r.name) ? 'ours' : 'theirs';
+for (const r of rows)
+  r.fixtureOwner =
+    carriedList === null ? null : carriedEarly.has(r.name) ? 'ours' : 'theirs';
 const theirFixtureRows = rows.filter((r) => r.fixtureOwner === 'theirs');
 if (carriedList === null) {
   console.log('');
@@ -1754,7 +1826,10 @@ if (carriedList === null) {
     // read as whichever half of the split the reader already had in mind.
     const bt = set.reduce((a, r) => a + r.oursTokBefore, 0);
     const ot = set.reduce((a, r) => a + r.oursTokAfter, 0);
-    const tt = set.reduce((a, r) => a + Math.round(r.oursTokBefore * (1 - r.theirsTok)), 0);
+    const tt = set.reduce(
+      (a, r) => a + Math.round(r.oursTokBefore * (1 - r.theirsTok)),
+      0
+    );
     console.log(
       `    ${label.padEnd(20)} ${String(set.length).padStart(2)} row(s)   ` +
         `chars ours ${pct(1 - o / b)} theirs ${pct(1 - t / b)}   ` +
@@ -1778,20 +1853,26 @@ if (carriedList === null) {
     }
   };
   part('their own fixtures', theirFixtureRows);
-  part('our fixtures', rows.filter((r) => r.fixtureOwner === 'ours'));
+  part(
+    'our fixtures',
+    rows.filter((r) => r.fixtureOwner === 'ours')
+  );
   console.log(
     '    Beating them on fixtures they chose is the stronger claim, beating them on ' +
       'ours the weaker one. Quote whichever is being made, never the blend.'
   );
 }
-const oursDeclined = KNOWN_ANSWER_OURS ? [] : rows.filter((r) => r.oursEngine === null);
+const oursDeclined = KNOWN_ANSWER_OURS
+  ? []
+  : rows.filter((r) => r.oursEngine === null);
 if (oursDeclined.length) {
   console.log('');
   console.log(
     `  OUR ENGINE DECLINED ${oursDeclined.length} of ${rows.length} workload(s). Their 0% saving is ` +
       'our product refusing the input, NOT our product examining it and finding nothing:'
   );
-  for (const r of oursDeclined) console.log(`    ${r.name}: no engine claimed this payload`);
+  for (const r of oursDeclined)
+    console.log(`    ${r.name}: no engine claimed this payload`);
   console.log(
     '    Check the fixture before reading the row: a payload truncated or rewrapped ' +
       'so it no longer parses loses its claim, and then measures a no-op.'
@@ -1884,7 +1965,34 @@ console.log(
     `${sum((r) => r.subGone)} identifiers unrecoverable`
 );
 
-const lostWorkloads = rows.filter((r) => r.ours <= r.theirs).map((r) => r.name);
+// LOST OR TIED, JUDGED LIKE-FOR-LIKE.
+//
+// This was `r.ours <= r.theirs`, and `r.theirs` is their best arm of ANY kind.
+// It therefore failed us on every row where their winner had moved the payload
+// to their store and left a marker -- the same mixed comparison the corpus gate
+// carried, one row at a time. `r.compRatio` is their comparable arm on that row,
+// which is the arm that is still holding the content.
+//
+// A row where that arm does not exist cannot be judged this way at all. It is
+// listed separately rather than counted as a win, because passing a row on
+// absent evidence is exactly how a gate goes quiet.
+const verdict = judgeRows(rows);
+const { lost: lostWorkloads, unjudgeable, behindOffload } = verdict;
+if (lostWorkloads.length)
+  console.log(
+    `LOST OR TIED ON: ${lostWorkloads.join(', ')} (like-for-like, against their ` +
+      'comparable arm)'
+  );
+if (unjudgeable.length)
+  console.log(
+    `NOT JUDGEABLE LIKE-FOR-LIKE ON: ${unjudgeable.join(', ')} -- no arm of theirs ` +
+      'kept the content, so these rows are counted neither way'
+  );
+if (behindOffload.length)
+  console.log(
+    `BEHIND THEIR BEST-OF-ANY ARM ON: ${behindOffload.join(', ')} -- offload included. ` +
+      'Disclosure, not the gate: see the NOTE beside the corpus totals.'
+  );
 if (lostWorkloads.length)
   console.log(`LOST OR TIED ON: ${lostWorkloads.join(', ')}`);
 // WHOLE-PAYLOAD CONSERVATION, printed whatever it says.
@@ -1912,7 +2020,9 @@ if (lostWorkloads.length)
         `${(r.wordsGoneShare * 100).toFixed(2)}% of its bytes   e.g. ${r.wordsMissing.join(', ')}`
     );
   if (offenders.length === 0)
-    console.log('  every word of every payload is in the output, its expansion, or the spill it points at');
+    console.log(
+      '  every word of every payload is in the output, its expansion, or the spill it points at'
+    );
   // THE CONTROL, REPORTED BESIDE THE RESULT. A row whose control saw no loss is
   // a row where this oracle cannot see one, so its clean reading is withdrawn
   // rather than counted. Blindness is now a much stronger statement than it was,
@@ -1931,7 +2041,10 @@ if (lostWorkloads.length)
 FLOOR AND CONTROL DISAGREE on ${floorMismatch.length} row(s), so one of ` +
         'them is not measuring what it claims: ' +
         floorMismatch
-          .map((r) => `${r.name}(chosen ${r.wordsFloorChosen}, controlGone ${r.wordsControlGone})`)
+          .map(
+            (r) =>
+              `${r.name}(chosen ${r.wordsFloorChosen}, controlGone ${r.wordsControlGone})`
+          )
           .join(', ')
     );
     process.exit(1);
@@ -2093,7 +2206,10 @@ if (process.argv[3] === '--record') {
   // clean.
   let dirty = null;
   try {
-    dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0;
+    dirty =
+      execFileSync('git', ['status', '--porcelain'], {
+        encoding: 'utf8',
+      }).trim().length > 0;
   } catch {
     dirty = null;
   }
@@ -2124,7 +2240,9 @@ if (process.argv[3] === '--record') {
   // only rows they measured at all: a workload their engine declined has no
   // timing to repeat, and counting it as 0 would describe the whole capture as
   // single-pass.
-  const ourPassCounts = rows.map((r) => (Array.isArray(r.msPasses) ? r.msPasses.length : 0));
+  const ourPassCounts = rows.map((r) =>
+    Array.isArray(r.msPasses) ? r.msPasses.length : 0
+  );
   const theirPassCounts = rows
     .map((r) => theirs[r.name])
     .filter((row) => row && Array.isArray(row.msSamples))
@@ -2151,7 +2269,8 @@ if (process.argv[3] === '--record') {
     // version of them and therefore the right opponent, but it is not what a
     // reader would assume, so it is stated rather than left in a comment.
     theirDetectBackend: theirs.__provenance__?.detectBackend ?? null,
-    theirDetectBackendSetByUs: theirs.__provenance__?.detectBackendSetByHarness ?? null,
+    theirDetectBackendSetByUs:
+      theirs.__provenance__?.detectBackendSetByHarness ?? null,
     // WHICH ENGINE, IN WHICH STATE, PRODUCED THEIR COLUMN. Their redeeming arms
     // read out of a durable store, so a sweep that starts from an empty one is
     // measuring an engine with nothing to redeem, and the arms that decide the
@@ -2305,7 +2424,8 @@ if (process.argv[3] === '--record') {
         // visible in the record rather than only in the code.
         bodyCachedPrefixChars:
           r.bodyRatio === null ? null : r.bodyCachedPrefixChars,
-        bodyCachedPrefixTok: r.bodyRatio === null ? null : r.bodyCachedPrefixTok,
+        bodyCachedPrefixTok:
+          r.bodyRatio === null ? null : r.bodyCachedPrefixTok,
         preset: pct(r.presetRatio),
         sub: pct(r.subRatio),
         theirs: pct(r.theirs),
@@ -2395,7 +2515,8 @@ if (process.argv[3] === '--record') {
         // every candidate with what the control saw at it, so the choice can be
         // re-derived from the record rather than trusted.
         minLen: String(r.wordsMinLen),
-        floorChosen: r.wordsFloorChosen === null ? null : String(r.wordsFloorChosen),
+        floorChosen:
+          r.wordsFloorChosen === null ? null : String(r.wordsFloorChosen),
         floorTried: r.wordsFloorTried.map((t) => ({
           minLen: String(t.minLen),
           words: String(t.words),
@@ -2695,7 +2816,9 @@ if (process.argv[3] === '--record') {
           // The `ours` arm above compresses in place and spills nothing, so
           // against a cache-read bill it is the wrong arm to quote alone.
           // `preset` is the one that evicts, and it is the one that wins.
-          presetBreakEven: breakEvenLabel(breakEven(corpus.preset, corpus.theirs)),
+          presetBreakEven: breakEvenLabel(
+            breakEven(corpus.preset, corpus.theirs)
+          ),
           // What the same subscription cap buys, against doing nothing at all.
           capMultiple: {
             oursP0: times(costAt(corpus.none, 0), costAt(corpus.ours, 0)),
@@ -2709,6 +2832,27 @@ if (process.argv[3] === '--record') {
         },
       },
       tokens: { ours: pct(oursTokens), theirs: pct(theirsTokens) },
+      // THE COMPARISON THIS HARNESS CALLS APPLES-TO-APPLES, now in the record.
+      //
+      // `tokens` above is our encoding arm against their best arm of ANY kind,
+      // offload included. `sub` below is our substitution arm, which this
+      // harness refuses to credit as reduction. So the `tokens` row pits the
+      // one arm of ours that does not move bytes against the one arm of theirs
+      // that does, and it is the only pairing here that is neither
+      // like-for-like nor store-for-store. It stays, because it is what their
+      // users actually get -- it is simply no longer the only thing a reader or
+      // a gate can see.
+      like4like:
+        like4like.ours === null
+          ? null
+          : {
+              ours: pct(like4like.ours),
+              theirs: pct(like4like.theirs),
+              workloads: String(like4like.measured.length),
+              of: String(rows.length),
+              noCleanArm: like4like.noClean.map((r) => r.name),
+              unrecorded: like4like.unrecorded.map((r) => r.name),
+            },
       sub: {
         chars: pct(1 - subAll / beforeAll),
         tokens: pct(1 - subTokAll / beforeTokAll),
@@ -2746,7 +2890,10 @@ if (process.argv[3] === '--record') {
   // before anything is published is the one over the COMMITTED record.
   record.reproduction.refusal = reproducibilityRefusal(reproduction);
   if (record.reproduction.refusal) {
-    console.error('WARNING: this record is not re-runnable as written: ' + record.reproduction.refusal);
+    console.error(
+      'WARNING: this record is not re-runnable as written: ' +
+        record.reproduction.refusal
+    );
   }
   // A DEGRADED CAPTURE IS NEVER WRITTEN. Everything else this file refuses, it
   // records with the reason attached, because a disclosed limit is still
@@ -2768,6 +2915,23 @@ if (process.argv[3] === '--record') {
   console.log(`recorded ${rows.length} workloads to ${at}`);
 }
 
+// EVERY REASON THIS RUN SHOULD FAIL, NAMED RATHER THAN OR-ED INTO A BOOLEAN.
+// `corpusFaults` in offload.mjs holds the rule and the reasoning; it lives
+// there so the same suite that pins what counts as offload also pins what
+// counts as losing to it. The names are printed because a bare non-zero exit
+// tells whoever is reading CI nothing about which column gave way.
+const corpusFaultList = corpusFaults({
+  subGone: sum((r) => r.subGone),
+  oursChars,
+  theirsChars,
+  like4likeOurs: like4like.ours,
+  like4likeTheirs: like4like.theirs,
+  subTokens: 1 - subTokAll / beforeTokAll,
+  theirsTokens,
+});
+if (corpusFaultList.length)
+  console.log(`CORPUS FAULTS: ${corpusFaultList.join(', ')}`);
+
 const failed =
   // Their side having run degraded is a gate, not a note: see the record
   // refusal above. Scoring without `--record` lands here.
@@ -2786,6 +2950,5 @@ const failed =
   sum((r) => r.wordsGone) > 0 ||
   lostWorkloads.length > 0 ||
   unconserved.length > 0 ||
-  oursChars <= theirsChars ||
-  oursTokens <= theirsTokens;
+  corpusFaultList.length > 0;
 process.exit(failed ? 1 : 0);
