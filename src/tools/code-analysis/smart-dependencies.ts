@@ -416,10 +416,7 @@ export class SmartDependenciesTool {
               opts.cwd
             );
             const graphTokens = this.measureGraphTokens(updatedGraph);
-            const tokensSaved = measured(
-              originalTokens,
-              graphTokens
-            ).tokensSaved;
+            const savings = measured(originalTokens, graphTokens);
 
             return {
               success: true,
@@ -430,10 +427,7 @@ export class SmartDependenciesTool {
                 analyzedFiles: changedFiles.length,
                 externalDependencies: this.countExternalDeps(updatedGraph),
                 internalDependencies: this.countInternalDeps(updatedGraph),
-                tokensSaved,
-                tokenCount: graphTokens,
-                originalTokenCount: originalTokens,
-                compressionRatio: graphTokens / originalTokens,
+                ...savings,
                 duration: 0,
                 cacheHit: false,
                 incrementalUpdate: true,
@@ -479,7 +473,7 @@ export class SmartDependenciesTool {
       opts.cwd
     );
     const graphTokens = this.measureGraphTokens(graph);
-    const tokensSaved = measured(originalTokens, graphTokens).tokensSaved;
+    const savings = measured(originalTokens, graphTokens);
 
     return {
       success: true,
@@ -490,10 +484,7 @@ export class SmartDependenciesTool {
         analyzedFiles: graph.size,
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
-        tokensSaved,
-        tokenCount: graphTokens,
-        originalTokenCount: originalTokens,
-        compressionRatio: graphTokens / originalTokens,
+        ...savings,
         duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
@@ -934,7 +925,7 @@ export class SmartDependenciesTool {
       Array.from(graph.keys()),
       _opts.cwd
     );
-    const tokensSaved = measured(originalTokens, resultTokens).tokensSaved;
+    const savings = measured(originalTokens, resultTokens);
 
     return {
       success: true,
@@ -945,10 +936,7 @@ export class SmartDependenciesTool {
         analyzedFiles: graph.size,
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
-        tokensSaved,
-        tokenCount: resultTokens,
-        originalTokenCount: originalTokens,
-        compressionRatio: resultTokens / originalTokens,
+        ...savings,
         duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
@@ -1010,7 +998,7 @@ export class SmartDependenciesTool {
       Array.from(graph.keys()),
       _opts.cwd
     );
-    const tokensSaved = measured(originalTokens, resultTokens).tokensSaved;
+    const savings = measured(originalTokens, resultTokens);
 
     return {
       success: true,
@@ -1021,10 +1009,7 @@ export class SmartDependenciesTool {
         analyzedFiles: graph.size,
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
-        tokensSaved,
-        tokenCount: resultTokens,
-        originalTokenCount: originalTokens,
-        compressionRatio: resultTokens / originalTokens,
+        ...savings,
         duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
@@ -1142,7 +1127,7 @@ export class SmartDependenciesTool {
       [opts.targetFile, ...directDependents, ...indirectDependents],
       opts.cwd
     );
-    const tokensSaved = measured(originalTokens, resultTokens).tokensSaved;
+    const savings = measured(originalTokens, resultTokens);
 
     return {
       success: true,
@@ -1153,10 +1138,7 @@ export class SmartDependenciesTool {
         analyzedFiles: impact.totalImpact + 1,
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
-        tokensSaved,
-        tokenCount: resultTokens,
-        originalTokenCount: originalTokens,
-        compressionRatio: resultTokens / originalTokens,
+        ...savings,
         duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
@@ -1199,7 +1181,7 @@ export class SmartDependenciesTool {
       Array.from(graph.keys()),
       opts.cwd
     );
-    const tokensSaved = measured(originalTokens, resultTokens).tokensSaved;
+    const savings = measured(originalTokens, resultTokens);
 
     return {
       success: true,
@@ -1212,10 +1194,7 @@ export class SmartDependenciesTool {
         analyzedFiles: filteredGraph.size,
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
-        tokensSaved,
-        tokenCount: resultTokens,
-        originalTokenCount: originalTokens,
-        compressionRatio: resultTokens / originalTokens,
+        ...savings,
         duration: 0,
         cacheHit: false,
         incrementalUpdate: false,

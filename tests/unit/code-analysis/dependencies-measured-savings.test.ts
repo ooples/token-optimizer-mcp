@@ -139,12 +139,22 @@ describe('smart_dependencies reports a measured baseline', () => {
     );
   });
 
-  it('never reports a negative saving, even when the graph costs more', async () => {
-    // Three trivial files are cheaper to read than the graph describing them,
-    // so the honest saving is zero -- not the difference with a minus sign.
-    const { dir, tool } = project(TINY);
+  it('reports a loss when the graph costs more than the files', async () => {
+    // Three trivial files are cheaper to read than the graph describing them.
+    // This used to be asserted the other way round, because measured() bought
+    // its non-negative saving by raising originalTokenCount to the size of the
+    // graph -- substituting a number nobody measured for the one that had
+    // been, which is the fabrication this whole file exists to catch. The
+    // baseline is pinned to the fixture's own tokens here, so a negative is
+    // the subtraction and not the zero-baseline bug described above.
+    const { dir, tool, realTokens } = project(TINY);
     const r = await tool.run({ cwd: dir, mode: 'graph', useCache: false });
-    expect(r.metadata.tokensSaved).toBeGreaterThanOrEqual(0);
+
+    expect(r.metadata.originalTokenCount).toBe(realTokens);
+    expect(r.metadata.tokensSaved).toBe(
+      r.metadata.originalTokenCount - r.metadata.tokenCount
+    );
+    expect(r.metadata.tokensSaved).toBeLessThan(0);
   });
 
   it('never claims to save more than the files actually contain', async () => {
