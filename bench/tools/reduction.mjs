@@ -88,6 +88,10 @@ const byFilePath = (path) => ({ filePath: path });
 const byPath = (path) => ({ path });
 const byFileList = (path) => ({ files: [path], cwd: FIXTURES });
 const byEnvFile = (path) => ({ envFile: path });
+const byPathKey = (path) => ({ path });
+const byProjectRoot = () => ({ projectRoot: FIXTURES });
+const byConfigPath = (path) => ({ configPath: path });
+const byFormatting = (path) => ({ operation: 'format-code', filePath: path });
 
 export const CASES = [
   { tool: 'smart_complexity', fixture: 'smart-complexity.ts', args: byFilePath },
@@ -106,6 +110,15 @@ export const CASES = [
   { tool: 'smart_env', fixture: 'example.env', args: byEnvFile },
   { tool: 'smart_typescript', fixture: 'tool-profile.ts', args: byFileList },
   { tool: 'smart_dependencies', fixture: 'package.json', args: byFileList },
+  { tool: 'smart_read', fixture: 'smart-complexity.ts', args: byPathKey },
+  { tool: 'smart_read', fixture: 'token-counter.ts', args: byPathKey },
+  { tool: 'smart_read', fixture: 'tool-profile.ts', args: byPathKey },
+  { tool: 'smart_package_json', fixture: 'package.json', args: byProjectRoot },
+  { tool: 'smart_tsconfig', fixture: 'tsconfig.json', args: byConfigPath },
+  // A syntax formatter cannot reduce anything -- it returns the same code, and
+  // highlighting adds markup to it. Its 86% claim is measured here rather than
+  // argued about.
+  { tool: 'smart_pretty', fixture: 'tool-profile.ts', args: byFormatting },
 ];
 /** A minimal JSON-RPC client over the server's real stdio transport. */
 class Server {
