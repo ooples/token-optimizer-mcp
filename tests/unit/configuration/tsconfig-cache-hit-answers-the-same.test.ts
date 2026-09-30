@@ -138,8 +138,17 @@ describe('smart_tsconfig answers the same on a cache hit', () => {
     // baseline is the file itself.
     const fileTokens = new TokenCounter().count(CONFIG).tokens;
     expect(cold.tokenMetrics.original).toBe(fileTokens);
+
+    // Was Math.max(0, ...), which asserted the clamp: a response costing more
+    // than the file reported saved: 0, the same answer as one that broke even.
+    // The subtraction is the measurement; hiding its sign hid the outcome this
+    // tool most needs to admit to.
     expect(cold.tokenMetrics.saved).toBe(
-      Math.max(0, fileTokens - cold.tokenMetrics.compact)
+      fileTokens - cold.tokenMetrics.compact
+    );
+    expect(cold.tokenMetrics.savingsPercent).toBeCloseTo(
+      (cold.tokenMetrics.saved / fileTokens) * 100,
+      2
     );
   });
 });

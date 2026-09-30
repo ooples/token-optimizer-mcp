@@ -139,6 +139,19 @@ export const CASES = [
   { tool: 'smart_package_json', fixture: 'large-project/package.json', args: byProjectRoot },
   { tool: 'smart_tsconfig', fixture: 'tsconfig.json', args: byConfigPath },
   { tool: 'smart_tsconfig', fixture: 'large-project/tsconfig.json', args: byConfigPath },
+  // An extends chain: the baseline is BOTH files, because a caller answering
+  // this by hand reads the config, sees what it extends, reads that too and
+  // merges them. Crediting only the leaf would have measured this tool against
+  // a fraction of the work it replaces.
+  {
+    tool: 'smart_tsconfig',
+    fixture: 'ts-extends/tsconfig.json',
+    baselineFixtures: [
+      'ts-extends/tsconfig.base.json',
+      'ts-extends/tsconfig.json',
+    ],
+    args: byConfigPath,
+  },
   // A syntax formatter cannot reduce anything -- it returns the same code, and
   // highlighting adds markup to it. Its 86% claim is measured here rather than
   // argued about.
@@ -242,7 +255,13 @@ export class Server {
  */
 export async function measure(server, testCase) {
   const path = join(FIXTURES, testCase.fixture);
-  const baselineText = readFileSync(path, 'utf8');
+  // A case may name more than one file as its baseline, for a tool whose whole
+  // job is to save the caller from reading a set of them. The texts are joined
+  // the way the tool under test joins them, so both sides of the ratio are
+  // counted over the same bytes; one fixture is still the common case.
+  const baselineText = (testCase.baselineFixtures ?? [testCase.fixture])
+    .map((entry) => readFileSync(join(FIXTURES, entry), 'utf8'))
+    .join('\n');
   const baseline = countTokens(baselineText);
   const reply = await server.send('tools/call', {
     name: testCase.tool,

@@ -17,6 +17,8 @@ import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { hashContent, generateCacheKey } from '../shared/hash-utils.js';
+import { displayPath } from '../shared/report-shape.js';
+import { measured } from '../shared/savings.js';
 
 // ==================== Type Definitions ====================
 
@@ -159,21 +161,20 @@ class SmartTsConfig {
           resolved: ResolvedTsConfig;
           issues?: ConfigIssue[];
           suggestions?: string[];
-          fileHash: string;
+          chainHash: string;
         };
 
-        // Validate cache is still valid
-        if (cachedData.fileHash === fileHash) {
+        // Validate cache is still valid. The key covers the leaf config only,
+        // so the whole chain is re-read and hashed here: a base config edited
+        // since would otherwise be answered from a merge that no longer holds.
+        const chainContent = await this.readChain(
+          cachedData.resolved.extendsChain
+        );
+        if (
+          chainContent !== undefined &&
+          hashContent(chainContent) === cachedData.chainHash
+        ) {
           const executionTime = Date.now() - startTime;
-
-          // Record metrics
-          this.metrics.record({
-            operation: 'smart-tsconfig',
-            duration: executionTime,
-            cacheHit: true,
-            success: true,
-            savedTokens: 0, // Will be calculated in transformOutput
-          });
 
           const output = this.transformOutput(
             cachedData.resolved,
@@ -183,8 +184,21 @@ class SmartTsConfig {
             options.includeSuggestions ?? true,
             true,
             executionTime,
-            configContent
+            chainContent
           );
+
+          // Recorded from the measurement, not before it. This said
+          // savedTokens: 0 with a comment promising the real figure would be
+          // calculated in transformOutput -- which computed it and threw it
+          // away, so every call this tool ever served contributed a zero to
+          // the metrics store regardless of what it actually saved or cost.
+          this.metrics.record({
+            operation: 'smart-tsconfig',
+            duration: executionTime,
+            cacheHit: true,
+            success: true,
+            savedTokens: output.tokenMetrics.saved,
+          });
 
           return output;
         }
@@ -194,7 +208,8 @@ class SmartTsConfig {
       }
 
       // Resolve the config with extends chain
-      const resolved = await this.resolveConfig(configPath);
+      const { config: resolved, chainContent } =
+        await this.resolveConfig(configPath);
 
       // Detect issues if requested
       const issues =
@@ -213,7 +228,10 @@ class SmartTsConfig {
         resolved,
         issues,
         suggestions,
-        fileHash,
+        // The chain, not the leaf, because the chain is what the answer was
+        // merged from. `fileHash` is still in the cache KEY, so a changed leaf
+        // misses outright; this is what catches a changed base on a hit.
+        chainHash: hashContent(chainContent),
       };
 
       const maxAge = options.maxCacheAge ?? 7 * 24 * 60 * 60; // 7 days default
@@ -224,16 +242,7 @@ class SmartTsConfig {
 
       const executionTime = Date.now() - startTime;
 
-      // Record metrics
-      this.metrics.record({
-        operation: 'smart-tsconfig',
-        duration: executionTime,
-        cacheHit: false,
-        success: true,
-        savedTokens: 0,
-      });
-
-      return this.transformOutput(
+      const output = this.transformOutput(
         resolved,
         issues,
         suggestions,
@@ -241,8 +250,19 @@ class SmartTsConfig {
         options.includeSuggestions ?? true,
         false,
         executionTime,
-        configContent
+        chainContent
       );
+
+      // From the measurement, as on the cache-hit path above.
+      this.metrics.record({
+        operation: 'smart-tsconfig',
+        duration: executionTime,
+        cacheHit: false,
+        success: true,
+        savedTokens: output.tokenMetrics.saved,
+      });
+
+      return output;
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
@@ -278,15 +298,26 @@ class SmartTsConfig {
   /**
    * Resolve tsconfig with extends chain
    */
-  private async resolveConfig(configPath: string): Promise<ResolvedTsConfig> {
+  private async resolveConfig(
+    configPath: string
+  ): Promise<{ config: ResolvedTsConfig; chainContent: string }> {
     const extendsChain: string[] = [];
+    // THE BASELINE IS EVERY FILE IN THE CHAIN, NOT JUST THE LEAF.
+    //
+    // A caller doing this by hand has to read the config, see what it extends,
+    // read that, and merge them. Counting only the leaf therefore compared this
+    // response against a fraction of the work it replaces, and it under-counted
+    // by exactly as much as the tool does for you -- so the one case the tool
+    // exists for was the case its own figures flattered least.
+    const chainTexts: string[] = [];
     let currentPath = configPath;
     let mergedConfig: TsConfigJson = {};
 
     // Walk the extends chain
     while (true) {
-      const config = await this.parseConfigFile(currentPath);
+      const { config, content } = await this.parseConfigFile(currentPath);
       extendsChain.push(currentPath);
+      chainTexts.push(content);
 
       // Merge compiler options (later configs override earlier)
       mergedConfig = this.mergeConfigs(mergedConfig, config);
@@ -311,26 +342,57 @@ class SmartTsConfig {
     }
 
     return {
-      compilerOptions: mergedConfig.compilerOptions ?? {},
-      include: mergedConfig.include,
-      exclude: mergedConfig.exclude,
-      files: mergedConfig.files,
-      references: mergedConfig.references,
-      extendsChain: extendsChain.reverse(), // Base first
-      configPath,
+      config: {
+        compilerOptions: mergedConfig.compilerOptions ?? {},
+        include: mergedConfig.include,
+        exclude: mergedConfig.exclude,
+        files: mergedConfig.files,
+        references: mergedConfig.references,
+        extendsChain: extendsChain.reverse(), // Base first
+        configPath,
+      },
+      chainContent: chainTexts.join('\n'),
     };
+  }
+
+  /**
+   * Re-reads every file a cached resolution was merged from.
+   *
+   * The cache key covers the leaf config's hash only, so a base config that
+   * changed since would otherwise be served from a stale merge -- the answer
+   * would be wrong in precisely the fields the caller came here for. Returns
+   * undefined when any file in the chain has gone, which invalidates the entry.
+   */
+  private async readChain(chain: string[]): Promise<string | undefined> {
+    const texts: string[] = [];
+    for (const entry of chain) {
+      try {
+        texts.push(await readFile(entry, 'utf-8'));
+      } catch (error) {
+        console.warn(
+          `[SmartTsConfig] cached extends chain entry unreadable, treating the cache entry as stale: ${entry}`,
+          error
+        );
+        return undefined;
+      }
+    }
+    // Base first, matching the order resolveConfig merged them in, so the hash
+    // is over the same bytes in the same order on both paths.
+    return texts.slice().reverse().join('\n');
   }
 
   /**
    * Parse a single tsconfig file
    */
-  private async parseConfigFile(configPath: string): Promise<TsConfigJson> {
+  private async parseConfigFile(
+    configPath: string
+  ): Promise<{ config: TsConfigJson; content: string }> {
     const content = await readFile(configPath, 'utf-8');
 
     const stripped = this.stripJsonComments(content);
 
     try {
-      return JSON.parse(stripped) as TsConfigJson;
+      return { config: JSON.parse(stripped) as TsConfigJson, content };
     } catch (error) {
       throw new Error(
         `Failed to parse ${configPath}: ${error instanceof Error ? error.message : String(error)}`
@@ -604,7 +666,8 @@ class SmartTsConfig {
     includeSuggestions: boolean = true,
     fromCache: boolean = false,
     executionTime: number = 0,
-    sourceContent: string = ''
+    /** Every file in the extends chain, which is what reading this by hand costs. */
+    chainContent: string = ''
   ): SmartTsConfigOutput {
     const emitted: EmittedTsConfig = {
       compilerOptions: resolved.compilerOptions,
@@ -617,13 +680,17 @@ class SmartTsConfig {
       // what the caller passed in cost about a fifth of the payload on a small
       // config, so they are only worth sending when there is a real chain.
       ...(resolved.extendsChain.length > 1
-        ? { extendsChain: resolved.extendsChain }
+        ? { extendsChain: resolved.extendsChain.map(displayPath) }
         : {}),
     };
 
     const output: SmartTsConfigOutput = {
       success: true,
-      configPath: resolved.configPath,
+      // Relative to the working directory where that is shorter. JSON escapes
+      // every Windows separator to a doubled backslash and each escape is its
+      // own token, so an absolute path cost 11 of the 142 tokens this response
+      // spends on a 76-token config -- to name the file the caller asked about.
+      configPath: displayPath(resolved.configPath),
       resolved: emitted,
       issues: includeIssues && issues && issues.length > 0 ? issues : undefined,
       suggestions:
@@ -645,11 +712,10 @@ class SmartTsConfig {
     // The old figure compared this response to a hypothetical fuller response --
     // a baseline the caller never sees and cannot check, and one that was only
     // ever bigger because the cached branch was dropping fields. The single
-    // saving a reader of this tool can verify is against the config file they
-    // would otherwise have read, so that is the baseline reported. When the
-    // report costs more than the file, saved is 0 and the caller can see it.
-    const originalTokens = sourceContent
-      ? this.tokenCounter.count(sourceContent).tokens
+    // saving a reader of this tool can verify is against the files they would
+    // otherwise have read and merged themselves, so that is the baseline.
+    const originalTokens = chainContent
+      ? this.tokenCounter.count(chainContent).tokens
       : 0;
     // Counted without the metrics block, so the number is not trying to account
     // for its own digits.
@@ -657,15 +723,20 @@ class SmartTsConfig {
     const compactTokens = this.tokenCounter.count(
       JSON.stringify(counted)
     ).tokens;
-    const savedTokens = Math.max(0, originalTokens - compactTokens);
-    const savingsPercent =
-      originalTokens > 0 ? (savedTokens / originalTokens) * 100 : 0;
+    // A LOSS IS REPORTED AS A LOSS. This clamped `saved` at zero, so the one
+    // case the caller most needs to know about -- a response costing more than
+    // the file it read, which is what happens on a config that extends nothing
+    // and is already compact -- was indistinguishable from a response that
+    // broke exactly even. The house helper reports the signed difference.
+    const savings = measured(originalTokens, compactTokens);
 
     output.tokenMetrics = {
-      original: originalTokens,
-      compact: compactTokens,
-      saved: savedTokens,
-      savingsPercent: parseFloat(savingsPercent.toFixed(2)),
+      original: savings.originalTokenCount,
+      compact: savings.tokenCount,
+      saved: savings.tokensSaved,
+      savingsPercent: parseFloat(
+        ((savings.tokensSaved / (savings.originalTokenCount || 1)) * 100).toFixed(2)
+      ),
     };
 
     return output;
