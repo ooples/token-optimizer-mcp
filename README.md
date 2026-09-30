@@ -625,6 +625,10 @@ removes more raw tokens on every workload and costs more money on every
 workload. Compression stops at the frontier, and cache-weighted tokens are
 reported beside raw ones so the trap is visible rather than inferred.
 
+<!-- PROSE-CLAIMS:START -- every percentage in the prose between this marker and
+     its END must also appear inside a guarded block above, or be declared in the
+     registry in bench/compression/readme-prose.check.mjs saying where it comes
+     from. Run `node bench/compression/readme-prose.check.mjs`. -->
 **It keeps the rows that matter.** Eliding a long array after the first few rows
 scored 95.7% on a search payload here and destroyed both the UUID record and the
 error record planted in it -- the only two rows anyone would have searched for.
@@ -639,6 +643,7 @@ this section -- 97.2%, 97.6%, 98.3% and 64.9% against their 72.8%, 92.1%, 92.2%
 and 47.4%. It is stated once and checked there rather than restated here, which
 is how this copy came to claim 98.9%, 98.2%, 92.8% and 61.3% long after the
 tree had moved.
+<!-- PROSE-CLAIMS:END -->
 
 These are not their corpora, which are unpublished; the code workloads read real
 files out of this repository and the rest are generated to the shape and scale

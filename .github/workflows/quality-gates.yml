@@ -679,13 +679,18 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           exit $status
 
-  # THE TWO CHECKS THAT GUARD PUBLISHED FIGURES, which ran nowhere until now.
+  # THE THREE CHECKS THAT GUARD PUBLISHED FIGURES, which ran nowhere until now.
   #
   # `proof-metrics` asks whether the proof harness computes what it says, and
   # `readme-table` re-derives every figure in the README's table from the harness
   # and refuses a README that has drifted from it. Both were in the tree, neither
   # was in a CI job, so the numbers a reader sees first were the least guarded
   # ones in the repository.
+  #
+  # `readme-prose` closes what the other two left open: they guard the marked
+  # TABLES, and a review then found four figures stale in the SENTENCES around
+  # them, quoting the same rows. Editing the table was checked; editing the
+  # paragraph two markers below it was not.
   #
   # They need the install and the build, which is why they are not in the
   # dependency-free job above: the proof harness imports the compiled engine.
@@ -721,6 +726,7 @@ jobs:
           status=0
           node bench/compression/proof-metrics.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           node bench/compression/readme-table.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          node bench/compression/readme-prose.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           echo '```' >> $GITHUB_STEP_SUMMARY
           exit $status
 
