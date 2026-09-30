@@ -70,7 +70,13 @@ if (enabled(process.env.TOKEN_OPTIMIZER_AUTO_INSTALL)) {
   console.log('  That will add hooks to:');
   console.log(`      ${settings}`);
   console.log('  and managed commands to your shell profile.');
-  console.log('  Undo at any time with:  token-optimizer-uninstall');
+  // uninstall.mjs is a dry run unless --apply is passed, so the bare command
+  // prints a plan and removes nothing. Telling someone the undo is one word
+  // when it is two leaves them believing they have unwired a machine they have
+  // not.
+  console.log(
+    '  Undo at any time with:  token-optimizer-uninstall --apply'
+  );
   console.log('');
   console.log(
     '  To activate automatically in an image or provisioning script, set'

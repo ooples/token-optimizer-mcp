@@ -73,6 +73,13 @@ writeFileSync(profile, '# existing user content\n');
 
 const env = {
   ...process.env,
+  // The check below asserts that a plain install wires nothing. This process
+  // inherits the developer's own environment, and anyone who has opted in on
+  // this machine exports TOKEN_OPTIMIZER_AUTO_INSTALL -- which would make
+  // postinstall wire the sandbox and fail that check for a reason that has
+  // nothing to do with the package. The default path is what is under test, so
+  // the opt-in is cleared here rather than inherited.
+  TOKEN_OPTIMIZER_AUTO_INSTALL: '',
   TOKEN_OPTIMIZER_SETTINGS: settings,
   TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify([profile]),
   TOKEN_OPTIMIZER_HOME: join(sandbox, 'home'),

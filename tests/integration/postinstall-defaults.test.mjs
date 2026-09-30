@@ -59,6 +59,19 @@ test('a global install says where activation would write and how to undo it', ()
   expect(said).toContain('TOKEN_OPTIMIZER_AUTO_INSTALL=1');
 });
 
+test('the undo it prints is one that actually undoes anything', () => {
+  // uninstall.mjs is a dry run unless --apply is passed: without the flag it
+  // prints a plan and changes nothing. Someone told the undo is one word runs
+  // it, reads a list of things it "would remove", and walks away believing the
+  // machine is unwired. The flag is read out of uninstall.mjs here rather than
+  // written down twice, so the notice cannot drift away from the gate.
+  const uninstaller = readFileSync(resolve('scripts/uninstall.mjs'), 'utf8');
+  expect(uninstaller).toContain("process.argv.includes('--apply')");
+
+  const said = install({ npm_config_global: 'true' }).messages.join('\n');
+  expect(said).toContain('token-optimizer-uninstall --apply');
+});
+
 test.each([
   [{ CLAUDE_CONFIG_DIR: resolve('elsewhere') }, join(resolve('elsewhere'), 'settings.json')],
   [{ TOKEN_OPTIMIZER_SETTINGS: resolve('exact/place.json') }, resolve('exact/place.json')],
