@@ -70,7 +70,7 @@ describe('SmartReadTool chunking', () => {
 
   it('returns ONE chunk, not every chunk', async () => {
     const { tool, file, body } = makeFixture();
-    const result = await tool.read(file);
+    const result = await tool.read(file, { chunkIndex: 0 });
 
     expect(result.metadata.chunked).toBe(true);
     expect(result.metadata.chunkCount).toBeGreaterThan(1);
@@ -83,7 +83,7 @@ describe('SmartReadTool chunking', () => {
 
   it('reports a saving it actually delivered', async () => {
     const { tool, file } = makeFixture();
-    const result = await tool.read(file);
+    const result = await tool.read(file, { chunkIndex: 0 });
 
     const { originalTokenCount, tokenCount, tokensSaved } = result.metadata;
     expect(tokenCount).toBeLessThan(originalTokenCount);
@@ -134,9 +134,9 @@ describe('SmartReadTool chunking', () => {
     expect(again.metadata.fromCache).toBe(true);
   });
 
-  it('falls back to the first chunk when the index is out of range or absent', async () => {
+  it('falls back to the first chunk when the index is out of range', async () => {
     const { tool, file } = makeFixture();
-    for (const bad of [undefined, -1, 9999, Number.NaN]) {
+    for (const bad of [-1, 9999, Number.NaN]) {
       const r = await tool.read(file, {
         chunkIndex: bad as number,
         enableCache: false,
@@ -145,9 +145,48 @@ describe('SmartReadTool chunking', () => {
     }
   });
 
+  it('does not paginate a file nobody asked to paginate', async () => {
+    // THE DEFECT THIS EXISTS FOR. Every chunk carries a full metadata block and
+    // a navigation footer, and the content inside it is the file's own bytes --
+    // so a caller who wanted the file paid that envelope once per chunk and got
+    // back exactly what one plain read would have given them. Measured on a
+    // 5,416-character source file at the 4,000-character default: 1,765 tokens
+    // against the file's own 1,270, a 39% loss. The clamp added earlier stopped
+    // the reported saving going negative; it did not stop the loss.
+    const { tool, file, body } = makeFixture();
+    const plain = await tool.read(file, { enableCache: false });
+
+    expect(plain.metadata.chunked).toBe(false);
+    expect(plain.metadata.chunkCount).toBeUndefined();
+    expect(plain.content).toBe(body);
+  });
+
+  it('costs less whole than the pagination it replaced', async () => {
+    // Counted the way a caller who wants the file actually pays: every chunk,
+    // each with the envelope it arrives in. Asking the tool what it saved is
+    // exactly what failed to catch this, so the responses are weighed instead.
+    const { tool, file } = makeFixture();
+    const counter = new TokenCounter();
+
+    const plain = await tool.read(file, { enableCache: false });
+    const whole = counter.count(JSON.stringify(plain)).tokens;
+
+    const first = await tool.read(file, { chunkIndex: 0, enableCache: false });
+    const chunks = first.metadata.chunkCount ?? 1;
+    expect(chunks).toBeGreaterThan(1);
+
+    let paged = counter.count(JSON.stringify(first)).tokens;
+    for (let i = 1; i < chunks; i++) {
+      const part = await tool.read(file, { chunkIndex: i, enableCache: false });
+      paged += counter.count(JSON.stringify(part)).tokens;
+    }
+
+    expect(whole).toBeLessThan(paged);
+  });
+
   it('tells the caller how to reach the rest', async () => {
     const { tool, file } = makeFixture();
-    const result = await tool.read(file);
+    const result = await tool.read(file, { chunkIndex: 0 });
     // A pointer with no usable parameter behind it is what made the original
     // message a dead end.
     expect(result.content).toMatch(/chunkIndex=/);

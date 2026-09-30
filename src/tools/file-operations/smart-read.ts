@@ -258,6 +258,26 @@ export class SmartReadTool {
       }
     }
 
+    // PAGINATION IS A REQUEST, NOT A DEFAULT.
+    //
+    // Every chunk carries its own metadata block and its own navigation footer,
+    // and the content inside it is the file's own bytes returned verbatim -- so a
+    // caller who wanted the file paid that envelope once per chunk and received
+    // exactly what a single plain read would have given them. Measured on a
+    // 5,416-character source file at the 4,000-character default: 1,765 tokens
+    // against the file's own 1,270, a 39% LOSS, because 4,000 characters is
+    // roughly a thousand tokens and any ordinary source file clears it. The
+    // response reported `tokensSaved: 316`. The clamp added earlier stopped that
+    // number going negative; it never stopped the loss it was reporting on.
+    //
+    // Chunking still earns its keep when a caller genuinely wants part of a file
+    // and will stop reading, so it stays -- reached by asking for it, with
+    // `chunkIndex` or an explicit `chunkSize`. What changes is that a caller who
+    // said only "read this file" is no longer charged for pagination they did not
+    // ask for and, on the evidence above, would not have wanted.
+    const paginationRequested =
+      options.chunkIndex !== undefined || options.chunkSize !== undefined;
+
     // Handle large files - prioritize maxSize over chunking
     if (!isDiff && rawContent.length > maxSize) {
       // Check if file is minified
@@ -282,6 +302,7 @@ export class SmartReadTool {
       tokensSaved = originalTokens - truncatedTokens;
     } else if (
       !isDiff &&
+      paginationRequested &&
       rawContent.length > chunkSize &&
       rawContent.length <= maxSize
     ) {
@@ -337,7 +358,11 @@ export class SmartReadTool {
       tokensSaved = Math.max(0, originalTokens - finalTokens);
     }
 
-    const compressionRatio = finalContent.length / rawContent.length;
+    // Sixteen decimal places of a ratio is not precision, it is float noise the
+    // caller pays for by the token: 0.7470457902511078 costs ten tokens to say
+    // what 0.747 says in three.
+    const compressionRatio =
+      Math.round((finalContent.length / rawContent.length) * 1000) / 1000;
 
     // Record metrics
     this.metrics.record({
@@ -473,7 +498,7 @@ export async function runSmartRead(
 export const SMART_READ_TOOL_DEFINITION = {
   name: 'smart_read',
   description:
-    'Read files with intelligent caching, diff-based updates, and syntax-aware optimization. Measured token reduction vs reading the file, summed over every chunk returned: -39% to -29% first read, 88-98% repeated on an unchanged file (bench/tools, 3 fixtures).',
+    'Read files with intelligent caching, diff-based updates, and syntax-aware optimization. Measured token reduction vs reading the file: 5-77% first read, 89-98% repeated on an unchanged file (bench/tools, 3 fixtures).',
   annotations: {
     title: 'Read a file efficiently',
     readOnlyHint: true,
