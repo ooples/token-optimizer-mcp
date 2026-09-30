@@ -22,6 +22,7 @@ import { createHash } from 'crypto';
 import {
   CacheEngine,
   CacheEngine as CacheEngineClass,
+  resolveCacheLocation,
 } from '../../core/cache-engine.js';
 import {
   TokenCounter,
@@ -1776,7 +1777,7 @@ export async function runSmartDatabase(
   const { join } = await import('path');
 
   const cache = new CacheEngineClass(
-    join(homedir(), '.hypercontext', 'cache'),
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
     100
   );
   const tokenCounter = new TokenCounterClass();

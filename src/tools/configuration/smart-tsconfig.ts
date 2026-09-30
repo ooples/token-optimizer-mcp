@@ -13,7 +13,7 @@ import { readFile } from 'fs/promises';
 import { resolve, dirname, join } from 'path';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { hashContent, generateCacheKey } from '../shared/hash-utils.js';
@@ -619,7 +619,7 @@ export function getSmartTsConfig(
 export async function runSmartTsconfig(
   options: SmartTsConfigOptions = {}
 ): Promise<SmartTsConfigOutput> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const projectRoot = options.projectRoot ?? process.cwd();

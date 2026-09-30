@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Refactor Tool
  *
  * Provides intelligent refactoring suggestions with code examples
@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import {
@@ -717,7 +717,7 @@ export function getSmartRefactorTool(
 export async function runSmartRefactor(
   options: SmartRefactorOptions
 ): Promise<SmartRefactorResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartRefactorTool(

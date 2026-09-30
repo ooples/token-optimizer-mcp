@@ -11,7 +11,7 @@
  * - Generated SQL inspection
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import type { TokenCounter } from '../../core/token-counter.js';
 import type { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
@@ -824,7 +824,7 @@ export async function runSmartORM(options: SmartORMOptions): Promise<string> {
   const { MetricsCollector } = await import('../../core/metrics.js');
 
   const cache = new CacheEngineClass(
-    join(homedir(), '.hypercontext', 'cache'),
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
     100
   );
   const tokenCounter = new TokenCounter();

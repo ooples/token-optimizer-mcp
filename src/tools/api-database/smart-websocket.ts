@@ -12,7 +12,7 @@
  */
 
 import { createHash } from 'crypto';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { measured } from '../shared/savings.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -785,7 +785,7 @@ export async function runSmartWebSocket(
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const websocket = getSmartWebSocket(
     cache,
     new TokenCounter(),

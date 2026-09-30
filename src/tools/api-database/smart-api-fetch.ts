@@ -10,7 +10,7 @@
  * - Token-optimized output
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import type { TokenCounter } from '../../core/token-counter.js';
 import type { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
@@ -665,7 +665,7 @@ export async function runSmartApiFetch(
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 

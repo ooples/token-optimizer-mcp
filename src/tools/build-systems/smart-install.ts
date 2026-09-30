@@ -9,7 +9,7 @@
  */
 
 import { assertAllowed } from '../../utils/safe-exec.js';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -631,7 +631,7 @@ export function getSmartInstall(
 export async function runSmartInstall(
   options: SmartInstallOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const smartInstall = getSmartInstall(cache, options.projectRoot);
   try {
     const result = await smartInstall.run(options);

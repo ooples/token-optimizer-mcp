@@ -78,6 +78,29 @@ export interface SemanticCachingConfig {
   enabled?: boolean; // Enable semantic caching (default: true if generators provided)
 }
 
+/**
+ * WHERE A TOOL'S CACHE ACTUALLY GOES.
+ *
+ * TOKEN_OPTIMIZER_CACHE_DIR is documented as the way to relocate the cache, and
+ * CacheEngine honours it -- but only when no path is passed. Forty-six tools
+ * pass one: `new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100)`.
+ * For every one of them the environment variable did nothing at all, silently,
+ * so a caller who set it to isolate a run still read and wrote the shared cache
+ * in their home directory. A bench that set it to get a cold cache measured a
+ * warm one and published the cache hit as the tool's saving.
+ *
+ * The legacy default stays exactly where it is, so nobody's existing cache
+ * moves; the override is what starts working.
+ *
+ * @param legacyDefault the location that site has always used
+ */
+export function resolveCacheLocation(legacyDefault: string): string {
+  const override = process.env.TOKEN_OPTIMIZER_CACHE_DIR;
+  if (override !== undefined && override.trim() !== '') {
+    return override;
+  }
+  return legacyDefault;
+}
 export class CacheEngine {
   private db!: Database.Database;
   private memoryCache: LRUCache<

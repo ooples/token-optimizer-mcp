@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Exports Tool
  *
  * Analyzes TypeScript/JavaScript export statements with intelligent caching.
@@ -12,7 +12,7 @@ import { createHash } from 'crypto';
 import { join, relative, dirname } from 'path';
 import { homedir } from 'os';
 import { existsSync, readFileSync } from 'fs';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import {
@@ -937,7 +937,7 @@ export function getSmartExportsTool(
 export async function runSmartExports(
   options: SmartExportsOptions
 ): Promise<SmartExportsResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartExportsTool(

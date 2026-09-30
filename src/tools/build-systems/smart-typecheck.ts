@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Typecheck Tool - 70% Token Reduction
  *
  * Wraps TypeScript compiler type checking to provide:
@@ -8,7 +8,7 @@
  * - Suggestion prioritization
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
@@ -661,7 +661,7 @@ export async function runSmartTypeCheck(
 ): Promise<string> {
   // Create own resources for standalone CLI usage
   const cache = new CacheEngine(
-    join(homedir(), '.token-optimizer-cache', 'cache.db')
+    resolveCacheLocation(join(homedir(), '.token-optimizer-cache', 'cache.db'))
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();

@@ -74,7 +74,7 @@ async function loadPrettier(): Promise<PrettierFormat | null> {
   }
   return prettierFormat;
 }
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { readCompressedJson } from '../../utils/cache-helper.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -1460,7 +1460,7 @@ export async function runSmartPretty(
   // use it (or correctly find it absent) without each becoming async.
   await loadHighlighter();
 
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 

@@ -9,7 +9,7 @@
  * - <1 hour full scan requirement for daily TTL
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
@@ -1375,7 +1375,7 @@ export function getSmartSecurityTool(
 export async function runSmartSecurity(
   options: SmartSecurityOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartSec = new SmartSecurity(

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Build Tool - 85% Token Reduction
  *
  * Wraps TypeScript compiler (tsc) to provide:
@@ -8,7 +8,7 @@
  * - Build time optimization suggestions
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
@@ -650,7 +650,7 @@ export async function runSmartBuild(
   options: SmartBuildOptions = {}
 ): Promise<string> {
   // Create standalone resources for CLI usage
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 

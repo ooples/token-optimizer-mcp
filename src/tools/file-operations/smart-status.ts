@@ -15,7 +15,7 @@ import { execFileSafeSync, assertSafePathArg } from '../../utils/safe-exec.js';
 import { existsSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -644,7 +644,7 @@ export function getSmartStatusTool(
 export async function runSmartStatus(
   options: SmartStatusOptions = {}
 ): Promise<SmartStatusResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 

@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 
@@ -750,7 +750,7 @@ export async function runSmartComplexity(
   metrics?: MetricsCollector
 ): Promise<SmartComplexityResult> {
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+    cache || new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metrics || new MetricsCollector();
 

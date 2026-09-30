@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Imports Tool
  *
  * Analyzes TypeScript/JavaScript import statements with intelligent caching.
@@ -12,7 +12,7 @@ import { createHash } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, readFileSync } from 'fs';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 
@@ -958,7 +958,7 @@ export function getSmartImportsTool(
 export async function runSmartImports(
   options: SmartImportsOptions
 ): Promise<SmartImportsResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartImportsTool(

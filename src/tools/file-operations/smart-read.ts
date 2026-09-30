@@ -12,7 +12,7 @@
 import { readFileSync, existsSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateDiff, hasMeaningfulChanges } from '../shared/diff-utils.js';
@@ -458,7 +458,7 @@ export async function runSmartRead(
   filePath: string,
   options: SmartReadOptions = {}
 ): Promise<SmartReadResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 

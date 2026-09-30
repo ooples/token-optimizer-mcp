@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Package.json Tool - 83% Token Reduction
  *
  * Provides intelligent package.json parsing and analysis:
@@ -14,7 +14,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
 import { execFileSafeSync } from '../../utils/safe-exec.js';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { homedir } from 'os';
@@ -1163,7 +1163,7 @@ export function getSmartPackageJson(
 export async function runSmartPackageJson(
   options: SmartPackageJsonOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartPkg = getSmartPackageJson(

@@ -13,7 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'crypto';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import type { TokenCounter } from '../../core/token-counter.js';
 import type { MetricsCollector } from '../../core/metrics.js';
 
@@ -784,7 +784,7 @@ export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
   const { MetricsCollector } = await import('../../core/metrics.js');
 
   const cache = new CacheEngine(
-    join(homedir(), '.token-optimizer-cache', 'cache.db')
+    resolveCacheLocation(join(homedir(), '.token-optimizer-cache', 'cache.db'))
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();

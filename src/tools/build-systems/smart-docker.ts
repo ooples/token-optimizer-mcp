@@ -9,7 +9,7 @@
  */
 
 import { spawn } from 'child_process';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -733,7 +733,7 @@ export function getSmartDocker(
 export async function runSmartDocker(
   options: SmartDockerOptions
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const smartDocker = getSmartDocker(cache, options.projectRoot);
   try {
     const result = await smartDocker.run(options);

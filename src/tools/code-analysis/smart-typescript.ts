@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart TypeScript Tool - 83% Token Reduction
  *
  * Incremental TypeScript compilation with intelligent caching:
@@ -9,7 +9,7 @@
  * - Provides actionable type error summaries
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
@@ -990,7 +990,7 @@ export function getSmartTypeScriptTool(
 export async function runSmartTypescript(
   options: SmartTypeScriptOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartTS = new SmartTypeScript(

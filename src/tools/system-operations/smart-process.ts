@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SmartProcess - Intelligent Process Management
  *
  * Track 2C - System Operations & Output
@@ -20,7 +20,7 @@ import {
   lifetimeCpuPercent,
   parseWmiDate,
 } from '../../utils/wmic-csv.js';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 
@@ -700,7 +700,7 @@ export async function runSmartProcess(
   const { join } = await import('path');
 
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+    cache || new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 

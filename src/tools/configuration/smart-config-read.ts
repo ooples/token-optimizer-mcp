@@ -13,7 +13,7 @@
 import { readFileSync, existsSync, statSync } from 'fs';
 import { parse as parseYAML } from 'yaml';
 import { parse as parseTOML } from '@iarna/toml';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
@@ -785,7 +785,7 @@ export async function runSmartConfigRead(
   filePath: string,
   options: SmartConfigReadOptions = {}
 ): Promise<SmartConfigReadResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartConfigReadTool(cache, tokenCounter, metrics);

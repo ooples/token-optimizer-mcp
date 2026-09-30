@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Logs Tool - System Log Aggregation and Analysis
  *
  * Provides intelligent log analysis with:
@@ -9,7 +9,7 @@
  */
 
 import { spawnSafe } from '../../utils/safe-exec.js';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -868,7 +868,7 @@ export function getSmartLogs(
 export async function runSmartLogs(
   options: SmartLogsOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')), 100);
   const smartLogs = getSmartLogs(cache, options.projectRoot);
   try {
     const result = await smartLogs.run(options);
