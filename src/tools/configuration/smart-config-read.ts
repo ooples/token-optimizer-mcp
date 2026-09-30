@@ -311,26 +311,29 @@ export class SmartConfigReadTool {
 
     // Cache the parsed config and schema
     if (enableCache && !fromCache) {
-      const configCompressed = compress(JSON.stringify(parsedConfig), 'gzip');
+      const configJson = JSON.stringify(parsedConfig);
+      const configCompressed = compress(configJson, 'gzip');
+      // BASE64. `.toString()` with no encoding is utf8, which mangles binary
+      // gzip irreversibly and poisons the entry permanently.
+      const configStored = configCompressed.compressed.toString('base64');
       this.cache.set(
         configCacheKey,
-        // BASE64. `.toString()` with no encoding is utf8, which mangles binary
-        // gzip irreversibly and poisons the entry permanently.
-        configCompressed.compressed.toString('base64'),
-        tokensSaved,
-        ttl
+        configStored,
+        configJson.length,
+        configStored.length,
+        { ttlSeconds: ttl }
       );
 
       if (inferredSchema) {
-        const schemaCompressed = compress(
-          JSON.stringify(inferredSchema),
-          'gzip'
-        );
+        const schemaJson = JSON.stringify(inferredSchema);
+        const schemaCompressed = compress(schemaJson, 'gzip');
+        const schemaStored = schemaCompressed.compressed.toString('base64');
         this.cache.set(
           schemaCacheKey,
-          schemaCompressed.compressed.toString('base64'),
-          0,
-          ttl
+          schemaStored,
+          schemaJson.length,
+          schemaStored.length,
+          { ttlSeconds: ttl }
         );
       }
     }

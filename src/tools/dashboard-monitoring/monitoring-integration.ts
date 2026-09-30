@@ -319,7 +319,7 @@ export class MonitoringIntegration {
     const tokensSaved = fullTokens - compressedTokens;
 
     const cacheData = JSON.stringify(compressed);
-    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length);
 
     return {
       success: true,
@@ -380,7 +380,7 @@ export class MonitoringIntegration {
     const tokensSaved = fullTokens - compressedTokens;
 
     const cacheData = JSON.stringify(compressed);
-    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length);
 
     return {
       success: true,

@@ -523,7 +523,7 @@ export class CacheAnalyticsTool extends EventEmitter {
 
       if (cacheKey && useCache) {
         const serialized = JSON.stringify(data);
-        this.cache.set(cacheKey, serialized, tokensUsed, serialized.length);
+        this.cache.set(cacheKey, serialized, serialized.length, serialized.length);
       }
 
       // Record metrics

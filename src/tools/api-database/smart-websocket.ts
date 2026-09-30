@@ -717,11 +717,13 @@ export class SmartWebSocket {
     ttl?: number
   ): Promise<void> {
     const cacheData = { ...result, timestamp: Date.now() };
+    const serialized = JSON.stringify(cacheData);
     await this.cache.set(
       key,
-      JSON.stringify(cacheData),
-      8 /* originalSize */,
-      ttl || 60
+      serialized,
+      serialized.length,
+      serialized.length,
+      { ttlSeconds: ttl || 60 }
     );
   }
 

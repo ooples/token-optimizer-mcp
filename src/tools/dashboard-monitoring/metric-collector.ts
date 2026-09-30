@@ -435,7 +435,7 @@ export class MetricCollector {
 
     // Cache results
     const cacheData = JSON.stringify(compressed);
-    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length);
 
     return {
       success: true,
@@ -505,7 +505,7 @@ export class MetricCollector {
 
     // Cache results
     const cacheData = JSON.stringify(aggregations);
-    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length);
 
     return {
       success: true,
@@ -647,7 +647,7 @@ export class MetricCollector {
 
     // Cache results
     const cacheData = JSON.stringify(compressed);
-    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length);
 
     return {
       success: true,

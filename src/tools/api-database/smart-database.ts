@@ -33,6 +33,14 @@ import {
   MetricsCollector as MetricsCollectorClass,
 } from '../../core/metrics.js';
 
+/**
+ * Default seconds a cached result stays servable.
+ *
+ * The read path already uses (options.ttl || 300) and the tool schema documents 300,
+ * so the write path takes the same number rather than a second opinion.
+ */
+const DEFAULT_CACHE_TTL_SECONDS = 300;
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -1444,19 +1452,16 @@ export class SmartDatabase {
   private async cacheResult(
     key: string,
     result: SmartDatabaseResult,
-    _ttl?: number
+    ttl?: number
   ): Promise<void> {
     try {
       // Add timestamp
       const cacheData = { ...result, timestamp: Date.now() };
 
-      // Calculate tokens saved
-      const fullOutput = JSON.stringify(cacheData, null, 2);
-      const tokensSaved = this.tokenCounter.count(fullOutput).tokens;
-
-      // Cache for specified TTL
       const cacheStr = JSON.stringify(cacheData);
-      this.cache.set(key, cacheStr, tokensSaved, cacheStr.length);
+      this.cache.set(key, cacheStr, cacheStr.length, cacheStr.length, {
+        ttlSeconds: ttl || DEFAULT_CACHE_TTL_SECONDS,
+      });
     } catch (error) {
       // Caching failure should not break the operation
       console.error('Failed to cache database result:', error);

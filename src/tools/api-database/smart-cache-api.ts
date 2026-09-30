@@ -332,12 +332,10 @@ export class SmartCacheAPI {
 
     // Store in cache
     const buffer = this.serializeCachedResponse(cachedResponse);
-    this.cache.set(
-      cacheKey,
-      buffer.toString('utf-8'),
-      0, // originalSize
-      0 // compressedSize - tokens saved will be calculated on get
-    );
+    const stored = buffer.toString('utf-8');
+    this.cache.set(cacheKey, stored, stored.length, stored.length, {
+      ttlSeconds: ttl,
+    });
 
     // Count tokens
     const originalTokens = this.tokenCounter.count(responseStr).tokens;

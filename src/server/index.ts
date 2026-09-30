@@ -451,8 +451,9 @@ async function recordDirectToolResult<T>(
  * Used when compression is skipped (file too small or compression doesn't help)
  */
 function cacheUncompressed(key: string, text: string, size: number): void {
-  // Store uncompressed text with size=0 for compressedSize to indicate no compression
-  cache.set(key, text, size, 0);
+  // Uncompressed, so the two sizes are the same size. A zero here would read
+  // as infinite compression in every ratio computed from these columns.
+  cache.set(key, text, size, size);
 }
 
 // Initialize advanced caching tools

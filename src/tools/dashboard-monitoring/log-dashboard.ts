@@ -344,7 +344,7 @@ export class LogDashboard {
     ).tokens;
     const tokensSaved = tokensUsed - this.tokenCounter.count(cachedData).tokens;
 
-    this.cache.set(cacheKey, cachedData, tokensUsed, cachedData.length);
+    this.cache.set(cacheKey, cachedData, cachedData.length, cachedData.length);
 
     await this.persistDashboards();
 
@@ -395,7 +395,7 @@ export class LogDashboard {
     ).tokens;
     const tokensSaved = tokensUsed - this.tokenCounter.count(cachedData).tokens;
 
-    this.cache.set(cacheKey, cachedData, tokensUsed, cachedData.length);
+    this.cache.set(cacheKey, cachedData, cachedData.length, cachedData.length);
 
     await this.persistDashboards();
 
@@ -481,7 +481,7 @@ export class LogDashboard {
 
     // Cache results
     const cacheData = JSON.stringify({ logs: compressed, stats });
-    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length);
 
     return {
       success: true,
@@ -553,7 +553,7 @@ export class LogDashboard {
 
     // Cache results
     const cacheData = JSON.stringify(aggregations);
-    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length);
 
     return {
       success: true,
@@ -625,7 +625,7 @@ export class LogDashboard {
 
     // Cache results (5-minute TTL for anomaly detection)
     const cacheData = JSON.stringify(anomalies);
-    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length);
 
     return {
       success: true,

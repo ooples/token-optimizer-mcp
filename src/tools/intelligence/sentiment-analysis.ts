@@ -513,7 +513,7 @@ export class SentimentAnalysisTool {
 
       if (options.useCache !== false) {
         const resultStr = JSON.stringify(result);
-        this.cache.set(cacheKey, resultStr, tokensUsed, tokensUsed);
+        this.cache.set(cacheKey, resultStr, resultStr.length, resultStr.length);
       }
 
       // 5. Record metrics

@@ -20,6 +20,13 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { homedir } from 'os';
 import { packageManagerInvocation } from '../build-systems/run-node-bin.js';
 
+/**
+ * Seconds a parsed package.json stays servable. The file is re-read whenever
+ * its hash changes, so the TTL is only a backstop against an entry outliving
+ * the project it describes.
+ */
+const PACKAGE_JSON_CACHE_TTL_SECONDS = 24 * 60 * 60;
+
 interface PackageMetadata {
   name: string;
   version: string;
@@ -278,7 +285,7 @@ export class SmartPackageJson {
       const cached = this.getCachedResult(cacheKey, maxCacheAge, fileHash);
       if (cached) {
         this.recordMetrics('cache_hit', Date.now() - startTime);
-        return this.transformOutput(cached, [], true);
+        return this.transformOutput(cached, [], true, fileContent);
       }
     }
 
@@ -317,7 +324,7 @@ export class SmartPackageJson {
     // Generate suggestions
     const suggestions = this.generateSuggestions(result);
 
-    return this.transformOutput(result, suggestions, false);
+    return this.transformOutput(result, suggestions, false, fileContent);
   }
 
   /**
@@ -878,24 +885,15 @@ export class SmartPackageJson {
       cachedAt: Date.now(),
     };
 
-    const tokensSaved = this.estimateTokensSaved(result);
+    const serialized = JSON.stringify(cacheData);
 
     this.cache.set(
       this.cacheNamespace + ':' + key,
-      JSON.stringify(cacheData),
-      86400, // 24 hour TTL
-      tokensSaved
+      serialized,
+      serialized.length,
+      serialized.length,
+      { ttlSeconds: PACKAGE_JSON_CACHE_TTL_SECONDS }
     );
-  }
-
-  /**
-   * Estimate tokens saved by caching
-   */
-  private estimateTokensSaved(result: ParsedPackageJson): number {
-    const fullOutput = JSON.stringify(result);
-    const originalTokens = this.tokenCounter.count(fullOutput).tokens;
-    const compactTokens = Math.ceil(originalTokens * 0.05); // 95% reduction
-    return originalTokens - compactTokens;
   }
 
   /**
@@ -975,7 +973,8 @@ export class SmartPackageJson {
       impact: 'high' | 'medium' | 'low';
       command?: string;
     }>,
-    fromCache: boolean
+    fromCache: boolean,
+    baseline: string
   ): SmartPackageJsonOutput {
     // Update stats with actual counts
     result.stats.outdatedPackages = result.packages.filter(
@@ -1028,13 +1027,7 @@ export class SmartPackageJson {
       children: node.dependencies ? Object.keys(node.dependencies).length : 0,
     }));
 
-    // Calculate token metrics
-    const originalSize = this.estimateOriginalSize(result);
-    const compactSize = this.estimateCompactSize(result);
-    const originalTokens = Math.ceil(originalSize / 4);
-    const compactedTokens = Math.ceil(compactSize / 4);
-
-    return {
+    const payload = {
       summary: {
         name: result.metadata.name,
         version: result.metadata.version,
@@ -1057,12 +1050,27 @@ export class SmartPackageJson {
       dependencyTree:
         result.dependencyTree.length > 0 ? dependencyTree : undefined,
       suggestions,
+    };
+
+    // The metrics block is excluded from its own count -- it cannot be
+    // measured before it exists -- so the compact figure is the payload the
+    // caller reads, short a handful of tokens for the three numbers below.
+    const originalTokens = this.tokenCounter.count(baseline).tokens;
+    const compactedTokens = this.tokenCounter.count(
+      JSON.stringify(payload, null, 2)
+    ).tokens;
+
+    return {
+      ...payload,
       metrics: {
         originalTokens,
         compactedTokens,
-        reductionPercentage: Math.round(
-          ((originalTokens - compactedTokens) / originalTokens) * 100
-        ),
+        reductionPercentage:
+          originalTokens > 0
+            ? Math.round(
+                ((originalTokens - compactedTokens) / originalTokens) * 100
+              )
+            : 0,
       },
     };
   }
@@ -1088,40 +1096,6 @@ export class SmartPackageJson {
       return 'Minor version change - should be safe to update';
     }
     return 'Patch version change - safe to update';
-  }
-
-  /**
-   * Estimate original output size
-   */
-  private estimateOriginalSize(result: ParsedPackageJson): number {
-    // Full package.json + all npm list output + audit output
-    const packageJsonSize = 1000;
-    const dependencyTreeSize = result.dependencyTree.length * 200;
-    const auditSize = result.securityIssues.length * 500;
-    const outdatedSize = result.packages.filter((p) => p.outdated).length * 200;
-
-    return (
-      packageJsonSize + dependencyTreeSize + auditSize + outdatedSize + 5000
-    );
-  }
-
-  /**
-   * Estimate compact output size
-   */
-  private estimateCompactSize(result: ParsedPackageJson): number {
-    const output = {
-      summary: {
-        name: result.metadata.name,
-        totalPackages: result.packages.length,
-        outdated: result.stats.outdatedPackages,
-        vulnerabilities: result.stats.vulnerabilities,
-      },
-      conflicts: result.conflicts.slice(0, 10),
-      security: result.securityIssues.slice(0, 10),
-      outdated: result.packages.filter((p) => p.outdated).slice(0, 10),
-    };
-
-    return JSON.stringify(output).length;
   }
 
   /**

@@ -1420,13 +1420,14 @@ export class SmartDependenciesTool {
   ): void {
     const serialized = this.serializeGraph(graph);
     const ttlSeconds = ttlDays * 24 * 60 * 60;
-    // No baseline is available here: cacheGraph is a write, and nothing at
-    // this point knows what reading the files would have cost. Storing a
-    // computed-looking number would put an unmeasured figure into the metrics,
-    // so the stored saving is the honest zero.
-    const { tokensSaved } = unmeasured(this.measureGraphTokens(graph));
 
-    this.cache.set(cacheKey, serialized as any, ttlSeconds, tokensSaved);
+    this.cache.set(
+      cacheKey,
+      serialized,
+      serialized.length,
+      serialized.length,
+      { ttlSeconds }
+    );
   }
 
   /**

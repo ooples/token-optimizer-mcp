@@ -682,8 +682,8 @@ export class SmartPretty {
 
     // Cache the result (85% reduction with grammar compression)
     if (useCache) {
-      const compressionResult = compress(JSON.stringify(result), 'gzip');
-      const resultTokens = this.tokenCounter.count(highlightedCode).tokens;
+      const serialized = JSON.stringify(result);
+      const compressionResult = compress(serialized, 'gzip');
       this.cache.set(
         cacheKey,
         // BASE64, to match the base64 the read path decodes.
@@ -692,7 +692,7 @@ export class SmartPretty {
         // later call returned "incorrect header check" until the cache was
         // cleared by hand. One call was enough to break the tool permanently.
         compressionResult.compressed.toString('base64'),
-        resultTokens,
+        serialized.length,
         compressionResult.compressedSize
       );
     }
@@ -952,8 +952,8 @@ export class SmartPretty {
 
     // Cache the result
     if (useCache && formatted) {
-      const compressionResult = compress(JSON.stringify(result), 'gzip');
-      const resultTokens = this.tokenCounter.count(formattedCode).tokens;
+      const serialized = JSON.stringify(result);
+      const compressionResult = compress(serialized, 'gzip');
       this.cache.set(
         cacheKey,
         // BASE64, to match the base64 the read path decodes.
@@ -962,7 +962,7 @@ export class SmartPretty {
         // later call returned "incorrect header check" until the cache was
         // cleared by hand. One call was enough to break the tool permanently.
         compressionResult.compressed.toString('base64'),
-        resultTokens,
+        serialized.length,
         compressionResult.compressedSize
       );
     }

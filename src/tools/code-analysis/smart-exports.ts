@@ -883,9 +883,7 @@ export class SmartExportsTool {
       compactedTokens,
     };
     const buffer = JSON.stringify(toCache);
-    const tokensSaved =
-      originalTokens && compactedTokens ? originalTokens - compactedTokens : 0;
-    this.cache.set(cacheKey, buffer, 300, tokensSaved);
+    this.cache.set(cacheKey, buffer, buffer.length, buffer.length, { ttlSeconds: 300 });
   }
 
   /**

@@ -320,7 +320,10 @@ class BenchmarkExecutor {
     for (let i = 0; i < warmupOps; i++) {
       const key = `warmup-key-${i}`;
       const value = this.generateValue(workload.valueSize);
-      this.cache.set(key, value.toString('utf-8'), 0, config.ttl || 3600);
+      const stored = value.toString('utf-8');
+      this.cache.set(key, stored, stored.length, stored.length, {
+        ttlSeconds: config.ttl || 3600,
+      });
     }
   }
 

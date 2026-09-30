@@ -217,12 +217,10 @@ class SmartTsConfig {
       };
 
       const maxAge = options.maxCacheAge ?? 7 * 24 * 60 * 60; // 7 days default
-      this.cache.set(
-        cacheKey,
-        Buffer.from(JSON.stringify(toCache)).toString('utf-8'),
-        0,
-        maxAge
-      );
+      const stored = JSON.stringify(toCache);
+      this.cache.set(cacheKey, stored, stored.length, stored.length, {
+        ttlSeconds: maxAge,
+      });
 
       const executionTime = Date.now() - startTime;
 

@@ -786,7 +786,14 @@ export class SmartGraphQL {
     };
 
     // Cache for 1 hour
-    await this.cache.set(cacheKey, JSON.stringify(schemaInfo), 0, 3600);
+    const serialized = JSON.stringify(schemaInfo);
+    await this.cache.set(
+      cacheKey,
+      serialized,
+      serialized.length,
+      serialized.length,
+      { ttlSeconds: 3600 }
+    );
 
     return schemaInfo;
   }
@@ -915,12 +922,10 @@ export class SmartGraphQL {
       timestamp: Date.now(),
     };
 
-    const tokensSavedResult = this.tokenCounter.count(
-      JSON.stringify(cacheData)
-    );
-    const tokensSaved = tokensSavedResult.tokens;
-
-    this.cache.set(key, JSON.stringify(cacheData), tokensSaved, ttl);
+    const serialized = JSON.stringify(cacheData);
+    this.cache.set(key, serialized, serialized.length, serialized.length, {
+      ttlSeconds: ttl,
+    });
   }
 }
 

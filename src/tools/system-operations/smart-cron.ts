@@ -331,7 +331,7 @@ export class SmartCron {
 
     // Cache the result
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {
@@ -974,7 +974,7 @@ export class SmartCron {
 
     // Cache the result (short TTL as history changes frequently)
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {
@@ -1164,7 +1164,7 @@ export class SmartCron {
 
     // Cache the result (longer TTL as schedule doesn't change often)
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {

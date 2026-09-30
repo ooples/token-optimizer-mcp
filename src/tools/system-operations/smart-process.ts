@@ -326,7 +326,7 @@ export class SmartProcess {
 
     // Cache the result
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {
@@ -438,7 +438,7 @@ export class SmartProcess {
 
     // Cache the result
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {

@@ -283,10 +283,13 @@ export class CachePartitionTool extends EventEmitter {
       }
 
       // Cache the result
-      const tokensUsedResult = this.tokenCounter.count(JSON.stringify(data));
+      const serialized = JSON.stringify(data);
+      const tokensUsedResult = this.tokenCounter.count(serialized);
       const tokensUsed = tokensUsedResult.tokens;
       if (cacheKey && useCache) {
-        this.cache.set(cacheKey, JSON.stringify(data), cacheTTL, tokensUsed);
+        this.cache.set(cacheKey, serialized, serialized.length, serialized.length, {
+          ttlSeconds: cacheTTL,
+        });
       }
 
       // Record metrics
