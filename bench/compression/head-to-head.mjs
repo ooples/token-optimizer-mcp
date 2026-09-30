@@ -107,6 +107,7 @@ import { imageSize } from '../../dist/compress/images.js';
 import {
   DEFAULTS,
   breakEven,
+  breakEvenLabel,
   costAt,
   costLine,
   commonSessionCost,
@@ -1527,20 +1528,6 @@ const k = (t) => `${(t / 1000).toFixed(1)}k`;
 const CORPUS_COMMON = commonSessionCost(PARAMS) * sessionCosts.length;
 const times = (base, arm) =>
   `${usageMultiplier(base, arm, { commonCost: CORPUS_COMMON, params: PARAMS }).toFixed(2)}x`;
-// A crossing outside [0, 1] is not a missing answer, it is the strongest one:
-// the arm is cheaper at every fetch rate there is.
-// `breakEven(ours, theirs)` names ours `a`. Three things can happen, and the
-// column header says "ours wins below", so only one of them may be printed as a
-// bare percentage: if theirs is the cheaper arm at rest, the SAME number means
-// the opposite thing, and printing it unqualified would invert the claim. A
-// second crossing gets a marker rather than being dropped -- with a quadratic
-// cost there is no longer any guarantee that one rate settles the question.
-const rate = (c) => {
-  if (c.p === null) return c.cheaper === 'a' ? 'always' : 'never';
-  const more = c.crossings.length > 1 ? '+' : '';
-  const pct = `${(c.p * 100).toFixed(0)}%${more}`;
-  return c.cheaper === 'a' ? pct : `above ${pct}`;
-};
 
 console.log(
   `
@@ -1561,7 +1548,7 @@ for (const c of sessionCosts) {
       `${n(k(costAt(c.arms.preset, 0)), 7)} ${n(k(costAt(c.arms.theirs, 0)), 7)} | ` +
       `${n(k(costAt(c.arms.ours, 1)), 6)} ${n(k(costAt(c.arms.preset, 1)), 7)} ` +
       `${n(k(costAt(c.arms.theirs, 1)), 7)} | ` +
-      `${n(rate(c.cross), 7)}`
+      `${n(breakEvenLabel(c.cross), 7)}`
   );
 }
 // Our spilling arm against theirs, which is the comparison that decides whether
@@ -1572,7 +1559,7 @@ for (const c of sessionCosts) {
     `  preset (our spilling arm) vs theirs, whole corpus: ` +
       `${k(costAt(corpus.preset, 0))} -> ${k(costAt(corpus.preset, 1))} against ` +
       `${k(costAt(corpus.theirs, 0))} -> ${k(costAt(corpus.theirs, 1))}, ` +
-      `preset wins ${rate(pre)}`
+      `preset wins ${breakEvenLabel(pre)}`
   );
 }
 
@@ -1627,7 +1614,7 @@ for (const turnsAfter of [5, 20, 60])
       `${n(turnsAfter, 11)} ${n(k(baseContextTokens), 11)} | ` +
         `${n(times(none, costAt(c.ours, 0.5)), 7)} ` +
         `${n(times(none, costAt(c.theirs, 0.5)), 9)} | ` +
-        `${n(rate(c.cross), 12)}`
+        `${n(breakEvenLabel(c.cross), 12)}`
     );
   }
 
@@ -2491,11 +2478,11 @@ if (process.argv[3] === '--record') {
                     Math.round(costAt(byName[r.name].theirsComparable, 1))
                   ),
           },
-          breakEven: rate(crossByName[r.name]),
+          breakEven: breakEvenLabel(crossByName[r.name]),
           breakEvenComparable:
             crossComparableByName[r.name] === null
               ? null
-              : rate(crossComparableByName[r.name]),
+              : breakEvenLabel(crossComparableByName[r.name]),
           // THE RATE THAT FLATTERS US LEAST, so a gate has something to stand
           // on. Cost is quadratic in the fetch rate, so the two endpoints no
           // longer bound the interval between them: a difference that opens
@@ -2704,11 +2691,11 @@ if (process.argv[3] === '--record') {
             preset: String(Math.round(costAt(corpus.preset, 1))),
             theirs: String(Math.round(costAt(corpus.theirs, 1))),
           },
-          breakEven: rate(corpus.cross),
+          breakEven: breakEvenLabel(corpus.cross),
           // The `ours` arm above compresses in place and spills nothing, so
           // against a cache-read bill it is the wrong arm to quote alone.
           // `preset` is the one that evicts, and it is the one that wins.
-          presetBreakEven: rate(breakEven(corpus.preset, corpus.theirs)),
+          presetBreakEven: breakEvenLabel(breakEven(corpus.preset, corpus.theirs)),
           // What the same subscription cap buys, against doing nothing at all.
           capMultiple: {
             oursP0: times(costAt(corpus.none, 0), costAt(corpus.ours, 0)),

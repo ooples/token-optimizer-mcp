@@ -455,6 +455,32 @@ export function breakEven(a, b) {
 }
 
 /**
+ * The column label for a crossing: what the harness prints, decided in one
+ * place.
+ *
+ * A crossing outside [0, 1] is not a missing answer, it is the strongest one:
+ * the arm is cheaper at every fetch rate there is.
+ *
+ * `breakEven(ours, theirs)` names ours `a`. Three things can happen, and the
+ * column header says "ours wins below", so only one of them may be printed as a
+ * bare percentage: if theirs is the cheaper arm at rest, the SAME number means
+ * the opposite thing, and printing it unqualified would invert the claim. A
+ * second crossing gets a marker rather than being dropped -- with a quadratic
+ * cost there is no longer any guarantee that one rate settles the question.
+ *
+ * THIS LIVED AS A CLOSURE INSIDE THE HARNESS, where no test could reach it
+ * while every published `breakEven` string came out of it. The direction it
+ * encodes was argued from the source rather than pinned. It is here so the
+ * same suite that pins the crossing also pins how the crossing is worded.
+ */
+export function breakEvenLabel(c) {
+  if (c.p === null) return c.cheaper === 'a' ? 'always' : 'never';
+  const more = c.crossings.length > 1 ? '+' : '';
+  const pct = `${(c.p * 100).toFixed(0)}%${more}`;
+  return c.cheaper === 'a' ? pct : `above ${pct}`;
+}
+
+/**
  * How much further the same subscription cap goes.
  *
  * A cap is a token budget, so "we cost 40% of doing nothing" and "the same plan
