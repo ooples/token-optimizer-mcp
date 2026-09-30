@@ -1,0 +1,246 @@
+/**
+ * WHAT A TOOL ACTUALLY SAVES THE CALLER, MEASURED ON THE WIRE.
+ *
+ * 51 of the 83 tool definitions under src/tools advertise a token reduction --
+ * "83% token reduction", "75-85%", "70-80%" -- and until this file nothing in
+ * the repository measured one. The figures arrived with bulk feature-integration
+ * commits (fc358254, 79f5d7ff) and no bench output is keyed by tool name.
+ *
+ * Worse, the number the tools compute for themselves does not mean what a reader
+ * would take it to mean. smart-complexity.ts:239 sets originalTokens from
+ * JSON.stringify(result, null, 2) -- its OWN result, pretty-printed -- and
+ * compares it against a compacted rendering of that same result. So the ratio
+ * describes the tool's choice of indentation, not anything the caller avoided
+ * reading. And the compact rendering is discarded: src/server/index.ts sends
+ * JSON.stringify(result, null, 2), the pretty form, so the compaction the tool
+ * measures never reaches the client at all.
+ *
+ * The reduction a caller experiences is a different quantity, and it is the one
+ * the descriptions are read as claiming:
+ *
+ *     baseline   the tokens the caller would have spent to answer the question
+ *                without the tool -- for a file analyser, the file's own text
+ *     treatment  the tokens of the payload the client really receives
+ *     reduction  1 - treatment / baseline
+ *
+ * Both halves are counted with the same encoding head-to-head.mjs uses, so the
+ * figures sit on the same scale as the compression numbers. The treatment half
+ * is taken by calling the real server over real stdio, so what is counted is the
+ * payload after dispatch and serialisation rather than a handler's return value,
+ * which is what the caller pays for.
+ *
+ * Fixtures are vendored under fixtures/ rather than read out of src/, so a row
+ * measured today can be re-measured next month and still mean the same thing.
+ *
+ * Nothing here is timed, so nothing here needs a quiet machine.
+ */
+
+import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { get_encoding } from 'tiktoken';
+
+export const ENCODING_NAME = 'cl100k_base';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, '..', '..');
+export const FIXTURES = join(HERE, 'fixtures');
+
+let encoding = null;
+export function countTokens(text) {
+  if (!encoding) encoding = get_encoding(ENCODING_NAME);
+  return encoding.encode(text).length;
+}
+
+/**
+ * The reduction a caller sees, as a fraction. Negative when a tool costs more
+ * than the text it replaces, which is a real outcome and must not be clamped:
+ * an analyser whose report is longer than the file is worth knowing about.
+ */
+export function reduction(baselineTokens, treatmentTokens) {
+  if (!(baselineTokens > 0)) return null;
+  return 1 - treatmentTokens / baselineTokens;
+}
+
+/**
+ * Turn a measured fraction into the words a description may use. A range is
+ * never invented from a single reading: one fixture yields one number, and a
+ * claim of "75-85%" needs the spread of several.
+ */
+export function claimFor(rows) {
+  const usable = rows.filter((r) => r.reduction !== null);
+  if (usable.length === 0) return null;
+  const pct = usable.map((r) => r.reduction * 100);
+  const lo = Math.floor(Math.min(...pct));
+  const hi = Math.ceil(Math.max(...pct));
+  return { lo, hi, n: usable.length, text: lo === hi ? `${lo}%` : `${lo}-${hi}%` };
+}
+
+/** Each case names the payload a caller would otherwise have put in context. */
+export const CASES = [
+  { tool: 'smart_complexity', fixture: 'smart-complexity.ts' },
+  { tool: 'smart_complexity', fixture: 'token-counter.ts' },
+  { tool: 'smart_complexity', fixture: 'tool-profile.ts' },
+  { tool: 'smart_exports', fixture: 'token-counter.ts' },
+  { tool: 'smart_exports', fixture: 'tool-profile.ts' },
+  { tool: 'smart_imports', fixture: 'smart-complexity.ts' },
+  { tool: 'smart_imports', fixture: 'token-counter.ts' },
+  { tool: 'smart_symbols', fixture: 'smart-complexity.ts' },
+  { tool: 'smart_symbols', fixture: 'tool-profile.ts' },
+  { tool: 'smart_security', fixture: 'smart-complexity.ts' },
+];
+/** A minimal JSON-RPC client over the server's real stdio transport. */
+class Server {
+  constructor() {
+    this.child = spawn(process.execPath, [join(ROOT, 'dist', 'server', 'index.js')], {
+      cwd: ROOT,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, TOKEN_OPTIMIZER_TOOL_PROFILE: 'full' },
+      windowsHide: true,
+    });
+    this.buffer = '';
+    this.pending = new Map();
+    this.nextId = 1;
+    this.stderr = '';
+    this.child.stderr.on('data', (chunk) => {
+      this.stderr += chunk.toString();
+    });
+    this.child.stdout.on('data', (chunk) => {
+      this.buffer += chunk.toString();
+      let cut;
+      while ((cut = this.buffer.indexOf('\n')) >= 0) {
+        const line = this.buffer.slice(0, cut).trim();
+        this.buffer = this.buffer.slice(cut + 1);
+        if (!line) continue;
+        let message;
+        try {
+          message = JSON.parse(line);
+        } catch {
+          continue; // a log line on stdout is not a protocol frame
+        }
+        const waiter = this.pending.get(message.id);
+        if (waiter) {
+          this.pending.delete(message.id);
+          waiter(message);
+        }
+      }
+    });
+  }
+
+  send(method, params) {
+    const id = this.nextId++;
+    const frame = { jsonrpc: '2.0', id, method, params };
+    return new Promise((res, rej) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        rej(new Error(`${method} timed out; stderr: ${this.stderr.slice(-400)}`));
+      }, 120000);
+      this.pending.set(id, (message) => {
+        clearTimeout(timer);
+        res(message);
+      });
+      this.child.stdin.write(JSON.stringify(frame) + '\n');
+    });
+  }
+
+  async start() {
+    await this.send('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'reduction-bench', version: '0' },
+    });
+    this.child.stdin.write(
+      JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n'
+    );
+  }
+
+  stop() {
+    this.child.stdin.end();
+    this.child.kill();
+  }
+}
+
+/**
+ * One reading. A tool that refuses, or whose payload carries the validator's
+ * "Unknown tool" text, records a null reduction rather than a flattering one:
+ * a missing measurement must not read as a measured zero.
+ */
+export async function measure(server, testCase) {
+  const path = join(FIXTURES, testCase.fixture);
+  const baselineText = readFileSync(path, 'utf8');
+  const baseline = countTokens(baselineText);
+  const reply = await server.send('tools/call', {
+    name: testCase.tool,
+    arguments: { filePath: path, projectRoot: ROOT, ...(testCase.args || {}) },
+  });
+  const payload = (reply.result?.content || [])
+    .map((part) => part.text || '')
+    .join('\n');
+  const refused =
+    !!reply.error ||
+    reply.result?.isError === true ||
+    /No validation schema available|"error"\s*:/.test(payload);
+  const treatment = countTokens(payload);
+  return {
+    tool: testCase.tool,
+    fixture: testCase.fixture,
+    baseline,
+    treatment,
+    reduction: refused ? null : reduction(baseline, treatment),
+    refused,
+    detail: refused ? payload.slice(0, 160).replace(/\s+/g, ' ') : '',
+  };
+}
+
+async function main() {
+  const server = new Server();
+  await server.start();
+  const rows = [];
+  try {
+    for (const testCase of CASES) rows.push(await measure(server, testCase));
+  } finally {
+    server.stop();
+  }
+
+  console.log(`encoding ${ENCODING_NAME}`);
+  console.log(
+    'tool                 fixture                baseline  payload  reduction'
+  );
+  for (const r of rows) {
+    const pct =
+      r.reduction === null
+        ? 'NO MEASUREMENT'
+        : `${(r.reduction * 100).toFixed(1)}%`;
+    console.log(
+      `${r.tool.padEnd(20)} ${r.fixture.padEnd(22)} ${String(r.baseline).padStart(8)} ${String(r.treatment).padStart(8)}  ${pct}`
+    );
+    if (r.refused) console.log(`  refused: ${r.detail}`);
+  }
+
+  const byTool = new Map();
+  for (const r of rows) {
+    if (!byTool.has(r.tool)) byTool.set(r.tool, []);
+    byTool.get(r.tool).push(r);
+  }
+  console.log('');
+  console.log('what each description could honestly say:');
+  for (const [tool, toolRows] of byTool) {
+    const claim = claimFor(toolRows);
+    console.log(
+      `  ${tool.padEnd(20)} ${claim ? `${claim.text} over ${claim.n} fixture(s)` : 'nothing measured -- no claim available'}`
+    );
+  }
+
+  const measured = rows.filter((r) => r.reduction !== null).length;
+  console.log('');
+  console.log(`${measured} of ${rows.length} reading(s) produced a measurement`);
+  process.exit(measured === 0 ? 1 : 0);
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}
