@@ -498,7 +498,11 @@ const logDashboard = getLogDashboard(cache, tokenCounter, metrics);
 
 // Initialize Intelligence tools that keep state between calls
 const knowledgeGraph = getKnowledgeGraphTool(cache, tokenCounter, metrics);
-const sentimentAnalysis = getSentimentAnalysisTool(cache, tokenCounter, metrics);
+const sentimentAnalysis = getSentimentAnalysisTool(
+  cache,
+  tokenCounter,
+  metrics
+);
 const smartWorkflow = getSmartWorkflowTool(cache, tokenCounter, metrics);
 
 // Initialize Build Systems tools
