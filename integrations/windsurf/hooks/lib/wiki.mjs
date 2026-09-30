@@ -1,6 +1,6 @@
 // GENERATED FILE -- do not edit.
 // Source of truth: hooks-core/wiki.mjs. Regenerate with `npm run sync:hooks`.
-﻿/**
+/**
  * The wiki graph store. Phase 1: skeleton, structural only.
  *
  * See docs/WIKI_GRAPH.md for the design. This file is the persistence layer and
@@ -24,6 +24,7 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
+import { flagOn } from './flags.mjs';
 
 /**
  * Schema version stamped on every record.
@@ -1006,10 +1007,8 @@ function readSnapshots(dir) {
  * the product's main feature off by accident.
  */
 export function wikiDisabled() {
-  const raw = String(process.env.TOKEN_OPTIMIZER_WIKI_DISABLED || '')
-    .trim()
-    .toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'yes';
+  return flagOn('TOKEN_OPTIMIZER_WIKI_DISABLED');
+
 }
 
 export function load(dir, { snapshots = false } = {}) {
