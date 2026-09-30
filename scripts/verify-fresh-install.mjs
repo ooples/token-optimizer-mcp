@@ -73,6 +73,13 @@ writeFileSync(profile, '# existing user content\n');
 
 const env = {
   ...process.env,
+  // The check below asserts that a plain install wires nothing. This process
+  // inherits the developer's own environment, and anyone who has opted in on
+  // this machine exports TOKEN_OPTIMIZER_AUTO_INSTALL -- which would make
+  // postinstall wire the sandbox and fail that check for a reason that has
+  // nothing to do with the package. The default path is what is under test, so
+  // the opt-in is cleared here rather than inherited.
+  TOKEN_OPTIMIZER_AUTO_INSTALL: '',
   TOKEN_OPTIMIZER_SETTINGS: settings,
   TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify([profile]),
   TOKEN_OPTIMIZER_HOME: join(sandbox, 'home'),
@@ -184,13 +191,15 @@ try {
     }
   }
 
-  // A LOCAL INSTALL DELIBERATELY WIRES NOTHING. postinstall.cjs skips setup for dependency and CI
-  // installs, which is why this drives the documented recovery command instead -- that command is
-  // what a user runs when lifecycle scripts were disabled, and it is the path that has to work.
+  // NO INSTALL WIRES ANYTHING ON ITS OWN. postinstall.cjs writes only when
+  // TOKEN_OPTIMIZER_AUTO_INSTALL asks it to, so every install -- global,
+  // dependency or CI -- leaves settings.json alone and prints the command
+  // instead. That command is therefore the only path that wires a machine, and
+  // the one that has to work, so this drives it directly below.
   const beforeWiring = JSON.parse(readFileSync(settings, 'utf8'));
   check(
     Object.keys(beforeWiring.hooks || {}).length === 0,
-    'a local install wires nothing on its own, as documented'
+    'the install wires nothing on its own, as documented'
   );
 
   try {
