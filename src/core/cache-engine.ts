@@ -43,12 +43,65 @@ const CACHE_SCHEMA = `
             original_size INTEGER NOT NULL,
             hit_count INTEGER DEFAULT 0,
             created_at INTEGER NOT NULL,
-            last_accessed_at INTEGER NOT NULL
+            last_accessed_at INTEGER NOT NULL,
+            expires_at INTEGER
           );
 
           CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache(last_accessed_at);
           CREATE INDEX IF NOT EXISTS idx_hit_count ON cache(hit_count);
         `;
+
+const CACHE_EXPIRY_COLUMN = 'expires_at';
+
+/**
+ * `expires_at` ARRIVED AFTER DATABASES WERE ALREADY ON DISK. CREATE TABLE IF
+ * NOT EXISTS leaves an existing cache exactly as it was, so the column is
+ * still absent there -- and SQLite has no ADD COLUMN IF NOT EXISTS, so the add
+ * has to be guarded by asking what the table actually has.
+ *
+ * The index on the column lives here and NOT in CACHE_SCHEMA for the same
+ * reason: that literal runs against the old table too, where CREATE INDEX on
+ * a column that is not there yet throws, all three open attempts fail, and the
+ * cache degrades to :memory:. Which is to say every installed user's cache.
+ */
+function migrateCacheSchema(db: Database.Database): void {
+  const columns = db.prepare('PRAGMA table_info(cache)').all() as {
+    name: string;
+  }[];
+  if (!columns.some((c) => c.name === CACHE_EXPIRY_COLUMN)) {
+    db.exec('ALTER TABLE cache ADD COLUMN expires_at INTEGER');
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_expires_at ON cache(expires_at)');
+}
+
+/**
+ * Options for a cache write.
+ *
+ * THE TTL USED TO HAVE NOWHERE TO GO. `set` took two byte-size arguments and
+ * nothing else, so thirty-one call sites passed their TTL into one of them:
+ * `set(key, value, 86400, tokensSaved)` records 86400 as the entry's
+ * compressed size, expires nothing ever, and corrupts every ratio computed
+ * from the size columns. The intent was always real; the parameter was not.
+ */
+export interface CacheSetOptions {
+  /**
+   * Seconds until the entry stops being served. Omitted, zero or negative
+   * means it never expires, which is what every existing four-argument call
+   * site already gets.
+   */
+  ttlSeconds?: number;
+}
+
+function expiryFrom(
+  options: CacheSetOptions | undefined,
+  now: number
+): number | null {
+  const ttl = options?.ttlSeconds;
+  if (ttl === undefined || !Number.isFinite(ttl) || ttl <= 0) {
+    return null;
+  }
+  return now + Math.round(ttl * 1000);
+}
 
 export interface CacheEntry {
   key: string;
@@ -58,6 +111,8 @@ export interface CacheEntry {
   hitCount: number;
   createdAt: number;
   lastAccessedAt: number;
+  /** Epoch ms after which the entry stops being served; null means never. */
+  expiresAt?: number | null;
 }
 
 export interface CacheStats {
@@ -105,7 +160,7 @@ export class CacheEngine {
   private db!: Database.Database;
   private memoryCache: LRUCache<
     string,
-    { content: string; compressedSize: number }
+    { content: string; compressedSize: number; expiresAt: number | null }
   >;
   private dbPath!: string;
   /**
@@ -242,6 +297,7 @@ export class CacheEngine {
 
         // Create cache table if it doesn't exist
         this.db.exec(CACHE_SCHEMA);
+        migrateCacheSchema(this.db);
 
         // Success! Store the path we used
         this.dbPath = dbPathToUse;
@@ -307,6 +363,7 @@ export class CacheEngine {
       try {
         this.db = new Database(':memory:');
         this.db.exec(CACHE_SCHEMA);
+        migrateCacheSchema(this.db);
         this.dbPath = ':memory:';
         this.degradedReason = diagnosis;
         console.error(
@@ -328,7 +385,7 @@ export class CacheEngine {
     // Initialize in-memory LRU cache for frequently accessed items
     this.memoryCache = new LRUCache<
       string,
-      { content: string; compressedSize: number }
+      { content: string; compressedSize: number; expiresAt: number | null }
     >({
       max: maxMemoryItems,
       ttl: 1000 * 60 * 60, // 1 hour TTL
@@ -402,6 +459,10 @@ export class CacheEngine {
     // Check memory cache first
     const memValue = this.memoryCache.get(key);
     if (memValue !== undefined) {
+      if (this.isExpired(memValue.expiresAt)) {
+        this.dropExpired(key);
+        return null;
+      }
       this.stats.hits++;
       this.updateHitCount(key);
       return memValue.content;
@@ -409,13 +470,17 @@ export class CacheEngine {
 
     // Check SQLite cache
     const stmt = this.db.prepare(`
-      SELECT value, compressed_size FROM cache WHERE key = ?
+      SELECT value, compressed_size, expires_at FROM cache WHERE key = ?
     `);
     const row = stmt.get(key) as
-      | { value: string; compressed_size: number }
+      | { value: string; compressed_size: number; expires_at: number | null }
       | undefined;
 
     if (row) {
+      if (this.isExpired(row.expires_at)) {
+        this.dropExpired(key);
+        return null;
+      }
       this.stats.hits++;
       // Update hit count and last accessed time
       this.updateHitCount(key);
@@ -423,6 +488,7 @@ export class CacheEngine {
       this.memoryCache.set(key, {
         content: row.value,
         compressedSize: row.compressed_size,
+        expiresAt: row.expires_at,
       });
       return row.value;
     }
@@ -478,20 +544,30 @@ export class CacheEngine {
     // Check memory cache first
     const memValue = this.memoryCache.get(key);
     if (memValue !== undefined) {
+      if (this.isExpired(memValue.expiresAt)) {
+        this.dropExpired(key);
+        this.stats.misses++;
+        return null;
+      }
       this.stats.hits++;
       this.updateHitCount(key);
-      return memValue;
+      return { content: memValue.content, compressedSize: memValue.compressedSize };
     }
 
     // Check SQLite cache
     const stmt = this.db.prepare(`
-      SELECT value, compressed_size FROM cache WHERE key = ?
+      SELECT value, compressed_size, expires_at FROM cache WHERE key = ?
     `);
     const row = stmt.get(key) as
-      | { value: string; compressed_size: number }
+      | { value: string; compressed_size: number; expires_at: number | null }
       | undefined;
 
     if (row) {
+      if (this.isExpired(row.expires_at)) {
+        this.dropExpired(key);
+        this.stats.misses++;
+        return null;
+      }
       this.stats.hits++;
       // Update hit count and last accessed time
       this.updateHitCount(key);
@@ -499,6 +575,7 @@ export class CacheEngine {
       this.memoryCache.set(key, {
         content: row.value,
         compressedSize: row.compressed_size,
+        expiresAt: row.expires_at,
       });
       return {
         content: row.value,
@@ -518,21 +595,26 @@ export class CacheEngine {
     key: string,
     value: string,
     originalSize: number,
-    compressedSize: number
+    compressedSize: number,
+    options?: CacheSetOptions
   ): void {
     // TWO DIFFERENT CLOCKS ON PURPOSE. `created_at` is a wall-clock fact that
     // reports get printed against; `last_accessed_at` is an ordering key, and
     // only the ordering key may run ahead of the clock to break a tie.
     const createdAt = Date.now();
     const accessedAt = this.nextRecencyStamp();
+    // A rewrite restarts the clock: created_at is COALESCEd to the original
+    // write, but the entry is fresh again, so its expiry runs from now.
+    const expiresAt = expiryFrom(options, createdAt);
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO cache
-      (key, value, compressed_size, original_size, hit_count, created_at, last_accessed_at)
+      (key, value, compressed_size, original_size, hit_count, created_at,
+       last_accessed_at, expires_at)
       VALUES (?, ?, ?, ?,
         COALESCE((SELECT hit_count FROM cache WHERE key = ?), 0),
         COALESCE((SELECT created_at FROM cache WHERE key = ?), ?),
-        ?)
+        ?, ?)
     `);
 
     stmt.run(
@@ -543,11 +625,12 @@ export class CacheEngine {
       key,
       key,
       createdAt,
-      accessedAt
+      accessedAt,
+      expiresAt
     );
 
     // Add to memory cache
-    this.memoryCache.set(key, { content: value, compressedSize });
+    this.memoryCache.set(key, { content: value, compressedSize, expiresAt });
   }
 
   /**
@@ -558,10 +641,11 @@ export class CacheEngine {
     key: string,
     value: string,
     originalSize: number,
-    compressedSize: number
+    compressedSize: number,
+    options?: CacheSetOptions
   ): Promise<void> {
     // First do the regular set
-    this.set(key, value, originalSize, compressedSize);
+    this.set(key, value, originalSize, compressedSize, options);
 
     // Generate and store embedding if semantic caching is enabled
     if (
@@ -666,9 +750,10 @@ export class CacheEngine {
         SUM(compressed_size) as total_compressed,
         SUM(original_size) as total_original
       FROM cache
+      WHERE expires_at IS NULL OR expires_at > ?
     `);
 
-    const row = stmt.get() as {
+    const row = stmt.get(Date.now()) as {
       total_entries: number;
       total_hits: number;
       total_compressed: number;
@@ -711,12 +796,13 @@ export class CacheEngine {
           compressed_size,
           SUM(compressed_size) OVER (ORDER BY last_accessed_at DESC, key ASC) as running_total
         FROM cache
+        WHERE expires_at IS NULL OR expires_at > ?
       )
       SELECT key FROM ranked
       WHERE running_total <= ?
     `
       )
-      .all(maxSizeBytes) as { key: string }[];
+      .all(Date.now(), maxSizeBytes) as { key: string }[];
 
     if (keysToKeep.length === 0) {
       // If no keys fit in the limit, keep none and delete all
@@ -756,17 +842,45 @@ export class CacheEngine {
         original_size as originalSize,
         hit_count as hitCount,
         created_at as createdAt,
-        last_accessed_at as lastAccessedAt
+        last_accessed_at as lastAccessedAt,
+        expires_at as expiresAt
       FROM cache
+      WHERE expires_at IS NULL OR expires_at > ?
       ORDER BY hit_count DESC, last_accessed_at DESC
     `);
 
-    return stmt.all() as CacheEntry[];
+    return stmt.all(Date.now()) as CacheEntry[];
   }
 
   /**
    * Update hit count and last accessed time
    */
+  /** An entry past its expiry is a miss, not a stale hit. */
+  private isExpired(expiresAt: number | null | undefined): boolean {
+    return (
+      expiresAt !== null && expiresAt !== undefined && expiresAt <= Date.now()
+    );
+  }
+
+  /**
+   * Remove an entry that has outlived its TTL, from both tiers.
+   *
+   * Reads are expected to survive a cache that has become unwritable -- the
+   * caller still gets the right answer (a miss) whether or not the row could
+   * be deleted -- so the failure is reported and not thrown.
+   */
+  private dropExpired(key: string): void {
+    this.memoryCache.delete(key);
+    try {
+      this.db.prepare('DELETE FROM cache WHERE key = ?').run(key);
+    } catch (error) {
+      console.error(
+        `[token-optimizer] could not remove expired cache entry ${key}:`,
+        error
+      );
+    }
+  }
+
   /** Strictly increasing, and never below what is already stored. */
   private nextRecencyStamp(): number {
     if (this.recencyStamp === 0) {
