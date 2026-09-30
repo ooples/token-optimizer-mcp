@@ -785,11 +785,6 @@ if (promote) {
   process.exit(0);
 }
 
-if (asJson) {
-  console.log(JSON.stringify(report, null, 2));
-  process.exit(0);
-}
-
 // IS THE RECORD THESE VERDICTS CAME FROM RE-RUNNABLE BY ANYONE ELSE? Every
 // line above compares the recorded figures against the ratchet, and not one of
 // them asks whether the recording itself could be repeated. A record with no
@@ -825,12 +820,33 @@ const declaredUnclaimed = new Set(
     .map(([name]) => `${name}/retention`)
 );
 const undeclared = unclaimedKeys.filter((k) => !declaredUnclaimed.has(k));
-if (undeclared.length) {
+if (undeclared.length)
   console.error(
     `\nBOARD IS WRONG - ${undeclared.length} criterion(s) left the board that no ` +
       `ROWS entry declares out of scope:\n  ${undeclared.join(`\n  `)}`
   );
-  process.exit(1);
+
+// THE VERDICT IS ONE EXPRESSION AND EVERY MODE EXITS ON IT. --json used to
+// print the report and exit zero whatever the report said, so a caller that ran
+// the gate for its machine-readable output -- CI above all -- was told the run
+// passed while that same report, in that same process, recorded an enforced
+// pair regressing. A gate whose exit status does not depend on its own verdict
+// is not a gate. The condition is named once here and read by both paths.
+const failed =
+  undeclared.length > 0 ||
+  Boolean(degraded) ||
+  Boolean(notReproducible) ||
+  regressed.length > 0 ||
+  stale.length > 0 ||
+  unverified.length > 0 ||
+  unpromoted.length > 0;
+
+// PRINTED BEFORE THE EXIT AND NOT INSTEAD OF IT: a --json caller still gets the
+// whole report on a failing run, which is what it needs in order to say what
+// failed. Only the status changes.
+if (asJson) {
+  console.log(JSON.stringify(report, null, 2));
+  process.exit(failed ? 1 : 0);
 }
 
 console.log(
@@ -894,13 +910,4 @@ if (notReproducible)
       `\n  Re-record with head-to-head.mjs --record from a clean tree against a capture that carries it.`
   );
 
-process.exit(
-  degraded ||
-  notReproducible ||
-  regressed.length ||
-  stale.length ||
-  unverified.length ||
-  unpromoted.length
-    ? 1
-    : 0
-);
+process.exit(failed ? 1 : 0);
