@@ -106,6 +106,11 @@ import {
   SMART_TSCONFIG_TOOL_DEFINITION,
 } from '../tools/configuration/smart-tsconfig.js';
 import {
+  getSmartWorkflowTool,
+  SMART_WORKFLOW_TOOL_DEFINITION,
+  type SmartWorkflowRequest,
+} from '../tools/configuration/smart-workflow.js';
+import {
   runSmartPretty,
   SMART_PRETTY_TOOL_DEFINITION,
 } from '../tools/output-formatting/smart-pretty.js';
@@ -209,6 +214,21 @@ import {
   runSmartSummarization,
   SMARTSUMMARIZATIONTOOL,
 } from '../tools/intelligence/smart-summarization.js';
+import {
+  runAnomalyExplainer,
+  ANOMALYEXPLAINERTOOL,
+  type AnomalyExplainerOptions,
+} from '../tools/intelligence/anomaly-explainer.js';
+import {
+  getKnowledgeGraphTool,
+  KNOWLEDGE_GRAPH_TOOL_DEFINITION,
+  type KnowledgeGraphOptions,
+} from '../tools/intelligence/knowledge-graph.js';
+import {
+  getSentimentAnalysisTool,
+  SENTIMENT_ANALYSIS_TOOL_DEFINITION,
+  type SentimentAnalysisOptions,
+} from '../tools/intelligence/sentiment-analysis.js';
 
 // Analytics tools
 import {
@@ -475,6 +495,11 @@ const customWidget = getCustomWidget(cache, tokenCounter, metrics);
 const dataVisualizer = getDataVisualizer(cache, tokenCounter, metrics);
 const healthMonitor = getHealthMonitor(cache, tokenCounter, metrics);
 const logDashboard = getLogDashboard(cache, tokenCounter, metrics);
+
+// Initialize Intelligence tools that keep state between calls
+const knowledgeGraph = getKnowledgeGraphTool(cache, tokenCounter, metrics);
+const sentimentAnalysis = getSentimentAnalysisTool(cache, tokenCounter, metrics);
+const smartWorkflow = getSmartWorkflowTool(cache, tokenCounter, metrics);
 
 // Initialize Build Systems tools
 const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
@@ -884,6 +909,10 @@ const TOOL_DEFINITIONS = [
   PREDICTIVEANALYTICSTOOL,
   RECOMMENDATIONENGINETOOL,
   SMARTSUMMARIZATIONTOOL,
+  ANOMALYEXPLAINERTOOL,
+  KNOWLEDGE_GRAPH_TOOL_DEFINITION,
+  SENTIMENT_ANALYSIS_TOOL_DEFINITION,
+  SMART_WORKFLOW_TOOL_DEFINITION,
   // Build Systems tools
   SMART_PROCESSES_TOOL_DEFINITION,
   SMART_NETWORK_TOOL_DEFINITION,
@@ -2838,6 +2867,57 @@ async function handleToolCall(request: {
       case 'smart-summarization': {
         const options = args as any;
         const result = await runSmartSummarization(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+      case 'anomaly_explainer': {
+        const options = args as unknown as AnomalyExplainerOptions;
+        const result = await runAnomalyExplainer(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'knowledge_graph': {
+        const options = args as unknown as KnowledgeGraphOptions;
+        const result = await knowledgeGraph.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'sentiment_analysis': {
+        const options = args as unknown as SentimentAnalysisOptions;
+        const result = await sentimentAnalysis.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_workflow': {
+        const request = args as unknown as SmartWorkflowRequest;
+        const result = await smartWorkflow.run(request);
         return {
           content: [
             {

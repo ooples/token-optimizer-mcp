@@ -1643,7 +1643,7 @@ function percentile(values: number[], p: number): number {
 // ============================================================================
 
 export const ANOMALYEXPLAINERTOOL = {
-  name: 'anomalyexplainer',
+  name: 'anomaly_explainer',
   description:
     'Explain anomalies with root cause analysis, hypothesis generation, and remediation suggestions',
   inputSchema: {

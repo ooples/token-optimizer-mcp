@@ -944,6 +944,123 @@ export const SmartServiceSchema = z
   })
   .passthrough();
 
+// knowledge_graph
+export const KnowledgeGraphSchema = z
+  .object({
+    operation: z.enum([
+      'build-graph',
+      'query',
+      'find-paths',
+      'detect-communities',
+      'infer-relations',
+      'visualize',
+      'export-graph',
+      'merge-graphs',
+    ]),
+    entities: z.array(z.any()).optional(),
+    relations: z.array(z.any()).optional(),
+    pattern: z.record(z.any()).optional(),
+    sourceId: z.string().optional(),
+    targetId: z.string().optional(),
+    algorithm: z.string().optional(),
+    layout: z.enum(['force', 'hierarchical', 'circular', 'radial']).optional(),
+    format: z.enum(['json', 'graphml', 'dot', 'csv', 'cytoscape']).optional(),
+    graphId: z.string().optional(),
+    useCache: z.boolean().optional(),
+    cacheTTL: z.number().optional(),
+    maxHops: z.number().optional(),
+    communityAlgorithm: z
+      .enum(['louvain', 'label-propagation', 'modularity'])
+      .optional(),
+    minCommunitySize: z.number().optional(),
+    rankingAlgorithm: z
+      .enum(['pagerank', 'betweenness', 'closeness', 'eigenvector'])
+      .optional(),
+    confidenceThreshold: z.number().optional(),
+    maxInferences: z.number().optional(),
+    maxNodes: z.number().optional(),
+    includeLabels: z.boolean().optional(),
+    imageWidth: z.number().optional(),
+    imageHeight: z.number().optional(),
+    graphs: z.array(z.any()).optional(),
+    mergeStrategy: z.enum(['union', 'intersection', 'override']).optional(),
+  })
+  .passthrough();
+
+// sentiment_analysis
+export const SentimentAnalysisSchema = z
+  .object({
+    operation: z.enum([
+      'analyze-sentiment',
+      'detect-emotions',
+      'extract-topics',
+      'classify-feedback',
+      'trend-analysis',
+      'comparative-analysis',
+      'batch-analyze',
+      'train-model',
+      'export-results',
+    ]),
+    text: z.string().optional(),
+    texts: z.array(z.string()).optional(),
+    language: z.string().optional(),
+    domain: z.enum(['general', 'technical', 'support', 'product']).optional(),
+    categories: z.array(z.string()).optional(),
+    timeRange: z.record(z.any()).optional(),
+    granularity: z.enum(['hourly', 'daily', 'weekly']).optional(),
+    dataPoints: z.array(z.any()).optional(),
+    groups: z.array(z.any()).optional(),
+    format: z.enum(['json', 'csv', 'markdown']).optional(),
+    useCache: z.boolean().optional(),
+    cacheTTL: z.number().optional(),
+    batchSize: z.number().optional(),
+    trainingData: z.array(z.any()).optional(),
+    outputPath: z.string().optional(),
+    threshold: z.record(z.any()).optional(),
+  })
+  .passthrough();
+
+// anomaly_explainer
+export const AnomalyExplainerSchema = z
+  .object({
+    operation: z.enum([
+      'explain',
+      'analyze-root-cause',
+      'generate-hypotheses',
+      'test-hypothesis',
+      'get-baseline',
+      'correlate-events',
+      'impact-assessment',
+      'suggest-remediation',
+    ]),
+    anomaly: z.record(z.any()).optional(),
+    historicalData: z.array(z.any()).optional(),
+    hypothesis: z.string().optional(),
+    events: z.array(z.any()).optional(),
+    useCache: z.boolean().optional(),
+    cacheTTL: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_workflow
+export const SmartWorkflowSchema = z
+  .object({
+    operation: z.enum([
+      'analyze',
+      'list-workflows',
+      'get-jobs',
+      'get-triggers',
+      'validate',
+      'optimize',
+      'visualize',
+      'get-secrets',
+    ]),
+    filePath: z.string().optional(),
+    projectRoot: z.string().optional(),
+    parsedWorkflow: z.record(z.any()).optional(),
+    options: z.record(z.any()).optional(),
+  })
+  .passthrough();
 export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   smart_complexity: SmartComplexitySchema,
   smart_dependencies: SmartDependenciesSchema,
@@ -1035,6 +1152,10 @@ export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   'predictive-analytics': PredictiveAnalyticsSchema,
   'recommendation-engine': RecommendationEngineSchema,
   'smart-summarization': SmartSummarizationSchema,
+  knowledge_graph: KnowledgeGraphSchema,
+  sentiment_analysis: SentimentAnalysisSchema,
+  anomaly_explainer: AnomalyExplainerSchema,
+  smart_workflow: SmartWorkflowSchema,
   get_hook_analytics: GetHookAnalyticsSchema,
   get_action_analytics: GetActionAnalyticsSchema,
   get_mcp_server_analytics: GetMcpServerAnalyticsSchema,

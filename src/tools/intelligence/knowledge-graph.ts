@@ -1815,7 +1815,7 @@ export function getKnowledgeGraphTool(
 export const KNOWLEDGE_GRAPH_TOOL_DEFINITION = {
   name: 'knowledge_graph',
   description:
-    'Build and query knowledge graphs with 91% token reduction through intelligent caching. Supports graph building, pattern querying, path finding, community detection, node ranking, relation inference, visualization, and export.',
+    'Build a directed graph of entities and relations you supply, then query it by pattern, find paths between nodes, detect communities, rank nodes, infer relations, visualize it, merge two graphs, or export it. The graph is held in the cache between calls, so a query does not have to resend the entities. This is a general-purpose graph over data you provide; it does not read your codebase.',
   inputSchema: {
     type: 'object',
     properties: {

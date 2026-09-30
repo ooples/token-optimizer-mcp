@@ -1482,7 +1482,7 @@ export function getSentimentAnalysisTool(
 export const SENTIMENT_ANALYSIS_TOOL_DEFINITION = {
   name: 'sentiment_analysis',
   description:
-    'Analyze sentiment in logs, feedback, and communications with 90% token reduction through intelligent caching. Supports sentiment analysis, emotion detection, topic extraction, feedback classification, trend analysis, and comparative analysis.',
+    'Score the sentiment of text you supply -- logs, review comments, issue threads, survey answers -- and derive emotions, topics, a feedback classification, a trend over timestamped samples, or a comparison between two sets. Scoring is lexicon-based and runs locally; results are cached so a second pass over the same text is free.',
   inputSchema: {
     type: 'object',
     properties: {
