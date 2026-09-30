@@ -50,10 +50,15 @@ const TTL_SAID = /CCR TTL: (\d+) seconds/;
 export function resolutionUsable(entry, prov = null, name = null) {
   if (entry === null || entry === undefined)
     return { usable: false, detail: 'no resolution recorded for this workload' };
-  if (typeof entry.text !== 'string')
-    return { usable: false, detail: 'resolution carries no resolved text' };
+  // THE RESOLVER ERROR IS CHECKED FIRST, because it is the more specific
+  // refusal and the two now fire together: a row whose resolver raised is
+  // written with a null `text`, so the shape check below would otherwise win
+  // the race and report "carries no resolved text" for a row that says, in the
+  // very next field, exactly which exception stopped it.
   if (entry.error)
     return { usable: false, detail: `their resolver raised ${String(entry.error)}` };
+  if (typeof entry.text !== 'string')
+    return { usable: false, detail: 'resolution carries no resolved text' };
 
   const markers = Number(entry.markers ?? 0);
   const unresolved = Number(entry.unresolved ?? 0);

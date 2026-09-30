@@ -121,27 +121,40 @@ for name, entry in sorted(theirs.items()):
         resolved = resolve_markers_in_text(text)
         error = None
     except Exception as exc:  # their resolver, their failure modes
-        resolved, error = text, f"{type(exc).__name__}: {exc}"
-    unresolved = len(UNRESOLVED.findall(resolved))
-    reasons = sorted(set(REASON.findall(resolved)))
+        # A CRASH IS NOT A PERFECT SCORE. Falling back to `text` left the row
+        # holding their markers with no `[unresolved:` suffix on any of them, so
+        # `unresolved` came out zero and `redeemed` came out equal to `markers`:
+        # full marks for a resolver that raised, printed beside the error that
+        # says it never ran. Nothing here was measured, so nothing here gets a
+        # number. The scorer already refuses a row carrying `error`
+        # (store-resolution.mjs), and this makes the artifact say the same thing
+        # itself rather than leaving the rule to whoever reads it next.
+        resolved, error = None, f"{type(exc).__name__}: {exc}"
+    unresolved = None if resolved is None else len(UNRESOLVED.findall(resolved))
+    reasons = [] if resolved is None else sorted(set(REASON.findall(resolved)))
     for reason in reasons:
         said = TTL_SAID.search(reason)
         if said:
             ttl_said.add(int(said.group(1)))
     out[name] = {
         "text": resolved,
+        # OURS TO COUNT EITHER WAY: `markers` is this file counting their
+        # markers in the text their engine emitted, which does not depend on
+        # their resolver having run. Everything below it does.
         "markers": markers,
-        "redeemed": markers - unresolved,
+        "redeemed": None if resolved is None else markers - unresolved,
         "unresolved": unresolved,
-        "grewBy": len(resolved) - len(text),
+        "grewBy": None if resolved is None else len(resolved) - len(text),
         "error": error,
         # Distinct reasons only. A workload with forty identical TTL misses is
         # one fact, not forty, and the scorer reads the fact.
         "reasons": reasons,
     }
+    redeemed_col = "   ?" if resolved is None else f"{markers - unresolved:>4}"
+    after_col = "       ?" if resolved is None else f"{len(resolved):>8}"
     print(
-        f"{name:<24} markers {markers:>4}  redeemed {markers - unresolved:>4}"
-        f"  chars {len(text):>8} -> {len(resolved):>8}"
+        f"{name:<24} markers {markers:>4}  redeemed {redeemed_col}"
+        f"  chars {len(text):>8} -> {after_col}"
         + (f"  ERROR {error}" if error else "")
     )
 
