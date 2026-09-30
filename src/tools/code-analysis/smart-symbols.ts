@@ -257,11 +257,20 @@ export class SmartSymbolsTool {
     fileName: string,
     sourceFile: ts.SourceFile
   ): ts.LanguageServiceHost {
+    // TypeScript addresses files by a path it has normalised to forward
+    // slashes, so a host that compares against a Windows path verbatim never
+    // recognises its own file: it is asked for 'C:/dir/x.ts', holds
+    // 'C:\\dir\\x.ts', answers undefined, and the service reports "Could not
+    // find source file". That made smart_symbols fail for every absolute
+    // Windows path and every relative one, leaving a forward-slash absolute
+    // path -- which no Windows client sends -- as the only input that worked.
+    // Comparing in the normalised form is what the service already assumes.
+    const canonical = fileName.split('\\').join('/');
     return {
-      getScriptFileNames: () => [fileName],
+      getScriptFileNames: () => [canonical],
       getScriptVersion: () => '0',
       getScriptSnapshot: (name) => {
-        if (name === fileName) {
+        if (name.split('\\').join('/') === canonical) {
           return ts.ScriptSnapshot.fromString(sourceFile.text);
         }
         return undefined;
