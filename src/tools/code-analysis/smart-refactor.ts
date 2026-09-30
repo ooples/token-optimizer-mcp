@@ -17,7 +17,10 @@ import { TokenCounter } from '../../core/token-counter.js';
 import {
   SmartComplexityTool,
   getSmartComplexityTool,
+  type FunctionComplexity,
+  type SmartComplexityResult,
 } from './smart-complexity.js';
+import { decodeTable } from '../shared/table.js';
 
 export interface SmartRefactorOptions {
   filePath?: string;
@@ -274,14 +277,21 @@ export class SmartRefactorTool {
   }
 
   private suggestExtractMethod(
-    complexityResult: any,
+    complexityResult: SmartComplexityResult,
     minComplexity: number
   ): RefactorSuggestion[] {
     const suggestions: RefactorSuggestion[] = [];
 
+    // Decoded back to records. smart_complexity sends the field names once
+    // and the values as rows, which costs the caller nothing to reverse and
+    // saved about half the size of that block.
+    const analysed = decodeTable<FunctionComplexity>(
+      complexityResult.functions
+    );
+
     // Find complex functions
-    const complexFunctions = complexityResult.functions.filter(
-      (f: any) => f.complexity.cyclomatic >= minComplexity
+    const complexFunctions = analysed.filter(
+      (f) => f.complexity.cyclomatic >= minComplexity
     );
 
     for (const func of complexFunctions) {
@@ -510,11 +520,15 @@ export class SmartRefactorTool {
     return suggestions;
   }
 
-  private suggestReduceComplexity(complexityResult: any): RefactorSuggestion[] {
+  private suggestReduceComplexity(
+    complexityResult: SmartComplexityResult
+  ): RefactorSuggestion[] {
     const suggestions: RefactorSuggestion[] = [];
 
     // Check for high cognitive complexity
-    for (const func of complexityResult.functions) {
+    for (const func of decodeTable<FunctionComplexity>(
+      complexityResult.functions
+    )) {
       if (func.complexity.cognitive > 15) {
         const location = func.location;
         suggestions.push({

@@ -3,7 +3,6 @@
  *
  * Analyzes code complexity metrics with intelligent caching
  * Calculates cyclomatic, cognitive, and Halstead metrics
- * Target: 70-80% token reduction through metric summarization
  */
 
 import * as ts from 'typescript';
@@ -14,6 +13,27 @@ import { createHash } from 'crypto';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
+import { displayPath } from '../shared/report-shape.js';
+import { measured } from '../shared/savings.js';
+import { encodeTable, type Table } from '../shared/table.js';
+
+/**
+ * Places a reported complexity figure is rounded to.
+ *
+ * Halstead's derived quantities are irrational functions of four integer
+ * counts, and they were serialised at full double precision: a single
+ * function's block carried calculatedLength 88.71062275542812, volume
+ * 176.41891628622352, effort 464.26030601637774 and five more like them.
+ * Every digit past the second is a token spent stating a heuristic estimate
+ * to a precision its own inputs do not have; on a 13-function file the
+ * per-function complexity blocks cost 1692 tokens against a 1669-token
+ * source file, and the long tails were most of that.
+ */
+const METRIC_DECIMALS = 2;
+
+function round(value: number): number {
+  return Number(value.toFixed(METRIC_DECIMALS));
+}
 
 export interface SmartComplexityOptions {
   filePath?: string;
@@ -72,12 +92,43 @@ export interface SmartComplexityResult {
     fromCache: boolean;
     duration: number;
   };
-  functions: FunctionComplexity[];
-  fileMetrics: ComplexityMetrics;
+  /**
+   * One row per function, field names sent once.
+   *
+   * Decode with `decodeTable<FunctionComplexity>(result.functions)` for the
+   * records. They were sent as an array of objects, which repeated all 24
+   * field names on every element -- about half of the 1639 tokens the block
+   * cost on a 13-function file, to re-label numbers the first element had
+   * already labelled.
+   */
+  functions: Table;
+  // NO fileMetrics FIELD, DELIBERATELY. It was the same object as
+  // summary.totalComplexity -- not a similar one, the identical reference --
+  // so every response serialised the whole file-level block twice, measured at
+  // 133 to 139 tokens a copy. summary.totalComplexity is the one that stays,
+  // because it sits with the rest of the file-level answer.
   recommendations: string[];
   metrics: {
+    /** Tokens the source file itself costs, which is what reading it would cost. */
     originalTokens: number;
+    /**
+     * Tokens of this response as it is sent, not counting this metrics block.
+     *
+     * This used to be the size of a SEPARATE seven-field summary that the tool
+     * built solely to be counted and then discarded -- never the response, and
+     * never sent to anyone. Against an equally invented baseline (the response
+     * pretty-printed at indent 2, another shape nobody receives) it published
+     * a 95.85% reduction on a file where the real response cost 44% MORE than
+     * reading the source.
+     */
     compactedTokens: number;
+    /**
+     * (originalTokens - compactedTokens) / originalTokens, as a percentage.
+     *
+     * NEGATIVE when this response costs more than the file it analysed, which
+     * is reported rather than clamped: on a small file with many small
+     * functions, per-function metrics genuinely cost more than the code.
+     */
     reductionPercentage: number;
   };
 }
@@ -215,7 +266,10 @@ export class SmartComplexityTool {
     // Build result
     const result: SmartComplexityResult = {
       summary: {
-        file: filePath || 'anonymous',
+        // Relative to the working directory where that is shorter: JSON
+        // escapes every Windows separator to a doubled backslash and each
+        // escape is its own token.
+        file: filePath ? displayPath(absolutePath ?? filePath) : 'anonymous',
         totalComplexity: fileMetrics,
         averageComplexity: avgComplexity,
         maxComplexity,
@@ -225,8 +279,9 @@ export class SmartComplexityTool {
         fromCache: false,
         duration: Date.now() - startTime,
       },
-      functions,
-      fileMetrics,
+      functions: encodeTable(
+        functions as unknown as Record<string, unknown>[]
+      ),
       recommendations,
       metrics: {
         originalTokens: 0,
@@ -235,17 +290,30 @@ export class SmartComplexityTool {
       },
     };
 
-    // Calculate token metrics
-    const originalText = JSON.stringify(result, null, 2);
-    const compactText = this.compactResult(result);
-    result.metrics.originalTokens =
-      this.tokenCounter.count(originalText).tokens;
-    result.metrics.compactedTokens =
-      this.tokenCounter.count(compactText).tokens;
-    result.metrics.reductionPercentage =
-      ((result.metrics.originalTokens - result.metrics.compactedTokens) /
-        result.metrics.originalTokens) *
-      100;
+    // THE SOURCE IS THE BASELINE, AND THE RESPONSE IS COUNTED AS IT IS SENT.
+    //
+    // Both figures used to be invented. The baseline was this same result
+    // pretty-printed at indent 2 -- a shape no caller ever receives, inflated
+    // by its own indentation -- and the treatment was a seven-field summary
+    // built by a private compactResult() helper whose only caller was this
+    // count, so the tool was comparing two artifacts it never sent and
+    // publishing the difference as its saving. What this tool actually
+    // replaces is reading the file, so that is the baseline.
+    const originalTokens = this.tokenCounter.count(content).tokens;
+    // Counted without the metrics block, so the number is not trying to
+    // account for its own digits.
+    const { metrics: _placeholder, ...served } = result;
+    const compactedTokens = this.tokenCounter.count(
+      JSON.stringify(served)
+    ).tokens;
+    const savings = measured(originalTokens, compactedTokens);
+    result.metrics = {
+      originalTokens: savings.originalTokenCount,
+      compactedTokens: savings.tokenCount,
+      reductionPercentage: round(
+        (savings.tokensSaved / (savings.originalTokenCount || 1)) * 100
+      ),
+    };
 
     // Cache result
     this.cacheResult(cacheKey, result);
@@ -512,6 +580,8 @@ export class SmartComplexityTool {
     const time = effort / 18; // seconds
     const bugs = volume / 3000;
 
+    // The four counts are integers and stay exact. The rest are estimates
+    // derived from them, and are rounded on the way out: see METRIC_DECIMALS.
     return {
       distinctOperators: n1,
       distinctOperands: n2,
@@ -519,12 +589,12 @@ export class SmartComplexityTool {
       totalOperands: N2,
       vocabulary,
       length,
-      calculatedLength,
-      volume,
-      difficulty,
-      effort,
-      time,
-      bugs,
+      calculatedLength: round(calculatedLength),
+      volume: round(volume),
+      difficulty: round(difficulty),
+      effort: round(effort),
+      time: round(time),
+      bugs: round(bugs),
     };
   }
 
@@ -544,8 +614,10 @@ export class SmartComplexityTool {
       0.23 * cyclomatic -
       16.2 * Math.log(lloc || 1);
 
-    // Normalize to 0-100 scale
-    return Math.max(0, Math.min(100, mi));
+    // Normalize to 0-100 scale. Rounded like the Halstead figures it is
+    // derived from -- the volume it reads is already rounded, so the digits
+    // this used to carry past the second were not even self-consistent.
+    return round(Math.max(0, Math.min(100, mi)));
   }
 
   private countLines(
@@ -667,30 +739,6 @@ export class SmartComplexityTool {
     return 'low';
   }
 
-  private compactResult(result: SmartComplexityResult): string {
-    // Create a compact summary for token efficiency
-    const compact = {
-      file: result.summary.file,
-      risk: result.summary.riskLevel,
-      avg: Math.round(result.summary.averageComplexity * 10) / 10,
-      max: result.summary.maxComplexity,
-      above: result.summary.functionsAboveThreshold,
-      total: result.summary.totalFunctions,
-      mi: result.fileMetrics.maintainabilityIndex
-        ? Math.round(result.fileMetrics.maintainabilityIndex)
-        : undefined,
-      high: result.functions
-        .filter((f) => f.aboveThreshold)
-        .map((f) => ({
-          n: f.name,
-          c: f.complexity.cyclomatic,
-          cog: f.complexity.cognitive,
-        })),
-      recs: result.recommendations,
-    };
-
-    return JSON.stringify(compact);
-  }
 
   private async generateCacheKey(
     content: string,
