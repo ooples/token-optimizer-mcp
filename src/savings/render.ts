@@ -16,6 +16,10 @@ import {
   type ProxySavingsReport,
   type ProxySavingsWindow,
 } from './proxy.js';
+import {
+  OPERATOR_PRICE_TABLE_ENV,
+  type OperatorPriceTableStatus,
+} from '../analytics/operator-prices.js';
 
 const BAR_WIDTH = 16;
 
@@ -317,9 +321,49 @@ export function unpricedNote(models: readonly string[]): string {
  * eye. The proxy section is omitted entirely when its ledger was not read; the
  * inputs block at the bottom is what says so.
  */
+/**
+ * WHERE EACH RATE CAME FROM, AND HOW TO SUPPLY A MISSING ONE.
+ *
+ * Three different facts share this one line because an operator reading an
+ * unpriced model needs exactly one of them: that their own table supplied some
+ * of these rates, that it was refused and why, or that such a table is how the
+ * gap gets closed. A refusal is named rather than swallowed -- a typo in the
+ * path would otherwise read as money that quietly went missing.
+ */
+export function priceTableNote(
+  status: OperatorPriceTableStatus,
+  unpricedModels: number
+): string {
+  if (status.path !== null && status.error !== null) {
+    return (
+      `The operator price table at ${status.path} was refused ` +
+      `(${status.error}), so no rate from it was used.`
+    );
+  }
+  if (status.contracts > 0 && status.path !== null) {
+    const noun = status.contracts === 1 ? 'rate' : 'rates';
+    return (
+      `${count(status.contracts)} ${noun} came from the operator price table ` +
+      `at ${status.path}, labelled as yours wherever they priced a request.`
+    );
+  }
+  if (unpricedModels > 0) {
+    return (
+      `To price a model the catalog does not publish, name a JSON price table ` +
+      `in ${OPERATOR_PRICE_TABLE_ENV}; its rates are reported as yours, and ` +
+      `nothing is ever charged at a default rate.`
+    );
+  }
+  return '';
+}
+
 export function renderSavings(
   report: SavingsReport,
-  options: { readonly topN: number; readonly proxy: ProxyInput }
+  options: {
+    readonly topN: number;
+    readonly proxy: ProxyInput;
+    readonly priceTable: OperatorPriceTableStatus;
+  }
 ): string {
   const lines: string[] = ['', MCP_SECTION];
   for (const window of report.windows) lines.push(windowLine(window));
@@ -336,6 +380,14 @@ export function renderSavings(
       ...renderProxySavings(options.proxy.report, { topN: options.topN })
     );
   }
+  const table = priceTableNote(
+    options.priceTable,
+    report.unpricedModels.length +
+      (options.proxy.kind === PROXY_INPUT.Read
+        ? options.proxy.report.unpricedModels.length
+        : 0)
+  );
+  if (table !== '') lines.push('', table);
   lines.push('', ...inputLines(report, options.proxy));
   return lines.join('\n');
 }

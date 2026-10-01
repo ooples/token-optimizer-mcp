@@ -14,6 +14,7 @@ import {
 import type { AccountingRecord } from '../../../src/proxy/accounting.js';
 import type { AnalyticsEntry } from '../../../src/analytics/analytics-types.js';
 import { MODEL_PRICE_CATALOG } from '../../../src/analytics/provider-pricing.js';
+import { OPERATOR_PRICE_TABLE_ENV } from '../../../src/analytics/operator-prices.js';
 
 // Ids this file relies on being absent from the price catalog, guarded by the
 // last block below. They used to be real model ids the catalog had not been
@@ -337,6 +338,45 @@ describe('savingsJson', () => {
     expect(json.windows).toBe(report.windows);
     expect(json.byModel).toBe(report.byModel);
     expect(json.totalEntries).toBe(1);
+  });
+
+  it('reports where the operator table was read and what it contributed', () => {
+    // A CONSUMER HAS TO BE ABLE TO TELL THE TWO SOURCES APART. Folding an
+    // operator-supplied rate into the same column as a rate we can cite, with
+    // nothing in the document saying which is which, is the exact confusion
+    // this whole table was built to avoid.
+    const report = buildReport([verified()], new Date());
+    const json = savingsJson(report, { kind: PROXY_INPUT.NotConfigured }, {
+      path: '/rates.json',
+      contracts: 3,
+      error: null,
+    });
+    expect(json.pricing.operatorTable.env).toBe(OPERATOR_PRICE_TABLE_ENV);
+    expect(json.pricing.operatorTable.path).toBe('/rates.json');
+    expect(json.pricing.operatorTable.contracts).toBe(3);
+    expect(json.pricing.operatorTable.error).toBeNull();
+  });
+
+  it('reports a refused table as a refusal, not as an absent one', () => {
+    // The two states produce the same money -- none from the table -- and a
+    // document that cannot distinguish them hides a typo in the path as
+    // nothing at all.
+    const report = buildReport([verified()], new Date());
+    const refused = savingsJson(report, { kind: PROXY_INPUT.NotConfigured }, {
+      path: '/rates.json',
+      contracts: 0,
+      error: 'models[0] (x): "output" must be a number',
+    });
+    expect(refused.pricing.operatorTable.error).toContain('"output"');
+    expect(refused.pricing.operatorTable.contracts).toBe(0);
+    // Positive control: no table named reads as no path AND no error.
+    const none = savingsJson(report, { kind: PROXY_INPUT.NotConfigured }, {
+      path: null,
+      contracts: 0,
+      error: null,
+    });
+    expect(none.pricing.operatorTable.path).toBeNull();
+    expect(none.pricing.operatorTable.error).toBeNull();
   });
 });
 

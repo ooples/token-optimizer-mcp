@@ -7,6 +7,8 @@
  * and every result carries the source and effective date used to compute it.
  */
 
+import { operatorPriceContracts } from './operator-prices.js';
+
 export type PriceCurrency = 'USD' | 'CNY';
 
 export interface TokenUsageDimensions {
@@ -507,6 +509,21 @@ export function inferProviderRoute(
   return { provider: explicit || 'unknown', route: 'unknown' };
 }
 
+/**
+ * Every contract in force for this process: the operator's own table first,
+ * then the shipped catalog.
+ *
+ * The order is the point. An operator who has written down a rate knows
+ * something a public page cannot -- a negotiated discount, a gateway's margin,
+ * their own hardware -- so their row wins, and it carries its own source label
+ * out to the report so the two are never confused for one another.
+ */
+function contractsInForce(): readonly ModelPriceContract[] {
+  const operator = operatorPriceContracts();
+  if (operator.length === 0) return MODEL_PRICE_CATALOG;
+  return [...operator, ...MODEL_PRICE_CATALOG];
+}
+
 function contractAt(
   route: string,
   model: string,
@@ -515,7 +532,7 @@ function contractAt(
   const at = Date.parse(timestamp);
   const key = model.toLowerCase();
   return (
-    MODEL_PRICE_CATALOG.find((contract) => {
+    contractsInForce().find((contract) => {
       const begins = contract.effectiveFrom
         ? Date.parse(contract.effectiveFrom)
         : Number.NEGATIVE_INFINITY;

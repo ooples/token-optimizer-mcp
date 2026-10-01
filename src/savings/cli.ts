@@ -24,6 +24,12 @@
 import { argv, stdout } from 'process';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
 import type { AnalyticsEntry } from '../analytics/analytics-types.js';
+import {
+  OPERATOR_PRICE_TABLE_ENV,
+  PRICE_TABLE_NOTE,
+  operatorPriceTableStatus,
+  type OperatorPriceTableStatus,
+} from '../analytics/operator-prices.js';
 import { buildReport, type SavingsReport } from './windows.js';
 import {
   INPUTS_NOTE,
@@ -65,6 +71,8 @@ const USAGE = [
   '  --proxy-ledger <path> read this proxy ledger instead of the configured one',
   '',
   INPUTS_NOTE,
+  '',
+  PRICE_TABLE_NOTE,
 ].join('\n');
 
 /** A value, or null when the next argv item is really the next flag. */
@@ -189,7 +197,8 @@ export function proxyJson(proxy: ProxyInput): Record<string, unknown> {
 
 export function savingsJson(
   report: SavingsReport,
-  proxy: ProxyInput
+  proxy: ProxyInput,
+  priceTable: OperatorPriceTableStatus = operatorPriceTableStatus()
 ): Record<string, unknown> {
   return {
     scope: proxy.kind === PROXY_INPUT.Read ? SCOPE.Both : SCOPE.McpOnly,
@@ -198,6 +207,16 @@ export function savingsJson(
       source: 'versioned-provider-model-catalog',
       definition:
         'one immediate uncached-input equivalent per verified transport delta; a model with no exact catalog entry is left unpriced rather than counted at zero',
+      // THE OPERATOR'S OWN TABLE IS REPORTED, NOT FOLDED IN SILENTLY. A
+      // consumer has to be able to tell a rate we can cite from one the
+      // operator supplied, and a refused table has to be visible as a refusal
+      // rather than as an unpriced model with no explanation.
+      operatorTable: {
+        env: OPERATOR_PRICE_TABLE_ENV,
+        path: priceTable.path,
+        contracts: priceTable.contracts,
+        error: priceTable.error,
+      },
     },
     measurement: {
       definition:
@@ -293,7 +312,13 @@ export async function main(
     return 0;
   }
 
-  line(renderSavings(report, { topN: parsed.topN, proxy }));
+  line(
+    renderSavings(report, {
+      topN: parsed.topN,
+      proxy,
+      priceTable: operatorPriceTableStatus(),
+    })
+  );
   return 0;
 }
 

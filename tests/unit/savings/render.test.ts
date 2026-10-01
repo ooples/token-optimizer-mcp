@@ -15,12 +15,15 @@ import {
   groupLines,
   inputLines,
   money,
+  priceTableNote,
   proxyGateNote,
   renderProxySavings,
   renderSavings,
   unpricedNote,
   windowLine,
 } from '../../../src/savings/render.js';
+import { OPERATOR_PRICE_TABLE_ENV } from '../../../src/analytics/operator-prices.js';
+import type { OperatorPriceTableStatus } from '../../../src/analytics/operator-prices.js';
 import {
   PROXY_INPUT,
   type ProxyInput,
@@ -206,11 +209,24 @@ describe('the scope and gate notes', () => {
   });
 });
 
+// NO OPERATOR TABLE CONFIGURED is the shape every one of these fixtures
+// renders under, so the note below is the only thing that puts that line on
+// the page and the rest of the report is unaffected by it.
+const NO_TABLE: OperatorPriceTableStatus = {
+  path: null,
+  contracts: 0,
+  error: null,
+};
+
 describe('the whole report', () => {
   const notConfigured: ProxyInput = { kind: PROXY_INPUT.NotConfigured };
 
   it('puts the windows above the breakdowns and the inputs block last', () => {
-    const text = renderSavings(report(), { topN: 10, proxy: notConfigured });
+    const text = renderSavings(report(), {
+      topN: 10,
+      proxy: notConfigured,
+      priceTable: NO_TABLE,
+    });
     const lines = text.split('\n');
     const sectionAt = lines.findIndex((l) => l === 'MCP tool traffic');
     const todayAt = lines.findIndex((l) => l.startsWith('Today'));
@@ -228,6 +244,7 @@ describe('the whole report', () => {
     for (const line of renderSavings(report(), {
       topN: 10,
       proxy: notConfigured,
+      priceTable: NO_TABLE,
     }).split('\n')) {
       expect(line).toBe(line.replace(/\s+$/, ''));
     }
@@ -239,6 +256,7 @@ describe('the whole report', () => {
       {
         topN: 10,
         proxy: notConfigured,
+        priceTable: NO_TABLE,
       }
     );
     expect(text).not.toContain('no provable before-state');
@@ -246,7 +264,11 @@ describe('the whole report', () => {
   });
 
   it('omits the proxy section entirely when its ledger was not read', () => {
-    const text = renderSavings(report(), { topN: 10, proxy: notConfigured });
+    const text = renderSavings(report(), {
+      topN: 10,
+      proxy: notConfigured,
+      priceTable: NO_TABLE,
+    });
     // The inputs block names the proxy either way; the SECTION is a line of
     // its own, and that is what must be absent.
     expect(text.split(chr10)).not.toContain('Proxy wire traffic');
@@ -259,6 +281,7 @@ describe('the whole report', () => {
         path: '/l.jsonl',
         report: proxyReport(),
       },
+      priceTable: NO_TABLE,
     });
     expect(withProxy.split(chr10)).toContain('Proxy wire traffic');
     expect(withProxy).toContain('Encoder check');
@@ -519,6 +542,7 @@ describe('the note for models with no catalog price', () => {
     const text = renderSavings(report({ unpricedModels: ['gemini-pro'] }), {
       topN: 10,
       proxy: { kind: PROXY_INPUT.NotConfigured },
+      priceTable: NO_TABLE,
     });
     const lines = text.split(chr10b);
     expect(lines).toContain(unpricedNote(['gemini-pro']));
@@ -528,6 +552,7 @@ describe('the note for models with no catalog price', () => {
     const clean = renderSavings(report(), {
       topN: 10,
       proxy: { kind: PROXY_INPUT.NotConfigured },
+      priceTable: NO_TABLE,
     });
     expect(clean.split(chr10b)).not.toContain(unpricedNote(['gemini-pro']));
   });
@@ -544,5 +569,98 @@ describe('the note for models with no catalog price', () => {
     expect(renderProxySavings(proxyReport(), { topN: 10 })).not.toContain(
       unpricedNote(['gpt-6-astra'])
     );
+  });
+});
+
+describe('the price-table note', () => {
+  /**
+   * THREE DIFFERENT FACTS SHARE ONE LINE, so what matters is that the right one
+   * wins. A refused table outranks everything: a typo in the path otherwise
+   * reads as a handful of models that merely happen to be unpriced, and the
+   * operator goes looking for the missing money in the wrong place.
+   */
+  it('names the refusal and its reason ahead of anything else', () => {
+    const note = priceTableNote(
+      { path: '/rates.json', contracts: 0, error: 'models[0] (x): "output" must be a number' },
+      3
+    );
+    expect(note).toContain('/rates.json');
+    expect(note).toContain('was refused');
+    expect(note).toContain('"output" must be a number');
+    // Positive control: the invitation is what the SAME unpriced count prints
+    // when no table was named, so the refusal really did take precedence.
+    expect(priceTableNote({ path: null, contracts: 0, error: null }, 3)).toContain(
+      OPERATOR_PRICE_TABLE_ENV
+    );
+  });
+
+  it('counts the rates a loaded table contributed and labels them as the operators own', () => {
+    const note = priceTableNote(
+      { path: '/rates.json', contracts: 4, error: null },
+      0
+    );
+    expect(note).toContain('4 rates');
+    expect(note).toContain('/rates.json');
+    expect(note).toContain('labelled as yours');
+    // The singular is a real branch, not a cosmetic one: "1 rates" is the
+    // tell-tale of a count pasted into a sentence without being read.
+    expect(
+      priceTableNote({ path: '/rates.json', contracts: 1, error: null }, 0)
+    ).toContain('1 rate came from');
+  });
+
+  it('invites a table only while something is actually unpriced', () => {
+    const invited = priceTableNote({ path: null, contracts: 0, error: null }, 2);
+    expect(invited).toContain(OPERATOR_PRICE_TABLE_ENV);
+    expect(invited).toContain('nothing is ever charged at a default rate');
+    // NOTHING TO SAY IS SAID WITH NOTHING. Every model priced and no table
+    // configured is the ordinary case, and advertising an env var there would
+    // put a line on every report that no reader needs.
+    expect(priceTableNote({ path: null, contracts: 0, error: null }, 0)).toBe('');
+  });
+
+  it('puts the line on the report itself, not only in the helper', () => {
+    // The helper could be perfect and never be called. This is the wiring.
+    const loaded = renderSavings(report(), {
+      topN: 10,
+      proxy: { kind: PROXY_INPUT.NotConfigured },
+      priceTable: { path: '/rates.json', contracts: 2, error: null },
+    });
+    expect(loaded).toContain('/rates.json');
+    expect(
+      renderSavings(report(), {
+        topN: 10,
+        proxy: { kind: PROXY_INPUT.NotConfigured },
+        priceTable: NO_TABLE,
+      })
+    ).not.toContain('/rates.json');
+  });
+
+  it('counts unpriced models under the proxy table toward the invitation', () => {
+    // THE INVITATION IS ABOUT THE WHOLE PAGE. A ledger can name a model the
+    // analytics database never saw, so a gap that exists only under the proxy
+    // table still has to offer the operator the way to close it.
+    const proxyOnly = renderSavings(report(), {
+      topN: 10,
+      proxy: {
+        kind: PROXY_INPUT.Read,
+        path: '/l.jsonl',
+        report: proxyReport({ unpricedModels: ['gpt-6-astra'] }),
+      },
+      priceTable: NO_TABLE,
+    });
+    expect(proxyOnly).toContain(OPERATOR_PRICE_TABLE_ENV);
+    // Positive control: the same render with no gap on either half stays quiet.
+    expect(
+      renderSavings(report(), {
+        topN: 10,
+        proxy: {
+          kind: PROXY_INPUT.Read,
+          path: '/l.jsonl',
+          report: proxyReport(),
+        },
+        priceTable: NO_TABLE,
+      })
+    ).not.toContain(OPERATOR_PRICE_TABLE_ENV);
   });
 });
