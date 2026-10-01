@@ -70,11 +70,12 @@ const byName = (rec) => Object.fromEntries(rec.workloads.map((w) => [w.name, w])
 const num = (s) => Number(s);
 
 /** Run the scorer over `outDir` with a stub profile, and return the record. */
-function score(profile, { mirrorDir, recordTo } = {}) {
+function score(profile, { mirrorDir, recordTo, extraEnv } = {}) {
   const at = recordTo ?? join(tmp, `rec-${profile}.json`);
   const env = {
     ...process.env,
     BENCH_KNOWN_ANSWER_OURS: join(HERE, `ours-${profile}.mjs`),
+    ...extraEnv,
   };
   if (mirrorDir) env.BENCH_KA_MIRROR_DIR = mirrorDir;
   const run = spawnSync('node', [SCORER, join(tmp, 'out'), '--record', at], {
@@ -236,6 +237,77 @@ try {
     check(pct(rec.totals.tokens.ours) === 0, 'totals: 0.0% of tokens', rec.totals.tokens.ours);
     return rec;
   })();
+  // ------------------------------------------------------- the unpriced arm
+  // ONE MISSING MEASUREMENT MUST NOT TAKE THIRTY WITH IT. `baseContextTokens`
+  // is read off local agent transcripts, which a CI runner does not have and a
+  // second developer has different ones of, and the harness used to exit 2
+  // without it -- so every instrument in this file was unrunnable anywhere but
+  // one laptop, and the published cost column was a figure only that laptop
+  // could produce.
+  //
+  // Now the measurement is committed and the refusal is per figure. This runs
+  // the scorer with the record pointed somewhere it is not, and checks both
+  // halves: the cost figures are withheld AND SAID TO BE, and every figure
+  // that does not rest on a price is byte-identical to the priced run.
+  console.log('\nthe unpriced arm -- cost withheld, everything else scored');
+  {
+    const { run, at } = score('identity', {
+      recordTo: join(tmp, 'rec-unpriced.json'),
+      extraEnv: { BENCH_BASE_CONTEXT_RECORD: join(tmp, 'no-such-record.json') },
+    });
+    check(
+      run.status === 0 || run.status === 1,
+      'the scorer completes with no base-context record',
+      `exit ${run.status}`
+    );
+    check(
+      /WITHHELD: cost figures are not priced/.test(run.stderr),
+      'and says on stderr that the cost figures are not priced',
+      (run.stderr.split('\n').find((l) => /WITHHELD/.test(l)) ?? '').trim()
+    );
+    check(
+      /session cost, effective input tokens: WITHHELD/.test(run.stdout),
+      'and the cost section of the table says so where the figures would be'
+    );
+    const un = JSON.parse(readFileSync(at, 'utf8'));
+    // BOTH DIRECTIONS. `cost === null` alone would pass against a scorer that
+    // nulled the block on a priced run too, which is why the priced record is
+    // asserted to carry one.
+    check(
+      un.workloads.length === identity.workloads.length &&
+        un.workloads.every((w) => w.cost === null) &&
+        identity.workloads.every((w) => w.cost !== null),
+      'every workload records cost as null here and an object when priced',
+      `${un.workloads.length} workloads`
+    );
+    check(
+      un.workloads.every((w) => /no base-context record at/.test(String(w.costRefusal))) &&
+        identity.workloads.every((w) => w.costRefusal === null),
+      'and names the reason, which a zero could never do',
+      String(un.workloads[0]?.costRefusal)
+    );
+    check(
+      un.totals.cost === null &&
+        /no base-context record at/.test(String(un.totals.costRefusal)) &&
+        identity.totals.cost !== null,
+      'the corpus total is withheld the same way',
+      String(un.totals.costRefusal)
+    );
+    // AND THE REST OF THE RUN IS UNTOUCHED. This is the half that was lost
+    // every time the harness exited: the char, token and retention columns do
+    // not depend on base context at all, and they have to come out identical.
+    const nonCost = (rec) =>
+      JSON.stringify({
+        chars: rec.totals.chars,
+        tokens: rec.totals.tokens,
+        workloads: rec.workloads.map((w) => [w.name, w.chars, w.tokens, w.retention]),
+      });
+    check(
+      nonCost(un) === nonCost(identity) && nonCost(un).length > 100,
+      'and every figure that does not rest on a price is identical to the priced run',
+      `${nonCost(un).length} bytes compared`
+    );
+  }
   // ----------------------------------------------- the denominator, enumerated
   // `ids` is the denominator of every retention figure this project publishes,
   // so what is IN it is stated here by name rather than trusted as a count. On

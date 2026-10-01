@@ -91,11 +91,7 @@ import {
   corpusFaults,
 } from './offload.mjs';
 import { stubbedCaptureRefusal } from './capture-guard.mjs';
-import {
-  baseContextReadiness,
-  measureBaseContext,
-} from '../subscription/base-context.mjs';
-import { loadRequests } from '../subscription/transcripts.mjs';
+import { readBaseContext } from '../subscription/base-context.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -242,7 +238,7 @@ if (KNOWN_ANSWER_OURS && !stubRefusal) {
   );
 }
 
-// BASE CONTEXT, MEASURED HERE OR NOT CLAIMED AT ALL.
+// BASE CONTEXT, READ FROM THE RECORDING OR NOT PRICED AT ALL.
 //
 // Every session-cost figure below adds `baseContextTokens` to both arms, so the
 // constant sits in the numerator and the denominator of every savings ratio.
@@ -250,31 +246,31 @@ if (KNOWN_ANSWER_OURS && !stubRefusal) {
 // is the flattering direction, and the 12000 this replaced understated the
 // machine this harness runs on by 5.4x.
 //
-// There is no defensible default, because the number is a property of the
+// There is no defensible default, because the number is a property of an
 // environment -- its system prompt and its loaded tool schemas -- and not of
-// the code. So this refuses rather than falling back, the same way
-// `weeklyClaimReadiness` refuses a weekly claim with no offset-immune row.
-const baseMeasured = measureBaseContext({
-  requests: (await loadRequests()).requests,
-});
-const baseReady = baseContextReadiness(baseMeasured);
-if (!baseReady.ready) {
+// the code. It used to be re-measured from the local agent transcripts on every
+// run, which is worse than it sounds twice over: the published cost column was
+// a function of whose laptop produced it, reproducible by nobody, and on a
+// machine with no transcripts the harness exited 2 and took every unrelated
+// instrument down with it. So the measurement is taken once, deliberately, and
+// committed: `node bench/subscription/base-context.mjs --record`.
+//
+// AND AN UNPRICED RUN IS NOT A FAILED RUN. Only the cost figures rest on this
+// parameter. With no recording, or one below the readiness bar, those figures
+// are withheld -- printed as a refusal and recorded as `null` with the reason
+// beside them -- and every instrument that prices nothing still runs.
+const BASE = readBaseContext();
+const COST_PRICED = BASE.ready;
+if (!COST_PRICED) {
+  console.error('WITHHELD: cost figures are not priced in this environment.');
+  console.error(`  ${BASE.reason}`);
   console.error(
-    `REFUSED: base context has not been measured for this environment.`
+    '  record it with: node bench/subscription/base-context.mjs --record'
   );
-  console.error(`  ${baseReady.reason}`);
-  console.error('');
-  console.error(
-    '  Every cost figure this harness prints adds base context to both arms, so'
-  );
-  console.error(
-    '  quoting one without it would publish a saving nobody measured. Run:'
-  );
-  console.error('    node bench/subscription/base-context.mjs');
-  process.exit(2);
 }
-// The measured median, standing in for the parameter that used to be hardcoded.
-const PARAMS = { ...DEFAULTS, baseContextTokens: baseReady.tokens };
+// The recorded median, standing in for the parameter that used to be hardcoded.
+// `null` when unrecorded, and every read of it sits behind `COST_PRICED`.
+const PARAMS = { ...DEFAULTS, baseContextTokens: BASE.tokens };
 
 /**
  * THEIR MARKERS, REDEEMED BY A PROCESS THAT IS NOT THE ONE THAT WROTE THEM.
@@ -1514,7 +1510,11 @@ const armsFor = (r, params) => {
 // the field names of an older cost line would drop the rest in silence, and the
 // corpus row -- the one the README quotes -- would be quietly wrong while every
 // per-session row above it stayed right.
-const sessionCosts = rows.map((r) => {
+// AND NOT COMPUTED AT ALL WHEN THE BASE CONTEXT IS NOT RECORDED: every line
+// in here is denominated in effective input tokens, which is the payload plus
+// `baseContextTokens`, and arithmetic on a missing term still prints as a
+// number.
+const sessionCosts = !COST_PRICED ? [] : rows.map((r) => {
   const arms = armsFor(r, PARAMS);
   return {
     name: r.name,
@@ -1546,15 +1546,19 @@ const foldCorpus = (all) => {
       : breakEven(out.ours, out.theirsComparable);
   return out;
 };
-const corpus = foldCorpus(sessionCosts.map((c) => c.arms));
+const corpus = !COST_PRICED
+  ? null
+  : foldCorpus(sessionCosts.map((c) => c.arms));
 // Keyed for the record block, which walks `rows` rather than `sessionCosts`.
-const byName = Object.fromEntries(sessionCosts.map((c) => [c.name, c.arms]));
-const crossByName = Object.fromEntries(
-  sessionCosts.map((c) => [c.name, c.cross])
-);
-const crossComparableByName = Object.fromEntries(
-  sessionCosts.map((c) => [c.name, c.crossComparable])
-);
+const byName = !COST_PRICED
+  ? {}
+  : Object.fromEntries(sessionCosts.map((c) => [c.name, c.arms]));
+const crossByName = !COST_PRICED
+  ? {}
+  : Object.fromEntries(sessionCosts.map((c) => [c.name, c.cross]));
+const crossComparableByName = !COST_PRICED
+  ? {}
+  : Object.fromEntries(sessionCosts.map((c) => [c.name, c.crossComparable]));
 
 const k = (t) => `${(t / 1000).toFixed(1)}k`;
 // EVERY `times` HERE IS A CORPUS RATIO, SO THE COMMON TERM IS PER SESSION
@@ -1563,102 +1567,127 @@ const k = (t) => `${(t / 1000).toFixed(1)}k`;
 // context. That output is 11.6% of the measured bill and no arm touches it, so
 // it belongs on BOTH sides of a "what the cap buys" ratio -- omitted, it
 // pushed every multiple away from 1, always in our favour.
-const CORPUS_COMMON = commonSessionCost(PARAMS) * sessionCosts.length;
+const CORPUS_COMMON = !COST_PRICED
+  ? null
+  : commonSessionCost(PARAMS) * sessionCosts.length;
 const times = (base, arm) =>
   `${usageMultiplier(base, arm, { commonCost: CORPUS_COMMON, params: PARAMS }).toFixed(2)}x`;
 
-console.log(
-  `
+if (!COST_PRICED) {
+  // THE WHOLE COST SECTION, WITHHELD IN ONE PLACE. Printing a dash per column
+  // would leave the banner, the break-even sentence and the sensitivity grid
+  // all still claiming to describe something, so the section says what is
+  // missing and what to run rather than printing a shape with nothing in it.
+  console.log('');
+  console.log(
+    'session cost, effective input tokens: WITHHELD -- base context is not ' +
+      'recorded for this environment'
+  );
+  console.log(`  ${BASE.reason}`);
+  console.log(
+    '  Every cost figure adds base context to both arms, so quoting one ' +
+      'without it would'
+  );
+  console.log(
+    '  publish a saving nobody measured. Record it and this section prices ' +
+      'itself:'
+  );
+  console.log('    node bench/subscription/base-context.mjs --record');
+} else {
+  console.log(
+    `
 session cost, effective input tokens -- ${PARAMS.turnsAfter} turns after the ` +
-    `payload, ${k(PARAMS.baseContextTokens)} of prior context (MEASURED over ` +
-    `${baseMeasured.sessions} sessions on this machine, not assumed)`
-);
-console.log(
-  '                          spill sites |     nothing fetched      |  everything fetched  | ours vs'
-);
-console.log(
-  'workload                 ours pre theirs |   none    ours  preset  theirs |   ours  preset  theirs | theirs'
-);
-for (const c of sessionCosts) {
-  console.log(
-    `${c.name.padEnd(24)} ${n(c.r.oursTurns, 4)} ${n(c.r.presetTurns, 3)} ${n(c.r.theirTurns, 6)} | ` +
-      `${n(k(costAt(c.arms.none, 0)), 6)} ${n(k(costAt(c.arms.ours, 0)), 7)} ` +
-      `${n(k(costAt(c.arms.preset, 0)), 7)} ${n(k(costAt(c.arms.theirs, 0)), 7)} | ` +
-      `${n(k(costAt(c.arms.ours, 1)), 6)} ${n(k(costAt(c.arms.preset, 1)), 7)} ` +
-      `${n(k(costAt(c.arms.theirs, 1)), 7)} | ` +
-      `${n(breakEvenLabel(c.cross), 7)}`
+      `payload, ${k(PARAMS.baseContextTokens)} of prior context (RECORDED over ` +
+      `${BASE.record.sessions} sessions, not assumed -- ` +
+      `bench/subscription/results/base-context.json)`
   );
-}
-// Our spilling arm against theirs, which is the comparison that decides whether
-// eviction or in-place compression is the better answer to a cache-read bill.
-{
-  const pre = breakEven(corpus.preset, corpus.theirs);
   console.log(
-    `  preset (our spilling arm) vs theirs, whole corpus: ` +
-      `${k(costAt(corpus.preset, 0))} -> ${k(costAt(corpus.preset, 1))} against ` +
-      `${k(costAt(corpus.theirs, 0))} -> ${k(costAt(corpus.theirs, 1))}, ` +
-      `preset wins ${breakEvenLabel(pre)}`
+    '                          spill sites |     nothing fetched      |  everything fetched  | ours vs'
   );
-}
-
-// THE SUBSCRIPTION QUESTION, answered in the unit a plan is metered in. A cap
-// is a token budget, so "costs 40% as much" and "the cap buys 2.5x as much of
-// this work" are one sentence; the second is the one that was asked.
-console.log(
-  '\nwhat a plan buys, whole corpus          effective tokens          the same cap buys'
-);
-console.log(
-  'fetch rate    nothing      ours    theirs |     ours   theirs   vs them'
-);
-for (const p of [0, 0.25, 0.5, 1]) {
-  const none = costAt(corpus.none, p);
-  const ours = costAt(corpus.ours, p);
-  const them = costAt(corpus.theirs, p);
   console.log(
-    `${n(`${(p * 100).toFixed(0)}%`, 10)} ${n(k(none), 10)} ${n(k(ours), 9)} ${n(k(them), 9)} | ` +
-      `${n(times(none, ours), 8)} ${n(times(none, them), 8)} ${n(times(them, ours), 9)}`
+    'workload                 ours pre theirs |   none    ours  preset  theirs |   ours  preset  theirs | theirs'
   );
-}
-console.log(
-  corpus.cross.p === null
-    ? `${corpus.cross.cheaper === 'a' ? 'ours' : 'theirs'} is cheaper at every ` +
-        `fetch rate from 0 to 100%`
-    : `${corpus.cross.cheaper === 'a' ? 'ours' : 'theirs'} is cheaper than the ` +
-        `other while the agent fetches back less than ` +
-        `${(corpus.cross.p * 100).toFixed(0)}% of what was moved out` +
-        (corpus.cross.crossings.length > 1
-          ? `, and they swap back at ${(corpus.cross.crossings[1] * 100).toFixed(0)}%`
-          : '')
-);
-
-// THE OBVIOUS ATTACK ON THE ABOVE, run rather than waited for. Both numbers in
-// DEFAULTS are guesses about how a session is used, so the table prints how far
-// the answer moves when they move.
-// AT HALF THE BLOCKS FETCHED, not at none. With nothing fetched the cache
-// factor is common to every arm and cancels, so a p = 0 column would print
-// the same ratio on every row and prove only that it had been divided out.
-console.log('\nsensitivity, at a 50% fetch rate');
-console.log('turns after   prior ctx |  ours x   theirs x | ours wins below');
-// THE GRID IS DERIVED FROM THE MEASUREMENT, NOT PINNED TO ROUND NUMBERS.
-// It was [4000, 12000, 40000], every value of which is below what this
-// machine actually carries -- a sensitivity band that does not contain the
-// real parameter tests nothing about the real claim.
-for (const turnsAfter of [5, 20, 60])
-  for (const baseContextTokens of [
-    baseMeasured.min,
-    baseMeasured.p50,
-    baseMeasured.max,
-  ]) {
-    const params = { ...PARAMS, turnsAfter, baseContextTokens };
-    const c = foldCorpus(rows.map((r) => armsFor(r, params)));
-    const none = costAt(c.none, 0.5);
+  for (const c of sessionCosts) {
     console.log(
-      `${n(turnsAfter, 11)} ${n(k(baseContextTokens), 11)} | ` +
-        `${n(times(none, costAt(c.ours, 0.5)), 7)} ` +
-        `${n(times(none, costAt(c.theirs, 0.5)), 9)} | ` +
-        `${n(breakEvenLabel(c.cross), 12)}`
+      `${c.name.padEnd(24)} ${n(c.r.oursTurns, 4)} ${n(c.r.presetTurns, 3)} ${n(c.r.theirTurns, 6)} | ` +
+        `${n(k(costAt(c.arms.none, 0)), 6)} ${n(k(costAt(c.arms.ours, 0)), 7)} ` +
+        `${n(k(costAt(c.arms.preset, 0)), 7)} ${n(k(costAt(c.arms.theirs, 0)), 7)} | ` +
+        `${n(k(costAt(c.arms.ours, 1)), 6)} ${n(k(costAt(c.arms.preset, 1)), 7)} ` +
+        `${n(k(costAt(c.arms.theirs, 1)), 7)} | ` +
+        `${n(breakEvenLabel(c.cross), 7)}`
     );
   }
+  // Our spilling arm against theirs, which is the comparison that decides whether
+  // eviction or in-place compression is the better answer to a cache-read bill.
+  {
+    const pre = breakEven(corpus.preset, corpus.theirs);
+    console.log(
+      `  preset (our spilling arm) vs theirs, whole corpus: ` +
+        `${k(costAt(corpus.preset, 0))} -> ${k(costAt(corpus.preset, 1))} against ` +
+        `${k(costAt(corpus.theirs, 0))} -> ${k(costAt(corpus.theirs, 1))}, ` +
+        `preset wins ${breakEvenLabel(pre)}`
+    );
+  }
+
+  // THE SUBSCRIPTION QUESTION, answered in the unit a plan is metered in. A cap
+  // is a token budget, so "costs 40% as much" and "the cap buys 2.5x as much of
+  // this work" are one sentence; the second is the one that was asked.
+  console.log(
+    '\nwhat a plan buys, whole corpus          effective tokens          the same cap buys'
+  );
+  console.log(
+    'fetch rate    nothing      ours    theirs |     ours   theirs   vs them'
+  );
+  for (const p of [0, 0.25, 0.5, 1]) {
+    const none = costAt(corpus.none, p);
+    const ours = costAt(corpus.ours, p);
+    const them = costAt(corpus.theirs, p);
+    console.log(
+      `${n(`${(p * 100).toFixed(0)}%`, 10)} ${n(k(none), 10)} ${n(k(ours), 9)} ${n(k(them), 9)} | ` +
+        `${n(times(none, ours), 8)} ${n(times(none, them), 8)} ${n(times(them, ours), 9)}`
+    );
+  }
+  console.log(
+    corpus.cross.p === null
+      ? `${corpus.cross.cheaper === 'a' ? 'ours' : 'theirs'} is cheaper at every ` +
+          `fetch rate from 0 to 100%`
+      : `${corpus.cross.cheaper === 'a' ? 'ours' : 'theirs'} is cheaper than the ` +
+          `other while the agent fetches back less than ` +
+          `${(corpus.cross.p * 100).toFixed(0)}% of what was moved out` +
+          (corpus.cross.crossings.length > 1
+            ? `, and they swap back at ${(corpus.cross.crossings[1] * 100).toFixed(0)}%`
+            : '')
+  );
+
+  // THE OBVIOUS ATTACK ON THE ABOVE, run rather than waited for. Both numbers in
+  // DEFAULTS are guesses about how a session is used, so the table prints how far
+  // the answer moves when they move.
+  // AT HALF THE BLOCKS FETCHED, not at none. With nothing fetched the cache
+  // factor is common to every arm and cancels, so a p = 0 column would print
+  // the same ratio on every row and prove only that it had been divided out.
+  console.log('\nsensitivity, at a 50% fetch rate');
+  console.log('turns after   prior ctx |  ours x   theirs x | ours wins below');
+  // THE GRID IS DERIVED FROM THE MEASUREMENT, NOT PINNED TO ROUND NUMBERS.
+  // It was [4000, 12000, 40000], every value of which is below what this
+  // machine actually carries -- a sensitivity band that does not contain the
+  // real parameter tests nothing about the real claim.
+  for (const turnsAfter of [5, 20, 60])
+    for (const baseContextTokens of [
+      BASE.record.min,
+      BASE.record.p50,
+      BASE.record.max,
+    ]) {
+      const params = { ...PARAMS, turnsAfter, baseContextTokens };
+      const c = foldCorpus(rows.map((r) => armsFor(r, params)));
+      const none = costAt(c.none, 0.5);
+      console.log(
+        `${n(turnsAfter, 11)} ${n(k(baseContextTokens), 11)} | ` +
+          `${n(times(none, costAt(c.ours, 0.5)), 7)} ` +
+          `${n(times(none, costAt(c.theirs, 0.5)), 9)} | ` +
+          `${n(breakEvenLabel(c.cross), 12)}`
+      );
+    }
+}
 
 const oursChars = 1 - oursAll / beforeAll;
 const theirsChars = 1 - theirsAll / beforeAll;
@@ -2523,10 +2552,16 @@ if (process.argv[3] === '--record') {
           controlGone: String(t.controlGone),
         })),
       },
+      // WITHHELD, NOT GUESSED, WHEN THE BASE CONTEXT IS NOT RECORDED. Every
+      // figure under `cost` is denominated in effective input tokens, which is
+      // the payload plus a measured base context; with no measurement there is
+      // no figure. `null` says the arm was never priced and `costRefusal` says
+      // why, which is the one thing a zero could never say.
+      costRefusal: COST_PRICED ? null : BASE.reason,
       // THE TWO BOUNDS, RECORDED. `handed` is the text the agent is given;
       // `whole` is that plus everything the arm moved out, fetched back.
       // Recording only the first is how a store-backed arm reads as free.
-      cost: {
+      cost: !COST_PRICED ? null : {
         turns: {
           ours: String(r.oursTurns),
           // THE REFERENCING ARM'S TURNS, RECORDED BESIDE THE DEFAULT ARM'S.
@@ -2775,7 +2810,8 @@ if (process.argv[3] === '--record') {
     })),
     totals: {
       chars: { ours: pct(oursChars), theirs: pct(theirsChars) },
-      cost: {
+      costRefusal: COST_PRICED ? null : BASE.reason,
+      cost: !COST_PRICED ? null : {
         usdPerMtok: String(USD_PER_MTOK),
         turns: {
           ours: String(sum((r) => r.oursTurns)),
@@ -2798,8 +2834,14 @@ if (process.argv[3] === '--record') {
         session: {
           turnsAfter: String(DEFAULTS.turnsAfter),
           baseContextTokens: String(PARAMS.baseContextTokens),
-          baseContextSessions: String(baseMeasured.sessions),
-          baseContextSource: 'measured',
+          baseContextSessions: String(BASE.record.sessions),
+          // NAMED, SO A READER CAN GO AND LOOK. This said 'measured', which is
+          // a claim about an act nobody could locate afterwards -- the act
+          // happened on whichever machine ran the harness and left nothing
+          // behind. The file it now names is committed, and carries when it was
+          // taken and over what.
+          baseContextSource: 'bench/subscription/results/base-context.json',
+          baseContextRecordedAt: BASE.record.recordedAt,
           p0: {
             none: String(Math.round(costAt(corpus.none, 0))),
             ours: String(Math.round(costAt(corpus.ours, 0))),

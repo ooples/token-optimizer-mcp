@@ -35,9 +35,49 @@
  * It spends no quota: every input is a local transcript file.
  */
 
-import { pathToFileURL } from 'node:url';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { loadRequests } from './transcripts.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * WHERE THE MEASUREMENT IS KEPT, so that reading it is not the same act as
+ * taking it.
+ *
+ * The number is a property of an environment and the measurement is only
+ * possible inside one: it is read off local agent transcripts, which a CI
+ * runner does not have and a second developer has different ones of. Taken
+ * afresh on every run, as it was, the cost column of the comparator was a
+ * function of whose laptop produced it -- nobody could reproduce the table,
+ * and on a machine with no transcripts at all the harness refused outright and
+ * took every unrelated instrument down with it.
+ *
+ * So the measurement is taken once, deliberately, and recorded with enough
+ * provenance to be argued with. Re-measuring somewhere else writes a different
+ * record, which is a visible diff rather than a silent change of parameter.
+ */
+export const BASE_CONTEXT_RECORD = join(HERE, 'results', 'base-context.json');
+
+/** The schema version of the record, bumped when a reader must change too. */
+export const BASE_CONTEXT_SCHEMA = 1;
+
+/**
+ * Where to read the record from, which is the committed one unless a gate says
+ * otherwise.
+ *
+ * A TEST SEAM, and the seam a fork needs anyway. The gates have to exercise the
+ * unrecorded path -- a harness that withholds its cost figures instead of dying
+ * is a claim about behaviour, and the only honest way to check it is to run with
+ * no record present. Renaming the committed file to do that would leave the
+ * repository dirty every time a gate crashed mid-run. Overriding the path
+ * cannot forge a figure that the record itself does not carry provenance for.
+ */
+export function baseContextRecordPath() {
+  return process.env.BENCH_BASE_CONTEXT_RECORD || BASE_CONTEXT_RECORD;
+}
 
 /** Sessions needed before a spread across them means anything. */
 export const MIN_SESSIONS = 5;
@@ -116,6 +156,106 @@ export function baseContextReadiness(measured) {
   };
 }
 
+/**
+ * The measurement, as a record a reader can audit.
+ *
+ * AGGREGATES ONLY. The distribution is built from per-session samples carrying
+ * a session id and a timestamp, and those describe the operator's own work --
+ * they do not go in a file that is committed to a public repository. What a
+ * reader needs is the shape of the distribution and how many sessions produced
+ * it, both of which are counts.
+ */
+export function baseContextRecord(measured, { now = () => new Date() } = {}) {
+  const ready = baseContextReadiness(measured);
+  return {
+    schema: BASE_CONTEXT_SCHEMA,
+    recordedAt: now().toISOString(),
+    regenerate: 'node bench/subscription/base-context.mjs --record',
+    // WHOSE ENVIRONMENT. Not a path: the home directory of whoever ran it is
+    // not a fact about the measurement, and this file is public.
+    environment: { agent: 'claude-code', transcriptRoot: '~/.claude/projects' },
+    toolchain: { node: process.version },
+    sessions: measured.sessions,
+    min: measured.min,
+    p01: measured.p01,
+    p50: measured.p50,
+    p99: measured.p99,
+    max: measured.max,
+    spread: measured.spread,
+    readiness: { ready: ready.ready, reason: ready.reason },
+  };
+}
+
+/**
+ * The recorded measurement, re-judged rather than trusted.
+ *
+ * `readiness.ready` in the file is a note from whoever took the measurement.
+ * The bar is re-applied to the recorded counts here, so a record written when
+ * MIN_SESSIONS was lower -- or written by hand -- does not get to assert that
+ * it passes a bar it does not meet.
+ */
+export function readBaseContext({
+  at = baseContextRecordPath(),
+  read = readFileSync,
+} = {}) {
+  let raw;
+  try {
+    raw = read(at, 'utf8');
+  } catch (error) {
+    return {
+      record: null,
+      ready: false,
+      reason:
+        error && error.code === 'ENOENT'
+          ? `no base-context record at ${at}`
+          : `base-context record at ${at} could not be read (${error && error.code})`,
+      tokens: null,
+    };
+  }
+  let record;
+  try {
+    record = JSON.parse(raw);
+  } catch {
+    return {
+      record: null,
+      ready: false,
+      reason: `base-context record at ${at} is not JSON`,
+      tokens: null,
+    };
+  }
+  if (record.schema !== BASE_CONTEXT_SCHEMA)
+    return {
+      record,
+      ready: false,
+      reason:
+        `base-context record is schema ${record.schema}, this reader ` +
+        `understands ${BASE_CONTEXT_SCHEMA}`,
+      tokens: null,
+    };
+  const judged = baseContextReadiness({
+    sessions: record.sessions,
+    p50: record.p50,
+    spread: record.spread,
+  });
+  return {
+    record,
+    ready: judged.ready,
+    reason: judged.reason,
+    tokens: judged.tokens,
+  };
+}
+
+/** Write the record, creating `results/` if this is the first one. */
+export function writeBaseContextRecord(
+  record,
+  { at = baseContextRecordPath() } = {}
+) {
+  mkdirSync(dirname(at), { recursive: true });
+  writeFileSync(at, `${JSON.stringify(record, null, 2)}
+`, 'utf8');
+  return at;
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const { requests } = await loadRequests();
   const m = measureBaseContext({ requests });
@@ -125,4 +265,16 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   console.log(`  spread ${m.spread === null ? 'n/a' : `${(m.spread * 100).toFixed(0)}% of the median`}`);
   console.log(`\n${ready.ready ? 'READY' : 'NOT READY'}: ${ready.reason}`);
   if (ready.ready) console.log(`\nbaseContextTokens: ${ready.tokens}`);
+
+  // RECORDING IS AN EXPLICIT ACT. Reading the distribution is free and says
+  // nothing about the comparator; writing the file changes the parameter every
+  // cost figure in the table is computed with, so it happens only when asked.
+  if (process.argv.includes('--record')) {
+    if (!ready.ready) {
+      console.error(`\nREFUSED to record: ${ready.reason}`);
+      process.exit(2);
+    }
+    const at = writeBaseContextRecord(baseContextRecord(m));
+    console.log(`\nrecorded to ${at}`);
+  }
 }
