@@ -15,6 +15,7 @@
     "token-optimizer-update": "./dist/update/cli.js",
     "token-optimizer-rollout": "./dist/rollout/cli.js",
     "token-optimizer-inspect": "./dist/inspect/cli.js",
+    "token-optimizer-savings": "./dist/savings/cli.js",
     "token-optimizer-diagnostics": "./scripts/export-diagnostics.mjs",
     "token-optimizer-proxy": "./dist/proxy/cli.js",
     "token-optimizer-run": "./scripts/run-client.mjs",

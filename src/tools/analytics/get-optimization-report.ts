@@ -15,7 +15,7 @@ import {
   isVerifiedSavingsEntry,
   verifiedTransportDelta,
 } from '../../analytics/savings-classification.js';
-import { priceTokenUsage } from '../../analytics/provider-pricing.js';
+import { priceVerifiedDelta } from '../../savings/windows.js';
 import type { AnalyticsEntry } from '../../analytics/analytics-types.js';
 import path from 'path';
 import { dirname } from 'path';
@@ -77,23 +77,13 @@ function directPrice(entries: AnalyticsEntry[]): {
     (entry) => verifiedTransportDelta(entry) !== 0
   );
   for (const entry of eligible) {
-    const tokens = verifiedTransportDelta(entry);
-    const metadata = entry.metadata || {};
-    const priced = priceTokenUsage({
-      client: entry.client || String(metadata.client || ''),
-      provider: String(metadata.provider || ''),
-      route: String(metadata.pricingRoute || metadata.route || ''),
-      model: entry.model || String(metadata.model || ''),
-      timestamp: entry.timestamp,
-      usage: { uncachedInputTokens: Math.abs(tokens) },
-    });
-    if (
-      !priced.available ||
-      priced.currency !== 'USD' ||
-      priced.amount === null
-    )
-      continue;
-    amount += Math.sign(tokens) * priced.amount;
+    // ONE COPY OF THE PRICING RULE. This used to be a second inline
+    // implementation of the same definition `token-optimizer-savings` applies,
+    // and two copies of a pricing rule drift -- the one that drifts being
+    // always the one nobody is looking at.
+    const priced = priceVerifiedDelta(entry);
+    if (priced === null) continue;
+    amount += priced;
     pricedOperations += 1;
   }
   return {
