@@ -13,7 +13,13 @@
 import { describe, it, expect, afterEach, beforeEach } from '@jest/globals';
 import { createServer, type Server } from 'node:http';
 import { request } from 'node:http';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  existsSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -539,5 +545,71 @@ describe('the proxy supervisor', () => {
     expect(() =>
       controlPort({ TOKEN_OPTIMIZER_PROXY_CONTROL_PORT: '17500' })
     ).toThrow(/reserved for proxy routes/);
+  });
+
+  /**
+   * A STATE FILE THIS PROCESS CANNOT WRITE MUST NOT COST A CLIENT ITS ROUTE.
+   *
+   * `writeState` throws on a transient the crash recovery suite measures 18/18 on
+   * this platform, and the throw used to land in `routeFor`'s catch AFTER the bound
+   * listener had been put in `routes`. The result was a supervisor serving a route
+   * its own state file did not name -- health listed port 17582, the file listed
+   * nothing, same pid -- while telling the client `cannot serve`, and no later call
+   * could correct it because `routes.get(key)` short-circuits before publishing.
+   *
+   * The home here sits under a regular file, so every write fails for as long as
+   * that file exists. That is a standing version of the same failure: the point is
+   * that routing survives it and that the supervisor says so.
+   */
+  describe('when it cannot write its state file', () => {
+    let blocker: string;
+    let unwritable: NodeJS.ProcessEnv;
+
+    beforeEach(() => {
+      blocker = join(home, 'in-the-way');
+      writeFileSync(blocker, 'not a directory');
+      unwritable = { ...env, TOKEN_OPTIMIZER_HOME: join(blocker, 'state') };
+    });
+
+    it('still starts, still routes, and reports the file it could not write', async () => {
+      supervisor = await runSupervisor(unwritable);
+      expect(supervisor).not.toBeNull();
+      // THE ROUTE, NOT NULL. This is the assertion the old code failed: publishing
+      // threw into routeFor's catch, which answered `cannot serve` for a listener it
+      // had already bound.
+      const url = await ensureRoute(upstreamUrl, unwritable);
+      expect(url).not.toBeNull();
+      expect((await get(url!, '/v1/messages')).status).toBe(200);
+      // And the route is on the control port, which is the surface that still works.
+      const health = await supervisorHealth(unwritable);
+      expect(health?.routes.map((route) => route.url)).toEqual([url]);
+      // NOT SWALLOWED. A detached supervisor has stdio ignored, so health is the only
+      // place this can be read, and an unreported one is the bug that hid for a month.
+      expect(health?.unpublished).toBeTruthy();
+      // The file genuinely is not there, so this is not a test of a soft failure.
+      expect(readSupervisorState(unwritable)).toBeNull();
+    }, 30_000);
+
+    it('publishes the routes it already serves once the file can be written', async () => {
+      supervisor = await runSupervisor(unwritable);
+      const url = await ensureRoute(upstreamUrl, unwritable);
+      expect(url).not.toBeNull();
+      expect(readSupervisorState(unwritable)).toBeNull();
+      // NOTHING ASKS FOR A ROUTE AGAIN. `routes.get(key)` would short-circuit if it
+      // did, which is exactly why the old code could never recover: the only path to
+      // publishing ran once, inside the call that failed.
+      rmSync(blocker);
+      const deadline = Date.now() + 10_000;
+      while (
+        !readSupervisorState(unwritable)?.routes.length &&
+        Date.now() < deadline
+      )
+        await new Promise((done) => setTimeout(done, 100));
+      expect(readSupervisorState(unwritable)?.routes.map((r) => r.url)).toEqual([
+        url,
+      ]);
+      // And the supervisor stops saying it has a problem it no longer has.
+      expect((await supervisorHealth(unwritable))?.unpublished).toBeUndefined();
+    }, 30_000);
   });
 });

@@ -32,6 +32,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -217,8 +218,22 @@ function writeState(state: SupervisorState, env: NodeJS.ProcessEnv): void {
   const temporary = `${file}.tmp-${process.pid}`;
   // eslint-disable-next-line n/no-sync -- see above
   writeFileSync(temporary, JSON.stringify(state, null, 2), { mode: 0o600 });
-  // eslint-disable-next-line n/no-sync -- see above
-  renameSync(temporary, file);
+  try {
+    // eslint-disable-next-line n/no-sync -- see above
+    renameSync(temporary, file);
+  } catch (error) {
+    // A HALF-WRITTEN PUBLISH MUST NOT LEAVE ITS SCRATCH FILE BEHIND. The caller
+    // republishes, so the next attempt would write this same name again; a failure
+    // that accumulated files in the state directory would be read as our litter.
+    try {
+      // eslint-disable-next-line n/no-sync -- see above
+      unlinkSync(temporary);
+    } catch {
+      // Nothing more can be done about it here, and the rename failure below is the
+      // one worth reporting.
+    }
+    throw error;
+  }
 }
 
 export function readSupervisorState(
@@ -308,11 +323,20 @@ async function control<T>(
 /** The supervisor's own report, or null when nothing is listening. */
 export async function supervisorHealth(
   env: NodeJS.ProcessEnv = process.env
-): Promise<{ ok: true; pid: number; routes: SupervisorRoute[] } | null> {
+): Promise<{
+  ok: true;
+  pid: number;
+  routes: SupervisorRoute[];
+  // Present only when this supervisor's last publish failed, so its state file does
+  // not name the routes it is serving. A detached daemon has stdio ignored and no
+  // other voice, so this endpoint is where that has to be readable.
+  unpublished?: string;
+} | null> {
   const health = await control<{
     ok: true;
     pid: number;
     routes: SupervisorRoute[];
+    unpublished?: string;
   }>('/__token-optimizer/health', undefined, env);
   return health?.ok === true &&
     Number.isInteger(health.pid) &&
@@ -354,18 +378,45 @@ export async function runSupervisor(
   // Held so shutdown can close them. Without this the listeners outlive every caller: a test run
   // never exits, and a supervisor asked to stop keeps the ports bound.
   const listeners = new Set<Server>();
+  // Why the last publish did not land, or '' while the state file is current.
+  let unpublished = '';
+  /**
+   * PUBLISHING CANNOT THROW, BECAUSE A ROUTE NOBODY CAN FIND IS THE SAME AS NO ROUTE.
+   *
+   * `writeState` throws on a transient this platform really produces: the crash
+   * recovery suite measures the state directory refusing an operation with EPERM on
+   * the first attempt 18/18 times, Windows holding it for a moment after a child of
+   * it is unlinked, and `renameSync` answers the same way.
+   *
+   * That throw used to land in `routeFor`'s catch -- which had ALREADY put the bound
+   * listener in `routes`. So the control port served the route, the state file did
+   * not name it, `routeFor` reported `cannot serve` for a route it had just bound,
+   * and no later call could correct the file because `routes.get(key)` returns the
+   * existing route before publishing is reached again. Observed as a supervisor whose
+   * health listed a route on port 17582 while its own state file listed none, under
+   * the same pid, and stayed that way: the state file is how a client finds a route
+   * at all, so the compression that route exists to provide was silently off.
+   *
+   * So a failure is recorded instead of thrown, and the retry loop below writes again
+   * until the file agrees with this process.
+   */
   const publish = () => {
     if (restoring) return;
-    writeState(
-      {
-        schema: 1,
-        pid: process.pid,
-        startedAt: new Date().toISOString(),
-        controlUrl: `http://127.0.0.1:${controlPort(env)}`,
-        routes: [...waiting.values(), ...routes.values()],
-      },
-      env
-    );
+    try {
+      writeState(
+        {
+          schema: 1,
+          pid: process.pid,
+          startedAt: new Date().toISOString(),
+          controlUrl: `http://127.0.0.1:${controlPort(env)}`,
+          routes: [...waiting.values(), ...routes.values()],
+        },
+        env
+      );
+      unpublished = '';
+    } catch (error) {
+      unpublished = error instanceof Error ? error.message : String(error);
+    }
   };
   // Keyed by upstream AND project, because those are two different listeners: the graph a proxy
   // serves is bound when it starts, so one route cannot answer for two projects.
@@ -460,6 +511,9 @@ export async function runSupervisor(
           ok: true,
           pid: process.pid,
           routes: [...routes.values()],
+          // Named rather than merely true, because the reader's next question is why --
+          // and a daemon with stdio ignored has nowhere else to say it.
+          ...(unpublished ? { unpublished } : {}),
         });
       }
       if (path === '/__token-optimizer/route' && req.method === 'POST') {
@@ -570,8 +624,14 @@ export async function runSupervisor(
     // This file reads and writes its state synchronously throughout (see writeState);
     // an async stat on a daemon timer tick would only widen the window between the
     // check and the decision it feeds.
+    // THE FILE FIRST: a route this process serves but has not published is one no
+    // client can reach, and nothing else will ever write it again.
+    if (!stopped && unpublished) publish();
+    // AND A FAILED WRITE IS NOT A DELETED STATE FILE. Standing down asks whether the
+    // file is GONE, which is only a question about a write that succeeded; counting a
+    // write we could not make would retire a supervisor that is serving traffic.
     // eslint-disable-next-line n/no-sync -- see above
-    if (!stopped && !existsSync(supervisorStateFile(env))) {
+    if (!stopped && !unpublished && !existsSync(supervisorStateFile(env))) {
       stateFileGone += 1;
       if (stateFileGone >= 2) {
         await close();
