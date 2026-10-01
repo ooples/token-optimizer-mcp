@@ -42,6 +42,12 @@ import {
   type Category,
 } from './text-core.js';
 import {
+  EXPORT_FORMATS,
+  isExportFormat,
+  renderPayload,
+  type ExportFormat,
+} from './render-core.js';
+import {
   sharedCache,
   sharedTokenCounter,
   sharedMetricsCollector,
@@ -65,9 +71,7 @@ export const SMART_SUMMARIZATION_OPERATIONS = [
 export type SmartSummarizationOperation =
   (typeof SMART_SUMMARIZATION_OPERATIONS)[number];
 
-/** Output formats `export` renders. */
-export const EXPORT_FORMATS = ['markdown', 'json', 'csv'] as const;
-export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+export { EXPORT_FORMATS, type ExportFormat };
 
 /**
  * Defaults, collected so every one of them is visible at once. Each is a
@@ -209,85 +213,6 @@ const parseInstant = (
       `smart-summarization ${operation}: \`${key}\` must be an ISO 8601 timestamp; received ${JSON.stringify(value)}`
     );
   return parsed;
-};
-
-/** Escapes a cell so a value containing a pipe cannot forge a column. */
-const markdownCell = (value: unknown): string =>
-  String(value ?? '')
-    .replace(/\|/g, '\\|')
-    .replace(/\r?\n/g, ' ');
-
-/** Escapes a CSV field per RFC 4180. */
-const csvField = (value: unknown): string => {
-  const text = String(value ?? '');
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-};
-
-/** The union of keys across an array of records, in first-seen order. */
-const columnsOf = (rows: ReadonlyArray<Record<string, unknown>>): string[] => {
-  const seen: string[] = [];
-  for (const row of rows)
-    for (const key of Object.keys(row)) if (!seen.includes(key)) seen.push(key);
-  return seen;
-};
-
-const asRows = (
-  payload: unknown
-): Array<Record<string, unknown>> | undefined => {
-  if (Array.isArray(payload)) {
-    if (payload.every((entry) => entry !== null && typeof entry === 'object'))
-      return payload as Array<Record<string, unknown>>;
-    return undefined;
-  }
-  if (payload !== null && typeof payload === 'object')
-    return [payload as Record<string, unknown>];
-  return undefined;
-};
-
-/**
- * Renders the caller's own payload in the requested format. A payload that is
- * not a table refuses for csv rather than being flattened into one column,
- * because a silent reshape is how a caller ends up quoting a number this tool
- * invented.
- */
-const render = (
-  payload: unknown,
-  format: ExportFormat
-): { format: ExportFormat; content: string; rows: number } => {
-  if (format === 'json')
-    return {
-      format,
-      content: JSON.stringify(payload, null, 2),
-      rows: asRows(payload)?.length ?? 0,
-    };
-
-  const rows = asRows(payload);
-  if (rows === undefined)
-    throw new Error(
-      `smart-summarization export: \`${format}\` needs \`payload\` to be an object or an array of objects`
-    );
-  const columns = columnsOf(rows);
-  if (columns.length === 0)
-    throw new Error(
-      'smart-summarization export: `payload` has no fields to write'
-    );
-
-  if (format === 'csv') {
-    const lines = [columns.map(csvField).join(',')];
-    for (const row of rows)
-      lines.push(columns.map((key) => csvField(row[key])).join(','));
-    return { format, content: lines.join('\n'), rows: rows.length };
-  }
-
-  const lines = [
-    `| ${columns.map(markdownCell).join(' | ')} |`,
-    `| ${columns.map(() => '---').join(' | ')} |`,
-  ];
-  for (const row of rows)
-    lines.push(
-      `| ${columns.map((key) => markdownCell(row[key])).join(' | ')} |`
-    );
-  return { format, content: lines.join('\n'), rows: rows.length };
 };
 
 export class SmartSummarization {
@@ -641,11 +566,15 @@ export class SmartSummarization {
       throw new Error(
         `smart-summarization export: \`format\` is required; one of ${EXPORT_FORMATS.join(', ')}`
       );
-    if (!EXPORT_FORMATS.includes(format))
+    if (!isExportFormat(format))
       throw new Error(
         `smart-summarization export: unknown format ${JSON.stringify(format)}; one of ${EXPORT_FORMATS.join(', ')}`
       );
-    const rendered = render(options.payload, format);
+    const rendered = renderPayload(
+      'smart-summarization',
+      options.payload,
+      format
+    );
     return {
       format: rendered.format,
       content: rendered.content,

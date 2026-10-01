@@ -444,7 +444,9 @@ describe('smart-summarization export', () => {
   it('refuses a csv of something that is not a table', async () => {
     await expect(
       fixture().run({ operation: 'export', format: 'csv', payload: [1, 2, 3] })
-    ).rejects.toThrow(/needs `payload` to be an object or an array of objects/);
+    ).rejects.toThrow(
+      /needs `payload` to be an object or a non-empty array of objects/
+    );
   });
 
   it('refuses an unknown format rather than guessing one', async () => {
