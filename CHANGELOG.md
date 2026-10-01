@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.3.1](https://github.com/ooples/token-optimizer-mcp/compare/v7.3.0...v7.3.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* stop installing hooks into global settings without being asked ([#450](https://github.com/ooples/token-optimizer-mcp/issues/450)) ([13b1a62](https://github.com/ooples/token-optimizer-mcp/commit/13b1a62da156c6cf4df53f6e3022a2879e8637a4))
+
 ## [7.3.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.2.0...v7.3.0) (2026-09-23)
 
 
