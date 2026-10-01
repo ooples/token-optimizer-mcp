@@ -42,6 +42,7 @@ const RUNS_ELSEWHERE = {
   'bench/compression/known-answer/scorer.check.mjs': 'known-answer-scorer',
   'bench/compression/proof-metrics.check.mjs': 'bench-proof',
   'bench/compression/readme-table.check.mjs': 'bench-proof',
+  'bench/compression/readme-prose.check.mjs': 'bench-proof',
 };
 
 /**

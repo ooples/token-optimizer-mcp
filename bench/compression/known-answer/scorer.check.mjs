@@ -181,13 +181,26 @@ try {
       'and any refusal it carries is about the tree, not a field left unfilled',
       String(rep.refusal)
     );
+    // THE BODY ARM DOES NOT EXIST ON EVERY WORKLOAD, and the expected set says
+    // so rather than the assertion being widened until it passes. `body` is
+    // `compressBody` over a message list, and `ka-items` carries no `role`
+    // anywhere by construction -- there is no conversation there to compress, so
+    // the scorer reports `null`. That is the honest answer: an arm that never ran
+    // printed as one that ran and saved nothing is a fabricated measurement, and
+    // fabricated measurements are what this harness exists to catch. So the arms
+    // demanded of each workload come from the fixture's own `kind`.
+    const kindOf = new Map(KA.map((f) => [f.name, f.kind]));
     for (const w of rec.workloads) {
       const name = w.name;
-      const arms = ['ours', 'body', 'preset', 'sub'];
+      const arms = ['ours', 'preset', 'sub'];
+      if (kindOf.get(name) === 'messages') arms.splice(1, 0, 'body');
       check(
         arms.every((a) => pct(w.chars[a]) === 0),
         `${name}: every arm saves 0.0% of characters`,
-        arms.map((a) => w.chars[a]).join(' ')
+        // Named, not positional: an empty slot in a space-joined list of four
+        // figures is two spaces, which is what this read as while the arm that
+        // was missing went unnamed.
+        arms.map((a) => `${a}=${w.chars[a]}`).join(' ')
       );
       check(
         pct(w.tokens.ours) === 0,
@@ -206,6 +219,19 @@ try {
         `${r.inContext}/${r.ids} in context, ${r.reconstructible} derived`
       );
     }
+    // AND THE ABSENCE IS ASSERTED, not skipped. The loop above cannot catch a
+    // scorer that stops running the body arm on an actual conversation, because
+    // an arm missing from the record is an arm missing from `arms`. This is the
+    // other direction too: a scorer that starts filling the slot in with a zero
+    // fails right here.
+    const sorted = (xs) => [...xs].sort().join(',');
+    const absent = rec.workloads.filter((w) => w.chars.body === null).map((w) => w.name);
+    const notConversations = KA.filter((f) => f.kind !== 'messages').map((f) => f.name);
+    check(
+      sorted(absent) === sorted(notConversations),
+      'the body arm is absent on exactly the fixtures that are not conversations',
+      `absent [${sorted(absent)}], not conversations [${sorted(notConversations)}]`
+    );
     check(pct(rec.totals.chars.ours) === 0, 'totals: 0.0% of characters', rec.totals.chars.ours);
     check(pct(rec.totals.tokens.ours) === 0, 'totals: 0.0% of tokens', rec.totals.tokens.ours);
     return rec;
