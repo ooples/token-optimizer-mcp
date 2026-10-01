@@ -104,12 +104,16 @@ const dispatchedIn = (text: string): Map<string, DispatchForm> => {
 };
 
 /**
- * A stub body. Six tools return `{ success: true, confidence: 0.85 }` and a
+ * A stub body. No tool in the tree has one any more; the detector stays
+ * because a new tool written from an old one as a template would bring it
+ * back, and a fabricating tool publishes a clean-looking surface.
+ *
+ * Six tools once returned `{ success: true, confidence: 0.85 }` and a
  * `result` string built from the operation name, for every operation they
- * publish -- no operation is implemented, which is why no dispatch form can be
- * found for any of them. Detecting that positively keeps them out of the
- * dispatch assertion without an exemption list: a seventh fabricating tool is
- * caught by FABRICATING below, and so is fixing one of the six.
+ * published -- none was implemented, which is why no dispatch form could be
+ * found for any of them. Detecting that positively kept them out of the
+ * dispatch assertion without an exemption list, and it still does: a tool that
+ * grows a stub body is caught by FABRICATING below.
  */
 const FABRICATION_MARK = 'completed successfully`';
 
@@ -177,10 +181,15 @@ const POSITIVE_CONTROL: ReadonlyArray<readonly [string, DispatchForm]> =
  * The tools whose published operations are all fabricated. This is a RECORD of
  * a measurement, not permission: it is asserted exactly, so the set shrinking
  * fails here and the record has to be brought along with the fix.
+ *
+ * It is now EMPTY. Six tools were listed here -- smart-summarization,
+ * pattern-recognition, predictive-analytics, recommendation-engine,
+ * natural-language-query and intelligent-assistant, 48 published operations
+ * between them -- each serving every operation from one body that read none of
+ * its arguments and reported `confidence: 0.85`. All 48 are implemented, so
+ * the only thing this list may do now is grow, and growing fails this file.
  */
-const FABRICATING: readonly string[] = Object.freeze([
-  'intelligent-assistant',
-]);
+const FABRICATING: readonly string[] = Object.freeze([]);
 
 describe('published operations are dispatched', () => {
   it('found the tools that publish an operation enum', () => {
