@@ -417,7 +417,19 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
         return receipt;
       }
     );
-    if (args.operation === 'verify-evidence') {
+    /*
+     * The published schema declares `operation` with `default: 'record'` and
+     * does not require it -- only its verify-evidence branch does -- so an
+     * argument list that omits the key is valid and means record. The
+     * validator deliberately never materialises a JSON Schema default (see
+     * `schema-from-definition.ts`), so resolving it here is what makes this
+     * dispatch agree with what the schema publishes. Reading `args.operation`
+     * raw rejected two of this package's own callers with
+     * "unknown operation undefined" -- a refusal for a payload the published
+     * schema accepts.
+     */
+    const operation = args.operation ?? 'record';
+    if (operation === 'verify-evidence') {
       return {
         valid: true,
         receipts: verifiedReceipts.map((receipt: any) => {
@@ -435,7 +447,7 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
      * the published enum member for member, which is what the published-
      * operations check can read.
      */
-    if (args.operation !== 'record') {
+    if (operation !== 'record') {
       throw new Error(
         `cognition_record: unknown operation ${String(args.operation)}`
       );
