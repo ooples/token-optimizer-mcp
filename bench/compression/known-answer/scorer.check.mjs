@@ -33,6 +33,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { knownAnswerFixtures, IDENTIFIER_COUNT } from './fixtures.mjs';
+import { reproducibilityRefusal } from '../reproducibility.mjs';
 import { identifiers, scanIdentifiers } from '../identifiers.mjs';
 import { DROP, ID_CHARS } from './ours-lossy.mjs';
 
@@ -181,6 +182,42 @@ try {
       rep.refusal === null || /(dirty|working tree was modified)/.test(String(rep.refusal)),
       'and any refusal it carries is about the tree, not a field left unfilled',
       String(rep.refusal)
+    );
+    // THE FIELD THAT SAYS WHOSE ENGINE RAN, AND THE VERSION THAT MUST NOT BE
+    // THERE. This capture replaced every one of their arms with `arms.py`, so
+    // their package was never imported -- and it stamped the installed version
+    // regardless, which named an engine that produced none of the column and read
+    // as recorded on any machine where the package happened to be installed. It
+    // went unnoticed for the same reason it was wrong: on a machine WITHOUT the
+    // package the field read 'unknown' and the gate called it missing, which is
+    // the wrong diagnosis of the right problem.
+    check(
+      typeof rep.stubArms === 'string' && rep.stubArms.endsWith('arms.py'),
+      'the record names the stub arms that stood in for their engine',
+      String(rep.stubArms)
+    );
+    check(
+      rep.headroomVersion === null,
+      'and carries no competitor version, because no engine of theirs ran',
+      String(rep.headroomVersion)
+    );
+    // BOTH DIRECTIONS, against the gate itself rather than a restatement of it.
+    // An assertion that only ever sees the accepting case cannot tell a rule
+    // apart from a rule that was deleted.
+    check(
+      reproducibilityRefusal({ ...rep, refusal: undefined }) === null ||
+        /(dirty|working tree was modified)/.test(
+          String(reproducibilityRefusal({ ...rep, refusal: undefined }))
+        ),
+      'the gate accepts this block as it stands',
+      String(reproducibilityRefusal({ ...rep, refusal: undefined }))
+    );
+    check(
+      /stub arms/.test(
+        String(reproducibilityRefusal({ ...rep, headroomVersion: '0.37.0' }))
+      ),
+      'and refuses the same block the moment it claims one',
+      String(reproducibilityRefusal({ ...rep, headroomVersion: '0.37.0' }))
     );
     // THE BODY ARM DOES NOT EXIST ON EVERY WORKLOAD, and the expected set says
     // so rather than the assertion being widened until it passes. `body` is

@@ -368,6 +368,27 @@ const MUTANTS = [
     to: '  // theirsDigest: no longer required',
   },
   {
+    name: 'a stubbed capture may name their version after all',
+    defect:
+      'a capture that replaced every one of their arms with a stub stamps the installed competitor version, naming an engine that produced none of the column',
+    caughtBy:
+      'reproducibility: a stubbed capture carrying their version is refused, because no engine of theirs ran',
+    file: REPRO,
+    check: REPRO_CHECK,
+    from: '    if (!absent) {',
+    to: '    if (false) {',
+  },
+  {
+    name: 'a stub run is held to the real-capture rule',
+    defect:
+      'the stub arm removed, so a known-answer capture is refused for lacking a version it must not carry -- the shape that sends a reader off to install a package the run never calls',
+    caughtBy: 'reproducibility: and the same stubbed capture with no version is accepted',
+    file: REPRO,
+    check: REPRO_CHECK,
+    from: "  const stubbed = typeof prov.stubArms === 'string' && prov.stubArms !== '';",
+    to: '  const stubbed = false;',
+  },
+  {
     name: 'a field that is present and unusable passes',
     defect:
       'an empty digest and the literal sentinel for a failed git call read as recorded, which is how both reached a published record',

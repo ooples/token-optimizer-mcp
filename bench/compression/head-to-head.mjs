@@ -2291,6 +2291,13 @@ if (process.argv[3] === '--record') {
       .slice(0, 16),
     theirsDigest: null,
     headroomVersion: theirs.__provenance__?.headroomVersion ?? null,
+    // WHICH FIELDS A READER IS OWED DEPENDS ON WHETHER AN ENGINE RAN. A capture
+    // taken under BENCH_KNOWN_ANSWER_ARMS drives this same path with arms whose
+    // output is arithmetic, so there is no competitor version to record and
+    // demanding one would demand a fabrication. The reproducibility gate reads
+    // this to decide which rule applies, so it travels in the block it governs
+    // rather than being inferred from the stub name on our side.
+    stubArms: theirs.__provenance__?.stubArms ?? null,
     python: theirs.__provenance__?.python ?? null,
     // THEIR DETECTOR WAS OUR CHOICE, AND THE RECORD SAYS SO. Their content
     // detector falls back to a slower, worse-routing pure-Python backend on

@@ -33,6 +33,7 @@ const GOOD = {
   payloadsDigest: '0123456789abcdef',
   theirsDigest: 'fedcba9876543210',
   headroomVersion: '0.37.0',
+  stubArms: null,
   python: '3.13.2',
   instrument: 'v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm',
   dirty: false,
@@ -58,7 +59,6 @@ const REQUIRED = [
   'encoding',
   'payloadsDigest',
   'theirsDigest',
-  'headroomVersion',
   'python',
   'instrument',
 ];
@@ -67,6 +67,14 @@ check(
     REQUIRED.every((f) => Object.hasOwn(FIELDS, f)),
   `the required set is exactly the ${REQUIRED.length} fields a re-run needs`,
   Object.keys(FIELDS).join(', ')
+);
+// AND THE TWO FIELDS THE TABLE DOES NOT HOLD, named here so dropping their
+// handling in the module cannot pass. `headroomVersion` is required or forbidden
+// depending on `stubArms`, which a flat table cannot express; a conditional rule
+// moved out of the table is exactly the rule that goes unchecked.
+check(
+  !Object.hasOwn(FIELDS, 'headroomVersion') && !Object.hasOwn(FIELDS, 'stubArms'),
+  'headroomVersion and stubArms are judged conditionally, not from the table'
 );
 
 // 1. The record that needs nothing said about it.
@@ -99,6 +107,64 @@ for (const field of Object.keys(FIELDS)) {
   const named = typeof r === 'string' && r.includes(`${field} is missing`);
   const only = typeof r === 'string' && r.startsWith('1 thing(s)');
   check(named && only, `a record with no ${field} is refused, and only for that`, String(r));
+}
+
+// 3b. THEIR VERSION, WHOSE RULE DEPENDS ON WHETHER THEIR ENGINE RAN. Both arms
+// refuse, and that is the point: this started as a single required field, and a
+// known-answer capture -- where their engine is never imported -- was stamping
+// the installed package version anyway, which named an engine that produced none
+// of the column. Loosening the field to accept that would have accepted a
+// fabricated provenance on every real capture too.
+
+{
+  // A RECORD FROM BEFORE THE FIELD EXISTED is not thereby unreadable: it names a
+  // competitor version, which is the question stubArms exists to answer when the
+  // version is absent. Refusing it would have meant re-recording every committed
+  // capture to add a field that tells a reader nothing those captures do not
+  // already say.
+  const older = reproducibilityRefusal(without('stubArms'));
+  check(older === null, 'a record with a version but no stubArms is accepted', String(older));
+  const neither = reproducibilityRefusal({ ...without('stubArms'), headroomVersion: null });
+  check(
+    typeof neither === 'string' &&
+      /headroomVersion is missing/.test(neither) &&
+      /stubArms does not say a stub produced their column/.test(neither) &&
+      neither.startsWith('1 thing(s)'),
+    'but with neither, the refusal names both ways out',
+    String(neither)
+  );
+  const mine = reproducibilityRefusal(without('headroomVersion'));
+  check(
+    typeof mine === 'string' &&
+      mine.includes('headroomVersion is missing') &&
+      mine.startsWith('1 thing(s)'),
+    'a real capture with no competitor version is refused, as before',
+    String(mine)
+  );
+  const stub = { ...GOOD, stubArms: 'bench/compression/known-answer/arms.py' };
+  const named = reproducibilityRefusal(stub);
+  check(
+    typeof named === 'string' &&
+      /headroomVersion is "0[.]37[.]0" on a capture taken with stub arms/.test(named) &&
+      /produced none of this column/.test(named) &&
+      named.startsWith('1 thing(s)'),
+    'a stubbed capture carrying their version is refused, because no engine of theirs ran',
+    String(named)
+  );
+  const honest = reproducibilityRefusal({ ...stub, headroomVersion: null });
+  check(
+    honest === null,
+    'and the same stubbed capture with no version is accepted',
+    String(honest)
+  );
+  // The empty string is not a stub name, so it cannot be a way to claim the
+  // lenient arm while saying nothing.
+  const blank = reproducibilityRefusal({ ...GOOD, stubArms: '', headroomVersion: null });
+  check(
+    typeof blank === 'string' && blank.includes('headroomVersion is missing'),
+    'an empty stubArms does not buy the stub rule',
+    String(blank)
+  );
 }
 
 // 4. Present and unusable, which reads as recorded and is not.

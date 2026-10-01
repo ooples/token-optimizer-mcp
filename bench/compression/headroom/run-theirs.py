@@ -1336,7 +1336,15 @@ for entry in competitor_warnings["degraded"]:
 take_witness("after-sweep")
 
 provenance = {
-    "headroomVersion": _headroom_version(),
+    # THEIR VERSION, OR NOTHING, AND NEVER A VERSION THAT DID NOT RUN. Under
+    # BENCH_KNOWN_ANSWER_ARMS their engine is never imported or invoked -- every
+    # arm comes from the stub module -- so stamping the installed package version
+    # here names an engine that had no part in producing the column. That is a
+    # fabricated provenance field, which is the one class of defect this whole
+    # file exists to prevent, and it read as correct on any machine where the
+    # package happened to be installed. `stubArms` below is what such a capture
+    # has to be identified by instead.
+    "headroomVersion": None if KNOWN_ANSWER_ARMS else _headroom_version(),
     # WHEN THE CAPTURE HAPPENED, BECAUSE THEIR STORE FORGETS. Their CCR
     # markers are redeemable from their store for a bounded time only (their
     # own resolver reports the bound: "CCR TTL: 1800 seconds"). A resolution

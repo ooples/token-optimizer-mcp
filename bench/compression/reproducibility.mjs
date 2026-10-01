@@ -27,7 +27,16 @@
  *                     it: ours moved, theirs reverted, the standing went from
  *                     nine workloads to five.
  *   headroomVersion   their engine's own version, without which "theirs" names
- *                     nothing.
+ *                     nothing -- EXCEPT on a known-answer capture, where their
+ *                     engine never ran and a version here would name an engine
+ *                     that had no part in the column. See `stubArms`.
+ *   stubArms          whether their column came from stub arms instead of their
+ *                     engine. It is what makes an ABSENT version readable: with
+ *                     it, the absence is the honest answer; without it, the
+ *                     absence is a gap. A version that IS present answers the
+ *                     reader's question on its own, so nothing more is asked of
+ *                     a record that carries one -- unless `stubArms` contradicts
+ *                     it, which is the refusal above.
  *   python            their capture runs under it.
  *   instrument        their engine reads its redeemable content out of a durable
  *                     store, and the arms that decide the comparable cost and
@@ -74,7 +83,6 @@ export const FIELDS = {
   encoding: { look: NAME, says: 'the encoding the token column was measured in' },
   payloadsDigest: { look: HEX16, says: 'sha256 of payloads.json, first 16' },
   theirsDigest: { look: HEX16, says: 'sha256 of their output, first 16' },
-  headroomVersion: { look: SEMVER, says: 'the competitor package version' },
   python: { look: SEMVER, says: 'the python their capture ran under' },
   instrument: {
     look: INSTRUMENT,
@@ -107,6 +115,41 @@ export function reproducibilityRefusal(prov) {
       // swallowed a failure and carried on.
       problems.push(`${field} is not usable: ${JSON.stringify(value)} (${says})`);
     }
+  }
+  // THEIR VERSION IS REQUIRED OR FORBIDDEN, AND WHICH ONE IS NOT OUR CHOICE.
+  // `stubArms` names the module that replaced their engine, and under it their
+  // package is never imported: a semver here would name an engine that produced
+  // none of the column, which is a fabricated provenance field and reads as
+  // recorded. Without it their engine did produce the column and a reader cannot
+  // reproduce the figures without knowing which version of it -- a stale out-dir
+  // once reproduced a competitor column that had already been retracted. So both
+  // arms refuse, and neither is the lenient one.
+  const stubbed = typeof prov.stubArms === 'string' && prov.stubArms !== '';
+  const version = prov.headroomVersion;
+  const absent =
+    version === undefined || version === null || version === '' || version === 'unknown';
+  if (stubbed) {
+    if (!absent) {
+      problems.push(
+        `headroomVersion is ${JSON.stringify(version)} on a capture taken with ` +
+          `stub arms (${prov.stubArms}), where their engine never ran -- it names ` +
+          'an engine that produced none of this column'
+      );
+    }
+  } else if (absent) {
+    // BOTH WAYS OUT, NAMED. The reader of this refusal either has a version to
+    // record or has a stub to declare, and a refusal that mentioned only the
+    // first would send a known-answer capture off to install a package it never
+    // calls.
+    problems.push(
+      'headroomVersion is missing (the competitor package version), and stubArms ' +
+        'does not say a stub produced their column instead'
+    );
+  } else if (typeof version !== 'string' || !SEMVER.test(version)) {
+    problems.push(
+      `headroomVersion is not usable: ${JSON.stringify(version)} ` +
+        '(the competitor package version)'
+    );
   }
   // A DIRTY TREE IS THE ONE FIELD WHOSE HONEST VALUE IS A REFUSAL. The sha is
   // well formed and the code it names is not the code that ran.
