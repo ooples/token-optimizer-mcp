@@ -27,9 +27,9 @@ import { BuiltInAgent, type AgentPlugin } from '../../../src/learn/plugin.js';
 const stub = (name: string): AgentPlugin => ({
   name,
   displayName: name,
-  detect: () => false,
-  discoverProjects: () => [],
-  scanProject: () => [],
+  detect: async () => false,
+  discoverProjects: async () => [],
+  scanProject: async () => [],
   contextTarget: () => ({ contextFile: 'AGENTS.md', memoryFile: null }),
 });
 
@@ -75,7 +75,9 @@ describe('registry', () => {
         ].join('\n'),
         'utf8'
       );
-      const problems = await loadExternalAgents({ [PLUGIN_ENV]: pathToFileURL(file).href });
+      const problems = await loadExternalAgents({
+        [PLUGIN_ENV]: pathToFileURL(file).href,
+      });
       expect(problems).toEqual([]);
       expect(agentPlugin('acme').displayName).toBe('Acme');
     } finally {
@@ -84,7 +86,9 @@ describe('registry', () => {
   });
 
   it('reports a plugin that will not import, and one that is not a plugin', async () => {
-    const problems = await loadExternalAgents({ [PLUGIN_ENV]: 'no-such-module-here, node:os' });
+    const problems = await loadExternalAgents({
+      [PLUGIN_ENV]: 'no-such-module-here, node:os',
+    });
     expect(problems).toHaveLength(2);
     expect(problems[0]).toContain('could not be loaded');
     expect(problems[1]).toContain('does not export a learn plugin');

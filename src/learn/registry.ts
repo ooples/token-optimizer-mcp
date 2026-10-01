@@ -73,11 +73,11 @@ export function agentPlugin(name: string): AgentPlugin {
 }
 
 /** The plugins that have data on this machine. */
-export function detectedAgents(): readonly AgentPlugin[] {
+export async function detectedAgents(): Promise<readonly AgentPlugin[]> {
   const found: AgentPlugin[] = [];
   for (const plugin of agentPlugins()) {
     try {
-      if (plugin.detect()) found.push(plugin);
+      if (await plugin.detect()) found.push(plugin);
     } catch {
       // A plugin that throws while looking is one this machine cannot use. That
       // is not a reason to abandon the pass for the agents that do work, and the
@@ -101,14 +101,19 @@ export async function loadExternalAgents(
   const raw = env[PLUGIN_ENV];
   if (raw === undefined || raw.trim().length === 0) return [];
   const problems: string[] = [];
-  for (const spec of raw.split(',').map((part) => part.trim()).filter(Boolean)) {
+  for (const spec of raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)) {
     try {
       const mod: unknown = await import(spec);
-      const exported = (mod as { plugin?: unknown; default?: unknown }).plugin ??
+      const exported =
+        (mod as { plugin?: unknown; default?: unknown }).plugin ??
         (mod as { default?: unknown }).default;
-      const candidate = typeof exported === 'function'
-        ? (exported as () => unknown)()
-        : exported;
+      const candidate =
+        typeof exported === 'function'
+          ? (exported as () => unknown)()
+          : exported;
       if (!isPlugin(candidate)) {
         problems.push(`${spec} does not export a learn plugin`);
         continue;

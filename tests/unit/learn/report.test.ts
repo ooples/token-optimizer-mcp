@@ -8,7 +8,13 @@
  * tool that rewrites a line of it has no way to give it back.
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -43,7 +49,12 @@ function rule(patch: Partial<Recommendation> = {}): Recommendation {
 function result(patch: Partial<AnalysisResult> = {}): AnalysisResult {
   return {
     agent: 'claude',
-    project: { name: 'demo', projectPath: 'C:/src/demo', dataPath: 'C:/logs', sessionCount: 2 },
+    project: {
+      name: 'demo',
+      projectPath: 'C:/src/demo',
+      dataPath: 'C:/logs',
+      sessionCount: 2,
+    },
     sessions: 2,
     calls: 400,
     failures: 40,
@@ -58,7 +69,9 @@ describe('describeAnalysis', () => {
   it('states the limits of the reading alongside the findings', () => {
     // Both numbers bound how much of the result to believe, so a pass that could
     // attribute a tenth of what it read has to say so rather than look thorough.
-    const lines = describeAnalysis(result({ unreadable: ['C:/logs/broken.jsonl'] })).join('\n');
+    const lines = describeAnalysis(
+      result({ unreadable: ['C:/logs/broken.jsonl'] })
+    ).join('\n');
     expect(lines).toContain('2 session(s), 400 tool call(s), 40 failed');
     expect(lines).toContain('failure rate 10.0%');
     expect(lines).toContain('4 failure(s) could not be categorised');
@@ -67,8 +80,12 @@ describe('describeAnalysis', () => {
   });
 
   it('says plainly when there is nothing to report', () => {
-    const lines = describeAnalysis(result({ recommendations: [], uncategorised: 0, unattributable: 0 }));
-    expect(lines.join('\n')).toContain('nothing repeated often enough to be worth a rule');
+    const lines = describeAnalysis(
+      result({ recommendations: [], uncategorised: 0, unattributable: 0 })
+    );
+    expect(lines.join('\n')).toContain(
+      'nothing repeated often enough to be worth a rule'
+    );
   });
 
   it('prints one heading over the findings that share it', () => {
@@ -81,13 +98,21 @@ describe('describeAnalysis', () => {
         ],
       })
     );
-    expect(lines.filter((line) => line.trim() === 'Commands that keep failing')).toHaveLength(1);
-    expect(lines.filter((line) => line.trim() === 'Paths that are not there')).toHaveLength(1);
+    expect(
+      lines.filter((line) => line.trim() === 'Commands that keep failing')
+    ).toHaveLength(1);
+    expect(
+      lines.filter((line) => line.trim() === 'Paths that are not there')
+    ).toHaveLength(1);
   });
 
   it('marks thin evidence as thin, and one session as one session', () => {
     const [thin] = describeAnalysis(
-      result({ recommendations: [rule({ confidence: Confidence.Thin, sessions: 1, occurrences: 3 })] })
+      result({
+        recommendations: [
+          rule({ confidence: Confidence.Thin, sessions: 1, occurrences: 3 }),
+        ],
+      })
     ).slice(-1);
     expect(thin).toContain('(3 times in one session, thin evidence)');
   });
@@ -105,16 +130,16 @@ describe('writeRecommendations', () => {
   const write = (options: { readonly dryRun?: boolean } = {}) =>
     writeRecommendations(directory, 'CLAUDE.md', result(), options);
 
-  it('writes nothing unless it is asked to', () => {
-    const outcome = write({ dryRun: true });
+  it('writes nothing unless it is asked to', async () => {
+    const outcome = await write({ dryRun: true });
     expect(outcome.written).toBe(false);
     expect(outcome.content).toContain(BLOCK_START);
     expect(existsSync(join(directory, 'CLAUDE.md'))).toBe(false);
   });
 
-  it('replaces its own block instead of appending a second one', () => {
-    write();
-    const second = writeRecommendations(
+  it('replaces its own block instead of appending a second one', async () => {
+    await write();
+    const second = await writeRecommendations(
       directory,
       'CLAUDE.md',
       result({ recommendations: [rule({ body: '`gh pr` failed 9 times.' })] })
@@ -127,35 +152,48 @@ describe('writeRecommendations', () => {
     expect(text).not.toContain('failed 4 times');
   });
 
-  it('leaves every line the user wrote exactly where it was', () => {
-    const own = ['# Project', '', 'Run the tests with `npm test`.', '', '## Style', '', '- Tabs.', ''].join('\n');
+  it('leaves every line the user wrote exactly where it was', async () => {
+    const own = [
+      '# Project',
+      '',
+      'Run the tests with `npm test`.',
+      '',
+      '## Style',
+      '',
+      '- Tabs.',
+      '',
+    ].join('\n');
     const path = join(directory, 'CLAUDE.md');
     writeFileSync(path, own, 'utf8');
-    write();
+    await write();
     const after = readFileSync(path, 'utf8');
     expect(after.startsWith(own)).toBe(true);
-    write();
+    await write();
     const again = readFileSync(path, 'utf8');
     expect(again.startsWith(own)).toBe(true);
     expect(again.split(BLOCK_START)).toHaveLength(2);
   });
 
-  it('does not rewrite a file that already says exactly this', () => {
-    write();
-    const second = write();
+  it('does not rewrite a file that already says exactly this', async () => {
+    await write();
+    const second = await write();
     expect(second.unchanged).toBe(true);
     expect(second.written).toBe(false);
   });
 
-  it('leaves no temporary file behind', () => {
-    write();
-    expect(existsSync(join(directory, 'CLAUDE.md.token-optimizer.tmp'))).toBe(false);
+  it('leaves no temporary file behind', async () => {
+    await write();
+    expect(existsSync(join(directory, 'CLAUDE.md.token-optimizer.tmp'))).toBe(
+      false
+    );
   });
 
   it('renders the block with a heading and the findings under it', () => {
     const rendered = renderRecommendations(result());
     expect(rendered).toContain('## What past sessions kept getting wrong');
     expect(rendered).toContain('### Commands that keep failing');
-    expect(rendered).toContain('- `gh pr` failed 4 times. _(4 times across 3 sessions)_');
+    expect(rendered).toContain(
+      '- `gh pr` failed 4 times. _(4 times across 3 sessions)_'
+    );
   });
 });

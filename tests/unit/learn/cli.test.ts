@@ -8,7 +8,14 @@
  * still owe the user an answer.
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseArguments, run } from '../../../src/learn/cli.js';
@@ -19,19 +26,46 @@ const PLUGIN_ENV = 'TOKEN_OPTIMIZER_LEARN_PLUGINS';
 /** A transcript with one habit in it: the same command failing four times. */
 function transcript(cwd: string): string {
   const records: unknown[] = [
-    { type: 'user', cwd, timestamp: '2026-09-01T10:00:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'go' }] } },
+    {
+      type: 'user',
+      cwd,
+      timestamp: '2026-09-01T10:00:00.000Z',
+      message: { role: 'user', content: [{ type: 'text', text: 'go' }] },
+    },
   ];
   for (let turn = 0; turn < 4; turn += 1) {
     const id = `t${turn}`;
     records.push({
       type: 'assistant',
-      message: { role: 'assistant', content: [{ type: 'tool_use', id, name: 'Bash', input: { command: 'gh pr view 7' } }] },
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id,
+            name: 'Bash',
+            input: { command: 'gh pr view 7' },
+          },
+        ],
+      },
     });
     records.push({
       type: 'user',
       message: {
         role: 'user',
-        content: [{ type: 'tool_result', tool_use_id: id, is_error: true, content: [{ type: 'text', text: 'Exit code 1\nfatal: not a git repository' }] }],
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: id,
+            is_error: true,
+            content: [
+              {
+                type: 'text',
+                text: 'Exit code 1\nfatal: not a git repository',
+              },
+            ],
+          },
+        ],
       },
     });
   }
@@ -40,7 +74,14 @@ function transcript(cwd: string): string {
 
 describe('parseArguments', () => {
   it('reads the options a user gives', () => {
-    const options = parseArguments(['--agent', 'CODEX', '--max-sessions', '5', '--write', '--json']);
+    const options = parseArguments([
+      '--agent',
+      'CODEX',
+      '--max-sessions',
+      '5',
+      '--write',
+      '--json',
+    ]);
     expect(options.agent).toBe('codex');
     expect(options.maxSessions).toBe(5);
     expect(options.write).toBe(true);
@@ -54,7 +95,9 @@ describe('parseArguments', () => {
   it('refuses a value it cannot use rather than guessing one', () => {
     expect(() => parseArguments(['--since', 'lots'])).toThrow('--since');
     expect(() => parseArguments(['--since', '-3'])).toThrow('--since');
-    expect(() => parseArguments(['--max-sessions', '2.5'])).toThrow('--max-sessions');
+    expect(() => parseArguments(['--max-sessions', '2.5'])).toThrow(
+      '--max-sessions'
+    );
     expect(() => parseArguments(['--agent'])).toThrow('needs a value');
     expect(() => parseArguments(['--nope'])).toThrow('unknown option: --nope');
   });
@@ -83,7 +126,8 @@ describe('run', () => {
     rmSync(project, { recursive: true, force: true });
   });
 
-  const claude = (...extra: string[]) => run(['--agent', 'claude', '--project', project, ...extra], {});
+  const claude = (...extra: string[]) =>
+    run(['--agent', 'claude', '--project', project, ...extra], {});
 
   it('prints what it found and writes nothing', async () => {
     const outcome = await claude();
@@ -106,8 +150,13 @@ describe('run', () => {
   it('reports a project it has no sessions for instead of inventing one', async () => {
     const elsewhere = mkdtempSync(join(tmpdir(), 'learn-cli-other-'));
     try {
-      const outcome = await run(['--agent', 'claude', '--project', elsewhere], {});
-      expect(outcome.lines.join('\n')).toContain('no sessions recorded for this project');
+      const outcome = await run(
+        ['--agent', 'claude', '--project', elsewhere],
+        {}
+      );
+      expect(outcome.lines.join('\n')).toContain(
+        'no sessions recorded for this project'
+      );
       expect(outcome.results).toHaveLength(0);
     } finally {
       rmSync(elsewhere, { recursive: true, force: true });
@@ -130,7 +179,9 @@ describe('run', () => {
   it('answers a usage mistake with the usage, and a non-zero code', async () => {
     const outcome = await run(['--nope'], {});
     expect(outcome.exitCode).toBe(2);
-    expect(outcome.lines.join('\n')).toContain('token-optimizer-learn [options]');
+    expect(outcome.lines.join('\n')).toContain(
+      'token-optimizer-learn [options]'
+    );
     const named = await run(['--agent', 'emacs'], {});
     expect(named.exitCode).toBe(2);
   });
@@ -138,7 +189,9 @@ describe('run', () => {
   it('prints the usage for --help and does nothing else', async () => {
     const outcome = await run(['--help'], {});
     expect(outcome.exitCode).toBe(0);
-    expect(outcome.lines.join('\n')).toContain('Nothing is written unless --write is given.');
+    expect(outcome.lines.join('\n')).toContain(
+      'Nothing is written unless --write is given.'
+    );
     expect(outcome.results).toHaveLength(0);
   });
 

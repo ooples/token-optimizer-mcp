@@ -8,7 +8,7 @@
  * this is a guest in it.
  */
 
-import { renameSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AnalysisResult, Confidence, Recommendation } from './models.js';
 
@@ -120,21 +120,25 @@ export interface WriteOutcome {
  * user's instructions file the first time they ask it to look at something has
  * misunderstood what it was asked.
  */
-export function writeRecommendations(
+export async function writeRecommendations(
   projectDir: string,
   contextFile: string,
   result: AnalysisResult,
   options: { readonly dryRun?: boolean } = {}
-): WriteOutcome {
+): Promise<WriteOutcome> {
   const path = join(projectDir, contextFile);
   const block = `${BLOCK_START}\n${renderRecommendations(result)}\n${BLOCK_END}`;
-  const existing = existsSync(path) ? readFileSync(path, 'utf8') : '';
+  // Read rather than asked-about-then-read: a file that appears between the two
+  // would have been overwritten, and a missing one is the same case as an empty
+  // one here -- the block is simply the whole file.
+  const existing = await readExisting(path);
   const start = existing.indexOf(BLOCK_START);
   const end = existing.indexOf(BLOCK_END);
   let content: string;
   let replaced = false;
   if (start !== -1 && end > start) {
-    content = existing.slice(0, start) + block + existing.slice(end + BLOCK_END.length);
+    content =
+      existing.slice(0, start) + block + existing.slice(end + BLOCK_END.length);
     replaced = true;
   } else if (existing.trim().length === 0) {
     content = `${block}\n`;
@@ -149,7 +153,19 @@ export function writeRecommendations(
   // Written through a temporary file in the same directory and renamed, so a
   // failure halfway cannot leave a user's instructions file half-written.
   const temporary = `${path}.token-optimizer.tmp`;
-  writeFileSync(temporary, content, 'utf8');
-  renameSync(temporary, path);
+  await writeFile(temporary, content, 'utf8');
+  await rename(temporary, path);
   return { path, content, written: true, unchanged, replaced };
+}
+
+/** A context file's current text, or empty when it is not there yet. */
+async function readExisting(path: string): Promise<string> {
+  try {
+    return await readFile(path, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+    // Anything else -- a directory in its place, no permission to read it -- is
+    // not a file this tool may quietly replace, so the caller hears about it.
+    throw error;
+  }
 }

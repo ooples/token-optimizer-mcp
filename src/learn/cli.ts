@@ -115,26 +115,43 @@ export function parseArguments(argv: readonly string[]): Options {
     }
   }
   if (agent === 'auto') agent = null;
-  return { agent, projectPath, since, maxSessions, write, listProjects, json, help };
+  return {
+    agent,
+    projectPath,
+    since,
+    maxSessions,
+    write,
+    listProjects,
+    json,
+    help,
+  };
 }
 
 /** Same directory, allowing for a trailing separator and Windows' casing. */
 function samePath(left: string | null, right: string): boolean {
   if (left === null) return false;
   const tidy = (value: string): string =>
-    value.replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
+    value
+      .replace(/[\\/]+$/, '')
+      .replace(/\\/g, '/')
+      .toLowerCase();
   return tidy(left) === tidy(right);
 }
 
-function projectFor(plugin: AgentPlugin, path: string): ProjectInfo | null {
-  for (const project of plugin.discoverProjects()) {
+async function projectFor(
+  plugin: AgentPlugin,
+  path: string
+): Promise<ProjectInfo | null> {
+  for (const project of await plugin.discoverProjects()) {
     if (samePath(project.projectPath, path)) return project;
   }
   return null;
 }
 
 /** The plugins to run: the one named, or every one with data on this machine. */
-export function selectPlugins(agent: string | null): readonly AgentPlugin[] {
+export async function selectPlugins(
+  agent: string | null
+): Promise<readonly AgentPlugin[]> {
   if (agent !== null) return [agentPlugin(agent)];
   return detectedAgents();
 }
@@ -167,7 +184,7 @@ export async function run(
   }
   let plugins: readonly AgentPlugin[];
   try {
-    plugins = selectPlugins(options.agent);
+    plugins = await selectPlugins(options.agent);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     return { lines: [...lines, reason], results: [], exitCode: 2 };
@@ -182,28 +199,34 @@ export async function run(
   if (options.listProjects) {
     for (const plugin of plugins) {
       lines.push(`${plugin.displayName}:`);
-      const projects = plugin.discoverProjects();
+      const projects = await plugin.discoverProjects();
       if (projects.length === 0) lines.push('  none');
       for (const project of projects) {
-        lines.push(`  ${project.projectPath ?? project.dataPath} (${project.sessionCount})`);
+        lines.push(
+          `  ${project.projectPath ?? project.dataPath} (${project.sessionCount})`
+        );
       }
     }
     return { lines, results: [], exitCode: 0 };
   }
   const results: AnalysisResult[] = [];
   for (const plugin of plugins) {
-    const project = projectFor(plugin, options.projectPath);
+    const project = await projectFor(plugin, options.projectPath);
     if (project === null) {
-      lines.push(`${plugin.displayName}: no sessions recorded for this project`);
+      lines.push(
+        `${plugin.displayName}: no sessions recorded for this project`
+      );
       continue;
     }
     const unreadable: string[] = [];
     const scan: ScanOptions = {
       onUnreadable: (path) => unreadable.push(path),
       ...(options.since === null ? {} : { since: options.since }),
-      ...(options.maxSessions === null ? {} : { maxSessions: options.maxSessions }),
+      ...(options.maxSessions === null
+        ? {}
+        : { maxSessions: options.maxSessions }),
     };
-    const sessions = plugin.scanProject(project, scan);
+    const sessions = await plugin.scanProject(project, scan);
     const result = analyse(plugin.displayName, project, sessions, unreadable);
     results.push(result);
     lines.push(...describeAnalysis(result));
@@ -213,9 +236,12 @@ export async function run(
       continue;
     }
     const target = plugin.contextTarget();
-    const outcome = writeRecommendations(options.projectPath, target.contextFile, result, {
-      dryRun: false,
-    });
+    const outcome = await writeRecommendations(
+      options.projectPath,
+      target.contextFile,
+      result,
+      { dryRun: false }
+    );
     lines.push(
       outcome.unchanged
         ? `  ${target.contextFile} already said this`

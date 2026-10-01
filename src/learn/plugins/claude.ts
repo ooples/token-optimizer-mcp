@@ -14,12 +14,17 @@
  * name is only a fallback for a file that has none.
  */
 
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { classifyFailure, failureDetail } from '../classify.js';
 import { SubjectKind, ProjectInfo, SessionData, ToolCall } from '../models.js';
-import { AgentPlugin, ContextTarget, ScanOptions } from '../plugin.js';
+import {
+  AgentPlugin,
+  ContextTarget,
+  ScanOptions,
+  directoryExists,
+} from '../plugin.js';
 import { BuiltInAgent } from '../plugin.js';
 import {
   DEFAULT_MAX_BYTES,
@@ -32,7 +37,8 @@ import {
 
 function projectsRoot(): string {
   const override = process.env.TOKEN_OPTIMIZER_CLAUDE_HOME;
-  const home = override !== undefined && override.length > 0 ? override : homedir();
+  const home =
+    override !== undefined && override.length > 0 ? override : homedir();
   return join(home, '.claude', 'projects');
 }
 
@@ -69,13 +75,15 @@ interface Pending {
   readonly index: number;
 }
 
-function sessionFiles(dir: string): { path: string; mtime: number }[] {
+async function sessionFiles(
+  dir: string
+): Promise<{ path: string; mtime: number }[]> {
   const files: { path: string; mtime: number }[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
     const path = join(dir, entry.name);
     try {
-      files.push({ path, mtime: statSync(path).mtimeMs });
+      files.push({ path, mtime: (await stat(path)).mtimeMs });
     } catch {
       // Gone between the listing and the stat. Nothing to read.
     }
@@ -83,8 +91,11 @@ function sessionFiles(dir: string): { path: string; mtime: number }[] {
   return files.sort((a, b) => b.mtime - a.mtime);
 }
 
-function scanFile(path: string, maxBytes: number): SessionData | null {
-  const { lines, truncated } = readJsonlHead(path, maxBytes);
+async function scanFile(
+  path: string,
+  maxBytes: number
+): Promise<SessionData | null> {
+  const { lines, truncated } = await readJsonlHead(path, maxBytes);
   if (lines.length === 0) return null;
   const pending = new Map<string, Pending>();
   const calls: ToolCall[] = [];
@@ -138,7 +149,12 @@ function scanFile(path: string, maxBytes: number): SessionData | null {
     }
   }
   return {
-    sessionId: path.replace(/\\/g, '/').split('/').pop()?.replace(/\.jsonl$/, '') ?? path,
+    sessionId:
+      path
+        .replace(/\\/g, '/')
+        .split('/')
+        .pop()
+        ?.replace(/\.jsonl$/, '') ?? path,
     agent: BuiltInAgent.Claude,
     calls,
     totalCalls: index,
@@ -151,22 +167,22 @@ export const claudePlugin: AgentPlugin = {
   name: BuiltInAgent.Claude,
   displayName: 'Claude Code',
 
-  detect(): boolean {
-    return existsSync(projectsRoot());
+  detect(): Promise<boolean> {
+    return directoryExists(projectsRoot());
   },
 
-  discoverProjects(): readonly ProjectInfo[] {
+  async discoverProjects(): Promise<readonly ProjectInfo[]> {
     const root = projectsRoot();
-    if (!existsSync(root)) return [];
+    if (!(await directoryExists(root))) return [];
     const projects: ProjectInfo[] = [];
-    for (const entry of readdirSync(root, { withFileTypes: true })) {
+    for (const entry of await readdir(root, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       const dir = join(root, entry.name);
-      const files = sessionFiles(dir);
+      const files = await sessionFiles(dir);
       if (files.length === 0) continue;
       projects.push({
         name: entry.name,
-        projectPath: cwdOf(files[0]?.path ?? ''),
+        projectPath: await cwdOf(files[0]?.path ?? ''),
         dataPath: dir,
         sessionCount: files.length,
       });
@@ -174,16 +190,20 @@ export const claudePlugin: AgentPlugin = {
     return projects;
   },
 
-  scanProject(project: ProjectInfo, options: ScanOptions = {}): readonly SessionData[] {
+  async scanProject(
+    project: ProjectInfo,
+    options: ScanOptions = {}
+  ): Promise<readonly SessionData[]> {
     const maxBytes = options.maxBytesPerSession ?? DEFAULT_MAX_BYTES;
     const sessions: SessionData[] = [];
-    const files = sessionFiles(project.dataPath);
+    const files = await sessionFiles(project.dataPath);
     const limit = options.maxSessions ?? files.length;
     for (const file of files) {
       if (sessions.length >= limit) break;
-      if (options.since !== undefined && file.mtime < options.since.getTime()) continue;
+      if (options.since !== undefined && file.mtime < options.since.getTime())
+        continue;
       try {
-        const session = scanFile(file.path, maxBytes);
+        const session = await scanFile(file.path, maxBytes);
         if (session !== null) sessions.push(session);
       } catch {
         // One unreadable transcript is not a reason to learn nothing from the
@@ -200,10 +220,10 @@ export const claudePlugin: AgentPlugin = {
 };
 
 /** The working directory a transcript recorded, read from its first entries. */
-function cwdOf(path: string): string | null {
+async function cwdOf(path: string): Promise<string | null> {
   if (path.length === 0) return null;
   try {
-    const { lines } = readJsonlHead(path, 64 * 1024);
+    const { lines } = await readJsonlHead(path, 64 * 1024);
     for (const line of lines) {
       const record = parseLine(line);
       if (record === null) continue;
@@ -216,4 +236,3 @@ function cwdOf(path: string): string | null {
   }
   return null;
 }
-

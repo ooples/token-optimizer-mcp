@@ -15,12 +15,19 @@
  * only cheap way to honour `since` without opening every session ever recorded.
  */
 
-import { Dirent, existsSync, readdirSync, statSync } from 'node:fs';
+import type { Dirent } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { classifyFailure, failureDetail } from '../classify.js';
 import { SubjectKind, ProjectInfo, SessionData, ToolCall } from '../models.js';
-import { AgentPlugin, BuiltInAgent, ContextTarget, ScanOptions } from '../plugin.js';
+import {
+  AgentPlugin,
+  BuiltInAgent,
+  ContextTarget,
+  ScanOptions,
+  directoryExists,
+} from '../plugin.js';
 import {
   DEFAULT_MAX_BYTES,
   parseLine,
@@ -32,17 +39,20 @@ import {
 
 function sessionsRoot(): string {
   const override = process.env.TOKEN_OPTIMIZER_CODEX_HOME;
-  const home = override !== undefined && override.length > 0 ? override : homedir();
+  const home =
+    override !== undefined && override.length > 0 ? override : homedir();
   return join(home, '.codex', 'sessions');
 }
 
 /** Every rollout file under the year/month/day tree, newest first. */
-function sessionFiles(root: string): { path: string; mtime: number }[] {
+async function sessionFiles(
+  root: string
+): Promise<{ path: string; mtime: number }[]> {
   const files: { path: string; mtime: number }[] = [];
-  const walk = (dir: string, depth: number): void => {
+  const walk = async (dir: string, depth: number): Promise<void> => {
     let entries: Dirent[];
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      entries = await readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
@@ -51,18 +61,18 @@ function sessionFiles(root: string): { path: string; mtime: number }[] {
       if (entry.isDirectory()) {
         // Three levels of date directories and no deeper. A bound here is what
         // keeps a stray symlink in a log directory from walking a whole disk.
-        if (depth < 3) walk(path, depth + 1);
+        if (depth < 3) await walk(path, depth + 1);
         continue;
       }
       if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
       try {
-        files.push({ path, mtime: statSync(path).mtimeMs });
+        files.push({ path, mtime: (await stat(path)).mtimeMs });
       } catch {
         // Gone between the listing and the stat.
       }
     }
   };
-  walk(root, 0);
+  await walk(root, 0);
   return files.sort((a, b) => b.mtime - a.mtime);
 }
 
@@ -127,17 +137,26 @@ function judge(value: unknown, depth = 0): Verdict | null {
   const record = value as Record<string, unknown>;
   const status = record['status'];
   if (status === 'rejected' || status === 'failed' || status === 'error') {
-    return { failed: true, reason: textOf(record['reason'] ?? record['value'] ?? '') };
+    return {
+      failed: true,
+      reason: textOf(record['reason'] ?? record['value'] ?? ''),
+    };
   }
   const code = record['exit_code'];
   if (typeof code === 'number' && code !== 0) {
     // stderr counts. Without it the reason was "exit code 1" and nothing else,
     // which restates the category and is refused downstream as no evidence at all.
-    const said = textOf(record['output']) || textOf(record['stderr']) || textOf(record['stdout']);
+    const said =
+      textOf(record['output']) ||
+      textOf(record['stderr']) ||
+      textOf(record['stdout']);
     return { failed: true, reason: `exit code ${code}\n${said}` };
   }
   if (record['success'] === false) {
-    return { failed: true, reason: textOf(record['error'] ?? record['output'] ?? '') };
+    return {
+      failed: true,
+      reason: textOf(record['error'] ?? record['output'] ?? ''),
+    };
   }
   for (const key of ['value', 'result', 'data']) {
     if (key in record) {
@@ -215,8 +234,11 @@ function tidy(text: string): string {
   return text.replace(/\s+/g, ' ').trim().slice(0, 400);
 }
 
-function scanFile(path: string, maxBytes: number): SessionData | null {
-  const { lines, truncated } = readJsonlHead(path, maxBytes);
+async function scanFile(
+  path: string,
+  maxBytes: number
+): Promise<SessionData | null> {
+  const { lines, truncated } = await readJsonlHead(path, maxBytes);
   if (lines.length === 0) return null;
   const pending = new Map<string, Pending>();
   const calls: ToolCall[] = [];
@@ -229,8 +251,10 @@ function scanFile(path: string, maxBytes: number): SessionData | null {
     const payload = recordField(record, 'payload');
     if (payload === null) continue;
     if (stringField(record, 'type') === 'session_meta') {
-      if (sessionId.length === 0) sessionId = stringField(payload, 'session_id');
-      const stamp = stringField(payload, 'timestamp') || stringField(record, 'timestamp');
+      if (sessionId.length === 0)
+        sessionId = stringField(payload, 'session_id');
+      const stamp =
+        stringField(payload, 'timestamp') || stringField(record, 'timestamp');
       if (stamp.length > 0) {
         const parsed = new Date(stamp);
         if (!Number.isNaN(parsed.getTime())) startedAt = parsed;
@@ -247,12 +271,15 @@ function scanFile(path: string, maxBytes: number): SessionData | null {
       });
       continue;
     }
-    if (type !== 'custom_tool_call_output' && type !== 'function_call_output') continue;
+    if (type !== 'custom_tool_call_output' && type !== 'function_call_output')
+      continue;
     const id = stringField(payload, 'call_id');
     const asked = pending.get(id);
     pending.delete(id);
     const verdict = readCodexOutput(payload['output']);
-    const text = verdict.failed ? verdict.reason : textOf(payload['output'], 4096);
+    const text = verdict.failed
+      ? verdict.reason
+      : textOf(payload['output'], 4096);
     const failed = verdict.failed || SAYS_ERROR.test(text.slice(0, 200));
     if (!failed) continue;
     const name = asked?.name ?? 'unknown';
@@ -270,7 +297,8 @@ function scanFile(path: string, maxBytes: number): SessionData | null {
   }
   const fallbackId = path.replace(/\\/g, '/').split('/').pop() ?? path;
   return {
-    sessionId: sessionId.length > 0 ? sessionId : fallbackId.replace(/\.jsonl$/, ''),
+    sessionId:
+      sessionId.length > 0 ? sessionId : fallbackId.replace(/\.jsonl$/, ''),
     agent: BuiltInAgent.Codex,
     calls,
     totalCalls: index,
@@ -280,9 +308,9 @@ function scanFile(path: string, maxBytes: number): SessionData | null {
 }
 
 /** The working directory a rollout recorded. */
-function cwdOf(path: string): string | null {
+async function cwdOf(path: string): Promise<string | null> {
   try {
-    const { lines } = readJsonlHead(path, 256 * 1024);
+    const { lines } = await readJsonlHead(path, 256 * 1024);
     for (const line of lines) {
       const record = parseLine(line);
       if (record === null) continue;
@@ -306,12 +334,20 @@ function cwdOf(path: string): string | null {
  * session file, which is why this is the one place a bound on how far back to look
  * changes what discovery costs.
  */
-function discover(limit: number): readonly ProjectInfo[] {
+async function discover(limit: number): Promise<readonly ProjectInfo[]> {
   const root = sessionsRoot();
-  if (!existsSync(root)) return [];
+  if (!(await directoryExists(root))) return [];
+  const files = (await sessionFiles(root)).slice(0, limit);
+  // The heads are independent of one another, so they are read together rather
+  // than one after the next -- which is what makes the one expensive path here
+  // cost a round trip instead of `limit` of them. `limit` is also the bound on how
+  // many files are open at once, which is why it is a constant and not a flag.
+  const directories = await Promise.all(files.map((file) => cwdOf(file.path)));
+  // Counted from the resolved list in the original newest-first order, so the
+  // order projects come back in does not depend on which read finished first.
   const counts = new Map<string, number>();
-  for (const file of sessionFiles(root).slice(0, limit)) {
-    const key = cwdOf(file.path) ?? '';
+  for (const directory of directories) {
+    const key = directory ?? '';
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return [...counts.entries()].map(([path, count]) => ({
@@ -329,29 +365,36 @@ export const codexPlugin: AgentPlugin = {
   name: BuiltInAgent.Codex,
   displayName: 'Codex',
 
-  detect(): boolean {
-    return existsSync(sessionsRoot());
+  detect(): Promise<boolean> {
+    return directoryExists(sessionsRoot());
   },
 
-  discoverProjects(): readonly ProjectInfo[] {
+  discoverProjects(): Promise<readonly ProjectInfo[]> {
     return discover(DISCOVERY_LIMIT);
   },
 
-  scanProject(project: ProjectInfo, options: ScanOptions = {}): readonly SessionData[] {
+  async scanProject(
+    project: ProjectInfo,
+    options: ScanOptions = {}
+  ): Promise<readonly SessionData[]> {
     const maxBytes = options.maxBytesPerSession ?? DEFAULT_MAX_BYTES;
     const sessions: SessionData[] = [];
-    const files = sessionFiles(sessionsRoot());
+    const files = await sessionFiles(sessionsRoot());
     const limit = options.maxSessions ?? files.length;
     for (const file of files) {
       if (sessions.length >= limit) break;
-      if (options.since !== undefined && file.mtime < options.since.getTime()) continue;
+      if (options.since !== undefined && file.mtime < options.since.getTime())
+        continue;
       // The project IS a working directory here, so a session that ran elsewhere
       // belongs to a different project even though it sits in the same tree.
-      if (project.projectPath !== null && cwdOf(file.path) !== project.projectPath) {
+      if (
+        project.projectPath !== null &&
+        (await cwdOf(file.path)) !== project.projectPath
+      ) {
         continue;
       }
       try {
-        const session = scanFile(file.path, maxBytes);
+        const session = await scanFile(file.path, maxBytes);
         if (session !== null) sessions.push(session);
       } catch {
         // One unreadable rollout, not the whole pass -- but a named loss.

@@ -2,13 +2,13 @@
  * Reading a line-delimited log without loading it.
  *
  * A session file on a working machine can be hundreds of megabytes -- the largest
- * on the machine this was written on is 204MB -- so nothing here calls
- * readFileSync. The head is read into a fixed buffer and the last partial line is
- * dropped, because half a JSON object parses as nothing and a caller that did not
+ * on the machine this was written on is 204MB -- so nothing here reads a whole
+ * file, and the read it does make does not block the process making it. The head
+ * goes into a fixed buffer and the last partial line is dropped, because half a JSON object parses as nothing and a caller that did not
  * know it was truncated would report a clean pass over a file it barely opened.
  */
 
-import { closeSync, openSync, readSync, statSync } from 'node:fs';
+import { open, stat } from 'node:fs/promises';
 
 /** How much of one session file is read when a caller does not say. */
 export const DEFAULT_MAX_BYTES = 8 * 1024 * 1024;
@@ -20,21 +20,24 @@ export interface HeadResult {
 }
 
 /** Read up to `maxBytes` of a file and split it into whole lines. */
-export function readJsonlHead(path: string, maxBytes = DEFAULT_MAX_BYTES): HeadResult {
-  const size = statSync(path).size;
+export async function readJsonlHead(
+  path: string,
+  maxBytes = DEFAULT_MAX_BYTES
+): Promise<HeadResult> {
+  const size = (await stat(path)).size;
   const want = Math.min(size, maxBytes);
   if (want === 0) return { lines: [], truncated: false };
   const buffer = Buffer.allocUnsafe(want);
-  const fd = openSync(path, 'r');
+  const handle = await open(path, 'r');
   let read = 0;
   try {
     while (read < want) {
-      const got = readSync(fd, buffer, read, want - read, read);
-      if (got === 0) break;
-      read += got;
+      const { bytesRead } = await handle.read(buffer, read, want - read, read);
+      if (bytesRead === 0) break;
+      read += bytesRead;
     }
   } finally {
-    closeSync(fd);
+    await handle.close();
   }
   const truncated = size > want;
   const text = buffer.subarray(0, read).toString('utf8');
@@ -83,7 +86,10 @@ export function textOf(value: unknown, limit = 64 * 1024): string {
 }
 
 /** A string field, or ''. */
-export function stringField(record: Record<string, unknown>, key: string): string {
+export function stringField(
+  record: Record<string, unknown>,
+  key: string
+): string {
   const value = record[key];
   return typeof value === 'string' ? value : '';
 }

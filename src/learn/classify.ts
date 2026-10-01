@@ -18,7 +18,6 @@
 
 import { FailureCategory } from './models.js';
 
-
 /**
  * How much of an output is examined.
  *
@@ -46,25 +45,84 @@ const RULES: readonly Rule[] = [
   // transcript. The wording below them is what an SDK writes, and one machine only
   // ever produces one of the two, so matching only the SDK's left the single most
   // actionable failure there is -- a call already refused once -- reading as unknown.
-  { category: FailureCategory.UserRejected, pattern: /(\bBlocked:|does ?n.t want to proceed|\buser (?:rejected|denied|declined)|operation was (?:aborted|rejected) by|(?:permission (?:request )?)?denied by the user|rejected by the user)/i },
-  { category: FailureCategory.Timeout, pattern: /\b(timed? ?out|timeout after|exceeded the timeout|ETIMEDOUT|deadline exceeded)\b/i },
-  { category: FailureCategory.OutOfMemory, pattern: /\b(out of memory|OutOfMemoryException|heap out of memory|Cannot allocate memory|ENOMEM|Killed)\b/ },
-  { category: FailureCategory.ModuleNotFound, pattern: /\b(Cannot find module|ModuleNotFoundError|MODULE_NOT_FOUND|Could not resolve|Unable to resolve|ImportError)\b/i },
-  { category: FailureCategory.CommandNotFound, pattern: /(command not found|is not recognized as (?:an internal|the name)|CommandNotFoundException|\bENOENT\b.*spawn|No such file or directory: '[^'/\\]+')/i },
-  { category: FailureCategory.PermissionDenied, pattern: /\b(EACCES|EPERM|permission denied|access is denied|UnauthorizedAccessException|Operation not permitted)\b/i },
-  { category: FailureCategory.FileTooLarge, pattern: /(\bEFBIG\b|file (?:is )?too large|exceeds maximum allowed|maximum allowed tokens|too large to read|results are too long)/i },
-  { category: FailureCategory.IsDirectory, pattern: /\b(EISDIR|is a directory|Is a directory)\b/ },
-  { category: FailureCategory.StringNotFound, pattern: /(String to replace not found|old_string not found|not found in (?:the )?file|No replacement was made|string_not_found)/i },
-  { category: FailureCategory.NoMatches, pattern: /(no (?:files? )?(?:matches?|matching files?) found|no results found|0 matches|found 0 files|pattern did not match)/i },
-  { category: FailureCategory.FileNotFound, pattern: /\b(ENOENT|No such file or directory|does not exist|cannot find (?:the )?(?:path|file)|FileNotFoundError|could not be found)\b/i },
-  { category: FailureCategory.ConnectionError, pattern: /\b(ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|getaddrinfo|connection (?:refused|reset|timed out)|failed to connect|could not connect|could not resolve host|network is unreachable|EHOSTUNREACH|ENETUNREACH|SSL|certificate)\b/i },
-  { category: FailureCategory.TestFailure, pattern: /(\b\d+ (?:tests? )?failed\b|Tests?:\s+\d+ failed|FAIL\s+\S+|assertion (?:failed|error)|Expected .* (?:but )?(?:received|got)|AssertionError)/ },
+  {
+    category: FailureCategory.UserRejected,
+    pattern:
+      /(\bBlocked:|does ?n.t want to proceed|\buser (?:rejected|denied|declined)|operation was (?:aborted|rejected) by|(?:permission (?:request )?)?denied by the user|rejected by the user)/i,
+  },
+  {
+    category: FailureCategory.Timeout,
+    pattern:
+      /\b(timed? ?out|timeout after|exceeded the timeout|ETIMEDOUT|deadline exceeded)\b/i,
+  },
+  {
+    category: FailureCategory.OutOfMemory,
+    pattern:
+      /\b(out of memory|OutOfMemoryException|heap out of memory|Cannot allocate memory|ENOMEM|Killed)\b/,
+  },
+  {
+    category: FailureCategory.ModuleNotFound,
+    pattern:
+      /\b(Cannot find module|ModuleNotFoundError|MODULE_NOT_FOUND|Could not resolve|Unable to resolve|ImportError)\b/i,
+  },
+  {
+    category: FailureCategory.CommandNotFound,
+    pattern:
+      /(command not found|is not recognized as (?:an internal|the name)|CommandNotFoundException|\bENOENT\b.*spawn|No such file or directory: '[^'/\\]+')/i,
+  },
+  {
+    category: FailureCategory.PermissionDenied,
+    pattern:
+      /\b(EACCES|EPERM|permission denied|access is denied|UnauthorizedAccessException|Operation not permitted)\b/i,
+  },
+  {
+    category: FailureCategory.FileTooLarge,
+    pattern:
+      /(\bEFBIG\b|file (?:is )?too large|exceeds maximum allowed|maximum allowed tokens|too large to read|results are too long)/i,
+  },
+  {
+    category: FailureCategory.IsDirectory,
+    pattern: /\b(EISDIR|is a directory|Is a directory)\b/,
+  },
+  {
+    category: FailureCategory.StringNotFound,
+    pattern:
+      /(String to replace not found|old_string not found|not found in (?:the )?file|No replacement was made|string_not_found)/i,
+  },
+  {
+    category: FailureCategory.NoMatches,
+    pattern:
+      /(no (?:files? )?(?:matches?|matching files?) found|no results found|0 matches|found 0 files|pattern did not match)/i,
+  },
+  {
+    category: FailureCategory.FileNotFound,
+    pattern:
+      /\b(ENOENT|No such file or directory|does not exist|cannot find (?:the )?(?:path|file)|FileNotFoundError|could not be found)\b/i,
+  },
+  {
+    category: FailureCategory.ConnectionError,
+    pattern:
+      /\b(ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|getaddrinfo|connection (?:refused|reset|timed out)|failed to connect|could not connect|could not resolve host|network is unreachable|EHOSTUNREACH|ENETUNREACH|SSL|certificate)\b/i,
+  },
+  {
+    category: FailureCategory.TestFailure,
+    pattern:
+      /(\b\d+ (?:tests? )?failed\b|Tests?:\s+\d+ failed|FAIL\s+\S+|assertion (?:failed|error)|Expected .* (?:but )?(?:received|got)|AssertionError)/,
+  },
   // A COMPILER CODE IS NOT A SYNTAX ERROR. `CS\d{4}` and `TS\d{4}` cover every
   // diagnostic those two compilers emit -- a missing reference, a nullability
   // warning promoted to an error, an unused variable -- so matching them here filed
   // the whole of a failed build under syntax. The build rule below claims them.
-  { category: FailureCategory.SyntaxError, pattern: /\b(SyntaxError|ParseError|Unexpected token|unterminated|missing (?:the )?terminator|is not valid JSON)\b/ },
-  { category: FailureCategory.BuildFailure, pattern: /(\berror\s+(?:CS|TS|MSB|LNK)\d+|Build FAILED|compilation (?:failed|error)|make: \*\*\*|error\[E\d+\])/i },
+  {
+    category: FailureCategory.SyntaxError,
+    pattern:
+      /\b(SyntaxError|ParseError|Unexpected token|unterminated|missing (?:the )?terminator|is not valid JSON)\b/,
+  },
+  {
+    category: FailureCategory.BuildFailure,
+    pattern:
+      /(\berror\s+(?:CS|TS|MSB|LNK)\d+|Build FAILED|compilation (?:failed|error)|make: \*\*\*|error\[E\d+\])/i,
+  },
 ];
 
 /**
@@ -79,7 +137,8 @@ const INVALID_ARGUMENTS =
   /\b(?:requires?|does not accept|unknown (?:option|parameter|argument|field)|unrecognized (?:option|argument)|missing required|invalid (?:input|argument|parameter|value for)|expected .{0,20}(?:but (?:got|received))|did you mean)\b/i;
 
 /** The exit-code line a shell failure ends up with when nothing else matched. */
-const EXIT_CODE = /(?:^|\n)\s*(?:exit(?:ed with)? code|Command exited with)\s*:?\s*([0-9]+)/i;
+const EXIT_CODE =
+  /(?:^|\n)\s*(?:exit(?:ed with)? code|Command exited with)\s*:?\s*([0-9]+)/i;
 
 function test(pattern: RegExp, text: string): boolean {
   // None of the rules carry /g, so there is no lastIndex to leak between calls
@@ -94,8 +153,12 @@ function test(pattern: RegExp, text: string): boolean {
  * different tools -- a search tool returning nothing is a "no matches", the same
  * words from an edit tool are a missing file.
  */
-export function classifyFailure(toolName: string, output: string): FailureCategory {
-  const head = output.length > HEAD_BYTES ? output.slice(0, HEAD_BYTES) : output;
+export function classifyFailure(
+  toolName: string,
+  output: string
+): FailureCategory {
+  const head =
+    output.length > HEAD_BYTES ? output.slice(0, HEAD_BYTES) : output;
   if (head.trim().length === 0) return FailureCategory.Unknown;
   for (const rule of RULES) {
     if (test(rule.pattern, head)) return rule.category;
@@ -109,7 +172,6 @@ export function classifyFailure(toolName: string, output: string): FailureCatego
   }
   return FailureCategory.Unknown;
 }
-
 
 /** How much of an output classification looks at, exported for the same reason. */
 export const classifyHeadBytes = HEAD_BYTES;

@@ -48,11 +48,7 @@ function tidy(text: string): string {
   const home = homedir();
   if (home.length === 0) return text;
   const forward = home.replace(/\\/g, '/');
-  return text
-    .split(home)
-    .join('~')
-    .split(forward)
-    .join('~');
+  return text.split(home).join('~').split(forward).join('~');
 }
 
 /**
@@ -69,7 +65,8 @@ export function groupKey(call: ToolCall): string {
   // The tool is the fact when it rejected its own arguments, and it is all there is
   // when the call named nothing.
   if (call.category === FailureCategory.InvalidArguments) return call.name;
-  if (subject.length === 0 || call.subjectKind === SubjectKind.None) return call.name;
+  if (subject.length === 0 || call.subjectKind === SubjectKind.None)
+    return call.name;
   if (call.subjectKind === SubjectKind.Command) {
     // WHATEVER THE OUTPUT SAID, the unit is the command. A "file not found" from a
     // shell call names a path the call never mentioned -- it is inside the output --
@@ -95,11 +92,31 @@ const SEPARATOR = /^(?:&&|\|\||[;|&])$/;
 const ENDS_STATEMENT = /[;&|]$/;
 /** Things that run another program, and are never the program that failed. */
 const LAUNCHERS = new Set([
-  'sudo', 'time', 'env', 'npx', 'cmd', 'powershell', 'pwsh', 'bash', 'sh', 'exec',
-  '/c', '/k', '--',
+  'sudo',
+  'time',
+  'env',
+  'npx',
+  'cmd',
+  'powershell',
+  'pwsh',
+  'bash',
+  'sh',
+  'exec',
+  '/c',
+  '/k',
+  '--',
 ]);
 /** Words whose whole statement is a preamble, not the command being judged. */
-const PREAMBLE = new Set(['cd', 'chdir', 'pushd', 'popd', 'set-location', 'sl', 'export', 'set']);
+const PREAMBLE = new Set([
+  'cd',
+  'chdir',
+  'pushd',
+  'popd',
+  'set-location',
+  'sl',
+  'export',
+  'set',
+]);
 /** A shell assignment: `FOO=bar`, `$f=...`, `$env:X=1`. */
 /**
  * `FOO=1 cmd` -- an environment prefix, which is one word and not a statement.
@@ -118,11 +135,34 @@ const SHELL_VARIABLE = /^\$/;
  * directory's spelling rather than the command, and so a group of one.
  */
 const VALUE_FLAGS = new Set([
-  '-c', '-h', '-r', '-w', '-z', '--git-dir', '--work-tree', '--exec-path', '--namespace',
-  '--repo', '--host', '--context', '--config', '--prefix', '--workspace', '--project',
+  '-c',
+  '-h',
+  '-r',
+  '-w',
+  '-z',
+  '--git-dir',
+  '--work-tree',
+  '--exec-path',
+  '--namespace',
+  '--repo',
+  '--host',
+  '--context',
+  '--config',
+  '--prefix',
+  '--workspace',
+  '--project',
 ]);
 /** Programs whose subcommand is the fact, so that `git push` is not `git`. */
-const SUBCOMMANDED = new Set(['npm', 'git', 'dotnet', 'gh', 'cargo', 'docker', 'pnpm', 'yarn']);
+const SUBCOMMANDED = new Set([
+  'npm',
+  'git',
+  'dotnet',
+  'gh',
+  'cargo',
+  'docker',
+  'pnpm',
+  'yarn',
+]);
 
 /**
  * The program a command line runs, past the things that wrap one.
@@ -139,7 +179,10 @@ function program(command: string): string {
   let index = 0;
   while (index < words.length) {
     const word = words[index] ?? '';
-    const bare = word.replace(/^.*[\\/]/, '').toLowerCase().replace(/[;&|]+$/, '');
+    const bare = word
+      .replace(/^.*[\\/]/, '')
+      .toLowerCase()
+      .replace(/[;&|]+$/, '');
     if (bare.length === 0 || SEPARATOR.test(word)) {
       index += 1;
       continue;
@@ -295,8 +338,20 @@ function commandRule(
 const PROGRAM_KEY = /^[a-z][\w.+-]*(?: [\w.+-]+){0,2}$/;
 /** Commands whose failure is the work failing, so never a rule about the project. */
 const BUILDS_OR_TESTS = new Set([
-  'make', 'msbuild', 'jest', 'pytest', 'tsc', 'npm test', 'npm run build', 'npm run test',
-  'dotnet build', 'dotnet test', 'cargo build', 'cargo test', 'go build', 'go test',
+  'make',
+  'msbuild',
+  'jest',
+  'pytest',
+  'tsc',
+  'npm test',
+  'npm run build',
+  'npm run test',
+  'dotnet build',
+  'dotnet test',
+  'cargo build',
+  'cargo test',
+  'go build',
+  'go test',
 ]);
 
 /** Categories whose wording says the key IS a file, a directory or a host. */
@@ -319,7 +374,10 @@ function advise(group: Group): { heading: string; body: string } | null {
   // read or written 16 times and does not exist" is what the path wordings below
   // produce when the subject is a command line, so everything a shell ran is worded
   // as what it is, and the category survives only as the message quoted from it.
-  if (group.kind === SubjectKind.Command && !NAMES_THE_PROGRAM.has(group.category)) {
+  if (
+    group.kind === SubjectKind.Command &&
+    !NAMES_THE_PROGRAM.has(group.category)
+  ) {
     return commandRule(group, key, example);
   }
   // AND A TOOL NAME IS NOT A RESOURCE. With no subject recorded, the key is the tool
@@ -417,7 +475,8 @@ function advise(group: Group): { heading: string; body: string } | null {
 }
 
 function confidenceOf(group: Group): Confidence {
-  if (group.sessions.size >= ESTABLISHED_SESSIONS) return Confidence.Established;
+  if (group.sessions.size >= ESTABLISHED_SESSIONS)
+    return Confidence.Established;
   if (group.calls.length >= MIN_OCCURRENCES * 2) return Confidence.Likely;
   return Confidence.Thin;
 }
@@ -480,7 +539,9 @@ export function analyse(
   // Ranked by what they cost, not by how often they happened: twenty cheap "no
   // matches" lines waste less of a context window than three failures that each
   // pasted a megabyte of build output into it.
-  recommendations.sort((a, b) => b.wastedBytes - a.wastedBytes || b.occurrences - a.occurrences);
+  recommendations.sort(
+    (a, b) => b.wastedBytes - a.wastedBytes || b.occurrences - a.occurrences
+  );
 
   return {
     agent,
