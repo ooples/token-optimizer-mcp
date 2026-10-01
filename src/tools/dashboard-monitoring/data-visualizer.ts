@@ -1876,18 +1876,27 @@ export const DATA_VISUALIZER_INPUT_SCHEMA = {
   properties: {
     operation: {
       type: 'string',
+      /*
+       * The operations `run()` dispatches on, and nothing else.
+       *
+       * Six of the eleven values published here used to throw `Unknown
+       * operation` from the default branch of that switch. Three were
+       * near-misses of a real name -- `export` for `export-chart`,
+       * `create-network` for `create-network-graph`, `create-animation` for
+       * `animate` -- so a caller reading the schema was given the one spelling
+       * that cannot work, and the near-miss guard cannot help because the value
+       * is published. The other three (`delete-chart`, `list-charts`,
+       * `render`) have no implementation at all, and never had one.
+       */
       enum: [
         'create-chart',
         'update-chart',
-        'delete-chart',
-        'list-charts',
-        'render',
-        'export',
+        'export-chart',
         'create-heatmap',
         'create-timeline',
-        'create-network',
+        'create-network-graph',
         'create-sankey',
-        'create-animation',
+        'animate',
       ],
       description: 'Visualization operation to perform',
     },
