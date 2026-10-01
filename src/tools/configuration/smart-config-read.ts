@@ -22,7 +22,7 @@ import { readCompressedJson } from '../../utils/cache-helper.js';
 import { displayPath, shortHash } from '../shared/report-shape.js';
 import { measured } from '../shared/savings.js';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 // ============================================================================
 // Types & Interfaces
@@ -180,9 +180,19 @@ export class SmartConfigReadTool {
       strictMode = false,
     } = options;
 
-    // Validate file exists
+    /*
+     * Validate the file exists, naming BOTH the target as written and the
+     * absolute path it resolved to. A relative target is resolved against the
+     * server's working directory, which is not the caller's, so the target
+     * alone does not tell them where to look -- the second half is the part
+     * they cannot derive.
+     */
     if (!existsSync(filePath)) {
-      throw new Error(`Config file not found: ${filePath}`);
+      const resolvedTo = resolve(filePath);
+      throw new Error(
+        `Config file not found: ${filePath}` +
+          (resolvedTo === filePath ? '' : ` (resolved to ${resolvedTo})`)
+      );
     }
 
     // Get file stats
@@ -833,6 +843,11 @@ export const SMART_CONFIG_READ_TOOL_DEFINITION = {
     properties: {
       path: {
         type: 'string',
+        // CONSTRAINED BECAUSE THE TOOL CONSTRAINS IT: an empty string passed
+        // the published schema and then refused with "Config file not found:"
+        // naming nothing at all.
+        minLength: 1,
+        maxLength: 4096,
         description: 'Path to the configuration file',
       },
       format: {
