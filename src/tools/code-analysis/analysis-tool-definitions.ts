@@ -53,7 +53,7 @@ export const SMART_COMPLEXITY_TOOL_DEFINITION = {
 export const SMART_EXPORTS_TOOL_DEFINITION = {
   name: 'smart_exports',
   description:
-    'Analyze TypeScript/JavaScript export statements with intelligent caching. Tracks exports, detects unused exports, and provides optimization suggestions. Measured token reduction vs reading the file: 67-98% first read, 67-97% repeated (bench/tools, 2 fixtures).',
+    'Analyze TypeScript/JavaScript export statements with intelligent caching. Tracks exports, detects unused exports, and provides optimization suggestions. Measured token reduction vs reading the file: 67-98% first read, 67-97% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -104,7 +104,7 @@ export const SMART_EXPORTS_TOOL_DEFINITION = {
 export const SMART_IMPORTS_TOOL_DEFINITION = {
   name: 'smart_imports',
   description:
-    'Analyze TypeScript/JavaScript import statements with intelligent caching. Detects unused imports, missing imports, and provides optimization suggestions. Measured token reduction vs reading the file: 92-93% first read, 92-93% repeated (bench/tools, 2 fixtures).',
+    'Analyze TypeScript/JavaScript import statements with intelligent caching. Detects unused imports, missing imports, and provides optimization suggestions. Measured token reduction vs reading the file: 92-96% first read, 92-96% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -149,7 +149,7 @@ export const SMART_IMPORTS_TOOL_DEFINITION = {
 export const SMART_REFACTOR_TOOL_DEFINITION = {
   name: 'smart_refactor',
   description:
-    'Provides intelligent refactoring suggestions with code examples and impact analysis. Measured token reduction vs reading the file: -130% to 34% first read, -131% to 34% repeated (bench/tools, 2 fixtures) -- the loss is on the smaller fixture, where the suggestions and their code examples outweigh the file they are about.',
+    'Provides intelligent refactoring suggestions with code examples and impact analysis. Measured token reduction vs reading the file: -130% to 79% first read, -131% to 79% repeated (bench/tools, 3 fixtures) -- the loss is on the smallest fixture, where the suggestions and their code examples outweigh the 5KB file they are about.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -204,7 +204,7 @@ export const SMART_REFACTOR_TOOL_DEFINITION = {
 export const SMART_SYMBOLS_TOOL_DEFINITION = {
   name: 'smart_symbols',
   description:
-    'Extract and analyze TypeScript/JavaScript symbols with scope, type, and reference information. Measured token reduction vs reading the file: 73-94% first read, 73-94% repeated (bench/tools, 2 fixtures).',
+    'Extract and analyze TypeScript/JavaScript symbols with scope, type, and reference information. Measured token reduction vs reading the file: 73-94% first read, 73-94% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {

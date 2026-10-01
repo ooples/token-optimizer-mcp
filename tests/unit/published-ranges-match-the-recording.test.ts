@@ -12,9 +12,19 @@
  * readings down; this asserts that every tool with a recording states exactly
  * that range, and that every recorded tool is covered here at all -- a bench
  * case for a tool missing from the map below fails rather than going unchecked.
+ *
+ * AND THAT THE RECORDING IS OF THE CASES THAT EXIST NOW. The first version of
+ * this file compared descriptions to the recording and nothing else, so growing
+ * `CASES` from 28 readings to 36 left all 16 assertions green: eight new fixtures
+ * were measuring nothing anybody would read, and six published ranges rested on
+ * fewer fixtures than the bench now has. A recording is only evidence for the
+ * cases it was taken over, so the per-tool fixture counts are compared with
+ * `CASES` directly -- adding or removing a case now fails here until the bench is
+ * re-recorded.
  */
 
 import { readFileSync } from 'fs';
+import { CASES } from '../../bench/tools/reduction.mjs';
 import { join } from 'path';
 import {
   SMART_COMPLEXITY_TOOL_DEFINITION,
@@ -72,6 +82,11 @@ const DESCRIBED: Record<string, { description: string }> = {
 const recording = JSON.parse(readFileSync(RECORD, 'utf-8')) as Recording;
 const recorded = Object.entries(recording.claims);
 
+/** How many bench cases each tool has right now, which is what a recording owes. */
+const casesPerTool = new Map<string, number>();
+for (const { tool } of CASES as readonly { tool: string }[])
+  casesPerTool.set(tool, (casesPerTool.get(tool) ?? 0) + 1);
+
 describe('every published reduction range is the recorded one', () => {
   it('has a recording to check against', () => {
     expect(recorded.length).toBeGreaterThan(0);
@@ -83,6 +98,21 @@ describe('every published reduction range is the recorded one', () => {
       .map(([tool]) => tool)
       .filter((tool) => !(tool in DESCRIBED));
     expect(uncovered).toEqual([]);
+  });
+
+  it('has a recording for every tool the bench has a case for', () => {
+    const unrecorded = [...casesPerTool.keys()].filter(
+      (tool) => !(tool in recording.claims)
+    );
+    expect(unrecorded).toEqual([]);
+  });
+
+  it('was recorded over the cases that exist now', () => {
+    // Keyed by tool so a failure names which one drifted, not just that one did.
+    const recordedCounts = Object.fromEntries(
+      recorded.map(([tool, claim]) => [tool, claim.fixtures])
+    );
+    expect(recordedCounts).toEqual(Object.fromEntries(casesPerTool));
   });
 
   for (const [tool, claim] of recorded) {
@@ -102,7 +132,9 @@ describe('every published reduction range is the recorded one', () => {
         return;
       }
 
-      expect(description).toContain('Measured token reduction vs reading the file');
+      expect(description).toContain(
+        'Measured token reduction vs reading the file'
+      );
       expect(description).toContain(`${claim.first.text} first read`);
       expect(description).toContain(`${claim.repeated.text} repeated`);
       // The fixture count is what tells a reader how much the range rests on.

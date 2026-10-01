@@ -40,7 +40,13 @@
  */
 
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -84,11 +90,7 @@ export function claimFor(rows) {
   // costs more than it saves is exactly the case a description must state
   // clearly rather than bury in punctuation.
   const text =
-    lo === hi
-      ? `${lo}%`
-      : lo < 0
-        ? `${lo}% to ${hi}%`
-        : `${lo}-${hi}%`;
+    lo === hi ? `${lo}%` : lo < 0 ? `${lo}% to ${hi}%` : `${lo}-${hi}%`;
   return { lo, hi, n: usable.length, text };
 }
 
@@ -113,32 +115,58 @@ const byConfigPath = (path) => ({ configPath: path });
 const byFormatting = (path) => ({ operation: 'format-code', filePath: path });
 
 export const CASES = [
-  { tool: 'smart_complexity', fixture: 'smart-complexity.ts', args: byFilePath },
+  {
+    tool: 'smart_complexity',
+    fixture: 'smart-complexity.ts',
+    args: byFilePath,
+  },
   { tool: 'smart_complexity', fixture: 'token-counter.ts', args: byFilePath },
   { tool: 'smart_complexity', fixture: 'tool-profile.ts', args: byFilePath },
+  { tool: 'smart_exports', fixture: 'smart-complexity.ts', args: byFilePath },
   { tool: 'smart_exports', fixture: 'token-counter.ts', args: byFilePath },
   { tool: 'smart_exports', fixture: 'tool-profile.ts', args: byFilePath },
   { tool: 'smart_imports', fixture: 'smart-complexity.ts', args: byFilePath },
   { tool: 'smart_imports', fixture: 'token-counter.ts', args: byFilePath },
+  { tool: 'smart_imports', fixture: 'tool-profile.ts', args: byFilePath },
   { tool: 'smart_symbols', fixture: 'smart-complexity.ts', args: byFilePath },
+  { tool: 'smart_symbols', fixture: 'token-counter.ts', args: byFilePath },
   { tool: 'smart_symbols', fixture: 'tool-profile.ts', args: byFilePath },
   { tool: 'smart_security', fixture: 'smart-complexity.ts', args: byFilePath },
+  { tool: 'smart_security', fixture: 'token-counter.ts', args: byFilePath },
+  { tool: 'smart_security', fixture: 'tool-profile.ts', args: byFilePath },
   { tool: 'smart_refactor', fixture: 'smart-complexity.ts', args: byFilePath },
+  { tool: 'smart_refactor', fixture: 'token-counter.ts', args: byFilePath },
   { tool: 'smart_refactor', fixture: 'tool-profile.ts', args: byFilePath },
   { tool: 'smart_config_read', fixture: 'package.json', args: byPath },
-  { tool: 'smart_config_read', fixture: 'large-project/package.json', args: byPath },
+  {
+    tool: 'smart_config_read',
+    fixture: 'large-project/package.json',
+    args: byPath,
+  },
   { tool: 'smart_env', fixture: 'example.env', args: byEnvFile },
   { tool: 'smart_env', fixture: 'large.env', args: byEnvFile },
   { tool: 'smart_typescript', fixture: 'tool-profile.ts', args: byFileList },
   { tool: 'smart_dependencies', fixture: 'package.json', args: byFileList },
-  { tool: 'smart_dependencies', fixture: 'large-project/package.json', args: byFileList },
+  {
+    tool: 'smart_dependencies',
+    fixture: 'large-project/package.json',
+    args: byFileList,
+  },
   { tool: 'smart_read', fixture: 'smart-complexity.ts', args: byPathKey },
   { tool: 'smart_read', fixture: 'token-counter.ts', args: byPathKey },
   { tool: 'smart_read', fixture: 'tool-profile.ts', args: byPathKey },
   { tool: 'smart_package_json', fixture: 'package.json', args: byProjectRoot },
-  { tool: 'smart_package_json', fixture: 'large-project/package.json', args: byProjectRoot },
+  {
+    tool: 'smart_package_json',
+    fixture: 'large-project/package.json',
+    args: byProjectRoot,
+  },
   { tool: 'smart_tsconfig', fixture: 'tsconfig.json', args: byConfigPath },
-  { tool: 'smart_tsconfig', fixture: 'large-project/tsconfig.json', args: byConfigPath },
+  {
+    tool: 'smart_tsconfig',
+    fixture: 'large-project/tsconfig.json',
+    args: byConfigPath,
+  },
   // An extends chain: the baseline is BOTH files, because a caller answering
   // this by hand reads the config, sees what it extends, reads that too and
   // merges them. Crediting only the leaf would have measured this tool against
@@ -153,8 +181,10 @@ export const CASES = [
     args: byConfigPath,
   },
   // A syntax formatter cannot reduce anything -- it returns the same code, and
-  // highlighting adds markup to it. Its 86% claim is measured here rather than
-  // argued about.
+  // highlighting adds markup to it. It published 94-95% anyway, off an elided
+  // payload counted as economy, so what it costs is measured here on all three.
+  { tool: 'smart_pretty', fixture: 'smart-complexity.ts', args: byFormatting },
+  { tool: 'smart_pretty', fixture: 'token-counter.ts', args: byFormatting },
   { tool: 'smart_pretty', fixture: 'tool-profile.ts', args: byFormatting },
 ];
 /** A minimal JSON-RPC client over the server's real stdio transport. */
@@ -162,25 +192,29 @@ export class Server {
   constructor() {
     const cacheDir = mkdtempSync(join(tmpdir(), 'tool-reduction-'));
     this.cacheDir = cacheDir;
-    this.child = spawn(process.execPath, [join(ROOT, 'dist', 'server', 'index.js')], {
-      cwd: ROOT,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        TOKEN_OPTIMIZER_TOOL_PROFILE: 'full',
-        // A COLD CACHE, OR THE FIRST READING IS NOT A FIRST READING.
-        //
-        // The cache lives in the home directory and outlives the process, so a
-        // second run of this bench found every fixture already cached and
-        // reported the cached figure in the first-read column. It moved
-        // smart_read's first read from 8-78% to 85-97% between two runs of the
-        // same code -- a number that changes because of what a previous run
-        // left behind measures history, not the tool. Each run gets its own
-        // directory, so the two columns mean what they say.
-        TOKEN_OPTIMIZER_CACHE_DIR: cacheDir,
-      },
-      windowsHide: true,
-    });
+    this.child = spawn(
+      process.execPath,
+      [join(ROOT, 'dist', 'server', 'index.js')],
+      {
+        cwd: ROOT,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          TOKEN_OPTIMIZER_TOOL_PROFILE: 'full',
+          // A COLD CACHE, OR THE FIRST READING IS NOT A FIRST READING.
+          //
+          // The cache lives in the home directory and outlives the process, so a
+          // second run of this bench found every fixture already cached and
+          // reported the cached figure in the first-read column. It moved
+          // smart_read's first read from 8-78% to 85-97% between two runs of the
+          // same code -- a number that changes because of what a previous run
+          // left behind measures history, not the tool. Each run gets its own
+          // directory, so the two columns mean what they say.
+          TOKEN_OPTIMIZER_CACHE_DIR: cacheDir,
+        },
+        windowsHide: true,
+      }
+    );
     this.buffer = '';
     this.pending = new Map();
     this.nextId = 1;
@@ -216,7 +250,9 @@ export class Server {
     return new Promise((res, rej) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        rej(new Error(`${method} timed out; stderr: ${this.stderr.slice(-400)}`));
+        rej(
+          new Error(`${method} timed out; stderr: ${this.stderr.slice(-400)}`)
+        );
       }, 120000);
       this.pending.set(id, (message) => {
         clearTimeout(timer);
@@ -233,7 +269,8 @@ export class Server {
       clientInfo: { name: 'reduction-bench', version: '0' },
     });
     this.child.stdin.write(
-      JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n'
+      JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) +
+        '\n'
     );
   }
 
@@ -311,7 +348,11 @@ export async function measure(server, testCase) {
    * tool, so what comes back is not itself a preview.
    */
   const withExpansions = async (text) => {
-    const refs = [...new Set([...text.matchAll(/\(expand ([0-9a-f]+)\)/g)].map((m) => m[1]))];
+    const refs = [
+      ...new Set(
+        [...text.matchAll(/\(expand ([0-9a-f]+)\)/g)].map((m) => m[1])
+      ),
+    ];
     let whole = text;
     for (const ref of refs) {
       const expanded = await server.send('tools/call', {
@@ -443,14 +484,21 @@ async function main() {
       );
       claims[tool] = {
         first: first ? { lo: first.lo, hi: first.hi, text: first.text } : null,
-        repeated: again ? { lo: again.lo, hi: again.hi, text: again.text } : null,
+        repeated: again
+          ? { lo: again.lo, hi: again.hi, text: again.text }
+          : null,
         fixtures: toolRows.length,
       };
     }
     writeFileSync(
       at,
       JSON.stringify(
-        { encoding: ENCODING_NAME, recorded: new Date().toISOString(), claims, rows },
+        {
+          encoding: ENCODING_NAME,
+          recorded: new Date().toISOString(),
+          claims,
+          rows,
+        },
         null,
         2
       ) + '\n'
@@ -460,11 +508,16 @@ async function main() {
 
   const measured = rows.filter((r) => r.reduction !== null).length;
   console.log('');
-  console.log(`${measured} of ${rows.length} reading(s) produced a measurement`);
+  console.log(
+    `${measured} of ${rows.length} reading(s) produced a measurement`
+  );
   process.exit(measured === 0 ? 1 : 0);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+) {
   main().catch((error) => {
     console.error(error.message);
     process.exit(1);

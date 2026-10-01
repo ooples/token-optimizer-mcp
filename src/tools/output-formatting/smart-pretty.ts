@@ -1603,7 +1603,7 @@ export async function runSmartPretty(
 export const SMART_PRETTY_TOOL_DEFINITION = {
   name: 'smart_pretty',
   description:
-    'Syntax highlighting and code formatting. Supports 50+ languages, ANSI/HTML output, multiple themes, and Prettier integration. Measured token reduction vs reading the file: -30% to -29% first read, -30% to -29% repeated (bench/tools, 1 fixture) -- highlighting and formatting add characters to the code they are given, so neither can reduce anything; the earlier 94% was an elided payload counted as economy.',
+    'Syntax highlighting and code formatting. Supports 50+ languages, ANSI/HTML output, multiple themes, and Prettier integration. Measured token reduction vs reading the file: -31% to -15% first read, -30% to -15% repeated (bench/tools, 3 fixtures) -- highlighting and formatting add characters to the code they are given, so neither can reduce anything; the earlier 94% was an elided payload counted as economy.',
   inputSchema: {
     type: 'object' as const,
     properties: {
