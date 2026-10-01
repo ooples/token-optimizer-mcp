@@ -30,7 +30,6 @@ interface CompilationResult {
   success: boolean;
   diagnostics: ts.Diagnostic[];
   filesCompiled: string[];
-  timestamp: number;
   typeInfo?: Map<string, TypeInfo>;
 }
 
@@ -451,7 +450,6 @@ export class SmartTypeScript {
           .length === 0,
       diagnostics,
       filesCompiled: filesToCompile,
-      timestamp: Date.now(),
       typeInfo: typeInfoMap,
     };
   }
