@@ -294,8 +294,38 @@ export async function measure(server, testCase) {
     return { text, chunks: count };
   };
 
+  /**
+   * AN ELISION IS NOT A SAVING EITHER.
+   *
+   * Every result leaves this server through the progressive-disclosure layer,
+   * which may replace a section with a one-line marker naming what it withheld
+   * and a handle to retrieve it. smart_pretty returned a 1,270-token file as a
+   * 95-token preview and the harness recorded 92.5% -- for a payload whose
+   * `data.format.code` had been elided outright. That is the same defect the
+   * chunk walk above exists to prevent: the content the caller asked for was
+   * not in the response, and it was not free, it was one `expand` call away.
+   *
+   * So the handles are followed and charged, which is what getting the whole
+   * answer through this tool actually costs. A single pass is enough: `expand`
+   * serves the stored output from the local store rather than re-running the
+   * tool, so what comes back is not itself a preview.
+   */
+  const withExpansions = async (text) => {
+    const refs = [...new Set([...text.matchAll(/\(expand ([0-9a-f]+)\)/g)].map((m) => m[1]))];
+    let whole = text;
+    for (const ref of refs) {
+      const expanded = await server.send('tools/call', {
+        name: 'expand',
+        arguments: { ref },
+      });
+      whole += '\n' + payloadOf(expanded);
+    }
+    return { text: whole, expansions: refs.length };
+  };
+
   const firstRead = await withAllChunks(reply);
-  const payload = firstRead.text;
+  const firstWhole = await withExpansions(firstRead.text);
+  const payload = firstWhole.text;
   // A REFUSAL IS A SHAPE, NOT A SUBSTRING. Hunting for an "error" key anywhere
   // in the payload threw away smart_refactor's readings, because a refactoring
   // report legitimately carries error fields about the code it examined. The
@@ -318,7 +348,8 @@ export async function measure(server, testCase) {
     arguments: testCase.args(path),
   });
   const repeatRead = await withAllChunks(again);
-  const repeatPayload = repeatRead.text;
+  const repeatWhole = await withExpansions(repeatRead.text);
+  const repeatPayload = repeatWhole.text;
   const repeatRefused =
     !!again.error ||
     again.result?.isError === true ||
@@ -337,6 +368,7 @@ export async function measure(server, testCase) {
       ? null
       : reduction(baseline, repeatTreatment),
     chunks: firstRead.chunks,
+    expansions: firstWhole.expansions,
     refused,
     detail: refused ? payload.slice(0, 160).replace(/\s+/g, ' ') : '',
   };
