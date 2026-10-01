@@ -76,6 +76,15 @@ export interface ProxySavingsReport {
   readonly uncountedRecords: number;
   /** Lines that were not a record. See `inspect/ledger.ts` for why skipped. */
   readonly skippedLines: number;
+  /**
+   * Model ids a counted row named that no catalog entry prices.
+   *
+   * THE SAME FACT THE MCP REPORT CARRIES, under the same name, because the two
+   * tables now sit one above the other: a note on one and silence on the other
+   * reads as "the proxy knows every price", when both halves consult the one
+   * catalog and both halves miss the same models.
+   */
+  readonly unpricedModels: readonly string[];
 }
 
 /** One window's running totals. Mutable by design: this is a fold. */
@@ -239,6 +248,15 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
       byModel.sort(
         (a, b) => b.tokensSaved - a.tokensSaved || a.name.localeCompare(b.name)
       );
+      // DERIVED FROM THE BUCKETS, not a fourth counter: a model whose counted
+      // rows outnumber its priced ones had at least one row the catalog could
+      // not price. A bucket with no counted rows at all is an unbilled model,
+      // which is a different fact and is reported as one.
+      const unpriced: string[] = [];
+      for (const [name, totals] of models) {
+        if (totals.pricedRequests < totals.countedRequests) unpriced.push(name);
+      }
+      unpriced.sort();
       return Object.freeze({
         windows: Object.freeze(
           windows.map((window) =>
@@ -251,6 +269,7 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
         unbilledRecords,
         uncountedRecords,
         skippedLines,
+        unpricedModels: Object.freeze(unpriced),
       });
     },
   };

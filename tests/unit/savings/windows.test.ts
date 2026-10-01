@@ -292,3 +292,54 @@ describe('an expansion debit', () => {
     expect(netted.costUsd as number).toBeLessThan(credit.costUsd as number);
   });
 });
+
+describe('the models no price exists for', () => {
+  it('names them, and leaves the priced ones out', () => {
+    // THE ACTIONABLE HALF OF "(1/2 priced)". The count already told an operator
+    // that a figure was partial; only the id tells them which entry is missing
+    // from the catalog.
+    const report = buildReport(
+      [
+        verified({ measurementId: 'm-1', model: 'claude-opus-5' }),
+        verified({ measurementId: 'm-2', model: 'gemini-pro' }),
+      ],
+      new Date('2026-10-01T18:00:00.000Z')
+    );
+    expect(report.unpricedModels).toEqual(['gemini-pro']);
+    // Positive control: the priced row really was priced, so the list is short
+    // because the catalog knew one of the two and not because nothing priced.
+    const all = report.windows.find((window) => window.since === null);
+    expect(all?.pricedOperations).toBe(1);
+    expect(all?.eligibleOperations).toBe(2);
+  });
+
+  it('is empty when every eligible row priced', () => {
+    const report = buildReport(
+      [verified()],
+      new Date('2026-10-01T18:00:00.000Z')
+    );
+    expect(report.unpricedModels).toEqual([]);
+    expect(report.windows[0].costUsd).not.toBeNull();
+  });
+
+  it('ignores a row the provenance gate already rejected', () => {
+    // An unverified row contributes no token delta, so it has no price to be
+    // missing -- naming its model here would send an operator to the catalog
+    // for a row that was never going to produce a figure.
+    const report = buildReport(
+      [verified(), unverified({ model: 'gpt-6-astra' })],
+      new Date('2026-10-01T18:00:00.000Z')
+    );
+    expect(report.unpricedModels).toEqual([]);
+    expect(report.totalEntries).toBe(2);
+    expect(report.eligibleEntries).toBe(1);
+  });
+
+  it('reports a row that named no model at all as unattributed', () => {
+    const report = buildReport(
+      [verified({ model: '   ', metadata: { model: '' } })],
+      new Date('2026-10-01T18:00:00.000Z')
+    );
+    expect(report.unpricedModels).toEqual([UNATTRIBUTED]);
+  });
+});

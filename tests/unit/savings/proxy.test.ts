@@ -273,3 +273,30 @@ describe('loadProxyInput', () => {
     ).resolves.toMatchObject({ kind: PROXY_INPUT.Missing });
   });
 });
+
+describe('the models the catalog could not price', () => {
+  it('names a counted row whose model is not in the catalog', () => {
+    const report = reportOf([record(), record({ model: 'gemini-pro' })]);
+    expect(report.unpricedModels).toEqual(['gemini-pro']);
+    // Positive control: the other row priced, so the list is short because the
+    // catalog knew one model and not because pricing failed for both.
+    const all = report.windows.find((window) => window.since === null);
+    expect(all?.pricedRequests).toBe(1);
+    expect(all?.countedRequests).toBe(2);
+  });
+
+  it('is empty when every counted row priced', () => {
+    const report = reportOf([record()]);
+    expect(report.unpricedModels).toEqual([]);
+    expect(report.windows[0].costUsd).not.toBeNull();
+  });
+
+  it('leaves out a model whose rows were never billed', () => {
+    // AN UNBILLED ROW HAS NO PRICE TO BE MISSING. It is reported by the gate
+    // note as a request the provider never charged for, and naming it here as
+    // well would send an operator to the catalog over a row that had no bill.
+    const report = reportOf([record({ status: 429, model: 'gemini-pro' })]);
+    expect(report.unpricedModels).toEqual([]);
+    expect(report.unbilledRecords).toBe(1);
+  });
+});

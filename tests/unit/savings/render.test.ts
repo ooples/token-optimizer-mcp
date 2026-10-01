@@ -18,6 +18,7 @@ import {
   proxyGateNote,
   renderProxySavings,
   renderSavings,
+  unpricedNote,
   windowLine,
 } from '../../../src/savings/render.js';
 import {
@@ -66,6 +67,7 @@ function report(over: Partial<SavingsReport> = {}): SavingsReport {
     byClient: [group({ name: 'claude-code' })],
     totalEntries: 4,
     eligibleEntries: 1,
+    unpricedModels: [],
     ...over,
   };
 }
@@ -307,6 +309,7 @@ function proxyReport(
     unbilledRecords: 1,
     uncountedRecords: 1,
     skippedLines: 0,
+    unpricedModels: [],
     ...over,
   };
 }
@@ -487,5 +490,59 @@ describe('the inputs block', () => {
         kind: PROXY_INPUT.NotConfigured,
       })[1]
     ).toContain('2 operations read');
+  });
+});
+
+describe('the note for models with no catalog price', () => {
+  const chr10b = String.fromCharCode(10);
+
+  it('names every model, and says which column is affected', () => {
+    expect(unpricedNote(['gemini-pro'])).toBe(
+      'No catalog price for 1 model (gemini-pro), so its tokens count toward ' +
+        'the percentages above but not the money.'
+    );
+    // Both agreements move with the count, so a two-model note cannot read
+    // "1 models ... its tokens".
+    expect(unpricedNote(['gemini-pro', 'gpt-6-astra'])).toBe(
+      'No catalog price for 2 models (gemini-pro, gpt-6-astra), so their ' +
+        'tokens count toward the percentages above but not the money.'
+    );
+  });
+
+  it('says nothing when the catalog priced everything', () => {
+    expect(unpricedNote([])).toBe('');
+    // Positive control: the formatter is not simply returning '' always.
+    expect(unpricedNote(['x'])).not.toBe('');
+  });
+
+  it('appears under the MCP table when that half has an unpriced model', () => {
+    const text = renderSavings(report({ unpricedModels: ['gemini-pro'] }), {
+      topN: 10,
+      proxy: { kind: PROXY_INPUT.NotConfigured },
+    });
+    const lines = text.split(chr10b);
+    expect(lines).toContain(unpricedNote(['gemini-pro']));
+    // Positive control: the same render without the gap omits the line, so the
+    // assertion above is about the field and not about the renderer always
+    // appending a sentence.
+    const clean = renderSavings(report(), {
+      topN: 10,
+      proxy: { kind: PROXY_INPUT.NotConfigured },
+    });
+    expect(clean.split(chr10b)).not.toContain(unpricedNote(['gemini-pro']));
+  });
+
+  it('appears under the proxy table independently of the MCP half', () => {
+    // THE TWO HALVES CONSULT THE SAME CATALOG BUT NOT THE SAME ROWS: a ledger
+    // can name a model the analytics database never saw, so the note has to be
+    // able to appear under one table and not the other.
+    const lines = renderProxySavings(
+      proxyReport({ unpricedModels: ['gpt-6-astra'] }),
+      { topN: 10 }
+    );
+    expect(lines).toContain(unpricedNote(['gpt-6-astra']));
+    expect(renderProxySavings(proxyReport(), { topN: 10 })).not.toContain(
+      unpricedNote(['gpt-6-astra'])
+    );
   });
 });

@@ -183,6 +183,7 @@ export function proxyJson(proxy: ProxyInput): Record<string, unknown> {
     unbilledRecords: report.unbilledRecords,
     uncountedRecords: report.uncountedRecords,
     skippedLines: report.skippedLines,
+    unpricedModels: report.unpricedModels,
   };
 }
 
@@ -209,6 +210,7 @@ export function savingsJson(
     byClient: report.byClient,
     totalEntries: report.totalEntries,
     eligibleEntries: report.eligibleEntries,
+    unpricedModels: report.unpricedModels,
     proxy: proxyJson(proxy),
   };
 }

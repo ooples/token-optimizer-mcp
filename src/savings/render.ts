@@ -258,6 +258,8 @@ export function renderProxySavings(
   if (calibration !== '') lines.push('', calibration);
   const gate = proxyGateNote(report);
   if (gate !== '') lines.push(gate);
+  const unpriced = unpricedNote(report.unpricedModels);
+  if (unpriced !== '') lines.push(unpriced);
   return lines;
 }
 
@@ -286,6 +288,29 @@ export function gateNote(report: SavingsReport): string {
 }
 
 /**
+ * The models the catalog has no price for, named.
+ *
+ * ONE FORMATTER FOR BOTH TABLES, taking the id list rather than either report,
+ * so the MCP half and the proxy half cannot end up describing the same gap in
+ * two different sentences.
+ *
+ * WHAT IT DOES NOT SAY is that the figures are wrong. The token columns are
+ * measured for these rows exactly as for any other; it is only the dollar
+ * column that cannot be filled, and the sentence has to leave a reader with
+ * that distinction rather than a vague doubt about the whole table.
+ */
+export function unpricedNote(models: readonly string[]): string {
+  if (models.length === 0) return '';
+  const noun = models.length === 1 ? 'model' : 'models';
+  const their = models.length === 1 ? 'its' : 'their';
+  return (
+    `No catalog price for ${count(models.length)} ${noun} ` +
+    `(${models.join(', ')}), so ${their} tokens count toward the ` +
+    `percentages above but not the money.`
+  );
+}
+
+/**
  * SECTION HEADINGS EXIST BECAUSE THERE ARE TWO INPUTS NOW. One column of
  * windows followed by another, unlabelled, reads as one table that repeats --
  * and the two prove different things, so the figures must not be addable by
@@ -304,6 +329,8 @@ export function renderSavings(
   );
   const gate = gateNote(report);
   if (gate !== '') lines.push('', gate);
+  const unpriced = unpricedNote(report.unpricedModels);
+  if (unpriced !== '') lines.push('', unpriced);
   if (options.proxy.kind === PROXY_INPUT.Read) {
     lines.push(
       ...renderProxySavings(options.proxy.report, { topN: options.topN })

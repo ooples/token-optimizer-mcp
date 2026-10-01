@@ -92,6 +92,8 @@ export interface SavingsReport {
   readonly totalEntries: number;
   /** Rows that cleared the provenance gate in one direction or the other. */
   readonly eligibleEntries: number;
+  /** Model ids an eligible row named that the catalog has no price for. */
+  readonly unpricedModels: readonly string[];
 }
 
 /**
@@ -253,6 +255,35 @@ export function groupBy(
   return Object.freeze(rows);
 }
 
+/**
+ * The model ids an eligible row named that no catalog entry prices.
+ *
+ * NAMED, NOT COUNTED. `(8/12 priced)` tells an operator that a third of the
+ * dollar figure is missing without telling them what to do about it, and the
+ * model id is the one fact that makes it actionable. A per-model breakdown
+ * carries the same fact only while the row survives the top-N truncation,
+ * which is exactly the case where the unpriced model is the small one.
+ *
+ * NO FALLBACK RATE, EVER. Pricing an unknown model at some default -- the
+ * obvious way to make this note unnecessary -- would hand back a dollar figure
+ * nobody was ever charged, indistinguishable in the output from a measured
+ * one. An absent number can be chased; a fabricated one cannot be detected.
+ */
+export function unpricedModels(
+  entries: readonly AnalyticsEntry[]
+): readonly string[] {
+  const names = new Set<string>();
+  for (const entry of entries) {
+    if (verifiedTransportDelta(entry) === 0) continue;
+    if (priceVerifiedDelta(entry) !== null) continue;
+    const metadata = entry.metadata || {};
+    names.add(
+      String(entry.model || metadata.model || '').trim() || UNATTRIBUTED
+    );
+  }
+  return Object.freeze([...names].sort());
+}
+
 export function buildReport(
   entries: readonly AnalyticsEntry[],
   now: Date = new Date()
@@ -273,5 +304,6 @@ export function buildReport(
     eligibleEntries: entries.filter(
       (entry) => verifiedTransportDelta(entry) !== 0
     ).length,
+    unpricedModels: unpricedModels(entries),
   });
 }

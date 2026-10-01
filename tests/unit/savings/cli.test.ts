@@ -273,8 +273,18 @@ describe('the rendered report', () => {
     const { text, deps } = harness({ entries });
     expect(await main(['--top', '1'], deps)).toBe(0);
     expect(text()).toContain('and 2 more rows');
-    expect(text()).toContain('model-c');
-    expect(text()).not.toContain('model-a');
+    // ASSERTED ON THE BREAKDOWN LINES, not on the whole report. `--top` governs
+    // how many rows the table prints; it does not govern the unpriced-model
+    // note, which names every such model precisely BECAUSE a truncated table
+    // is where one would otherwise disappear.
+    const rows = text()
+      .split(String.fromCharCode(10))
+      .filter((line) => line.startsWith('  model-'));
+    expect(rows.some((line) => line.includes('model-c'))).toBe(true);
+    expect(rows.some((line) => line.includes('model-a'))).toBe(false);
+    // And the truncated row is still accounted for, by name, below the table:
+    // none of these three models is in the catalog.
+    expect(text()).toContain('model-a, model-b, model-c');
   });
 
   it('emits parseable JSON that carries both definitions it depends on', async () => {
@@ -382,6 +392,19 @@ describe('the proxy as a second input', () => {
 });
 
 describe('the proxy in the JSON', () => {
+  it('carries the unpriced models on both halves, separately', async () => {
+    // A CONSUMER HAS TO BE ABLE TO TELL WHICH HALF LOST THE PRICE, since the
+    // two read different sources and only one of them may be missing an entry.
+    const { text, deps } = harness({
+      entries: [verified({ model: 'gemini-pro' })],
+      proxy: proxyRead([proxyRecord({ model: 'gpt-6-astra' })], '/l.jsonl'),
+    });
+    expect(await main(['--json'], deps)).toBe(0);
+    const parsed = JSON.parse(text());
+    expect(parsed.unpricedModels).toEqual(['gemini-pro']);
+    expect(parsed.proxy.unpricedModels).toEqual(['gpt-6-astra']);
+  });
+
   it('widens the scope and carries the proxy figures and definitions', async () => {
     const { text, deps } = harness({
       entries: [verified()],
