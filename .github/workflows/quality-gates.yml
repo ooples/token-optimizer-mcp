@@ -646,7 +646,15 @@ jobs:
   # NO npm ci AND NO BUILD: every one of these imports nothing but node: and its
   # neighbours, which is a property worth keeping -- it is why they can gate a
   # pull request in seconds. If one of them ever needs a dependency, it belongs
-  # in the scorer job below instead of being bought with an install here.
+  # in an installed job below instead of being bought with an install here.
+  #
+  # TWO CHECKS OUTGREW THAT AND MOVED, rather than the rule bending for them.
+  # `pretoken-proxy` tokenises with `tiktoken` and imports the compiled engine;
+  # `bench/tools/reduction` tokenises with `tiktoken` too. Both sat in the roster
+  # and both failed here with ERR_MODULE_NOT_FOUND the first time this job ran on
+  # a clean checkout -- a laptop with a populated `node_modules` had never shown
+  # it. They run in `bench-proof` now, which installs and builds, and
+  # `instrument-roster.check.mjs` verifies that claim against this file.
   bench-instruments:
     name: Bench Instrument Checks
     runs-on: ubuntu-latest
@@ -694,8 +702,13 @@ jobs:
   #
   # They need the install and the build, which is why they are not in the
   # dependency-free job above: the proof harness imports the compiled engine.
+  #
+  # AND SO DO THE TWO INSTRUMENTS THAT MOVED HERE. `pretoken-proxy` needs both
+  # `tiktoken` and `dist/`; `bench/tools/reduction` needs `tiktoken`. They are
+  # instrument checks and not README checks, so they are run as their own step --
+  # a failure names which half of the job went red without reading the log.
   bench-proof:
-    name: Proof Harness and README Figures
+    name: Proof Harness, Instruments That Need a Build, README Figures
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -727,6 +740,20 @@ jobs:
           node bench/compression/proof-metrics.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           node bench/compression/readme-table.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           node bench/compression/readme-prose.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
+
+      - name: Check the instruments that need a dependency
+        run: |
+          set -o pipefail
+          {
+            echo "## Instruments That Need a Build"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/pretoken-proxy.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          node bench/tools/reduction.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           echo '```' >> $GITHUB_STEP_SUMMARY
           exit $status
 

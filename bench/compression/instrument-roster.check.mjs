@@ -43,6 +43,12 @@ const RUNS_ELSEWHERE = {
   'bench/compression/proof-metrics.check.mjs': 'bench-proof',
   'bench/compression/readme-table.check.mjs': 'bench-proof',
   'bench/compression/readme-prose.check.mjs': 'bench-proof',
+  // Moved out of the roster because they need a dependency the install-free job
+  // does not have: `pretoken-proxy` tokenises with tiktoken AND imports dist/,
+  // `bench/tools/reduction` tokenises with tiktoken. Both were green on a laptop
+  // with a populated node_modules and ERR_MODULE_NOT_FOUND on a clean checkout.
+  'bench/compression/pretoken-proxy.check.mjs': 'bench-proof',
+  'bench/tools/reduction.check.mjs': 'bench-proof',
 };
 
 /**
@@ -116,19 +122,42 @@ if (!workflow.includes(`npm run -s ${RUNNER}`))
   fail(`${WORKFLOW} never runs \`npm run -s ${RUNNER}\``);
 else ok(`${WORKFLOW} runs the roster through the script`);
 
-// RULE 3: an exception must name a runner that exists and covers it. Both halves
-// matter -- a job name with no such job, and a job that no longer mentions the
-// file, are the same failure as no runner at all.
+/**
+ * The lines of one top-level job, from its `  <id>:` header to the next one. The
+ * exception map names a job, and the point of naming it is that the claim can be
+ * checked -- which it cannot be against the whole file, where a path mentioned in
+ * a comment, or run by a different job entirely, reads as covered.
+ */
+const jobBlock = (job) => {
+  const lines = workflow.split('\n');
+  const start = lines.findIndex((line) => line === `  ${job}:`);
+  if (start === -1) return null;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^  [\w-]+:$/.test(line));
+  return (end === -1 ? rest : rest.slice(0, end)).join('\n');
+};
+
+// RULE 3: an exception must name a runner that exists and covers it. All three
+// parts matter -- a job name with no such job, a job that no longer mentions the
+// file, and a file named SOMEWHERE ELSE in the workflow than the job claimed, are
+// the same failure as no runner at all. The last of those is why this reads one
+// job's block and not the whole file: the map is an excuse, and an excuse checked
+// against the wrong job is not checked.
 for (const [path, job] of Object.entries(RUNS_ELSEWHERE)) {
   if (!existsSync(join(ROOT, path))) {
     fail(`${path} is claimed to run in \`${job}\` but is not on disk`);
     continue;
   }
-  if (!new RegExp(`^  ${job}:$`, 'm').test(workflow))
+  const block = jobBlock(job);
+  if (block === null)
     fail(`${path} names job \`${job}\`, which ${WORKFLOW} does not define`);
-  else if (!workflow.includes(path))
-    fail(`${path} names job \`${job}\`, but ${WORKFLOW} never mentions the file`);
+  else if (!block.includes(path))
+    fail(
+      `${path} names job \`${job}\`, but that job does not run it` +
+        (workflow.includes(path) ? ' -- the file is named elsewhere in the workflow' : '')
+    );
 }
+if (!failed) ok(`every exception names a job in ${WORKFLOW} that runs it`);
 
 // RULE 4: a check nothing runs is stated, not discovered. It must be real, must
 // really be absent from CI, and must carry a reason.
