@@ -46,6 +46,39 @@ describe('render-core cell escaping', () => {
     expect(markdownCell(0)).toBe('0');
   });
 
+  it('escapes the backslash before the pipe, so neither can forge a column', () => {
+    /*
+     * Regression, found by CodeQL on this file: only the pipe was escaped,
+     * so the two-character input `\|` came out as `\\|` -- an escaped
+     * backslash followed by a LIVE pipe. A cell could still forge a column,
+     * which is the single thing this function exists to prevent.
+     */
+    expect(markdownCell('\\|')).toBe('\\\\\\|');
+    expect(markdownCell('\\')).toBe('\\\\');
+    expect(markdownCell('a\\|b')).toBe('a\\\\\\|b');
+
+    /*
+     * The decisive assertion: a pipe is live in markdown when an EVEN number
+     * of backslashes precedes it, so counting live pipes is counting the
+     * columns the cell can forge. Every input below must forge none.
+     */
+    const livePipes = (cell: string): number => {
+      let live = 0;
+      let slashes = 0;
+      for (const character of cell) {
+        if (character === '\\') {
+          slashes += 1;
+          continue;
+        }
+        if (character === '|' && slashes % 2 === 0) live += 1;
+        slashes = 0;
+      }
+      return live;
+    };
+    expect(livePipes('a|b')).toBe(1);
+    for (const forgery of ['|', '\\|', '\\\\|', '\\\\\\|', 'a\\|b\\\\|c'])
+      expect(livePipes(markdownCell(forgery))).toBe(0);
+  });
   it('quotes a csv field per rfc 4180 and doubles an inner quote', () => {
     expect(csvField('plain')).toBe('plain');
     expect(csvField('with,comma')).toBe('"with,comma"');

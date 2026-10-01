@@ -20,9 +20,20 @@ export const isExportFormat = (value: unknown): value is ExportFormat =>
   typeof value === 'string' &&
   (EXPORT_FORMATS as readonly string[]).includes(value);
 
-/** Escapes a cell so a value containing a pipe cannot forge a column. */
+/**
+ * Escapes a cell so a value containing a pipe cannot forge a column.
+ *
+ * The backslash is escaped FIRST, and that order is the whole point.
+ * Escaping only the pipe turned the two-character input `\|` into
+ * `\\|`, which a Markdown reader parses as an escaped backslash
+ * followed by a LIVE pipe -- so the cell could still forge a column, which
+ * is the one thing this function exists to prevent. Escaping the backslash
+ * first makes that input `\\\|`: a literal backslash followed by a
+ * literal pipe.
+ */
 export const markdownCell = (value: unknown): string =>
   String(value ?? '')
+    .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|')
     .replace(/\r?\n/g, ' ');
 
