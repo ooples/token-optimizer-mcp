@@ -29,7 +29,9 @@ describe('the rollout block', () => {
   it('leads with the channel and lists what is on', () => {
     const lines = describeRollout(resolveRollout(env()));
     expect(lines[0]).toBe('channel: stable');
-    expect(lines.join('\n')).toContain('defer_tools: on by default from stable');
+    expect(lines.join('\n')).toContain(
+      'defer_tools: on by default from stable'
+    );
   });
 
   it('names a wider channel only when that channel would change something', () => {
@@ -41,7 +43,9 @@ describe('the rollout block', () => {
   });
 
   it('counts the request-only features apart from the staged ones', () => {
-    const askable = allFeatures().filter((s) => s.defaultEnabledIn === null).length;
+    const askable = allFeatures().filter(
+      (s) => s.defaultEnabledIn === null
+    ).length;
     expect(text({ [CHANNEL_ENV]: 'dev' })).toContain(
       `${askable} are request-only, on no channel`
     );
@@ -55,12 +59,16 @@ describe('the rollout block', () => {
     });
     expect(broken).toContain('IGNORED: unknown rollout channel "canry"');
     expect(broken).toContain('IGNORED: unknown feature "substitue"');
-    expect(broken).toContain('IGNORED: TOKEN_OPTIMIZER_PROXY_SUBSTITUTE="maybe"');
+    expect(broken).toContain(
+      'IGNORED: TOKEN_OPTIMIZER_PROXY_SUBSTITUTE="maybe"'
+    );
   });
 
   it('calls out a feature that was asked for and is not running', () => {
     const blocked = text({ [REQUEST_ENV]: 'substitution' });
-    expect(blocked).toContain('substitution: asked for, but it needs the canary channel');
+    expect(blocked).toContain(
+      'substitution: asked for, but it needs the canary channel'
+    );
   });
 
   it('offers only the switch for a request-only feature, not a channel', () => {
@@ -81,10 +89,30 @@ describe('the rollout block', () => {
     expect(section[1]).toBe('Rollout');
   });
 
+  it('points at the inspector, which is the only thing that answers "what if"', () => {
+    /*
+     * This section reports the environment it ran in. A reader whose feature is
+     * off next wants to know what would turn it on, and no amount of reporting
+     * the current state answers that.
+     */
+    const section = rolloutSection(env());
+    expect(section.join('\n')).toContain('token-optimizer-rollout');
+  });
+
+  it('does not repeat that pointer in the verbose listing', () => {
+    const verbose = rolloutSection(env(), { verbose: true });
+    expect(verbose.join('\n')).not.toContain('token-optimizer-rollout');
+    expect(verbose.join('\n')).toContain('defer_tools');
+  });
+
   it('says so plainly when nothing at all is on', () => {
-    const names = allFeatures().map((s) => s.name).join(',');
+    const names = allFeatures()
+      .map((s) => s.name)
+      .join(',');
     const all = text({ [DISABLE_ENV]: names });
-    expect(all).toContain('nothing enabled: this copy is running its shipped behaviour');
+    expect(all).toContain(
+      'nothing enabled: this copy is running its shipped behaviour'
+    );
     // A silent block here would read as "the rollout system is not installed" when
     // what happened is that every feature was switched off on purpose.
     expect(all).toContain(`switched off by ${DISABLE_ENV}`);

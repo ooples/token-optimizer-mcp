@@ -135,7 +135,21 @@ export function rolloutSection(
   const body = options.verbose
     ? describeEveryFeature(snapshot)
     : describeRollout(snapshot);
-  return ['', 'Rollout', ...body.map((line) => `  ${line}`)];
+  /*
+   * Name the inspector at the end of the summary. This section answers the
+   * question for the environment the diagnostic happens to be running in; the
+   * question a reader usually has next is conditional -- what a different
+   * channel or an extra feature would give them -- and that is the one thing
+   * this block cannot answer. It is omitted from the verbose listing, which is
+   * already what the inspector would print.
+   */
+  const footer = options.verbose
+    ? []
+    : [
+        '',
+        'try another channel: token-optimizer-rollout --channel canary --all',
+      ];
+  return ['', 'Rollout', ...body.map((line) => `  ${line}`), ...footer];
 }
 
 /** Named so a caller can print the variable rather than hard-coding it twice. */
