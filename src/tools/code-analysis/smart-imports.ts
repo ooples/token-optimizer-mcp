@@ -3,8 +3,6 @@
  *
  * Analyzes TypeScript/JavaScript import statements with intelligent caching.
  * Provides import optimization suggestions, unused import detection, and circular dependency analysis.
- *
- * Token Reduction: 75-85% through summarization of import analysis
  */
 
 import * as ts from 'typescript';
@@ -15,6 +13,7 @@ import { existsSync, readFileSync } from 'fs';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
+import { measured } from '../shared/savings.js';
 
 /**
  * Import statement information
@@ -222,7 +221,12 @@ export class SmartImportsTool {
           operation: 'smart_imports',
           duration,
           cacheHit: true,
-          savedTokens: cached.originalTokens || 0,
+          // THE SAVING IS THE DIFFERENCE, NOT THE BASELINE. This recorded
+          // originalTokens, which claims the whole file was saved and the
+          // response cost nothing. cacheResult() has always stored both
+          // figures; getCachedResult() just never declared the second one.
+          savedTokens:
+            (cached.originalTokens ?? 0) - (cached.compactedTokens ?? 0),
           success: true,
         });
         return {
@@ -270,11 +274,15 @@ export class SmartImportsTool {
       cached: false,
     };
 
-    // Calculate token metrics
-    const fullOutput = JSON.stringify(result, null, 2);
-    const compactOutput = this.compactResult(result);
-    const originalTokens = this.tokenCounter.count(fullOutput).tokens;
-    const compactedTokens = this.tokenCounter.count(compactOutput).tokens;
+    // THE BASELINE IS THE FILE, THE TREATMENT IS THE RESPONSE AS SENT.
+    // This used to count JSON.stringify(result, null, 2) -- indent-inflated and
+    // never sent -- against a private compactResult() summary that was built to
+    // be counted and then discarded. Neither artifact ever reached a caller, so
+    // the recorded saving described two things that do not exist. The baseline a
+    // caller actually avoids is reading the file; the cost is this response.
+    const originalTokens = this.tokenCounter.count(content).tokens;
+    const compactedTokens = this.tokenCounter.count(JSON.stringify(result)).tokens;
+    const savings = measured(originalTokens, compactedTokens);
 
     // Cache result
     this.cacheResult(cacheKey, result, originalTokens, compactedTokens);
@@ -287,7 +295,7 @@ export class SmartImportsTool {
       cacheHit: false,
       inputTokens: originalTokens,
       cachedTokens: compactedTokens,
-      savedTokens: originalTokens - compactedTokens,
+      savedTokens: savings.tokensSaved,
       success: true,
     });
 
@@ -867,6 +875,7 @@ export class SmartImportsTool {
     result: SmartImportsResult;
     timestamp: number;
     originalTokens?: number;
+    compactedTokens?: number;
   } | null {
     const cached = this.cache.get(cacheKey);
     if (!cached) return null;
@@ -875,6 +884,7 @@ export class SmartImportsTool {
       result: SmartImportsResult;
       timestamp: number;
       originalTokens?: number;
+      compactedTokens?: number;
     };
 
     const age = (Date.now() - data.timestamp) / 1000;
@@ -904,38 +914,6 @@ export class SmartImportsTool {
     this.cache.set(cacheKey, buffer, buffer.length, buffer.length, { ttlSeconds: 300 });
   }
 
-  /**
-   * Compact result for token efficiency
-   */
-  private compactResult(result: SmartImportsResult): string {
-    const compact = {
-      imp: result.imports.map((i) => ({
-        t: i.type[0], // First letter: i/r/d
-        m: i.module,
-        i: i.imports.map((x) => x.name),
-        u: i.used,
-        l: i.location.line,
-      })),
-      unu: result.unusedImports.map((i) => ({
-        m: i.module,
-        i: i.unusedImports,
-      })),
-      mis: result.missingImports.map((m) => ({
-        s: m.symbol,
-        l: m.location.line,
-      })),
-      opt: result.optimizations.map((o) => ({
-        t: o.type,
-        m: o.message,
-      })),
-      circ: result.circularDependencies.map((c) => ({
-        c: c.cycle,
-      })),
-      sum: result.summary,
-    };
-
-    return JSON.stringify(compact);
-  }
 }
 
 /**

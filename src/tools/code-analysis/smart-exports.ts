@@ -3,8 +3,6 @@
  *
  * Analyzes TypeScript/JavaScript export statements with intelligent caching.
  * Provides export tracking, unused export detection, and optimization suggestions.
- *
- * Token Reduction: 75-85% through summarization of export analysis
  */
 
 import * as ts from 'typescript';
@@ -15,6 +13,7 @@ import { existsSync, readFileSync } from 'fs';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
+import { measured } from '../shared/savings.js';
 import {
   boundedWalk,
   traversalDeadlineMs,
@@ -228,7 +227,12 @@ export class SmartExportsTool {
           operation: 'smart_exports',
           duration,
           cacheHit: true,
-          savedTokens: cached.originalTokens || 0,
+          // THE SAVING IS THE DIFFERENCE, NOT THE BASELINE. This recorded
+          // originalTokens, which claims the whole file was saved and the
+          // response cost nothing. cacheResult() has always stored both
+          // figures; getCachedResult() just never declared the second one.
+          savedTokens:
+            (cached.originalTokens ?? 0) - (cached.compactedTokens ?? 0),
           success: true,
         });
         return {
@@ -292,11 +296,15 @@ export class SmartExportsTool {
       cached: false,
     };
 
-    // Calculate token metrics
-    const fullOutput = JSON.stringify(result, null, 2);
-    const compactOutput = this.compactResult(result);
-    const originalTokens = this.tokenCounter.count(fullOutput).tokens;
-    const compactedTokens = this.tokenCounter.count(compactOutput).tokens;
+    // THE BASELINE IS THE FILE, THE TREATMENT IS THE RESPONSE AS SENT.
+    // This used to count JSON.stringify(result, null, 2) -- indent-inflated and
+    // never sent -- against a private compactResult() summary that was built to
+    // be counted and then discarded. Neither artifact ever reached a caller, so
+    // the recorded saving described two things that do not exist. The baseline a
+    // caller actually avoids is reading the file; the cost is this response.
+    const originalTokens = this.tokenCounter.count(content).tokens;
+    const compactedTokens = this.tokenCounter.count(JSON.stringify(result)).tokens;
+    const savings = measured(originalTokens, compactedTokens);
 
     // A PARTIAL USAGE SCAN IS NEVER CACHED. The key is derived from the file's
     // content and the scan settings, NOT from which files were reached, so a
@@ -314,7 +322,7 @@ export class SmartExportsTool {
       cacheHit: false,
       inputTokens: originalTokens,
       cachedTokens: compactedTokens,
-      savedTokens: originalTokens - compactedTokens,
+      savedTokens: savings.tokensSaved,
       success: true,
     });
 
@@ -849,6 +857,7 @@ export class SmartExportsTool {
     result: SmartExportsResult;
     timestamp: number;
     originalTokens?: number;
+    compactedTokens?: number;
   } | null {
     const cached = this.cache.get(cacheKey);
     if (!cached) return null;
@@ -857,6 +866,7 @@ export class SmartExportsTool {
       result: SmartExportsResult;
       timestamp: number;
       originalTokens?: number;
+      compactedTokens?: number;
     };
 
     const age = (Date.now() - data.timestamp) / 1000;
@@ -886,35 +896,6 @@ export class SmartExportsTool {
     this.cache.set(cacheKey, buffer, buffer.length, buffer.length, { ttlSeconds: 300 });
   }
 
-  /**
-   * Compact result for token efficiency
-   */
-  private compactResult(result: SmartExportsResult): string {
-    const compact = {
-      exp: result.exports.map((e) => ({
-        t: e.type[0], // First letter: n/d/r
-        n: e.name,
-        k: e.kind,
-        l: e.location.line,
-        u: e.used,
-      })),
-      unu: result.unusedExports.map((e) => ({
-        n: e.name,
-        k: e.kind,
-      })),
-      dep: result.dependencies.map((d) => ({
-        f: d.importingFile.split('/').pop(), // Just filename
-        s: d.symbol,
-      })),
-      opt: result.optimizations.map((o) => ({
-        t: o.type,
-        m: o.message,
-      })),
-      sum: result.summary,
-    };
-
-    return JSON.stringify(compact);
-  }
 }
 
 /**
