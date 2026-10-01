@@ -109,11 +109,33 @@ export const COLUMNS = Object.freeze([
   'before',
   'after',
   'change',
+  /*
+   * TOKENS SAVED, WHICH IS THE COLUMN THE OTHERS WERE STANDING IN FOR. `before`
+   * and `after` are exact and free, and they are bytes -- not the unit anyone
+   * is billed in. This is the same request measured under our own encoder on
+   * both sides, which is the only way the before side can be known at all:
+   * nobody bills for a request we did not send.
+   */
+  'saved',
   'billed',
   'cached',
   'out',
   'notes',
 ] as const);
+
+/**
+ * The tokens this request did not spend, or `-` when nothing counted it.
+ *
+ * A DASH, NEVER A ZERO. A zero in this column reads as a request the proxy did
+ * not improve; a dash reads as a request it did not measure, and only one of
+ * those is true when the counter refused. The reason itself is one line down in
+ * the detail view, where there is room for a word.
+ */
+function savedTokensCell(record: AccountingRecord): string {
+  const tokens = record.tokens;
+  if (tokens === undefined || !tokens.measured) return '-';
+  return formatCount(tokens.beforeTokens - tokens.afterTokens);
+}
 
 function cellsFor(record: AccountingRecord): readonly string[] {
   const usage = record.usage ?? {};
@@ -129,6 +151,7 @@ function cellsFor(record: AccountingRecord): readonly string[] {
     formatBytes(record.beforeBytes),
     formatBytes(record.afterBytes),
     formatDelta(record.beforeBytes, record.afterBytes),
+    savedTokensCell(record),
     formatCount(usage.input_tokens),
     formatCount(cached),
     formatCount(usage.output_tokens),
@@ -139,7 +162,16 @@ function cellsFor(record: AccountingRecord): readonly string[] {
 // Which columns read as numbers, and so align on their right edge. `notes` is
 // deliberately last and never padded: it is the only variable-width cell, and
 // padding the final column just adds trailing whitespace to every line.
-const RIGHT_ALIGNED = new Set(['code', 'before', 'after', 'change', 'billed', 'cached', 'out']);
+const RIGHT_ALIGNED = new Set([
+  'code',
+  'before',
+  'after',
+  'change',
+  'saved',
+  'billed',
+  'cached',
+  'out',
+]);
 
 /** Every field of one record, for the reader who needs the one not in a column. */
 export function detailFor(record: AccountingRecord): readonly string[] {
@@ -169,6 +201,18 @@ export function detailFor(record: AccountingRecord): readonly string[] {
       ? undefined
       : `${formatChars(record.messagesChars)} in ${formatCount(record.messageCount)} messages`
   );
+  // THE ENCODER IS NAMED WITH THE FIGURE, and a refusal is named instead of
+  // one, because a token count whose instrument is unstated cannot be compared
+  // with the provider's own count sitting in the next column.
+  add(
+    'request tokens',
+    record.tokens === undefined
+      ? undefined
+      : record.tokens.measured
+        ? `${formatCount(record.tokens.beforeTokens)} -> ` +
+          `${formatCount(record.tokens.afterTokens)} (${record.tokens.method})`
+        : `not counted: ${record.tokens.reason}`
+  );
   add('reason', record.reason);
   add('anchor', record.anchorReason);
   if (record.timing)
@@ -190,6 +234,19 @@ export interface TransformationTotals {
   readonly inputTokens: number;
   readonly cachedTokens: number;
   readonly outputTokens: number;
+  /** Tokens not spent, summed over the requests that were actually counted. */
+  readonly savedTokens: number;
+  /**
+   * How many requests contributed to `savedTokens`.
+   *
+   * REPORTED BESIDE THE TOTAL BECAUSE THE TOTAL IS MEANINGLESS WITHOUT IT. A
+   * saving summed over three of two hundred requests is not a saving over two
+   * hundred requests, and printing only the figure would invite exactly that
+   * reading -- which is the mistake the live analytics ledger had already made
+   * once, pricing a whole week from the five rows that happened to carry a
+   * model id.
+   */
+  readonly countedRequests: number;
 }
 
 /**
@@ -210,7 +267,13 @@ export function totalsFor(
   let inputTokens = 0;
   let cachedTokens = 0;
   let outputTokens = 0;
+  let savedTokens = 0;
+  let countedRequests = 0;
   for (const record of records) {
+    if (record.tokens?.measured === true) {
+      savedTokens += record.tokens.beforeTokens - record.tokens.afterTokens;
+      countedRequests++;
+    }
     if (record.compressed) compressed++;
     beforeBytes += record.beforeBytes;
     afterBytes += record.afterBytes;
@@ -228,6 +291,8 @@ export function totalsFor(
     inputTokens,
     cachedTokens,
     outputTokens,
+    savedTokens,
+    countedRequests,
   };
 }
 
@@ -270,5 +335,15 @@ export function renderTransformations(
       `${formatCount(totals.cachedTokens)} from cache, ` +
       `${formatCount(totals.outputTokens)} output`
   );
+  // THE DENOMINATOR TRAVELS WITH THE FIGURE. Omitted entirely when nothing was
+  // counted, because a line reading `0 tokens saved` over an uncounted window
+  // would be a measurement of the instrument, not of the proxy.
+  if (totals.countedRequests > 0) {
+    lines.push(
+      `saved ${formatCount(totals.savedTokens)} input tokens across ` +
+        `${totals.countedRequests} of ${totals.requests} ` +
+        `${totals.requests === 1 ? 'request' : 'requests'}`
+    );
+  }
   return lines;
 }

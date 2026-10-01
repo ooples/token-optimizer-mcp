@@ -24,7 +24,7 @@
  * `token-optimizer-inspect --ledger` reads it. Neither replaces the other.
  */
 
-import type { AccountingRecord } from './accounting.js';
+import type { AccountingRecord, TokenAccountingFacts } from './accounting.js';
 
 /**
  * How many transformations one listener remembers.
@@ -36,10 +36,31 @@ import type { AccountingRecord } from './accounting.js';
  */
 export const TRANSFORMATION_CAPACITY = 128;
 
+/**
+ * Fills in a token count on a record that is already in the window.
+ *
+ * WHY A RECORD IS AMENDED RATHER THAN DELAYED. The token count for a request
+ * arrives slightly after the provider's usage does -- it is CPU work on
+ * another thread, overlapped with the upstream round trip but not always
+ * finished first. Holding the record back until it lands would make
+ * `token-optimizer-inspect` lag behind the proxy by the cost of a measurement,
+ * so the ring takes the record the instant it is complete in every other
+ * respect and the count is written into it in place. The durable ledger cannot
+ * do this -- an appended line is final -- which is why the ledger waits and
+ * the ring does not.
+ *
+ * A no-op once the record has been evicted: the window has moved on, and a
+ * token count for a request nobody can see any more is nothing to report.
+ */
+export type AttachTokens = (tokens: TokenAccountingFacts) => void;
+
 /** A bounded, in-memory view of what the proxy recently did. */
 export interface TransformationLog {
-  /** Records one transformation, evicting the oldest when full. */
-  readonly record: (entry: AccountingRecord) => void;
+  /**
+   * Records one transformation, evicting the oldest when full, and returns the
+   * handle that can still complete it. See `AttachTokens`.
+   */
+  readonly record: (entry: AccountingRecord) => AttachTokens;
   /** The most recent `limit` records, oldest first. */
   readonly recent: (limit?: number) => readonly AccountingRecord[];
   /** How many records are held right now. */
@@ -69,11 +90,18 @@ export function createTransformationLog(
   let held = 0;
   let evicted = 0;
   return Object.freeze({
-    record: (entry: AccountingRecord): void => {
+    record: (entry: AccountingRecord): AttachTokens => {
       if (held === size) evicted++;
-      buffer[head] = entry;
+      const slot = head;
+      buffer[slot] = entry;
       head = (head + 1) % size;
       if (held < size) held++;
+      // IDENTITY, NOT INDEX. The slot is reused every `size` requests, so the
+      // reference check is what stops a late count from being written onto a
+      // completely different request that has since taken the same position.
+      return (tokens: TokenAccountingFacts): void => {
+        if (buffer[slot] === entry) buffer[slot] = { ...entry, tokens };
+      };
     },
     recent: (limit = size): readonly AccountingRecord[] => {
       const want = Math.min(Math.max(0, Math.floor(limit)), held);

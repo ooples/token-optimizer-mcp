@@ -159,7 +159,31 @@ describe('totals', () => {
       inputTokens: 0,
       cachedTokens: 0,
       outputTokens: 0,
+      savedTokens: 0,
+      countedRequests: 0,
     });
+  });
+
+  it('sums saved tokens only over the requests that were counted', () => {
+    const totals = totalsFor([
+      record({
+        tokens: {
+          measured: true,
+          beforeTokens: 1_000,
+          afterTokens: 400,
+          method: 'test',
+        },
+      }),
+      record({ tokens: { measured: false, reason: 'queue-full' } }),
+      record(),
+    ]);
+
+    // THE DENOMINATOR IS THE POINT. A 600-token saving over one of three
+    // requests is not a saving over three, and the refused and unmeasured rows
+    // must not be read as rows that saved nothing.
+    expect(totals.savedTokens).toBe(600);
+    expect(totals.countedRequests).toBe(1);
+    expect(totals.requests).toBe(3);
   });
 });
 
@@ -211,6 +235,71 @@ describe('the table', () => {
   it('never pads the last column, which would trail whitespace on every line', () => {
     for (const line of renderTransformations([record(), record({ path: '/v1/messages/longer' })]))
       expect(line).toBe(line.trimEnd());
+  });
+});
+
+describe('the saved-tokens column', () => {
+  it('shows the tokens a counted request did not spend', () => {
+    const lines = renderTransformations([
+      record({
+        tokens: {
+          measured: true,
+          beforeTokens: 98_000,
+          afterTokens: 24_000,
+          method: 'tiktoken-gpt-4-compatible-local-estimate',
+        },
+      }),
+    ]);
+
+    expect(lines[0]).toContain('saved');
+    expect(lines[1]).toContain('74,000');
+    expect(lines[lines.length - 1]).toBe(
+      'saved 74,000 input tokens across 1 of 1 request'
+    );
+  });
+
+  it('prints a dash, not a zero, for a request nothing counted', () => {
+    const refused = renderTransformations([
+      record({ tokens: { measured: false, reason: 'worker-failed' } }),
+    ]);
+
+    // A ZERO WOULD BE A FALSE MEASUREMENT -- it reads as a request the proxy
+    // did not improve, when in fact it is one nobody measured. The reason
+    // itself is in the detail block, which has room for a word.
+    expect(refused[1]).not.toContain(' 0 ');
+    expect(refused.some((line) => line.includes('saved') && /\d/.test(line))).toBe(
+      false
+    );
+    expect(detailFor(record({ tokens: { measured: false, reason: 'worker-failed' } }))
+      .join('\n')).toContain('not counted: worker-failed');
+
+    // The control: the same renderer does print a figure and a summary line
+    // when a count is present, so the absence above is about the refusal.
+    const counted = renderTransformations([
+      record({
+        tokens: { measured: true, beforeTokens: 90, afterTokens: 40, method: 'x' },
+      }),
+    ]);
+    expect(counted[counted.length - 1]).toContain('saved 50 input tokens');
+  });
+
+  it('names the encoder beside the figure in the detail block', () => {
+    const detail = detailFor(
+      record({
+        tokens: {
+          measured: true,
+          beforeTokens: 98_000,
+          afterTokens: 24_000,
+          method: 'tiktoken-gpt-4-compatible-local-estimate',
+        },
+      })
+    ).join('\n');
+
+    // A token count whose instrument is unstated cannot be compared with the
+    // provider's own count sitting in the next column.
+    expect(detail).toContain('request tokens');
+    expect(detail).toContain('98,000 -> 24,000');
+    expect(detail).toContain('tiktoken-gpt-4-compatible-local-estimate');
   });
 });
 

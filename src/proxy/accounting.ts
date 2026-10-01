@@ -122,6 +122,45 @@ export interface CompressionFacts {
   readonly afterBytes: number;
 }
 
+/**
+ * What the request cost in tokens on each side, or why that is not known.
+ *
+ * BYTES ARE NOT THE UNIT A BILL IS DENOMINATED IN. `beforeBytes` and
+ * `afterBytes` are exact and free, and they are the wrong unit: a provider
+ * charges per token, and the ratio between the two is not constant across
+ * JSON structure, prose and code. A savings figure computed from bytes is a
+ * proxy for the thing the user actually pays, and this field is the thing
+ * itself.
+ *
+ * COUNTS ONLY. No body, no fragment of one, and no text of any kind appears
+ * here -- that constraint is what lets the transformations ring and the ledger
+ * stay always-on rather than opt-in like capture.
+ *
+ * THE PROVIDER'S OWN COUNT STAYS WHERE IT IS, in `usage`. Keeping our estimate
+ * of the after-body separate from the provider's billed count for that same
+ * body is what makes every single request a free calibration of this
+ * instrument; merging them would throw that away.
+ */
+export type TokenAccountingFacts =
+  | {
+      readonly measured: true;
+      /** Our estimate for the body we would have sent. Nobody billed for it. */
+      readonly beforeTokens: number;
+      /** Our estimate for the body we did send; compare with `usage`. */
+      readonly afterTokens: number;
+      /** The encoder, so this figure can be compared with any other. */
+      readonly method: string;
+    }
+  | {
+      readonly measured: false;
+      /**
+       * Why there is no figure. A NAMED REASON, NEVER A ZERO: a zero in a
+       * savings column reads as a request the proxy did not improve, which
+       * would be a false measurement rather than a missing one.
+       */
+      readonly reason: string;
+    };
+
 /** One line of the ledger: what we sent, and what it was billed as. */
 export interface AccountingRecord extends CompressionFacts {
   /** Monotonic durations. Upstream includes transport and provider processing. */
@@ -136,6 +175,11 @@ export interface AccountingRecord extends CompressionFacts {
   /** No HTTP response was received; usage remains unknown, not zero. */
   readonly transportError?: string;
   readonly usage: RequestUsage;
+  /**
+   * Tokens before and after, under our own encoder -- absent entirely on a
+   * proxy built without token accounting, so an old ledger line stays valid.
+   */
+  readonly tokens?: TokenAccountingFacts;
 }
 
 /** The ledger path, or null when accounting was not asked for. */

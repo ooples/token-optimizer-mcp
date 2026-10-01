@@ -55,7 +55,13 @@ import {
   tapUsage,
   type AccountingRecord,
   type CompressionFacts,
+  type TokenAccountingFacts,
 } from './accounting.js';
+import {
+  createTokenAccounting,
+  trackCount,
+  type PendingCount,
+} from './token-accounting.js';
 import {
   createTransformationLog,
   type TransformationLog,
@@ -1112,7 +1118,15 @@ function forward(
   body: Buffer,
   facts?: CompressionFacts,
   transformMs = 0,
-  observe?: (entry: AccountingRecord) => void
+  observe?: (entry: AccountingRecord, tokens?: PendingCount) => void,
+  /**
+   * A token count for both bodies, ALREADY RUNNING. It is started at the call
+   * site rather than here so it overlaps the upstream round trip: the count is
+   * CPU work on another thread and the round trip is always the longer of the
+   * two, which is what makes the measurement cost no wall-clock time at all.
+   * Awaiting it inside the usage tap is therefore free in the common case.
+   */
+  tokens?: PendingCount
 ): void {
   const path = requestPath(req.url);
   if (path === null) {
@@ -1238,18 +1252,25 @@ function forward(
         tapUsage(
           upstreamRes,
           (usage) => {
-            observe({
-              ts: new Date().toISOString(),
-              path: requestPath(req.url) ?? '/',
-              status: upstreamRes.statusCode || 0,
-              ...facts,
-              timing: {
-                transformMs,
-                upstreamHeadersMs,
-                upstreamMs: performance.now() - upstreamStarted,
+            // BUILT AT THE MOMENT USAGE SETTLES, attached to later. The timings
+            // are read here because they are durations of the request that has
+            // just finished; waiting for the token count first would fold the
+            // cost of the measurement into the thing being measured.
+            observe(
+              {
+                ts: new Date().toISOString(),
+                path: requestPath(req.url) ?? '/',
+                status: upstreamRes.statusCode || 0,
+                ...facts,
+                timing: {
+                  transformMs,
+                  upstreamHeadersMs,
+                  upstreamMs: performance.now() - upstreamStarted,
+                },
+                usage,
               },
-              usage,
-            });
+              tokens
+            );
           },
           typeof encoding === 'string' ? encoding : undefined
         );
@@ -1328,10 +1349,54 @@ export async function startProxy(
    * restarts nothing is not told, wrongly, that the ledger is on.
    */
   const transformations = createTransformationLog();
-  const observe = (entry: AccountingRecord): void => {
-    transformations.record(entry);
-    const ledger = accountingPath();
-    if (ledger) appendRecord(ledger, entry);
+  /*
+   * ALWAYS ON, FOR THE SAME REASON THE TAP IS. The ring is read by
+   * `token-optimizer-inspect` on every proxy, ledger or not, and a rewrite
+   * recorded in bytes while the bill is denominated in tokens is the
+   * half-feature this already refused once. The cost is one lazily-started
+   * thread per proxy -- nothing until the first request -- and CPU that runs
+   * inside the upstream round trip, so it is not on the request's critical
+   * path; see proxy/token-accounting.ts.
+   */
+  const tokenAccounting = createTokenAccounting();
+  // The thread and the encoder come up now rather than on the first request,
+  // which would otherwise pay ~190ms of one-time cost on its measurement path.
+  tokenAccounting.warmUp();
+  const observe = (entry: AccountingRecord, tokens?: PendingCount): void => {
+    /*
+     * THE RING TAKES IT NOW; THE LEDGER WAITS FOR THE COUNT. These are two
+     * different promises about the same record. `token-optimizer-inspect` must
+     * answer "what did the proxy just do" without lagging behind the proxy by
+     * the cost of a measurement, so the ring gets the record immediately and
+     * the token count is written into it in place when it lands. An appended
+     * ledger line is final and cannot be amended, so that one is written once,
+     * complete -- which is the right trade for a file nothing reads until
+     * later.
+     */
+    const attach = transformations.record(entry);
+    const commit = (counted?: TokenAccountingFacts): void => {
+      if (counted) attach(counted);
+      const ledger = accountingPath();
+      if (ledger) appendRecord(ledger, counted ? { ...entry, tokens: counted } : entry);
+    };
+    if (!tokens) {
+      commit();
+      return;
+    }
+    // Synchronous whenever the count is already in, which is the normal case:
+    // it runs inside the upstream round trip and a real provider's round trip
+    // is the longer of the two. A loopback upstream is what defers.
+    const ready = tokens.settled();
+    if (ready) {
+      commit(ready);
+      return;
+    }
+    // A REFUSAL IS NAMED, NEVER A ZERO, and a rejection here is the counter
+    // breaking its own no-throw contract -- so it gets a word of its own
+    // rather than being folded into one of the counter's own reasons.
+    void tokens.done.then(commit, () =>
+      commit({ measured: false, reason: 'count-rejected' })
+    );
   };
   // ONE DIRECTORY PER PROXY, because shutdown deletes it. A shared root would mean the
   // first proxy to stop wiping the spills of every other one still running -- and a
@@ -1537,6 +1602,11 @@ export async function startProxy(
       // knowledge block read its own effect as zero. The summary IS the
       // compression facts -- every field of it belongs in the ledger, and a
       // field added to one should never need remembering in the other.
+      // STARTED BEFORE THE REQUEST GOES OUT, awaited after it comes back. Both
+      // bodies exist here and only here -- `body` is the request we were given
+      // and `next` the one we are about to send, and nobody will ever bill us
+      // for the first of them, which is why it has to be counted locally.
+      const counted = trackCount(tokenAccounting.countPair(body, next));
       forward(
         upstream,
         req,
@@ -1544,7 +1614,8 @@ export async function startProxy(
         next,
         summary,
         performance.now() - transformStarted,
-        observe
+        observe,
+        counted
       );
     })();
   });
@@ -1554,6 +1625,11 @@ export async function startProxy(
   // temp directory that nothing ever removes. Cleared when the proxy stops, which is
   // also when the last agent that could still `Read` one of those paths has gone.
   server.on('close', () => {
+    // The counting thread goes with the proxy. It is unref'd so it could not
+    // hold the process open anyway, but leaving it running past the last
+    // request it will ever be asked about is a leak on any host that keeps the
+    // process alive for something else.
+    void tokenAccounting.shutdown();
     // WHAT WAS COUNTED SINCE THE LAST ROLLUP GOES NOW. A clean stop is the only
     // chance to record the tail of the window; a kill loses it, which is the
     // reason the rollups are periodic rather than one per session.

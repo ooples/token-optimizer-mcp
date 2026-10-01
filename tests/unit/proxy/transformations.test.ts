@@ -102,6 +102,72 @@ describe('the transformation ring', () => {
     expect(log.size()).toBe(TRANSFORMATION_CAPACITY);
   });
 
+  it('writes a late token count onto the record it belongs to', () => {
+    const log = createTransformationLog(4);
+    const attach = log.record(record(0));
+    log.record(record(1));
+
+    // The control: before the count lands the record is in the window and
+    // carries no token figures at all, which is what makes the amendment
+    // visible rather than assumed.
+    expect(log.recent()[0].tokens).toBeUndefined();
+
+    attach({
+      measured: true,
+      beforeTokens: 900,
+      afterTokens: 300,
+      method: 'test-encoder',
+    });
+
+    expect(log.recent()[0].tokens).toEqual({
+      measured: true,
+      beforeTokens: 900,
+      afterTokens: 300,
+      method: 'test-encoder',
+    });
+    // The neighbour is untouched: the handle addresses one record, not the ring.
+    expect(log.recent()[1].tokens).toBeUndefined();
+  });
+
+  it('records a named refusal in place of a count, never a zero', () => {
+    const log = createTransformationLog(2);
+    const attach = log.record(record(0));
+
+    attach({ measured: false, reason: 'queue-full' });
+
+    const only = log.recent()[0];
+    expect(only.tokens).toEqual({ measured: false, reason: 'queue-full' });
+    // A zero here would read as a request the proxy did not improve, so the
+    // field must not be numeric when nothing was measured.
+    expect(only.tokens).not.toHaveProperty('beforeTokens');
+  });
+
+  it('drops a count for a record the window has already evicted', () => {
+    const log = createTransformationLog(2);
+    const stale = log.record(record(0));
+    const live = log.record(record(1));
+    log.record(record(2));
+    log.record(record(3));
+
+    // Record 0 was evicted, and its slot now holds record 2. A late count must
+    // not be written onto whatever request has since taken that position.
+    stale({ measured: true, beforeTokens: 1, afterTokens: 1, method: 'x' });
+    expect(log.recent().map(indexOf)).toEqual([2, 3]);
+    expect(log.recent().every((r) => r.tokens === undefined)).toBe(true);
+
+    // The control: a handle for a record still in the window does amend it, so
+    // the test above is about eviction and not about the handle being inert.
+    const current = log.record(record(4));
+    current({ measured: true, beforeTokens: 7, afterTokens: 3, method: 'x' });
+    expect(log.recent().find((r) => indexOf(r) === 4)?.tokens).toEqual({
+      measured: true,
+      beforeTokens: 7,
+      afterTokens: 3,
+      method: 'x',
+    });
+    expect(live).toBeInstanceOf(Function);
+  });
+
   it('hands out a frozen view, so a reader cannot edit the window', () => {
     const log = createTransformationLog(4);
     log.record(record(0));
