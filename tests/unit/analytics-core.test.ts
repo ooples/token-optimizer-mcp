@@ -1,6 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
 
 import {
+  wilsonInterval,
+  regressionMetrics,
   MINIMUM_SAMPLES,
   NORMAL_QUANTILE_95,
   OutlierMethod,
@@ -372,5 +374,118 @@ describe('analytics core: refusals name what is missing', () => {
 
   it('states the quantile it uses for a 95% interval', () => {
     expect(NORMAL_QUANTILE_95).toBeCloseTo(1.959963984540054, 15);
+  });
+});
+
+describe('wilsonInterval', () => {
+  it('does not claim a clean run rules the event out', () => {
+    /*
+     * This is the whole reason the Wilson form is used. The textbook normal
+     * interval at 0 successes is p +- z*sqrt(0/n), which is [0, 0]: it asserts
+     * the event cannot happen on the strength of ten trials. Wilson's upper
+     * bound for 0 of 10 is 1.96^2 / (10 + 1.96^2) = 0.2775.
+     */
+    const measured = wilsonInterval(0, 10);
+    expect(measured.rate).toBe(0);
+    expect(measured.lower).toBe(0);
+    const z2 = NORMAL_QUANTILE_95 ** 2;
+    expect(measured.upper).toBeCloseTo(z2 / (10 + z2), 12);
+    expect(measured.upper).toBeGreaterThan(0.27);
+  });
+
+  it('mirrors a clean run at the other end', () => {
+    const measured = wilsonInterval(10, 10);
+    expect(measured.rate).toBe(1);
+    /*
+     * Algebraically the upper bound at p = 1 is exactly 1: centre + half is
+     * (1 + z^2/n) / (1 + z^2/n). The computed value lands one float epsilon
+     * short of it, so the assertion is made at that scale rather than on
+     * exact equality.
+     */
+    expect(measured.upper).toBeCloseTo(1, 15);
+    expect(measured.upper).toBeLessThanOrEqual(1);
+    const z2 = NORMAL_QUANTILE_95 ** 2;
+    expect(measured.lower).toBeCloseTo(10 / (10 + z2), 12);
+  });
+
+  it('centres a half-and-half result on the rate itself', () => {
+    const measured = wilsonInterval(50, 100);
+    expect(measured.rate).toBe(0.5);
+    // At p = 0.5 the Wilson centre is exactly 0.5, so the interval is
+    // symmetric about it.
+    expect(measured.lower + measured.upper).toBeCloseTo(1, 12);
+    expect(measured.lower).toBeCloseTo(0.4038, 3);
+    expect(measured.upper).toBeCloseTo(0.5962, 3);
+  });
+
+  it('narrows as the trials grow at a fixed rate', () => {
+    const few = wilsonInterval(5, 10);
+    const many = wilsonInterval(500, 1000);
+    expect(many.upper - many.lower).toBeLessThan(few.upper - few.lower);
+  });
+
+  it('refuses impossible counts rather than reporting a rate above one', () => {
+    expect(() => wilsonInterval(3, 2)).toThrow(
+      'wilsonInterval needs 0 <= successes <= trials; received 3 of 2'
+    );
+    expect(() => wilsonInterval(-1, 2)).toThrow(/0 <= successes/);
+    expect(() => wilsonInterval(0, 0)).toThrow(
+      'wilsonInterval needs at least one trial; received 0'
+    );
+  });
+});
+
+describe('regressionMetrics', () => {
+  it('reports zero error for predictions that were exactly right', () => {
+    const measured = regressionMetrics([1, 2, 3], [1, 2, 3]);
+    expect(measured.mae).toBe(0);
+    expect(measured.rmse).toBe(0);
+    expect(measured.bias).toBe(0);
+    expect(measured.mape).toBe(0);
+    expect(measured.r2).toBe(1);
+  });
+
+  it('computes each metric from errors worked out by hand', () => {
+    /*
+     * Errors (predicted - actual) are +1, -1, +2: absolute 1, 1, 2 so mae is
+     * 4/3; squared 1, 1, 4 so rmse is sqrt(2); signed sum +2 so bias is 2/3.
+     * Percentages are 1/10, 1/20, 2/30, so mape is (0.1 + 0.05 + 2/30)/3.
+     */
+    const measured = regressionMetrics([10, 20, 30], [11, 19, 32]);
+    expect(measured.mae).toBeCloseTo(4 / 3, 12);
+    expect(measured.rmse).toBeCloseTo(Math.sqrt(2), 12);
+    expect(measured.bias).toBeCloseTo(2 / 3, 12);
+    expect(measured.mape).toBeCloseTo((0.1 + 0.05 + 2 / 30) / 3, 12);
+  });
+
+  it('separates bias from magnitude', () => {
+    // Same absolute errors either way; only the sign of the mean differs.
+    const high = regressionMetrics([10, 10], [12, 12]);
+    const mixed = regressionMetrics([10, 10], [12, 8]);
+    expect(high.mae).toBe(mixed.mae);
+    expect(high.bias).toBe(2);
+    expect(mixed.bias).toBe(0);
+  });
+
+  it('returns a null mape rather than a number when an actual is zero', () => {
+    const measured = regressionMetrics([0, 10], [1, 10]);
+    expect(measured.mape).toBeNull();
+    expect(measured.mae).toBe(0.5);
+  });
+
+  it('scores a prediction worse than the actuals mean below zero', () => {
+    /*
+     * r2 is measured against the actuals' own mean, 20. Predicting 100 every
+     * time is far worse than predicting that mean, so r2 is negative -- which
+     * is the information a clamp to [0, 1] would destroy.
+     */
+    const measured = regressionMetrics([10, 20, 30], [100, 100, 100]);
+    expect(measured.r2).toBeLessThan(0);
+  });
+
+  it('refuses series of different length', () => {
+    expect(() => regressionMetrics([1, 2], [1])).toThrow(
+      'regressionMetrics needs series of equal length; received 2 and 1'
+    );
   });
 });

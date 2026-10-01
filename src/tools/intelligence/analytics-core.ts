@@ -712,3 +712,112 @@ export const frequencies = (
     }))
     .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
 };
+
+/** A proportion with its Wilson score interval. */
+export interface Proportion {
+  /** Successes over trials. */
+  rate: number;
+  successes: number;
+  trials: number;
+  /** Wilson score 95% bounds, clamped to [0, 1]. */
+  lower: number;
+  upper: number;
+}
+
+/**
+ * A proportion and its Wilson score 95% interval.
+ *
+ * WHY WILSON: the textbook normal interval p +- z*sqrt(p(1-p)/n) is wrong
+ * exactly where a failure rate matters most -- at 0 successes it returns the
+ * zero-width interval [0, 0], asserting the event cannot happen. Wilson gives
+ * 0 out of 10 an upper bound near 0.28, which is the honest statement: ten
+ * clean trials do not rule out a one-in-four failure rate.
+ */
+export const wilsonInterval = (
+  successes: number,
+  trials: number
+): Proportion => {
+  if (!Number.isInteger(trials) || trials < 1)
+    throw new Error(
+      `wilsonInterval needs at least one trial; received ${String(trials)}`
+    );
+  if (!Number.isInteger(successes) || successes < 0 || successes > trials)
+    throw new Error(
+      `wilsonInterval needs 0 <= successes <= trials; received ${String(successes)} of ${trials}`
+    );
+  const rate = successes / trials;
+  const z = NORMAL_QUANTILE_95;
+  const z2 = z * z;
+  const denominator = 1 + z2 / trials;
+  const centre = (rate + z2 / (2 * trials)) / denominator;
+  const half =
+    (z / denominator) *
+    Math.sqrt((rate * (1 - rate)) / trials + z2 / (4 * trials * trials));
+  return {
+    rate,
+    successes,
+    trials,
+    lower: Math.max(0, centre - half),
+    upper: Math.min(1, centre + half),
+  };
+};
+
+/** How far predictions sat from what happened. */
+export interface RegressionMetrics {
+  sampleSize: number;
+  /** Mean absolute error. */
+  mae: number;
+  /** Root mean squared error. */
+  rmse: number;
+  /** Mean error, signed: positive means the predictions ran high. */
+  bias: number;
+  /**
+   * Mean absolute percentage error, or null when any actual is zero -- the
+   * quantity is undefined there, and substituting a number for it is how a
+   * meaningless figure ends up being quoted.
+   */
+  mape: number | null;
+  /** 1 - SSres/SStot against the actuals' own mean. */
+  r2: number;
+}
+
+/**
+ * Error metrics for a set of predictions against what actually happened.
+ * Nothing is fitted here: both series are the caller's, so these measure the
+ * predictions rather than describing a fit to them.
+ */
+export const regressionMetrics = (
+  actual: readonly number[],
+  predicted: readonly number[]
+): RegressionMetrics => {
+  requireSamples(actual, MINIMUM_SAMPLES.mean, 'regressionMetrics');
+  if (actual.length !== predicted.length)
+    throw new Error(
+      `regressionMetrics needs series of equal length; received ${actual.length} and ${predicted.length}`
+    );
+  const n = actual.length;
+  let absolute = 0;
+  let squared = 0;
+  let signed = 0;
+  let percentage = 0;
+  let anyZeroActual = false;
+  for (let index = 0; index < n; index += 1) {
+    const error = predicted[index] - actual[index];
+    absolute += Math.abs(error);
+    squared += error * error;
+    signed += error;
+    if (actual[index] === 0) anyZeroActual = true;
+    else percentage += Math.abs(error / actual[index]);
+  }
+  const actualMean = mean(actual);
+  let total = 0;
+  for (const value of actual) total += (value - actualMean) ** 2;
+  return {
+    sampleSize: n,
+    mae: absolute / n,
+    rmse: Math.sqrt(squared / n),
+    bias: signed / n,
+    mape: anyZeroActual ? null : percentage / n,
+    r2: total === 0 ? (squared === 0 ? 1 : 0) : 1 - squared / total,
+  };
+};
