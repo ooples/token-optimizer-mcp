@@ -31,7 +31,11 @@ let upstream: Server;
 let upstreamUrl: string;
 let seen: string[];
 let bodies: string[];
-let supervisor: { server: Server; close: () => Promise<void> } | null;
+let supervisor: {
+  server: Server;
+  close: () => Promise<void>;
+  decommissioned: Promise<void>;
+} | null;
 let home: string;
 let env: NodeJS.ProcessEnv;
 
@@ -86,7 +90,6 @@ it('keeps a saved port that comes free between retry attempts', async () => {
   expect(released).toBe(true);
   expect(again).toBe(url);
 }, 15000);
-
 
 it('does not mistake unrelated HTTP JSON for a healthy supervisor', async () => {
   const other = createServer((_req, res) => res.end('{}'));
@@ -459,6 +462,26 @@ describe('the proxy supervisor', () => {
     ).toHaveLength(1);
   }, 30_000);
 
+  // THE LEAK THIS CLOSES. Nothing but a signal used to end this process, and nothing
+  // sends one, so the crash-recovery suite left one background supervisor behind per run
+  // holding its deleted temp home -- and the NEXT run's teardown then failed with EPERM on
+  // a directory no live client owned. A user who removes the state directory, or
+  // uninstalls, was leaking the same process: the state file is how a client finds a
+  // supervisor at all, so once it is gone this one holds a port and a directory for
+  // nobody.
+  it('stands down on its own once its state file is gone', async () => {
+    const running = await runSupervisor(env);
+    if (running === null) throw new Error('the supervisor refused to start');
+    supervisor = running;
+    await ensureRoute(upstreamUrl, env);
+    expect(await supervisorHealth(env)).not.toBeNull();
+    rmSync(supervisorStateFile(env));
+    await running.decommissioned;
+    // It closed its own listeners too, so the control port is free for the next session.
+    expect(await supervisorHealth(env)).toBeNull();
+    supervisor = null;
+  }, 30_000);
+
   it('refuses to run twice on one control port', async () => {
     supervisor = await runSupervisor(env);
     expect(await runSupervisor(env)).toBeNull();
@@ -510,9 +533,7 @@ describe('the proxy supervisor', () => {
     expect(controlPort({})).toBe(16999);
     // The default has to be outside the route window as well, or the supervisor would collide
     // with its own first route.
-    expect(
-      routePort('https://api.anthropic.com', { ...env })
-    ).not.toBe(16999);
+    expect(routePort('https://api.anthropic.com', { ...env })).not.toBe(16999);
     // And a user who points the control port INTO the route window is told, rather than quietly
     // losing the derived port for one upstream.
     expect(() =>

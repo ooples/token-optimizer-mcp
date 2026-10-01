@@ -27,7 +27,13 @@
 
 import { createServer, request, type Server } from 'node:http';
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -328,6 +334,7 @@ export async function runSupervisor(
   server: Server;
   port: number;
   close: () => Promise<void>;
+  decommissioned: Promise<void>;
 } | null> {
   if (await supervisorHealth(env)) return null;
 
@@ -335,6 +342,13 @@ export async function runSupervisor(
   let restoring = true;
   let stopped = false;
   let retryTimer: NodeJS.Timeout | undefined;
+  let stateFileGone = 0;
+  let standDown = (): void => {};
+  // Resolves only when this supervisor has stood itself down; a caller that owns the
+  // process exits on it. Never rejects, and never resolves on an explicit close().
+  const decommissioned = new Promise<void>((resolve) => {
+    standDown = resolve;
+  });
   const waiting = new Map<string, SupervisorRoute>();
   const routes = new Map<string, SupervisorRoute>();
   // Held so shutdown can close them. Without this the listeners outlive every caller: a test run
@@ -540,6 +554,33 @@ export async function runSupervisor(
   publish();
 
   const retry = async () => {
+    // A SUPERVISOR WHOSE STATE FILE IS GONE HAS BEEN DECOMMISSIONED, SO IT STANDS DOWN.
+    //
+    // Nothing used to end this process but a signal, and nothing sends one: a client that
+    // started it exits, and the supervisor keeps its control port and its spill directory
+    // for the next session, which is the point of a daemon. But the state file is how a
+    // client finds it at all, so once that file is gone this process cannot be reached by
+    // anyone, and it holds a port and an open directory for nothing. Measured in the crash
+    // recovery suite: every run left one supervisor behind holding its deleted temp home,
+    // which failed the NEXT run's teardown with EPERM on a directory no live client owned.
+    // A user who removes the state directory, or uninstalls, was leaking the same process.
+    //
+    // Two consecutive observations rather than one, so that nothing here depends on how a
+    // concurrent writeState orders its unlink and its rename.
+    // This file reads and writes its state synchronously throughout (see writeState);
+    // an async stat on a daemon timer tick would only widen the window between the
+    // check and the decision it feeds.
+    // eslint-disable-next-line n/no-sync -- see above
+    if (!stopped && !existsSync(supervisorStateFile(env))) {
+      stateFileGone += 1;
+      if (stateFileGone >= 2) {
+        await close();
+        standDown();
+        return;
+      }
+    } else {
+      stateFileGone = 0;
+    }
     for (const route of waiting.values()) {
       if (stopped) break;
       await routeFor(route.upstream, route.project, route.port);
@@ -565,7 +606,7 @@ export async function runSupervisor(
       )
     );
   };
-  return { server, port: controlPort(env), close };
+  return { server, port: controlPort(env), close, decommissioned };
 }
 
 /**
