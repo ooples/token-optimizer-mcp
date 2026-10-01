@@ -181,7 +181,6 @@ const POSITIVE_CONTROL: ReadonlyArray<readonly [string, DispatchForm]> =
 const FABRICATING: readonly string[] = Object.freeze([
   'intelligent-assistant',
   'natural-language-query',
-  'predictive-analytics',
   'recommendation-engine',
 ]);
 
