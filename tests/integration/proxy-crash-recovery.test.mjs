@@ -18,19 +18,35 @@ const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 // per-case timeout below is derived from it; moving one has to move the other.
 const UNTIL_TIMEOUT_MS = 20_000;
 /**
- * THE RECOVERY WAIT IS QUANTIZED AND NEEDS ITS OWN BUDGET.
+ * WAITING FOR A SUPERVISOR TO PUBLISH IS QUANTIZED AND NEEDS ITS OWN BUDGET.
  *
- * Recovery is driven by the client's periodic probe, so its latency comes in
+ * Two waits in a case end only once a background supervisor has booted and
+ * published a route: the first proxy coming up, and the recovery after the kill.
+ * Both are driven by the client's periodic probe, so their latency arrives in
  * whole steps of that period rather than in a smooth spread. Measured over the
- * 18 cases on an idle box: every single one landed in one of two clusters,
- * 5.2-5.5s or 10.1-10.4s, and nothing fell between or above them. Under
- * full-suite load a third step is reachable, and at a flat 20s the wait failed
- * with `Timed out waiting for proxy recovery` on a case whose product behaviour
- * was fine -- the budget sat inside the tail of its own distribution. This
- * covers four steps with slop; a genuine stall still fails it.
+ * 18 recovery waits on an idle box: every single one landed in one of two
+ * clusters, 5.2-5.5s or 10.1-10.4s, and nothing fell between or above them.
+ *
+ * A flat 20s therefore sat inside the tail of that distribution, and each of the
+ * two waits has since failed there on a case whose product behaviour was fine --
+ * `Timed out waiting for proxy recovery` on an isolated run, and `Timed out
+ * waiting for the first proxy to publish a route` on the first case of a
+ * full-suite run, which starts while the other 422 suites are still finishing.
+ * This budget covers four of the measured steps with slop; a genuine stall still
+ * fails it. The other four waits in a case are a line of stdio or a local file
+ * and keep the flat budget.
  */
-const RECOVERY_TIMEOUT_MS = 45_000;
-async function until(what, check, timeout = UNTIL_TIMEOUT_MS) {
+const SUPERVISOR_TIMEOUT_MS = 45_000;
+/**
+ * A TIMEOUT WITHOUT A DIAGNOSIS IS NOT A TEST RESULT.
+ *
+ * Every wait here ends on a condition some other process has to bring about, so
+ * a bare `Timed out waiting for X` says only that it did not happen -- and the
+ * run is over, the temp home is gone and the daemons are killed before anyone
+ * can look. `diagnose` is called once, on the timeout, and whatever it reports
+ * is carried in the failure message, which is the only thing a CI log keeps.
+ */
+async function until(what, check, timeout = UNTIL_TIMEOUT_MS, diagnose) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
     try {
@@ -41,8 +57,49 @@ async function until(what, check, timeout = UNTIL_TIMEOUT_MS) {
     }
     await pause(100);
   }
-  throw new Error(`Timed out waiting for ${what}`);
+  let detail = '';
+  if (diagnose) {
+    try {
+      detail = ` -- ${await diagnose()}`;
+    } catch (error) {
+      detail = ` -- the diagnosis itself failed: ${error.message}`;
+    }
+  }
+  throw new Error(`Timed out waiting for ${what}${detail}`);
 }
+
+/** What the state file says, or why it could not say anything. */
+const describeState = (state) => {
+  try {
+    const value = state();
+    return `pid ${value.pid} (${liveness(value.pid)}), ${value.routes.length} route(s)`;
+  } catch (error) {
+    return `unreadable: ${error.message}`;
+  }
+};
+
+/** What the control port says, or why it said nothing. */
+const describeControl = async (port) => {
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:${port}/__token-optimizer/health`,
+      { signal: AbortSignal.timeout(2000) }
+    );
+    return `${res.status} ${await res.text()}`;
+  } catch (error) {
+    return `silent (${error.message})`;
+  }
+};
+
+/** 'alive' / 'dead', so a report can name what a pid was doing. */
+const liveness = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return `alive`;
+  } catch {
+    return `dead`;
+  }
+};
 async function listen(server) {
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   return server.address().port;
@@ -77,8 +134,12 @@ const removeHome = async (home) => {
   }
 };
 
-/** Sequential `until` waits in one case; see the note on the case timeout. */
-const UNTIL_WAITS_PER_CASE = 6;
+/**
+ * Sequential `until` waits in one case, split by what each one waits on; see
+ * the note on the case timeout.
+ */
+const SUPERVISOR_WAITS_PER_CASE = 2;
+const OTHER_WAITS_PER_CASE = 4;
 /** Spawning the client, the 2s exit race and the retrying temp-dir removal. */
 const SPAWN_AND_TEARDOWN_MS = 15_000;
 
@@ -198,10 +259,18 @@ describe('a connected MCP session survives a dead background proxy', () => {
       );
       try {
         await until('the initialize response', () => output.includes('"id":1'));
-        const first = await until('the first proxy to publish a route', () => {
-          const value = state();
-          return value.pid > 0 && value.routes.length && value;
-        });
+        const first = await until(
+          'the first proxy to publish a route',
+          () => {
+            const value = state();
+            return value.pid > 0 && value.routes.length && value;
+          },
+          SUPERVISOR_TIMEOUT_MS,
+          // A supervisor that never started, one that started and never published, and a
+          // client that never asked for a route all look the same from out here.
+          async () =>
+            `the state file names ${describeState(state)}; the control port answers ${await describeControl(port)}; the client has said ${JSON.stringify(output.slice(-400))}`
+        );
         daemonPids.add(first.pid);
         const url = first.routes[0].url;
         if (hasClaude)
@@ -231,7 +300,12 @@ describe('a connected MCP session survives a dead background proxy', () => {
             if (value.pid !== first.pid) daemonPids.add(value.pid);
             return value.pid !== first.pid && value.routes.length && value;
           },
-          RECOVERY_TIMEOUT_MS
+          SUPERVISOR_TIMEOUT_MS,
+          // Three facts separate the ways this can fail: a replacement that never
+          // started, one that started and never published, and one that published a
+          // route table the wait would not accept.
+          async () =>
+            `the killed pid ${first.pid} is ${liveness(first.pid)}; the state file names ${describeState(state)}; the control port answers ${await describeControl(port)}`
         );
         expect(recovered.routes[0].url).toBe(url);
         expect(await request()).toEqual({ recovered: true });
@@ -284,8 +358,8 @@ describe('a connected MCP session survives a dead background proxy', () => {
     // the case passed on an idle machine (~11s) and could only fail under load
     // with a timeout rather than an assertion, which says nothing about what
     // went wrong. Derived, the two stay in step.
-    (UNTIL_WAITS_PER_CASE - 1) * UNTIL_TIMEOUT_MS +
-      RECOVERY_TIMEOUT_MS +
+    SUPERVISOR_WAITS_PER_CASE * SUPERVISOR_TIMEOUT_MS +
+      OTHER_WAITS_PER_CASE * UNTIL_TIMEOUT_MS +
       SPAWN_AND_TEARDOWN_MS
   );
 });
