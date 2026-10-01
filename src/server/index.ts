@@ -4,30 +4,24 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { startManagedInstallRepair } from './install-repair.js';
 import { installShutdownHandlers } from './lifecycle.js';
-import { discloseResult, expandRef, EXPAND_TOOL } from './disclosure.js';
+import { discloseResult, expandRef } from './disclosure.js';
 import {
   createToolArgumentChecker,
   type ToolDefinitionLike,
 } from './tool-arguments.js';
 import { selectToolDefinitions } from './tool-profile.js';
-import { wasteAudit, WASTE_TOOL } from './waste-tool.js';
-import { cacheAudit, CACHE_TOOL } from './cache-tool.js';
-import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
-import { tokenAudit, AUDIT_TOOL } from './audit-tool.js';
-import { installDoctor, DOCTOR_TOOL } from './doctor-tool.js';
-import { fleetAudit, FLEET_TOOL } from './fleet-tool.js';
+import { TOOL_DEFINITIONS } from './tool-definitions.js';
+import { wasteAudit } from './waste-tool.js';
+import { cacheAudit } from './cache-tool.js';
+import { modelRouting } from './routing-tool.js';
+import { tokenAudit } from './audit-tool.js';
+import { installDoctor } from './doctor-tool.js';
+import { fleetAudit } from './fleet-tool.js';
 import { McpEvidenceRecorder } from './mcp-evidence.js';
-import {
-  wikiWrite,
-  WIKI_WRITE_TOOL_DEFINITION,
-} from '../tools/intelligence/wiki-write.js';
-import {
-  wikiRead,
-  WIKI_READ_TOOL_DEFINITION,
-} from '../tools/intelligence/wiki-read.js';
+import { wikiWrite } from '../tools/intelligence/wiki-write.js';
+import { wikiRead } from '../tools/intelligence/wiki-read.js';
 import {
   wikiQuery,
-  WIKI_QUERY_TOOL_DEFINITION,
   type WikiQueryOptions,
 } from '../tools/intelligence/wiki-query.js';
 import {
@@ -35,7 +29,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { noteToolCall, flushToolRollup } from '../telemetry/tool-rollup.js';
-import { runUcrTool, UCR_TOOL_DEFINITIONS } from './ucr-tools.js';
+import { runUcrTool } from './ucr-tools.js';
 
 import { CacheEngine } from '../core/cache-engine.js';
 import { TokenCounter } from '../core/token-counter.js';
@@ -43,220 +37,78 @@ import { CompressionEngine } from '../core/compression-engine.js';
 import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
 import { MetricsCollector } from '../core/metrics.js';
 import { validateToolArgs } from '../validation/validator.js';
-import {
-  getPredictiveCacheTool,
-  PREDICTIVE_CACHE_TOOL_DEFINITION,
-} from '../tools/advanced-caching/predictive-cache.js';
-import {
-  getCacheWarmupTool,
-  CACHE_WARMUP_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-warmup.js';
+import { getPredictiveCacheTool } from '../tools/advanced-caching/predictive-cache.js';
+import { getCacheWarmupTool } from '../tools/advanced-caching/cache-warmup.js';
 // --- Previously unregistered tools ---------------------------------------
 // Each of these shipped with a definition, a runner and tests, and no line
 // anywhere that let a user reach it. Fifteen finished tools were invisible.
-import {
-  runSmartComplexity,
-  SMART_COMPLEXITY_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartDependencies,
-  SMART_DEPENDENCIES_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-dependencies.js';
-import {
-  runSmartExports,
-  SMART_EXPORTS_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartImports,
-  SMART_IMPORTS_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartRefactor,
-  SMART_REFACTOR_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartSecurity,
-  SMART_SECURITY_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-security.js';
-import {
-  runSmartSymbols,
-  SMART_SYMBOLS_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartTypescript,
-  SMART_TYPESCRIPT_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartConfigRead,
-  SMART_CONFIG_READ_TOOL_DEFINITION,
-} from '../tools/configuration/smart-config-read.js';
-import {
-  runSmartEnv,
-  SMART_ENV_TOOL_DEFINITION,
-} from '../tools/configuration/smart-env.js';
-import {
-  runSmartPackageJson,
-  SMART_PACKAGE_JSON_TOOL_DEFINITION,
-} from '../tools/configuration/smart-package-json.js';
-import {
-  runSmartTsconfig,
-  SMART_TSCONFIG_TOOL_DEFINITION,
-} from '../tools/configuration/smart-tsconfig.js';
+import { runSmartComplexity } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartDependencies } from '../tools/code-analysis/smart-dependencies.js';
+import { runSmartExports } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartImports } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartRefactor } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartSecurity } from '../tools/code-analysis/smart-security.js';
+import { runSmartSymbols } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartTypescript } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartConfigRead } from '../tools/configuration/smart-config-read.js';
+import { runSmartEnv } from '../tools/configuration/smart-env.js';
+import { runSmartPackageJson } from '../tools/configuration/smart-package-json.js';
+import { runSmartTsconfig } from '../tools/configuration/smart-tsconfig.js';
 import {
   getSmartWorkflowTool,
-  SMART_WORKFLOW_TOOL_DEFINITION,
   type SmartWorkflowRequest,
 } from '../tools/configuration/smart-workflow.js';
-import {
-  runSmartPretty,
-  SMART_PRETTY_TOOL_DEFINITION,
-} from '../tools/output-formatting/smart-pretty.js';
-import {
-  runSmartProcess,
-  SMART_PROCESS_TOOL_DEFINITION,
-} from '../tools/system-operations/smart-process.js';
-import {
-  runSmartService,
-  SMART_SERVICE_TOOL_DEFINITION,
-} from '../tools/system-operations/smart-service.js';
+import { runSmartPretty } from '../tools/output-formatting/smart-pretty.js';
+import { runSmartProcess } from '../tools/system-operations/smart-process.js';
+import { runSmartService } from '../tools/system-operations/smart-service.js';
 
 // Code analysis tools
-import {
-  getSmartAstGrepTool,
-  SMART_AST_GREP_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-ast-grep.js';
-import {
-  getCacheAnalyticsTool,
-  CACHE_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-analytics.js';
-import {
-  runCacheBenchmark,
-  CACHE_BENCHMARK_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-benchmark.js';
-import {
-  runCacheCompression,
-  CACHE_COMPRESSION_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-compression.js';
-import {
-  getCacheInvalidationTool,
-  CACHE_INVALIDATION_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-invalidation.js';
-import {
-  getCacheOptimizerTool,
-  CACHE_OPTIMIZER_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-optimizer.js';
-import {
-  getCachePartitionTool,
-  CACHE_PARTITION_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-partition.js';
-import {
-  getCacheReplicationTool,
-  CACHE_REPLICATION_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-replication.js';
-import {
-  getSmartCacheTool,
-  SMART_CACHE_TOOL_DEFINITION,
-} from '../tools/advanced-caching/smart-cache.js';
-import {
-  getAlertManager,
-  ALERT_MANAGER_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/alert-manager.js';
-import {
-  getMetricCollector,
-  METRIC_COLLECTOR_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/metric-collector.js';
-import {
-  getMonitoringIntegration,
-  MONITORING_INTEGRATION_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/monitoring-integration.js';
-import {
-  getCustomWidget,
-  CUSTOM_WIDGET_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/custom-widget.js';
-import {
-  getDataVisualizer,
-  DATA_VISUALIZER_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/data-visualizer.js';
-import {
-  getHealthMonitor,
-  HEALTH_MONITOR_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/health-monitor.js';
-import {
-  getLogDashboard,
-  LOG_DASHBOARD_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/log-dashboard.js';
+import { getSmartAstGrepTool } from '../tools/code-analysis/smart-ast-grep.js';
+import { getCacheAnalyticsTool } from '../tools/advanced-caching/cache-analytics.js';
+import { runCacheBenchmark } from '../tools/advanced-caching/cache-benchmark.js';
+import { runCacheCompression } from '../tools/advanced-caching/cache-compression.js';
+import { getCacheInvalidationTool } from '../tools/advanced-caching/cache-invalidation.js';
+import { getCacheOptimizerTool } from '../tools/advanced-caching/cache-optimizer.js';
+import { getCachePartitionTool } from '../tools/advanced-caching/cache-partition.js';
+import { getCacheReplicationTool } from '../tools/advanced-caching/cache-replication.js';
+import { getSmartCacheTool } from '../tools/advanced-caching/smart-cache.js';
+import { getAlertManager } from '../tools/dashboard-monitoring/alert-manager.js';
+import { getMetricCollector } from '../tools/dashboard-monitoring/metric-collector.js';
+import { getMonitoringIntegration } from '../tools/dashboard-monitoring/monitoring-integration.js';
+import { getCustomWidget } from '../tools/dashboard-monitoring/custom-widget.js';
+import { getDataVisualizer } from '../tools/dashboard-monitoring/data-visualizer.js';
+import { getHealthMonitor } from '../tools/dashboard-monitoring/health-monitor.js';
+import { getLogDashboard } from '../tools/dashboard-monitoring/log-dashboard.js';
 
 // Intelligence tools
-import {
-  runIntelligentAssistant,
-  INTELLIGENTASSISTANTTOOL,
-} from '../tools/intelligence/intelligent-assistant.js';
-import {
-  runNaturalLanguageQuery,
-  NATURALLANGUAGEQUERYTOOL,
-} from '../tools/intelligence/natural-language-query.js';
-import {
-  runPatternRecognition,
-  PATTERNRECOGNITIONTOOL,
-} from '../tools/intelligence/pattern-recognition.js';
-import {
-  runPredictiveAnalytics,
-  PREDICTIVEANALYTICSTOOL,
-} from '../tools/intelligence/predictive-analytics.js';
-import {
-  runRecommendationEngine,
-  RECOMMENDATIONENGINETOOL,
-} from '../tools/intelligence/recommendation-engine.js';
-import {
-  runSmartSummarization,
-  SMARTSUMMARIZATIONTOOL,
-} from '../tools/intelligence/smart-summarization.js';
+import { runIntelligentAssistant } from '../tools/intelligence/intelligent-assistant.js';
+import { runNaturalLanguageQuery } from '../tools/intelligence/natural-language-query.js';
+import { runPatternRecognition } from '../tools/intelligence/pattern-recognition.js';
+import { runPredictiveAnalytics } from '../tools/intelligence/predictive-analytics.js';
+import { runRecommendationEngine } from '../tools/intelligence/recommendation-engine.js';
+import { runSmartSummarization } from '../tools/intelligence/smart-summarization.js';
 import {
   runAnomalyExplainer,
-  ANOMALYEXPLAINERTOOL,
   type AnomalyExplainerOptions,
 } from '../tools/intelligence/anomaly-explainer.js';
 import {
   getKnowledgeGraphTool,
-  KNOWLEDGE_GRAPH_TOOL_DEFINITION,
   type KnowledgeGraphOptions,
 } from '../tools/intelligence/knowledge-graph.js';
 import {
   getSentimentAnalysisTool,
-  SENTIMENT_ANALYSIS_TOOL_DEFINITION,
   type SentimentAnalysisOptions,
 } from '../tools/intelligence/sentiment-analysis.js';
 
 // Analytics tools
-import {
-  getHookAnalyticsTool,
-  GET_HOOK_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/analytics/get-hook-analytics.js';
-import {
-  getActionAnalyticsTool,
-  GET_ACTION_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/analytics/get-action-analytics.js';
-import {
-  getMcpServerAnalyticsTool,
-  GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/analytics/get-mcp-server-analytics.js';
-import {
-  getExportAnalyticsTool,
-  EXPORT_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/analytics/export-analytics.js';
-import {
-  getOptimizationReportTool,
-  GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
-} from '../tools/analytics/get-optimization-report.js';
+import { getHookAnalyticsTool } from '../tools/analytics/get-hook-analytics.js';
+import { getActionAnalyticsTool } from '../tools/analytics/get-action-analytics.js';
+import { getMcpServerAnalyticsTool } from '../tools/analytics/get-mcp-server-analytics.js';
+import { getExportAnalyticsTool } from '../tools/analytics/export-analytics.js';
+import { getOptimizationReportTool } from '../tools/analytics/get-optimization-report.js';
 import { recordToolAnalytics } from '../analytics/record-tool-analytics.js';
-import {
-  OptimizationStorageTool,
-  OPTIMIZATION_STORAGE_TOOL_DEFINITION,
-} from '../tools/optimization-storage-tool.js';
-import {
-  ContextDeltaTool,
-  CONTEXT_DELTA_TOOL_DEFINITION,
-} from '../tools/context-delta-tool.js';
+import { OptimizationStorageTool } from '../tools/optimization-storage-tool.js';
+import { ContextDeltaTool } from '../tools/context-delta-tool.js';
 import { SessionManager } from '../core/session-manager.js';
 import { createSummarizerFromEnv } from '../core/summarization.js';
 import { TokenizerFactory } from '../core/tokenizers/tokenizer-factory.js';
@@ -265,140 +117,43 @@ import { memoRegistry } from '../utils/lru-memoize.js';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
 
 // API & Database tools
-import {
-  getSmartSql,
-  SMART_SQL_TOOL_DEFINITION,
-} from '../tools/api-database/smart-sql.js';
-import {
-  getSmartSchema,
-  SMART_SCHEMA_TOOL_DEFINITION,
-} from '../tools/api-database/smart-schema.js';
-import {
-  getSmartApiFetch,
-  SMART_API_FETCH_TOOL_DEFINITION,
-} from '../tools/api-database/smart-api-fetch.js';
-import {
-  getSmartCacheApi,
-  SMART_CACHE_API_TOOL_DEFINITION,
-} from '../tools/api-database/smart-cache-api.js';
-import {
-  getSmartDatabase,
-  SMART_DATABASE_TOOL_DEFINITION,
-} from '../tools/api-database/smart-database.js';
-import {
-  getSmartGraphQL,
-  SMART_GRAPHQL_TOOL_DEFINITION,
-} from '../tools/api-database/smart-graphql.js';
-import {
-  getSmartMigration,
-  SMART_MIGRATION_TOOL_DEFINITION,
-} from '../tools/api-database/smart-migration.js';
-import {
-  getSmartOrm,
-  SMART_ORM_TOOL_DEFINITION,
-} from '../tools/api-database/smart-orm.js';
-import {
-  getSmartRest,
-  SMART_REST_TOOL_DEFINITION,
-} from '../tools/api-database/smart-rest.js';
-import {
-  getSmartWebSocket,
-  SMART_WEBSOCKET_TOOL_DEFINITION,
-} from '../tools/api-database/smart-websocket.js';
+import { getSmartSql } from '../tools/api-database/smart-sql.js';
+import { getSmartSchema } from '../tools/api-database/smart-schema.js';
+import { getSmartApiFetch } from '../tools/api-database/smart-api-fetch.js';
+import { getSmartCacheApi } from '../tools/api-database/smart-cache-api.js';
+import { getSmartDatabase } from '../tools/api-database/smart-database.js';
+import { getSmartGraphQL } from '../tools/api-database/smart-graphql.js';
+import { getSmartMigration } from '../tools/api-database/smart-migration.js';
+import { getSmartOrm } from '../tools/api-database/smart-orm.js';
+import { getSmartRest } from '../tools/api-database/smart-rest.js';
+import { getSmartWebSocket } from '../tools/api-database/smart-websocket.js';
 
 // Build Systems tools
-import {
-  getSmartProcessesTool,
-  SMART_PROCESSES_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-processes.js';
-import {
-  getSmartNetwork,
-  SMART_NETWORK_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-network.js';
-import {
-  getSmartLogs,
-  SMART_LOGS_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-logs.js';
-import {
-  getSmartLintTool,
-  SMART_LINT_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-lint.js';
-import {
-  getSmartInstall,
-  SMART_INSTALL_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-install.js';
-import {
-  getSmartDocker,
-  SMART_DOCKER_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-docker.js';
-import {
-  getSmartBuildTool,
-  SMART_BUILD_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-build.js';
-import {
-  getSmartSystemMetrics,
-  SMART_SYSTEM_METRICS_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-system-metrics.js';
-import {
-  getSmartTestTool,
-  SMART_TEST_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-test.js';
-import {
-  getSmartTypeCheckTool,
-  SMART_TYPECHECK_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-typecheck.js';
+import { getSmartProcessesTool } from '../tools/build-systems/smart-processes.js';
+import { getSmartNetwork } from '../tools/build-systems/smart-network.js';
+import { getSmartLogs } from '../tools/build-systems/smart-logs.js';
+import { getSmartLintTool } from '../tools/build-systems/smart-lint.js';
+import { getSmartInstall } from '../tools/build-systems/smart-install.js';
+import { getSmartDocker } from '../tools/build-systems/smart-docker.js';
+import { getSmartBuildTool } from '../tools/build-systems/smart-build.js';
+import { getSmartSystemMetrics } from '../tools/build-systems/smart-system-metrics.js';
+import { getSmartTestTool } from '../tools/build-systems/smart-test.js';
+import { getSmartTypeCheckTool } from '../tools/build-systems/smart-typecheck.js';
 // System Operations tools
-import {
-  getSmartCron,
-  SMART_CRON_TOOL_DEFINITION,
-} from '../tools/system-operations/smart-cron.js';
-import {
-  getSmartUser,
-  SMART_USER_TOOL_DEFINITION,
-} from '../tools/system-operations/smart-user.js';
+import { getSmartCron } from '../tools/system-operations/smart-cron.js';
+import { getSmartUser } from '../tools/system-operations/smart-user.js';
 
 // File operations tools
-import {
-  getSmartDiffTool,
-  SMART_DIFF_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-diff.js';
-import {
-  getSmartBranchTool,
-  SMART_BRANCH_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-branch.js';
-import {
-  getSmartMergeTool,
-  SMART_MERGE_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-merge.js';
-import {
-  getSmartStatusTool,
-  SMART_STATUS_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-status.js';
-import {
-  getSmartLogTool,
-  SMART_LOG_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-log.js';
-import {
-  runSmartRead,
-  SMART_READ_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-read.js';
-import {
-  runSmartWrite,
-  SMART_WRITE_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-write.js';
-import {
-  runSmartEdit,
-  SMART_EDIT_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-edit.js';
-import {
-  runSmartGlob,
-  SMART_GLOB_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-glob.js';
-import {
-  runSmartGrep,
-  SMART_GREP_TOOL_DEFINITION,
-  // Analytics tools
-} from '../tools/file-operations/smart-grep.js';
+import { getSmartDiffTool } from '../tools/file-operations/smart-diff.js';
+import { getSmartBranchTool } from '../tools/file-operations/smart-branch.js';
+import { getSmartMergeTool } from '../tools/file-operations/smart-merge.js';
+import { getSmartStatusTool } from '../tools/file-operations/smart-status.js';
+import { getSmartLogTool } from '../tools/file-operations/smart-log.js';
+import { runSmartRead } from '../tools/file-operations/smart-read.js';
+import { runSmartWrite } from '../tools/file-operations/smart-write.js';
+import { runSmartEdit } from '../tools/file-operations/smart-edit.js';
+import { runSmartGlob } from '../tools/file-operations/smart-glob.js';
+import { runSmartGrep } from '../tools/file-operations/smart-grep.js';
 import {
   parseSessionLog,
   resolveSessionLogPath,
@@ -628,328 +383,6 @@ server.oninitialized = () => {
 };
 
 // Define tools
-/**
- * Every tool this server advertises.
- *
- * Named, rather than inline in the handler, so ONE list is both what the
- * client is shown and what requests are validated against. When they were
- * two things, a tool could declare `required: [ormCode, ormType]` in the
- * schema a caller reads while its Zod entry was the permissive
- * GenericToolOptionsSchema -- and 43 of them use that. Omitting a required
- * field then reached the tool body, where smart_orm answered:
- *
- *     The "data" argument must be of type string or an instance of Buffer,
- *     TypedArray, or DataView. Received undefined
- *
- * which tells the caller nothing about the field they left out.
- */
-const TOOL_DEFINITIONS = [
-  SMART_COMPLEXITY_TOOL_DEFINITION,
-  SMART_DEPENDENCIES_TOOL_DEFINITION,
-  SMART_EXPORTS_TOOL_DEFINITION,
-  SMART_IMPORTS_TOOL_DEFINITION,
-  SMART_REFACTOR_TOOL_DEFINITION,
-  SMART_SECURITY_TOOL_DEFINITION,
-  SMART_SYMBOLS_TOOL_DEFINITION,
-  SMART_TYPESCRIPT_TOOL_DEFINITION,
-  SMART_CONFIG_READ_TOOL_DEFINITION,
-  SMART_ENV_TOOL_DEFINITION,
-  SMART_PACKAGE_JSON_TOOL_DEFINITION,
-  SMART_TSCONFIG_TOOL_DEFINITION,
-  SMART_PRETTY_TOOL_DEFINITION,
-  SMART_PROCESS_TOOL_DEFINITION,
-  SMART_SERVICE_TOOL_DEFINITION,
-  AUDIT_TOOL,
-  DOCTOR_TOOL,
-  FLEET_TOOL,
-  WIKI_WRITE_TOOL_DEFINITION,
-  WIKI_READ_TOOL_DEFINITION,
-  WIKI_QUERY_TOOL_DEFINITION,
-  ...UCR_TOOL_DEFINITIONS,
-  EXPAND_TOOL,
-  WASTE_TOOL,
-  CACHE_TOOL,
-  ROUTING_TOOL,
-  {
-    name: 'optimize_text',
-    description:
-      'Compress and cache text to reduce token usage. Returns compressed version and saves to cache for future use.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: {
-          type: 'string',
-          description: 'Text to optimize',
-        },
-        key: {
-          type: 'string',
-          description: 'Cache key for storing the optimized text',
-        },
-        quality: {
-          type: 'number',
-          description: 'Compression quality (0-11, default 11)',
-          minimum: 0,
-          maximum: 11,
-        },
-      },
-      required: ['text', 'key'],
-    },
-  },
-  {
-    name: 'get_cached',
-    description:
-      'Retrieve previously cached and optimized text. Returns the original text if found in cache.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        key: {
-          type: 'string',
-          description: 'Cache key to retrieve',
-        },
-      },
-      required: ['key'],
-    },
-  },
-  {
-    name: 'count_tokens',
-    description:
-      'Count tokens in text using the pluggable tokenizer framework (#124). Picks a model-specific tokenizer (tiktoken for GPT/Claude, Google AI REST for Gemini, content-aware heuristic fallback).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: {
-          type: 'string',
-          description: 'Text to count tokens for',
-        },
-        modelName: {
-          type: 'string',
-          description:
-            'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). Defaults to the server-configured model when omitted.',
-        },
-      },
-      required: ['text'],
-    },
-  },
-  {
-    name: 'compress_text',
-    description:
-      'Compress text using Brotli, returned as a base64 string. Intended for AT-REST STORAGE/caching (reduces bytes ~50%). NOTE: base64 tokenizes poorly, so the output usually has MORE LLM tokens than the input — do NOT feed the result into a model context expecting savings. The response includes originalTokens/compressedTokens and a warning when the output would increase tokens.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: {
-          type: 'string',
-          description: 'Text to compress',
-        },
-        quality: {
-          type: 'number',
-          description: 'Compression quality (0-11, default 11)',
-          minimum: 0,
-          maximum: 11,
-        },
-      },
-      required: ['text'],
-    },
-  },
-  {
-    name: 'decompress_text',
-    description: 'Decompress base64-encoded Brotli-compressed text.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        compressed: {
-          type: 'string',
-          description: 'Base64-encoded compressed text',
-        },
-      },
-      required: ['compressed'],
-    },
-  },
-  {
-    name: 'get_cache_stats',
-    description:
-      'Get cache statistics including hit rate, compression ratio, and token savings.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-    },
-  },
-  {
-    name: 'clear_cache',
-    description: 'Clear all cached data. Use with caution.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        confirm: {
-          type: 'boolean',
-          description: 'Must be true to confirm cache clearing',
-        },
-      },
-      required: ['confirm'],
-    },
-  },
-  {
-    name: 'analyze_optimization',
-    description:
-      'Analyze text and provide recommendations for optimization including compression benefits and token savings.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: {
-          type: 'string',
-          description: 'Text to analyze',
-        },
-      },
-      required: ['text'],
-    },
-  },
-  {
-    name: 'get_session_stats',
-    description:
-      'Get comprehensive statistics from the PowerShell wrapper session tracker including system reminders, tool operations, and total tokens with accurate tiktoken-based counting.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        sessionId: {
-          type: 'string',
-          description:
-            'Optional session ID to query. If not provided, uses current session.',
-        },
-      },
-    },
-  },
-  {
-    name: 'optimize_session',
-    description:
-      'Analyzes operations in the current session from the session JSONL log, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        sessionId: {
-          type: 'string',
-          description:
-            'Optional session ID to optimize. If not provided, uses the current active session.',
-        },
-        min_token_threshold: {
-          type: 'number',
-          description:
-            'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
-        },
-      },
-    },
-  },
-  // NOTE: 'lookup_cache' tool never existed in master branch - this is NOT a breaking change
-  // This tool (analyze_project_tokens) is a new addition to the MCP server
-  {
-    name: 'analyze_project_tokens',
-    description:
-      'Analyze observed token usage across multiple sessions within a project. Aggregates session logs and identifies top contributors. Cost is Not priced unless the caller supplies an effective input-token rate; any resulting value is a cost equivalent, not an invoice.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        projectPath: {
-          type: 'string',
-          description:
-            'Path to the project directory. If not provided, uses the hooks data directory.',
-        },
-        startDate: {
-          type: 'string',
-          format: 'date',
-          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-          description: 'Optional start date filter (YYYY-MM-DD format).',
-        },
-        endDate: {
-          type: 'string',
-          format: 'date',
-          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-          description: 'Optional end date filter (YYYY-MM-DD format).',
-        },
-        costPerMillionTokens: {
-          type: 'number',
-          description:
-            'Optional effective USD cost per million input tokens. No provider price is assumed when omitted.',
-          minimum: 0,
-        },
-      },
-    },
-  },
-  PREDICTIVE_CACHE_TOOL_DEFINITION,
-  CACHE_WARMUP_TOOL_DEFINITION,
-  // Code analysis tools
-  SMART_AST_GREP_TOOL_DEFINITION,
-  CACHE_ANALYTICS_TOOL_DEFINITION,
-  CACHE_BENCHMARK_TOOL_DEFINITION,
-  CACHE_COMPRESSION_TOOL_DEFINITION,
-  CACHE_INVALIDATION_TOOL_DEFINITION,
-  CACHE_OPTIMIZER_TOOL_DEFINITION,
-  CACHE_PARTITION_TOOL_DEFINITION,
-  CACHE_REPLICATION_TOOL_DEFINITION,
-  SMART_CACHE_TOOL_DEFINITION,
-  // API & Database tools
-  SMART_SQL_TOOL_DEFINITION,
-  SMART_SCHEMA_TOOL_DEFINITION,
-  SMART_API_FETCH_TOOL_DEFINITION,
-  SMART_CACHE_API_TOOL_DEFINITION,
-  SMART_DATABASE_TOOL_DEFINITION,
-  SMART_GRAPHQL_TOOL_DEFINITION,
-  SMART_MIGRATION_TOOL_DEFINITION,
-  SMART_ORM_TOOL_DEFINITION,
-  SMART_REST_TOOL_DEFINITION,
-  SMART_WEBSOCKET_TOOL_DEFINITION,
-  // Dashboard & Monitoring tools
-  ALERT_MANAGER_TOOL_DEFINITION,
-  METRIC_COLLECTOR_TOOL_DEFINITION,
-  MONITORING_INTEGRATION_TOOL_DEFINITION,
-  CUSTOM_WIDGET_TOOL_DEFINITION,
-  DATA_VISUALIZER_TOOL_DEFINITION,
-  HEALTH_MONITOR_TOOL_DEFINITION,
-  LOG_DASHBOARD_TOOL_DEFINITION,
-  // Intelligence tools
-  INTELLIGENTASSISTANTTOOL,
-  NATURALLANGUAGEQUERYTOOL,
-  PATTERNRECOGNITIONTOOL,
-  PREDICTIVEANALYTICSTOOL,
-  RECOMMENDATIONENGINETOOL,
-  SMARTSUMMARIZATIONTOOL,
-  ANOMALYEXPLAINERTOOL,
-  KNOWLEDGE_GRAPH_TOOL_DEFINITION,
-  SENTIMENT_ANALYSIS_TOOL_DEFINITION,
-  SMART_WORKFLOW_TOOL_DEFINITION,
-  // Build Systems tools
-  SMART_PROCESSES_TOOL_DEFINITION,
-  SMART_NETWORK_TOOL_DEFINITION,
-  SMART_LOGS_TOOL_DEFINITION,
-  SMART_LINT_TOOL_DEFINITION,
-  SMART_INSTALL_TOOL_DEFINITION,
-  SMART_DOCKER_TOOL_DEFINITION,
-  SMART_BUILD_TOOL_DEFINITION,
-  SMART_SYSTEM_METRICS_TOOL_DEFINITION,
-  SMART_TEST_TOOL_DEFINITION,
-  SMART_TYPECHECK_TOOL_DEFINITION,
-  // System Operations tools
-  SMART_CRON_TOOL_DEFINITION,
-  SMART_USER_TOOL_DEFINITION,
-  // File operations tools
-
-  SMART_DIFF_TOOL_DEFINITION,
-  SMART_BRANCH_TOOL_DEFINITION,
-  SMART_MERGE_TOOL_DEFINITION,
-  SMART_STATUS_TOOL_DEFINITION,
-  SMART_LOG_TOOL_DEFINITION,
-  SMART_READ_TOOL_DEFINITION,
-  SMART_WRITE_TOOL_DEFINITION,
-  SMART_EDIT_TOOL_DEFINITION,
-  SMART_GLOB_TOOL_DEFINITION,
-  SMART_GREP_TOOL_DEFINITION,
-  // Analytics tools
-  GET_HOOK_ANALYTICS_TOOL_DEFINITION,
-  GET_ACTION_ANALYTICS_TOOL_DEFINITION,
-  GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
-  EXPORT_ANALYTICS_TOOL_DEFINITION,
-  GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
-  OPTIMIZATION_STORAGE_TOOL_DEFINITION,
-  CONTEXT_DELTA_TOOL_DEFINITION,
-];
 
 const ADVERTISED_TOOL_DEFINITIONS = selectToolDefinitions(TOOL_DEFINITIONS);
 const ADVERTISED_TOOL_NAMES = new Set(
