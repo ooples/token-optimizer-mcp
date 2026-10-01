@@ -33,7 +33,12 @@ export function compactToolCode(description: string): string {
   while (cache.size >= 64 || retained + bytes > LIMIT) {
     const key = cache.keys().next().value;
     if (key === undefined) break;
-    retained -= 2 * (key.length + cache.get(key)!.length);
+    // The entry is read, not asserted. A key from `cache.keys()` is present by
+    // construction, but asserting that with `!` means a future change that
+    // deletes while iterating silently subtracts NaN from `retained` and the
+    // budget stops holding. Reading it back costs nothing and cannot lie.
+    const evicted = cache.get(key);
+    if (evicted !== undefined) retained -= 2 * (key.length + evicted.length);
     cache.delete(key);
   }
   cache.set(description, result);
