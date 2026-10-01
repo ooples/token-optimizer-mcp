@@ -184,7 +184,6 @@ const FABRICATING: readonly string[] = Object.freeze([
   'pattern-recognition',
   'predictive-analytics',
   'recommendation-engine',
-  'smart-summarization',
 ]);
 
 describe('published operations are dispatched', () => {

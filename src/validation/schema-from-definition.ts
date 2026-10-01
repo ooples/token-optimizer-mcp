@@ -32,11 +32,14 @@ export interface JsonSchemaNode {
   anyOf?: JsonSchemaNode[];
   minimum?: number;
   maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
   minLength?: number;
   maxLength?: number;
   minItems?: number;
   maxItems?: number;
   pattern?: string;
+  format?: string;
   description?: string;
   default?: unknown;
 }
@@ -47,6 +50,41 @@ export interface JsonSchemaNode {
  * so it gets a bounded run like every other regex in this codebase.
  */
 const PATTERN_TIMEOUT_MS = 1000;
+
+/**
+ * The `format` values the definitions publish, and what each one accepts.
+ *
+ * Five keys published one of these and nothing checked it: analyze_project_
+ * tokens.startDate/endDate as `date`, and smart_cache_api.since plus
+ * smart_glob.modifiedAfter/modifiedBefore as `date-time`. A published format
+ * that is not applied is a rule every caller is shown and no request is held
+ * to, so each is derived here.
+ *
+ * A format NOT listed here throws when the schema is built, rather than being
+ * skipped: the whole point of deriving validation from the publication is that
+ * a rule cannot be advertised without being enforced, and a silent skip is how
+ * these five came to be decorative.
+ */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_TIME =
+  /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}(:\d{2})?(\.\d+)?([Zz]|[+-]\d{2}:\d{2})?$/;
+
+/** A real calendar day, so 2026-02-30 is refused rather than rolled over. */
+const isCalendarDate = (value: string): boolean => {
+  const parts = value.split('-').map((part) => Number(part));
+  const parsed = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  return (
+    parsed.getUTCFullYear() === parts[0] &&
+    parsed.getUTCMonth() === parts[1] - 1 &&
+    parsed.getUTCDate() === parts[2]
+  );
+};
+
+const FORMAT_CHECKS: Record<string, (value: string) => boolean> = {
+  date: (value) => DATE_ONLY.test(value) && isCalendarDate(value),
+  'date-time': (value) =>
+    DATE_TIME.test(value) && !Number.isNaN(Date.parse(value)),
+};
 
 const union = (options: z.ZodTypeAny[]): z.ZodTypeAny =>
   z.union(options as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
@@ -69,6 +107,24 @@ const scalar = (node: JsonSchemaNode, type: string): z.ZodTypeAny => {
           { message: `must match ${node.pattern}` }
         );
       }
+      if (typeof node.format === 'string') {
+        const check = FORMAT_CHECKS[node.format];
+        if (check === undefined)
+          throw new Error(
+            `schema-from-definition: published format "${node.format}" has no check; add one rather than publishing a rule nothing applies`
+          );
+        // Same bounded run as a published `pattern`: both compile a literal
+        // regex here and test it against caller text.
+        return s.refine(
+          (value) => {
+            const started = Date.now();
+            const ok = check(value);
+            if (Date.now() - started > PATTERN_TIMEOUT_MS) return false;
+            return ok;
+          },
+          { message: `must be a valid ${node.format}` }
+        );
+      }
       return s;
     }
     case 'number':
@@ -76,6 +132,18 @@ const scalar = (node: JsonSchemaNode, type: string): z.ZodTypeAny => {
       let n = type === 'integer' ? z.number().int() : z.number();
       if (typeof node.minimum === 'number') n = n.min(node.minimum);
       if (typeof node.maximum === 'number') n = n.max(node.maximum);
+      /*
+       * The exclusive bounds, which this deriver used to skip. A skipped
+       * keyword is worse than an absent one: the definition advertises a rule,
+       * tools/list serves it, and nothing holds the request to it -- the exact
+       * drift that deleting the hand-written schema layer was meant to end.
+       * published-schema-keywords-are-derived.test.ts now fails on any
+       * keyword appearing in a definition that this file does not read.
+       */
+      if (typeof node.exclusiveMinimum === 'number')
+        n = n.gt(node.exclusiveMinimum);
+      if (typeof node.exclusiveMaximum === 'number')
+        n = n.lt(node.exclusiveMaximum);
       return n;
     }
     case 'boolean':
