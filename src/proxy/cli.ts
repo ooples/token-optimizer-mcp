@@ -224,7 +224,12 @@ export async function run(argv: readonly string[]): Promise<number> {
     // accident and not notice.
     (captureDir() ? `${captureNotice(captureDir() ?? '')}\n` : '') +
       `token-optimizer proxy listening on ${url}, forwarding to ` +
-      `${args.upstream || process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM || DEFAULT_UPSTREAM}\n`
+      `${args.upstream || process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM || DEFAULT_UPSTREAM}` +
+      // NAMED HERE because whoever reads this line is the one reader who will
+      // later want it: a proxy that has just started saves nothing yet, and the
+      // question "did that actually do anything" arrives a few turns later with
+      // nothing on screen to answer it.
+      `\nask what it did: token-optimizer-inspect\n`
   );
 
   await stopped;

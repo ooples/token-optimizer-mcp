@@ -53,8 +53,13 @@ import {
   accountingPath,
   appendRecord,
   tapUsage,
+  type AccountingRecord,
   type CompressionFacts,
 } from './accounting.js';
+import {
+  createTransformationLog,
+  type TransformationLog,
+} from './transformations.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import { serialiseKeepingPrefix } from './cached-prefix.js';
 import { record, libraryVersion } from '../telemetry/recorder.js';
@@ -1106,7 +1111,8 @@ function forward(
   res: ServerResponse,
   body: Buffer,
   facts?: CompressionFacts,
-  transformMs = 0
+  transformMs = 0,
+  observe?: (entry: AccountingRecord) => void
 ): void {
   const path = requestPath(req.url);
   if (path === null) {
@@ -1213,8 +1219,17 @@ function forward(
       // listener does not consume a stream in flowing mode, so every byte still
       // reaches `pipe` unchanged. Registered first so no chunk can be missed by
       // a listener attached after delivery has already begun.
-      const ledger = facts ? accountingPath() : null;
-      if (ledger && facts) {
+      //
+      // THE TAP IS NO LONGER CONDITIONAL ON A LEDGER PATH, and that costs one
+      // decompress of the RESPONSE per request where it used to cost none. It
+      // is the cheap side of the exchange -- a response carries output tokens,
+      // a request carries the whole conversation, so this decodes the small
+      // half of what the process is already streaming -- and it buys the one
+      // column an operator actually wants: what the provider billed for the
+      // request we had just rewritten. Recording the rewrite without the bill
+      // would have been the half-feature, measurable only by whoever had
+      // thought to set an environment variable before the interesting request.
+      if (facts && observe) {
         // THE ENCODING HAS TO BE HANDED OVER, and forgetting to was why the
         // ledger still recorded no usage after the decoder was written: the
         // parameter existed, the call site never passed it, and every test fed
@@ -1223,7 +1238,7 @@ function forward(
         tapUsage(
           upstreamRes,
           (usage) => {
-            appendRecord(ledger, {
+            observe({
               ts: new Date().toISOString(),
               path: requestPath(req.url) ?? '/',
               status: upstreamRes.statusCode || 0,
@@ -1254,10 +1269,9 @@ function forward(
   upstreamReq.on('error', (error) => {
     // A connection failure has no response stream for tapUsage to observe.
     // Keep the attempted request in the ledger with unknown usage, never zero.
-    const ledger = facts ? accountingPath() : null;
-    if (!receivedResponse && ledger && facts) {
+    if (!receivedResponse && facts && observe) {
       receivedResponse = true;
-      appendRecord(ledger, {
+      observe({
         ts: new Date().toISOString(),
         path: requestPath(req.url) ?? '/',
         status: 0,
@@ -1279,10 +1293,17 @@ function forward(
   upstreamReq.end(body);
 }
 
-/** Starts the proxy. Resolves once it is listening. */
+/**
+ * Starts the proxy. Resolves once it is listening.
+ *
+ * The returned `transformations` log is this listener's own window on what it
+ * has done -- see `transformations.ts` for why it is per listener and why it
+ * holds no payload. A caller that throws the handle away loses only the
+ * ability to answer questions about itself.
+ */
 export async function startProxy(
   options: ProxyOptions = {}
-): Promise<{ server: Server; port: number }> {
+): Promise<{ server: Server; port: number; transformations: TransformationLog }> {
   const upstream = options.upstream || UPSTREAM();
   if (!upstreamIsSafe(upstream)) {
     // FAIL LOUDLY HERE, uniquely in this file. Everything else in the proxy
@@ -1295,6 +1316,23 @@ export async function startProxy(
         'an upstream must be https, or http on loopback'
     );
   }
+  /*
+   * THE RING IS ALWAYS ON; THE LEDGER IS STILL OPT-IN. These are two different
+   * promises and they keep their own shapes: the ring is bounded, in memory,
+   * payload-free and dies with the process, so it needs no consent; the ledger
+   * writes to a path the operator chose, so it still needs one.
+   *
+   * `accountingPath()` is read per record rather than once here, which is what
+   * the code it replaced did too. A supervised proxy outlives the shell that
+   * started it, and re-reading means an operator who exports the variable and
+   * restarts nothing is not told, wrongly, that the ledger is on.
+   */
+  const transformations = createTransformationLog();
+  const observe = (entry: AccountingRecord): void => {
+    transformations.record(entry);
+    const ledger = accountingPath();
+    if (ledger) appendRecord(ledger, entry);
+  };
   // ONE DIRECTORY PER PROXY, because shutdown deletes it. A shared root would mean the
   // first proxy to stop wiping the spills of every other one still running -- and a
   // spill path is a live reference the agent may still follow with `Read`. The random
@@ -1505,7 +1543,8 @@ export async function startProxy(
         res,
         next,
         summary,
-        performance.now() - transformStarted
+        performance.now() - transformStarted,
+        observe
       );
     })();
   });
@@ -1533,7 +1572,7 @@ export async function startProxy(
     server.listen(options.port ?? 0, HOST, () => {
       const address = server.address();
       const port = typeof address === 'object' && address ? address.port : 0;
-      resolve({ server, port });
+      resolve({ server, port, transformations });
     });
   });
 }

@@ -39,6 +39,8 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startProxy } from './server.js';
+import type { TransformationLog } from './transformations.js';
+import type { AccountingRecord } from './accounting.js';
 
 /** Where the supervisor records what it is serving, for callers and for the doctor. */
 export function supervisorStateFile(
@@ -346,6 +348,41 @@ export async function supervisorHealth(
     : null;
 }
 
+/** One listener's window on what it did, as the control endpoint reports it. */
+export interface TransformationWindow {
+  readonly port: number;
+  readonly upstream?: string;
+  readonly project?: string;
+  readonly held: number;
+  readonly dropped: number;
+  readonly records: readonly AccountingRecord[];
+}
+
+/**
+ * What the running proxies recently did, or null when nothing is listening.
+ *
+ * NULL IS A REAL ANSWER HERE, not an error to be papered over: no supervisor
+ * means no transformations, and the caller has something specific to say about
+ * that -- which is why this returns the same null `supervisorHealth` does
+ * rather than throwing or inventing an empty window.
+ */
+export async function supervisorTransformations(
+  env: NodeJS.ProcessEnv = process.env,
+  options: { readonly last?: number; readonly port?: number } = {}
+): Promise<readonly TransformationWindow[] | null> {
+  const query = new URLSearchParams();
+  if (options.last !== undefined) query.set('last', String(options.last));
+  if (options.port !== undefined) query.set('port', String(options.port));
+  const suffix = query.size > 0 ? `?${query.toString()}` : '';
+  const reply = await control<{
+    ok: true;
+    windows: TransformationWindow[];
+  }>(`/__token-optimizer/transformations${suffix}`, undefined, env);
+  return reply?.ok === true && Array.isArray(reply.windows)
+    ? reply.windows
+    : null;
+}
+
 /**
  * Serve the control API and the per-upstream proxies until the process is stopped.
  *
@@ -378,6 +415,16 @@ export async function runSupervisor(
   // Held so shutdown can close them. Without this the listeners outlive every caller: a test run
   // never exits, and a supervisor asked to stop keeps the ports bound.
   const listeners = new Set<Server>();
+  /*
+   * Each listener's own transformation window, keyed by the port it is reachable on.
+   *
+   * KEYED BY PORT RATHER THAN KEPT ON THE ROUTE, because a route is published to the state
+   * file as JSON and a log is a set of closures -- putting one on the other would either
+   * serialise to `{}` or have to be stripped on every publish. The port is already in the
+   * route, so a reader can line the two up, and it is the only identifier a caller passing
+   * `--port` has to hand.
+   */
+  const windows = new Map<number, TransformationLog>();
   // Why the last publish did not land, or '' while the state file is current.
   let unpublished = '';
   /**
@@ -454,7 +501,7 @@ export async function runSupervisor(
           (derived === null && (savedPort !== undefined || waiting.has(key)))
         )
           return null;
-        const { server: listener, port } = await startProxy({
+        const { server: listener, port, transformations } = await startProxy({
           upstream,
           port: derived ?? 0,
           // THE PROJECT IS THE CALLER'S, OR THERE IS NONE.
@@ -472,6 +519,7 @@ export async function runSupervisor(
           ...(project ? { projectRoot: project } : { knowledge: false }),
         });
         listeners.add(listener);
+        windows.set(port, transformations);
         const route: SupervisorRoute = {
           upstream,
           url: `http://127.0.0.1:${port}`,
@@ -515,6 +563,47 @@ export async function runSupervisor(
           // and a daemon with stdio ignored has nowhere else to say it.
           ...(unpublished ? { unpublished } : {}),
         });
+      }
+      if (path === '/__token-optimizer/transformations') {
+        /*
+         * WHAT THE PROXY DID, read back out of the listeners that did it.
+         *
+         * GET AND LOOPBACK-ONLY, like `/health` beside it, and for the same reason it needs
+         * no further protection: every field here is a count, a duration, a status, a
+         * fixed-vocabulary reason or a tool name. There is no conversation content in a
+         * transformation record -- see the header of `transformations.ts` -- so this is not
+         * a hole in the promise `server.ts` makes about payloads.
+         *
+         * `last` is applied PER WINDOW rather than across all of them, because the
+         * supervisor cannot order two listeners' records without comparing timestamps, and
+         * doing that here would mean deciding, on behalf of a caller who may want them
+         * grouped, that they should be interleaved. The caller merges; this reports.
+         */
+        const query = new URLSearchParams((req.url || '').split('?')[1] ?? '');
+        const asked = Number.parseInt(query.get('last') ?? '', 10);
+        const last = Number.isSafeInteger(asked) && asked > 0 ? asked : undefined;
+        const wanted = query.get('port');
+        const only =
+          wanted === null ? null : Number.parseInt(wanted, 10);
+        if (only !== null && !Number.isSafeInteger(only))
+          return reply(400, { error: 'port must be a number' });
+        const byPort = new Map(
+          [...routes.values()].map((route) => [route.port, route])
+        );
+        const windowsOut = [...windows.entries()]
+          .filter(([port]) => only === null || port === only)
+          .map(([port, log]) => {
+            const route = byPort.get(port);
+            return {
+              port,
+              ...(route ? { upstream: route.upstream } : {}),
+              ...(route?.project ? { project: route.project } : {}),
+              held: log.size(),
+              dropped: log.dropped(),
+              records: log.recent(last),
+            };
+          });
+        return reply(200, { ok: true, windows: windowsOut });
       }
       if (path === '/__token-optimizer/route' && req.method === 'POST') {
         // A PAGE IN A BROWSER CAN POST HERE WITHOUT CORS PERMISSION. `text/plain` is a simple
@@ -659,6 +748,7 @@ export async function runSupervisor(
     await Promise.allSettled(starting.values());
     const all = [server, ...listeners];
     listeners.clear();
+    windows.clear();
     routes.clear();
     await Promise.all(
       all.map(

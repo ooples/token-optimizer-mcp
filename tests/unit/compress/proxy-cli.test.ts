@@ -241,6 +241,27 @@ describe('the proxy command-line entrypoint', () => {
     expect(stderr()).toMatch(/\/v1\/messages \d+B -> \d+B/);
   });
 
+  it('names the command that answers what it did', async () => {
+    // THE ONE READER WHO NEEDS IT. Every number `token-optimizer-inspect` prints
+    // was already being computed per request; without a pointer here, finding
+    // the command requires knowing it exists, which is the whole problem the
+    // command was built to fix.
+    const target = await upstream();
+    const { child, url, stderr } = await start(['--upstream', target.url]);
+    running.push(child);
+
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    // `start` resolves on the first stdout line, and the banner goes to the
+    // OTHER pipe -- so wait for it rather than racing two streams.
+    for (let waited = 0; waited < 40 && stderr() === ''; waited++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(stderr()).toContain('token-optimizer-inspect');
+    // Positive control on the line it was appended to: a botched concatenation
+    // could swallow the upstream the operator actually asked about.
+    expect(stderr()).toContain(target.url);
+  });
+
   it('exits on SIGTERM rather than outliving the launcher', async () => {
     const target = await upstream();
     const { child } = await start(['--upstream', target.url, '--quiet']);
