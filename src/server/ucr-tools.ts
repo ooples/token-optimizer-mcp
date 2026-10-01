@@ -428,6 +428,18 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
         persisted: false,
       };
     }
+    /*
+     * The record path is reached by falling past verify-evidence, so a value
+     * the schema publishes but nothing here handles would have been recorded
+     * as a `record` silently. Naming the operation makes the dispatch match
+     * the published enum member for member, which is what the published-
+     * operations check can read.
+     */
+    if (args.operation !== 'record') {
+      throw new Error(
+        `cognition_record: unknown operation ${String(args.operation)}`
+      );
+    }
     if (!args.kind || !args.semanticObject) {
       throw new Error(
         'cognition_record operation=record requires kind and semanticObject'
@@ -502,6 +514,11 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
         })
       );
       return { created: true, checkpoint };
+    }
+    if (args.operation !== 'restore') {
+      throw new Error(
+        `checkpoint_handoff: unknown operation ${String(args.operation)}`
+      );
     }
     return ucr.restoreCheckpoint(args.checkpoint, args.currentState || {}, {
       consumer: args.consumer || identity().agentId,
