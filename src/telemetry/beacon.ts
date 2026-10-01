@@ -51,17 +51,22 @@ export function eventFromLine(line: string): TelemetryEvent | null {
   } catch {
     return null;
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    return null;
   const row = parsed as Record<string, unknown>;
   const str = (key: string): string | null =>
-    typeof row[key] === 'string' && row[key] !== '' ? (row[key] as string) : null;
+    typeof row[key] === 'string' && row[key] !== ''
+      ? (row[key] as string)
+      : null;
   const eventType = str('event_type');
   const machine = str('machine_id_hash');
   const version = str('library_version');
   const at = str('timestamp_utc');
   if (!eventType || !machine || !version || !at) return null;
   const properties =
-    row.properties && typeof row.properties === 'object' && !Array.isArray(row.properties)
+    row.properties &&
+    typeof row.properties === 'object' &&
+    !Array.isArray(row.properties)
       ? (row.properties as Record<string, unknown>)
       : {};
   return {

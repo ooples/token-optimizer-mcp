@@ -84,7 +84,11 @@ export async function latestVersion(
   const explicitlyOff = (env.TOKEN_OPTIMIZER_UPDATE_CHECK ?? '')
     .trim()
     .toLowerCase();
-  if (explicitlyOff === '0' || explicitlyOff === 'off' || explicitlyOff === 'false')
+  if (
+    explicitlyOff === '0' ||
+    explicitlyOff === 'off' ||
+    explicitlyOff === 'false'
+  )
     return { refused: 'the update check is disabled' };
 
   const get = options.fetcher ?? fetch;
@@ -94,7 +98,8 @@ export async function latestVersion(
 
       signal: AbortSignal.timeout(options.timeoutMs ?? REGISTRY_TIMEOUT_MS),
     });
-    if (!response.ok) return { refused: `the registry answered ${response.status}` };
+    if (!response.ok)
+      return { refused: `the registry answered ${response.status}` };
     const parsed: unknown = await response.json();
     const version =
       typeof parsed === 'object' && parsed !== null
@@ -118,7 +123,10 @@ function parseVersion(
 ): { readonly numbers: number[]; readonly pre: string[] } | null {
   const [core, ...rest] = value.split('+')[0].split('-');
   const numbers = core.split('.').map((part) => Number(part));
-  if (numbers.length !== 3 || numbers.some((n) => !Number.isInteger(n) || n < 0))
+  if (
+    numbers.length !== 3 ||
+    numbers.some((n) => !Number.isInteger(n) || n < 0)
+  )
     return null;
   const pre = rest.join('-');
   return { numbers, pre: pre.length === 0 ? [] : pre.split('.') };
@@ -136,7 +144,8 @@ export function compareVersions(left: string, right: string): number | null {
   const b = parseVersion(right);
   if (a === null || b === null) return null;
   for (let i = 0; i < 3; i += 1)
-    if (a.numbers[i] !== b.numbers[i]) return a.numbers[i] < b.numbers[i] ? -1 : 1;
+    if (a.numbers[i] !== b.numbers[i])
+      return a.numbers[i] < b.numbers[i] ? -1 : 1;
   // A prerelease sorts BEFORE the release it leads to, so 7.4.0-rc.1 < 7.4.0.
   // Getting this backwards would tell someone on a release candidate that they
   // are ahead of the release that supersedes them.

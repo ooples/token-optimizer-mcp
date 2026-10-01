@@ -260,10 +260,7 @@ function movable(text: string, ctx: EngineContext): boolean {
 }
 
 /** The block moved out whole, or null when there is nowhere to put it. */
-function moveOut(
-  text: string,
-  ctx: EngineContext
-): CompressionResult | null {
+function moveOut(text: string, ctx: EngineContext): CompressionResult | null {
   // A SINK THAT FAILED IS NOT A PATH. `spillFor` normalises the proxy's empty
   // string to null, and without somewhere to put the block the honest answer is
   // whatever the engine managed, however modest it was.
@@ -315,10 +312,7 @@ function substitute(
  * line break, so it has nothing to declare -- running it there turned a good
  * compression into an untouched block. It belongs above this, once.
  */
-function routed(
-  text: string,
-  ctx: EngineContext = {}
-): CompressionResult {
+function routed(text: string, ctx: EngineContext = {}): CompressionResult {
   const engine = engineFor(text, ctx);
   // RESOLVED ONCE, HERE. An engine reading `ctx.tuning?.keepRows ?? 3`
   // would put the default in two places, and the second copy is the one

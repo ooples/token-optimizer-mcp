@@ -34,10 +34,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import {
-  noteToolCall,
-  flushToolRollup,
-} from '../telemetry/tool-rollup.js';
+import { noteToolCall, flushToolRollup } from '../telemetry/tool-rollup.js';
 import { runUcrTool, UCR_TOOL_DEFINITIONS } from './ucr-tools.js';
 
 import { CacheEngine } from '../core/cache-engine.js';
@@ -1060,21 +1057,19 @@ async function handleToolCall(request: {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: true,
-                    key,
-                    originalTokens: originalCount.tokens,
-                    compressedTokens: originalCount.tokens,
-                    tokensSaved: 0,
-                    percentSaved: 0,
-                    originalSize,
-                    compressedSize: originalSize,
-                    cached: true,
-                    compressionSkipped: true,
-                    reason: `File too small (${originalSize} bytes < ${COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD} bytes threshold)`,
-                  }
-                ),
+                text: JSON.stringify({
+                  success: true,
+                  key,
+                  originalTokens: originalCount.tokens,
+                  compressedTokens: originalCount.tokens,
+                  tokensSaved: 0,
+                  percentSaved: 0,
+                  originalSize,
+                  compressedSize: originalSize,
+                  cached: true,
+                  compressionSkipped: true,
+                  reason: `File too small (${originalSize} bytes < ${COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD} bytes threshold)`,
+                }),
               },
             ],
           };
@@ -1099,21 +1094,19 @@ async function handleToolCall(request: {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: true,
-                    key,
-                    originalTokens: originalCount.tokens,
-                    compressedTokens: originalCount.tokens,
-                    tokensSaved: 0,
-                    percentSaved: 0,
-                    originalSize,
-                    compressedSize: originalSize,
-                    cached: true,
-                    compressionSkipped: true,
-                    reason: `Compression would increase tokens (${originalCount.tokens} → ${compressedCount.tokens})`,
-                  }
-                ),
+                text: JSON.stringify({
+                  success: true,
+                  key,
+                  originalTokens: originalCount.tokens,
+                  compressedTokens: originalCount.tokens,
+                  tokensSaved: 0,
+                  percentSaved: 0,
+                  originalSize,
+                  compressedSize: originalSize,
+                  cached: true,
+                  compressionSkipped: true,
+                  reason: `Compression would increase tokens (${originalCount.tokens} → ${compressedCount.tokens})`,
+                }),
               },
             ],
           };
@@ -1140,20 +1133,18 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
-                  success: true,
-                  key,
-                  originalTokens: originalCount.tokens,
-                  compressedTokens: compressedCount.tokens,
-                  tokensSaved: originalCount.tokens - compressedCount.tokens,
-                  percentSaved: compressionResult.percentSaved,
-                  originalSize: compressionResult.originalSize,
-                  compressedSize: compressionResult.compressedSize,
-                  cached: true,
-                  compressionUsed: true,
-                }
-              ),
+              text: JSON.stringify({
+                success: true,
+                key,
+                originalTokens: originalCount.tokens,
+                compressedTokens: compressedCount.tokens,
+                tokensSaved: originalCount.tokens - compressedCount.tokens,
+                percentSaved: compressionResult.percentSaved,
+                originalSize: compressionResult.originalSize,
+                compressedSize: compressionResult.compressedSize,
+                cached: true,
+                compressionUsed: true,
+              }),
             },
           ],
         };
@@ -1238,9 +1229,10 @@ async function handleToolCall(request: {
               },
               {
                 type: 'text',
-                text: JSON.stringify(
-                  { ...result, model: modelName ?? counter.model }
-                ),
+                text: JSON.stringify({
+                  ...result,
+                  model: modelName ?? counter.model,
+                }),
               },
             ],
           };
@@ -1271,20 +1263,18 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
-                  ...result,
-                  originalTokens,
-                  compressedTokens,
-                  increasesTokens,
-                  ...(increasesTokens
-                    ? {
-                        warning:
-                          'Base64 output has MORE LLM tokens than the input. This tool reduces BYTES for at-rest storage/caching; do NOT inject the result into a model context expecting token savings (use optimize_text with a cache key for that).',
-                      }
-                    : {}),
-                }
-              ),
+              text: JSON.stringify({
+                ...result,
+                originalTokens,
+                compressedTokens,
+                increasesTokens,
+                ...(increasesTokens
+                  ? {
+                      warning:
+                        'Base64 output has MORE LLM tokens than the input. This tool reduces BYTES for at-rest storage/caching; do NOT inject the result into a model context expecting token savings (use optimize_text with a cache key for that).',
+                    }
+                  : {}),
+              }),
             },
           ],
         };
@@ -1379,31 +1369,29 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
-                  tokens: {
-                    current: tokenResult.tokens,
-                    afterCompression: compressedTokens.tokens,
-                    saved: tokenResult.tokens - compressedTokens.tokens,
-                    percentSaved:
-                      ((tokenResult.tokens - compressedTokens.tokens) /
-                        tokenResult.tokens) *
-                      100,
-                  },
-                  size: {
-                    current: compStats.uncompressed,
-                    compressed: compStats.compressed,
-                    ratio: compStats.ratio,
-                    percentSaved: compStats.percentSaved,
-                  },
-                  recommendations: {
-                    shouldCompress: compStats.recommended,
-                    reason: compStats.recommended
-                      ? 'Compression will provide significant token savings'
-                      : 'Text is too small or compression benefit is minimal',
-                  },
-                }
-              ),
+              text: JSON.stringify({
+                tokens: {
+                  current: tokenResult.tokens,
+                  afterCompression: compressedTokens.tokens,
+                  saved: tokenResult.tokens - compressedTokens.tokens,
+                  percentSaved:
+                    ((tokenResult.tokens - compressedTokens.tokens) /
+                      tokenResult.tokens) *
+                    100,
+                },
+                size: {
+                  current: compStats.uncompressed,
+                  compressed: compStats.compressed,
+                  ratio: compStats.ratio,
+                  percentSaved: compStats.percentSaved,
+                },
+                recommendations: {
+                  shouldCompress: compStats.recommended,
+                  reason: compStats.recommended
+                    ? 'Compression will provide significant token savings'
+                    : 'Text is too small or compression benefit is minimal',
+                },
+              }),
             },
           ],
         };
@@ -1508,45 +1496,43 @@ async function handleToolCall(request: {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: true,
-                    sessionId: targetSessionId,
-                    sessionInfo: {
-                      // Taken from the log itself rather than from
-                      // current-session.txt, which only ever describes the
-                      // session running right now and says nothing about a
-                      // past one the caller asked about by id.
-                      startTime: operations[0]?.timestamp ?? '',
-                      lastActivity:
-                        operations[operations.length - 1]?.timestamp ?? '',
-                      totalOperations: operations.length,
-                    },
-                    tokens: {
-                      total: totalTokens,
-                      systemReminders: systemReminderTokens,
-                      tools: toolTokens,
-                      breakdown: {
-                        systemReminders: {
-                          tokens: systemReminderTokens,
-                          percent: systemReminderPercent,
-                        },
-                        tools: {
-                          tokens: toolTokens,
-                          percent: toolPercent,
-                        },
+                text: JSON.stringify({
+                  success: true,
+                  sessionId: targetSessionId,
+                  sessionInfo: {
+                    // Taken from the log itself rather than from
+                    // current-session.txt, which only ever describes the
+                    // session running right now and says nothing about a
+                    // past one the caller asked about by id.
+                    startTime: operations[0]?.timestamp ?? '',
+                    lastActivity:
+                      operations[operations.length - 1]?.timestamp ?? '',
+                    totalOperations: operations.length,
+                  },
+                  tokens: {
+                    total: totalTokens,
+                    systemReminders: systemReminderTokens,
+                    tools: toolTokens,
+                    breakdown: {
+                      systemReminders: {
+                        tokens: systemReminderTokens,
+                        percent: systemReminderPercent,
+                      },
+                      tools: {
+                        tokens: toolTokens,
+                        percent: toolPercent,
                       },
                     },
-                    operations: {
-                      total: operations.length,
-                      byTool: toolBreakdown,
-                    },
-                    tracking: {
-                      method: 'tiktoken-based (accurate)',
-                      note: 'System reminders tracked with tiktoken via Node.js helper, tool costs use fixed estimates',
-                    },
-                  }
-                ),
+                  },
+                  operations: {
+                    total: operations.length,
+                    byTool: toolBreakdown,
+                  },
+                  tracking: {
+                    method: 'tiktoken-based (accurate)',
+                    note: 'System reminders tracked with tiktoken via Node.js helper, tool costs use fixed estimates',
+                  },
+                }),
               },
             ],
           };
@@ -1744,24 +1730,22 @@ async function handleToolCall(request: {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: true,
-                    sessionId: targetSessionId,
-                    operationsAnalyzed: operations.length,
-                    operationsCompressed,
-                    tokens: {
-                      before: originalTokens,
-                      after: compressedTokens,
-                      saved: tokensSaved,
-                      percentSaved: percentSaved,
-                    },
-                    security: {
-                      pathsRejected: debugInfo.securityRejected,
-                      secureBaseDir: secureBaseDir,
-                    },
-                  }
-                ),
+                text: JSON.stringify({
+                  success: true,
+                  sessionId: targetSessionId,
+                  operationsAnalyzed: operations.length,
+                  operationsCompressed,
+                  tokens: {
+                    before: originalTokens,
+                    after: compressedTokens,
+                    saved: tokensSaved,
+                    percentSaved: percentSaved,
+                  },
+                  security: {
+                    pathsRejected: debugInfo.securityRejected,
+                    secureBaseDir: secureBaseDir,
+                  },
+                }),
               },
             ],
           };
@@ -3026,12 +3010,7 @@ async function observeMcpToolCall<T>(
  */
 function countToolCall(toolName: string, elapsedMs: number, ok: boolean): void {
   try {
-    noteToolCall(
-      toolName,
-      elapsedMs,
-      ok,
-      ADVERTISED_TOOL_NAMES.has(toolName)
-    );
+    noteToolCall(toolName, elapsedMs, ok, ADVERTISED_TOOL_NAMES.has(toolName));
   } catch {
     /* Optional telemetry cannot fail a tool call. */
   }
@@ -3244,7 +3223,6 @@ async function main() {
       /* Optional telemetry cannot fail MCP startup. */
     }
   })();
-
 
   // All termination paths (SIGINT/SIGTERM/SIGHUP + stdin end/close/error) run
   // through one guarded shutdown. See ./lifecycle.ts for the full rationale

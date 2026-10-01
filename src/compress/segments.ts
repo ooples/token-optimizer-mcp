@@ -55,7 +55,8 @@ interface Segmentation {
 
 function segment(text: string): Segmentation {
   const byHeading = text.split(HEADING);
-  if (byHeading.length >= MIN_SEGMENTS) return { parts: byHeading, exact: true };
+  if (byHeading.length >= MIN_SEGMENTS)
+    return { parts: byHeading, exact: true };
   return { parts: text.split(PARAGRAPH), exact: false };
 }
 
@@ -81,7 +82,9 @@ export function encodeOrder(order: readonly number[]): string {
   let start = 0;
   for (let i = 1; i <= order.length; i++) {
     if (i === order.length || order[i] !== order[i - 1] + 1) {
-      runs.push(i - start > 1 ? `${order[start]}-${order[i - 1]}` : `${order[start]}`);
+      runs.push(
+        i - start > 1 ? `${order[start]}-${order[i - 1]}` : `${order[start]}`
+      );
       start = i;
     }
   }
@@ -179,7 +182,8 @@ export function foldRepeatedSegments(
   if (exact) {
     const note = `\n[... ${folded} repeated sections folded; each byte-identical to one above; order: ${encodeOrder(order)}]`;
     const out = `${kept.join(SECTION_JOIN)}${note}`;
-    if (out.length >= text.length) return { text, elisions: [], lossless: true };
+    if (out.length >= text.length)
+      return { text, elisions: [], lossless: true };
     return {
       text: out,
       elisions: [

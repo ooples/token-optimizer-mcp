@@ -916,7 +916,9 @@ export class SmartTypeScript {
 
     const buffer = JSON.stringify(toCache);
 
-    this.cache.set(key, buffer, buffer.length, buffer.length, { ttlSeconds: 300 }); // 5 minute TTL
+    this.cache.set(key, buffer, buffer.length, buffer.length, {
+      ttlSeconds: 300,
+    }); // 5 minute TTL
   }
 
   /**

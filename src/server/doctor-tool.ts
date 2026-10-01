@@ -117,10 +117,12 @@ export async function telemetrySection(
  * the registry did not answer would be the one wrong answer, since it is the
  * answer that stops a user from upgrading out of a bug.
  */
-export async function versionSection(options: {
-  readonly env?: NodeJS.ProcessEnv;
-  readonly fetcher?: typeof fetch;
-} = {}): Promise<string[]> {
+export async function versionSection(
+  options: {
+    readonly env?: NodeJS.ProcessEnv;
+    readonly fetcher?: typeof fetch;
+  } = {}
+): Promise<string[]> {
   const report = await checkForUpdate({
     env: options.env ?? process.env,
     ...(options.fetcher ? { fetcher: options.fetcher } : {}),

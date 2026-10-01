@@ -188,14 +188,28 @@ export function resolveRollout(
   if (parsed.refused !== null) refusals.push(parsed.refused);
   const channel = parsed.channel;
 
-  const requested = new Set(resolveNames(env[REQUEST_ENV], REQUEST_ENV, strict, refusals));
+  const requested = new Set(
+    resolveNames(env[REQUEST_ENV], REQUEST_ENV, strict, refusals)
+  );
   for (const extra of options.requested ?? []) {
-    for (const name of resolveNames(extra, 'requested features', strict, refusals))
+    for (const name of resolveNames(
+      extra,
+      'requested features',
+      strict,
+      refusals
+    ))
       requested.add(name);
   }
-  const switchedOff = new Set(resolveNames(env[DISABLE_ENV], DISABLE_ENV, strict, refusals));
+  const switchedOff = new Set(
+    resolveNames(env[DISABLE_ENV], DISABLE_ENV, strict, refusals)
+  );
   for (const extra of options.disabled ?? []) {
-    for (const name of resolveNames(extra, 'disabled features', strict, refusals))
+    for (const name of resolveNames(
+      extra,
+      'disabled features',
+      strict,
+      refusals
+    ))
       switchedOff.add(name);
   }
 
@@ -204,10 +218,12 @@ export function resolveRollout(
     const own = ownSwitch(spec, env, strict, refusals);
     const available = channelAllows(channel, spec.availableIn);
     const decide = (): { enabled: boolean; reason: DecisionReason } => {
-      if (own === false) return { enabled: false, reason: DecisionReason.Disabled };
+      if (own === false)
+        return { enabled: false, reason: DecisionReason.Disabled };
       if (switchedOff.has(spec.name))
         return { enabled: false, reason: DecisionReason.Disabled };
-      if (own === true) return { enabled: true, reason: DecisionReason.Explicit };
+      if (own === true)
+        return { enabled: true, reason: DecisionReason.Explicit };
       if (requested.has(spec.name)) {
         return available
           ? { enabled: true, reason: DecisionReason.Requested }
@@ -227,7 +243,11 @@ export function resolveRollout(
     // feature that should be on needs to be told where to look, not that something
     // somewhere said no. The order here mirrors decide() above exactly.
     const by =
-      own === false ? spec.env : switchedOff.has(spec.name) ? DISABLE_ENV : null;
+      own === false
+        ? spec.env
+        : switchedOff.has(spec.name)
+          ? DISABLE_ENV
+          : null;
     decisions.push({
       name: spec.name,
       enabled,

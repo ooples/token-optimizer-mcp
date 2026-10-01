@@ -1400,13 +1400,9 @@ export class SmartDependenciesTool {
     const serialized = this.serializeGraph(graph);
     const ttlSeconds = ttlDays * 24 * 60 * 60;
 
-    this.cache.set(
-      cacheKey,
-      serialized,
-      serialized.length,
-      serialized.length,
-      { ttlSeconds }
-    );
+    this.cache.set(cacheKey, serialized, serialized.length, serialized.length, {
+      ttlSeconds,
+    });
   }
 
   /**

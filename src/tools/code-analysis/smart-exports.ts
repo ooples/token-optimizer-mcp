@@ -303,7 +303,9 @@ export class SmartExportsTool {
     // the recorded saving described two things that do not exist. The baseline a
     // caller actually avoids is reading the file; the cost is this response.
     const originalTokens = this.tokenCounter.count(content).tokens;
-    const compactedTokens = this.tokenCounter.count(JSON.stringify(result)).tokens;
+    const compactedTokens = this.tokenCounter.count(
+      JSON.stringify(result)
+    ).tokens;
     const savings = measured(originalTokens, compactedTokens);
 
     // A PARTIAL USAGE SCAN IS NEVER CACHED. The key is derived from the file's
@@ -893,9 +895,10 @@ export class SmartExportsTool {
       compactedTokens,
     };
     const buffer = JSON.stringify(toCache);
-    this.cache.set(cacheKey, buffer, buffer.length, buffer.length, { ttlSeconds: 300 });
+    this.cache.set(cacheKey, buffer, buffer.length, buffer.length, {
+      ttlSeconds: 300,
+    });
   }
-
 }
 
 /**

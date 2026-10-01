@@ -330,7 +330,9 @@ export class ReportGenerator {
     // Cache the result
     const tokensUsed = this.tokenCounter.count(JSON.stringify(chart)).tokens;
     const cacheData = JSON.stringify(chart);
-    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length, { ttlSeconds: options.cacheTTL || 3600 });
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length, {
+      ttlSeconds: options.cacheTTL || 3600,
+    });
 
     return {
       success: true,
@@ -552,7 +554,9 @@ export class ReportGenerator {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    this.cache.set(cacheKey, svg, svg.length, svg.length, { ttlSeconds: options.cacheTTL || 3600 });
+    this.cache.set(cacheKey, svg, svg.length, svg.length, {
+      ttlSeconds: options.cacheTTL || 3600,
+    });
 
     return {
       success: true,
@@ -605,7 +609,9 @@ export class ReportGenerator {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    this.cache.set(cacheKey, svg, svg.length, svg.length, { ttlSeconds: options.cacheTTL || 3600 });
+    this.cache.set(cacheKey, svg, svg.length, svg.length, {
+      ttlSeconds: options.cacheTTL || 3600,
+    });
 
     return {
       success: true,
@@ -667,7 +673,9 @@ export class ReportGenerator {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    this.cache.set(cacheKey, svg, svg.length, svg.length, { ttlSeconds: options.cacheTTL || 3600 });
+    this.cache.set(cacheKey, svg, svg.length, svg.length, {
+      ttlSeconds: options.cacheTTL || 3600,
+    });
 
     return {
       success: true,
@@ -724,7 +732,9 @@ export class ReportGenerator {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    this.cache.set(cacheKey, svg, svg.length, svg.length, { ttlSeconds: options.cacheTTL || 3600 });
+    this.cache.set(cacheKey, svg, svg.length, svg.length, {
+      ttlSeconds: options.cacheTTL || 3600,
+    });
 
     return {
       success: true,
@@ -791,7 +801,9 @@ export class ReportGenerator {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(animated).tokens;
-    this.cache.set(cacheKey, animated, animated.length, animated.length, { ttlSeconds: options.cacheTTL || 1800 });
+    this.cache.set(cacheKey, animated, animated.length, animated.length, {
+      ttlSeconds: options.cacheTTL || 1800,
+    });
 
     return {
       success: true,

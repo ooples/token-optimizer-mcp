@@ -125,7 +125,9 @@ export function describeUpdate(report: UpdateReport): string[] {
   const where = describeInstallMethod(report.method);
   switch (report.state) {
     case UpdateState.Current:
-      return [`version: ${report.installed}, the published latest, from ${where}`];
+      return [
+        `version: ${report.installed}, the published latest, from ${where}`,
+      ];
     case UpdateState.Ahead:
       return [
         `version: ${report.installed}, ahead of the published ${String(report.latest)}, from ${where}`,

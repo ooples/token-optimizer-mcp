@@ -35,7 +35,13 @@
  * than instrumentation is entitled to impose. These are appends of a few hundred
  * bytes to a local file, already inside a try/catch that swallows every failure.
  * `beacon.ts`, which is async and off the hot path, uses the promise API. */
-import { appendFileSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -134,7 +140,9 @@ export function recorderLastError(): string | null {
 }
 
 /** Bytes currently held, or null when the file is absent or unreadable. */
-export function recordedBytes(env: NodeJS.ProcessEnv = process.env): number | null {
+export function recordedBytes(
+  env: NodeJS.ProcessEnv = process.env
+): number | null {
   try {
     return statSync(eventsFile(env)).size;
   } catch {

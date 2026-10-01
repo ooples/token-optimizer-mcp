@@ -210,6 +210,8 @@ export function registryDigest(): string {
   }));
   digest =
     'sha256:' +
-    createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex');
+    createHash('sha256')
+      .update(JSON.stringify(canonical), 'utf8')
+      .digest('hex');
   return digest;
 }

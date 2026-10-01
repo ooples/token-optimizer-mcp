@@ -279,9 +279,7 @@ export class SmartComplexityTool {
         fromCache: false,
         duration: Date.now() - startTime,
       },
-      functions: encodeTable(
-        functions as unknown as Record<string, unknown>[]
-      ),
+      functions: encodeTable(functions as unknown as Record<string, unknown>[]),
       recommendations,
       metrics: {
         originalTokens: 0,
@@ -738,7 +736,6 @@ export class SmartComplexityTool {
     }
     return 'low';
   }
-
 
   private async generateCacheKey(
     content: string,

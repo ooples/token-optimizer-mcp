@@ -85,8 +85,10 @@ export function detectInstallMethod(moduleUrl: string): InstallMethod {
   // `node_modules`, and the plugin surface is what upgrades it -- answering
   // `ProjectDependency` here would hand the reader an `npm install` that
   // updates a directory the plugin loader does not read.
-  if (hasRun(segments, ['.claude', 'plugins'])) return InstallMethod.ClaudePlugin;
-  if (hasRun(segments, ['claude', 'plugins'])) return InstallMethod.ClaudePlugin;
+  if (hasRun(segments, ['.claude', 'plugins']))
+    return InstallMethod.ClaudePlugin;
+  if (hasRun(segments, ['claude', 'plugins']))
+    return InstallMethod.ClaudePlugin;
 
   // `npx` unpacks into `_npx/<hash>/node_modules/...`. It is not upgraded: the
   // next invocation with `@latest` fetches a new one.

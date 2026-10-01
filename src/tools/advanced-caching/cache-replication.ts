@@ -469,7 +469,13 @@ export class CacheReplicationTool extends EventEmitter {
       // Cache result if applicable
       if (cacheKey && useCache) {
         const serialized = JSON.stringify(data);
-        this.cache.set(cacheKey, serialized, serialized.length, serialized.length, { ttlSeconds: cacheTTL });
+        this.cache.set(
+          cacheKey,
+          serialized,
+          serialized.length,
+          serialized.length,
+          { ttlSeconds: cacheTTL }
+        );
       }
 
       // Record metrics

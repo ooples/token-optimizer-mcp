@@ -92,7 +92,9 @@ export function describeRollout(snapshot: RolloutSnapshot): string[] {
         quiet.some((d) => d.defaultEnabledIn === channel)
     );
     const others =
-      quiet.length === 1 ? '1 other feature off' : `${quiet.length} other features off`;
+      quiet.length === 1
+        ? '1 other feature off'
+        : `${quiet.length} other features off`;
     const askable = quiet.filter((d) => d.defaultEnabledIn === null).length;
     const parts = [others];
     if (staging.length > 0) {

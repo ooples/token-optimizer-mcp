@@ -292,7 +292,12 @@ export function compressSearchResults(
       } else {
         out.push({ path, raw: `:${range}${marks}`, eol });
         for (const line of buffer)
-          out.push({ path: null, raw: line.text, eol: line.eol, content: true });
+          out.push({
+            path: null,
+            raw: line.text,
+            eol: line.eol,
+            content: true,
+          });
       }
     }
     path = null;

@@ -792,8 +792,18 @@ export const SESSION_HORIZON_CENSUS = Object.freeze({
   conversations: 14,
   requests: 45_042,
   /** Reads per written token, per conversation. The floor is what the bet uses. */
-  horizon: Object.freeze({ floor: 41.1, p10: 44.8, p25: 59.7, median: 69.2, pooled: 71.5 }),
-  smallestConversation: Object.freeze({ requests: 140, spanHours: 1.4, horizon: 93.8 }),
+  horizon: Object.freeze({
+    floor: 41.1,
+    p10: 44.8,
+    p25: 59.7,
+    median: 69.2,
+    pooled: 71.5,
+  }),
+  smallestConversation: Object.freeze({
+    requests: 140,
+    spanHours: 1.4,
+    horizon: 93.8,
+  }),
 });
 
 export function v1Frontier(
@@ -833,19 +843,19 @@ export function v1Frontier(
   const knowledge = options.suppressKnowledge
     ? null
     : fresh
-    ? knowledgeBlock(
-        options.findings ?? [],
-        stableContext(request),
-        options.knowledgeBudget ?? options.tuning?.knowledgeBudgetChars,
-        {
-          embeddings: options.embeddings,
-          // Passed through rather than defaulted here: only the loader knows
-          // which graph these findings came from, and a project claim served
-          // out of a shared graph is a fact about some other tree.
-          sharedGraph: options.sharedGraph === true,
-        }
-      )
-    : (decision.record.knowledge ?? null);
+      ? knowledgeBlock(
+          options.findings ?? [],
+          stableContext(request),
+          options.knowledgeBudget ?? options.tuning?.knowledgeBudgetChars,
+          {
+            embeddings: options.embeddings,
+            // Passed through rather than defaulted here: only the loader knows
+            // which graph these findings came from, and a project claim served
+            // out of a shared graph is a fact about some other tree.
+            sharedGraph: options.sharedGraph === true,
+          }
+        )
+      : (decision.record.knowledge ?? null);
 
   // RECONSIDERED EVERY TURN, because the answer changes as the conversation
   // grows. The break-even test below compares what a rewrite would remove

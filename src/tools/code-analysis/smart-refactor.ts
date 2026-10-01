@@ -282,7 +282,9 @@ export class SmartRefactorTool {
           rawSuggestions.push(...this.suggestImproveNaming(sourceFile));
           break;
         case 'reduce-complexity':
-          rawSuggestions.push(...this.suggestReduceComplexity(complexityResult));
+          rawSuggestions.push(
+            ...this.suggestReduceComplexity(complexityResult)
+          );
           break;
         case 'extract-constant':
           rawSuggestions.push(...this.suggestExtractConstant(sourceFile));
@@ -350,7 +352,9 @@ export class SmartRefactorTool {
     result.metrics.originalTokens = savings.originalTokenCount;
     result.metrics.compactedTokens = savings.tokenCount;
     result.metrics.reductionPercentage = parseFloat(
-      ((savings.tokensSaved / (savings.originalTokenCount || 1)) * 100).toFixed(2)
+      ((savings.tokensSaved / (savings.originalTokenCount || 1)) * 100).toFixed(
+        2
+      )
     );
 
     // Cache result
@@ -907,7 +911,9 @@ export class SmartRefactorTool {
   private cacheResult(key: string, output: SmartRefactorResult): void {
     const toCache = { ...output, cachedAt: Date.now() };
     const buffer = JSON.stringify(toCache);
-    this.cache.set(key, buffer, buffer.length, buffer.length, { ttlSeconds: 300 });
+    this.cache.set(key, buffer, buffer.length, buffer.length, {
+      ttlSeconds: 300,
+    });
   }
 }
 

@@ -197,7 +197,9 @@ export function expandLongRepeats(text: string): string {
         `expandLongRepeats: quote names no run above: ${found[0]}`
       );
     if (at + length > out.length)
-      throw new Error(`expandLongRepeats: run runs past its source: ${found[0]}`);
+      throw new Error(
+        `expandLongRepeats: run runs past its source: ${found[0]}`
+      );
 
     out += out.slice(at, at + length);
     read = found.index + found[0].length;
@@ -228,7 +230,8 @@ function atStringEdge(text: string, at: number): boolean {
  */
 function stringEdges(text: string): number[] {
   const at: number[] = [];
-  for (let i = 0; i < text.length; i += 1) if (atStringEdge(text, i)) at.push(i);
+  for (let i = 0; i < text.length; i += 1)
+    if (atStringEdge(text, i)) at.push(i);
   return at;
 }
 
@@ -387,11 +390,7 @@ function findRepeats(text: string, document: boolean): Repeat[] {
     const source = sourceOf(probeHash[probe / STRIDE]);
     // A HASH AGREEING IS NOT THE BYTES AGREEING. Verified before anything is
     // measured off it, so a collision costs one comparison and never a fold.
-    if (
-      source < 0 ||
-      source >= probe ||
-      !windowsAgree(text, source, probe)
-    ) {
+    if (source < 0 || source >= probe || !windowsAgree(text, source, probe)) {
       probe += STRIDE;
       continue;
     }

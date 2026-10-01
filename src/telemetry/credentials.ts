@@ -43,9 +43,10 @@ function trimmed(raw: string | undefined): string {
 
 /** Project URL: environment first, then the committed default. */
 export function beaconUrl(env: NodeJS.ProcessEnv = process.env): string {
-  return (
-    trimmed(env.TOKEN_OPTIMIZER_BEACON_URL) || URL_DEFAULT
-  ).replace(/\/+$/, '');
+  return (trimmed(env.TOKEN_OPTIMIZER_BEACON_URL) || URL_DEFAULT).replace(
+    /\/+$/,
+    ''
+  );
 }
 
 /** Anon key: environment first, then whatever the release stamped in. */

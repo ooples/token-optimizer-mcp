@@ -735,7 +735,10 @@ class SmartTsConfig {
       compact: savings.tokenCount,
       saved: savings.tokensSaved,
       savingsPercent: parseFloat(
-        ((savings.tokensSaved / (savings.originalTokenCount || 1)) * 100).toFixed(2)
+        (
+          (savings.tokensSaved / (savings.originalTokenCount || 1)) *
+          100
+        ).toFixed(2)
       ),
     };
 

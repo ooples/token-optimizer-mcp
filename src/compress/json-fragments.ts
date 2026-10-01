@@ -708,7 +708,12 @@ function templateOf(group: RecordParts[]): Templated {
     const run = runOfCells(cut.map((row) => row[piece ?? 0]));
     if (run) runs.set(slot, run);
   });
-  return { template, columns, runs, dicts: dictsOf(cellColumns(group, { columns, runs })) };
+  return {
+    template,
+    columns,
+    runs,
+    dicts: dictsOf(cellColumns(group, { columns, runs })),
+  };
 }
 
 /**
@@ -925,8 +930,8 @@ function byPositionMarker(
       const shaped = templateOf(cls.rows);
       blocks.push(
         `[rows at ${cls.at.join(',')}${slotClause(shaped.runs)}${dictClause(
-            shaped.dicts
-          )}; Template: ` +
+          shaped.dicts
+        )}; Template: ` +
           JSON.stringify(shaped.template) +
           ']\n' +
           rowLines(cls.rows, shaped) +

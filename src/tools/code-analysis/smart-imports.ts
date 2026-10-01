@@ -281,7 +281,9 @@ export class SmartImportsTool {
     // the recorded saving described two things that do not exist. The baseline a
     // caller actually avoids is reading the file; the cost is this response.
     const originalTokens = this.tokenCounter.count(content).tokens;
-    const compactedTokens = this.tokenCounter.count(JSON.stringify(result)).tokens;
+    const compactedTokens = this.tokenCounter.count(
+      JSON.stringify(result)
+    ).tokens;
     const savings = measured(originalTokens, compactedTokens);
 
     // Cache result
@@ -911,9 +913,10 @@ export class SmartImportsTool {
       compactedTokens,
     };
     const buffer = JSON.stringify(toCache);
-    this.cache.set(cacheKey, buffer, buffer.length, buffer.length, { ttlSeconds: 300 });
+    this.cache.set(cacheKey, buffer, buffer.length, buffer.length, {
+      ttlSeconds: 300,
+    });
   }
-
 }
 
 /**

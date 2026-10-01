@@ -760,7 +760,10 @@ function compressBodyOnce(
   const compact = JSON.stringify(result.request);
   const spliced = serialiseKeepingPrefix(
     text,
-    result.request as unknown as { messages?: unknown[] } & Record<string, unknown>
+    result.request as unknown as { messages?: unknown[] } & Record<
+      string,
+      unknown
+    >
   );
   const next = Buffer.from(spliced ?? compact, 'utf8');
   // Never send more than we were given -- UNLESS a knowledge block was
@@ -856,7 +859,9 @@ function compressBodyOnce(
  * which is a surprising thing for something called a compressing proxy to do,
  * and a thing anyone measuring us should be able to turn off and compare.
  */
-export function netSavingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+export function netSavingEnabled(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
   return featureEnabled(FeatureName.NetSavingGuard, env);
 }
 
@@ -910,7 +915,9 @@ export function compressBody(
   // STILL THE SMALLER OF THE TWO, not unconditionally the second. Dropping the
   // block is meant to remove the overshoot, and if it somehow does not, the
   // first result was the better one and the guard should not make things worse.
-  return withoutKnowledge.body.length <= first.body.length ? withoutKnowledge : first;
+  return withoutKnowledge.body.length <= first.body.length
+    ? withoutKnowledge
+    : first;
 }
 
 /**
@@ -954,7 +961,9 @@ export function knowledgeEnabled(env: NodeJS.ProcessEnv): boolean {
   // The proxy gate stays out of the rollout registry on purpose: whether the
   // proxy is running at all is not a feature flag, and a channel that could
   // turn it on would be a channel that starts a listener nobody asked for.
-  return proxyEnabled(env) && featureEnabled(FeatureName.KnowledgeInjection, env);
+  return (
+    proxyEnabled(env) && featureEnabled(FeatureName.KnowledgeInjection, env)
+  );
 }
 
 /**

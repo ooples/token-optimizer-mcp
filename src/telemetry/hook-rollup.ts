@@ -47,7 +47,8 @@
  * how it is tested and how the refusal above is expressed -- into a promise, for
  * no measurable gain on two operations of that size. `recorder.ts`, which owns the
  * same directory, gives the same answer for its own appends. */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';import { join } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { record, libraryVersion, telemetryDir } from './recorder.js';
@@ -58,14 +59,20 @@ import type { SafeValue } from './event.js';
 export const SNAPSHOT_EVERY_MS = 6 * 60 * 60 * 1000;
 
 /** Where the last snapshot's time is remembered. */
-export function snapshotStampFile(env: NodeJS.ProcessEnv = process.env): string {
+export function snapshotStampFile(
+  env: NodeJS.ProcessEnv = process.env
+): string {
   return join(telemetryDir(env), 'last-snapshot.json');
 }
 
 /** When the last snapshot was taken, or null if none was or the stamp is unreadable. */
-export function lastSnapshotAt(env: NodeJS.ProcessEnv = process.env): number | null {
+export function lastSnapshotAt(
+  env: NodeJS.ProcessEnv = process.env
+): number | null {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(snapshotStampFile(env), 'utf8'));
+    const parsed: unknown = JSON.parse(
+      readFileSync(snapshotStampFile(env), 'utf8')
+    );
     const at =
       parsed && typeof parsed === 'object' && !Array.isArray(parsed)
         ? (parsed as { at?: unknown }).at
@@ -102,7 +109,11 @@ export function stampSnapshot(
 ): void {
   try {
     mkdirSync(telemetryDir(env), { recursive: true });
-    writeFileSync(snapshotStampFile(env), `${JSON.stringify({ at: now })}\n`, 'utf8');
+    writeFileSync(
+      snapshotStampFile(env),
+      `${JSON.stringify({ at: now })}\n`,
+      'utf8'
+    );
   } catch {
     // The snapshot itself is already recorded. A stamp that could not be written
     // means the next boot takes another one, which the receiver sees as a second
@@ -119,7 +130,8 @@ function num(value: unknown): number | null {
 function at(row: unknown, ...path: string[]): unknown {
   let cursor: unknown = row;
   for (const key of path) {
-    if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) return undefined;
+    if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor))
+      return undefined;
     cursor = (cursor as Record<string, unknown>)[key];
   }
   return cursor;
@@ -135,7 +147,8 @@ function at(row: unknown, ...path: string[]): unknown {
 export function snapshotProperties(
   report: unknown
 ): Record<string, SafeValue> | null {
-  const substitutions = num(at(report, 'nativeOptimizer', 'substitutions')) ?? 0;
+  const substitutions =
+    num(at(report, 'nativeOptimizer', 'substitutions')) ?? 0;
   const deliveries = num(at(report, 'memoryDeliveries')) ?? 0;
   const holdouts = num(at(report, 'memoryHoldouts')) ?? 0;
   if (substitutions + deliveries + holdouts <= 0) return null;
@@ -215,7 +228,10 @@ export async function flushHookSnapshot(
     const wikiUrl = pathToFileURL(
       fileURLToPath(new URL('../../hooks-core/wiki.mjs', import.meta.url))
     ).href;
-    const [metrics, wiki] = await Promise.all([import(moduleUrl), import(wikiUrl)]);
+    const [metrics, wiki] = await Promise.all([
+      import(moduleUrl),
+      import(wikiUrl),
+    ]);
     report = metrics.report(wiki.wikiDir(root));
   } catch (err) {
     return {
@@ -228,10 +244,19 @@ export async function flushHookSnapshot(
     // STAMPED ANYWAY. Otherwise every boot on a machine that does not use the
     // graph re-reads and re-reduces the whole log to decide the same thing.
     stampSnapshot(now, env);
-    return { recorded: false, refused: 'the graph was not used in this project' };
+    return {
+      recorded: false,
+      refused: 'the graph was not used in this project',
+    };
   }
-  const event = record('hook_graph_snapshot', libraryVersion(), properties, env);
-  if (!event) return { recorded: false, refused: 'the event could not be written' };
+  const event = record(
+    'hook_graph_snapshot',
+    libraryVersion(),
+    properties,
+    env
+  );
+  if (!event)
+    return { recorded: false, refused: 'the event could not be written' };
   stampSnapshot(now, env);
   return { recorded: true, refused: null };
 }

@@ -96,7 +96,9 @@ export function encodeTable(records: Record<string, unknown>[]): Table {
   return {
     columns,
     rows: flattened.map((cells) =>
-      columns.map((path) => (cells.has(path) ? (cells.get(path) as Cell) : null))
+      columns.map((path) =>
+        cells.has(path) ? (cells.get(path) as Cell) : null
+      )
     ),
   };
 }

@@ -30,7 +30,6 @@ function isCorruptDatabaseError(err: unknown): boolean {
   );
 }
 
-
 /**
  * The cache table and its indexes. Shared by the on-disk path and the
  * in-memory fallback so a degraded cache is schema-identical to a healthy one.
@@ -551,7 +550,10 @@ export class CacheEngine {
       }
       this.stats.hits++;
       this.updateHitCount(key);
-      return { content: memValue.content, compressedSize: memValue.compressedSize };
+      return {
+        content: memValue.content,
+        compressedSize: memValue.compressedSize,
+      };
     }
 
     // Check SQLite cache
