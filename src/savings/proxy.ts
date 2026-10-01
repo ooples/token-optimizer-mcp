@@ -35,7 +35,7 @@ import {
   proxyTransportDelta,
   PROXY_SAVINGS,
 } from '../analytics/proxy-savings.js';
-import type { AccountingRecord } from '../proxy/accounting.js';
+import { accountingPath, type AccountingRecord } from '../proxy/accounting.js';
 import { looksLikeRecord } from '../inspect/ledger.js';
 import {
   UNATTRIBUTED,
@@ -291,4 +291,80 @@ export async function readProxySavings(
     aggregator.add(parsed);
   }
   return aggregator.report();
+}
+
+/**
+ * Which of the two inputs the report actually had.
+ *
+ * FOUR STATES, NOT A NULLABLE REPORT. "No proxy figures" has four different
+ * causes and three of them are actionable by the operator: the ledger was never
+ * configured (set the variable), it is configured but empty (the proxy has not
+ * run yet), or it exists and could not be read (a permission or a disk). Only
+ * the fourth is a measurement. Collapsing them into an absent report would
+ * print the same silence for all four, which is the exact defect the scope note
+ * existed to work around.
+ */
+export const PROXY_INPUT = Object.freeze({
+  NotConfigured: 'not-configured',
+  Missing: 'missing',
+  Unreadable: 'unreadable',
+  Read: 'read',
+} as const);
+
+export type ProxyInput =
+  | { readonly kind: typeof PROXY_INPUT.NotConfigured }
+  | { readonly kind: typeof PROXY_INPUT.Missing; readonly path: string }
+  | {
+      readonly kind: typeof PROXY_INPUT.Unreadable;
+      readonly path: string;
+      readonly reason: string;
+    }
+  | {
+      readonly kind: typeof PROXY_INPUT.Read;
+      readonly path: string;
+      readonly report: ProxySavingsReport;
+    };
+
+/** True for the one failure that means "configured, but nothing written yet". */
+function isMissingFile(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { readonly code?: unknown }).code === 'ENOENT'
+  );
+}
+
+/**
+ * Resolves the proxy input, reading the ledger when there is one.
+ *
+ * NEVER THROWS. A savings report whose first input read fine must still print;
+ * the proxy half degrades to a named state instead of taking the command's
+ * exit code with it. The reason text is the error's own message, which is a
+ * local path at worst -- the same class of detail `token-optimizer-inspect`
+ * already prints -- and it goes to the caller's terminal only.
+ */
+export async function loadProxyInput(
+  options: {
+    readonly env?: NodeJS.ProcessEnv;
+    readonly now?: Date;
+    readonly path?: string | null;
+  } = {}
+): Promise<ProxyInput> {
+  const path =
+    options.path === undefined
+      ? accountingPath(options.env ?? process.env)
+      : options.path;
+  if (path === null || path === '') return { kind: PROXY_INPUT.NotConfigured };
+  try {
+    const report = await readProxySavings(path, options.now ?? new Date());
+    return { kind: PROXY_INPUT.Read, path, report };
+  } catch (error) {
+    if (isMissingFile(error)) return { kind: PROXY_INPUT.Missing, path };
+    return {
+      kind: PROXY_INPUT.Unreadable,
+      path,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
 }

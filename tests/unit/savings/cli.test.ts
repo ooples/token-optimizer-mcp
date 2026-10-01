@@ -6,6 +6,12 @@
 
 import { main, parseArguments, savingsJson } from '../../../src/savings/cli.js';
 import { buildReport } from '../../../src/savings/windows.js';
+import {
+  createProxyAggregator,
+  PROXY_INPUT,
+  type ProxyInput,
+} from '../../../src/savings/proxy.js';
+import type { AccountingRecord } from '../../../src/proxy/accounting.js';
 import type { AnalyticsEntry } from '../../../src/analytics/analytics-types.js';
 
 function verified(over: Partial<AnalyticsEntry> = {}): AnalyticsEntry {
@@ -41,11 +47,47 @@ function verified(over: Partial<AnalyticsEntry> = {}): AnalyticsEntry {
   };
 }
 
+/** One proxied request that saved 750 of 1000 prompt tokens on a priced model. */
+function proxyRecord(over: Partial<AccountingRecord> = {}): AccountingRecord {
+  return {
+    ts: new Date().toISOString(),
+    method: 'POST',
+    path: '/v1/chat/completions',
+    status: 200,
+    model: 'gpt-5.6-sol',
+    beforeBytes: 4000,
+    afterBytes: 1000,
+    usage: { input_tokens: 240 },
+    tokens: {
+      measured: true,
+      beforeTokens: 1000,
+      afterTokens: 250,
+      method: 'tiktoken-gpt-4-compatible-local-estimate',
+    },
+    ...over,
+  } as AccountingRecord;
+}
+
+function proxyRead(
+  records: readonly AccountingRecord[],
+  path = '/tmp/ledger.jsonl'
+): ProxyInput {
+  const aggregator = createProxyAggregator();
+  for (const record of records) aggregator.add(record);
+  return { kind: PROXY_INPUT.Read, path, report: aggregator.report() };
+}
+
+/**
+ * THE PROXY STATE IS ALWAYS INJECTED, never taken from the environment: the
+ * host may well have `TOKEN_OPTIMIZER_PROXY_ACCOUNTING` set, and a test that
+ * read it would fold a developer's own traffic into its assertions.
+ */
 function harness(
   over: {
     entries?: readonly AnalyticsEntry[];
     fail?: Error;
     now?: Date;
+    proxy?: ProxyInput;
   } = {}
 ) {
   let text = '';
@@ -57,6 +99,7 @@ function harness(
         return over.entries ?? [];
       },
       now: () => over.now ?? new Date(),
+      proxy: async () => over.proxy ?? { kind: PROXY_INPUT.NotConfigured },
       write: (chunk: string) => {
         text += chunk;
       },
@@ -104,6 +147,24 @@ describe('parseArguments', () => {
     expect(parseArguments(['--week'])).toBe('unknown argument: --week');
   });
 
+  it('takes a proxy ledger path, and refuses the flag with no path', () => {
+    expect(parseArguments(['--proxy-ledger', 'x.jsonl'])).toMatchObject({
+      proxyLedger: 'x.jsonl',
+    });
+    expect(parseArguments(['--proxy-ledger'])).toBe(
+      '--proxy-ledger needs a path'
+    );
+    expect(parseArguments(['--proxy-ledger', '--json'])).toBe(
+      '--proxy-ledger needs a path'
+    );
+  });
+
+  it('leaves the ledger unset by default, so the environment decides', () => {
+    const parsed = parseArguments([]);
+    expect(typeof parsed).not.toBe('string');
+    expect(parsed).not.toHaveProperty('proxyLedger');
+  });
+
   it('takes --json and --help', () => {
     expect(parseArguments(['--json'])).toMatchObject({ json: true });
     expect(parseArguments(['--help'])).toMatchObject({ help: true });
@@ -134,9 +195,11 @@ describe('main', () => {
     expect(code).toBe(0);
     expect(asked).toBe(0);
     expect(text()).toContain('usage: token-optimizer-savings');
-    // The help text names the scope, so a reader learns what is NOT counted
+    // The help text names BOTH inputs, so a reader knows what is counted
     // before they run anything and misread the answer.
-    expect(text()).toContain('token-optimizer-proxy');
+    expect(text()).toContain('MCP analytics database');
+    expect(text()).toContain('TOKEN_OPTIMIZER_PROXY_ACCOUNTING');
+    expect(text()).toContain('--proxy-ledger');
   });
 
   it('names the reason when analytics cannot be read, and exits 1', async () => {
@@ -153,7 +216,7 @@ describe('main', () => {
     const { text, deps } = harness({ entries: [] });
     const code = await main([], deps);
     expect(code).toBe(0);
-    expect(text()).toContain('No verified savings recorded yet.');
+    expect(text()).toContain('No verified MCP savings recorded yet.');
     expect(text()).toContain('Nothing has been recorded');
   });
 
@@ -189,7 +252,11 @@ describe('the rendered report', () => {
     expect(out).toContain('All time');
     expect(out).toContain('claude-opus-5');
     expect(out).toContain('claude-code');
-    expect(out).toContain('token-optimizer-inspect');
+    // The inputs block replaced a note disclaiming the proxy's absence; with no
+    // ledger configured it says so, and says what to set.
+    expect(out).toContain('Inputs:');
+    expect(out).toContain('MCP tool traffic');
+    expect(out).toContain('TOKEN_OPTIMIZER_PROXY_ACCOUNTING');
   });
 
   it('honours --top across both breakdowns', async () => {
@@ -215,6 +282,8 @@ describe('the rendered report', () => {
     expect(await main(['--json'], deps)).toBe(0);
     const parsed = JSON.parse(text());
     expect(parsed.scope).toBe('mcp-tool-traffic');
+    expect(parsed.proxy.state).toBe('not-configured');
+    expect(parsed.proxy.path).toBeNull();
     expect(parsed.windows).toHaveLength(4);
     expect(parsed.windows[3].label).toBe('All time');
     expect(parsed.measurement.windows).toContain('not a partition');
@@ -246,9 +315,123 @@ describe('the rendered report', () => {
 describe('savingsJson', () => {
   it('reports the same figures the text rendering is built from', () => {
     const report = buildReport([verified()], new Date());
-    const json = savingsJson(report);
+    const json = savingsJson(report, { kind: PROXY_INPUT.NotConfigured });
     expect(json.windows).toBe(report.windows);
     expect(json.byModel).toBe(report.byModel);
     expect(json.totalEntries).toBe(1);
+  });
+});
+
+describe('the proxy as a second input', () => {
+  it('prints a proxy section with its own windows and model rows', async () => {
+    const { text, deps } = harness({
+      entries: [verified()],
+      proxy: proxyRead([proxyRecord()]),
+    });
+    expect(await main([], deps)).toBe(0);
+    const out = text();
+    expect(out).toContain('Proxy wire traffic');
+    expect(out).toContain('gpt-5.6-sol');
+    // Positive control: the MCP section is still there, so the two sections are
+    // additions to each other and not one replacing the other.
+    expect(out).toContain('MCP tool traffic');
+    expect(out).toContain('claude-opus-5');
+  });
+
+  it('prints the proxy section even when no MCP row is measurable', async () => {
+    // THE DEFECT THIS FEATURE EXISTS FOR. An install that routes everything
+    // through the proxy has no analytics rows at all, and the old command
+    // answered it with a flat "nothing recorded".
+    const { text, deps } = harness({
+      entries: [],
+      proxy: proxyRead([proxyRecord()]),
+    });
+    expect(await main([], deps)).toBe(0);
+    const out = text();
+    expect(out).toContain('No verified MCP savings recorded yet.');
+    expect(out).toContain('Proxy wire traffic');
+    expect(out).toContain('750 / 1,000');
+  });
+
+  it('names each state of the ledger it could not read', async () => {
+    const states: readonly [ProxyInput, string][] = [
+      [{ kind: PROXY_INPUT.NotConfigured }, 'not configured'],
+      [
+        { kind: PROXY_INPUT.Missing, path: '/l.jsonl' },
+        'nothing written there yet',
+      ],
+      [
+        { kind: PROXY_INPUT.Unreadable, path: '/l.jsonl', reason: 'EACCES' },
+        'could not be read: EACCES',
+      ],
+    ];
+    for (const [proxy, expected] of states) {
+      const { text, deps } = harness({ entries: [verified()], proxy });
+      expect(await main([], deps)).toBe(0);
+      expect(text()).toContain(expected);
+      expect(text()).not.toContain('Proxy wire traffic  /l.jsonl -- 1');
+    }
+    // Positive control: a ledger that WAS read reports what it held instead.
+    const { text, deps } = harness({
+      entries: [verified()],
+      proxy: proxyRead([proxyRecord()], '/l.jsonl'),
+    });
+    expect(await main([], deps)).toBe(0);
+    expect(text()).toContain('/l.jsonl -- 1 request read, 1 measurable');
+  });
+});
+
+describe('the proxy in the JSON', () => {
+  it('widens the scope and carries the proxy figures and definitions', async () => {
+    const { text, deps } = harness({
+      entries: [verified()],
+      proxy: proxyRead([proxyRecord()], '/l.jsonl'),
+    });
+    expect(await main(['--json'], deps)).toBe(0);
+    const parsed = JSON.parse(text());
+    expect(parsed.scope).toBe('mcp-tool-traffic+proxy-wire-traffic');
+    expect(parsed.proxy.state).toBe('read');
+    expect(parsed.proxy.path).toBe('/l.jsonl');
+    expect(parsed.proxy.windows[3].tokensSaved).toBe(750);
+    expect(parsed.proxy.measurement.pricing).toContain('tiered rate');
+    expect(parsed.proxy.measurement.calibration).toContain('never averaged');
+  });
+
+  it('carries the reason a ledger could not be read, and no figures', async () => {
+    const { text, deps } = harness({
+      entries: [verified()],
+      proxy: {
+        kind: PROXY_INPUT.Unreadable,
+        path: '/l.jsonl',
+        reason: 'EACCES: permission denied',
+      },
+    });
+    expect(await main(['--json'], deps)).toBe(0);
+    const parsed = JSON.parse(text());
+    expect(parsed.scope).toBe('mcp-tool-traffic');
+    expect(parsed.proxy.reason).toContain('EACCES');
+    expect(parsed.proxy.windows).toBeUndefined();
+    // Positive control: a read ledger on the same path does carry them.
+    const second = harness({
+      entries: [verified()],
+      proxy: proxyRead([proxyRecord()], '/l.jsonl'),
+    });
+    expect(await main(['--json'], second.deps)).toBe(0);
+    expect(JSON.parse(second.text()).proxy.windows).toHaveLength(4);
+  });
+
+  it('passes --proxy-ledger through to the loader, overriding the default', async () => {
+    const seen: (string | undefined)[] = [];
+    const { deps } = harness({ entries: [verified()] });
+    const spy = {
+      ...deps,
+      proxy: async (path: string | undefined) => {
+        seen.push(path);
+        return { kind: PROXY_INPUT.NotConfigured } as ProxyInput;
+      },
+    };
+    expect(await main(['--proxy-ledger', '/given.jsonl'], spy)).toBe(0);
+    expect(await main([], spy)).toBe(0);
+    expect(seen).toEqual(['/given.jsonl', undefined]);
   });
 });

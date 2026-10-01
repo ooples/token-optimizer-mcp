@@ -25,7 +25,13 @@ import { argv, stdout } from 'process';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
 import type { AnalyticsEntry } from '../analytics/analytics-types.js';
 import { buildReport, type SavingsReport } from './windows.js';
-import { renderSavings, PROXY_SCOPE_NOTE } from './render.js';
+import {
+  INPUTS_NOTE,
+  inputLines,
+  renderProxySavings,
+  renderSavings,
+} from './render.js';
+import { loadProxyInput, PROXY_INPUT, type ProxyInput } from './proxy.js';
 
 const DEFAULT_TOP_N = 10;
 
@@ -33,16 +39,39 @@ export interface Options {
   readonly topN: number;
   readonly json: boolean;
   readonly help: boolean;
+  /**
+   * An explicit proxy ledger, or undefined to take the one
+   * `TOKEN_OPTIMIZER_PROXY_ACCOUNTING` names. UNDEFINED IS NOT "NONE": there is
+   * no flag that suppresses the second input, because a report that silently
+   * dropped half of what the product does is the defect this command had.
+   */
+  readonly proxyLedger?: string;
 }
 
+/**
+ * The two scopes this command can have, named rather than spelled inline, so
+ * a consumer parsing the JSON can switch on the value instead of matching text.
+ */
+const SCOPE = Object.freeze({
+  McpOnly: 'mcp-tool-traffic',
+  Both: 'mcp-tool-traffic+proxy-wire-traffic',
+} as const);
+
 const USAGE = [
-  'usage: token-optimizer-savings [--top <n>] [--json]',
+  'usage: token-optimizer-savings [--top <n>] [--json] [--proxy-ledger <path>]',
   '',
-  '  --top <n>   rows per breakdown (default 10)',
-  '  --json      emit the report as JSON instead of text',
+  '  --top <n>             rows per breakdown (default 10)',
+  '  --json                emit the report as JSON instead of text',
+  '  --proxy-ledger <path> read this proxy ledger instead of the configured one',
   '',
-  PROXY_SCOPE_NOTE,
+  INPUTS_NOTE,
 ].join('\n');
+
+/** A value, or null when the next argv item is really the next flag. */
+function valueArgument(raw: string | undefined): string | null {
+  if (raw === undefined || raw.startsWith('--')) return null;
+  return raw.length > 0 ? raw : null;
+}
 
 /** A positive whole number, or null -- a flag is never read as its own value. */
 function positiveInteger(raw: string | undefined): number | null {
@@ -56,6 +85,7 @@ export function parseArguments(args: readonly string[]): Options | string {
   let topN = DEFAULT_TOP_N;
   let json = false;
   let help = false;
+  let proxyLedger: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--help' || arg === '-h') {
@@ -67,11 +97,18 @@ export function parseArguments(args: readonly string[]): Options | string {
       if (value === null) return '--top needs a positive whole number';
       topN = value;
       i++;
+    } else if (arg === '--proxy-ledger') {
+      const value = valueArgument(args[i + 1]);
+      if (value === null) return '--proxy-ledger needs a path';
+      proxyLedger = value;
+      i++;
     } else {
       return `unknown argument: ${arg}`;
     }
   }
-  return { topN, json, help };
+  return proxyLedger === undefined
+    ? { topN, json, help }
+    : { topN, json, help, proxyLedger };
 }
 
 export interface MainDependencies {
@@ -79,6 +116,11 @@ export interface MainDependencies {
   readonly entries?: () => Promise<readonly AnalyticsEntry[]>;
   readonly now?: () => Date;
   readonly write?: (text: string) => void;
+  /**
+   * The proxy ledger's state, already read. Never throws -- see
+   * `loadProxyInput`, whose four states are the point of the type.
+   */
+  readonly proxy?: (path: string | undefined, now: Date) => Promise<ProxyInput>;
 }
 
 /**
@@ -96,10 +138,61 @@ async function readEntries(): Promise<readonly AnalyticsEntry[]> {
   }
 }
 
-export function savingsJson(report: SavingsReport): Record<string, unknown> {
+/**
+ * THE PROXY HALF OF THE JSON, INCLUDING WHEN THERE ISN'T ONE.
+ *
+ * `state` is always present and always one of the four loader states, so a
+ * consumer can tell "the proxy saved nothing" from "the proxy was never
+ * measured" without inferring it from a missing key.
+ */
+/**
+ * READ THE CONFIGURED LEDGER, OR SAY WHY NOT. Separated from `main` only so a
+ * test can hand in a state without putting a file on disk.
+ */
+function defaultProxy(
+  path: string | undefined,
+  now: Date
+): Promise<ProxyInput> {
+  return loadProxyInput(path === undefined ? { now } : { now, path });
+}
+
+export function proxyJson(proxy: ProxyInput): Record<string, unknown> {
+  const base = {
+    state: proxy.kind,
+    path: proxy.kind === PROXY_INPUT.NotConfigured ? null : proxy.path,
+  };
+  if (proxy.kind === PROXY_INPUT.Unreadable) {
+    return { ...base, reason: proxy.reason };
+  }
+  if (proxy.kind !== PROXY_INPUT.Read) return base;
+  const { report } = proxy;
   return {
-    scope: 'mcp-tool-traffic',
-    note: PROXY_SCOPE_NOTE,
+    ...base,
+    measurement: {
+      definition:
+        'request bytes we sent against the bytes we would have sent, both counted locally, credited only to requests the provider answered 2xx',
+      pricing:
+        'the before-prompt price minus the after-prompt price at the model tiered rate, so a request carried back across a context threshold keeps the tier change it earned',
+      calibration:
+        'our count of the sent body against the prompt tokens the provider billed for that same body, summed, never averaged over per-request ratios',
+    },
+    windows: report.windows,
+    byModel: report.byModel,
+    totalRecords: report.totalRecords,
+    measuredRecords: report.measuredRecords,
+    unbilledRecords: report.unbilledRecords,
+    uncountedRecords: report.uncountedRecords,
+    skippedLines: report.skippedLines,
+  };
+}
+
+export function savingsJson(
+  report: SavingsReport,
+  proxy: ProxyInput
+): Record<string, unknown> {
+  return {
+    scope: proxy.kind === PROXY_INPUT.Read ? SCOPE.Both : SCOPE.McpOnly,
+    note: INPUTS_NOTE,
     pricing: {
       source: 'versioned-provider-model-catalog',
       definition:
@@ -116,6 +209,7 @@ export function savingsJson(report: SavingsReport): Record<string, unknown> {
     byClient: report.byClient,
     totalEntries: report.totalEntries,
     eligibleEntries: report.eligibleEntries,
+    proxy: proxyJson(proxy),
   };
 }
 
@@ -157,20 +251,28 @@ export async function main(
     return 1;
   }
 
-  const report = buildReport(
-    entries,
-    (dependencies.now ?? (() => new Date()))()
+  const now = (dependencies.now ?? (() => new Date()))();
+  const report = buildReport(entries, now);
+  // THE SECOND INPUT IS READ EVEN WHEN THE FIRST ONE IS EMPTY. A fresh install
+  // that routed everything through the proxy has no analytics rows at all, and
+  // the old command answered it with "No verified savings recorded yet" while a
+  // ledger full of measured reductions sat unread beside it.
+  const proxy = await (dependencies.proxy ?? defaultProxy)(
+    parsed.proxyLedger,
+    now
   );
 
   if (parsed.json) {
-    line(JSON.stringify(savingsJson(report), null, 2));
+    line(JSON.stringify(savingsJson(report, proxy), null, 2));
     return 0;
   }
 
   if (report.eligibleEntries === 0) {
-    // NOT AN ERROR, AND NOT A BLANK TABLE. Zero measurable rows is the state a
-    // fresh install is in, and the useful answer is how to leave it.
-    line('No verified savings recorded yet.');
+    // NOT AN ERROR, AND NOT A BLANK TABLE. Zero measurable MCP rows is the
+    // state a fresh install is in, and the useful answer is how to leave it --
+    // but it is only half the report, so the proxy section and the inputs
+    // block still print under it.
+    line('No verified MCP savings recorded yet.');
     line(
       report.totalEntries === 0
         ? 'Nothing has been recorded. Use the token-optimizer MCP tools, then re-run this command.'
@@ -178,12 +280,18 @@ export async function main(
             report.totalEntries === 1 ? 'operation was' : 'operations were'
           } recorded, none with a provable before-state.`
     );
+    if (proxy.kind === PROXY_INPUT.Read) {
+      for (const text of renderProxySavings(proxy.report, {
+        topN: parsed.topN,
+      }))
+        line(text);
+    }
     line('');
-    line(PROXY_SCOPE_NOTE);
+    for (const text of inputLines(report, proxy)) line(text);
     return 0;
   }
 
-  line(renderSavings(report, { topN: parsed.topN }));
+  line(renderSavings(report, { topN: parsed.topN, proxy }));
   return 0;
 }
 

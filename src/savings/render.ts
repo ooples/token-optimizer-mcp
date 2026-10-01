@@ -10,6 +10,12 @@
  */
 
 import type { SavingsGroup, SavingsReport, SavingsWindow } from './windows.js';
+import {
+  PROXY_INPUT,
+  type ProxyInput,
+  type ProxySavingsReport,
+  type ProxySavingsWindow,
+} from './proxy.js';
 
 const BAR_WIDTH = 16;
 
@@ -95,16 +101,165 @@ export function groupLines(
 }
 
 /**
- * WHAT THIS REPORT DOES NOT COUNT, SAID OUT LOUD.
+ * THE SHORT FORM OF "WHAT THIS READS", for `--help`.
  *
- * The analytics ledger is written by the MCP tool path. Requests routed through
- * `token-optimizer-proxy` are accounted separately and are not in it -- so a
- * user whose savings come mostly from the proxy would read this report as the
- * product barely working. Silence about a missing input is indistinguishable
- * from a measurement of zero, and this is the line that tells them apart.
+ * This replaced a note that disclaimed the proxy's absence. The disclaimer was
+ * honest while the proxy ledger was unread, and it is the wrong text now that
+ * it is an input: a reader who sees "requests through the proxy are not in this
+ * ledger" concludes the proxy figures below it belong to something else.
  */
-export const PROXY_SCOPE_NOTE =
-  'Scope: MCP tool traffic. Requests through token-optimizer-proxy are not in this ledger -- see token-optimizer-inspect.';
+export const INPUTS_NOTE =
+  'Reads two inputs: the MCP analytics database, and the token-optimizer-proxy wire ledger when TOKEN_OPTIMIZER_PROXY_ACCOUNTING names one.';
+
+const MCP_SECTION = 'MCP tool traffic';
+const PROXY_SECTION = 'Proxy wire traffic';
+const INPUT_LABEL_WIDTH = Math.max(MCP_SECTION.length, PROXY_SECTION.length);
+
+/**
+ * BOTH INPUTS, AND WHETHER EACH ONE WAS THERE.
+ *
+ * Silence about a missing input is indistinguishable from a measurement of
+ * zero. Every state of both inputs gets a line, and the three proxy states
+ * that an operator can act on say what the action is rather than only that
+ * there are no numbers.
+ */
+export function inputLines(
+  report: SavingsReport,
+  proxy: ProxyInput
+): readonly string[] {
+  const label = (text: string): string =>
+    `  ${text.padEnd(INPUT_LABEL_WIDTH)}  `;
+  const operations = `${count(report.totalEntries)} ${
+    report.totalEntries === 1 ? 'operation' : 'operations'
+  } read, ${count(report.eligibleEntries)} measurable`;
+  const lines = [
+    'Inputs:',
+    `${label(MCP_SECTION)}analytics database -- ${operations}`,
+  ];
+  if (proxy.kind === PROXY_INPUT.NotConfigured) {
+    lines.push(
+      `${label(PROXY_SECTION)}not configured -- set TOKEN_OPTIMIZER_PROXY_ACCOUNTING to a ledger path to include it`
+    );
+    return lines;
+  }
+  if (proxy.kind === PROXY_INPUT.Missing) {
+    lines.push(
+      `${label(PROXY_SECTION)}${proxy.path} -- nothing written there yet`
+    );
+    return lines;
+  }
+  if (proxy.kind === PROXY_INPUT.Unreadable) {
+    lines.push(
+      `${label(PROXY_SECTION)}${proxy.path} -- could not be read: ${proxy.reason}`
+    );
+    return lines;
+  }
+  const { report: proxyReport } = proxy;
+  const requests = `${count(proxyReport.totalRecords)} ${
+    proxyReport.totalRecords === 1 ? 'request' : 'requests'
+  } read, ${count(proxyReport.measuredRecords)} measurable`;
+  const skipped =
+    proxyReport.skippedLines > 0
+      ? `, ${count(proxyReport.skippedLines)} unparseable ${
+          proxyReport.skippedLines === 1 ? 'line' : 'lines'
+        } skipped`
+      : '';
+  lines.push(`${label(PROXY_SECTION)}${proxy.path} -- ${requests}${skipped}`);
+  return lines;
+}
+
+/**
+ * A proxy window, printed by the same function as an MCP window.
+ *
+ * ONE FORMAT FOR BOTH TABLES, which is why this adapts rather than reimplements
+ * `windowLine`. The two aggregations count different things -- operations
+ * against requests -- but a reader comparing the two sections is comparing
+ * columns, and two hand-written formats drift into two different column layouts
+ * the first time one of them is touched.
+ */
+export function asSavingsWindow(window: ProxySavingsWindow): SavingsWindow {
+  return {
+    label: window.label,
+    since: window.since,
+    operations: window.countedRequests,
+    tokensSaved: window.tokensSaved,
+    tokensBefore: window.tokensBefore,
+    savingsPercent: window.savingsPercent,
+    costUsd: window.costUsd,
+    pricedOperations: window.pricedRequests,
+    eligibleOperations: window.countedRequests,
+  };
+}
+
+/**
+ * THE INSTRUMENT'S OWN ERROR, PRINTED AS A PAIR.
+ *
+ * Both numbers describe one identical byte sequence -- the body we sent -- so
+ * the gap between them is encoder disagreement and nothing else. The percentage
+ * is taken from the two sums rather than averaged over per-request ratios,
+ * which would weight a three-hundred-token request the same as a
+ * three-hundred-thousand-token one.
+ */
+export function calibrationLine(report: ProxySavingsReport): string {
+  const all = report.windows.find((window) => window.since === null);
+  if (all === undefined || all.calibratedRequests === 0) return '';
+  const { oursTokens: ours, billedTokens: billed } = all;
+  const gap =
+    billed === 0
+      ? ''
+      : ` (${(ours - billed) / billed >= 0 ? '+' : ''}${(((ours - billed) / billed) * 100).toFixed(1)}%)`;
+  const requests = `${count(all.calibratedRequests)} ${
+    all.calibratedRequests === 1 ? 'request' : 'requests'
+  }`;
+  return (
+    `Encoder check: we counted ${count(ours)} prompt tokens where the provider ` +
+    `billed ${count(billed)}${gap}, over ${requests} it priced.`
+  );
+}
+
+/**
+ * WHY THE UNCOUNTED ROWS ARE NAMED SEPARATELY FROM THE UNBILLED ONES. A request
+ * the provider rejected is not a failed measurement -- there was no bill to
+ * reduce -- while a billed request we could not count is exactly that, and the
+ * two numbers lead an operator to different places.
+ */
+export function proxyGateNote(report: ProxySavingsReport): string {
+  const parts: string[] = [];
+  if (report.unbilledRecords > 0) {
+    parts.push(
+      `${count(report.unbilledRecords)} ${
+        report.unbilledRecords === 1 ? 'request was' : 'requests were'
+      } never billed (no 2xx response)`
+    );
+  }
+  if (report.uncountedRecords > 0) {
+    parts.push(
+      `${count(report.uncountedRecords)} billed ${
+        report.uncountedRecords === 1 ? 'request carries' : 'requests carry'
+      } no token count`
+    );
+  }
+  if (parts.length === 0) return '';
+  const verb = parts.length === 1 ? 'is' : 'are';
+  return `${parts.join(' and ')} -- ${verb} excluded from every proxy figure above.`;
+}
+
+export function renderProxySavings(
+  report: ProxySavingsReport,
+  options: { readonly topN: number }
+): readonly string[] {
+  const lines = [`\n${PROXY_SECTION}`];
+  for (const window of report.windows)
+    lines.push(windowLine(asSavingsWindow(window)));
+  lines.push(
+    ...groupLines('\nCost avoided per model:', report.byModel, options.topN)
+  );
+  const calibration = calibrationLine(report);
+  if (calibration !== '') lines.push('', calibration);
+  const gate = proxyGateNote(report);
+  if (gate !== '') lines.push(gate);
+  return lines;
+}
 
 /**
  * WHY A GATE NOTE AND NOT JUST A NUMBER. An operator who ran a hundred
@@ -130,25 +285,30 @@ export function gateNote(report: SavingsReport): string {
   );
 }
 
+/**
+ * SECTION HEADINGS EXIST BECAUSE THERE ARE TWO INPUTS NOW. One column of
+ * windows followed by another, unlabelled, reads as one table that repeats --
+ * and the two prove different things, so the figures must not be addable by
+ * eye. The proxy section is omitted entirely when its ledger was not read; the
+ * inputs block at the bottom is what says so.
+ */
 export function renderSavings(
   report: SavingsReport,
-  options: { readonly topN: number }
+  options: { readonly topN: number; readonly proxy: ProxyInput }
 ): string {
-  const lines: string[] = [''];
+  const lines: string[] = ['', MCP_SECTION];
   for (const window of report.windows) lines.push(windowLine(window));
-  const model = groupLines(
-    '\nCost avoided per model:',
-    report.byModel,
-    options.topN
+  lines.push(
+    ...groupLines('\nCost avoided per model:', report.byModel, options.topN),
+    ...groupLines('\nSavings by client:', report.byClient, options.topN)
   );
-  const client = groupLines(
-    '\nSavings by client:',
-    report.byClient,
-    options.topN
-  );
-  lines.push(...model, ...client);
   const gate = gateNote(report);
-  lines.push('', PROXY_SCOPE_NOTE);
-  if (gate !== '') lines.push(gate);
+  if (gate !== '') lines.push('', gate);
+  if (options.proxy.kind === PROXY_INPUT.Read) {
+    lines.push(
+      ...renderProxySavings(options.proxy.report, { topN: options.topN })
+    );
+  }
+  lines.push('', ...inputLines(report, options.proxy));
   return lines.join('\n');
 }

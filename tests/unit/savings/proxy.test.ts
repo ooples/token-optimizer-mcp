@@ -12,6 +12,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createProxyAggregator,
+  loadProxyInput,
+  PROXY_INPUT,
   readProxySavings,
 } from '../../../src/savings/proxy.js';
 import type { AccountingRecord } from '../../../src/proxy/accounting.js';
@@ -198,5 +200,76 @@ describe('reading a ledger off disk', () => {
     // bad lines and not the reader giving up.
     expect(report.totalRecords).toBe(1);
     expect(report.windows[3].tokensSaved).toBe(750);
+  });
+});
+
+describe('loadProxyInput', () => {
+  it('reads the ledger the environment names', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'proxy-input-'));
+    const path = join(dir, 'ledger.jsonl');
+    writeFileSync(path, `${JSON.stringify(record())}\u000a`, 'utf8');
+    const input = await loadProxyInput({
+      env: { TOKEN_OPTIMIZER_PROXY_ACCOUNTING: path },
+      now: NOW,
+    });
+    expect(input.kind).toBe(PROXY_INPUT.Read);
+    if (input.kind !== PROXY_INPUT.Read) throw new Error('not read');
+    expect(input.path).toBe(path);
+    expect(input.report.windows[3].tokensSaved).toBe(750);
+  });
+
+  it('prefers an explicit path over the environment', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'proxy-input-'));
+    const given = join(dir, 'given.jsonl');
+    writeFileSync(given, `${JSON.stringify(record())}\u000a`, 'utf8');
+    const input = await loadProxyInput({
+      env: { TOKEN_OPTIMIZER_PROXY_ACCOUNTING: join(dir, 'other.jsonl') },
+      now: NOW,
+      path: given,
+    });
+    expect(input.kind).toBe(PROXY_INPUT.Read);
+    if (input.kind !== PROXY_INPUT.Read) throw new Error('not read');
+    expect(input.path).toBe(given);
+  });
+
+  it('says the ledger was never configured, not that it was empty', async () => {
+    for (const env of [{}, { TOKEN_OPTIMIZER_PROXY_ACCOUNTING: '   ' }]) {
+      const input = await loadProxyInput({ env, now: NOW });
+      expect(input.kind).toBe(PROXY_INPUT.NotConfigured);
+    }
+    // Positive control: a real path on the same call shape is read.
+    const dir = mkdtempSync(join(tmpdir(), 'proxy-input-'));
+    const path = join(dir, 'ledger.jsonl');
+    writeFileSync(path, `${JSON.stringify(record())}\u000a`, 'utf8');
+    const read = await loadProxyInput({
+      env: { TOKEN_OPTIMIZER_PROXY_ACCOUNTING: path },
+      now: NOW,
+    });
+    expect(read.kind).toBe(PROXY_INPUT.Read);
+  });
+
+  it('separates a configured ledger that does not exist from one that fails', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'proxy-input-'));
+    const missing = await loadProxyInput({
+      now: NOW,
+      path: join(dir, 'never-written.jsonl'),
+    });
+    expect(missing.kind).toBe(PROXY_INPUT.Missing);
+    // A directory is readable as a path and unreadable as a file, which is the
+    // cheapest portable way to reach the other failure.
+    const broken = await loadProxyInput({ now: NOW, path: dir });
+    expect(broken.kind).toBe(PROXY_INPUT.Unreadable);
+    if (broken.kind !== PROXY_INPUT.Unreadable) throw new Error('not that');
+    expect(broken.reason.length).toBeGreaterThan(0);
+  });
+
+  it('never throws, so the MCP half of the report still prints', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'proxy-input-'));
+    await expect(
+      loadProxyInput({ now: NOW, path: dir })
+    ).resolves.toMatchObject({ kind: PROXY_INPUT.Unreadable, path: dir });
+    await expect(
+      loadProxyInput({ now: NOW, path: join(dir, 'nope.jsonl') })
+    ).resolves.toMatchObject({ kind: PROXY_INPUT.Missing });
   });
 });

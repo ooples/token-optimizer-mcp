@@ -6,15 +6,26 @@
  */
 
 import {
-  PROXY_SCOPE_NOTE,
+  INPUTS_NOTE,
+  asSavingsWindow,
   bar,
+  calibrationLine,
   count,
   gateNote,
   groupLines,
+  inputLines,
   money,
+  proxyGateNote,
+  renderProxySavings,
   renderSavings,
   windowLine,
 } from '../../../src/savings/render.js';
+import {
+  PROXY_INPUT,
+  type ProxyInput,
+  type ProxySavingsReport,
+  type ProxySavingsWindow,
+} from '../../../src/savings/proxy.js';
 import type {
   SavingsGroup,
   SavingsReport,
@@ -164,9 +175,10 @@ describe('a breakdown', () => {
 });
 
 describe('the scope and gate notes', () => {
-  it('names the proxy, because a missing input reads as a measurement of zero', () => {
-    expect(PROXY_SCOPE_NOTE).toContain('token-optimizer-proxy');
-    expect(PROXY_SCOPE_NOTE).toContain('token-optimizer-inspect');
+  it('names both inputs, because a missing one reads as a measurement of zero', () => {
+    expect(INPUTS_NOTE).toContain('MCP analytics database');
+    expect(INPUTS_NOTE).toContain('token-optimizer-proxy');
+    expect(INPUTS_NOTE).toContain('TOKEN_OPTIMIZER_PROXY_ACCOUNTING');
   });
 
   it('says how many rows were excluded and out of how many', () => {
@@ -193,31 +205,287 @@ describe('the scope and gate notes', () => {
 });
 
 describe('the whole report', () => {
-  it('puts the windows above the breakdowns and the scope note last', () => {
-    const text = renderSavings(report(), { topN: 10 });
+  const notConfigured: ProxyInput = { kind: PROXY_INPUT.NotConfigured };
+
+  it('puts the windows above the breakdowns and the inputs block last', () => {
+    const text = renderSavings(report(), { topN: 10, proxy: notConfigured });
     const lines = text.split('\n');
+    const sectionAt = lines.findIndex((l) => l === 'MCP tool traffic');
     const todayAt = lines.findIndex((l) => l.startsWith('Today'));
     const modelAt = lines.findIndex((l) => l === 'Cost avoided per model:');
     const clientAt = lines.findIndex((l) => l === 'Savings by client:');
-    const noteAt = lines.findIndex((l) => l === PROXY_SCOPE_NOTE);
-    expect(todayAt).toBeGreaterThanOrEqual(0);
+    const inputsAt = lines.findIndex((l) => l === 'Inputs:');
+    expect(sectionAt).toBeGreaterThanOrEqual(0);
+    expect(todayAt).toBeGreaterThan(sectionAt);
     expect(modelAt).toBeGreaterThan(todayAt);
     expect(clientAt).toBeGreaterThan(modelAt);
-    expect(noteAt).toBeGreaterThan(clientAt);
+    expect(inputsAt).toBeGreaterThan(clientAt);
   });
 
   it('leaves no line carrying trailing whitespace', () => {
-    for (const line of renderSavings(report(), { topN: 10 }).split('\n')) {
+    for (const line of renderSavings(report(), {
+      topN: 10,
+      proxy: notConfigured,
+    }).split('\n')) {
       expect(line).toBe(line.replace(/\s+$/, ''));
     }
   });
 
-  it('omits the gate note when nothing was excluded, keeping the scope note', () => {
+  it('omits the gate note when nothing was excluded, keeping the inputs', () => {
     const text = renderSavings(
       report({ totalEntries: 1, eligibleEntries: 1 }),
-      { topN: 10 }
+      {
+        topN: 10,
+        proxy: notConfigured,
+      }
     );
     expect(text).not.toContain('no provable before-state');
-    expect(text).toContain(PROXY_SCOPE_NOTE);
+    expect(text).toContain('Inputs:');
+  });
+
+  it('omits the proxy section entirely when its ledger was not read', () => {
+    const text = renderSavings(report(), { topN: 10, proxy: notConfigured });
+    // The inputs block names the proxy either way; the SECTION is a line of
+    // its own, and that is what must be absent.
+    expect(text.split(chr10)).not.toContain('Proxy wire traffic');
+    expect(text).not.toContain('Encoder check');
+    // Positive control: a read ledger puts the section in.
+    const withProxy = renderSavings(report(), {
+      topN: 10,
+      proxy: {
+        kind: PROXY_INPUT.Read,
+        path: '/l.jsonl',
+        report: proxyReport(),
+      },
+    });
+    expect(withProxy.split(chr10)).toContain('Proxy wire traffic');
+    expect(withProxy).toContain('Encoder check');
+  });
+});
+
+/** A newline, written without an escape the tooling can collapse. */
+const chr10 = String.fromCharCode(10);
+
+function proxyWindow(
+  over: Partial<ProxySavingsWindow> = {}
+): ProxySavingsWindow {
+  return {
+    label: 'All time',
+    since: null,
+    requests: 6,
+    billedRequests: 5,
+    countedRequests: 4,
+    pricedRequests: 3,
+    calibratedRequests: 2,
+    tokensSaved: 750,
+    tokensBefore: 1000,
+    savingsPercent: 75,
+    costUsd: 0.02,
+    oursTokens: 500,
+    billedTokens: 480,
+    ...over,
+  };
+}
+
+function proxyReport(
+  over: Partial<ProxySavingsReport> = {}
+): ProxySavingsReport {
+  return {
+    windows: [proxyWindow()],
+    byModel: [
+      {
+        name: 'gpt-5.6-sol',
+        operations: 4,
+        tokensSaved: 750,
+        costUsd: 0.02,
+        pricedOperations: 3,
+        eligibleOperations: 4,
+      },
+    ],
+    totalRecords: 6,
+    measuredRecords: 4,
+    unbilledRecords: 1,
+    uncountedRecords: 1,
+    skippedLines: 0,
+    ...over,
+  };
+}
+
+describe('the proxy section', () => {
+  it('prints a proxy window through the same formatter as an MCP one', () => {
+    const adapted = asSavingsWindow(proxyWindow());
+    expect(adapted.operations).toBe(4);
+    expect(adapted.pricedOperations).toBe(3);
+    expect(adapted.eligibleOperations).toBe(4);
+    expect(windowLine(adapted)).toBe(
+      windowLine({
+        label: 'All time',
+        since: null,
+        operations: 4,
+        tokensSaved: 750,
+        tokensBefore: 1000,
+        savingsPercent: 75,
+        costUsd: 0.02,
+        pricedOperations: 3,
+        eligibleOperations: 4,
+      })
+    );
+  });
+
+  it('reports the encoder gap as a pair, not as a ratio of ratios', () => {
+    const line = calibrationLine(proxyReport());
+    expect(line).toContain('we counted 500 prompt tokens');
+    expect(line).toContain('billed 480');
+    expect(line).toContain('+4.2%');
+    expect(line).toContain('over 2 requests it priced');
+  });
+
+  it('signs the gap when our count reads low', () => {
+    const line = calibrationLine(
+      proxyReport({
+        windows: [proxyWindow({ oursTokens: 480, billedTokens: 500 })],
+      })
+    );
+    expect(line).toContain('-4.0%');
+    // Positive control: the high-reading case still prints a plus.
+    expect(calibrationLine(proxyReport())).toContain('+4.2%');
+  });
+
+  it('says nothing when no request was calibrated', () => {
+    expect(
+      calibrationLine(
+        proxyReport({ windows: [proxyWindow({ calibratedRequests: 0 })] })
+      )
+    ).toBe('');
+    // Positive control: the same report with a calibrated request speaks.
+    expect(calibrationLine(proxyReport())).not.toBe('');
+  });
+
+  it('takes the calibration from all time, never from one window', () => {
+    const line = calibrationLine(
+      proxyReport({
+        windows: [
+          proxyWindow({ label: 'Today', since: '2026-10-01T00:00:00.000Z' }),
+          proxyWindow({ oursTokens: 9000, billedTokens: 9000 }),
+        ],
+      })
+    );
+    expect(line).toContain('9,000');
+    expect(line).not.toContain('500 prompt tokens');
+  });
+});
+
+describe('the proxy gate note', () => {
+  it('names the unbilled and the uncounted rows separately', () => {
+    expect(proxyGateNote(proxyReport())).toBe(
+      '1 request was never billed (no 2xx response) and 1 billed request carries no token count -- are excluded from every proxy figure above.'
+    );
+  });
+
+  it('agrees the verbs with each count on its own', () => {
+    expect(
+      proxyGateNote(proxyReport({ unbilledRecords: 3, uncountedRecords: 0 }))
+    ).toBe(
+      '3 requests were never billed (no 2xx response) -- is excluded from every proxy figure above.'
+    );
+    expect(
+      proxyGateNote(proxyReport({ unbilledRecords: 0, uncountedRecords: 2 }))
+    ).toBe(
+      '2 billed requests carry no token count -- is excluded from every proxy figure above.'
+    );
+  });
+
+  it('says nothing when every request counted', () => {
+    expect(
+      proxyGateNote(proxyReport({ unbilledRecords: 0, uncountedRecords: 0 }))
+    ).toBe('');
+    // Positive control: one unbilled row brings the note back.
+    expect(proxyGateNote(proxyReport({ uncountedRecords: 0 }))).not.toBe('');
+  });
+
+  it('puts the windows, the models, the check and the gate in that order', () => {
+    const lines = renderProxySavings(proxyReport(), { topN: 10 });
+    const text = lines.join('\u000a').split('\u000a');
+    const headingAt = text.findIndex((l) => l === 'Proxy wire traffic');
+    const windowAt = text.findIndex((l) => l.startsWith('All time'));
+    const modelAt = text.findIndex((l) => l === 'Cost avoided per model:');
+    const checkAt = text.findIndex((l) => l.startsWith('Encoder check'));
+    const gateAt = text.findIndex((l) => l.includes('never billed'));
+    expect(headingAt).toBeGreaterThanOrEqual(0);
+    expect(windowAt).toBeGreaterThan(headingAt);
+    expect(modelAt).toBeGreaterThan(windowAt);
+    expect(checkAt).toBeGreaterThan(modelAt);
+    expect(gateAt).toBeGreaterThan(checkAt);
+  });
+});
+
+describe('the inputs block', () => {
+  const mcp = report({ totalEntries: 100, eligibleEntries: 12 });
+
+  it('states the MCP input and how much of it was measurable', () => {
+    const lines = inputLines(mcp, { kind: PROXY_INPUT.NotConfigured });
+    expect(lines[0]).toBe('Inputs:');
+    expect(lines[1]).toContain('MCP tool traffic');
+    expect(lines[1]).toContain('100 operations read, 12 measurable');
+  });
+
+  it('tells an operator how to add the proxy input when it is unset', () => {
+    const lines = inputLines(mcp, { kind: PROXY_INPUT.NotConfigured });
+    expect(lines[2]).toContain('not configured');
+    expect(lines[2]).toContain('TOKEN_OPTIMIZER_PROXY_ACCOUNTING');
+  });
+
+  it('separates a ledger that is empty from one that cannot be read', () => {
+    expect(
+      inputLines(mcp, { kind: PROXY_INPUT.Missing, path: '/l.jsonl' })[2]
+    ).toContain('/l.jsonl -- nothing written there yet');
+    expect(
+      inputLines(mcp, {
+        kind: PROXY_INPUT.Unreadable,
+        path: '/l.jsonl',
+        reason: 'EACCES: permission denied',
+      })[2]
+    ).toContain('could not be read: EACCES: permission denied');
+  });
+
+  it('reports what a read ledger held, and the lines it could not parse', () => {
+    const read = (over: Partial<ProxySavingsReport> = {}): string =>
+      inputLines(mcp, {
+        kind: PROXY_INPUT.Read,
+        path: '/l.jsonl',
+        report: proxyReport(over),
+      })[2];
+    expect(read()).toContain('/l.jsonl -- 6 requests read, 4 measurable');
+    expect(read()).not.toContain('skipped');
+    expect(read({ skippedLines: 2 })).toContain('2 unparseable lines skipped');
+    expect(read({ skippedLines: 1 })).toContain('1 unparseable line skipped');
+  });
+
+  it('starts both sources in one column, so the states are comparable', () => {
+    const lines = inputLines(mcp, {
+      kind: PROXY_INPUT.Read,
+      path: '/l.jsonl',
+      report: proxyReport(),
+    });
+    expect(lines[1].indexOf('analytics database')).toBe(
+      lines[2].indexOf('/l.jsonl')
+    );
+    // Positive control: the shorter label really is the one being padded, so
+    // the agreement above is padding and not a coincidence of two lengths.
+    expect(lines[1]).toContain('MCP tool traffic  ');
+  });
+
+  it('counts one operation in the singular', () => {
+    expect(
+      inputLines(report({ totalEntries: 1, eligibleEntries: 1 }), {
+        kind: PROXY_INPUT.NotConfigured,
+      })[1]
+    ).toContain('1 operation read');
+    // Positive control: two go back to the plural.
+    expect(
+      inputLines(report({ totalEntries: 2, eligibleEntries: 1 }), {
+        kind: PROXY_INPUT.NotConfigured,
+      })[1]
+    ).toContain('2 operations read');
   });
 });
