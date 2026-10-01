@@ -257,6 +257,18 @@ describe('usage and json', () => {
     expect(text()).toContain('TOKEN_OPTIMIZER_PROXY_ACCOUNTING');
   });
 
+  it('names the command that answers the money question', async () => {
+    // DISCOVERABILITY, NOT DECORATION. `token-optimizer-savings` has shipped as
+    // a registered bin that no user-facing output ever mentioned, so the only
+    // way to reach it was to already know it existed.
+    const { text, deps } = harness();
+    expect(await main(['--help'], deps)).toBe(0);
+    expect(text()).toContain('token-optimizer-savings');
+    // Positive control: the pointer has to sit in the usage this command
+    // prints, not in some other stream the harness also captures.
+    expect(text()).toContain('usage: token-optimizer-inspect');
+  });
+
   it('prints the refusal above the usage, and exits 2', async () => {
     const { text, deps } = harness();
     expect(await main(['--nope'], deps)).toBe(2);

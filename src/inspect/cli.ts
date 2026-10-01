@@ -59,6 +59,12 @@ const USAGE = [
   'remembers the last 128 requests per listener in memory. A ledger is durable',
   'but has to be asked for in advance:',
   '  TOKEN_OPTIMIZER_PROXY_ACCOUNTING=/path/to/ledger.jsonl',
+  '',
+  // THE OTHER HALF OF THE SAME QUESTION. This command answers what happened
+  // to individual requests; the money it added up to is a different bin, and
+  // a reader who got this far is exactly the one who wants it.
+  'This is the per-request view. For what the traffic was worth in money,',
+  'token-optimizer-savings totals a ledger alongside MCP tool traffic.',
 ];
 
 /**

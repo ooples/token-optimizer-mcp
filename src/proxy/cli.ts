@@ -18,6 +18,7 @@
  * filtering, and a summary line can never be mistaken for the URL.
  */
 
+import { accountingPath } from './accounting.js';
 import { startProxy, proxyEnabled } from './server.js';
 import { captureDir, captureNotice } from './capture.js';
 import type { ProxySummary } from './server.js';
@@ -229,7 +230,14 @@ export async function run(argv: readonly string[]): Promise<number> {
       // later want it: a proxy that has just started saves nothing yet, and the
       // question "did that actually do anything" arrives a few turns later with
       // nothing on screen to answer it.
-      `\nask what it did: token-optimizer-inspect\n`
+      // TWO QUESTIONS, NOT ONE. `inspect` answers what happened to the last
+      // few requests; the money question is answered by `savings`, and only
+      // if a ledger is being written -- so when there is none, the line says
+      // what to set instead of naming a command that would find nothing.
+      `\nask what it did: token-optimizer-inspect\n` +
+      (accountingPath() === null
+        ? `total what it saves: set TOKEN_OPTIMIZER_PROXY_ACCOUNTING to a path, then run token-optimizer-savings\n`
+        : `what it saved: token-optimizer-savings\n`)
   );
 
   await stopped;

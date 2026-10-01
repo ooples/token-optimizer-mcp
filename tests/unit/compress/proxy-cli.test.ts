@@ -4,6 +4,8 @@ import { createServer, request as httpRequest, type Server } from 'node:http';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 /**
  * The proxy's command-line entrypoint, run as a real process.
@@ -260,6 +262,40 @@ describe('the proxy command-line entrypoint', () => {
     // Positive control on the line it was appended to: a botched concatenation
     // could swallow the upstream the operator actually asked about.
     expect(stderr()).toContain(target.url);
+  });
+
+  it('names the command that totals the money, and what to set without it', async () => {
+    // TWO QUESTIONS, NOT ONE. `inspect` answers what happened to the last few
+    // requests; `savings` answers what that traffic was worth -- and it can
+    // only answer it from a ledger, so with no ledger configured the line asks
+    // for one instead of naming a command that would find nothing.
+    const banner = async (read: () => string): Promise<string> => {
+      for (let waited = 0; waited < 40 && read() === ''; waited++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return read();
+    };
+    const target = await upstream();
+
+    const configured = await start(['--upstream', target.url], {
+      TOKEN_OPTIMIZER_PROXY_ACCOUNTING: join(tmpdir(), 'banner-ledger.jsonl'),
+    });
+    running.push(configured.child);
+    expect(await banner(configured.stderr)).toContain(
+      'what it saved: token-optimizer-savings'
+    );
+
+    // EMPTY, NOT INHERITED: the host running the suite may well have a ledger
+    // configured, and the branch under test is the one where it has none.
+    const bare = await start(['--upstream', target.url], {
+      TOKEN_OPTIMIZER_PROXY_ACCOUNTING: '',
+    });
+    running.push(bare.child);
+    const without = await banner(bare.stderr);
+    expect(without).toContain('set TOKEN_OPTIMIZER_PROXY_ACCOUNTING to a path');
+    // Positive control on the same banner: a missing line has to be a missing
+    // line, not a stderr pipe that never delivered anything at all.
+    expect(without).toContain('token-optimizer-inspect');
   });
 
   it('exits on SIGTERM rather than outliving the launcher', async () => {
