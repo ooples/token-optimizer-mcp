@@ -38,7 +38,9 @@ describe('which install this is', () => {
   it('reads a windows global install off its own path', () => {
     expect(
       detectInstallMethod(
-        at('C:/Users/x/AppData/Roaming/npm/node_modules/@ooples/token-optimizer-mcp/dist/update')
+        at(
+          'C:/Users/x/AppData/Roaming/npm/node_modules/@ooples/token-optimizer-mcp/dist/update'
+        )
       )
     ).toBe(InstallMethod.GlobalNpm);
   });
@@ -46,7 +48,9 @@ describe('which install this is', () => {
   it('reads a posix global install off its own path', () => {
     expect(
       detectInstallMethod(
-        at('/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/dist/update')
+        at(
+          '/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/dist/update'
+        )
       )
     ).toBe(InstallMethod.GlobalNpm);
   });
@@ -62,7 +66,9 @@ describe('which install this is', () => {
   it('recognises an npx cache entry, which is replaced rather than upgraded', () => {
     expect(
       detectInstallMethod(
-        at('C:/Users/x/AppData/Local/npm-cache/_npx/a1b2/node_modules/@ooples/token-optimizer-mcp/dist')
+        at(
+          'C:/Users/x/AppData/Local/npm-cache/_npx/a1b2/node_modules/@ooples/token-optimizer-mcp/dist'
+        )
       )
     ).toBe(InstallMethod.NpxCache);
   });
@@ -73,15 +79,17 @@ describe('which install this is', () => {
     // reader an npm install that updates a directory the loader never reads.
     expect(
       detectInstallMethod(
-        at('C:/Users/x/.claude/plugins/token-optimizer/node_modules/@ooples/token-optimizer-mcp/dist')
+        at(
+          'C:/Users/x/.claude/plugins/token-optimizer/node_modules/@ooples/token-optimizer-mcp/dist'
+        )
       )
     ).toBe(InstallMethod.ClaudePlugin);
   });
 
   it('calls a checkout a checkout when there is no node_modules above it', () => {
-    expect(detectInstallMethod(at('C:/src/token-optimizer-mcp/dist/update'))).toBe(
-      InstallMethod.SourceCheckout
-    );
+    expect(
+      detectInstallMethod(at('C:/src/token-optimizer-mcp/dist/update'))
+    ).toBe(InstallMethod.SourceCheckout);
   });
 
   it('answers Unknown for a url that is not a file, rather than throwing', () => {
@@ -162,15 +170,15 @@ describe('where it asks', () => {
   });
 
   it('follows a configured https mirror and trims its trailing slash', () => {
-    expect(registryBase({ npm_config_registry: 'https://npm.internal.test/' })).toBe(
-      'https://npm.internal.test'
-    );
+    expect(
+      registryBase({ npm_config_registry: 'https://npm.internal.test/' })
+    ).toBe('https://npm.internal.test');
   });
 
   it('ignores a mirror that is not https, which is npm policy and not ours', () => {
-    expect(registryBase({ npm_config_registry: 'http://npm.internal.test' })).toBe(
-      'https://registry.npmjs.org'
-    );
+    expect(
+      registryBase({ npm_config_registry: 'http://npm.internal.test' })
+    ).toBe('https://registry.npmjs.org');
     expect(registryBase({ npm_config_registry: 'not a url' })).toBe(
       'https://registry.npmjs.org'
     );
@@ -210,7 +218,10 @@ describe('what it refuses to ask', () => {
   });
 
   it('reports a body with no version rather than treating it as current', async () => {
-    const got = await latestVersion({ env: {}, fetcher: answering({ name: 'x' }) });
+    const got = await latestVersion({
+      env: {},
+      fetcher: answering({ name: 'x' }),
+    });
     expect(got.refused).toContain('without a version');
   });
 
@@ -224,7 +235,9 @@ describe('what it refuses to ask', () => {
 });
 
 describe('the line doctor prints', () => {
-  const posix = at('/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/dist/update');
+  const posix = at(
+    '/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/dist/update'
+  );
 
   it('names the command when the copy is behind', async () => {
     const report = await checkForUpdate({
@@ -234,8 +247,40 @@ describe('the line doctor prints', () => {
       installed: '7.3.0',
     });
     expect(report.state).toBe(UpdateState.Behind);
-    expect(report.command).toBe('npm install -g @ooples/token-optimizer-mcp@latest');
+    expect(report.command).toBe(
+      'npm install -g @ooples/token-optimizer-mcp@latest'
+    );
     expect(describeUpdate(report).join('\n')).toContain('npm install -g');
+  });
+
+  it('names the command that performs the upgrade, and still shows what it runs', async () => {
+    /*
+     * Both halves matter. A reader told only `npm install -g ...` never learns
+     * that a command exists which does it for them; a reader told only
+     * `token-optimizer-update` cannot see what it is about to run.
+     */
+    const report = await checkForUpdate({
+      env: {},
+      fetcher: answering({ version: '7.4.0' }),
+      moduleUrl: posix,
+      installed: '7.3.0',
+    });
+    const said = describeUpdate(report).join('\n');
+    expect(said).toContain('token-optimizer-update');
+    expect(said).toContain('npm install -g @ooples/token-optimizer-mcp@latest');
+  });
+
+  it('does not offer that command for an install it will not upgrade', async () => {
+    const report = await checkForUpdate({
+      env: {},
+      fetcher: answering({ version: '7.4.0' }),
+      moduleUrl: at('/home/me/.claude/plugins/token-optimizer/dist/update'),
+      installed: '7.3.0',
+    });
+    expect(report.state).toBe(UpdateState.Behind);
+    const said = describeUpdate(report).join('\n');
+    expect(said).not.toContain('token-optimizer-update');
+    expect(said).toContain('/plugin update token-optimizer');
   });
 
   it('says current only when it actually compared two versions', async () => {

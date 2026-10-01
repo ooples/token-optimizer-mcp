@@ -135,6 +135,25 @@ export function upgradeCommand(method: InstallMethod): string | null {
   }
 }
 
+/**
+ * The methods `token-optimizer-update` will upgrade in place.
+ *
+ * Narrower than the set with an `upgradeCommand`, deliberately. `NpxCache` has
+ * a command, but that command RUNS the package rather than upgrading anything,
+ * so performing it would report success having changed nothing. `ClaudePlugin`
+ * is the client's to upgrade, and `SourceCheckout` would have a developer's
+ * working tree replaced by the published tarball.
+ *
+ * It lives here rather than beside `applyUpdate` because it is a property of
+ * the install method, and both the applier and the diagnostic line that names
+ * the command need it -- and `apply.ts` already imports `check.ts`, so a home
+ * there would make that pair circular.
+ */
+export const UPGRADABLE_METHODS: readonly InstallMethod[] = Object.freeze([
+  InstallMethod.GlobalNpm,
+  InstallMethod.ProjectDependency,
+]);
+
 /** How the method reads in a diagnostic line. */
 export function describeInstallMethod(method: InstallMethod): string {
   switch (method) {

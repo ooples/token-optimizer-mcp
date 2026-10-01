@@ -16,6 +16,7 @@
 import { libraryVersion } from '../telemetry/recorder.js';
 import {
   InstallMethod,
+  UPGRADABLE_METHODS,
   describeInstallMethod,
   detectInstallMethod,
   upgradeCommand,
@@ -139,6 +140,16 @@ export function describeUpdate(report: UpdateReport): string[] {
       if (report.command === null)
         lines.push(
           '  this install is not one npm placed, so no upgrade command is suggested'
+        );
+      else if (UPGRADABLE_METHODS.includes(report.method))
+        /*
+         * Name the command that does it, and keep the raw npm line beside it.
+         * `token-optimizer-update` exists precisely so this reader does not
+         * have to retype an install command, but a reader who would rather run
+         * npm themselves must still be able to see what would be run.
+         */
+        lines.push(
+          `  upgrade with: token-optimizer-update (runs \`${report.command}\`)`
         );
       else lines.push(`  upgrade with: ${report.command}`);
       return lines;
