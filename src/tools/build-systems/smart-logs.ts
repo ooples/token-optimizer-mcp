@@ -666,10 +666,10 @@ export class SmartLogs {
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached) as LogResult & {
+      const { cachedAt, ...result } = JSON.parse(cached) as LogResult & {
         cachedAt: number;
       };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         return result;

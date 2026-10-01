@@ -474,8 +474,10 @@ export class SmartTest {
     }
 
     try {
-      const result = JSON.parse(cached) as TestResult & { cachedAt: number };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const { cachedAt, ...result } = JSON.parse(cached) as TestResult & {
+        cachedAt: number;
+      };
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         return result;

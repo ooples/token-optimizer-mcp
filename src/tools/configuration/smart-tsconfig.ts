@@ -110,7 +110,6 @@ interface SmartTsConfigOutput {
     saved: number;
     savingsPercent: number;
   };
-  executionTime: number;
   diff?: {
     added: string[];
     removed: string[];
@@ -183,7 +182,6 @@ class SmartTsConfig {
             options.includeIssues ?? true,
             options.includeSuggestions ?? true,
             true,
-            executionTime,
             chainContent
           );
 
@@ -249,7 +247,6 @@ class SmartTsConfig {
         options.includeIssues ?? true,
         options.includeSuggestions ?? true,
         false,
-        executionTime,
         chainContent
       );
 
@@ -665,7 +662,6 @@ class SmartTsConfig {
     includeIssues: boolean = true,
     includeSuggestions: boolean = true,
     fromCache: boolean = false,
-    executionTime: number = 0,
     /** Every file in the extends chain, which is what reading this by hand costs. */
     chainContent: string = ''
   ): SmartTsConfigOutput {
@@ -704,7 +700,6 @@ class SmartTsConfig {
         saved: 0,
         savingsPercent: 0,
       },
-      executionTime,
     };
 
     // MEASURED AGAINST THE FILE, NOT AGAINST A SHAPE WE NEVER SEND.
@@ -796,7 +791,7 @@ export async function runSmartTsconfig(
 export const SMART_TSCONFIG_TOOL_DEFINITION = {
   name: 'smart_tsconfig',
   description:
-    'Parse and analyze TypeScript configuration. Resolves extends chains, detects issues, and caches results for 7 days. Measured token reduction vs reading the file: -86% to 27% first read, -86% to 27% repeated (bench/tools, 3 fixtures) -- this answers what the resolved config is and what is wrong with it; it pays only on the fixture with an extends chain to resolve, and costs more than the file on the two without one.',
+    'Parse and analyze TypeScript configuration. Resolves extends chains, detects issues, and caches results for 7 days. Measured token reduction vs reading the file: -79% to 29% first read, -79% to 29% repeated (bench/tools, 3 fixtures) -- this answers what the resolved config is and what is wrong with it; it pays only on the fixture with an extends chain to resolve, and costs more than the file on the two without one.',
   inputSchema: {
     type: 'object',
     properties: {

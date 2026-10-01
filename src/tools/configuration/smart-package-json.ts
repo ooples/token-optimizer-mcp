@@ -850,12 +850,14 @@ export class SmartPackageJson {
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached) as ParsedPackageJson & {
+      const { cachedAt, ...result } = JSON.parse(
+        cached
+      ) as ParsedPackageJson & {
         cachedAt: number;
       };
 
       // Check age
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
       if (age > maxAge) {
         return null;
       }

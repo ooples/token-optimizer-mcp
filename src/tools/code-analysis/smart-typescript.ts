@@ -30,7 +30,6 @@ interface CompilationResult {
   success: boolean;
   diagnostics: ts.Diagnostic[];
   filesCompiled: string[];
-  duration: number;
   timestamp: number;
   typeInfo?: Map<string, TypeInfo>;
 }
@@ -90,7 +89,6 @@ interface SmartTypeScriptOutput {
     warningCount: number;
     filesCompiled: number;
     filesFromCache: number;
-    duration: number;
     fromCache: boolean;
     incrementalMode: boolean;
   };
@@ -234,7 +232,6 @@ export class SmartTypeScript {
     // Run compilation
     const result = await this.compile(filesToCompile, includeTypeInfo);
     const duration = Date.now() - startTime;
-    result.duration = duration;
 
     // Cache the result
     const output = this.transformOutput(
@@ -454,7 +451,6 @@ export class SmartTypeScript {
           .length === 0,
       diagnostics,
       filesCompiled: filesToCompile,
-      duration: 0, // Set by caller
       timestamp: Date.now(),
       typeInfo: typeInfoMap,
     };
@@ -664,7 +660,6 @@ export class SmartTypeScript {
         warningCount,
         filesCompiled: filesCompiled.length,
         filesFromCache: 0,
-        duration: result.duration,
         fromCache: false,
         incrementalMode,
       },
@@ -889,10 +884,12 @@ export class SmartTypeScript {
     }
 
     try {
-      const result = JSON.parse(cached) as SmartTypeScriptOutput & {
+      const { cachedAt, ...result } = JSON.parse(
+        cached
+      ) as SmartTypeScriptOutput & {
         cachedAt: number;
       };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         result.summary.fromCache = true;
@@ -1016,7 +1013,7 @@ export async function runSmartTypescript(
     if (result.summary.incrementalMode) {
       output += `  Mode: Incremental (changed files only)\n`;
     }
-    output += `  Duration: ${(result.summary.duration / 1000).toFixed(2)}s\n\n`;
+    output += '\n';
 
     // Dependency information (incremental mode)
     if (result.dependencies) {

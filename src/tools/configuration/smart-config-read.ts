@@ -118,7 +118,6 @@ export interface SmartConfigReadResult {
     /** Tokens the config file itself costs, which is what reading it would have cost. */
     originalTokenCount: number;
     compressionRatio: number;
-    parseTime: number;
   };
   // NO schema FIELD, DELIBERATELY.
   //
@@ -409,7 +408,6 @@ export class SmartConfigReadTool {
         fromCache,
         isDiff,
         ...savings,
-        parseTime,
       },
     };
   }
@@ -829,7 +827,7 @@ export async function runSmartConfigRead(
 export const SMART_CONFIG_READ_TOOL_DEFINITION = {
   name: 'smart_config_read',
   description:
-    'Read and parse configuration files (JSON, YAML, TOML) with schema-aware caching and intelligent diffing. Measured token reduction vs reading the file: -20% to -9% first read, 49-98% repeated (bench/tools, 2 fixtures) -- a first read costs more than the file at both sizes measured; the saving is on the repeat.',
+    'Read and parse configuration files (JSON, YAML, TOML) with schema-aware caching and intelligent diffing. Measured token reduction vs reading the file: -20% to -7% first read, 51-98% repeated (bench/tools, 2 fixtures) -- a first read costs more than the file at both sizes measured; the saving is on the repeat.',
   inputSchema: {
     type: 'object',
     properties: {

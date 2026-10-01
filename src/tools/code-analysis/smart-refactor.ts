@@ -122,7 +122,6 @@ export interface SmartRefactorResult {
     byType: Record<string, number>;
     estimatedImpact: 'low' | 'medium' | 'high';
     fromCache: boolean;
-    duration: number;
   };
   /**
    * One row per finding, field names sent once.
@@ -328,7 +327,6 @@ export class SmartRefactorTool {
         byType,
         estimatedImpact,
         fromCache: false,
-        duration: Date.now() - startTime,
       },
       suggestions: encodeTable(rows as unknown as Record<string, unknown>[]),
       guidance,
@@ -895,10 +893,12 @@ export class SmartRefactorTool {
     const cached = this.cache.get(key);
     if (!cached) return null;
 
-    const result = JSON.parse(cached) as SmartRefactorResult & {
+    const { cachedAt, ...result } = JSON.parse(
+      cached
+    ) as SmartRefactorResult & {
       cachedAt: number;
     };
-    const age = (Date.now() - result.cachedAt) / 1000;
+    const age = (Date.now() - cachedAt) / 1000;
 
     if (age <= maxAge) {
       result.summary.fromCache = true;

@@ -111,7 +111,6 @@ export interface SmartWorkflowResult {
     tokenCount: number;
     originalTokenCount: number;
     compressionRatio: number;
-    parseTime: number;
   };
   validationErrors?: WorkflowValidationError[];
   securityIssues?: WorkflowSecurityIssue[];
@@ -332,7 +331,6 @@ export class SmartWorkflowTool {
         tokenCount: originalTokens,
         originalTokenCount: originalTokens,
         compressionRatio: 1.0,
-        parseTime,
       },
       validationErrors:
         validationErrors.length > 0 ? validationErrors : undefined,

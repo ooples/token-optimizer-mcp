@@ -90,7 +90,6 @@ export interface SmartComplexityResult {
     totalFunctions: number;
     riskLevel: 'low' | 'medium' | 'high' | 'critical';
     fromCache: boolean;
-    duration: number;
   };
   /**
    * One row per function, field names sent once.
@@ -277,7 +276,6 @@ export class SmartComplexityTool {
         totalFunctions,
         riskLevel,
         fromCache: false,
-        duration: Date.now() - startTime,
       },
       functions: encodeTable(functions as unknown as Record<string, unknown>[]),
       recommendations,
@@ -756,10 +754,12 @@ export class SmartComplexityTool {
     const cached = this.cache.get(key);
     if (!cached) return null;
 
-    const result = JSON.parse(cached) as SmartComplexityResult & {
+    const { cachedAt, ...result } = JSON.parse(
+      cached
+    ) as SmartComplexityResult & {
       cachedAt: number;
     };
-    const age = (Date.now() - result.cachedAt) / 1000;
+    const age = (Date.now() - cachedAt) / 1000;
 
     if (age <= maxAge) {
       result.summary.fromCache = true;

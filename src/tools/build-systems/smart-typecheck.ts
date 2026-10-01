@@ -416,10 +416,10 @@ export class SmartTypeCheck {
     }
 
     try {
-      const result = JSON.parse(cached) as TypeCheckResult & {
+      const { cachedAt, ...result } = JSON.parse(cached) as TypeCheckResult & {
         cachedAt: number;
       };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         return result;

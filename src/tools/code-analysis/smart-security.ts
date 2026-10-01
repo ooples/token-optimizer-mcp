@@ -117,7 +117,6 @@ interface SecurityScanResult {
   findingsBySeverity: Record<VulnerabilitySeverity, number>;
   findingsByCategory: Record<VulnerabilityCategory, number>;
   findings: VulnerabilityFinding[];
-  duration: number;
   timestamp: number;
 }
 
@@ -227,7 +226,6 @@ export interface SmartSecurityOutput {
     highCount: number;
     mediumCount: number;
     lowCount: number;
-    duration: number;
     fromCache: boolean;
     incrementalMode: boolean;
     /**
@@ -728,12 +726,7 @@ export class SmartSecurity {
     // this costs one failed stat, and an empty file set hashes to one key -- so
     // caching it would let a refusal about one bad path answer for another.
     if (filesToScan.length === 0) {
-      return this.refuseEmptyScan(
-        discovery,
-        requested,
-        deadlineMs,
-        Date.now() - startTime
-      );
+      return this.refuseEmptyScan(discovery, requested, deadlineMs);
     }
 
     // Generate cache key
@@ -764,7 +757,6 @@ export class SmartSecurity {
       : await this.fullScan(filesToScan);
 
     const duration = Date.now() - startTime;
-    scanResults.duration = duration;
 
     // Filter by severity if needed
     if (minSeverity !== 'low') {
@@ -826,8 +818,7 @@ export class SmartSecurity {
       unresolved: UnresolvedTarget[];
     },
     requested: string[],
-    deadlineMs: number,
-    duration: number
+    deadlineMs: number
   ): SmartSecurityOutput {
     const unresolved = discovery.unresolved;
     const described = unresolved.map(
@@ -858,7 +849,6 @@ export class SmartSecurity {
         highCount: 0,
         mediumCount: 0,
         lowCount: 0,
-        duration,
         fromCache: false,
         incrementalMode: false,
         scannedNothing: true,
@@ -1165,7 +1155,6 @@ export class SmartSecurity {
       findingsBySeverity,
       findingsByCategory,
       findings,
-      duration: 0, // Set by caller
       timestamp: Date.now(),
     };
   }
@@ -1214,7 +1203,6 @@ export class SmartSecurity {
         highCount: result.findingsBySeverity.high,
         mediumCount: result.findingsBySeverity.medium,
         lowCount: result.findingsBySeverity.low,
-        duration: result.duration,
         fromCache: false,
         incrementalMode,
       },
@@ -1534,10 +1522,12 @@ export class SmartSecurity {
     }
 
     try {
-      const result = JSON.parse(cached) as SmartSecurityOutput & {
+      const { cachedAt, ...result } = JSON.parse(
+        cached
+      ) as SmartSecurityOutput & {
         cachedAt: number;
       };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         result.summary.fromCache = true;
@@ -1633,7 +1623,7 @@ export async function runSmartSecurity(
     if (result.summary.incrementalMode) {
       output += `  Mode: Incremental (changed files only)\n`;
     }
-    output += `  Duration: ${(result.summary.duration / 1000).toFixed(2)}s\n\n`;
+    output += '\n';
 
     // Findings by severity
     if (result.findingsBySeverity.length > 0) {
@@ -1704,7 +1694,7 @@ export async function runSmartSecurity(
 export const SMART_SECURITY_TOOL_DEFINITION = {
   name: 'smart_security',
   description:
-    'Security vulnerability scanner with pattern detection and intelligent caching. Measured token reduction vs reading the file: -102% to 49% first read, -102% to 49% repeated (bench/tools, 3 fixtures) -- the loss is on the smallest fixture, where the findings and the context quoted for each outweigh the 5KB file they were found in.',
+    'Security vulnerability scanner with pattern detection and intelligent caching. Measured token reduction vs reading the file: -50% to 99% first read, -50% to 98% repeated (bench/tools, 4 fixtures) -- the three clean fixtures cost a flat 98 tokens each, because a scan that finds nothing says so in the same words whatever it was pointed at; the loss is the fourth, where six findings and a remediation for each outweigh the small file they were found in.',
   inputSchema: {
     type: 'object',
     properties: {

@@ -148,7 +148,6 @@ export interface SmartDependenciesResult {
     tokenCount: number;
     originalTokenCount: number;
     compressionRatio: number;
-    duration: number;
     cacheHit: boolean;
     incrementalUpdate: boolean;
     /**
@@ -299,7 +298,6 @@ export class SmartDependenciesTool {
 
       // Record metrics
       const duration = Date.now() - startTime;
-      result.metadata.duration = duration;
 
       this.metrics.record({
         operation: 'smart_dependencies',
@@ -341,7 +339,6 @@ export class SmartDependenciesTool {
           tokenCount: 0,
           originalTokenCount: 0,
           compressionRatio: 0,
-          duration,
           cacheHit: false,
           incrementalUpdate: false,
         },
@@ -395,7 +392,6 @@ export class SmartDependenciesTool {
                 // is a claim to have saved 100% of the content it returned.
                 // `unmeasured()` claims nothing, which is the truth here.
                 ...unmeasured(this.measureGraphTokens(cachedGraph)),
-                duration: 0,
                 cacheHit: true,
                 incrementalUpdate: false,
               },
@@ -428,7 +424,6 @@ export class SmartDependenciesTool {
                 externalDependencies: this.countExternalDeps(updatedGraph),
                 internalDependencies: this.countInternalDeps(updatedGraph),
                 ...savings,
-                duration: 0,
                 cacheHit: false,
                 incrementalUpdate: true,
               },
@@ -447,7 +442,6 @@ export class SmartDependenciesTool {
               internalDependencies: this.countInternalDeps(cachedGraph),
               // See above: a cache hit has no measured baseline.
               ...unmeasured(this.measureGraphTokens(cachedGraph)),
-              duration: 0,
               cacheHit: true,
               incrementalUpdate: false,
             },
@@ -485,7 +479,6 @@ export class SmartDependenciesTool {
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
         ...savings,
-        duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
         ...(truncatedBy
@@ -937,7 +930,6 @@ export class SmartDependenciesTool {
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
         ...savings,
-        duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
       },
@@ -1010,7 +1002,6 @@ export class SmartDependenciesTool {
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
         ...savings,
-        duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
       },
@@ -1038,7 +1029,6 @@ export class SmartDependenciesTool {
           tokenCount: 0,
           originalTokenCount: 0,
           compressionRatio: 0,
-          duration: 0,
           cacheHit: false,
           incrementalUpdate: false,
         },
@@ -1060,7 +1050,6 @@ export class SmartDependenciesTool {
           tokenCount: 0,
           originalTokenCount: 0,
           compressionRatio: 0,
-          duration: 0,
           cacheHit: false,
           incrementalUpdate: false,
         },
@@ -1139,7 +1128,6 @@ export class SmartDependenciesTool {
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
         ...savings,
-        duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
       },
@@ -1195,7 +1183,6 @@ export class SmartDependenciesTool {
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
         ...savings,
-        duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
       },
@@ -1494,7 +1481,7 @@ export async function runSmartDependencies(
 export const SMART_DEPENDENCIES_TOOL_DEFINITION = {
   name: 'smart_dependencies',
   description:
-    'Analyze project dependencies through graph caching and incremental updates. Measured token reduction vs reading the file: 61-99% first read, 61-99% repeated (bench/tools, 2 fixtures).',
+    'Analyze project dependencies through graph caching and incremental updates. Measured token reduction vs reading the file: 63-99% first read, 63-99% repeated (bench/tools, 2 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {

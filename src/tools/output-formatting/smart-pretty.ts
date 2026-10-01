@@ -212,7 +212,6 @@ export interface FormatResult {
     tokensUsed: number;
     tokensSaved: number;
     cacheHit: boolean;
-    formatTime: number;
   };
 }
 
@@ -246,7 +245,6 @@ export interface SmartPrettyResult {
     tokensUsed: number;
     tokensSaved: number;
     cacheHit: boolean;
-    executionTime: number;
   };
 }
 
@@ -551,7 +549,6 @@ export class SmartPretty {
   private async highlightCode(
     options: SmartPrettyOptions
   ): Promise<SmartPrettyResult> {
-    const startTime = Date.now();
     const useCache = options.useCache !== false;
 
     const code = await this.readSubject(options);
@@ -637,7 +634,6 @@ export class SmartPretty {
               tokensUsed: cachedSavings.tokenCount,
               tokensSaved: cachedSavings.tokensSaved,
               cacheHit: true,
-              executionTime: Date.now() - startTime,
             },
           };
         }
@@ -776,7 +772,6 @@ export class SmartPretty {
         tokensUsed,
         tokensSaved: savings.tokensSaved,
         cacheHit: false,
-        executionTime: Date.now() - startTime,
       },
     };
   }
@@ -787,8 +782,6 @@ export class SmartPretty {
   private async formatCode(
     options: SmartPrettyOptions
   ): Promise<SmartPrettyResult> {
-    const startTime = Date.now();
-
     const code = await this.readSubject(options);
 
     // Detect language if not provided
@@ -812,7 +805,6 @@ export class SmartPretty {
         tokensUsed,
         tokensSaved: result.metadata.tokensSaved,
         cacheHit: result.metadata.cacheHit,
-        executionTime: Date.now() - startTime,
       },
     };
   }
@@ -823,8 +815,6 @@ export class SmartPretty {
   private async detectLanguage(
     options: SmartPrettyOptions
   ): Promise<SmartPrettyResult> {
-    const startTime = Date.now();
-
     const code = await this.readSubject(options);
     const detection = await this.detectLanguageInternal(
       code,
@@ -847,7 +837,6 @@ export class SmartPretty {
         tokensUsed: noClaim.tokenCount,
         tokensSaved: noClaim.tokensSaved,
         cacheHit: false,
-        executionTime: Date.now() - startTime,
       },
     };
   }
@@ -858,8 +847,6 @@ export class SmartPretty {
   private async applyTheme(
     options: SmartPrettyOptions
   ): Promise<SmartPrettyResult> {
-    const startTime = Date.now();
-
     const themeName = options.theme || 'default';
     const themeDefinition = this.getTheme(themeName, options.customTheme);
     const outputMode = options.outputMode || 'ansi';
@@ -896,7 +883,6 @@ export class SmartPretty {
         tokensUsed: noClaim.tokenCount,
         tokensSaved: noClaim.tokensSaved,
         cacheHit: false,
-        executionTime: Date.now() - startTime,
       },
     };
   }
@@ -946,7 +932,6 @@ export class SmartPretty {
     language: string,
     options: SmartPrettyOptions
   ): Promise<FormatResult> {
-    const startTime = Date.now();
     const useCache = options.useCache !== false;
 
     // Check if language is supported
@@ -969,7 +954,6 @@ export class SmartPretty {
           tokensUsed: untouched.tokenCount,
           tokensSaved: untouched.tokensSaved,
           cacheHit: false,
-          formatTime: Date.now() - startTime,
         },
       };
     }
@@ -1050,7 +1034,6 @@ export class SmartPretty {
     }
 
     const changes = this.calculateChanges(code, formattedCode);
-    const formatTime = Date.now() - startTime;
 
     // A FORMATTER CANNOT SAVE TOKENS EITHER. This was a hardcoded 0, which
     // happened to look harmless and was still a number nobody had measured:
@@ -1071,7 +1054,6 @@ export class SmartPretty {
         tokensUsed: formatSavings.tokenCount,
         tokensSaved: formatSavings.tokensSaved,
         cacheHit: false,
-        formatTime,
       },
     };
 
@@ -1603,7 +1585,7 @@ export async function runSmartPretty(
 export const SMART_PRETTY_TOOL_DEFINITION = {
   name: 'smart_pretty',
   description:
-    'Syntax highlighting and code formatting. Supports 50+ languages, ANSI/HTML output, multiple themes, and Prettier integration. Measured token reduction vs reading the file: -31% to -15% first read, -30% to -15% repeated (bench/tools, 3 fixtures) -- highlighting and formatting add characters to the code they are given, so neither can reduce anything; the earlier 94% was an elided payload counted as economy.',
+    'Syntax highlighting and code formatting. Supports 50+ languages, ANSI/HTML output, multiple themes, and Prettier integration. Measured token reduction vs reading the file: -29% to -15% first read, -29% to -15% repeated (bench/tools, 3 fixtures) -- highlighting and formatting add characters to the code they are given, so neither can reduce anything; the earlier 94% was an elided payload counted as economy.',
   inputSchema: {
     type: 'object' as const,
     properties: {

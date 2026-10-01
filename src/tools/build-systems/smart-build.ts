@@ -400,8 +400,10 @@ export class SmartBuild {
     }
 
     try {
-      const result = JSON.parse(cached) as BuildResult & { cachedAt: number };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const { cachedAt, ...result } = JSON.parse(cached) as BuildResult & {
+        cachedAt: number;
+      };
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         return result;

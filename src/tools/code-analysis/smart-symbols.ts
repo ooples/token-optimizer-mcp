@@ -87,7 +87,6 @@ export interface SmartSymbolsResult {
     byKind: Record<string, number>;
     exportedCount: number;
     fromCache: boolean;
-    duration: number;
   };
 
   /**
@@ -226,7 +225,6 @@ export class SmartSymbolsTool {
         byKind,
         exportedCount,
         fromCache: false,
-        duration,
       },
       symbols,
       imports,
@@ -661,10 +659,12 @@ export class SmartSymbolsTool {
     }
 
     try {
-      const result = JSON.parse(cached) as SmartSymbolsResult & {
+      const { cachedAt, ...result } = JSON.parse(
+        cached
+      ) as SmartSymbolsResult & {
         cachedAt: number;
       };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         result.summary.fromCache = true;
@@ -753,8 +753,7 @@ export async function runSmartSymbols(
     // Summary
     output += `File: ${result.summary.file}\n`;
     output += `Total Symbols: ${result.summary.totalSymbols}\n`;
-    output += `Exported: ${result.summary.exportedCount}\n`;
-    output += `Duration: ${result.summary.duration}ms\n\n`;
+    output += `Exported: ${result.summary.exportedCount}\n\n`;
 
     // By kind
     output += `Symbols by Kind:\n`;

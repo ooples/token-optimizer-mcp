@@ -165,7 +165,6 @@ export interface SmartEnvResult {
      * clamped to zero.
      */
     tokensSaved: number;
-    executionTime: number;
   };
 }
 
@@ -226,7 +225,6 @@ export class SmartEnv {
       await this.cacheResult(cacheKey, result);
 
       const executionTime = Date.now() - startTime;
-      result.metadata.executionTime = executionTime;
 
       this.metrics.record({
         operation: 'smart-env',
@@ -265,7 +263,6 @@ export class SmartEnv {
           baselineTokens: 0,
           tokensUsed: 0,
           tokensSaved: 0,
-          executionTime,
         },
       };
     }
@@ -437,7 +434,6 @@ export class SmartEnv {
         baselineTokens,
         tokensUsed,
         tokensSaved: baselineTokens - tokensUsed,
-        executionTime: 0, // Will be set by caller
       },
     };
   }
@@ -860,7 +856,7 @@ export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
 export const SMART_ENV_TOOL_DEFINITION = {
   name: 'smart_env',
   description:
-    'Smart environment variable analyzer with security checking and suggestions. Measured token reduction vs reading the file: -79% to -11% first read, -79% to -11% repeated (bench/tools, 2 fixtures) -- this answers what the variables are and what is wrong with them, and at both sizes measured the answer costs more than the file.',
+    'Smart environment variable analyzer with security checking and suggestions. Measured token reduction vs reading the file: -74% to -10% first read, -74% to -10% repeated (bench/tools, 2 fixtures) -- this answers what the variables are and what is wrong with them, and at both sizes measured the answer costs more than the file.',
   inputSchema: {
     type: 'object' as const,
     properties: {
