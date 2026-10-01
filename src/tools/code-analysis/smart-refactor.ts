@@ -3,7 +3,6 @@
  *
  * Provides intelligent refactoring suggestions with code examples
  * Analyzes code patterns and suggests improvements
- * Target: 75-85% token reduction through suggestion summarization
  */
 
 import * as ts from 'typescript';
@@ -20,7 +19,9 @@ import {
   type FunctionComplexity,
   type SmartComplexityResult,
 } from './smart-complexity.js';
-import { decodeTable } from '../shared/table.js';
+import { decodeTable, encodeTable, type Table } from '../shared/table.js';
+import { displayPath } from '../shared/report-shape.js';
+import { measured } from '../shared/savings.js';
 
 export interface SmartRefactorOptions {
   filePath?: string;
@@ -42,12 +43,23 @@ export interface SmartRefactorOptions {
 export interface RefactorSuggestion {
   type: string;
   severity: 'info' | 'warning' | 'error';
-  location: {
-    line: number;
-    column: number;
-    endLine?: number;
-    endColumn?: number;
-  };
+  /**
+   * Every place this same finding occurs, as [line, column] pairs.
+   *
+   * ONE FINDING, ALL ITS PLACES -- not one finding per place.
+   *
+   * These were separate suggestions, each carrying its own copy of the
+   * message, the advice, the code example and the impact block. On one
+   * 4937-token source file that produced 100 suggestions holding 26 distinct
+   * messages: "Single-letter variable 'n' is not descriptive." was sent 50
+   * times and the same sentence for 'f' 24 times, identical in every field
+   * but the line. That is not 50 findings, and answering as though it were
+   * cost 7214 tokens to report on a 4937-token file.
+   *
+   * The previous shape also declared endLine and endColumn, which no
+   * producer ever set.
+   */
+  locations: Array<[line: number, column: number]>;
   message: string;
   suggestion: string;
   codeExample?: {
@@ -61,20 +73,83 @@ export interface RefactorSuggestion {
   };
 }
 
+/**
+ * The advice and worked example for a kind of refactoring, sent once.
+ *
+ * Most of what a suggestion said was a property of its TYPE, not of the place
+ * it was found: the same "Extract complex conditions into descriptively named
+ * boolean variables." and the same before/after example went out with every
+ * simplify-conditional finding. On one fixture the codeExample field alone
+ * was 517 of the 1982 tokens the suggestions cost, most of it the same
+ * textbook snippet repeated.
+ *
+ * Hoisting it here loses nothing: a finding that omits `suggestion` or
+ * `codeExample` means the entry under its own type, which is in this same
+ * response, and a finding whose advice genuinely differs still carries its
+ * own.
+ */
+export interface RefactorGuidance {
+  suggestion: string;
+  codeExample?: {
+    before: string;
+    after: string;
+  };
+}
+
+/**
+ * A finding as it is sent: its own advice only where that differs from the
+ * shared {`link RefactorGuidance} for its type.
+ */
+export type RefactorSuggestionRow = Omit<
+  RefactorSuggestion,
+  'suggestion' | 'codeExample'
+> &
+  Partial<Pick<RefactorSuggestion, 'suggestion' | 'codeExample'>>;
+
 export interface SmartRefactorResult {
   summary: {
     file: string;
+    /** Distinct findings, after identical ones were folded onto one entry. */
     totalSuggestions: number;
+    /**
+     * Places those findings occur, summed over every entry's locations.
+     *
+     * Kept so folding loses no count: this is what totalSuggestions used to
+     * report, when one occurrence was one suggestion.
+     */
+    totalOccurrences: number;
     bySeverity: Record<string, number>;
     byType: Record<string, number>;
     estimatedImpact: 'low' | 'medium' | 'high';
     fromCache: boolean;
     duration: number;
   };
-  suggestions: RefactorSuggestion[];
+  /**
+   * One row per finding, field names sent once.
+   *
+   * Decode with `decodeTable<RefactorSuggestionRow>(result.suggestions)`. As
+   * an array of objects this re-labelled every field on every element; on a
+   * 26-finding response that repetition cost 526 tokens.
+   *
+   * A row's `suggestion` and `codeExample` may be absent, which means the
+   * entry for its type in {`link SmartRefactorResult.guidance}.
+   */
+  suggestions: Table;
+  /** Per-type advice, keyed by `type`, referenced by the rows above. */
+  guidance: Record<string, RefactorGuidance>;
   metrics: {
+    /** Cost of reading the file this tool analysed, which is what it replaces. */
     originalTokens: number;
+    /**
+     * Cost of this response as it is sent, minus this metrics block.
+     *
+     * It used to be the length of a private compactResult() summary -- four
+     * abbreviated fields per suggestion -- that no caller ever received,
+     * measured against JSON.stringify(result, null, 2), whose indentation no
+     * caller receives either. Neither side was the thing being reported on.
+     */
     compactedTokens: number;
+    /** Signed: a response costing more than the file reports a negative. */
     reductionPercentage: number;
   };
 }
@@ -185,12 +260,12 @@ export class SmartRefactorTool {
     });
 
     // Analyze and generate suggestions
-    const suggestions: RefactorSuggestion[] = [];
+    const rawSuggestions: RefactorSuggestion[] = [];
 
     for (const type of refactorTypes) {
       switch (type) {
         case 'extract-method':
-          suggestions.push(
+          rawSuggestions.push(
             ...this.suggestExtractMethod(
               complexityResult,
               minComplexityForExtraction
@@ -198,22 +273,27 @@ export class SmartRefactorTool {
           );
           break;
         case 'simplify-conditional':
-          suggestions.push(...this.suggestSimplifyConditional(sourceFile));
+          rawSuggestions.push(...this.suggestSimplifyConditional(sourceFile));
           break;
         case 'remove-duplication':
-          suggestions.push(...this.suggestRemoveDuplication(sourceFile));
+          rawSuggestions.push(...this.suggestRemoveDuplication(sourceFile));
           break;
         case 'improve-naming':
-          suggestions.push(...this.suggestImproveNaming(sourceFile));
+          rawSuggestions.push(...this.suggestImproveNaming(sourceFile));
           break;
         case 'reduce-complexity':
-          suggestions.push(...this.suggestReduceComplexity(complexityResult));
+          rawSuggestions.push(...this.suggestReduceComplexity(complexityResult));
           break;
         case 'extract-constant':
-          suggestions.push(...this.suggestExtractConstant(sourceFile));
+          rawSuggestions.push(...this.suggestExtractConstant(sourceFile));
           break;
       }
     }
+
+    // Identical findings are one finding at many places. The producers above
+    // each emit one entry per occurrence, which is the natural way to write a
+    // visitor; folding them here keeps that simple and still answers once.
+    const suggestions = this.foldIdenticalFindings(rawSuggestions);
 
     // Calculate summary statistics
     const bySeverity: Record<string, number> = {
@@ -229,18 +309,27 @@ export class SmartRefactorTool {
 
     const estimatedImpact = this.calculateEstimatedImpact(suggestions);
 
+    // Advice that belongs to the kind of refactoring, not to the place, is
+    // said once for that kind.
+    const { guidance, rows } = this.hoistGuidance(suggestions);
+
     // Build result
     const result: SmartRefactorResult = {
       summary: {
-        file: filePath || 'anonymous',
+        file: filePath ? displayPath(absolutePath ?? filePath) : 'anonymous',
         totalSuggestions: suggestions.length,
+        totalOccurrences: suggestions.reduce(
+          (total, entry) => total + entry.locations.length,
+          0
+        ),
         bySeverity,
         byType,
         estimatedImpact,
         fromCache: false,
         duration: Date.now() - startTime,
       },
-      suggestions,
+      suggestions: encodeTable(rows as unknown as Record<string, unknown>[]),
+      guidance,
       metrics: {
         originalTokens: 0,
         compactedTokens: 0,
@@ -248,17 +337,21 @@ export class SmartRefactorTool {
       },
     };
 
-    // Calculate token metrics
-    const originalText = JSON.stringify(result, null, 2);
-    const compactText = this.compactResult(result);
-    result.metrics.originalTokens =
-      this.tokenCounter.count(originalText).tokens;
-    result.metrics.compactedTokens =
-      this.tokenCounter.count(compactText).tokens;
-    result.metrics.reductionPercentage =
-      ((result.metrics.originalTokens - result.metrics.compactedTokens) /
-        result.metrics.originalTokens) *
-      100;
+    // THE SOURCE IS THE BASELINE, AND THE RESPONSE IS COUNTED AS IT IS SENT.
+    // A caller reaches for this tool instead of reading the file and finding
+    // the refactorings itself, so the file is what the saving is against. The
+    // metrics block itself is excluded because it reports on the rest, and
+    // counting it would make the figure depend on its own digits.
+    const { metrics: _placeholder, ...served } = result;
+    const savings = measured(
+      this.tokenCounter.count(content).tokens,
+      this.tokenCounter.count(JSON.stringify(served)).tokens
+    );
+    result.metrics.originalTokens = savings.originalTokenCount;
+    result.metrics.compactedTokens = savings.tokenCount;
+    result.metrics.reductionPercentage = parseFloat(
+      ((savings.tokensSaved / (savings.originalTokenCount || 1)) * 100).toFixed(2)
+    );
 
     // Cache result
     this.cacheResult(cacheKey, result);
@@ -295,11 +388,10 @@ export class SmartRefactorTool {
     );
 
     for (const func of complexFunctions) {
-      const location = func.location;
       suggestions.push({
         type: 'extract-method',
         severity: func.complexity.cyclomatic > 20 ? 'error' : 'warning',
-        location,
+        locations: [[func.location.line, func.location.column]],
         message: `Function '${func.name}' has high complexity (${func.complexity.cyclomatic}). Consider extracting smaller methods.`,
         suggestion: `Break down '${func.name}' into smaller, focused functions with single responsibilities.`,
         impact: {
@@ -318,16 +410,35 @@ export class SmartRefactorTool {
   ): RefactorSuggestion[] {
     const suggestions: RefactorSuggestion[] = [];
 
+    // A REPORTED CONSTRUCT IS NOT REPORTED AGAIN FROM THE INSIDE.
+    //
+    // Both checks below measure a whole construct -- the depth of an if
+    // chain, the operator count of a boolean expression -- and the visitor
+    // then walked into it and measured the same construct again, one level
+    // down. A four-level if chain was reported at four levels and again at
+    // three; one conditional in the fixtures produced two findings at the
+    // identical line and column, "5 logical operators" and "4", which are
+    // the same expression counted from two of its nodes. The visitor runs
+    // parents before children, so the first report of a construct is its
+    // outermost node, and anything inside that range is the same finding.
+    const reportedIfs: ts.TextRange[] = [];
+    const reportedBooleans: ts.TextRange[] = [];
+    const within = (ranges: ts.TextRange[], node: ts.Node): boolean =>
+      ranges.some(
+        (range) => node.getStart() >= range.pos && node.getEnd() <= range.end
+      );
+
     const visit = (node: ts.Node) => {
       // Nested if statements
-      if (ts.isIfStatement(node)) {
+      if (ts.isIfStatement(node) && !within(reportedIfs, node)) {
         const nestedIfs = this.countNestedIfs(node);
         if (nestedIfs > 2) {
+          reportedIfs.push({ pos: node.getStart(), end: node.getEnd() });
           const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart());
           suggestions.push({
             type: 'simplify-conditional',
             severity: 'warning',
-            location: { line: pos.line + 1, column: pos.character },
+            locations: [[pos.line + 1, pos.character]],
             message: `Deeply nested if statements (${nestedIfs} levels). Consider using early returns or guard clauses.`,
             suggestion:
               'Use early returns or extract conditions into well-named variables.',
@@ -346,14 +457,15 @@ export class SmartRefactorTool {
       }
 
       // Complex boolean expressions
-      if (ts.isBinaryExpression(node)) {
+      if (ts.isBinaryExpression(node) && !within(reportedBooleans, node)) {
         const complexity = this.countLogicalOperators(node);
         if (complexity > 3) {
+          reportedBooleans.push({ pos: node.getStart(), end: node.getEnd() });
           const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart());
           suggestions.push({
             type: 'simplify-conditional',
             severity: 'warning',
-            location: { line: pos.line + 1, column: pos.character },
+            locations: [[pos.line + 1, pos.character]],
             message: `Complex boolean expression with ${complexity} logical operators. Consider extracting into well-named variables.`,
             suggestion:
               'Extract complex conditions into descriptively named boolean variables.',
@@ -423,7 +535,7 @@ export class SmartRefactorTool {
         suggestions.push({
           type: 'remove-duplication',
           severity: 'warning',
-          location: { line: pos.line + 1, column: pos.character },
+          locations: [[pos.line + 1, pos.character]],
           message: `Found ${blocks.length} duplicate or very similar code blocks.`,
           suggestion:
             'Extract common logic into a reusable function or utility.',
@@ -456,7 +568,7 @@ export class SmartRefactorTool {
           suggestions.push({
             type: 'improve-naming',
             severity: 'info',
-            location: { line: pos.line + 1, column: pos.character },
+            locations: [[pos.line + 1, pos.character]],
             message: `Single-letter variable '${name}' is not descriptive.`,
             suggestion:
               "Use a descriptive name that explains the variable's purpose.",
@@ -483,7 +595,7 @@ export class SmartRefactorTool {
           suggestions.push({
             type: 'improve-naming',
             severity: 'info',
-            location: { line: pos.line + 1, column: pos.character },
+            locations: [[pos.line + 1, pos.character]],
             message: `Generic variable name '${name}' lacks clarity.`,
             suggestion:
               'Use a more specific name that describes what this variable contains or represents.',
@@ -501,7 +613,7 @@ export class SmartRefactorTool {
           suggestions.push({
             type: 'improve-naming',
             severity: 'info',
-            location: { line: pos.line + 1, column: pos.character },
+            locations: [[pos.line + 1, pos.character]],
             message: `Inconsistent naming convention in '${name}'.`,
             suggestion:
               'Use consistent naming: camelCase for variables/functions, PascalCase for classes, SCREAMING_CASE for constants.',
@@ -530,11 +642,10 @@ export class SmartRefactorTool {
       complexityResult.functions
     )) {
       if (func.complexity.cognitive > 15) {
-        const location = func.location;
         suggestions.push({
           type: 'reduce-complexity',
           severity: func.complexity.cognitive > 25 ? 'error' : 'warning',
-          location,
+          locations: [[func.location.line, func.location.column]],
           message: `Function '${func.name}' has high cognitive complexity (${func.complexity.cognitive}).`,
           suggestion:
             'Reduce nesting, extract helper functions, and simplify control flow.',
@@ -559,14 +670,29 @@ export class SmartRefactorTool {
     sourceFile: ts.SourceFile
   ): RefactorSuggestion[] {
     const suggestions: RefactorSuggestion[] = [];
-    const magicNumbers = new Map<string, number>();
+    // WHERE each occurrence is, not just how many there are. This counted
+    // occurrences and then reported every finding at line 1, column 0, so the
+    // one field that would let a caller go and change the literals pointed at
+    // the top of the file instead. The positions are free here -- the visitor
+    // is already standing on the node.
+    const repeatedValues = new Map<string, Array<[number, number]>>();
+
+    const record = (value: string, node: ts.Node): void => {
+      const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+      const places = repeatedValues.get(value);
+      if (places === undefined) {
+        repeatedValues.set(value, [[pos.line + 1, pos.character]]);
+        return;
+      }
+      places.push([pos.line + 1, pos.character]);
+    };
 
     const visit = (node: ts.Node) => {
       if (ts.isNumericLiteral(node)) {
         const value = node.text;
         // Skip common non-magic numbers
         if (!['0', '1', '-1', '2'].includes(value)) {
-          magicNumbers.set(value, (magicNumbers.get(value) || 0) + 1);
+          record(value, node);
         }
       }
 
@@ -575,7 +701,7 @@ export class SmartRefactorTool {
         // Look for repeated string literals that might be constants
         if (value.length > 5) {
           // Skip very short strings
-          magicNumbers.set(value, (magicNumbers.get(value) || 0) + 1);
+          record(value, node);
         }
       }
 
@@ -585,12 +711,13 @@ export class SmartRefactorTool {
     visit(sourceFile);
 
     // Report values that appear multiple times
-    for (const [value, count] of magicNumbers) {
+    for (const [value, places] of repeatedValues) {
+      const count = places.length;
       if (count > 2) {
         suggestions.push({
           type: 'extract-constant',
           severity: 'info',
-          location: { line: 1, column: 0 },
+          locations: places,
           message: `Value '${value}' appears ${count} times. Consider extracting as a named constant.`,
           suggestion: `Extract '${value}' into a descriptively named constant to improve maintainability.`,
           codeExample: {
@@ -659,21 +786,90 @@ export class SmartRefactorTool {
     return 'low';
   }
 
-  private compactResult(result: SmartRefactorResult): string {
-    // Create compact summary for token efficiency
-    const compact = {
-      file: result.summary.file,
-      total: result.summary.totalSuggestions,
-      impact: result.summary.estimatedImpact,
-      suggestions: result.suggestions.map((s) => ({
-        t: s.type,
-        s: s.severity,
-        l: s.location.line,
-        m: s.message.substring(0, 100),
-      })),
-    };
+  /**
+   * Folds findings that differ only in where they occur onto one entry.
+   *
+   * The key is every field but the locations, so two entries merge only when
+   * their message, advice, code example, severity and impact are all
+   * identical -- a merge can therefore not change what the response says
+   * about any one place. Locations keep first-seen order, and a location
+   * repeated for the same finding is kept once.
+   */
+  private foldIdenticalFindings(
+    raw: RefactorSuggestion[]
+  ): RefactorSuggestion[] {
+    const folded = new Map<string, RefactorSuggestion>();
 
-    return JSON.stringify(compact);
+    for (const finding of raw) {
+      const { locations, ...withoutLocations } = finding;
+      const key = JSON.stringify(withoutLocations);
+      const existing = folded.get(key);
+      if (existing === undefined) {
+        folded.set(key, { ...withoutLocations, locations: [...locations] });
+        continue;
+      }
+      for (const place of locations) {
+        const alreadyThere = existing.locations.some(
+          ([line, column]) => line === place[0] && column === place[1]
+        );
+        if (!alreadyThere) {
+          existing.locations.push(place);
+        }
+      }
+    }
+
+    return [...folded.values()];
+  }
+
+  /**
+   * Moves each type's advice into a shared map and drops the copies that
+   * repeat it.
+   *
+   * The entry for a type is taken from the FIRST finding of that type, so the
+   * result does not depend on a frequency count, and a field is left off a
+   * finding only when it is byte-identical to that entry -- a finding whose
+   * advice or example differs keeps its own and reads exactly as before.
+   */
+  private hoistGuidance(suggestions: RefactorSuggestion[]): {
+    guidance: Record<string, RefactorGuidance>;
+    rows: RefactorSuggestionRow[];
+  } {
+    const guidance: Record<string, RefactorGuidance> = {};
+
+    for (const finding of suggestions) {
+      if (guidance[finding.type] === undefined) {
+        const entry: RefactorGuidance = { suggestion: finding.suggestion };
+        if (finding.codeExample !== undefined) {
+          entry.codeExample = finding.codeExample;
+        }
+        guidance[finding.type] = entry;
+      }
+    }
+
+    const rows = suggestions.map((finding) => {
+      const shared = guidance[finding.type];
+      const row: RefactorSuggestionRow = {
+        type: finding.type,
+        severity: finding.severity,
+        locations: finding.locations,
+        message: finding.message,
+        impact: finding.impact,
+      };
+      if (shared === undefined || shared.suggestion !== finding.suggestion) {
+        row.suggestion = finding.suggestion;
+      }
+      if (
+        finding.codeExample !== undefined &&
+        (shared === undefined ||
+          JSON.stringify(shared.codeExample) !==
+            JSON.stringify(finding.codeExample))
+      ) {
+        row.codeExample = finding.codeExample;
+      }
+      return row;
+    });
+
+    return { guidance, rows };
   }
 
   private async generateCacheKey(
