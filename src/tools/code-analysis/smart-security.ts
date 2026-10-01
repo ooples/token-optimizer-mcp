@@ -14,7 +14,7 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync, statSync } from 'fs';
-import { join, relative, extname } from 'path';
+import { join, relative, extname, isAbsolute, resolve } from 'path';
 import { homedir } from 'os';
 import { hashFileMetadata } from '../shared/hash-utils.js';
 import {
@@ -122,6 +122,30 @@ interface SecurityScanResult {
 }
 
 /**
+ * Why a requested target produced no file to scan.
+ *
+ * A fixed vocabulary rather than free text, because the caller's next action
+ * depends on which of these it is: a typo, a path written for the wrong root,
+ * or a directory that genuinely holds nothing this scanner reads.
+ */
+export const TARGET_FAILURES = Object.freeze({
+  missing: 'no such file or directory',
+  noScannableFile: 'a directory holding no file with a scannable extension',
+  unreadable: 'could not be read',
+} as const);
+
+export type TargetFailure = keyof typeof TARGET_FAILURES;
+
+/** A target that resolved to nothing, and why. */
+export interface UnresolvedTarget {
+  /** Exactly the string the caller passed, so it can be corrected. */
+  target: string;
+  /** Where it was looked for, which is the half the caller cannot see. */
+  resolvedTo: string;
+  reason: TargetFailure;
+}
+
+/**
  * Options for smart security scan
  */
 export interface SmartSecurityOptions {
@@ -137,8 +161,24 @@ export interface SmartSecurityOptions {
 
   /**
    * Files or directories to scan (specific targets for incremental mode)
+   *
+   * Absolute paths are accepted. They used to be joined onto `projectRoot`,
+   * which produced a path that cannot exist -- and because an unresolvable
+   * target was skipped silently, a scan of one named file reported `Secure`
+   * over nothing at all.
    */
   targets?: string[];
+
+  /**
+   * A single file to scan. Alias for `targets: [filePath]`.
+   *
+   * Every other tool on this server names its subject `filePath`, so callers
+   * wrote it here too -- and the schema dropped the key, turning a request
+   * about one file into an unfiltered scan of the whole project whose findings
+   * were then reported as that file's. Accepting the name a caller would
+   * reasonably use is cheaper than being right about which one is canonical.
+   */
+  filePath?: string;
 
   /**
    * File patterns to exclude (glob patterns)
@@ -199,6 +239,20 @@ export interface SmartSecurityOutput {
     searchTruncated?: boolean;
     searchTruncatedBy?: TruncationReason;
     searchNote?: string;
+
+    /**
+     * Set when NO FILE WAS OPENED, which is never a pass.
+     *
+     * `success` means "no critical or high findings", and over an empty file
+     * set that was trivially true: a scan of a path this tool could not resolve
+     * printed the same `Secure` as a scan that examined the code and found it
+     * clean. The two are not the same answer and must not read the same.
+     */
+    scannedNothing?: boolean;
+    /** Each requested target that resolved to no file, and why. */
+    unresolvedTargets?: UnresolvedTarget[];
+    /** One sentence saying what was not examined. Present with scannedNothing. */
+    refusal?: string;
   };
 
   /**
@@ -247,6 +301,20 @@ export interface SmartSecurityOutput {
     compactedTokens: number;
     reductionPercentage: number;
   };
+}
+
+/**
+ * What a truncated discovery means, in the words both the normal and the
+ * refused path use -- two spellings of this would be two different claims.
+ */
+function truncationNote(deadlineMs: number, found: number): string {
+  return (
+    'File discovery stopped at the ' +
+    deadlineMs +
+    'ms traversal deadline after finding ' +
+    found +
+    ' file(s), so parts of the project were never scanned and a clean result does NOT mean there is nothing there. Narrow `targets`, widen `exclude`, or raise TOKEN_OPTIMIZER_TRAVERSAL_DEADLINE_MS.'
+  );
 }
 
 /**
@@ -645,9 +713,28 @@ export class SmartSecurity {
     const startTime = Date.now();
     const deadlineMs = traversalDeadlineMs(options.deadlineMs);
 
+    // `filePath` is the name every other tool here uses for its subject, and a
+    // caller who wrote it got a whole-project scan reported as that file's.
+    const requested =
+      options.filePath !== undefined && options.filePath !== ''
+        ? [...targets, options.filePath]
+        : targets;
+
     // Determine files to scan
-    const discovery = await this.discoverFiles(targets, exclude, deadlineMs);
+    const discovery = await this.discoverFiles(requested, exclude, deadlineMs);
     const filesToScan = discovery.files;
+
+    // NOTHING OPENED IS NOT A PASS, AND NOT A CACHE ENTRY EITHER. Recomputing
+    // this costs one failed stat, and an empty file set hashes to one key -- so
+    // caching it would let a refusal about one bad path answer for another.
+    if (filesToScan.length === 0) {
+      return this.refuseEmptyScan(
+        discovery,
+        requested,
+        deadlineMs,
+        Date.now() - startTime
+      );
+    }
 
     // Generate cache key
     const cacheKey = await this.generateCacheKey(filesToScan);
@@ -671,7 +758,7 @@ export class SmartSecurity {
     }
 
     // Determine incremental vs full scan
-    const incrementalMode = targets.length > 0 && !force;
+    const incrementalMode = requested.length > 0 && !force;
     const scanResults = incrementalMode
       ? await this.incrementalScan(filesToScan)
       : await this.fullScan(filesToScan);
@@ -699,12 +786,10 @@ export class SmartSecurity {
     if (discovery.truncatedBy) {
       output.summary.searchTruncated = true;
       output.summary.searchTruncatedBy = discovery.truncatedBy;
-      output.summary.searchNote =
-        'File discovery stopped at the ' +
-        deadlineMs +
-        'ms traversal deadline after finding ' +
-        filesToScan.length +
-        ' file(s), so parts of the project were never scanned and a clean result does NOT mean there is nothing there. Narrow `targets`, widen `exclude`, or raise TOKEN_OPTIMIZER_TRAVERSAL_DEADLINE_MS.';
+      output.summary.searchNote = truncationNote(
+        deadlineMs,
+        filesToScan.length
+      );
     }
 
     // Cached under a key derived from the DISCOVERED FILE SET, so a partial
@@ -727,13 +812,93 @@ export class SmartSecurity {
   }
 
   /**
+   * Answer a scan that opened no file, naming what could not be resolved.
+   *
+   * THE DEFECT THIS REPLACES: `filesScanned: 0` with `success: true` rendered as
+   * a green `Secure (no critical/high issues)` status, which is a security
+   * claim about code that was never read. Measured over this repo's own
+   * fixtures, four of eight ways of naming a target produced exactly that.
+   */
+  private refuseEmptyScan(
+    discovery: {
+      files: string[];
+      truncatedBy?: TruncationReason;
+      unresolved: UnresolvedTarget[];
+    },
+    requested: string[],
+    deadlineMs: number,
+    duration: number
+  ): SmartSecurityOutput {
+    const unresolved = discovery.unresolved;
+    const described = unresolved.map(
+      (item) =>
+        `${item.target} -> ${item.resolvedTo} (${TARGET_FAILURES[item.reason]})`
+    );
+    // A BOUND AND AN UNRESOLVABLE PATH ARE DIFFERENT ANSWERS, and only one of
+    // them is the caller's to fix. Discovery that ran out of time reports no
+    // unresolved target, because it never got far enough to decide.
+    const refusal =
+      'No file was examined, so no statement is being made about this code. ' +
+      (discovery.truncatedBy !== undefined
+        ? truncationNote(deadlineMs, 0)
+        : described.length > 0
+          ? `${requested.length > 0 ? 'targets' : 'projectRoot'} resolved to 0 files: ${described.join('; ')}`
+          : 'Nothing was requested and nothing was found.');
+
+    return {
+      summary: {
+        // FALSE, because this value is what a caller tests to decide whether the
+        // code passed -- and over zero files the honest answer is "unknown",
+        // which on a two-valued flag has to be the one that does not pass.
+        success: false,
+        filesScanned: 0,
+        filesFromCache: 0,
+        totalFindings: 0,
+        criticalCount: 0,
+        highCount: 0,
+        mediumCount: 0,
+        lowCount: 0,
+        duration,
+        fromCache: false,
+        incrementalMode: false,
+        scannedNothing: true,
+        unresolvedTargets: unresolved,
+        refusal,
+        // Carried through rather than dropped: `scannedNothing` says no file was
+        // opened, and these say whether that was a bound or a bad path.
+        ...(discovery.truncatedBy !== undefined
+          ? {
+              searchTruncated: true,
+              searchTruncatedBy: discovery.truncatedBy,
+              searchNote: truncationNote(deadlineMs, 0),
+            }
+          : {}),
+      },
+      findingsBySeverity: [],
+      findingsByCategory: [],
+      remediationPriorities: [],
+      // Nothing was read, so nothing was saved. A reduction percentage here
+      // would be a saving claimed against a file that was never opened.
+      metrics: {
+        originalTokens: 0,
+        compactedTokens: 0,
+        reductionPercentage: 0,
+      },
+    };
+  }
+
+  /**
    * Discover files to scan
    */
   private async discoverFiles(
     targets: string[],
     exclude: string[],
     deadlineMs: number
-  ): Promise<{ files: string[]; truncatedBy?: TruncationReason }> {
+  ): Promise<{
+    files: string[];
+    truncatedBy?: TruncationReason;
+    unresolved: UnresolvedTarget[];
+  }> {
     // ONE budget for the whole call. `targets` is a list, and a per-target
     // deadline would multiply the ceiling by however many the caller passed.
     const expiresAt = Date.now() + deadlineMs;
@@ -745,6 +910,7 @@ export class SmartSecurity {
     };
 
     const files: string[] = [];
+    const unresolved: UnresolvedTarget[] = [];
     let truncatedBy: TruncationReason | undefined;
 
     const scanDirectory = async (dir: string) => {
@@ -776,22 +942,73 @@ export class SmartSecurity {
       // Scan specific targets
       for (const target of targets) {
         if (truncatedBy) break;
-        const fullPath = join(this.projectRoot, target);
-        if (existsSync(fullPath)) {
-          const stat = statSync(fullPath);
-          if (stat.isDirectory()) {
-            await scanDirectory(fullPath);
-          } else if (stat.isFile()) {
-            files.push(fullPath);
+        // AN ABSOLUTE TARGET IS ALREADY A PATH. Joining one onto the root built
+        // `<root>/C:/...`, which exists nowhere, and the miss was then skipped
+        // without a word -- so `targets: ['C:/repo/app.ts']` scanned no file and
+        // still answered `Secure`.
+        const fullPath = isAbsolute(target)
+          ? resolve(target)
+          : resolve(this.projectRoot, target);
+        if (!existsSync(fullPath)) {
+          unresolved.push({
+            target,
+            resolvedTo: fullPath,
+            reason: 'missing',
+          });
+          continue;
+        }
+        let stat;
+        try {
+          stat = statSync(fullPath);
+        } catch (error) {
+          // Logged rather than swallowed: an unreadable target is the one case
+          // here with a cause the caller cannot see from the path alone.
+          console.error(`Error reading target ${target}:`, error);
+          unresolved.push({
+            target,
+            resolvedTo: fullPath,
+            reason: 'unreadable',
+          });
+          continue;
+        }
+        if (stat.isDirectory()) {
+          const before = files.length;
+          await scanDirectory(fullPath);
+          // A directory that contributed nothing is as unexamined as a missing
+          // one, and only truncation makes that a bound rather than a fact.
+          if (files.length === before && !truncatedBy) {
+            unresolved.push({
+              target,
+              resolvedTo: fullPath,
+              reason: 'noScannableFile',
+            });
           }
+        } else if (stat.isFile()) {
+          // AN EXPLICIT FILE IS SCANNED WHATEVER ITS EXTENSION. The caller named
+          // this one, so the extension filter -- which exists to keep a blind
+          // walk cheap -- has nothing to decide here.
+          files.push(fullPath);
+        } else {
+          unresolved.push({
+            target,
+            resolvedTo: fullPath,
+            reason: 'missing',
+          });
         }
       }
     } else {
       // Full project scan
       await scanDirectory(this.projectRoot);
+      if (files.length === 0 && !truncatedBy) {
+        unresolved.push({
+          target: this.projectRoot,
+          resolvedTo: this.projectRoot,
+          reason: 'noScannableFile',
+        });
+      }
     }
 
-    return { files, truncatedBy };
+    return { files, truncatedBy, unresolved };
   }
 
   /**
@@ -1395,6 +1612,17 @@ export async function runSmartSecurity(
 
     // Summary
     output += `Summary:\n`;
+    if (result.summary.scannedNothing) {
+      // The refusal replaces the whole summary rather than annotating it: a
+      // reader who sees `Files Scanned: 0` under a green status reads the status.
+      output += `  Status: ✗ SCANNED NOTHING -- this is not a pass\n`;
+      for (const item of result.summary.unresolvedTargets ?? []) {
+        output += `    ${item.target} -> ${item.resolvedTo}\n`;
+        output += `      ${TARGET_FAILURES[item.reason]}\n`;
+      }
+      output += `  ${result.summary.refusal ?? ''}\n`;
+      return output;
+    }
     output += `  Status: ${result.summary.success ? '✓ Secure (no critical/high issues)' : '✗ Vulnerabilities Found'}\n`;
     output += `  Files Scanned: ${result.summary.filesScanned}\n`;
     output += `  Total Findings: ${result.summary.totalFindings}\n`;
@@ -1492,10 +1720,15 @@ export const SMART_SECURITY_TOOL_DEFINITION = {
       targets: {
         type: 'array',
         description:
-          'Specific files or directories to scan (enables incremental mode)',
+          'Specific files or directories to scan, absolute or relative to projectRoot (enables incremental mode)',
         items: {
           type: 'string',
         },
+      },
+      filePath: {
+        type: 'string',
+        description:
+          'A single file to scan. Alias for targets: [filePath]. A target that resolves to no file is refused by name rather than reported as a clean scan.',
       },
       deadlineMs: {
         type: 'number',

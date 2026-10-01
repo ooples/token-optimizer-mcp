@@ -760,15 +760,21 @@ export const SmartSecuritySchema = z
   .object({
     force: z.boolean().optional(),
     projectRoot: z.string().optional(),
-    targets: z.array(z.any()).optional(),
-    exclude: z.array(z.any()).optional(),
+    targets: z.array(z.string()).optional(),
+    // DECLARED, NOT DROPPED. `filePath` is what every other tool here calls its
+    // subject, so callers wrote it -- and a passthrough schema handed it to an
+    // implementation that reads `targets`, which then scanned the whole project
+    // and reported the result as that one file's.
+    filePath: safePathArg.optional(),
+    exclude: z.array(z.string()).optional(),
     minSeverity: z
       .enum(['critical', 'high', 'medium', 'low', 'info'])
       .optional(),
     maxCacheAge: z.number().optional(),
     includeLowSeverity: z.boolean().optional(),
+    deadlineMs: z.number().optional(),
   })
-  .passthrough();
+  .strict();
 
 // smart_symbols
 export const SmartSymbolsSchema = z
