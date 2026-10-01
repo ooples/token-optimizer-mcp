@@ -4,6 +4,7 @@ import path from 'path';
 import { dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { recordMcpDiagnostic } from './mcp-diagnostics.js';
+import { resolveModel, type ModelSource } from './model-attribution.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const processEpisodeId =
@@ -102,17 +103,32 @@ export class McpEvidenceRecorder {
     });
   }
 
-  analyticsAttribution(): {
+  /**
+   * THE MODEL IS RESOLVED, NOT READ OFF AN ENV VAR NOBODY SETS.
+   *
+   * This used to be `process.env.TOKEN_OPTIMIZER_MODEL || null` and nothing
+   * else -- a variable this package never sets and no client exports -- so
+   * every analytics row recorded a null model. On a live ledger that left
+   * 3,884 of 3,895 verified-savings operations unattributed and unpriceable,
+   * and the dollar figure the product reported was computed from the five rows
+   * that had somehow got one. `resolveModel` reads the exact catalog id out of
+   * the client's own session log instead; see src/server/model-attribution.ts
+   * for why it observes rather than infers.
+   */
+  async analyticsAttribution(): Promise<{
     client: string;
     clientVersion: string | null;
     model: string | null;
     modelVersion: string | null;
-  } {
+    modelSource: ModelSource;
+  }> {
+    const attributed = await resolveModel();
     return {
       client: this.client?.name || 'unattributed',
       clientVersion: this.client?.version || null,
-      model: process.env.TOKEN_OPTIMIZER_MODEL || null,
+      model: attributed.model,
       modelVersion: process.env.TOKEN_OPTIMIZER_MODEL_VERSION || null,
+      modelSource: attributed.source,
     };
   }
 

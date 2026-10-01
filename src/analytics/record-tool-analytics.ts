@@ -183,6 +183,13 @@ export async function recordToolAnalytics(
     clientVersion?: string | null;
     model?: string | null;
     modelVersion?: string | null;
+    /**
+     * Where `model` came from -- declared by the operator, observed in the
+     * client's own session log, or nowhere. A priced saving is only as good as
+     * its model id, so the id and its provenance travel together: without this
+     * an unattributed row and a mis-attributed one read identically.
+     */
+    modelSource?: string | null;
     operationId?: string | null;
   } = {},
   baselineResult: McpToolResult | null = null
@@ -324,6 +331,7 @@ export async function recordToolAnalytics(
         clientVersion: attribution.clientVersion || null,
         model: attribution.model || null,
         modelVersion: attribution.modelVersion || null,
+        modelSource: attribution.modelSource || 'none',
       },
     });
   } catch {

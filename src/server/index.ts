@@ -193,7 +193,7 @@ async function recordDirectToolResult<T>(
 ): Promise<T> {
   const result = await operation();
   await recordToolAnalytics(analyticsManager, toolName, result as any, {
-    ...mcpEvidence.analyticsAttribution(),
+    ...(await mcpEvidence.analyticsAttribution()),
     operationId,
   });
   return result;
@@ -2608,7 +2608,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
       analyticsManager,
       request.params.name,
       disclosed,
-      { ...mcpEvidence.analyticsAttribution(), operationId },
+      { ...(await mcpEvidence.analyticsAttribution()), operationId },
       result
     );
     // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
