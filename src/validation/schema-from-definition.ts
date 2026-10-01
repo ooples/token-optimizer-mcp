@@ -192,7 +192,23 @@ const objectFor = (node: JsonSchemaNode, topLevel: boolean): z.ZodTypeAny => {
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const [key, child] of Object.entries(properties)) {
     const built = zodFor(child, false);
-    shape[key] = required.has(key) ? built : built.optional();
+    if (!required.has(key)) {
+      shape[key] = built.optional();
+      continue;
+    }
+    /*
+     * A required key whose node names no type derives to z.unknown(), and
+     * z.unknown() ACCEPTS undefined -- so `required` was published, served by
+     * tools/list and enforced on nothing. Measured on a typeless `payload`
+     * that export operations require: `{ operation: 'export', format: 'csv' }`
+     * validated, and only the tool refused it.
+     *
+     * The probe is taken here rather than keyed off `type` so it also covers
+     * any future node that happens to admit undefined.
+     */
+    shape[key] = built.safeParse(undefined).success
+      ? built.refine((value) => value !== undefined, { message: 'Required' })
+      : built;
   }
   /*
    * A `required` key the node does not describe still has to be present. That

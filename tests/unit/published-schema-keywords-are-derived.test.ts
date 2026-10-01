@@ -291,6 +291,33 @@ describe('published schema keywords are derived', () => {
     }
   );
 
+  it('enforces required on a property that names no type', () => {
+    /*
+     * A separate case because the probe above uses a typed property, and a
+     * typeless one took a different path: it derives to z.unknown(), which
+     * ACCEPTS undefined, so `required` was published and enforced on nothing.
+     * Measured on the typeless `payload` the export operations require --
+     * `{ operation: 'export', format: 'csv' }` passed validation and only the
+     * tool refused it.
+     */
+    const node: JsonSchemaNode = {
+      type: 'object',
+      properties: { payload: { description: 'anything' } },
+      required: ['payload'],
+    };
+    const schema = schemaFromDefinition(node);
+    expect(schema.safeParse({ payload: 1 }).success).toBe(true);
+    expect(schema.safeParse({ payload: null }).success).toBe(true);
+    expect(schema.safeParse({}).success).toBe(false);
+    // The control: without `required` the same node accepts the empty object,
+    // so the refusal above comes from the keyword and not from strictness.
+    const control = schemaFromDefinition({
+      type: 'object',
+      properties: { payload: { description: 'anything' } },
+    });
+    expect(control.safeParse({}).success).toBe(true);
+  });
+
   it('still sees the keywords the live definitions use', () => {
     // A census that found nothing would report a clean surface.
     for (const keyword of ['type', 'enum', 'properties', 'required'])
