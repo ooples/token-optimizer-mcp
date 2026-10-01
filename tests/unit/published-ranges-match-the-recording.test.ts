@@ -47,13 +47,28 @@ interface Claim {
   first: { lo: number; hi: number; text: string } | null;
   repeated: { lo: number; hi: number; text: string } | null;
   fixtures: number;
+  samples: number;
 }
 
 interface Recording {
   encoding: string;
   recorded: string;
+  stability: { passes: number; maxTokenSpread: number; drifting: unknown[] };
   claims: Record<string, Claim>;
 }
+
+/**
+ * The fewest independent sweeps a published figure may rest on.
+ *
+ * Matches RECORD_PASSES in the bench. Three readings of identical inputs used to
+ * disagree on 7 of 36 cases, and one disagreement had already moved a published
+ * bracket from -31% to -30%, because the measured payloads carried wall-clock
+ * fields. Those are gone and the readings are byte-identical now, which is what
+ * makes the agreement check below a trip-wire rather than a tolerance: it is
+ * expected never to fire, and a recording that cannot satisfy it is not evidence
+ * for anything.
+ */
+const MIN_PASSES = 3;
 
 const RECORD = join('bench', 'tools', 'results', 'per-tool-reduction.json');
 
@@ -91,6 +106,18 @@ describe('every published reduction range is the recorded one', () => {
   it('has a recording to check against', () => {
     expect(recorded.length).toBeGreaterThan(0);
     expect(recording.encoding).toBe('cl100k_base');
+  });
+
+  it('rests on readings that reproduced', () => {
+    expect(recording.stability.passes).toBeGreaterThanOrEqual(MIN_PASSES);
+    // Zero, not 'small'. The quantity is deterministic, so any spread at all is
+    // a field that varies between identical calls -- the defect, not its size.
+    expect(recording.stability.maxTokenSpread).toBe(0);
+    expect(recording.stability.drifting).toEqual([]);
+    const thin = recorded
+      .filter(([, claim]) => (claim.samples ?? 0) < MIN_PASSES)
+      .map(([tool]) => tool);
+    expect(thin).toEqual([]);
   });
 
   it('covers every tool the bench recorded', () => {

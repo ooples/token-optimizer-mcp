@@ -79,6 +79,39 @@ describe('compressed cache entries survive a round trip', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('no tool hands its cache bookkeeping back to the caller', () => {
+    // The generalisation of the `cachedAt` finding above, which the smart_pretty
+    // test cannot see because smart_pretty does not use the pattern. Fifteen
+    // tools stamp `cachedAt: Date.now()` into the entry they store and need it
+    // to compute the entry's age -- so the field must exist in the STORED json
+    // and must not exist in what `getCachedResult` returns. Destructuring it off
+    // the parse is what separates the two, and this is the check that keeps the
+    // next one from forgetting.
+    const offenders: string[] = [];
+    const root = join(process.cwd(), 'src');
+
+    (function walk(dir: string) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (
+          entry.name.endsWith('.ts') &&
+          !entry.name.endsWith('.test.ts')
+        ) {
+          const src = readFileSync(full, 'utf8');
+          if (!src.includes('cachedAt')) continue;
+          for (const m of src.matchAll(
+            /const (\w+) = JSON\.parse\(cached\) as [^;]*cachedAt/g
+          )) {
+            offenders.push(`${entry.name}: ${m[0].split('\n')[0]}`);
+          }
+        }
+      }
+    })(root);
+
+    expect(offenders).toEqual([]);
+  });
+
   it('a real tool can read back what it just wrote', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'token-optimizer-roundtrip-'));
     dirs.push(dir);
@@ -109,12 +142,20 @@ describe('compressed cache entries survive a round trip', () => {
         language: 'typescript',
       };
 
-      // Timings and the cache flag are EXPECTED to differ between the two
-      // calls; everything else must not. Comparing the payloads with those
-      // fields dropped is what makes 'read back what it wrote' checkable at all
-      // -- two `toBeDefined` checks passed even when the cached read came back
-      // with different content, which is the only defect this test exists for.
-      const VOLATILE = new Set(['cacheHit', 'executionTime', 'formatTime']);
+      // The cache flag is EXPECTED to differ between the two calls; everything
+      // else must not. Comparing the payloads with it dropped is what makes
+      // 'read back what it wrote' checkable at all -- two `toBeDefined` checks
+      // passed even when the cached read came back with different content,
+      // which is the only defect this test exists for.
+      //
+      // IT USED TO EXCLUDE `executionTime` AND `formatTime` TOO. Those were
+      // wall-clock readings inside the response, and excluding them here was
+      // the first sign of the cost: the bench that publishes this tool's
+      // reduction range read 5953, 5955 and 5953 tokens for one unchanged
+      // input, which moved a published figure from -31% to -30%. They are gone
+      // from the payload, so the set is down to the one field that carries
+      // information, and the assertion below is what keeps it that way.
+      const VOLATILE = new Set(['cacheHit']);
       const payload = (value: unknown) =>
         JSON.parse(
           JSON.stringify(value, (key, inner) =>
@@ -133,6 +174,32 @@ describe('compressed cache entries survive a round trip', () => {
       expect(first.metadata.cacheHit).toBe(false);
       expect(second.metadata.cacheHit).toBe(true);
       expect(payload(second)).toEqual(payload(first));
+
+      // NO CLOCK IN THE PAYLOAD. A response that reports how long it took is
+      // not reproducible, and this tool's published reduction range is taken
+      // over exactly these bytes -- so a reading of it is only evidence if two
+      // runs of the same call produce the same bytes. Named keys rather than a
+      // value scan, because a number that happens to look like a duration is
+      // not one.
+      // `cachedAt` is in that set because it is the second field this caught,
+      // and it was only ever visible on the CACHED read: the tools store
+      // `{ ...output, cachedAt: Date.now() }` and used to hand the parsed
+      // object straight back, so a cache hit returned a 13-digit epoch the
+      // caller never asked for. Both responses are scanned for that reason --
+      // a field that appears only on the second call is exactly the one a
+      // single-shot check misses.
+      const CLOCKED =
+        /^(executionTime|formatTime|duration|elapsed|timestamp|cachedAt)$/;
+      const clockedIn = (value: unknown) => {
+        const found: string[] = [];
+        JSON.stringify(value, (key, inner) => {
+          if (CLOCKED.test(key)) found.push(key);
+          return inner;
+        });
+        return found;
+      };
+      expect(clockedIn(first)).toEqual([]);
+      expect(clockedIn(second)).toEqual([]);
     } finally {
       try {
         cache.close();
