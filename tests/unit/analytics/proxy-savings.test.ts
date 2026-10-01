@@ -18,6 +18,7 @@ import {
   proxyTransportDelta,
   wasBilled,
 } from '../../../src/analytics/proxy-savings.js';
+import { MODEL_PRICE_CATALOG } from '../../../src/analytics/provider-pricing.js';
 import type { AccountingRecord } from '../../../src/proxy/accounting.js';
 
 const METHOD = 'tiktoken-gpt-4-compatible-local-estimate';
@@ -168,12 +169,12 @@ describe('the instrument checking itself', () => {
 
 describe('pricing one proxy row', () => {
   /**
-   * THE TIER IS THE WHOLE POINT OF THIS BLOCK. gpt-5.6-sol bills $5 per million
-   * uncached input tokens up to a 272,000-token prompt and $10 above it, so a
+   * THE TIER IS THE WHOLE POINT OF THIS BLOCK. gpt-5.6-sol bills $4 per million
+   * uncached input tokens up to a 272,000-token prompt and $8 above it, so a
    * request cut from 300,000 tokens to 200,000 crosses the threshold. Pricing
    * the 100,000 saved tokens on their own puts them in the cheap tier and
-   * reports $0.50; pricing each side as the prompt it actually was reports the
-   * $3.00 we would have paid less the $1.00 we did.
+   * reports $0.40; pricing each side as the prompt it actually was reports the
+   * $2.40 we would have paid less the $0.80 we did.
    */
   const crossing = record({
     model: 'gpt-5.6-sol',
@@ -186,13 +187,13 @@ describe('pricing one proxy row', () => {
   });
 
   it('prices each side as the prompt it was, not the delta in isolation', () => {
-    expect(priceProxyDelta(crossing)).toBeCloseTo(2.0, 6);
+    expect(priceProxyDelta(crossing)).toBeCloseTo(1.6, 6);
   });
 
   it('is not the cheap-tier price of the delta alone', () => {
-    // The control for the figure above: $0.50 is what the delta-only rule
+    // The control for the figure above: $0.40 is what the delta-only rule
     // produces, and reading it here would mean the tiering was lost.
-    expect(priceProxyDelta(crossing)).not.toBeCloseTo(0.5, 6);
+    expect(priceProxyDelta(crossing)).not.toBeCloseTo(0.4, 6);
   });
 
   it('carries the sign of an expansion through to the money', () => {
@@ -207,7 +208,7 @@ describe('pricing one proxy row', () => {
     });
     const priced = priceProxyDelta(grown);
     expect(priced).not.toBeNull();
-    expect(priced).toBeCloseTo(-0.1, 6);
+    expect(priced).toBeCloseTo(-0.08, 6);
   });
 
   it('refuses a price for a row that never named a model', () => {
@@ -217,7 +218,14 @@ describe('pricing one proxy row', () => {
   });
 
   it('refuses a price for a model the catalog does not have', () => {
-    expect(priceProxyDelta(record({ model: 'gpt-6-astra' }))).toBeNull();
+    // The absence is ASSERTED, not assumed. This fixture used to name a real
+    // model that the catalog simply had not been widened to yet; once it was,
+    // the test went on passing for the wrong reason until the price arrived.
+    // The id keeps a vendor prefix so the route still resolves and the refusal
+    // is the catalog's, not the router's.
+    const absent = 'gpt-0-not-a-model';
+    expect(MODEL_PRICE_CATALOG.some((row) => row.model === absent)).toBe(false);
+    expect(priceProxyDelta(record({ model: absent }))).toBeNull();
     expect(
       priceProxyDelta(record({ model: 'claude-sonnet-5' }))
     ).not.toBeNull();

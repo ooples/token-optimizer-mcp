@@ -17,9 +17,12 @@ import {
   readProxySavings,
 } from '../../../src/savings/proxy.js';
 import type { AccountingRecord } from '../../../src/proxy/accounting.js';
+import { MODEL_PRICE_CATALOG } from '../../../src/analytics/provider-pricing.js';
 
 const METHOD = 'tiktoken-gpt-4-compatible-local-estimate';
 const NOW = new Date('2026-10-01T15:00:00.000Z');
+const UNPRICED_OPENAI = 'gpt-0-not-a-model';
+const UNPRICED_GEMINI = 'gemini-0-not-a-model';
 
 function record(over: Partial<AccountingRecord> = {}): AccountingRecord {
   return {
@@ -115,7 +118,7 @@ describe('what the report says about its own instrument', () => {
   });
 
   it('prices only the rows whose model the catalog knows', () => {
-    const report = reportOf([record(), record({ model: 'gpt-6-astra' })]);
+    const report = reportOf([record(), record({ model: UNPRICED_OPENAI })]);
     const all = report.windows[report.windows.length - 1];
     expect(all.pricedRequests).toBe(1);
     expect(all.costUsd).not.toBeNull();
@@ -276,8 +279,8 @@ describe('loadProxyInput', () => {
 
 describe('the models the catalog could not price', () => {
   it('names a counted row whose model is not in the catalog', () => {
-    const report = reportOf([record(), record({ model: 'gemini-pro' })]);
-    expect(report.unpricedModels).toEqual(['gemini-pro']);
+    const report = reportOf([record(), record({ model: UNPRICED_GEMINI })]);
+    expect(report.unpricedModels).toEqual([UNPRICED_GEMINI]);
     // Positive control: the other row priced, so the list is short because the
     // catalog knew one model and not because pricing failed for both.
     const all = report.windows.find((window) => window.since === null);
@@ -295,8 +298,25 @@ describe('the models the catalog could not price', () => {
     // AN UNBILLED ROW HAS NO PRICE TO BE MISSING. It is reported by the gate
     // note as a request the provider never charged for, and naming it here as
     // well would send an operator to the catalog over a row that had no bill.
-    const report = reportOf([record({ status: 429, model: 'gemini-pro' })]);
+    const report = reportOf([record({ status: 429, model: UNPRICED_GEMINI })]);
     expect(report.unpricedModels).toEqual([]);
     expect(report.unbilledRecords).toBe(1);
+  });
+});
+
+describe('the ids these fixtures rely on being absent', () => {
+  it('names models the catalog really does not carry', () => {
+    // THE GUARD FOR EVERY "UNPRICED" FIXTURE BELOW. These used to be real
+    // model ids that the catalog merely had not been widened to cover yet, so
+    // when it was widened the fixtures became priced rows and the assertions
+    // went on passing while proving nothing. Each id keeps a vendor prefix so
+    // the route still resolves and the missing price is the catalog's.
+    for (const id of [UNPRICED_OPENAI, UNPRICED_GEMINI]) {
+      expect(MODEL_PRICE_CATALOG.some((row) => row.model === id)).toBe(false);
+    }
+    // The positive control: the id they are contrasted with IS priced.
+    expect(
+      MODEL_PRICE_CATALOG.some((row) => row.model === 'gpt-5.6-sol')
+    ).toBe(true);
   });
 });

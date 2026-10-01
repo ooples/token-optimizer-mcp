@@ -206,7 +206,11 @@ describe('native provider usage adapters', () => {
       pricedRequestCount: 1,
       unpricedRequestCount: 1,
       pricingCoveragePercent: 50,
-      apiEquivalentCost: { USD: 10 },
+      // A million uncached input tokens is past GPT-5.6 Sol's 272,000-token
+      // threshold, so the long-context rate applies: 2 x $4/M = $8. It was $10
+      // while the catalog carried the pre-reduction $5/M; the model page now
+      // states $4 in and $20 out.
+      apiEquivalentCost: { USD: 8 },
     });
   });
 

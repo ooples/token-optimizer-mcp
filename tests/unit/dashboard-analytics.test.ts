@@ -110,8 +110,11 @@ describe('dashboard optimizer analytics contract', () => {
     ]);
 
     expect(report.summary).toMatchObject({
-      contextUsd: 0.00125,
-      savedUsd: 0.00375,
+      // 250 returned and 750 saved tokens at GPT-5.6 Sol's $4/M uncached input
+      // rate, down from the $5/M the catalog carried before the reduction the
+      // model page describes.
+      contextUsd: 0.001,
+      savedUsd: 0.003,
       pricedReturnedContextOperations: 1,
       pricedSavingsOperations: 1,
     });

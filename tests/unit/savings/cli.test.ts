@@ -13,6 +13,14 @@ import {
 } from '../../../src/savings/proxy.js';
 import type { AccountingRecord } from '../../../src/proxy/accounting.js';
 import type { AnalyticsEntry } from '../../../src/analytics/analytics-types.js';
+import { MODEL_PRICE_CATALOG } from '../../../src/analytics/provider-pricing.js';
+
+// Ids this file relies on being absent from the price catalog, guarded by the
+// last block below. They used to be real model ids the catalog had not been
+// widened to yet, which made every "unpriced" assertion here pass for the
+// wrong reason the moment it was.
+const UNPRICED_OPENAI = 'gpt-0-not-a-model';
+const UNPRICED_GEMINI = 'gemini-0-not-a-model';
 
 function verified(over: Partial<AnalyticsEntry> = {}): AnalyticsEntry {
   const id = String(over.measurementId ?? 'm-1');
@@ -396,13 +404,13 @@ describe('the proxy in the JSON', () => {
     // A CONSUMER HAS TO BE ABLE TO TELL WHICH HALF LOST THE PRICE, since the
     // two read different sources and only one of them may be missing an entry.
     const { text, deps } = harness({
-      entries: [verified({ model: 'gemini-pro' })],
-      proxy: proxyRead([proxyRecord({ model: 'gpt-6-astra' })], '/l.jsonl'),
+      entries: [verified({ model: UNPRICED_GEMINI })],
+      proxy: proxyRead([proxyRecord({ model: UNPRICED_OPENAI })], '/l.jsonl'),
     });
     expect(await main(['--json'], deps)).toBe(0);
     const parsed = JSON.parse(text());
-    expect(parsed.unpricedModels).toEqual(['gemini-pro']);
-    expect(parsed.proxy.unpricedModels).toEqual(['gpt-6-astra']);
+    expect(parsed.unpricedModels).toEqual([UNPRICED_GEMINI]);
+    expect(parsed.proxy.unpricedModels).toEqual([UNPRICED_OPENAI]);
   });
 
   it('widens the scope and carries the proxy figures and definitions', async () => {
@@ -456,5 +464,17 @@ describe('the proxy in the JSON', () => {
     expect(await main(['--proxy-ledger', '/given.jsonl'], spy)).toBe(0);
     expect(await main([], spy)).toBe(0);
     expect(seen).toEqual(['/given.jsonl', undefined]);
+  });
+});
+
+describe('the ids these fixtures rely on being absent', () => {
+  it('names models the catalog really does not carry', () => {
+    for (const id of [UNPRICED_OPENAI, UNPRICED_GEMINI]) {
+      expect(MODEL_PRICE_CATALOG.some((row) => row.model === id)).toBe(false);
+    }
+    // The positive control: the ids they are contrasted with ARE priced.
+    for (const id of ['gpt-5.6-sol', 'claude-opus-5']) {
+      expect(MODEL_PRICE_CATALOG.some((row) => row.model === id)).toBe(true);
+    }
   });
 });

@@ -28,6 +28,13 @@ export interface TokenPriceTier {
   output: number;
 }
 
+/**
+ * A price list with no tier prices nothing, so the type makes that
+ * unrepresentable: every contract carries at least one tier, and the tier
+ * lookup therefore never has to invent one for an empty list.
+ */
+export type NonEmptyTiers = readonly [TokenPriceTier, ...TokenPriceTier[]];
+
 export interface ModelPriceContract {
   provider: string;
   route: string;
@@ -39,7 +46,7 @@ export interface ModelPriceContract {
   effectiveTo?: string;
   sourceUrl: string;
   sourceLabel: string;
-  tiers: readonly TokenPriceTier[];
+  tiers: NonEmptyTiers;
 }
 
 export interface PricedTokenUsage {
@@ -68,52 +75,124 @@ export interface PricedTokenUsage {
   reason: string | null;
 }
 
-const OPENAI_SOURCE = 'https://developers.openai.com/api/docs/models/compare';
-const OPENAI_SOL_SOURCE =
-  'https://developers.openai.com/api/docs/models/gpt-5.6-sol';
+// Every current OpenAI model has its own page at a uniform path, and each one
+// states that model's four rates plus the long-context and cache-write rules in
+// prose. Deriving the URL from the id keeps the citation specific to the model
+// whose price it justifies, rather than pointing every row at one index page.
+const OPENAI_MODEL_SOURCE = 'https://developers.openai.com/api/docs/models/';
 const ANTHROPIC_SOURCE =
   'https://platform.claude.com/docs/en/about-claude/pricing';
-const ANTHROPIC_CACHE_SOURCE =
-  'https://platform.claude.com/docs/en/build-with-claude/prompt-caching';
 const GEMINI_SOURCE = 'https://ai.google.dev/gemini-api/docs/pricing';
 const COPILOT_SOURCE =
   'https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing';
-const CATALOG_VERIFIED_AT = '2026-08-12T00:00:00.000Z';
+// Verified against the live pricing pages, model by model, on this date. It is
+// deliberately separate from the older stamp: a row is only restamped when it
+// was actually re-read, so a stale rate cannot hide behind a fresh date.
+const VERIFIED_AT = '2026-10-01T00:00:00.000Z';
+// Google publishes a dated step for the 3.6/3.7/3.8 Flash family -- one price
+// "through December 31, 2026" and a higher one "starting January 1, 2027". That
+// is what an effective window is for: a change the vendor has committed to in
+// writing, as opposed to one we assumed would happen.
+const GEMINI_2027_STEP = '2027-01-01T00:00:00.000Z';
 
-const openAi56Tier = (
+const openAiTier = (
   input: number,
   cached: number,
-  output: number
-): readonly TokenPriceTier[] => [
-  {
-    maxInputTokens: 272_000,
+  output: number,
+  options: {
+    readonly maxInputTokens?: number | null;
+    readonly cacheWrites?: boolean;
+  } = {}
+): NonEmptyTiers => {
+  // THE RULE, IN THE VENDOR'S OWN WORDS, identical on every current model page:
+  // "Prompts with more than 272K input tokens are priced at 2x input and cache
+  // rates and 1.5x output for the full request. Cache writes are billed at
+  // 1.25x the uncached input token rate."
+  //
+  // The threshold is a parameter because the resold Copilot route publishes its
+  // own (200K on GPT-5.6 Luna, where the first-party page says 272K), and null
+  // means that price list publishes no long-context tier at all -- which is a
+  // different fact from publishing one we do not know.
+  const writes = options.cacheWrites ?? true;
+  const write = (rate: number): number | null => (writes ? rate * 1.25 : null);
+  const standard: TokenPriceTier = {
     uncachedInput: input,
     cachedInput: cached,
+    cacheWrite5m: write(input),
+    cacheWrite1h: write(input),
+    cacheWrite: write(input),
+    output,
+  };
+  const threshold =
+    options.maxInputTokens === undefined ? 272_000 : options.maxInputTokens;
+  if (threshold === null) return [standard];
+  return [
+    { ...standard, maxInputTokens: threshold },
+    {
+      uncachedInput: input * 2,
+      cachedInput: cached * 2,
+      cacheWrite5m: write(input * 2),
+      cacheWrite1h: write(input * 2),
+      cacheWrite: write(input * 2),
+      output: output * 1.5,
+    },
+  ];
+};
+
+const anthropicTier = (
+  input: number,
+  output: number,
+  // THE MULTIPLIER TABLE ON THE PRICING PAGE, verbatim: a cache read is "0.1x
+  // base input price (0.025x on Claude Fable 5.1 and Claude Mythos 5.1; 0.05x
+  // on Claude Opus 5.5)". Writes have no such exception -- 1.25x for five
+  // minutes and 2x for an hour hold for every model listed.
+  cacheRead = 0.1
+): NonEmptyTiers => [
+  {
+    uncachedInput: input,
+    cachedInput: input * cacheRead,
+    cacheWrite5m: input * 1.25,
+    cacheWrite1h: input * 2,
+    cacheWrite: input * 1.25,
+    output,
+  },
+];
+
+// Resold Claude capacity publishes ONE cache-write rate, not the two Anthropic
+// prices directly, so a 1h write is quoted at the same 1.25x as a 5m write
+// rather than at Anthropic's 2x. The cache-read rate is taken from the column
+// instead of multiplied out, because the page prints it per model.
+const copilotClaudeTier = (
+  input: number,
+  cacheRead: number,
+  output: number
+): NonEmptyTiers => [
+  {
+    uncachedInput: input,
+    cachedInput: cacheRead,
     cacheWrite5m: input * 1.25,
     cacheWrite1h: input * 1.25,
     cacheWrite: input * 1.25,
     output,
   },
-  {
-    uncachedInput: input * 2,
-    cachedInput: cached * 2,
-    cacheWrite5m: input * 2 * 1.25,
-    cacheWrite1h: input * 2 * 1.25,
-    cacheWrite: input * 2 * 1.25,
-    output: output * 1.5,
-  },
 ];
 
-const anthropicTier = (
+// Resold Gemini capacity. The cache-write column on this price list reads
+// "Not applicable" for every Gemini row, which is not the same fact as the
+// first-party zero: there, a write genuinely costs nothing because caching is
+// implicit. Here the rate is simply not published, so all three write fields
+// are null and a cache-write dimension on this route stays unpriced.
+const resoldGeminiTier = (
   input: number,
+  cached: number,
   output: number
-): readonly TokenPriceTier[] => [
+): NonEmptyTiers => [
   {
     uncachedInput: input,
-    cachedInput: input * 0.1,
-    cacheWrite5m: input * 1.25,
-    cacheWrite1h: input * 2,
-    cacheWrite: input * 1.25,
+    cachedInput: cached,
+    cacheWrite5m: null,
+    cacheWrite1h: null,
+    cacheWrite: null,
     output,
   },
 ];
@@ -122,7 +201,7 @@ const geminiTier = (
   input: number,
   cached: number,
   output: number
-): readonly TokenPriceTier[] => [
+): NonEmptyTiers => [
   {
     uncachedInput: input,
     cachedInput: cached,
@@ -135,220 +214,244 @@ const geminiTier = (
   },
 ];
 
-/** Official prices that can be resolved without guessing a model generation. */
+interface OpenAiRow {
+  readonly model: string;
+  readonly input: number;
+  readonly cached: number;
+  readonly output: number;
+  readonly maxInputTokens?: number | null;
+  readonly cacheWrites?: boolean;
+}
+
+interface AnthropicRow {
+  readonly model: string;
+  readonly input: number;
+  readonly output: number;
+  readonly cacheRead?: number;
+}
+
+/**
+ * Prices read off each vendor's own page, model by model, on VERIFIED_AT.
+ *
+ * NO FALLBACK ROW. A model absent from this list is reported as unpriced, never
+ * charged at some default rate: an absent number can be chased, a fabricated
+ * one is indistinguishable from a measured one in the same column.
+ *
+ * NO ASSUMED FUTURE EITHER. An effective window is only written when the vendor
+ * has published the change. Two rows here previously encoded a scheduled
+ * increase that was then cancelled, which silently billed every request on
+ * those models 50% high -- the reverse of the error everyone expects.
+ */
 export const MODEL_PRICE_CATALOG: readonly ModelPriceContract[] = [
-  {
-    provider: 'openai',
-    route: 'openai-api',
-    model: 'gpt-5.6-sol',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    sourceUrl: OPENAI_SOL_SOURCE,
-    sourceLabel: 'OpenAI API price',
-    tiers: openAi56Tier(5, 0.5, 30),
-  },
-  {
-    provider: 'openai',
-    route: 'openai-api',
-    model: 'gpt-5.6-terra',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    sourceUrl: OPENAI_SOURCE,
-    sourceLabel: 'OpenAI API price',
-    tiers: openAi56Tier(2.5, 0.25, 15),
-  },
-  {
-    provider: 'openai',
-    route: 'openai-api',
-    model: 'gpt-5.6-luna',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    sourceUrl: OPENAI_SOURCE,
-    sourceLabel: 'OpenAI API price',
-    tiers: openAi56Tier(1, 0.1, 6),
-  },
-  {
-    provider: 'anthropic',
-    route: 'anthropic-api',
-    model: 'claude-opus-5',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    sourceUrl: ANTHROPIC_SOURCE,
-    sourceLabel: 'Anthropic API price',
-    tiers: anthropicTier(5, 25),
-  },
-  {
-    provider: 'anthropic',
-    route: 'anthropic-api',
-    model: 'claude-sonnet-5',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    effectiveTo: '2026-09-01T00:00:00.000Z',
-    sourceUrl: ANTHROPIC_SOURCE,
-    sourceLabel: 'Anthropic introductory API price',
-    tiers: anthropicTier(2, 10),
-  },
-  {
-    provider: 'anthropic',
-    route: 'anthropic-api',
-    model: 'claude-sonnet-5',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    effectiveFrom: '2026-09-01T00:00:00.000Z',
-    sourceUrl: ANTHROPIC_SOURCE,
-    sourceLabel: 'Anthropic standard API price',
-    tiers: anthropicTier(3, 15),
-  },
-  ...[
-    'claude-opus-4-8',
-    'claude-opus-4-7',
-    'claude-opus-4-6',
-    'claude-opus-4-5',
-  ].map(
-    (model): ModelPriceContract => ({
-      provider: 'anthropic',
-      route: 'anthropic-api',
-      model,
+  ...(
+    [
+      // The GPT-6 generation, each from its own model page.
+      { model: 'gpt-6-astra', input: 10, cached: 1, output: 50 },
+      { model: 'gpt-6.1-sol', input: 2, cached: 0.1, output: 10 },
+      { model: 'gpt-6-luna', input: 0.1, cached: 0.01, output: 0.5 },
+      // The GPT-5.6 generation, previously carried here at $5/$0.50/$30,
+      // $2.50/$0.25/$15 and $1/$0.10/$6 -- the rates from before a reduction
+      // the model pages now describe as "a 20% reduction in input pricing and
+      // a 33% reduction in output pricing". No end date is written for it: the
+      // page says the lower price runs "at least through November 21, 2026",
+      // and an effectiveTo would quietly revert to a figure nobody is charged.
+      { model: 'gpt-5.6-sol', input: 4, cached: 0.4, output: 20 },
+      { model: 'gpt-5.6-terra', input: 2, cached: 0.2, output: 12 },
+      { model: 'gpt-5.6-luna', input: 0.2, cached: 0.02, output: 1.2 },
+    ] satisfies readonly OpenAiRow[]
+  ).map(
+    (row): ModelPriceContract => ({
+      provider: 'openai',
+      route: 'openai-api',
+      model: row.model,
       aliases: [],
       currency: 'USD',
-      verifiedAt: CATALOG_VERIFIED_AT,
-      sourceUrl: ANTHROPIC_CACHE_SOURCE,
-      sourceLabel: 'Anthropic API and prompt-cache price',
-      tiers: anthropicTier(5, 25),
+      verifiedAt: VERIFIED_AT,
+      sourceUrl: OPENAI_MODEL_SOURCE + row.model,
+      sourceLabel: 'OpenAI API price',
+      tiers: openAiTier(row.input, row.cached, row.output),
     })
   ),
-  ...['claude-sonnet-4-6', 'claude-sonnet-4-5'].map(
-    (model): ModelPriceContract => ({
+  ...(
+    [
+      { model: 'claude-fable-5-1', input: 10, output: 50, cacheRead: 0.025 },
+      { model: 'claude-mythos-5-1', input: 10, output: 50, cacheRead: 0.025 },
+      { model: 'claude-opus-5-5', input: 4, output: 20, cacheRead: 0.05 },
+      { model: 'claude-sonnet-5-5', input: 2, output: 10 },
+      { model: 'claude-haiku-4-5', input: 1, output: 5 },
+      { model: 'claude-fable-5', input: 10, output: 50 },
+      { model: 'claude-mythos-5', input: 10, output: 50 },
+      { model: 'claude-opus-5', input: 5, output: 25 },
+      { model: 'claude-opus-4-8', input: 5, output: 25 },
+      { model: 'claude-opus-4-7', input: 5, output: 25 },
+      { model: 'claude-opus-4-6', input: 5, output: 25 },
+      { model: 'claude-opus-4-5', input: 5, output: 25 },
+      { model: 'claude-opus-4-1', input: 15, output: 75 },
+      { model: 'claude-opus-4', input: 15, output: 75 },
+      // ONE ROW, NOT TWO. This model used to carry a window that ended on
+      // 2026-09-01 and handed over to a $3/$15 "standard" rate. The pricing
+      // page now states the opposite in a footnote: the $2/$10 price
+      // "announced at launch as introductory pricing through August 31, 2026,
+      // is now the standard price. The previously scheduled increase to $3/$15
+      // per million input/output tokens on September 1, 2026 will not occur."
+      { model: 'claude-sonnet-5', input: 2, output: 10 },
+      { model: 'claude-sonnet-4-6', input: 3, output: 15 },
+      { model: 'claude-sonnet-4-5', input: 3, output: 15 },
+      { model: 'claude-sonnet-4', input: 3, output: 15 },
+      { model: 'claude-haiku-3-5', input: 0.8, output: 4 },
+    ] satisfies readonly AnthropicRow[]
+  ).map(
+    (row): ModelPriceContract => ({
       provider: 'anthropic',
       route: 'anthropic-api',
-      model,
+      model: row.model,
       aliases: [],
       currency: 'USD',
-      verifiedAt: CATALOG_VERIFIED_AT,
-      sourceUrl: ANTHROPIC_CACHE_SOURCE,
-      sourceLabel: 'Anthropic API and prompt-cache price',
-      tiers: anthropicTier(3, 15),
+      verifiedAt: VERIFIED_AT,
+      sourceUrl: ANTHROPIC_SOURCE,
+      sourceLabel: 'Anthropic API price',
+      tiers: anthropicTier(row.input, row.output, row.cacheRead),
     })
   ),
-  {
-    provider: 'anthropic',
-    route: 'anthropic-api',
-    model: 'claude-haiku-4-5',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    sourceUrl: ANTHROPIC_CACHE_SOURCE,
-    sourceLabel: 'Anthropic API and prompt-cache price',
-    tiers: anthropicTier(1, 5),
-  },
-  {
-    provider: 'google',
-    route: 'gemini-api',
-    model: 'gemini-3.5-flash',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    sourceUrl: GEMINI_SOURCE,
-    sourceLabel: 'Gemini Developer API standard price',
-    tiers: geminiTier(1.5, 0.15, 9),
-  },
-  {
-    provider: 'google',
-    route: 'gemini-api',
-    model: 'gemini-3.5-flash-lite',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    sourceUrl: GEMINI_SOURCE,
-    sourceLabel: 'Gemini Developer API standard price',
-    tiers: geminiTier(0.3, 0.03, 2.5),
-  },
-  {
-    provider: 'google',
-    route: 'gemini-api',
-    model: 'gemini-2.5-flash',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    sourceUrl: GEMINI_SOURCE,
-    sourceLabel: 'Gemini Developer API standard price',
-    tiers: geminiTier(0.3, 0.03, 2.5),
-  },
-  {
-    provider: 'google',
-    route: 'gemini-api',
-    model: 'gemini-2.5-flash-lite',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    sourceUrl: GEMINI_SOURCE,
-    sourceLabel: 'Gemini Developer API standard price',
-    tiers: geminiTier(0.1, 0.01, 0.4),
-  },
-  // GitHub Copilot is a distinct billing route even when the underlying model
-  // id is identical to a direct provider model.
   ...[
-    ['gpt-5.6-sol', 5, 0.5, 30, 272_000],
-    ['gpt-5.6-terra', 2.5, 0.25, 15, 272_000],
-    ['gpt-5.6-luna', 1, 0.1, 6, 200_000],
+    { model: 'gemini-3.5-flash', input: 1.5, cached: 0.15, output: 9 },
+    { model: 'gemini-3.5-flash-lite', input: 0.3, cached: 0.03, output: 2.5 },
+    { model: 'gemini-2.5-flash', input: 0.3, cached: 0.03, output: 2.5 },
+    { model: 'gemini-2.5-flash-lite', input: 0.1, cached: 0.01, output: 0.4 },
   ].map(
-    ([model, input, cached, output, threshold]): ModelPriceContract => ({
+    (row): ModelPriceContract => ({
+      provider: 'google',
+      route: 'gemini-api',
+      model: row.model,
+      aliases: [],
+      currency: 'USD',
+      verifiedAt: VERIFIED_AT,
+      sourceUrl: GEMINI_SOURCE,
+      sourceLabel: 'Gemini Developer API standard price',
+      tiers: geminiTier(row.input, row.cached, row.output),
+    })
+  ),
+  ...['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash'].flatMap(
+    (model): readonly ModelPriceContract[] => {
+      const shared = {
+        provider: 'google',
+        route: 'gemini-api',
+        model,
+        aliases: [] as readonly string[],
+        currency: 'USD' as PriceCurrency,
+        verifiedAt: VERIFIED_AT,
+        sourceUrl: GEMINI_SOURCE,
+      };
+      return [
+        {
+          ...shared,
+          effectiveTo: GEMINI_2027_STEP,
+          sourceLabel: 'Gemini Developer API price through 2026-12-31',
+          tiers: geminiTier(0.75, 0.075, 3.75),
+        },
+        {
+          ...shared,
+          effectiveFrom: GEMINI_2027_STEP,
+          sourceLabel: 'Gemini Developer API price from 2027-01-01',
+          tiers: geminiTier(1.5, 0.15, 7.5),
+        },
+      ];
+    }
+  ),
+  ...(
+    [
+      // Resold OpenAI capacity. The rates are GitHub's own, and they are not
+      // always the first-party ones: GPT-5.6 Luna's long-context threshold is
+      // 200K here where OpenAI's page says 272K, and the older models publish
+      // no cache-write rate at all ("Not applicable" in the column).
+      { model: 'gpt-5-mini', input: 0.25, cached: 0.025, output: 2,
+        maxInputTokens: null, cacheWrites: false },
+      { model: 'gpt-5.3-codex', input: 1.75, cached: 0.175, output: 14,
+        maxInputTokens: null, cacheWrites: false },
+      { model: 'gpt-5.4', input: 2.5, cached: 0.25, output: 15,
+        cacheWrites: false },
+      { model: 'gpt-5.4-mini', input: 0.75, cached: 0.075, output: 4.5,
+        maxInputTokens: null, cacheWrites: false },
+      { model: 'gpt-5.4-nano', input: 0.2, cached: 0.02, output: 1.25,
+        maxInputTokens: null, cacheWrites: false },
+      { model: 'gpt-5.5', input: 5, cached: 0.5, output: 30,
+        cacheWrites: false },
+      { model: 'gpt-5.6-luna', input: 0.2, cached: 0.02, output: 1.2,
+        maxInputTokens: 200_000 },
+      { model: 'gpt-5.6-sol', input: 4, cached: 0.4, output: 20 },
+      { model: 'gpt-5.6-terra', input: 2, cached: 0.2, output: 12 },
+      { model: 'gpt-6-astra', input: 10, cached: 1, output: 50 },
+      { model: 'gpt-6-luna', input: 0.1, cached: 0.01, output: 0.5 },
+      { model: 'gpt-6-sol', input: 2, cached: 0.2, output: 10 },
+      { model: 'gpt-6.1-sol', input: 2, cached: 0.1, output: 10 },
+    ] satisfies readonly OpenAiRow[]
+  ).map(
+    (row): ModelPriceContract => ({
       provider: 'github',
       route: 'github-copilot',
-      model: String(model),
+      model: row.model,
       aliases: [],
       currency: 'USD',
-      verifiedAt: CATALOG_VERIFIED_AT,
+      verifiedAt: VERIFIED_AT,
       sourceUrl: COPILOT_SOURCE,
       sourceLabel: 'GitHub Copilot AI-credit token price',
-      tiers: [
-        {
-          maxInputTokens: Number(threshold),
-          uncachedInput: Number(input),
-          cachedInput: Number(cached),
-          cacheWrite5m: null,
-          cacheWrite1h: null,
-          cacheWrite: null,
-          output: Number(output),
-        },
-        {
-          uncachedInput: Number(input) * 2,
-          cachedInput: Number(cached) * 2,
-          cacheWrite5m: null,
-          cacheWrite1h: null,
-          cacheWrite: null,
-          output: Number(output) * 1.5,
-        },
-      ],
+      tiers: openAiTier(row.input, row.cached, row.output, {
+        maxInputTokens: row.maxInputTokens,
+        cacheWrites: row.cacheWrites,
+      }),
     })
   ),
-  {
-    provider: 'github',
-    route: 'github-copilot',
-    model: 'claude-sonnet-5',
-    aliases: [],
-    currency: 'USD',
-    verifiedAt: CATALOG_VERIFIED_AT,
-    effectiveTo: '2026-09-01T00:00:00.000Z',
-    sourceUrl: COPILOT_SOURCE,
-    sourceLabel: 'GitHub Copilot promotional AI-credit token price',
-    tiers: [
-      {
-        uncachedInput: 2,
-        cachedInput: 0.2,
-        cacheWrite5m: 2.5,
-        cacheWrite1h: 4,
-        cacheWrite: 2.5,
-        output: 10,
-      },
-    ],
-  },
+  ...[
+    // Resold Claude capacity. The previous entry here priced claude-sonnet-5
+    // only until 2026-09-01 and called it promotional, which left the model
+    // unpriced on this route from that date on; GitHub still lists it at
+    // $2/$0.20/$2.50/$10 with no end date.
+    { model: 'claude-fable-5-1', input: 10, cacheRead: 0.25, output: 50 },
+    { model: 'claude-fable-5', input: 10, cacheRead: 1, output: 50 },
+    { model: 'claude-opus-5-5', input: 4, cacheRead: 0.2, output: 20 },
+    { model: 'claude-opus-5', input: 5, cacheRead: 0.5, output: 25 },
+    { model: 'claude-opus-4-8', input: 5, cacheRead: 0.5, output: 25 },
+    { model: 'claude-opus-4-7', input: 5, cacheRead: 0.5, output: 25 },
+    { model: 'claude-sonnet-5-5', input: 2, cacheRead: 0.2, output: 10 },
+    { model: 'claude-sonnet-5', input: 2, cacheRead: 0.2, output: 10 },
+    { model: 'claude-sonnet-4-6', input: 3, cacheRead: 0.3, output: 15 },
+    { model: 'claude-sonnet-4', input: 3, cacheRead: 0.3, output: 15 },
+    { model: 'claude-haiku-4-5', input: 1, cacheRead: 0.1, output: 5 },
+  ].map(
+    (row): ModelPriceContract => ({
+      provider: 'github',
+      route: 'github-copilot',
+      model: row.model,
+      aliases: [],
+      currency: 'USD',
+      verifiedAt: VERIFIED_AT,
+      sourceUrl: COPILOT_SOURCE,
+      sourceLabel: 'GitHub Copilot AI-credit token price',
+      tiers: copilotClaudeTier(row.input, row.cacheRead, row.output),
+    })
+  ),
+  ...[
+    { model: 'gemini-3.8-flash', input: 0.75, cached: 0.075, output: 3.75 },
+    { model: 'gemini-3.7-flash', input: 0.75, cached: 0.075, output: 3.75 },
+    { model: 'gemini-3.6-flash', input: 0.75, cached: 0.075, output: 3.75 },
+    { model: 'gemini-3.5-flash', input: 1.5, cached: 0.15, output: 9 },
+  ].map(
+    (row): ModelPriceContract => ({
+      provider: 'github',
+      route: 'github-copilot',
+      model: row.model,
+      aliases: [],
+      currency: 'USD',
+      verifiedAt: VERIFIED_AT,
+      sourceUrl: COPILOT_SOURCE,
+      sourceLabel: 'GitHub Copilot AI-credit token price',
+      tiers: resoldGeminiTier(row.input, row.cached, row.output),
+    })
+  ),
+  // NOT LISTED HERE, deliberately: the Grok, Kimi and MAI models the same page
+  // prices. Their rates are published, but the identifier a client would send
+  // for them is not, and a catalog keyed on a guessed id prices nothing while
+  // looking as though it covers something.
 ];
 
 function nonnegative(value: unknown): number {
@@ -433,12 +536,23 @@ function tierFor(
   contract: ModelPriceContract,
   promptTokens: number
 ): TokenPriceTier {
-  return (
-    contract.tiers.find(
-      (tier) =>
-        tier.maxInputTokens === undefined || promptTokens <= tier.maxInputTokens
-    ) || contract.tiers.at(-1)!
-  );
+  // Tiers are ordered by threshold, so the first one the prompt fits under is
+  // the one that applies, and an unbounded tier matches everything. Walking the
+  // list keeps the last tier in hand for a prompt that overruns every published
+  // threshold, which is what a provider charges for it -- and because the type
+  // guarantees at least one tier, there is nothing to assert away here.
+  const [first] = contract.tiers;
+  let last: TokenPriceTier = first;
+  for (const tier of contract.tiers) {
+    if (
+      tier.maxInputTokens === undefined ||
+      promptTokens <= tier.maxInputTokens
+    ) {
+      return tier;
+    }
+    last = tier;
+  }
+  return last;
 }
 
 function tierInputTokens(usage: TokenUsageDimensions): number {
