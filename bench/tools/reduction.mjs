@@ -32,11 +32,22 @@
  * Fixtures are vendored under fixtures/ rather than read out of src/, so a row
  * measured today can be re-measured next month and still mean the same thing.
  *
- * Nothing here is timed, so nothing here needs a quiet machine. The payloads
- * are not quite byte-stable all the same: smart_complexity reports a "duration"
- * field, so two runs of the same call differ by a digit and the reading moves
- * by one or two tokens in sixteen hundred. That is 0.1% and it has never moved
- * a bracket, but it is why these figures are stated to whole percent.
+ * Nothing here is timed, so nothing here needs a quiet machine.
+ *
+ * AND NOTHING MEASURED HERE MAY CARRY A CLOCK. This paragraph used to excuse the
+ * drift -- "smart_complexity reports a duration field, so two runs differ by a
+ * digit ... that is 0.1% and it has never moved a bracket". Both halves were
+ * wrong when checked: three passes over the same inputs disagreed on 7 of 36
+ * cases by up to 8 tokens, 0.6% of the smallest fixture, and it HAD moved a
+ * bracket -- smart_pretty's repeated range read -31% once and -30% the next
+ * time. The wall-clock fields are gone from those responses, so an identical
+ * call now serialises to identical bytes.
+ *
+ * `--record` is what holds that. It measures every case RECORD_PASSES times and
+ * refuses to write unless all of them agree on the bracket it would publish, so
+ * a figure reaches the file only once it has been shown to reproduce. The
+ * observed spread is written down beside the claims rather than discarded: a
+ * recording that drifted but still landed in the same bracket is worth seeing.
  */
 
 import { spawn } from 'node:child_process';
@@ -134,6 +145,14 @@ export const CASES = [
   { tool: 'smart_security', fixture: 'smart-complexity.ts', args: byFilePath },
   { tool: 'smart_security', fixture: 'token-counter.ts', args: byFilePath },
   { tool: 'smart_security', fixture: 'tool-profile.ts', args: byFilePath },
+  // The one fixture with findings. Without it every smart_security reading is
+  // the same 98-token "0 findings" answer, and the published range describes
+  // the empty path only -- see the fixture's own header.
+  {
+    tool: 'smart_security',
+    fixture: 'insecure-handlers.ts',
+    args: byFilePath,
+  },
   { tool: 'smart_refactor', fixture: 'smart-complexity.ts', args: byFilePath },
   { tool: 'smart_refactor', fixture: 'token-counter.ts', args: byFilePath },
   { tool: 'smart_refactor', fixture: 'tool-profile.ts', args: byFilePath },
@@ -415,7 +434,18 @@ export async function measure(server, testCase) {
   };
 }
 
-async function main() {
+/**
+ * How many independent passes a recording rests on.
+ *
+ * Three rather than two because two readings that agree cannot be told from one
+ * reading taken twice by luck, and three rather than ten because the quantity is
+ * now deterministic: the passes exist to prove that, not to average it away. A
+ * pass costs about ninety seconds.
+ */
+const RECORD_PASSES = 3;
+
+/** One full sweep of every case, each on its own server. */
+async function measureAll() {
   const rows = [];
   // ONE SERVER PER CASE, BECAUSE THE CASES SHARE FIXTURES.
   //
@@ -433,6 +463,38 @@ async function main() {
       server.stop();
     }
   }
+  return rows;
+}
+
+/** The claims a sweep supports, keyed by tool -- what --record would publish. */
+function claimsFrom(rows) {
+  const byTool = new Map();
+  for (const r of rows) {
+    if (!byTool.has(r.tool)) byTool.set(r.tool, []);
+    byTool.get(r.tool).push(r);
+  }
+  const claims = {};
+  for (const [tool, toolRows] of byTool) {
+    const first = claimFor(toolRows);
+    const again = claimFor(toolRows.map((r) => ({ reduction: r.repeatReduction })));
+    claims[tool] = {
+      first: first ? { lo: first.lo, hi: first.hi, text: first.text } : null,
+      repeated: again ? { lo: again.lo, hi: again.hi, text: again.text } : null,
+      fixtures: toolRows.length,
+    };
+  }
+  return claims;
+}
+
+async function main() {
+  const recording = process.argv.includes('--record');
+  const passes = [await measureAll()];
+  if (recording) {
+    for (let pass = 1; pass < RECORD_PASSES; pass += 1) {
+      passes.push(await measureAll());
+    }
+  }
+  const rows = passes[0];
 
   const pctOf = (value) =>
     value === null ? 'NO MEASUREMENT' : `${(value * 100).toFixed(1)}%`;
@@ -471,31 +533,68 @@ async function main() {
   }
 
   // --record writes the readings down so a description can be checked against
-  // them without spawning a server. Nothing here is timed, so a recording taken
-  // on a busy machine is as good as one taken on a quiet one.
-  if (process.argv.includes('--record')) {
+  // them without spawning a server -- but ONLY once every pass agreed on what it
+  // would write. A figure that moves between identical runs is not a measurement
+  // of anything, and the previous version of this block wrote whichever one the
+  // last pass happened to produce.
+  if (recording) {
+    const perPass = passes.map((pass) => claimsFrom(pass));
+    const reference = JSON.stringify(perPass[0]);
+    const disagreed = [];
+    for (const tool of Object.keys(perPass[0])) {
+      const seen = perPass.map((claims) => JSON.stringify(claims[tool]));
+      if (new Set(seen).size > 1) disagreed.push({ tool, seen });
+    }
+
+    // THE SPREAD IS RECORDED, NOT CHECKED. Bytes may legitimately differ one day
+    // without the published whole-percent bracket moving; that is worth seeing
+    // in the file rather than being the thing that blocks a recording.
+    let maxTokenSpread = 0;
+    const drifting = [];
+    for (let i = 0; i < rows.length; i += 1) {
+      const key = `${rows[i].tool}/${rows[i].fixture}`;
+      for (const field of ['treatment', 'repeatTreatment']) {
+        const seen = passes.map((pass) => pass[i][field]);
+        const spread = Math.max(...seen) - Math.min(...seen);
+        if (spread > 0) {
+          maxTokenSpread = Math.max(maxTokenSpread, spread);
+          drifting.push({ case: key, field, seen });
+        }
+      }
+    }
+
+    if (disagreed.length > 0) {
+      console.log('');
+      console.log(
+        `REFUSED: ${RECORD_PASSES} passes do not agree on the bracket, so nothing was written.`
+      );
+      for (const { tool, seen } of disagreed) {
+        console.log(`  ${tool}`);
+        for (const one of seen) console.log(`    ${one}`);
+      }
+      for (const d of drifting) {
+        console.log(`  drift ${d.case} ${d.field} ${d.seen.join(' / ')}`);
+      }
+      process.exit(1);
+    }
+
     const at = join(HERE, 'results', 'per-tool-reduction.json');
     mkdirSync(dirname(at), { recursive: true });
-    const claims = {};
-    for (const [tool, toolRows] of byTool) {
-      const first = claimFor(toolRows);
-      const again = claimFor(
-        toolRows.map((r) => ({ reduction: r.repeatReduction }))
-      );
-      claims[tool] = {
-        first: first ? { lo: first.lo, hi: first.hi, text: first.text } : null,
-        repeated: again
-          ? { lo: again.lo, hi: again.hi, text: again.text }
-          : null,
-        fixtures: toolRows.length,
-      };
-    }
+    const claims = JSON.parse(reference);
+    for (const claim of Object.values(claims)) claim.samples = RECORD_PASSES;
     writeFileSync(
       at,
       JSON.stringify(
         {
           encoding: ENCODING_NAME,
           recorded: new Date().toISOString(),
+          // What the figures below rest on: how many independent sweeps produced
+          // them, and whether the readings themselves were byte-stable.
+          stability: {
+            passes: RECORD_PASSES,
+            maxTokenSpread,
+            drifting,
+          },
           claims,
           rows,
         },
@@ -503,7 +602,9 @@ async function main() {
         2
       ) + '\n'
     );
-    console.log(`recorded ${rows.length} reading(s) to ${at}`);
+    console.log(
+      `recorded ${rows.length} reading(s) from ${RECORD_PASSES} agreeing pass(es) to ${at}`
+    );
   }
 
   const measured = rows.filter((r) => r.reduction !== null).length;

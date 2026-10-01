@@ -1,6 +1,11 @@
 {
   "encoding": "cl100k_base",
-  "recorded": "2026-10-01T02:43:38.166Z",
+  "recorded": "2026-10-01T14:07:21.406Z",
+  "stability": {
+    "passes": 3,
+    "maxTokenSpread": 0,
+    "drifting": []
+  },
   "claims": {
     "smart_complexity": {
       "first": {
@@ -9,11 +14,12 @@
         "text": "11-68%"
       },
       "repeated": {
-        "lo": 11,
+        "lo": 12,
         "hi": 68,
-        "text": "11-68%"
+        "text": "12-68%"
       },
-      "fixtures": 3
+      "fixtures": 3,
+      "samples": 3
     },
     "smart_exports": {
       "first": {
@@ -26,7 +32,8 @@
         "hi": 97,
         "text": "67-97%"
       },
-      "fixtures": 3
+      "fixtures": 3,
+      "samples": 3
     },
     "smart_imports": {
       "first": {
@@ -39,72 +46,78 @@
         "hi": 96,
         "text": "92-96%"
       },
-      "fixtures": 3
+      "fixtures": 3,
+      "samples": 3
     },
     "smart_symbols": {
       "first": {
-        "lo": 73,
+        "lo": 74,
         "hi": 94,
-        "text": "73-94%"
+        "text": "74-94%"
       },
       "repeated": {
         "lo": 73,
         "hi": 94,
         "text": "73-94%"
       },
-      "fixtures": 3
+      "fixtures": 3,
+      "samples": 3
     },
     "smart_security": {
       "first": {
-        "lo": -102,
-        "hi": 49,
-        "text": "-102% to 49%"
+        "lo": -50,
+        "hi": 99,
+        "text": "-50% to 99%"
       },
       "repeated": {
-        "lo": -102,
-        "hi": 49,
-        "text": "-102% to 49%"
+        "lo": -50,
+        "hi": 98,
+        "text": "-50% to 98%"
       },
-      "fixtures": 3
+      "fixtures": 4,
+      "samples": 3
     },
     "smart_refactor": {
       "first": {
+        "lo": -129,
+        "hi": 79,
+        "text": "-129% to 79%"
+      },
+      "repeated": {
         "lo": -130,
         "hi": 79,
         "text": "-130% to 79%"
       },
-      "repeated": {
-        "lo": -131,
-        "hi": 79,
-        "text": "-131% to 79%"
-      },
-      "fixtures": 3
+      "fixtures": 3,
+      "samples": 3
     },
     "smart_config_read": {
       "first": {
         "lo": -20,
-        "hi": -9,
-        "text": "-20% to -9%"
+        "hi": -7,
+        "text": "-20% to -7%"
       },
       "repeated": {
-        "lo": 49,
+        "lo": 51,
         "hi": 98,
-        "text": "49-98%"
+        "text": "51-98%"
       },
-      "fixtures": 2
+      "fixtures": 2,
+      "samples": 3
     },
     "smart_env": {
       "first": {
-        "lo": -79,
-        "hi": -11,
-        "text": "-79% to -11%"
+        "lo": -74,
+        "hi": -10,
+        "text": "-74% to -10%"
       },
       "repeated": {
-        "lo": -79,
-        "hi": -11,
-        "text": "-79% to -11%"
+        "lo": -74,
+        "hi": -10,
+        "text": "-74% to -10%"
       },
-      "fixtures": 2
+      "fixtures": 2,
+      "samples": 3
     },
     "smart_typescript": {
       "first": {
@@ -117,20 +130,22 @@
         "hi": 86,
         "text": "85-86%"
       },
-      "fixtures": 1
+      "fixtures": 1,
+      "samples": 3
     },
     "smart_dependencies": {
       "first": {
-        "lo": 61,
+        "lo": 63,
         "hi": 99,
-        "text": "61-99%"
+        "text": "63-99%"
       },
       "repeated": {
-        "lo": 61,
+        "lo": 63,
         "hi": 99,
-        "text": "61-99%"
+        "text": "63-99%"
       },
-      "fixtures": 2
+      "fixtures": 2,
+      "samples": 3
     },
     "smart_read": {
       "first": {
@@ -143,7 +158,8 @@
         "hi": 98,
         "text": "89-98%"
       },
-      "fixtures": 3
+      "fixtures": 3,
+      "samples": 3
     },
     "smart_package_json": {
       "first": {
@@ -156,33 +172,36 @@
         "hi": 90,
         "text": "-12% to 90%"
       },
-      "fixtures": 2
+      "fixtures": 2,
+      "samples": 3
     },
     "smart_tsconfig": {
       "first": {
-        "lo": -86,
-        "hi": 27,
-        "text": "-86% to 27%"
+        "lo": -79,
+        "hi": 29,
+        "text": "-79% to 29%"
       },
       "repeated": {
-        "lo": -86,
-        "hi": 27,
-        "text": "-86% to 27%"
+        "lo": -79,
+        "hi": 29,
+        "text": "-79% to 29%"
       },
-      "fixtures": 3
+      "fixtures": 3,
+      "samples": 3
     },
     "smart_pretty": {
       "first": {
-        "lo": -31,
+        "lo": -29,
         "hi": -15,
-        "text": "-31% to -15%"
+        "text": "-29% to -15%"
       },
       "repeated": {
-        "lo": -30,
+        "lo": -29,
         "hi": -15,
-        "text": "-30% to -15%"
+        "text": "-29% to -15%"
       },
-      "fixtures": 3
+      "fixtures": 3,
+      "samples": 3
     }
   },
   "rows": [
@@ -190,10 +209,10 @@
       "tool": "smart_complexity",
       "fixture": "smart-complexity.ts",
       "baseline": 4937,
-      "treatment": 4349,
-      "reduction": 0.11910066842211875,
-      "repeatTreatment": 4365,
-      "repeatReduction": 0.11585983390723109,
+      "treatment": 4345,
+      "reduction": 0.11991087705084058,
+      "repeatTreatment": 4344,
+      "repeatReduction": 0.12011342920802104,
       "chunks": 1,
       "expansions": 1,
       "refused": false,
@@ -203,10 +222,10 @@
       "tool": "smart_complexity",
       "fixture": "token-counter.ts",
       "baseline": 3368,
-      "treatment": 1092,
-      "reduction": 0.675771971496437,
-      "repeatTreatment": 1101,
-      "repeatReduction": 0.6730997624703088,
+      "treatment": 1088,
+      "reduction": 0.6769596199524941,
+      "repeatTreatment": 1088,
+      "repeatReduction": 0.6769596199524941,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -216,10 +235,10 @@
       "tool": "smart_complexity",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 1121,
-      "reduction": 0.11732283464566928,
-      "repeatTreatment": 1130,
-      "repeatReduction": 0.11023622047244097,
+      "treatment": 1117,
+      "reduction": 0.12047244094488185,
+      "repeatTreatment": 1117,
+      "repeatReduction": 0.12047244094488185,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -307,10 +326,10 @@
       "tool": "smart_symbols",
       "fixture": "smart-complexity.ts",
       "baseline": 4937,
-      "treatment": 340,
-      "reduction": 0.9311322665586388,
-      "repeatTreatment": 342,
-      "repeatReduction": 0.9307271622442779,
+      "treatment": 333,
+      "reduction": 0.9325501316589022,
+      "repeatTreatment": 335,
+      "repeatReduction": 0.9321450273445412,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -320,10 +339,10 @@
       "tool": "smart_symbols",
       "fixture": "token-counter.ts",
       "baseline": 3368,
-      "treatment": 311,
-      "reduction": 0.9076603325415677,
-      "repeatTreatment": 313,
-      "repeatReduction": 0.9070665083135392,
+      "treatment": 304,
+      "reduction": 0.9097387173396675,
+      "repeatTreatment": 306,
+      "repeatReduction": 0.9091448931116389,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -333,10 +352,10 @@
       "tool": "smart_symbols",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 336,
-      "reduction": 0.7354330708661417,
-      "repeatTreatment": 338,
-      "repeatReduction": 0.7338582677165355,
+      "treatment": 330,
+      "reduction": 0.7401574803149606,
+      "repeatTreatment": 332,
+      "repeatReduction": 0.7385826771653543,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -346,12 +365,12 @@
       "tool": "smart_security",
       "fixture": "smart-complexity.ts",
       "baseline": 4937,
-      "treatment": 2563,
-      "reduction": 0.4808588211464452,
-      "repeatTreatment": 2563,
-      "repeatReduction": 0.4808588211464452,
+      "treatment": 98,
+      "reduction": 0.9801498885963136,
+      "repeatTreatment": 100,
+      "repeatReduction": 0.9797447842819526,
       "chunks": 1,
-      "expansions": 1,
+      "expansions": 0,
       "refused": false,
       "detail": ""
     },
@@ -359,12 +378,12 @@
       "tool": "smart_security",
       "fixture": "token-counter.ts",
       "baseline": 3368,
-      "treatment": 2561,
-      "reduction": 0.23960807600950118,
-      "repeatTreatment": 2566,
-      "repeatReduction": 0.2381235154394299,
+      "treatment": 98,
+      "reduction": 0.9709026128266033,
+      "repeatTreatment": 100,
+      "repeatReduction": 0.9703087885985748,
       "chunks": 1,
-      "expansions": 1,
+      "expansions": 0,
       "refused": false,
       "detail": ""
     },
@@ -372,12 +391,25 @@
       "tool": "smart_security",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 2559,
-      "reduction": -1.01496062992126,
-      "repeatTreatment": 2565,
-      "repeatReduction": -1.0196850393700787,
+      "treatment": 98,
+      "reduction": 0.9228346456692913,
+      "repeatTreatment": 100,
+      "repeatReduction": 0.9212598425196851,
       "chunks": 1,
-      "expansions": 1,
+      "expansions": 0,
+      "refused": false,
+      "detail": ""
+    },
+    {
+      "tool": "smart_security",
+      "fixture": "insecure-handlers.ts",
+      "baseline": 482,
+      "treatment": 721,
+      "reduction": -0.495850622406639,
+      "repeatTreatment": 723,
+      "repeatReduction": -0.5,
+      "chunks": 1,
+      "expansions": 0,
       "refused": false,
       "detail": ""
     },
@@ -385,10 +417,10 @@
       "tool": "smart_refactor",
       "fixture": "smart-complexity.ts",
       "baseline": 4937,
-      "treatment": 3275,
-      "reduction": 0.3366416852339478,
-      "repeatTreatment": 3292,
-      "repeatReduction": 0.33319829856187966,
+      "treatment": 3270,
+      "reduction": 0.33765444601985006,
+      "repeatTreatment": 3272,
+      "repeatReduction": 0.33724934170548915,
       "chunks": 1,
       "expansions": 1,
       "refused": false,
@@ -398,10 +430,10 @@
       "tool": "smart_refactor",
       "fixture": "token-counter.ts",
       "baseline": 3368,
-      "treatment": 731,
-      "reduction": 0.7829572446555819,
-      "repeatTreatment": 740,
-      "repeatReduction": 0.7802850356294537,
+      "treatment": 727,
+      "reduction": 0.7841448931116389,
+      "repeatTreatment": 727,
+      "repeatReduction": 0.7841448931116389,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -411,10 +443,10 @@
       "tool": "smart_refactor",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 2912,
-      "reduction": -1.2929133858267718,
-      "repeatTreatment": 2933,
-      "repeatReduction": -1.3094488188976379,
+      "treatment": 2908,
+      "reduction": -1.2897637795275592,
+      "repeatTreatment": 2909,
+      "repeatReduction": -1.2905511811023622,
       "chunks": 1,
       "expansions": 1,
       "refused": false,
@@ -424,10 +456,10 @@
       "tool": "smart_config_read",
       "fixture": "package.json",
       "baseline": 211,
-      "treatment": 232,
-      "reduction": -0.09952606635071093,
-      "repeatTreatment": 107,
-      "repeatReduction": 0.4928909952606635,
+      "treatment": 227,
+      "reduction": -0.07582938388625582,
+      "repeatTreatment": 102,
+      "repeatReduction": 0.5165876777251185,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -437,10 +469,10 @@
       "tool": "smart_config_read",
       "fixture": "large-project/package.json",
       "baseline": 4328,
-      "treatment": 5151,
-      "reduction": -0.19015711645101674,
-      "repeatTreatment": 110,
-      "repeatReduction": 0.9745841035120147,
+      "treatment": 5152,
+      "reduction": -0.19038817005545283,
+      "repeatTreatment": 105,
+      "repeatReduction": 0.975739371534196,
       "chunks": 1,
       "expansions": 1,
       "refused": false,
@@ -450,10 +482,10 @@
       "tool": "smart_env",
       "fixture": "example.env",
       "baseline": 97,
-      "treatment": 173,
-      "reduction": -0.7835051546391754,
-      "repeatTreatment": 173,
-      "repeatReduction": -0.7835051546391754,
+      "treatment": 168,
+      "reduction": -0.731958762886598,
+      "repeatTreatment": 168,
+      "repeatReduction": -0.731958762886598,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -463,10 +495,10 @@
       "tool": "smart_env",
       "fixture": "large.env",
       "baseline": 485,
-      "treatment": 543,
-      "reduction": -0.1195876288659794,
-      "repeatTreatment": 543,
-      "repeatReduction": -0.1195876288659794,
+      "treatment": 538,
+      "reduction": -0.10927835051546397,
+      "repeatTreatment": 538,
+      "repeatReduction": -0.10927835051546397,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -476,10 +508,10 @@
       "tool": "smart_typescript",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 188,
-      "reduction": 0.8519685039370078,
-      "repeatTreatment": 190,
-      "repeatReduction": 0.8503937007874016,
+      "treatment": 179,
+      "reduction": 0.8590551181102362,
+      "repeatTreatment": 181,
+      "repeatReduction": 0.8574803149606299,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -489,10 +521,10 @@
       "tool": "smart_dependencies",
       "fixture": "package.json",
       "baseline": 211,
-      "treatment": 81,
-      "reduction": 0.6161137440758293,
-      "repeatTreatment": 81,
-      "repeatReduction": 0.6161137440758293,
+      "treatment": 77,
+      "reduction": 0.6350710900473934,
+      "repeatTreatment": 77,
+      "repeatReduction": 0.6350710900473934,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -502,10 +534,10 @@
       "tool": "smart_dependencies",
       "fixture": "large-project/package.json",
       "baseline": 4328,
-      "treatment": 81,
-      "reduction": 0.9812846580406654,
-      "repeatTreatment": 81,
-      "repeatReduction": 0.9812846580406654,
+      "treatment": 77,
+      "reduction": 0.9822088724584104,
+      "repeatTreatment": 77,
+      "repeatReduction": 0.9822088724584104,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -580,10 +612,10 @@
       "tool": "smart_tsconfig",
       "fixture": "tsconfig.json",
       "baseline": 76,
-      "treatment": 141,
-      "reduction": -0.855263157894737,
-      "repeatTreatment": 141,
-      "repeatReduction": -0.855263157894737,
+      "treatment": 136,
+      "reduction": -0.7894736842105263,
+      "repeatTreatment": 136,
+      "repeatReduction": -0.7894736842105263,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -593,10 +625,10 @@
       "tool": "smart_tsconfig",
       "fixture": "large-project/tsconfig.json",
       "baseline": 207,
-      "treatment": 218,
-      "reduction": -0.0531400966183575,
-      "repeatTreatment": 218,
-      "repeatReduction": -0.0531400966183575,
+      "treatment": 213,
+      "reduction": -0.02898550724637672,
+      "repeatTreatment": 213,
+      "repeatReduction": -0.02898550724637672,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -606,10 +638,10 @@
       "tool": "smart_tsconfig",
       "fixture": "ts-extends/tsconfig.json",
       "baseline": 301,
-      "treatment": 220,
-      "reduction": 0.2691029900332226,
-      "repeatTreatment": 220,
-      "repeatReduction": 0.2691029900332226,
+      "treatment": 215,
+      "reduction": 0.2857142857142857,
+      "repeatTreatment": 215,
+      "repeatReduction": 0.2857142857142857,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -619,10 +651,10 @@
       "tool": "smart_pretty",
       "fixture": "smart-complexity.ts",
       "baseline": 4937,
-      "treatment": 5953,
-      "reduction": -0.20579299169536158,
-      "repeatTreatment": 5957,
-      "repeatReduction": -0.2066032003240834,
+      "treatment": 5937,
+      "reduction": -0.20255215718047404,
+      "repeatTreatment": 5934,
+      "repeatReduction": -0.20194450070893244,
       "chunks": 1,
       "expansions": 1,
       "refused": false,
@@ -632,10 +664,10 @@
       "tool": "smart_pretty",
       "fixture": "token-counter.ts",
       "baseline": 3368,
-      "treatment": 3900,
-      "reduction": -0.15795724465558192,
-      "repeatTreatment": 3898,
-      "repeatReduction": -0.15736342042755336,
+      "treatment": 3880,
+      "reduction": -0.15201900237529697,
+      "repeatTreatment": 3880,
+      "repeatReduction": -0.15201900237529697,
       "chunks": 1,
       "expansions": 1,
       "refused": false,
@@ -645,10 +677,10 @@
       "tool": "smart_pretty",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 1651,
-      "reduction": -0.30000000000000004,
-      "repeatTreatment": 1648,
-      "repeatReduction": -0.29763779527559064,
+      "treatment": 1632,
+      "reduction": -0.28503937007874014,
+      "repeatTreatment": 1631,
+      "repeatReduction": -0.2842519685039371,
       "chunks": 1,
       "expansions": 1,
       "refused": false,
