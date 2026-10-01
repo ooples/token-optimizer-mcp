@@ -17,7 +17,20 @@ const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 // THE WAIT BUDGET ONE `until` MAY SPEND. Exported as a constant because the
 // per-case timeout below is derived from it; moving one has to move the other.
 const UNTIL_TIMEOUT_MS = 20_000;
-async function until(check, timeout = UNTIL_TIMEOUT_MS) {
+/**
+ * THE RECOVERY WAIT IS QUANTIZED AND NEEDS ITS OWN BUDGET.
+ *
+ * Recovery is driven by the client's periodic probe, so its latency comes in
+ * whole steps of that period rather than in a smooth spread. Measured over the
+ * 18 cases on an idle box: every single one landed in one of two clusters,
+ * 5.2-5.5s or 10.1-10.4s, and nothing fell between or above them. Under
+ * full-suite load a third step is reachable, and at a flat 20s the wait failed
+ * with `Timed out waiting for proxy recovery` on a case whose product behaviour
+ * was fine -- the budget sat inside the tail of its own distribution. This
+ * covers four steps with slop; a genuine stall still fails it.
+ */
+const RECOVERY_TIMEOUT_MS = 45_000;
+async function until(what, check, timeout = UNTIL_TIMEOUT_MS) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
     try {
@@ -28,13 +41,41 @@ async function until(check, timeout = UNTIL_TIMEOUT_MS) {
     }
     await pause(100);
   }
-  throw new Error('Timed out waiting for proxy recovery');
+  throw new Error(`Timed out waiting for ${what}`);
 }
 async function listen(server) {
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   return server.address().port;
 }
 const close = (server) => new Promise((done) => server.close(done));
+
+/**
+ * rmSync's OWN RETRY DOES NOT REACH THIS ONE.
+ *
+ * Teardown removed the temp home with `maxRetries: 5, retryDelay: 200` and
+ * still failed with EPERM on the temp home itself, failing a case whose every
+ * assertion had already passed -- which reads as the product failing to recover
+ * when nothing of the sort happened. Raising the retries to 10 did not help.
+ *
+ * Measured across all 18 cases: the first removal fails EPERM every single
+ * time, with every daemon pid already dead and the control port refusing
+ * connections, and a second attempt 100ms later succeeds every single time
+ * (18/18, ~110ms in total). So nothing is holding the directory -- Windows
+ * keeps it for a moment after its last child is unlinked -- and node's own
+ * retry does not cover that last rmdir. The retry has to live out here.
+ */
+const removeHome = async (home) => {
+  const end = Date.now() + 20_000;
+  for (;;) {
+    try {
+      rmSync(home, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (Date.now() >= end) throw error;
+      await pause(100);
+    }
+  }
+};
 
 /** Sequential `until` waits in one case; see the note on the case timeout. */
 const UNTIL_WAITS_PER_CASE = 6;
@@ -156,8 +197,8 @@ describe('a connected MCP session survives a dead background proxy', () => {
         `${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: client, version: '1' } } })}\n`
       );
       try {
-        await until(() => output.includes('"id":1'));
-        const first = await until(() => {
+        await until('the initialize response', () => output.includes('"id":1'));
+        const first = await until('the first proxy to publish a route', () => {
           const value = state();
           return value.pid > 0 && value.routes.length && value;
         });
@@ -165,6 +206,7 @@ describe('a connected MCP session survives a dead background proxy', () => {
         const url = first.routes[0].url;
         if (hasClaude)
           await until(
+            'the client settings to point at the proxy',
             () =>
               JSON.parse(readFileSync(settings, 'utf8')).env
                 .ANTHROPIC_BASE_URL === url
@@ -182,18 +224,22 @@ describe('a connected MCP session survives a dead background proxy', () => {
         expect(await request()).toEqual({ recovered: true });
         // Abrupt death leaves stale state, just as observed on Windows. No MCP restart follows.
         process.kill(first.pid, signal);
-        const recovered = await until(() => {
-          const value = state();
-          if (value.pid !== first.pid) daemonPids.add(value.pid);
-          return value.pid !== first.pid && value.routes.length && value;
-        });
+        const recovered = await until(
+          'proxy recovery',
+          () => {
+            const value = state();
+            if (value.pid !== first.pid) daemonPids.add(value.pid);
+            return value.pid !== first.pid && value.routes.length && value;
+          },
+          RECOVERY_TIMEOUT_MS
+        );
         expect(recovered.routes[0].url).toBe(url);
         expect(await request()).toEqual({ recovered: true });
         expect(child.exitCode).toBe(null);
         child.stdin.write(
           `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`
         );
-        await until(() => output.includes('"id":2'));
+        await until('the tools/list response', () => output.includes('"id":2'));
         const response = output
           .split('\n')
           .filter(Boolean)
@@ -201,7 +247,7 @@ describe('a connected MCP session survives a dead background proxy', () => {
           .find((message) => message.id === 2);
         expect(response.result.tools.length).toBeGreaterThan(0);
         if (!hasClaude) expect(existsSync(settings)).toBe(false);
-        await until(() =>
+        await until('the project profile to be written', () =>
           readFileSync(profile, 'utf8').includes(
             resolve('.').replaceAll('\\', '/')
           )
@@ -227,23 +273,19 @@ describe('a connected MCP session survives a dead background proxy', () => {
           }
         }
         await close(upstream);
-        await pause(200);
-        rmSync(home, {
-          recursive: true,
-          force: true,
-          maxRetries: 5,
-          retryDelay: 200,
-        });
+        await removeHome(home);
       }
     },
     // A CASE NEEDS A BUDGET BIGGER THAN WHAT IT IS ALLOWED TO WAIT FOR. One
     // case awaits `until` six times -- for the handshake, the first proxy, the
     // port release, the recovered proxy, the second response and the profile
-    // write -- and each of those may legally spend UNTIL_TIMEOUT_MS before any
+    // write -- and each of those may legally spend its budget before any
     // assertion is reached. At a flat 45s the budget sat below that ceiling, so
     // the case passed on an idle machine (~11s) and could only fail under load
     // with a timeout rather than an assertion, which says nothing about what
     // went wrong. Derived, the two stay in step.
-    UNTIL_WAITS_PER_CASE * UNTIL_TIMEOUT_MS + SPAWN_AND_TEARDOWN_MS
+    (UNTIL_WAITS_PER_CASE - 1) * UNTIL_TIMEOUT_MS +
+      RECOVERY_TIMEOUT_MS +
+      SPAWN_AND_TEARDOWN_MS
   );
 });
