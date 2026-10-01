@@ -5,6 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { startManagedInstallRepair } from './install-repair.js';
 import { installShutdownHandlers } from './lifecycle.js';
 import { discloseResult, expandRef } from './disclosure.js';
+import { flagPayloadFailure } from './payload-failure.js';
 import {
   createToolArgumentChecker,
   type ToolDefinitionLike,
@@ -2593,7 +2594,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     }
 
     const started = Date.now();
-    const result = await handleToolCall(request);
+    const result = flagPayloadFailure(await handleToolCall(request));
     const disclosed = (await discloseResult(
       request.params.name,
       request.params.arguments as Record<string, unknown> | undefined,
