@@ -31,7 +31,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { indexFile } from './staleness.mjs';
-import { withBatchedWrites, isSharedDir } from './wiki.mjs';
+import { withBatchedWrites, isSharedDir, logWriteCycles } from './wiki.mjs';
 import { isFsSafePath } from './paths.mjs';
 import { languageOf } from './symbols.mjs';
 
@@ -125,7 +125,7 @@ export function seedProject(dir, root, {
   let symbols = 0;
 
   if (typeof root !== 'string' || !root || !isFsSafePath(root)) {
-    return { files: 0, symbols: 0, stopped: 'unusable-root' };
+    return { files: 0, symbols: 0, writes: 0, stopped: 'unusable-root' };
   }
 
   // THE SHARED LESSON TIER IS NOT AN INDEX. `sharedDir` holds only lessons that
@@ -148,7 +148,7 @@ export function seedProject(dir, root, {
   // Growth is bounded separately by `alreadySeeded`, which sees a store that is
   // already populated and declines to add to it.
   if (isSharedDir(dir)) {
-    return { files: 0, symbols: 0, stopped: 'shared-tier' };
+    return { files: 0, symbols: 0, writes: 0, stopped: 'shared-tier' };
   }
 
   const queue = [root];
@@ -158,7 +158,8 @@ export function seedProject(dir, root, {
   // 26-file index produces costs a lock, an append, a compaction check and an
   // unlink -- 1.3 ms apiece, which spent the entire deadline on a tenth of the
   // tree. The batch is the difference between an index and a stub.
-  return withBatchedWrites(dir, () => {
+  const writesBefore = logWriteCycles();
+  const indexed = withBatchedWrites(dir, () => {
   while (queue.length) {
     if (files >= maxFiles) { stopped = 'file-cap'; break; }
     if (now() >= deadline) { stopped = 'deadline'; break; }
@@ -211,6 +212,18 @@ export function seedProject(dir, root, {
 
   return { files, symbols, stopped };
   });
+
+  // READ AFTER THE SCOPE CLOSES, not inside it. The buffer is flushed by
+  // `withBatchedWrites` in its finally, so while the callback above is still
+  // running the one append this whole seed makes has not happened yet and the
+  // count would read zero every time.
+  //
+  // WHY THE CALLER IS TOLD AT ALL: batching is the difference between an index
+  // and a stub (see above), and it had no observable consequence -- the only
+  // evidence it was still in force was how long a seed took, which is the load
+  // times the count and so says nothing reliable about either. This is the
+  // count on its own.
+  return { ...indexed, writes: logWriteCycles() - writesBefore };
 }
 
 /**

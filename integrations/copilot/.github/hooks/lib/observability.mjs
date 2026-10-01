@@ -161,7 +161,15 @@ function sanitize(text) {
   return value.slice(0, MAX_ERROR_CHARS);
 }
 
-function errorFields(error) {
+/**
+ * The only way an exception is allowed into this log.
+ *
+ * Exported because callers outside this module have exceptions to record too,
+ * and the alternative they reach for is `error.message` -- which on a
+ * filesystem failure is a sentence with the user's home directory in it. Every
+ * field here goes through `sanitize` first.
+ */
+export function errorFields(error) {
   if (!error) return null;
   return {
     type: sanitize(error.name || error.constructor?.name || 'Error'),

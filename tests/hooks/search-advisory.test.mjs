@@ -55,7 +55,6 @@ import {
   withBatchedWrites,
   putNode,
   putEdge,
-  logWriteCycles,
 } from '../../hooks-core/wiki.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -760,20 +759,18 @@ describe('seeding a project', () => {
     // amount of parallel load moves either number.
     const dir = mkdtempSync(join(tmpdir(), 'advisory-real-'));
     try {
-      const before = logWriteCycles();
       const seeded = seedProject(dir, REPO, {
         maxFiles: 100,
         budgetMs: 60_000,
       });
-      const writes = logWriteCycles() - before;
 
       // The budget above is deliberately generous now that it carries none of
       // the weight: the cap is what stops the pass, and the count below is
       // what proves the batch is applied.
       expect(seeded.stopped).toBe('file-cap');
       expect(seeded.files).toBe(100);
-      expect(writes).toBeLessThanOrEqual(10);
-      expect(writes).toBeGreaterThan(0);
+      expect(seeded.writes).toBeLessThanOrEqual(10);
+      expect(seeded.writes).toBeGreaterThan(0);
 
       // The other half of the original property: a working index, not a stub.
       const graph = load(dir);
