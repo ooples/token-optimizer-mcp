@@ -15,7 +15,13 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
-const RECORD = join(ROOT, 'bench', 'tools', 'results', 'per-tool-reduction.json');
+const RECORD = join(
+  ROOT,
+  'bench',
+  'tools',
+  'results',
+  'per-tool-reduction.json'
+);
 
 const walk = (dir) =>
   readdirSync(dir).flatMap((entry) => {
@@ -72,15 +78,27 @@ describe('tool descriptions carry the measured figure', () => {
   // said "1 fixture" after a second one was added and every figure beside it
   // had moved. A reader uses that number to weigh the range, so it is part of
   // the claim, not decoration.
-  it.each(measured)('%s states how many fixtures it was measured over', (tool, claim) => {
-    const description = descriptionOf(tool);
-    expect(description).not.toBeNull();
-    const noun = claim.fixtures === 1 ? 'fixture' : 'fixtures';
-    expect(description).toContain(`(bench/tools, ${claim.fixtures} ${noun})`);
-  });
+  it.each(measured)(
+    '%s states how many fixtures it was measured over',
+    (tool, claim) => {
+      const description = descriptionOf(tool);
+      expect(description).not.toBeNull();
+      const noun = claim.fixtures === 1 ? 'fixture' : 'fixtures';
+      expect(description).toContain(`(bench/tools, ${claim.fixtures} ${noun})`);
+    }
+  );
 
   it.each(measured)('%s no longer advertises an unmeasured figure', (tool) => {
     const description = descriptionOf(tool);
+    // Positive first, and deliberately so: every other assertion here is a
+    // negative one, which a description of null satisfies as happily as a
+    // correct one. The absence is only evidence once the phrase that replaced
+    // the old copy is shown to be present -- a tool whose definition this scan
+    // stopped finding now fails here, instead of passing for having no figure
+    // left to object to.
+    expect(description).toContain(
+      'Measured token reduction vs reading the file'
+    );
     // The old copy read "83% token reduction", "75-85% token reduction",
     // "86%+ token reduction". None of those phrasings survives a measurement.
     expect(description).not.toMatch(/%\+?\s*token reduction/);
