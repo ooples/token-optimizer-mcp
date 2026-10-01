@@ -1476,7 +1476,7 @@ export async function runSmartSecurity(
 export const SMART_SECURITY_TOOL_DEFINITION = {
   name: 'smart_security',
   description:
-    'Security vulnerability scanner with pattern detection and intelligent caching. Measured token reduction vs reading the file: 74-75% first read, 74-75% repeated (bench/tools, 1 fixture).',
+    'Security vulnerability scanner with pattern detection and intelligent caching. Measured token reduction vs reading the file: 48-49% first read, 48-49% repeated (bench/tools, 1 fixture).',
   inputSchema: {
     type: 'object',
     properties: {

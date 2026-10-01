@@ -829,7 +829,7 @@ export async function runSmartConfigRead(
 export const SMART_CONFIG_READ_TOOL_DEFINITION = {
   name: 'smart_config_read',
   description:
-    'Read and parse configuration files (JSON, YAML, TOML) with schema-aware caching and intelligent diffing. Measured token reduction vs reading the file: -135% to 68% first read, -78% to 71% repeated (bench/tools, 2 fixtures) -- the loss is on a minimal package.json, the saving on a real one.',
+    'Read and parse configuration files (JSON, YAML, TOML) with schema-aware caching and intelligent diffing. Measured token reduction vs reading the file: -20% to -9% first read, 49-98% repeated (bench/tools, 2 fixtures) -- a first read costs more than the file at both sizes measured; the saving is on the repeat.',
   inputSchema: {
     type: 'object',
     properties: {

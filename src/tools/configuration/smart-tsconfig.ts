@@ -793,7 +793,7 @@ export async function runSmartTsconfig(
 export const SMART_TSCONFIG_TOOL_DEFINITION = {
   name: 'smart_tsconfig',
   description:
-    'Parse and analyze TypeScript configuration. Resolves extends chains, detects issues, and caches results for 7 days. Measured token reduction vs reading the file: -108% to -13% first read, -108% to -13% repeated (bench/tools, 2 fixtures) -- this answers what the resolved config is and what is wrong with it, and a tsconfig is small enough that the answer costs more than the file at both sizes measured.',
+    'Parse and analyze TypeScript configuration. Resolves extends chains, detects issues, and caches results for 7 days. Measured token reduction vs reading the file: -86% to 27% first read, -86% to 27% repeated (bench/tools, 3 fixtures) -- this answers what the resolved config is and what is wrong with it; it pays only on the fixture with an extends chain to resolve, and costs more than the file on the two without one.',
   inputSchema: {
     type: 'object',
     properties: {

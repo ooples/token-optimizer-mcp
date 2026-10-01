@@ -2,7 +2,7 @@
 export const SMART_COMPLEXITY_TOOL_DEFINITION = {
   name: 'smart_complexity',
   description:
-    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index. Measured token reduction vs reading the file: -25% to 68% first read, -26% to 68% repeated (bench/tools, 3 fixtures).',
+    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index. Measured token reduction vs reading the file: 11-68% first read, 11-68% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -149,7 +149,7 @@ export const SMART_IMPORTS_TOOL_DEFINITION = {
 export const SMART_REFACTOR_TOOL_DEFINITION = {
   name: 'smart_refactor',
   description:
-    'Provides intelligent refactoring suggestions with code examples and impact analysis. Measured token reduction vs reading the file: -6% to 75% first read, -7% to 74% repeated (bench/tools, 2 fixtures).',
+    'Provides intelligent refactoring suggestions with code examples and impact analysis. Measured token reduction vs reading the file: -130% to 34% first read, -131% to 34% repeated (bench/tools, 2 fixtures) -- the loss is on the smaller fixture, where the suggestions and their code examples outweigh the file they are about.',
   inputSchema: {
     type: 'object',
     properties: {
