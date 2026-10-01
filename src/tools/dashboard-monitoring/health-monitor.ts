@@ -1423,56 +1423,93 @@ export const healthMonitorTool = {
 };
 
 // MCP Tool definition - Input schema for health_monitor tool
+/**
+ * What a caller is shown, and it has to be what the implementation honours.
+ *
+ * It was neither. The published schema described a different tool: its eight
+ * `operation` values were register-endpoint / check-health / list-endpoints and
+ * so on, while the switch at the bottom of this file accepts check /
+ * register-check / get-status / get-impact. Every operation a caller could read
+ * off the schema came back `Unknown operation: list-endpoints`, and the eight
+ * that work were undocumented -- along with checkId, checkType, dependencies,
+ * limit and the rest, which the options interface has always read.
+ */
 export const HEALTH_MONITOR_INPUT_SCHEMA = {
   type: 'object',
   properties: {
     operation: {
       type: 'string',
       enum: [
-        'register-endpoint',
-        'unregister-endpoint',
-        'check-health',
-        'list-endpoints',
+        'check',
+        'register-check',
+        'update-check',
+        'delete-check',
+        'get-status',
         'get-history',
-        'set-threshold',
-        'get-summary',
-        'run-diagnostic',
+        'configure-dependencies',
+        'get-impact',
       ],
       description: 'Health monitoring operation',
     },
-    endpointId: {
+    checkId: {
       type: 'string',
-      description: 'Endpoint ID',
+      description: 'Check ID, for update-check, delete-check and get-history',
     },
-    endpointName: {
+    checkName: {
       type: 'string',
-      description: 'Endpoint name',
+      description: 'Human-readable check name, for register-check',
     },
-    endpointType: {
+    checkType: {
       type: 'string',
-      enum: ['http', 'tcp', 'database', 'service', 'custom'],
-      description: 'Type of endpoint to monitor',
+      enum: ['http', 'tcp', 'database', 'command', 'custom'],
+      description: 'How the check probes its target',
     },
-    config: {
+    checkConfig: {
       type: 'object',
-      description: 'Endpoint configuration',
+      description:
+        'Probe configuration: url/method/expectedStatus/expectedBody/timeout for http, host/port for tcp, query for database, command/args for command',
     },
     interval: {
       type: 'number',
       description: 'Check interval in seconds',
     },
-    thresholds: {
+    timeout: {
+      type: 'number',
+      description: 'Per-probe timeout in milliseconds',
+    },
+    retries: {
+      type: 'number',
+      description: 'Retries before a check is reported unhealthy',
+    },
+    dependencies: {
       type: 'object',
-      description: 'Health thresholds',
+      description:
+        'Dependency edge for configure-dependencies: { service, dependsOn: string[], critical? }',
+    },
+    includeDetails: {
+      type: 'boolean',
+      description: 'Include each check result in a get-status answer',
+    },
+    includeDependencies: {
+      type: 'boolean',
+      description: 'Include the dependency graph in a get-status answer',
     },
     timeRange: {
       type: 'object',
-      description: 'Time range for history',
+      description: 'Time range for get-history: { start, end } epoch millis',
     },
-    diagnosticType: {
+    limit: {
+      type: 'number',
+      description: 'Maximum number of history events to return',
+    },
+    service: {
       type: 'string',
-      enum: ['network', 'disk', 'memory', 'cpu', 'process'],
-      description: 'Type of diagnostic to run',
+      description: 'Service name, for get-status and get-impact',
+    },
+    scenario: {
+      type: 'string',
+      enum: ['failure', 'degraded', 'maintenance'],
+      description: 'Scenario to analyse in get-impact',
     },
     useCache: {
       type: 'boolean',

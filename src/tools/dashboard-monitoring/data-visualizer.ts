@@ -1891,6 +1891,15 @@ export const DATA_VISUALIZER_INPUT_SCHEMA = {
       ],
       description: 'Visualization operation to perform',
     },
+    chartName: {
+      type: 'string',
+      description: 'Human-readable chart name, for create-chart',
+    },
+    dataFormat: {
+      type: 'string',
+      enum: ['json', 'csv', 'array'],
+      description: 'How `data` is encoded (default json)',
+    },
     chartId: {
       type: 'string',
       description: 'Chart ID (required for update, delete, render)',

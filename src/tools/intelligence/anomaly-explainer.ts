@@ -1696,6 +1696,27 @@ export const ANOMALYEXPLAINERTOOL = {
         type: 'string',
         description: 'Hypothesis to test',
       },
+      testData: {
+        type: 'array',
+        description: 'Samples to test a hypothesis against',
+        items: {
+          type: 'object',
+          properties: {
+            timestamp: { type: 'number' },
+            values: { type: 'object', additionalProperties: true },
+          },
+          required: ['timestamp', 'values'],
+        },
+      },
+      confidenceThreshold: {
+        type: 'number',
+        description:
+          'Minimum confidence a hypothesis must reach to be reported (0-1)',
+      },
+      maxHypotheses: {
+        type: 'number',
+        description: 'Maximum hypotheses to generate (default 5)',
+      },
       events: {
         type: 'array',
         description: 'Related system events',
