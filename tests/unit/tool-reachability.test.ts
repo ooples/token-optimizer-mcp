@@ -89,13 +89,21 @@ function definedTools(): ToolDefinition[] {
 
 /** The identifiers the server actually puts in its advertised list. */
 function listedIdentifiers(): Set<string> {
-  const server = readFileSync(join(ROOT, 'src/server/index.ts'), 'utf8');
+  // The advertised list is `export const TOOL_DEFINITIONS = [ ... ]` in
+  // src/server/tool-definitions.ts, which the ListTools handler returns and
+  // from which validation is derived. It has been an inline `tools: [ ... ]`
+  // and a `const TOOL_DEFINITIONS` inside the server module before now; all
+  // three spellings are accepted so this test pins the CONTENT of the list
+  // rather than where it happens to be written. Reading the wrong file is not
+  // a silent pass -- `found the advertised tools` below fails on an empty set.
+  const server = readFileSync(
+    join(ROOT, 'src/server/tool-definitions.ts'),
+    'utf8'
+  );
 
-  // The advertised list lives in `const TOOL_DEFINITIONS = [ ... ]`, which the
-  // ListTools handler returns and the required-field guard reads. It used to be
-  // an inline `tools: [ ... ]`; both spellings are accepted here so this test
-  // pins the CONTENT of the list rather than where it happens to be written.
   const listStart = (() => {
+    const exported = server.indexOf('export const TOOL_DEFINITIONS = [');
+    if (exported !== -1) return exported;
     const named = server.indexOf('const TOOL_DEFINITIONS = [');
     return named !== -1 ? named : server.indexOf('tools: [');
   })();

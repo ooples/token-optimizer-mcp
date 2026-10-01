@@ -138,6 +138,7 @@ export const UCR_TOOL_DEFINITIONS = [
       properties: {
         deliveryEventId: {
           type: 'string',
+          minLength: 1,
           description: 'The delivery receipt ID supplied by the host adapter.',
         },
       },

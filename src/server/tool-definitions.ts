@@ -258,6 +258,7 @@ export const TOOL_DEFINITIONS = [
       properties: {
         confirm: {
           type: 'boolean',
+          const: true,
           description: 'Must be true to confirm cache clearing',
         },
       },

@@ -640,27 +640,41 @@ export const SMART_LOG_TOOL_DEFINITION = {
       },
       since: {
         type: 'string',
+        maxLength: 1024,
+        pattern: '^[^\\u0000\\n\\r]*$',
         description:
           'Show commits since ref/date (e.g., "HEAD~10", "2024-01-01")',
       },
       until: {
         type: 'string',
+        maxLength: 1024,
+        pattern: '^[^\\u0000\\n\\r]*$',
         description: 'Show commits until ref/date',
       },
       branch: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description: 'Specific branch to query (default: current branch)',
       },
       author: {
         type: 'string',
+        maxLength: 1024,
+        pattern: '^[^\\u0000\\n\\r]*$',
         description: 'Filter by author name or email',
       },
       grep: {
         type: 'string',
+        maxLength: 1024,
+        pattern: '^[^\\u0000\\n\\r]*$',
         description: 'Filter by commit message pattern',
       },
       filePath: {
         type: 'string',
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description: 'Only show commits affecting this file/directory',
       },
       format: {

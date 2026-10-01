@@ -578,11 +578,17 @@ export const SMART_DIFF_TOOL_DEFINITION = {
       },
       source: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description: 'Source commit/branch to compare from (default: HEAD)',
         default: 'HEAD',
       },
       target: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description:
           'Target commit/branch to compare to (default: working directory)',
       },
@@ -593,11 +599,19 @@ export const SMART_DIFF_TOOL_DEFINITION = {
       },
       files: {
         type: 'array',
-        items: { type: 'string' },
+        items: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 4096,
+          pattern: '^(?!-)[^\\u0000\\n\\r]+$',
+        },
         description: 'Specific files to diff',
       },
       filePattern: {
         type: 'string',
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description: 'Pattern to filter files (e.g., "*.ts")',
       },
       summaryOnly: {

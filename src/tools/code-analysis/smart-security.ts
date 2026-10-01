@@ -1717,6 +1717,9 @@ export const SMART_SECURITY_TOOL_DEFINITION = {
       },
       filePath: {
         type: 'string',
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description:
           'A single file to scan. Alias for targets: [filePath]. A target that resolves to no file is refused by name rather than reported as a clean scan.',
       },

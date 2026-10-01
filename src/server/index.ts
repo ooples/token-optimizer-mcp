@@ -397,6 +397,20 @@ const { assertRequiredFields, assertKnownFields } = createToolArgumentChecker(
   ADVERTISED_TOOL_DEFINITIONS as ToolDefinitionLike[]
 );
 
+/**
+ * Tools answered before the dispatch switch, so they need the argument check
+ * applied where they are answered rather than where everything else is.
+ */
+const DIRECT_ANSWER_TOOLS: ReadonlySet<string> = new Set([
+  'expand',
+  'waste_audit',
+  'cache_audit',
+  'model_routing',
+  'token_audit',
+  'install_doctor',
+  'fleet_audit',
+]);
+
 // Define tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   mcpEvidence.toolsListed(ADVERTISED_TOOL_DEFINITIONS.length);
@@ -427,46 +441,70 @@ function toResultText(result: unknown): string {
   return JSON.stringify(result);
 }
 
+/**
+ * Both argument checks plus zod validation, as ONE step.
+ *
+ * It is a function rather than a block inside handleToolCall because seven
+ * tools never reach handleToolCall: expand, waste_audit, cache_audit,
+ * model_routing, token_audit, install_doctor and fleet_audit are answered
+ * earlier in this file, and so were the seven that had no schema entry at all.
+ * Having the checks in one named place is what lets that path run them too.
+ */
+type ArgumentCheck =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | { readonly ok: true; readonly args: any }
+  | {
+      readonly ok: false;
+      readonly response: {
+        content: Array<{ type: string; text: string }>;
+        isError: boolean;
+      };
+    };
+
+function checkToolArguments(name: string, raw: unknown): ArgumentCheck {
+  // A field the published schema calls required must actually be required.
+  assertRequiredFields(name, raw);
+
+  // ...and a field it does NOT publish must be refused rather than dropped,
+  // which is what the passthrough schemas were doing to every typo.
+  assertKnownFields(name, raw);
+
+  try {
+    return { ok: true, args: validateToolArgs(name, raw || {}) };
+  } catch (validationError) {
+    return {
+      ok: false,
+      response: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              error:
+                validationError instanceof Error
+                  ? validationError.message
+                  : String(validationError),
+            }),
+          },
+        ],
+        isError: true,
+      },
+    };
+  }
+}
+
 // Handle tool calls
 async function handleToolCall(request: {
   params: { name: string; arguments?: unknown };
 }) {
   const { name } = request.params;
 
-  // Validate tool arguments using Zod schemas. The validated (and, for tightened
-  // schemas, sanitized) result REPLACES the raw args so every downstream tool
-  // case operates on validated input — closing the prior gap where the handler
+  // The validated result REPLACES the raw args so every downstream tool case
+  // operates on validated input — closing the prior gap where the handler
   // computed `validatedArgs` but then routed the unvalidated raw `args`.
+  const checked = checkToolArguments(name, request.params.arguments);
+  if (!checked.ok) return checked.response;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let args: any = request.params.arguments;
-
-  // A field the published schema calls required must actually be required.
-  // 43 tools share the permissive GenericToolOptionsSchema, so without this
-  // their `required` arrays were documentation only.
-  assertRequiredFields(name, args);
-
-  // ...and a field it does NOT publish must be refused rather than dropped,
-  // which is what the passthrough schemas were doing to every typo.
-  assertKnownFields(name, args);
-
-  try {
-    args = validateToolArgs(name, args || {});
-  } catch (validationError) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            error:
-              validationError instanceof Error
-                ? validationError.message
-                : String(validationError),
-          }),
-        },
-      ],
-      isError: true,
-    };
-  }
+  let args: any = checked.args;
 
   try {
     switch (name) {
@@ -2468,13 +2506,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
       };
     }
 
+    /*
+     * The seven tools answered below never reach handleToolCall, which is where
+     * arguments were checked -- so for years they took `request.params
+     * .arguments as any` unvalidated, and none of them had a schema entry
+     * either. Both halves are fixed: every advertised tool now has a derived
+     * schema, and this path runs the same check the switch does.
+     */
+    let directArgs: unknown = request.params.arguments;
+    if (DIRECT_ANSWER_TOOLS.has(request.params.name)) {
+      const checked = checkToolArguments(
+        request.params.name,
+        request.params.arguments
+      );
+      if (!checked.ok) return checked.response;
+      directArgs = checked.args;
+    }
+
     // Following a pointer is handled here rather than in the tool switch, because
     // it is not an operation on the codebase -- it is an operation on what we
     // already said about it.
     if (request.params.name === 'expand') {
       return recordDirectToolResult(
         request.params.name,
-        () => expandRef(request.params.arguments as any),
+        () => expandRef(directArgs as any),
         operationId
       );
     }
@@ -2484,7 +2539,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     if (request.params.name === 'waste_audit') {
       return recordDirectToolResult(
         request.params.name,
-        () => wasteAudit(request.params.arguments as any),
+        () => wasteAudit(directArgs as any),
         operationId
       );
     }
@@ -2500,7 +2555,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     if (request.params.name === 'model_routing') {
       return recordDirectToolResult(
         request.params.name,
-        () => modelRouting(request.params.arguments as any),
+        () => modelRouting(directArgs as any),
         operationId
       );
     }
@@ -2508,7 +2563,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     if (request.params.name === 'token_audit') {
       return recordDirectToolResult(
         request.params.name,
-        () => tokenAudit(request.params.arguments as any),
+        () => tokenAudit(directArgs as any),
         operationId
       );
     }
@@ -2518,7 +2573,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
         request.params.name,
         () =>
           installDoctor({
-            ...(request.params.arguments as any),
+            ...(directArgs as any),
             clientName: server.getClientVersion()?.name,
             // A runtime fact no file inspection can reach: this process may be
             // running on an in-memory cache because the real one would not open.
@@ -2532,7 +2587,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     if (request.params.name === 'fleet_audit') {
       return recordDirectToolResult(
         request.params.name,
-        () => fleetAudit(request.params.arguments as any),
+        () => fleetAudit(directArgs as any),
         operationId
       );
     }

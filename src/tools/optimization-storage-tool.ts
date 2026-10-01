@@ -176,6 +176,35 @@ export const OPTIMIZATION_STORAGE_TOOL_DEFINITION = {
       },
     },
     required: ['operation', 'originalTextHash'],
+    /*
+     * Which fields a `store` needs, in the schema rather than in prose beside
+     * it. The property descriptions say "Required for store", which a human
+     * reads and a client does not; validation knew the rule separately, from a
+     * hand-written discriminated union that no caller could see. One
+     * description of the contract means publishing the condition too.
+     *
+     * These are SIBLING keywords, not a top-level oneOf. The note above
+     * records what a top-level oneOf cost: clients flatten it to the first
+     * branch, and `retrieve` disappeared from the published contract. An
+     * `anyOf` beside the flat property list leaves every operation visible.
+     */
+    anyOf: [
+      {
+        properties: { operation: { const: 'store' } },
+        required: [
+          'operation',
+          'originalTextHash',
+          'optimizedText',
+          'originalTokens',
+          'optimizedTokens',
+          'tokensSaved',
+        ],
+      },
+      {
+        properties: { operation: { const: 'retrieve' } },
+        required: ['operation', 'originalTextHash'],
+      },
+    ],
     additionalProperties: false,
   },
 };

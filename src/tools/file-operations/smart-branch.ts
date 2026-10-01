@@ -625,6 +625,8 @@ export const SMART_BRANCH_TOOL_DEFINITION = {
       },
       pattern: {
         type: 'string',
+        maxLength: 1024,
+        pattern: '^[^\\u0000\\n\\r]*$',
         description: 'Filter branches by pattern (e.g., "feature/*")',
       },
       merged: {
@@ -672,6 +674,9 @@ export const SMART_BRANCH_TOOL_DEFINITION = {
       },
       mergedInto: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description: 'Only branches already merged into this ref',
       },
       sortOrder: {

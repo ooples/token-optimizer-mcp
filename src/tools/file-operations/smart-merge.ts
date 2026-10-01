@@ -794,10 +794,16 @@ export const SMART_MERGE_TOOL_DEFINITION = {
       },
       branch: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description: 'Branch to merge from (for merge mode)',
       },
       commit: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description: 'Specific commit to merge (for merge mode)',
       },
       noCommit: {
@@ -822,6 +828,9 @@ export const SMART_MERGE_TOOL_DEFINITION = {
       },
       strategy: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         enum: ['recursive', 'ours', 'theirs', 'octopus', 'subtree'],
         description: 'Merge strategy',
         default: 'recursive',
@@ -849,7 +858,11 @@ export const SMART_MERGE_TOOL_DEFINITION = {
       // argument object into options, so these worked while being undiscoverable.
       strategyOption: {
         type: 'array',
-        items: { type: 'string' },
+        items: {
+          type: 'string',
+          maxLength: 1024,
+          pattern: '^[^\\u0000\\n\\r]*$',
+        },
         description:
           'Strategy options passed through to git, for example ["ignore-space-change"]',
       },

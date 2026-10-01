@@ -1611,14 +1611,23 @@ export const SMART_USER_TOOL_DEFINITION = {
       },
       username: {
         type: 'string' as const,
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description: 'Username for user-specific operations',
       },
       groupname: {
         type: 'string' as const,
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description: 'Group name for group-specific operations',
       },
       path: {
         type: 'string' as const,
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description:
           'File/directory path for permission checks and ACL operations',
       },

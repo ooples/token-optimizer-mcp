@@ -117,38 +117,38 @@ export function createToolArgumentChecker(
     },
 
     /**
-     * Zod strips unknown keys and most schemas here are `.passthrough()`, so a
-     * mistyped argument used to vanish silently. That is the worst outcome for
-     * a FILTER: `smart_grep` given `filePattern` searched every file and
-     * returned a confident, unfiltered answer. Failing loudly turns a wrong
-     * result into a fixable message.
+     * Names the field the caller probably meant.
+     *
+     * Refusing an unknown argument is no longer this check's job: every
+     * advertised tool's zod schema is derived from its published inputSchema
+     * and strict, so an undeclared key is refused by name whatever it is. What
+     * a strict schema cannot say is which declared field a typo was reaching
+     * for, and that is the whole value here: `smart_grep` given `filePattern`
+     * silently searched every file and returned a confident, unfiltered answer,
+     * and `filePattern` is one letter-group from `pattern`.
      */
     assertKnownFields(name, args) {
       const fields = known.get(name);
-      // Tools that publish no properties take an open options bag -- there is
-      // no declared vocabulary to check against.
+      // Two tools publish no properties because they take no arguments at all
+      // (cache_audit, get_cache_stats). There is no vocabulary to be near, and
+      // the derived schema already refuses anything they are sent.
       if (!fields?.size) return;
 
       const provided = Object.keys((args ?? {}) as Record<string, unknown>);
       if (!provided.length) return;
 
-      // ONLY NEAR MISSES ARE REFUSED, and that limit is measured rather than
-      // timid. Rejecting every undeclared field looked right until the published
-      // schemas were audited against what the implementations actually read: 22
-      // tools accept options they do not advertise. smart_grep itself reads
-      // wholeWord, skipBinary and ignore; smart_edit reads contextLines and
-      // batchEdits. A blanket rule would have broken working calls across a
-      // fifth of the surface in order to catch typos on the rest.
-      //
-      // A near miss is recoverable information: `filePattern` is one
-      // letter-group from `pattern`, and that is what silently searched 17 files
-      // instead of the 1 requested. An unrelated name is far likelier to be a
-      // real option this schema has never documented, and refusing it would mean
-      // enforcing a contract the implementation does not actually have.
-      //
-      // Those undocumented options are a genuine gap and should be declared, but
-      // that is a schema-completeness change, not a licence to fail callers in
-      // the meantime.
+      // Only near misses are reported here, and that is now a message
+      // decision rather than a safety one. When this was the only check on
+      // unknown arguments it had to be narrow: 22 tools were then reading
+      // options they did not advertise, so refusing everything undeclared
+      // would have broken working calls. That gap has since been closed -- the
+      // named examples (smart_grep's wholeWord, skipBinary and ignore;
+      // smart_edit's contextLines and batchEdits) are published, and the last
+      // five unpublished options are functions and a Buffer that no json
+      // request can carry. An unrelated key therefore falls through to the
+      // derived schema, which refuses it with the list of what is accepted; a
+      // near miss is caught here first because naming the intended field is
+      // more use than listing forty.
       const typos = provided
         .filter((field) => !fields.has(field))
         .map((field) => ({ field, near: nearestKnownField(field, fields) }))

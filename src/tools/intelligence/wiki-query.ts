@@ -114,7 +114,9 @@ export const WIKI_QUERY_TOOL_DEFINITION = {
       },
       nodeId: { type: 'string', description: 'Node id, for operation=node.' },
       limit: {
-        type: 'number',
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
         description: 'Max rows. Default 20, capped at 100.',
       },
       graphDir: {

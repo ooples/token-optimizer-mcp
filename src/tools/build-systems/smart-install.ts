@@ -724,7 +724,12 @@ export const SMART_INSTALL_TOOL_DEFINITION = {
       },
       packages: {
         type: 'array',
-        items: { type: 'string' },
+        items: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 214,
+          pattern: '^(?!-)[^\\u0000\\n\\r]+$',
+        },
         description:
           'Packages to install (if empty, installs all from package.json)',
       },

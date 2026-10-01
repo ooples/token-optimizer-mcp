@@ -47,6 +47,7 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join, relative } from 'path';
 import { putEdge } from '../../hooks-core/wiki.mjs';
+import { TOOL_DEFINITIONS } from '../../dist/server/tool-definitions.js';
 import {
   USAGE_DIRS,
   DECLARE_DIRS,
@@ -67,7 +68,7 @@ const shipped = USAGE_DIRS.flatMap((d) => walk(join(REPO, d))).map((file) => ({
 const sourceOf = (pattern) => shipped.find(({ file }) => pattern.test(file));
 
 /** Kind names: lower-case, and hyphens are real -- `tool-outcome`, `eval-run`. */
-const KIND = "[a-z][a-z0-9_-]*";
+const KIND = '[a-z][a-z0-9_-]*';
 
 const add = (map, key, file) => {
   if (!map.has(key)) map.set(key, new Set());
@@ -110,7 +111,9 @@ function writtenEventKinds() {
   const out = new Map();
   for (const { file, code } of shipped) {
     for (const window of callWindows(code, 'record(?:Read)?')) {
-      for (const m of window.matchAll(new RegExp(`\\bkind:\\s*'(${KIND})'`, 'g'))) {
+      for (const m of window.matchAll(
+        new RegExp(`\\bkind:\\s*'(${KIND})'`, 'g')
+      )) {
         add(out, m[1], file);
       }
     }
@@ -140,12 +143,18 @@ function readEventKinds(vocabulary) {
       for (const m of code.matchAll(re)) add(out, m[1], file);
     }
     // An array literal tested against something with `kind` in it.
-    for (const m of code.matchAll(/\[([^\]]{0,300}?)\]\s*\.includes\(([^)]{0,120}kind[^)]{0,120})\)/gi)) {
-      for (const k of m[1].matchAll(new RegExp(`'(${KIND})'`, 'g'))) add(out, k[1], file);
+    for (const m of code.matchAll(
+      /\[([^\]]{0,300}?)\]\s*\.includes\(([^)]{0,120}kind[^)]{0,120})\)/gi
+    )) {
+      for (const k of m[1].matchAll(new RegExp(`'(${KIND})'`, 'g')))
+        add(out, k[1], file);
     }
     // A Set built from a literal and tested with .has(...kind...).
-    for (const m of code.matchAll(/new Set\(\[([^\]]{0,300}?)\]\)\s*\.has\(([^)]{0,120}kind[^)]{0,120})\)/gi)) {
-      for (const k of m[1].matchAll(new RegExp(`'(${KIND})'`, 'g'))) add(out, k[1], file);
+    for (const m of code.matchAll(
+      /new Set\(\[([^\]]{0,300}?)\]\)\s*\.has\(([^)]{0,120}kind[^)]{0,120})\)/gi
+    )) {
+      for (const k of m[1].matchAll(new RegExp(`'(${KIND})'`, 'g')))
+        add(out, k[1], file);
     }
   }
   // Restricted to the event vocabulary, so the four other `kind` namespaces --
@@ -176,7 +185,9 @@ function readEventKinds(vocabulary) {
 function readsInTheEventLog() {
   const metrics = sourceOf(/hooks-core[\\/]metrics\.mjs$/);
   const out = new Map();
-  for (const m of metrics.code.matchAll(new RegExp(`\\bkind\\s*[=!]==\\s*'(${KIND})'`, 'g'))) {
+  for (const m of metrics.code.matchAll(
+    new RegExp(`\\bkind\\s*[=!]==\\s*'(${KIND})'`, 'g')
+  )) {
     add(out, m[1], metrics.file);
   }
   return out;
@@ -189,7 +200,9 @@ function edgeKinds() {
   const wiki = sourceOf(/hooks-core[\\/]wiki\.mjs$/);
   const block = /export const EDGE_KINDS = \[([\s\S]*?)\]/.exec(wiki.code);
   if (!block) throw new Error('could not read EDGE_KINDS from wiki.mjs');
-  const declared = new Set([...block[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]));
+  const declared = new Set(
+    [...block[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
+  );
 
   const written = new Map();
   for (const { file, code } of shipped) {
@@ -240,7 +253,16 @@ function edgeKinds() {
  * them says which fields are exempt and why; `name.length < 4` said only that
  * they are short, and would have waved through an unread `ttl`.
  */
-const STRUCTURAL_KEYS = new Set(['id', 'at', 'to', 'key', 'v', 't', 'from', 'kind']);
+const STRUCTURAL_KEYS = new Set([
+  'id',
+  'at',
+  'to',
+  'key',
+  'v',
+  't',
+  'from',
+  'kind',
+]);
 
 const FIELD_WRITERS = ['record(?:Read)?', 'putNode', 'putNodeWithEdges'];
 const FIELD_WRITE_PATH = /^(hooks-core|plugin.hooks|src.server)/;
@@ -267,12 +289,16 @@ function recordFields() {
     if (STRUCTURAL_KEYS.has(name)) continue;
     const readSomewhere = shipped.some(({ code }) => {
       const total = (code.match(new RegExp(`\\b${name}\\b`, 'g')) || []).length;
-      const asKey = (code.match(new RegExp(`\\b${name}\\s*:`, 'g')) || []).length;
+      const asKey = (code.match(new RegExp(`\\b${name}\\s*:`, 'g')) || [])
+        .length;
       return total - asKey > 0;
     });
     if (!readSomewhere) unread.push({ name, writers: [...writers].sort() });
   }
-  return { written, unread: unread.sort((a, b) => a.name.localeCompare(b.name)) };
+  return {
+    written,
+    unread: unread.sort((a, b) => a.name.localeCompare(b.name)),
+  };
 }
 
 /* ------------------------------------------- TOOL NAMES IN INJECTED PROMPTS */
@@ -286,17 +312,34 @@ function recordFields() {
  * check whose failure mode is "we told the model to call something imaginary".
  */
 function toolNamesInInjectedText() {
-  const registry = new Set();
-  for (const file of USAGE_DIRS.flatMap((d) => walk(join(REPO, d)))) {
-    if (!/tool-schemas\.ts$/.test(file)) continue;
-    for (const m of readFileSync(file, 'utf8').matchAll(/^\s{2}([a-z_]+):\s*\w+Schema,/gm)) {
-      registry.add(m[1]);
-    }
+  /*
+   * The registry is the SERVED tool list, not a regex over a validation file.
+   *
+   * It used to be scraped out of src/validation/tool-schemas.ts, back when that
+   * file hand-wrote one schema per tool. Validation is now derived from
+   * TOOL_DEFINITIONS -- the same array `tools/list` publishes -- so the
+   * hand-written map is gone and the regex would match nothing, turning every
+   * injected tool name into a false `missing` and failing CI on working hooks.
+   *
+   * Reading TOOL_DEFINITIONS is also the stronger check: it asks whether the
+   * name we put in front of the model is a name a client can actually call,
+   * which is the question this test exists to answer.
+   */
+  const registry = new Set(TOOL_DEFINITIONS.map((d) => d.name));
+
+  /*
+   * A positive control. An empty registry would mark every mentioned tool as
+   * missing, and a reader seeing 40 failures would hunt the hooks instead of
+   * the registry, so the instrument says when it is the broken part.
+   */
+  if (registry.size === 0) {
+    throw new Error('TOOL_DEFINITIONS served no tools -- run `npm run build`');
   }
 
   const mentioned = new Map();
   for (const file of DECLARE_DIRS.flatMap((d) => walk(join(REPO, d)))) {
-    if (!/inject\.mjs$|policy\.mjs$|adapter\.mjs$|disclose\.mjs$/.test(file)) continue;
+    if (!/inject\.mjs$|policy\.mjs$|adapter\.mjs$|disclose\.mjs$/.test(file))
+      continue;
     // COMMENTS STRIPPED, and the earlier reasoning for scanning raw text was
     // wrong in the direction that matters. It said a tool name in a comment
     // that does not exist "is still worth knowing about" -- but this is a
@@ -332,7 +375,9 @@ describe('the census can see anything at all', () => {
 
   it('finds producers and consumers, not just declarations', () => {
     expect(writtenEventKinds().size).toBeGreaterThan(10);
-    expect(readEventKinds(new Set(writtenEventKinds().keys())).size).toBeGreaterThan(5);
+    expect(
+      readEventKinds(new Set(writtenEventKinds().keys())).size
+    ).toBeGreaterThan(5);
     expect(edgeKinds().written.size).toBeGreaterThan(5);
     expect(toolNamesInInjectedText().mentioned.size).toBeGreaterThan(3);
   });
@@ -396,7 +441,9 @@ describe('event kinds', () => {
     // The list is at zero. A ceiling that can only fall is the right shape
     // while somebody genuinely owes the fix; at zero it is just this.
     const written2 = writtenEventKinds();
-    const read2 = readEventKinds(new Set([...declared.keys(), ...written2.keys()]));
+    const read2 = readEventKinds(
+      new Set([...declared.keys(), ...written2.keys()])
+    );
     expect(withoutReader(written2, read2)).toEqual([]);
   });
 });
@@ -423,9 +470,9 @@ describe('edge kinds', () => {
     //
     // putEdge validates the kind before it touches the log, so this exercises
     // the real guard rail and needs no fixture.
-    expect(() => putEdge('/nonexistent-graph-dir', 'a', 'not_a_real_edge_kind', 'b')).toThrow(
-      /unknown edge kind/
-    );
+    expect(() =>
+      putEdge('/nonexistent-graph-dir', 'a', 'not_a_real_edge_kind', 'b')
+    ).toThrow(/unknown edge kind/);
   });
 });
 
