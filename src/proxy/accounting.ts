@@ -118,6 +118,26 @@ export interface CompressionFacts {
   readonly topTools?: string;
   readonly messagesChars?: number;
   readonly messageCount?: number;
+  /**
+   * The model the request names, when it names one.
+   *
+   * THE ONE FIELD THAT MAKES A ROW PRICEABLE. Every other number here is a
+   * size, and a size cannot be turned into money: the provider's catalog is
+   * keyed by model, so a ledger row without one can report tokens avoided and
+   * never a dollar figure. The MCP path already carries a model for exactly
+   * this reason and the proxy path -- the component responsible for the larger
+   * saving -- carried none, so its rows could only ever have been reported
+   * unpriced.
+   *
+   * AN IDENTIFIER, NOT CONTENT. It is a value chosen from the provider's own
+   * published catalog, in the same class as the tool names already recorded
+   * here, and it is read from the PARSED request rather than matched out of
+   * the raw bytes. No part of the conversation, system prompt or tool schema
+   * is retained with it -- which is what keeps the always-on ring and the
+   * loopback `/__token-optimizer/transformations` endpoint as safe as they
+   * were before this field existed.
+   */
+  readonly model?: string;
   readonly beforeBytes: number;
   readonly afterBytes: number;
 }

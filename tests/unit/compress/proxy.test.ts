@@ -984,3 +984,50 @@ describe('the net-saving switch', () => {
     expect(unguarded.body.length).toBeGreaterThan(body.length);
   });
 });
+
+/**
+ * THE ONE FIELD THAT TURNS A LEDGER ROW INTO MONEY. Every other number the
+ * summary carries is a size, and the provider's price catalog is keyed by
+ * model -- so a row without one can report tokens avoided and never a dollar
+ * figure. It is read from the parsed request, which means a refusal reached
+ * AFTER the parse must still carry it: those rows are exactly the ones an
+ * operator asks the cost of.
+ */
+describe('the model on the summary', () => {
+  it('names the model of a request it compressed', () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        model: 'claude-sonnet-5',
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+        ],
+      }),
+      'utf8'
+    );
+    const out = compressBody(body, spill);
+    expect(out.summary.compressed).toBe(true);
+    expect(out.summary.model).toBe('claude-sonnet-5');
+  });
+
+  it('names the model of a request it declined after parsing it', () => {
+    const body = Buffer.from(
+      JSON.stringify({ model: 'claude-sonnet-5', prompt: 'x'.repeat(9000) }),
+      'utf8'
+    );
+    const out = compressBody(body, noSpill);
+    expect(out.summary.reason).toBe('no messages array');
+    expect(out.summary.model).toBe('claude-sonnet-5');
+  });
+
+  it('claims no model when the body never parsed', () => {
+    const out = compressBody(Buffer.from('x'.repeat(9000), 'utf8'), noSpill);
+    expect(out.summary.model).toBeUndefined();
+    // THE CONTROL for the two assertions above: a parsed body that names no
+    // model is also left without one, so the field is read rather than guessed.
+    const anonymous = Buffer.from(
+      JSON.stringify({ prompt: 'x'.repeat(9000) }),
+      'utf8'
+    );
+    expect(compressBody(anonymous, noSpill).summary.model).toBeUndefined();
+  });
+});

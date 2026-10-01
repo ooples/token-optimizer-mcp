@@ -217,6 +217,14 @@ export interface ProxyOptions {
 
 export interface ProxySummary {
   readonly path: string;
+  /**
+   * The model the request names, when it names one.
+   *
+   * See `CompressionFacts.model` in `accounting.ts` for why a size-only record
+   * cannot be turned into money without it, and why an identifier from the
+   * provider's catalog is not request content.
+   */
+  readonly model?: string;
   readonly beforeBytes: number;
   readonly afterBytes: number;
   readonly compressed: boolean;
@@ -427,6 +435,24 @@ function compressBodyOnce(
   wireFormat?: 'chat-completions',
   suppressKnowledge?: boolean
 ): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
+  // THE MODEL, LEARNED AS SOON AS THE BODY PARSES AND CARRIED BY EVERY RETURN
+  // BELOW IT. `unchanged` closes over this variable rather than taking it as an
+  // argument, so a refusal reached after the parse still names the model it
+  // refused to compress -- which is what lets a row be priced even when nothing
+  // was saved on it.
+  let model: string | undefined;
+  const named = () => (model === undefined ? {} : { model });
+  // THE SAME FACT FOR THE TWO DIALECTS THAT BUILD THEIR OWN SUMMARIES. Chat
+  // Completions and Responses return out of helpers that never saw the parse,
+  // so the model is folded onto their result here rather than threaded through
+  // two more signatures -- one place to keep in step instead of three.
+  const withModel = (result: {
+    body: Buffer;
+    summary: Omit<ProxySummary, 'path'>;
+  }): { body: Buffer; summary: Omit<ProxySummary, 'path'> } =>
+    model === undefined
+      ? result
+      : { body: result.body, summary: { ...result.summary, model } };
   const before = body.length;
   const unchanged = (reason: string) => ({
     body,
@@ -438,6 +464,7 @@ function compressBodyOnce(
       afterBytes: body.length,
       compressed: false,
       reason,
+      ...named(),
     },
   });
 
@@ -508,6 +535,7 @@ function compressBodyOnce(
         compressed: false,
         reason: 'null proxy',
         ...(shape ?? {}),
+        ...named(),
       },
     };
   }
@@ -533,6 +561,8 @@ function compressBodyOnce(
   // Note it can only ADD a little input -- the terse note -- to remove more
   // output, and `before` was captured above so the input figure stays honest.
   const asRecord = parsed as unknown as Record<string, unknown>;
+  if (typeof asRecord.model === 'string' && asRecord.model !== '')
+    model = asRecord.model;
   const shapeFormat: WireFormat =
     wireFormat === 'chat-completions'
       ? 'chat-completions'
@@ -572,14 +602,16 @@ function compressBodyOnce(
   }
   if (wireFormat === 'chat-completions' && Array.isArray(parsed.messages)) {
     try {
-      return compressChatCompletions(
-        body,
-        parsed as Record<string, unknown>,
-        spill,
-        anchors,
-        findings,
-        tuning,
-        sharedGraph
+      return withModel(
+        compressChatCompletions(
+          body,
+          parsed as Record<string, unknown>,
+          spill,
+          anchors,
+          findings,
+          tuning,
+          sharedGraph
+        )
       );
     } catch {
       return unchanged('Chat Completions compression failed');
@@ -593,13 +625,15 @@ function compressBodyOnce(
         spill,
         tuning
       );
-      return withResponsesKnowledge(
-        result,
-        parsed as unknown as Record<string, unknown>,
-        anchors,
-        findings,
-        tuning,
-        sharedGraph
+      return withModel(
+        withResponsesKnowledge(
+          result,
+          parsed as unknown as Record<string, unknown>,
+          anchors,
+          findings,
+          tuning,
+          sharedGraph
+        )
       );
     } catch {
       return unchanged('Responses compression failed');
@@ -832,6 +866,7 @@ function compressBodyOnce(
             : 'compression did not pay',
         anchorReason: result.anchor?.reason,
         elisions: result.elisions.length,
+        ...named(),
       },
     };
   }
@@ -856,6 +891,7 @@ function compressBodyOnce(
       anchorReason: result.anchor?.reason,
       elisions: result.elisions.length,
       ...(added ? { injectedChars: result.injectedChars } : {}),
+      ...named(),
     },
   };
 }
@@ -1324,7 +1360,11 @@ function forward(
  */
 export async function startProxy(
   options: ProxyOptions = {}
-): Promise<{ server: Server; port: number; transformations: TransformationLog }> {
+): Promise<{
+  server: Server;
+  port: number;
+  transformations: TransformationLog;
+}> {
   const upstream = options.upstream || UPSTREAM();
   if (!upstreamIsSafe(upstream)) {
     // FAIL LOUDLY HERE, uniquely in this file. Everything else in the proxy
@@ -1377,7 +1417,8 @@ export async function startProxy(
     const commit = (counted?: TokenAccountingFacts): void => {
       if (counted) attach(counted);
       const ledger = accountingPath();
-      if (ledger) appendRecord(ledger, counted ? { ...entry, tokens: counted } : entry);
+      if (ledger)
+        appendRecord(ledger, counted ? { ...entry, tokens: counted } : entry);
     };
     if (!tokens) {
       commit();
