@@ -30,6 +30,7 @@ import { createGunzip, createInflate, createBrotliDecompress } from 'node:zlib';
 import * as zlib from 'node:zlib';
 import { StringDecoder } from 'node:string_decoder';
 import { UsageParser } from './usage-parser.js';
+import { pruneProxyLedger } from '../savings/retention.js';
 
 /** The token classes a provider bills separately. */
 export interface RequestUsage {
@@ -232,6 +233,57 @@ export function appendRecord(path: string, record: AccountingRecord): void {
     appendFileSync(path, `${JSON.stringify(record)}\n`, 'utf8');
   } catch {
     // An unwritable ledger must not cost the agent its response.
+  }
+  maybePrune(path);
+}
+
+/**
+ * How many appends pass between two prunes of the same ledger.
+ *
+ * AMORTISED, BECAUSE A PRUNE READS THE WHOLE FILE. Checking on every append
+ * would turn a per-request constant into a per-request pass over the ledger,
+ * which is exactly the cost the append above was written to avoid. At this
+ * interval the read is spread thin enough to disappear, and the file can still
+ * only overshoot its ceiling by the few hundred lines written in between --
+ * which is why the ceiling is set well under any real limit rather than at it.
+ */
+const PRUNE_EVERY_APPENDS = 512;
+
+/**
+ * Appends since each ledger was last pruned. Keyed by path because one process
+ * can be told to write more than one.
+ */
+const sinceLastPrune = new Map<string, number>();
+
+/**
+ * Folds whatever has aged out of the ledger, occasionally.
+ *
+ * IT RUNS HERE, IN THE WRITER, ON PURPOSE. The prune rewrites the file, so it
+ * cannot run beside an append without the risk of losing the line that lands
+ * mid-rewrite. The single writer is the one place where "no append is in
+ * flight" is known rather than hoped for, and both are synchronous, so the
+ * rewrite cannot interleave with the append that triggered it.
+ *
+ * THE FIRST APPEND ALWAYS CHECKS. A ledger that grew under an older build, or
+ * under a proxy that only ever handled a handful of requests before exiting,
+ * would otherwise never reach a counter-driven prune at all -- it would just
+ * stay as big as it already was, forever.
+ */
+function maybePrune(path: string): void {
+  const seen = sinceLastPrune.get(path);
+  const next = (seen ?? 0) + 1;
+  if (seen !== undefined && next < PRUNE_EVERY_APPENDS) {
+    sinceLastPrune.set(path, next);
+    return;
+  }
+  sinceLastPrune.set(path, 0);
+  try {
+    pruneProxyLedger(path);
+  } catch {
+    // A ledger that cannot be pruned is a ledger that grows, which is worth a
+    // disk; it is not worth the agent's response, and it is not worth losing
+    // the line we just wrote either. Swallowed for the same reason the append
+    // above is -- see the file header.
   }
 }
 
