@@ -29,6 +29,7 @@ export interface SmartEnvOptions {
   suggestMissing?: boolean; // Suggest missing variables
   environment?: 'development' | 'staging' | 'production'; // Environment type
   requiredVars?: string[]; // Required variable names
+  includeLocations?: boolean; // Report each variable's line and value length (default: false)
   force?: boolean; // Bypass cache
   ttl?: number; // Cache TTL in seconds (default: 3600)
 }
@@ -47,14 +48,31 @@ export interface EnvVariable {
 }
 
 /**
- * The fields a row of {@link EnvVariableTable} holds, in order.
+ * The fields a row holds when the caller asked where each variable is.
  */
-export const ENV_VARIABLE_COLUMNS = ['key', 'line', 'length'] as const;
+export const ENV_LOCATED_COLUMNS = ['key', 'line', 'length'] as const;
 
-export type EnvVariableColumn = (typeof ENV_VARIABLE_COLUMNS)[number];
+/**
+ * The fields a row holds by default: the name, and nothing else.
+ *
+ * MEASURED, AND IT IS WHY THIS TOOL USED TO LOSE ON EVERY FIXTURE. On the
+ * 48-variable fixture the two extra numbers were 242 of 538 tokens -- 45% of
+ * the report -- and they moved the reading from +39.0% against the file to
+ * -10.9%, a tool that cost more than reading the thing it summarised. Both
+ * numbers answer "where is it", which is a question about editing the file,
+ * not about what is configured in it; the caller that is about to edit asks
+ * for them with `includeLocations` and pays for them then.
+ */
+export const ENV_KEY_COLUMNS = ['key'] as const;
 
-/** One variable: its name, the line it is on, and the characters its value had. */
-export type EnvVariableRow = [string, number, number];
+export type EnvVariableColumn = (typeof ENV_LOCATED_COLUMNS)[number];
+
+/**
+ * One variable: its name alone, or its name with the line it is on and the
+ * characters its value had. The width is the caller's choice, so it is read
+ * from `columns` rather than assumed.
+ */
+export type EnvVariableRow = [string] | [string, number, number];
 
 /**
  * The variables, as a table rather than a list of objects.
@@ -90,13 +108,18 @@ export interface EnvVariableTable {
  * every legitimate use of this tool actually needs: knowing WHICH variables are
  * defined, not what they are set to.
  */
-function tabulate(vars: EnvVariable[]): EnvVariableTable {
+function tabulate(
+  vars: EnvVariable[],
+  includeLocations: boolean
+): EnvVariableTable {
   const quoted = vars.filter((v) => v.hasQuotes).map((v) => v.key);
   const empty = vars.filter((v) => v.isEmpty).map((v) => v.key);
 
   return {
-    columns: [...ENV_VARIABLE_COLUMNS],
-    rows: vars.map((v) => [v.key, v.line, v.value.length]),
+    columns: includeLocations ? [...ENV_LOCATED_COLUMNS] : [...ENV_KEY_COLUMNS],
+    rows: includeLocations
+      ? vars.map((v): EnvVariableRow => [v.key, v.line, v.value.length])
+      : vars.map((v): EnvVariableRow => [v.key]),
     ...(quoted.length > 0 ? { quoted } : {}),
     ...(empty.length > 0 ? { empty } : {}),
   };
@@ -111,7 +134,7 @@ function tabulate(vars: EnvVariable[]): EnvVariableTable {
  * shape -- objects with a redacted value field -- to anyone whose cache already
  * held an entry for that file, with no error and no way to tell.
  */
-const RESPONSE_VERSION = 2;
+const RESPONSE_VERSION = 3;
 
 export interface SecurityIssue {
   severity: 'critical' | 'high' | 'medium' | 'low';
@@ -416,7 +439,7 @@ export class SmartEnv {
       // TABULATED HERE, after the security analysis above has used the real
       // values and before anything leaves this module. The response shape has
       // no value field, so a value cannot reach the caller by omission.
-      parsed: tabulate(parsed),
+      parsed: tabulate(parsed, options.includeLocations === true),
       missing,
       security,
       suggestions,
@@ -762,6 +785,7 @@ export class SmartEnv {
       suggestMissing: options.suggestMissing,
       environment: options.environment,
       requiredVars: options.requiredVars,
+      includeLocations: options.includeLocations,
     };
     const hash = createHash('md5')
       .update('smart_env' + JSON.stringify(keyData))
@@ -856,7 +880,7 @@ export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
 export const SMART_ENV_TOOL_DEFINITION = {
   name: 'smart_env',
   description:
-    'Smart environment variable analyzer with security checking and suggestions. Measured token reduction vs reading the file: -74% to -10% first read, -74% to -10% repeated (bench/tools, 2 fixtures) -- this answers what the variables are and what is wrong with them, and at both sizes measured the answer costs more than the file.',
+    'Smart environment variable analyzer with security checking and suggestions. Measured token reduction vs reading the file: -30% to 39% first read, -30% to 39% repeated (bench/tools, 2 fixtures) -- it names every variable without returning any value. The loss is on the 8-variable fixture, where a 97-token file cannot be beaten by any JSON envelope; `includeLocations` adds each line and value length back and costs about 45% more.',
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -887,6 +911,12 @@ export const SMART_ENV_TOOL_DEFINITION = {
         type: 'array',
         items: { type: 'string' },
         description: 'List of required variable names',
+      },
+      includeLocations: {
+        type: 'boolean',
+        description:
+          "Report each variable's line number and value length as well as its name. Costs about 45% more on a 48-variable file, so it is off unless you are about to edit the file (default: false)",
+        default: false,
       },
       force: {
         type: 'boolean',

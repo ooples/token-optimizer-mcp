@@ -1,6 +1,6 @@
 {
   "encoding": "cl100k_base",
-  "recorded": "2026-10-01T14:07:21.406Z",
+  "recorded": "2026-10-02T21:50:49.481Z",
   "stability": {
     "passes": 3,
     "maxTokenSpread": 0,
@@ -65,14 +65,14 @@
     },
     "smart_security": {
       "first": {
-        "lo": -50,
+        "lo": -49,
         "hi": 99,
-        "text": "-50% to 99%"
+        "text": "-49% to 99%"
       },
       "repeated": {
-        "lo": -50,
+        "lo": -49,
         "hi": 98,
-        "text": "-50% to 98%"
+        "text": "-49% to 98%"
       },
       "fixtures": 4,
       "samples": 3
@@ -107,14 +107,14 @@
     },
     "smart_env": {
       "first": {
-        "lo": -74,
-        "hi": -10,
-        "text": "-74% to -10%"
+        "lo": -30,
+        "hi": 39,
+        "text": "-30% to 39%"
       },
       "repeated": {
-        "lo": -74,
-        "hi": -10,
-        "text": "-74% to -10%"
+        "lo": -30,
+        "hi": 39,
+        "text": "-30% to 39%"
       },
       "fixtures": 2,
       "samples": 3
@@ -403,11 +403,11 @@
     {
       "tool": "smart_security",
       "fixture": "insecure-handlers.ts",
-      "baseline": 482,
+      "baseline": 486,
       "treatment": 721,
-      "reduction": -0.495850622406639,
+      "reduction": -0.48353909465020584,
       "repeatTreatment": 723,
-      "repeatReduction": -0.5,
+      "repeatReduction": -0.48765432098765427,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -482,10 +482,10 @@
       "tool": "smart_env",
       "fixture": "example.env",
       "baseline": 97,
-      "treatment": 168,
-      "reduction": -0.731958762886598,
-      "repeatTreatment": 168,
-      "repeatReduction": -0.731958762886598,
+      "treatment": 126,
+      "reduction": -0.2989690721649485,
+      "repeatTreatment": 126,
+      "repeatReduction": -0.2989690721649485,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -495,10 +495,10 @@
       "tool": "smart_env",
       "fixture": "large.env",
       "baseline": 485,
-      "treatment": 538,
-      "reduction": -0.10927835051546397,
-      "repeatTreatment": 538,
-      "repeatReduction": -0.10927835051546397,
+      "treatment": 296,
+      "reduction": 0.3896907216494845,
+      "repeatTreatment": 296,
+      "repeatReduction": 0.3896907216494845,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -508,10 +508,10 @@
       "tool": "smart_typescript",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 179,
-      "reduction": 0.8590551181102362,
-      "repeatTreatment": 181,
-      "repeatReduction": 0.8574803149606299,
+      "treatment": 184,
+      "reduction": 0.8551181102362204,
+      "repeatTreatment": 186,
+      "repeatReduction": 0.8535433070866142,
       "chunks": 1,
       "expansions": 0,
       "refused": false,

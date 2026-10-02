@@ -167,8 +167,25 @@ describe('responses survive JSON', () => {
       expect(text).not.toContain('CANARY_jwt_aaaabbbbccccddddeeee');
     });
 
-    it('keeps the length, so "is it set" is still answerable', async () => {
+    it('answers "is it set" without reporting a length', async () => {
+      /*
+       * THE QUESTION SURVIVED THE COLUMN THAT USED TO ANSWER IT. `length` was
+       * 45% of this report's tokens and is now opt-in, so set-ness is read off
+       * the `empty` list instead -- which names only the variables the flag is
+       * true of, and so costs nothing in the normal case where none are.
+       */
       const result = await analyze();
+
+      expect(result.parsed?.rows.map((r) => r[0])).toContain('DB_PASSWORD');
+      expect(result.parsed?.empty ?? []).not.toContain('DB_PASSWORD');
+    });
+
+    it('still reports an exact length to a caller who asks for one', async () => {
+      const result = await new SmartEnv(
+        cache,
+        counter,
+        new MetricsCollector()
+      ).run({ envFile: envPath, force: true, includeLocations: true });
       const columns = result.parsed?.columns ?? [];
       const row = result.parsed?.rows.find((r) => r[0] === 'DB_PASSWORD');
 
@@ -179,13 +196,21 @@ describe('responses survive JSON', () => {
     });
 
     it('has no value field for a value to be returned in', async () => {
-      const result = await analyze(true);
+      // BOTH SHAPES. The redaction used to be a placeholder written OVER the
+      // value, so every path that built a response had to remember to apply it;
+      // a shape with no value field cannot leak one by a path that forgets, and
+      // the wider shape is the one with the most room to forget in.
+      const lean = await analyze(true);
+      const located = await new SmartEnv(
+        cache,
+        counter,
+        new MetricsCollector()
+      ).run({ envFile: envPath, force: true, includeLocations: true });
 
-      // The redaction used to be a placeholder written OVER the value, so every
-      // path that built a response had to remember to apply it. A shape with no
-      // value field cannot leak one by a path that forgets.
-      expect(result.parsed?.columns).toEqual(['key', 'line', 'length']);
-      expect(JSON.stringify(result)).not.toContain('"value":');
+      expect(lean.parsed?.columns).toEqual(['key']);
+      expect(located.parsed?.columns).toEqual(['key', 'line', 'length']);
+      expect(JSON.stringify(lean)).not.toContain('"value":');
+      expect(JSON.stringify(located)).not.toContain('"value":');
     });
   });
 });
