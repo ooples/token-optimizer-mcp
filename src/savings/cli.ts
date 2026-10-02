@@ -39,12 +39,20 @@ import {
   renderSavings,
 } from './render.js';
 import { loadProxyInput, PROXY_INPUT, type ProxyInput } from './proxy.js';
+import { renderSavingsCsv } from './csv.js';
 
 const DEFAULT_TOP_N = 10;
 
 export interface Options {
   readonly topN: number;
-  readonly json: boolean;
+  /**
+   * How to write the report.
+   *
+   * ONE FIELD, NOT A FLAG PER FORMAT. A boolean per rendering lets two of them
+   * be true at once, and the command then has to pick a winner that nobody
+   * asked for; a single value makes a contradiction an argument error instead.
+   */
+  readonly format: SavingsFormat;
   readonly help: boolean;
   /**
    * An explicit proxy ledger, or undefined to take the one
@@ -64,12 +72,38 @@ const SCOPE = Object.freeze({
   Both: 'mcp-tool-traffic+proxy-wire-traffic',
 } as const);
 
+/**
+ * The renderings this command can write.
+ *
+ * `text` is for a person, `json` is lossless and is what a consumer should
+ * parse, and `csv` is the one flat table a spreadsheet or a stored series
+ * wants -- see savings/csv.ts for what an empty cell means there.
+ */
+export const SAVINGS_FORMAT = Object.freeze({
+  Text: 'text',
+  Json: 'json',
+  Csv: 'csv',
+} as const);
+
+export type SavingsFormat =
+  (typeof SAVINGS_FORMAT)[keyof typeof SAVINGS_FORMAT];
+
+const FORMATS: readonly SavingsFormat[] = Object.freeze(
+  Object.values(SAVINGS_FORMAT)
+);
+
 const USAGE = [
-  'usage: token-optimizer-savings [--top <n>] [--json] [--proxy-ledger <path>]',
+  'usage: token-optimizer-savings [--top <n>] [--format <text|json|csv>]',
+  '                               [--proxy-ledger <path>]',
   '',
   '  --top <n>             rows per breakdown (default 10)',
-  '  --json                emit the report as JSON instead of text',
+  '  --format <name>       text (default), json, or csv',
+  '  --json                the same as --format json',
   '  --proxy-ledger <path> read this proxy ledger instead of the configured one',
+  '',
+  'csv is one flat table of both halves: source and section name the grain, and',
+  'an empty cell means a figure this command does not measure at that grain --',
+  'never zero. The windows nest, so summing a column over them double-counts.',
   '',
   INPUTS_NOTE,
   '',
@@ -92,15 +126,40 @@ function positiveInteger(raw: string | undefined): number | null {
 
 export function parseArguments(args: readonly string[]): Options | string {
   let topN = DEFAULT_TOP_N;
-  let json = false;
   let help = false;
   let proxyLedger: string | undefined;
+  /*
+   * THE FLAG THAT CHOSE THE FORMAT IS REMEMBERED, NOT JUST THE FORMAT. Two
+   * flags asking for two different renderings is a mistake worth naming in the
+   * error, and naming it needs the words the operator actually typed.
+   */
+  let format: SavingsFormat | undefined;
+  let chosenBy: string | undefined;
+  const choose = (next: SavingsFormat, flag: string): string | null => {
+    if (format !== undefined && format !== next) {
+      return `${chosenBy} and ${flag} ask for different formats`;
+    }
+    format = next;
+    chosenBy = flag;
+    return null;
+  };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--help' || arg === '-h') {
       help = true;
     } else if (arg === '--json') {
-      json = true;
+      const refusal = choose(SAVINGS_FORMAT.Json, '--json');
+      if (refusal !== null) return refusal;
+    } else if (arg === '--format') {
+      const value = valueArgument(args[i + 1]);
+      if (value === null) return '--format needs a name';
+      const named = FORMATS.find((candidate) => candidate === value);
+      if (named === undefined) {
+        return `--format does not know ${value}; it takes ${FORMATS.join(', ')}`;
+      }
+      const refusal = choose(named, `--format ${value}`);
+      if (refusal !== null) return refusal;
+      i++;
     } else if (arg === '--top') {
       const value = positiveInteger(args[i + 1]);
       if (value === null) return '--top needs a positive whole number';
@@ -115,9 +174,10 @@ export function parseArguments(args: readonly string[]): Options | string {
       return `unknown argument: ${arg}`;
     }
   }
+  const settled = format ?? SAVINGS_FORMAT.Text;
   return proxyLedger === undefined
-    ? { topN, json, help }
-    : { topN, json, help, proxyLedger };
+    ? { topN, format: settled, help }
+    : { topN, format: settled, help, proxyLedger };
 }
 
 /**
@@ -303,8 +363,20 @@ export async function main(
     now
   );
 
-  if (parsed.json) {
+  if (parsed.format === SAVINGS_FORMAT.Json) {
     line(JSON.stringify(savingsJson(report, proxy), null, 2));
+    return 0;
+  }
+
+  /*
+   * THE EMPTY-REPORT BRANCH BELOW IS FOR A READER, NOT FOR A PARSER. A CSV with
+   * a header and no rows is the correct answer to "nothing has been recorded":
+   * the advice under the text rendering would be a row that is not a
+   * measurement, and a consumer appending these files to a series needs the
+   * header to stay the header.
+   */
+  if (parsed.format === SAVINGS_FORMAT.Csv) {
+    for (const text of renderSavingsCsv(report, proxy)) line(text);
     return 0;
   }
 

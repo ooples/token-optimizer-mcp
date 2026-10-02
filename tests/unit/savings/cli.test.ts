@@ -4,7 +4,12 @@
  * screen -- never the analytics database, which no test here opens.
  */
 
-import { main, parseArguments, savingsJson } from '../../../src/savings/cli.js';
+import {
+  main,
+  parseArguments,
+  SAVINGS_FORMAT,
+  savingsJson,
+} from '../../../src/savings/cli.js';
 import { buildReport } from '../../../src/savings/windows.js';
 import {
   createProxyAggregator,
@@ -122,7 +127,7 @@ describe('parseArguments', () => {
   it('defaults to ten rows, text output and no help', () => {
     expect(parseArguments([])).toEqual({
       topN: 10,
-      json: false,
+      format: SAVINGS_FORMAT.Text,
       help: false,
     });
   });
@@ -177,9 +182,43 @@ describe('parseArguments', () => {
   });
 
   it('takes --json and --help', () => {
-    expect(parseArguments(['--json'])).toMatchObject({ json: true });
+    expect(parseArguments(['--json'])).toMatchObject({
+      format: SAVINGS_FORMAT.Json,
+    });
     expect(parseArguments(['--help'])).toMatchObject({ help: true });
     expect(parseArguments(['-h'])).toMatchObject({ help: true });
+  });
+
+  it('reads every format --help offers, and refuses one it does not know', () => {
+    // THE NAMES COME FROM THE ENUM, not from a second list written here: a
+    // format added to the command without a rendering would otherwise pass.
+    for (const name of Object.values(SAVINGS_FORMAT)) {
+      expect(parseArguments(['--format', name])).toMatchObject({
+        format: name,
+      });
+    }
+    expect(parseArguments(['--format', 'tsv'])).toBe(
+      '--format does not know tsv; it takes text, json, csv'
+    );
+    expect(parseArguments(['--format'])).toBe('--format needs a name');
+    // A FLAG IS NEVER READ AS ITS OWN VALUE, the same rule as --top.
+    expect(parseArguments(['--format', '--json'])).toBe(
+      '--format needs a name'
+    );
+  });
+
+  it('refuses two flags that ask for different renderings', () => {
+    expect(parseArguments(['--json', '--format', 'csv'])).toBe(
+      '--json and --format csv ask for different formats'
+    );
+    expect(parseArguments(['--format', 'csv', '--json'])).toBe(
+      '--format csv and --json ask for different formats'
+    );
+    // AND AGREES WITH ITSELF. Saying the same thing twice is not a conflict,
+    // which is the control this refusal needs to not be a blanket refusal.
+    expect(parseArguments(['--json', '--format', 'json'])).toMatchObject({
+      format: SAVINGS_FORMAT.Json,
+    });
   });
 });
 
@@ -348,11 +387,15 @@ describe('savingsJson', () => {
     // nothing in the document saying which is which, is the exact confusion
     // this whole table was built to avoid.
     const report = buildReport([verified()], new Date());
-    const json = savingsJson(report, { kind: PROXY_INPUT.NotConfigured }, {
-      path: '/rates.json',
-      contracts: 3,
-      error: null,
-    });
+    const json = savingsJson(
+      report,
+      { kind: PROXY_INPUT.NotConfigured },
+      {
+        path: '/rates.json',
+        contracts: 3,
+        error: null,
+      }
+    );
     expect(json.pricing.operatorTable.env).toBe(OPERATOR_PRICE_TABLE_ENV);
     expect(json.pricing.operatorTable.path).toBe('/rates.json');
     expect(json.pricing.operatorTable.contracts).toBe(3);
@@ -364,19 +407,27 @@ describe('savingsJson', () => {
     // document that cannot distinguish them hides a typo in the path as
     // nothing at all.
     const report = buildReport([verified()], new Date());
-    const refused = savingsJson(report, { kind: PROXY_INPUT.NotConfigured }, {
-      path: '/rates.json',
-      contracts: 0,
-      error: 'models[0] (x): "output" must be a number',
-    });
+    const refused = savingsJson(
+      report,
+      { kind: PROXY_INPUT.NotConfigured },
+      {
+        path: '/rates.json',
+        contracts: 0,
+        error: 'models[0] (x): "output" must be a number',
+      }
+    );
     expect(refused.pricing.operatorTable.error).toContain('"output"');
     expect(refused.pricing.operatorTable.contracts).toBe(0);
     // Positive control: no table named reads as no path AND no error.
-    const none = savingsJson(report, { kind: PROXY_INPUT.NotConfigured }, {
-      path: null,
-      contracts: 0,
-      error: null,
-    });
+    const none = savingsJson(
+      report,
+      { kind: PROXY_INPUT.NotConfigured },
+      {
+        path: null,
+        contracts: 0,
+        error: null,
+      }
+    );
     expect(none.pricing.operatorTable.path).toBeNull();
     expect(none.pricing.operatorTable.error).toBeNull();
   });
