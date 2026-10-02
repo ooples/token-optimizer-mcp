@@ -93,7 +93,7 @@ async function load() {
     );
     renderClientLedger(optimizerOnly, null);
     renderServers(optimizerOnly);
-    renderTimeline(optimizerOnly.events);
+    renderTimeline(optimizerOnly.events, optimizerOnly.analytics?.summary);
     renderBreakdown(optimizerOnly);
   }
   const providerUsagePromise = get(
@@ -135,7 +135,7 @@ async function load() {
   renderClientLedger(session, null);
   renderCategories(session);
   renderServers(session);
-  renderTimeline(session?.events);
+  renderTimeline(session?.events, session?.analytics?.summary);
   renderBreakdown(session);
 
   const providerUsage = await providerUsagePromise;
@@ -171,7 +171,7 @@ async function load() {
   );
   renderClientLedger(session, graphBalance);
   renderServers(session);
-  renderTimeline(session?.events);
+  renderTimeline(session?.events, session?.analytics?.summary);
   renderBreakdown(session);
 
   $('last-updated').textContent = new Date().toLocaleTimeString();
@@ -1008,13 +1008,38 @@ function renderServers(s) {
   });
 }
 
-function renderTimeline(events) {
+/**
+ * How much of the history is a total rather than a list of operations.
+ *
+ * SHOWN BECAUSE THIS LIST IS THE ONE THING THE FOLD CANNOT KEEP. Retention
+ * folds a day older than the longest report window into per-dimension totals,
+ * which keeps every figure on the cards above exact -- but a total has no
+ * operations left to list, and the oldest operations are exactly the ones that
+ * go first. Without this line, a short timeline under a large saved figure looks
+ * like a bug in the timeline.
+ */
+function foldedNote(summary) {
+  const operations = Number(summary?.foldedOperations || 0);
+  const days = Number(summary?.foldedDays || 0);
+  if (operations <= 0 || days <= 0) return '';
+  return (
+    `<p class="ev-folded">${fmt(operations)} earlier ` +
+    `${operations === 1 ? 'operation' : 'operations'} from ${fmt(days)} ` +
+    `${days === 1 ? 'day' : 'days'} are counted in the totals above but are no ` +
+    `longer listed individually.</p>`
+  );
+}
+
+function renderTimeline(events, summary) {
   const host = $('timeline-container');
+  const folded = foldedNote(summary);
   if (!events?.length) {
-    host.innerHTML = teach(
-      'Nothing has happened yet',
-      'Every observed read, edit, search, and command will appear here in order, newest first.'
-    );
+    host.innerHTML =
+      folded ||
+      teach(
+        'Nothing has happened yet',
+        'Every observed read, edit, search, and command will appear here in order, newest first.'
+      );
     return;
   }
   host.innerHTML = events
@@ -1032,7 +1057,7 @@ function renderTimeline(events) {
         <span class="ev-time">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ''}</span>
       </div>`;
     })
-    .join('');
+    .join('') + folded;
 }
 
 function describeEvent(event) {
