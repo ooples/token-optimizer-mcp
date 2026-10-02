@@ -43,7 +43,13 @@
  * Only exact equality dedups here.
  */
 
-import type { Elision } from './types.js';
+import {
+  assertStamp,
+  STAMP_CHARS,
+  stampFor,
+  stampPattern,
+} from './annotate.js';
+import type { Elision, Stamp } from './types.js';
 
 /**
  * How much of the referent's opening is quoted, so the model can find it.
@@ -58,6 +64,44 @@ const QUOTE_CHARS = 40;
 
 /** The widest ordinal the bound below assumes; see `markerCost`. */
 const WIDEST_LABEL = 99;
+
+/**
+ * The authenticator every reference this module emits carries.
+ *
+ * THE THIRD MARKER GRAMMAR, AND IT HAD THE WORST VERSION OF THE DEFECT. A
+ * block whose entire text is a reference-shaped line reaches `readBackReference`
+ * before anything asks who wrote it, and both outcomes were measured against
+ * `dist/` before this was written:
+ *
+ *   - `[... 1,016 bytes, as #1 above]` planted in a four-block request denied
+ *     the WHOLE sequence -- `back-reference names no single block above` --
+ *     where the clean request rebuilt all four;
+ *   - `'[... 1,016 bytes, shown above: "<the referent's own first line>"]'`
+ *     was worse: it resolved, and the planted block came back as 1,016 bytes of
+ *     UNRELATED content from earlier in the request. The decoder vouched for a
+ *     reconstruction the encoder never made.
+ *
+ * The second is why this is not merely a denial-of-service fix. A stamped
+ * reference is one we wrote; an unstamped reference-shaped line is content, and
+ * content is returned verbatim.
+ *
+ * MAC-KEYED OVER THE BLOCK, NOT RANDOM, for the reason `stampFor` gives: the same
+ * block stamps the same way next turn, so the compressed prefix stays byte-
+ * identical and the provider cache still hits.
+ */
+function referenceStamp(stamp: Stamp): string {
+  return stamp === null ? '' : ` ~${stamp}`;
+}
+
+/**
+ * A stamp of the real width, for the two cost bounds below.
+ *
+ * The guards that decide whether a reference pays have to price the marker that
+ * will actually be emitted, and every emitted marker now carries eight more
+ * characters than it did. Priced without them, a block just over the floor
+ * would be pointed at by a marker that costs more than the bytes it saves.
+ */
+const WIDEST_STAMP = 'x'.repeat(STAMP_CHARS);
 
 /**
  * Below this a reference cannot pay for itself -- derived, not chosen.
@@ -76,7 +120,9 @@ const WIDEST_LABEL = 99;
  * `worthPointingAt` weighs the marker that will actually be emitted.
  */
 export const MIN_DEDUP_BYTES =
-  2 * labelledReference(0, 'x'.repeat(QUOTE_CHARS), WIDEST_LABEL).length;
+  2 *
+  labelledReference(0, 'x'.repeat(QUOTE_CHARS), WIDEST_LABEL, WIDEST_STAMP)
+    .length;
 
 /** One block on its way through a strategy. */
 export interface DedupBlock {
@@ -89,12 +135,35 @@ export interface DedupBlock {
    * behind the cache frontier, both of which must stay byte-identical.
    */
   readonly touchable: boolean;
+  /**
+   * The key `text` already decodes under -- whatever engine compressed it.
+   *
+   * CARRIED THROUGH RATHER THAN RECOMPUTED. A literal block leaves this pass
+   * untouched, and the caller still has to decode the markers inside it, so the
+   * stamp it arrived with is the one that comes back out on `stamps`. Omitted
+   * means the text carries no marker of ours -- an untouchable block, which is
+   * the original bytes.
+   */
+  readonly stamp?: Stamp;
 }
 
 export interface DedupResult {
   /** One text per input block, in order. */
   readonly texts: readonly string[];
   readonly elisions: readonly Elision[];
+  /**
+   * One key per output text, aligned index for index with `texts`.
+   *
+   * ALIGNED, NOT A LIST OF THE ONES THAT EXIST, because the decoder consumes it
+   * positionally: `rehydrateSequence` is handed one block at a time with the
+   * stamp for that block, and a reference resolves by rebuilding a block from
+   * further up the array with ITS stamp. A compacted list would silently shift
+   * every key one position left of the text it belongs to.
+   *
+   * At a literal this is the stamp the block arrived with; at a reference it is
+   * the one this pass minted for the marker it wrote.
+   */
+  readonly stamps: readonly Stamp[];
 }
 
 /**
@@ -191,9 +260,10 @@ function quoteFor(referent: string, above: ReadonlySet<string>): string | null {
 function labelledReference(
   bytes: number,
   quote: string,
-  label: number
+  label: number,
+  stamp: Stamp
 ): string {
-  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}" (#${label})]`;
+  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}" (#${label})${referenceStamp(stamp)}]`;
 }
 
 /**
@@ -211,8 +281,8 @@ function labelledReference(
  * per repeat keeps the legibility where a reader needs it -- the first time --
  * and charges roughly their price for every repeat after.
  */
-function repeatReference(bytes: number, label: number): string {
-  return `[... ${bytes.toLocaleString('en-US')} bytes, as #${label} above]`;
+function repeatReference(bytes: number, label: number, stamp: Stamp): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, as #${label} above${referenceStamp(stamp)}]`;
 }
 
 /**
@@ -233,12 +303,12 @@ function repeatReference(bytes: number, label: number): string {
  * Measured on the mirrored-payload workload: fourteen quoted references at 1,016
  * characters became one quoted reference and thirteen of these, at 388.
  */
-function nextReference(bytes: number): string {
-  return `[... ${bytes.toLocaleString('en-US')} bytes, next above]`;
+function nextReference(bytes: number, stamp: Stamp): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, next above${referenceStamp(stamp)}]`;
 }
 
-function backReference(bytes: number, quote: string): string {
-  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}"]`;
+function backReference(bytes: number, quote: string, stamp: Stamp): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}"${referenceStamp(stamp)}]`;
 }
 
 /**
@@ -250,7 +320,7 @@ function backReference(bytes: number, quote: string): string {
  * judged on, never longer, which is the direction a guard has to err in.
  */
 function markerCost(bytes: number, quote: string): number {
-  return labelledReference(bytes, quote, 99).length;
+  return labelledReference(bytes, quote, 99, WIDEST_STAMP).length;
 }
 
 /**
@@ -306,13 +376,32 @@ export interface BackReference {
   readonly follows: boolean;
 }
 
-const SPELLED_OUT =
-  /^\s*\[\.\.\. [\d,]+ bytes, shown above: "([\s\S]*)"(?: \(#(\d+)\))?\]\s*$/;
-const REPEAT = /^\s*\[\.\.\. [\d,]+ bytes, as #(\d+) above\]\s*$/;
-const NEXT = /^\s*\[\.\.\. [\d,]+ bytes, next above\]\s*$/;
+/*
+ * EACH SPLIT EITHER SIDE OF ITS STAMP, and assembled from `.source` rather than
+ * rewritten as a string: a rebuilt string needs every backslash doubled, and the
+ * one that is missed turns `\[` into `[` or `\d` into a literal `d`, silently.
+ *
+ * Handed no stamp, `stampPattern` contributes `(?!)` and none of the three
+ * matches anything at all. That is the whole fix: a decoder without the key
+ * honours no reference, so a reference-shaped line is just a line.
+ */
+const SPELLED_OUT_HEAD =
+  /^\s*\[\.\.\. [\d,]+ bytes, shown above: "([\s\S]*)"(?: \(#(\d+)\))?/;
+const REPEAT_HEAD = /^\s*\[\.\.\. [\d,]+ bytes, as #(\d+) above/;
+const NEXT_HEAD = /^\s*\[\.\.\. [\d,]+ bytes, next above/;
+const CLOSE = /\]\s*$/;
 
-export function readBackReference(line: string): BackReference | null {
-  const spelled = SPELLED_OUT.exec(line);
+/** One of the three heads above, closed off and gated on the stamp. */
+function reader(head: RegExp, stamp: Stamp): RegExp {
+  return new RegExp(head.source + stampPattern(stamp) + CLOSE.source);
+}
+
+export function readBackReference(
+  line: string,
+  stamp: Stamp = null
+): BackReference | null {
+  assertStamp(stamp);
+  const spelled = reader(SPELLED_OUT_HEAD, stamp).exec(line);
   if (spelled) {
     const quote = spelled[1];
     return {
@@ -323,9 +412,11 @@ export function readBackReference(line: string): BackReference | null {
       follows: false,
     };
   }
-  const repeat = REPEAT.exec(line);
+  const repeat = reader(REPEAT_HEAD, stamp).exec(line);
   if (repeat) return { needle: null, label: Number(repeat[1]), follows: false };
-  return NEXT.test(line) ? { needle: null, label: null, follows: true } : null;
+  return reader(NEXT_HEAD, stamp).test(line)
+    ? { needle: null, label: null, follows: true }
+    : null;
 }
 
 /**
@@ -394,6 +485,18 @@ type Slot =
        * them can be worded by order instead of by quote -- see `nextReference`.
        */
       readonly at: number;
+      /**
+       * The key this reference's marker will carry.
+       *
+       * OVER THE BYTES THE REFERENCE REPLACED, so it is stable turn over turn:
+       * the same block in the same conversation stamps the same way next turn,
+       * the marker comes out byte-identical and the provider's cached prefix
+       * still matches. Minted here rather than in the wording pass below
+       * because the three shapes a reference can take must all carry the same
+       * key -- which of them is chosen depends on how many other slots share
+       * the referent, and must not change what the marker authenticates as.
+       */
+      readonly stamp: string;
     };
 
 export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
@@ -487,6 +590,7 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
         referent: earlier,
         quote,
         at: positionOf.get(earlier) ?? -1,
+        stamp: stampFor(block.original),
       });
       elisions.push({
         removed: `${block.original.length.toLocaleString('en-US')} bytes already shown earlier in this conversation`,
@@ -552,22 +656,31 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     // the two, and emitting the terser wording would then cost bytes to say
     // less.
     return (
-      nextReference(slot.bytes).length <
-      backReference(slot.bytes, slot.quote).length
+      nextReference(slot.bytes, slot.stamp).length <
+      backReference(slot.bytes, slot.quote, slot.stamp).length
     );
   });
 
   const spelledOut = new Set<string>();
   const texts = slots.map((slot, i) => {
     if (slot.kind === 'text') return slot.text;
-    if (runnable[i]) return nextReference(slot.bytes);
+    if (runnable[i]) return nextReference(slot.bytes, slot.stamp);
     const label = labels.get(slot.referent);
-    if (label === undefined) return backReference(slot.bytes, slot.quote);
+    if (label === undefined)
+      return backReference(slot.bytes, slot.quote, slot.stamp);
     if (spelledOut.has(slot.referent))
-      return repeatReference(slot.bytes, label);
+      return repeatReference(slot.bytes, label, slot.stamp);
     spelledOut.add(slot.referent);
-    return labelledReference(slot.bytes, slot.quote, label);
+    return labelledReference(slot.bytes, slot.quote, label, slot.stamp);
   });
 
-  return { texts, elisions };
+  // THE KEYS, IN THE SAME ORDER AS THE TEXTS. A reference's is the one minted
+  // for it above; a literal's is the one the block arrived under, because this
+  // pass did not touch its text and whatever markers are inside it still verify
+  // against that. Output handed over without these is output nobody can invert.
+  const stamps = slots.map((slot, i) =>
+    slot.kind === 'ref' ? slot.stamp : (blocks[i]?.stamp ?? null)
+  );
+
+  return { texts, elisions, stamps };
 }

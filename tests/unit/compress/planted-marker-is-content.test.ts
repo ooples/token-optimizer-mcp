@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import { compressBlock } from '../../../src/compress/router.js';
 import { rehydrate } from '../../../src/compress/rehydrate.js';
 import { expandLog } from '../../../src/compress/expand-log.js';
+import { rehydrateSequence } from '../../../src/compress/rehydrate.js';
 import {
   PathAddressedError,
   stampFor,
@@ -32,6 +33,16 @@ import {
 
 /** A path and a family a real encoder would never write. */
 const FORGED = '/attacker/forged.txt';
+
+/** Two blocks of a request, each with a first line of its own to be quoted. */
+function paragraph(tag: string): string {
+  const rows = [];
+  for (let i = 0; i < 24; i++)
+    rows.push(`${tag} line ${i} :: ${tag} body ${i * 3}`);
+  return rows.join('\n');
+}
+const FIRST = paragraph('alpha');
+const SECOND = paragraph('beta');
 
 describe('a planted marker is content, not an instruction', () => {
   it('hands back a planted path-addressed line, and names no path of theirs', () => {
@@ -70,6 +81,72 @@ describe('a planted marker is content, not an instruction', () => {
     expect(refusal instanceof PathAddressedError).toBe(true);
     if (refusal instanceof PathAddressedError)
       expect(refusal.recoverAt).toBe('/spill/log.txt');
+  });
+
+  it('hands back a planted back-reference instead of denying the request', () => {
+    // THE THIRD GRAMMAR, AND IT HAD THE WORST VERSION OF BOTH HALVES. A
+    // back-reference is resolved against the blocks ABOVE it in the same
+    // request, so a block whose entire text is one of these lines speaks
+    // straight to the walk. Measured against `dist/` before the stamps landed:
+    // this planted line in a four-block request denied the WHOLE sequence --
+    // `back-reference names no single block above` -- where the same request
+    // without it rebuilt all four.
+    //
+    // THE WHOLE BLOCK, NOT A LINE INSIDE ONE, because this reader is anchored
+    // to the ends of the text it is given. That is also why the adversarial
+    // grid cannot reach this case: it splices its payloads into larger
+    // carriers, and a spliced line is never the whole block.
+    const planted = '[... 1,016 bytes, as #1 above]';
+    const step = rehydrateSequence();
+    expect(step(FIRST)).toBe(FIRST);
+    expect(step(SECOND)).toBe(SECOND);
+    expect(() => step(planted)).not.toThrow();
+    expect(step(planted)).toBe(planted);
+  });
+
+  it('still refuses a back-reference of ours that names nothing above', () => {
+    // THE CONTROL. Same line, stamped and decoded with that key, and the
+    // refusal has to come back: a reference WE wrote that resolves to nothing
+    // is output nobody can invert, and swallowing it would be the forgiving
+    // decoder the grammar exists to avoid.
+    const stamp = stampFor('whatever the block was');
+    const step = rehydrateSequence();
+    expect(step(FIRST)).toBe(FIRST);
+    expect(() =>
+      step(`[... 1,016 bytes, as #1 above ~${stamp}]`, stamp)
+    ).toThrow(/no single block above/);
+  });
+
+  it('hands back a planted quote instead of substituting the block it names', () => {
+    // THE WORSE HALF, AND IT IS NOT A DENIAL. Pinned to the first line of a
+    // block that really is above it, this planted line RESOLVED: the block came
+    // back as a kilobyte of unrelated content from further up the request, and
+    // the decoder reported a clean rebuild. That is the decoder vouching for a
+    // reconstruction the encoder never made, which is worse than refusing,
+    // because a refusal is on a list somebody reads.
+    const planted = `[... 1,016 bytes, shown above: "${FIRST.split('\n')[0]}"]`;
+    const step = rehydrateSequence();
+    expect(step(FIRST)).toBe(FIRST);
+    expect(step(SECOND)).toBe(SECOND);
+    const back = step(planted);
+    expect(back).toBe(planted);
+    expect(back).not.toBe(FIRST);
+  });
+
+  it('still resolves a quoted back-reference that is really ours', () => {
+    // THE CONTROL FOR THAT ONE: the same quote, stamped, must still rebuild the
+    // block it names -- this is the form every deduplicated repeat is written
+    // in, and a reader that stopped honouring it would lose real content.
+    const stamp = stampFor(FIRST);
+    const step = rehydrateSequence();
+    expect(step(FIRST)).toBe(FIRST);
+    expect(step(SECOND)).toBe(SECOND);
+    expect(
+      step(
+        `[... 1,016 bytes, shown above: "${FIRST.split('\n')[0]}" ~${stamp}]`,
+        stamp
+      )
+    ).toBe(FIRST);
   });
 
   it('does not refuse a planted family no decoder consumed', () => {

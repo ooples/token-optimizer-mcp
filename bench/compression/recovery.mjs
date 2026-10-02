@@ -58,8 +58,35 @@ export const refusals = new Map();
 // being read. They are counted, because a column of them growing IS worth
 // seeing, but they are not named as gaps.
 export const pathRefusals = new Map();
-export function recoverable(text, label) {
+export function recoverable(text, label, keys = []) {
   const parts = [];
+  // THE KEYS THE PRODUCER MINTED, AND WITHOUT THEM THIS ORACLE READS NOTHING.
+  //
+  // Every marker grammar is authenticated: the encoder derives a key per block
+  // and writes it into each marker, and the decoder honours only the markers
+  // that verify. So a decoder handed no key reads a marker-shaped line as the
+  // content it would be if a user had typed it, hands it straight back, and
+  // this function returns nothing recovered -- which is a column of losses the
+  // product does not have. The oracle holds the keys because the oracle IS the
+  // producer, measuring its own output.
+  //
+  // PICKED OUT OF THE FRAGMENT, NOT ASSUMED BY POSITION. A document arm has one
+  // key for the whole text; the body arm has one per block, and that walk is
+  // the product's, not this harness's, so indexing them against this walk would
+  // be an alignment nobody checked. Instead each fragment names its own key, and
+  // it is accepted only if it is one of ours. That cannot resolve a reference
+  // under a sibling's key -- a marker ends on the key its own encoder wrote --
+  // and it cannot honour a planted line, because the keys are MACs under a
+  // secret this process never emits and content cannot guess.
+  const ours = new Set(
+    (Array.isArray(keys) ? keys : [keys]).filter((k) => typeof k === 'string')
+  );
+  const STAMP_IN_MARKER = /~([0-9a-z]+)(?: -> [^\]]+)?\]/g;
+  const keyOf = (fragment) => {
+    for (const m of fragment.matchAll(STAMP_IN_MARKER))
+      if (ours.has(m[1])) return m[1];
+    return null;
+  };
 
   // THE WHOLE DOCUMENT FIRST, BECAUSE THAT IS WHAT WAS FOLDED. Every other
   // pass rewrites the inside of one block, so decoding block by block matches
@@ -72,10 +99,17 @@ export function recoverable(text, label) {
   // engine restores both folded payloads byte for byte when it is given the
   // same scope it compressed: 735,340 -> 50,602 -> 735,340 on browser-session.
   try {
-    const unfolded = expandLongRepeats(text);
-    if (unfolded !== text) {
-      parts.push(unfolded);
-      text = unfolded;
+    // ONCE PER KEY, because a fold carries the key of the block it was written
+    // in and `expandLongRepeats` honours exactly one: on the body arm the folds
+    // in different blocks verify under different keys, and a single pass would
+    // leave every one but the first family folded and count them as lost.
+    // Each pass is a no-op for markers keyed to anything else.
+    for (const key of ours) {
+      const unfolded = expandLongRepeats(text, key);
+      if (unfolded !== text) {
+        parts.push(unfolded);
+        text = unfolded;
+      }
     }
   } catch (error) {
     if (!refusals.has(label))
@@ -87,7 +121,7 @@ export function recoverable(text, label) {
   const decode = (fragment) => {
     if (MARKER_SHAPED.test(fragment)) handed += 1;
     try {
-      const back = step(fragment);
+      const back = step(fragment, keyOf(fragment));
       if (back !== fragment) parts.push(back);
     } catch (error) {
       if (error instanceof PathAddressedError) {

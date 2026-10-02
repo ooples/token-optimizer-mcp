@@ -712,7 +712,16 @@ export function rehydrateSequence(
 
   return (block: string, stamp: Stamp = null): string => {
     assertStamp(stamp);
-    const ordinal = readImageBackReference(block);
+    // ASKED WITH THE KEY, NOT OF THE SHAPE, and this is the whole of the fix.
+    // Both readers used to answer a question about the TEXT, so a block whose
+    // entire content was a reference-shaped line spoke straight to this walk.
+    // Measured against `dist/` before the stamps existed: a planted
+    // `as #1 above` denied all four blocks of a request that otherwise rebuilt
+    // cleanly, and a planted quote pinned to the referent's own first line was
+    // worse -- it RESOLVED, and the block came back as a kilobyte of unrelated
+    // content from further up. Unstamped, both now fall through to the literal
+    // branch, where `rehydrate` emits the line exactly as it arrived.
+    const ordinal = readImageBackReference(block, stamp);
     if (ordinal !== null) {
       const data = images[ordinal - 1];
       if (data === undefined)
@@ -720,7 +729,7 @@ export function rehydrateSequence(
       return data;
     }
 
-    const reference = readBackReference(block);
+    const reference = readBackReference(block, stamp);
     if (reference === null) {
       // KEPT AS IT ARRIVED, NOT AS IT REBUILT. A quote is computed over the
       // text that was EMITTED -- `quoteFor` separates the referent from the

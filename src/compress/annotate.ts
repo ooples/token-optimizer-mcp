@@ -51,7 +51,14 @@ import type { Elision, EngineContext, Stamp } from './types.js';
  * and it is paid on the product's core output; it buys the only version of this
  * fix under which planted content cannot address the decoder at all.
  */
-const STAMP_CHARS = 6;
+/*
+ * EXPORTED, because a caller that prices a marker has to price the stamp in it.
+ * `dedup.ts` decides whether a reference pays for itself by rendering the widest
+ * marker it could emit and comparing it with the block it would replace, and a
+ * bound that left these characters out would approve a reference that costs more
+ * than it saves.
+ */
+export const STAMP_CHARS = 6;
 
 /** The alphabet, with no vowels, so a stamp never renders as a word. */
 const ALPHABET = '0123456789bcdfghjklmnpqrstvwxyz';

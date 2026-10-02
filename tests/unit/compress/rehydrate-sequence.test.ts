@@ -50,29 +50,44 @@ describe('rehydrateSequence', () => {
   it('rebuilds a spelled-out reference from the block it names', () => {
     const alpha = body('alpha');
     const beta = body('beta');
-    const { texts } = dedupBlocks([alpha, beta, alpha].map(touchable));
+    const { texts, stamps } = dedupBlocks([alpha, beta, alpha].map(touchable));
 
     // The third block really was replaced, or the assertion below is vacuous.
     expect(texts[2]).not.toBe(alpha);
     expect(texts[2]).toMatch(/^\[\.\.\. [\d,]+ bytes, shown above: /);
 
+    // EACH STEP GETS THE KEY FOR ITS OWN BLOCK. The encoder authenticates every
+    // marker it writes, and the decoder honours only the ones that verify, so a
+    // walk handed no keys reads none of these lines as references, returns them
+    // as the content it takes them for, and this would fail on the marker text.
     const step = rehydrateSequence();
-    expect(texts.map((text) => step(text))).toEqual([alpha, beta, alpha]);
+    expect(texts.map((text, i) => step(text, stamps[i] ?? null))).toEqual([
+      alpha,
+      beta,
+      alpha,
+    ]);
   });
 
   it('resolves the cheap repeat form by its label', () => {
     const alpha = body('alpha');
-    const { texts } = dedupBlocks([alpha, alpha, alpha].map(touchable));
+    const { texts, stamps } = dedupBlocks([alpha, alpha, alpha].map(touchable));
 
     // Two references to one referent is what earns the label, and the second
-    // of them is the short form that carries nothing else.
-    expect(texts[1]).toMatch(/\(#1\)\]$/);
+    // of them is the short form that carries nothing else -- bar the
+    // authenticator, which every marker this encoder writes now ends on. An
+    // assertion anchored on the old closing bracket could never match again,
+    // and an assertion that can never match pins no wording at all.
+    expect(texts[1]).toMatch(/\(#1\) ~[0-9a-z]+\]$/);
     expect(texts[2]).toBe(
-      `[... ${alpha.length.toLocaleString('en-US')} bytes, as #1 above]`
+      `[... ${alpha.length.toLocaleString('en-US')} bytes, as #1 above ~${stamps[2] ?? ''}]`
     );
 
     const step = rehydrateSequence();
-    expect(texts.map((text) => step(text))).toEqual([alpha, alpha, alpha]);
+    expect(texts.map((text, i) => step(text, stamps[i] ?? null))).toEqual([
+      alpha,
+      alpha,
+      alpha,
+    ]);
   });
 
   it('gives an image back-reference the image data it points at', () => {
@@ -82,7 +97,7 @@ describe('rehydrateSequence', () => {
       block: imageBlock(data),
       touchable: true,
     }));
-    const { replacements, collapsed } = dedupImages(blocks);
+    const { replacements, stamps, collapsed } = dedupImages(blocks);
     expect(collapsed).toBe(1);
 
     const marker = replacements[2];
@@ -90,14 +105,26 @@ describe('rehydrateSequence', () => {
 
     // The caller supplies the distinct images in order of first appearance,
     // read off the output -- where the first copy of each one is still present.
+    //
+    // AND THE KEY FOR THE BLOCK THE MARKER REPLACED. An image reference is
+    // authenticated like every other marker: unstamped, this line is content,
+    // and handing back an image for a line the request merely CONTAINED was the
+    // defect the keys exist for.
     const step = rehydrateSequence([first, second]);
-    expect(step(String(marker))).toBe(first);
+    expect(step(String(marker), stamps[2] ?? null)).toBe(first);
   });
 
   it('throws rather than guess when no single block above answers', () => {
+    // STAMPED, AND THE KEY HANDED OVER, because the refusal under test is the
+    // one for a reference WE wrote that resolves to nothing. Without the key the
+    // line is not read as a reference at all, and the throw this asserts would
+    // come from somewhere else entirely -- a green test on the wrong fact.
     const step = rehydrateSequence();
     expect(() =>
-      step('[... 9,769 bytes, shown above: "a line nobody sent"]')
+      step(
+        '[... 9,769 bytes, shown above: "a line nobody sent" ~abcdef]',
+        'abcdef'
+      )
     ).toThrow(/no single block above/);
   });
 
@@ -105,7 +132,8 @@ describe('rehydrateSequence', () => {
     const step = rehydrateSequence([png('only')]);
     expect(() =>
       step(
-        '[... the same 8x8 image/png image already shown above (#3) -- not repeated here]'
+        '[... the same 8x8 image/png image already shown above (#3) -- not repeated here ~abcdef]',
+        'abcdef'
       )
     ).toThrow(/no image #3/);
   });
@@ -127,16 +155,27 @@ describe('rehydrateSequence', () => {
     const spilled = `${body('spilled')}
 [... 41,000 bytes ~${stamp} -> .token-optimizer/spill/b1-block.txt]`;
     const other = body('other');
-    const { texts } = dedupBlocks([spilled, other, spilled].map(touchable));
+    const { texts, stamps } = dedupBlocks(
+      [spilled, other, spilled].map(touchable)
+    );
     expect(texts[2]).toMatch(/^\[\.\.\. [\d,]+ bytes, shown above: /);
 
+    // TWO DIFFERENT KEYS, AND THAT IS THE POINT OF THE WALK KEEPING ONE PER
+    // BLOCK. The literal above still holds the path marker the fixture wrote,
+    // so it decodes under the fixture's key; the reference below was minted by
+    // this dedup pass and decodes under its own. Resolving the reference means
+    // rebuilding the literal, and the walk has to reach for the key THAT block
+    // arrived with -- handed the referrer's, the path marker inside it would
+    // read as content and the recoverable throw would never come.
     const step = rehydrateSequence();
     expect(() => step(texts[0], stamp)).toThrow(PathAddressedError);
     expect(step(texts[1], stamp)).toBe(other);
     // The reference is resolved, and the answer is the path -- not a refusal
     // to name the block, which is what this regressed to.
-    expect(() => step(texts[2], stamp)).toThrow(PathAddressedError);
-    expect(() => step(texts[2], stamp)).not.toThrow(/no single block above/);
+    expect(() => step(texts[2], stamps[2] ?? null)).toThrow(PathAddressedError);
+    expect(() => step(texts[2], stamps[2] ?? null)).not.toThrow(
+      /no single block above/
+    );
   });
 
   it('still refuses an unregistered marker family', () => {

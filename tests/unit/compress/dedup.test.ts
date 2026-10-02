@@ -240,8 +240,14 @@ describe('a referent pointed at twice is spelled out once', () => {
     // introduces names something a reader has actually seen.
     expect(first).toContain('export function alpha(input) {');
     expect(first).toContain('(#1)');
-    // The repeat is the cheap form.
-    expect(second).toBe('[... 1,189 bytes, as #1 above]');
+    // The repeat is the cheap form. MATCHED ON ITS PREFIX PLUS ITS OWN KEY,
+    // because the marker now closes on an authenticator: the old exact string
+    // could never match again, and a test that can never pass tells you nothing
+    // about the wording it was written to pin.
+    const at = out.texts.indexOf(second);
+    expect(second).toBe(
+      `[... 1,189 bytes, as #1 above ${'~' + (out.stamps[at] ?? '')}]`
+    );
     expect(second.length).toBeLessThan(first.length / 2);
   });
 
@@ -276,9 +282,13 @@ describe('a referent pointed at twice is spelled out once', () => {
 
     const introduced = new Set<string>();
     for (const text of refs(out.texts)) {
-      const spelled = text.match(/\(#(\d+)\)$|\(#(\d+)\)]/);
+      // THE ORDINAL IS NO LONGER THE LAST THING ON THE LINE. A stamp follows
+      // it, so an anchor on `)$` or on `)]` matches nothing and every spelled-
+      // out introduction went unrecorded -- which made the `used` branch below
+      // fail on an ordinal that had in fact been introduced.
+      const spelled = text.match(/\(#(\d+)\)(?: ~[0-9a-z]+)?\]$/);
       const used = text.match(/as #(\d+) above/);
-      if (spelled) introduced.add(spelled[1] ?? spelled[2] ?? '');
+      if (spelled) introduced.add(spelled[1]);
       if (used) expect(introduced.has(used[1])).toBe(true);
     }
     // And the test is not vacuous: ordinals were actually used.
@@ -364,7 +374,10 @@ describe('a mirrored stretch is worded once and still walks back', () => {
     const first = Array.from({ length: n }, (_, i) => big(`svc-${i} :: `));
     return [...first, ...first].map((t) => block(t));
   };
-  const RUN = /^\[\.\.\. [\d,]+ bytes, next above\]$/;
+  // THE RUN FORM AS A READER SEES IT, stamp included: the marker closes on an
+  // authenticator now, so an anchor on `above]` matches nothing and every
+  // assertion built on it would read zero run forms and pass for free.
+  const RUN = /^\[\.\.\. [\d,]+ bytes, next above ~[0-9a-z]+\]$/;
 
   it('spells out the first reference and orders the rest', () => {
     const { texts } = dedupBlocks(mirror(12));
@@ -386,36 +399,43 @@ describe('a mirrored stretch is worded once and still walks back', () => {
 
   it('gives every block back, through the decoder that ships', () => {
     const blocks = mirror(12);
-    const { texts } = dedupBlocks(blocks);
+    const { texts, stamps } = dedupBlocks(blocks);
 
     // NOT VACUOUS: the run form has to be in what is being decoded, or this
     // proves only that literals survive.
     expect(texts.filter((t) => RUN.test(t)).length).toBe(11);
 
     const decode = rehydrateSequence();
-    expect(texts.map((text) => decode(text))).toEqual(
+    expect(texts.map((text, i) => decode(text, stamps[i] ?? null))).toEqual(
       blocks.map((b) => b.text)
     );
   });
 
   it('refuses a run form with no reference before it', () => {
-    const { texts } = dedupBlocks(mirror(12));
-    const orphan = texts.find((t) => RUN.test(t));
+    const { texts, stamps } = dedupBlocks(mirror(12));
+    const at = texts.findIndex((t) => RUN.test(t));
+    const orphan = texts[at];
     expect(orphan).toBeDefined();
     // Handed the marker alone, a decoder knows of no walk to continue. Guessing
     // would be the forgiving decoder this module exists to avoid.
-    expect(() => rehydrateSequence()(orphan as string)).toThrow(
+    //
+    // AND HANDED ITS KEY, or the refusal is not the one under test: without one
+    // the decoder does not read the line as a marker at all, returns it as the
+    // content it then takes it for, and this would pass on the wrong fact.
+    expect(() => rehydrateSequence()(orphan, stamps[at] ?? null)).toThrow(
       /names no single block above/
     );
   });
 
   it('refuses a run form whose walk was broken by a literal', () => {
-    const { texts } = dedupBlocks(mirror(12));
+    const { texts, stamps } = dedupBlocks(mirror(12));
     const decode = rehydrateSequence();
-    texts.slice(0, 14).forEach((text) => decode(text));
+    texts.slice(0, 14).forEach((text, i) => decode(text, stamps[i] ?? null));
     // A literal between the reference and its continuation is a stretch the
     // encoder never emits, so the decoder must not resolve one.
     expect(() => decode(big('interloper :: '))).not.toThrow();
-    expect(() => decode(texts[14])).toThrow(/names no single block above/);
+    expect(() => decode(texts[14], stamps[14] ?? null)).toThrow(
+      /names no single block above/
+    );
   });
 });

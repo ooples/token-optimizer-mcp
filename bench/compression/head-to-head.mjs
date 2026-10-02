@@ -764,6 +764,11 @@ for (const [name, text] of Object.entries(payloads)) {
         before: Buffer.byteLength(wrapped, 'utf8'),
         after: result.body.length,
         text: result.body.toString('utf8'),
+        // THE KEYS, CARRIED OUT WITH THE TEXT. They are what makes the output
+        // decodable, and the recovery oracle below is the only reader of it.
+        // They never reach a row: a key is derived from the content, so it has
+        // no place in a number anybody publishes.
+        stamps: result.stamps ?? [],
         tokBefore: tokens(wrapped),
         tokAfter: tokens(result.body.toString('utf8')),
         reason: result.summary.compressed
@@ -840,7 +845,11 @@ for (const [name, text] of Object.entries(payloads)) {
   // it is the same question asked of their arm: run the published decoder over
   // the output and see what comes back. An identifier counts as recovered only
   // if it is really there afterwards. Nothing is credited on a promise.
-  const recoveredOut = recoverable(out.text, name);
+  // WITH THE KEY THE ENGINE MINTED FOR THIS TEXT. `compressBlock` authenticates
+  // every marker it writes, so the oracle decodes nothing without it and the
+  // conservation column would read as a wall of losses the product does not
+  // have.
+  const recoveredOut = recoverable(out.text, name, out.stamp ?? []);
 
   // SUBSTRING, not set membership, for what is LITERALLY present. Compression
   // reformats -- a value that arrived as a JSON field may leave as part of a
@@ -928,7 +937,7 @@ for (const [name, text] of Object.entries(payloads)) {
   // to come back off the spill or it is gone. A ratio near 100% earned by losing
   // content is the exact claim this harness exists to refuse.
   let subGone = 0;
-  const subRecovered = recoverable(sub.text, `${name} (sub)`);
+  const subRecovered = recoverable(sub.text, `${name} (sub)`, sub.stamp ?? []);
   const subSpill = subSpilled.join('\n');
   for (const id of want)
     if (
@@ -942,7 +951,11 @@ for (const [name, text] of Object.entries(payloads)) {
   // buys reduction without buying it out of the reader's pocket. `presetFree` is
   // the zero-turn count: in the text, or rebuilt from the text alone. `presetGone`
   // is the loss column every other arm here answers.
-  const presetRecovered = recoverable(preset.text, `${name} (preset)`);
+  const presetRecovered = recoverable(
+    preset.text,
+    `${name} (preset)`,
+    preset.stamp ?? []
+  );
   const presetSpill = presetSpilled.join('\n');
   let presetGone = 0;
   let presetFree = 0;
@@ -953,7 +966,14 @@ for (const [name, text] of Object.entries(payloads)) {
 
   let bodyGone = 0;
   if (body !== null) {
-    const bodyRecovered = recoverable(body.text, `${name} (body)`);
+    // ONE KEY PER BLOCK HERE, not one for the text: `compressBody` runs the
+    // engine once per block, so the markers in different blocks verify under
+    // different keys and the oracle is handed the whole set.
+    const bodyRecovered = recoverable(
+      body.text,
+      `${name} (body)`,
+      body.stamps ?? []
+    );
     const bodySpill = bodySpilled.join('\n');
     for (const id of want)
       if (
@@ -1514,19 +1534,21 @@ const armsFor = (r, params) => {
 // in here is denominated in effective input tokens, which is the payload plus
 // `baseContextTokens`, and arithmetic on a missing term still prints as a
 // number.
-const sessionCosts = !COST_PRICED ? [] : rows.map((r) => {
-  const arms = armsFor(r, PARAMS);
-  return {
-    name: r.name,
-    r,
-    arms,
-    cross: breakEven(arms.ours, arms.theirs),
-    crossComparable:
-      arms.theirsComparable === null
-        ? null
-        : breakEven(arms.ours, arms.theirsComparable),
-  };
-});
+const sessionCosts = !COST_PRICED
+  ? []
+  : rows.map((r) => {
+      const arms = armsFor(r, PARAMS);
+      return {
+        name: r.name,
+        r,
+        arms,
+        cross: breakEven(arms.ours, arms.theirs),
+        crossComparable:
+          arms.theirsComparable === null
+            ? null
+            : breakEven(arms.ours, arms.theirsComparable),
+      };
+    });
 const foldCorpus = (all) => {
   const keys = ['none', 'ours', 'theirs', 'preset'];
   const out = {};
@@ -2568,147 +2590,157 @@ if (process.argv[3] === '--record') {
       // THE TWO BOUNDS, RECORDED. `handed` is the text the agent is given;
       // `whole` is that plus everything the arm moved out, fetched back.
       // Recording only the first is how a store-backed arm reads as free.
-      cost: !COST_PRICED ? null : {
-        turns: {
-          ours: String(r.oursTurns),
-          // THE REFERENCING ARM'S TURNS, RECORDED BESIDE THE DEFAULT ARM'S.
-          // The speed column already pairs `ours-movewhole` against their
-          // best-of-any because that is the arm whose mechanism matches theirs;
-          // must-win 2b prices that same pairing, and it cannot without the
-          // round-trip count for the arm being timed.
-          oursSub: String(r.subTurns),
-          theirs: String(r.theirTurns),
-          theirsComparable: r.compTurns === null ? null : String(r.compTurns),
-          preset: String(r.presetTurns),
-        },
-        handedTokens: {
-          ours: String(r.oursTokAfter),
-          theirs: String(tokens(theirs[r.name].bestText ?? '')),
-          theirsComparable:
-            r.compTokAfter === null ? null : String(r.compTokAfter),
-        },
-        wholeTokens: {
-          ours: String(r.oursTokAfter + r.oursTokSpill),
-          theirs: String(
-            tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem
-          ),
-          // A LOWER BOUND, NOT A MEASUREMENT. We never resolved the comparable
-          // arm, so its redeem tokens are unknown and priced at zero here.
-          // Their whole cost is therefore AT LEAST this, which only makes our
-          // bar harder -- but it must not be read as their measured total.
-          theirsComparableAtLeast:
-            r.compTokAfter === null ? null : String(r.compTokAfter),
-        },
-        // THE SESSION MODEL, which is what a subscription is metered on.
-        // `p0` assumes nothing is ever fetched back and `p1` that everything
-        // is; `breakEven` is the fetch rate at which the two arms cost the
-        // same, and is the only one of the three that rests on no guess about
-        // how long a session runs or how much context precedes the payload.
-        session: {
-          p0: {
-            none: String(Math.round(costAt(byName[r.name].none, 0))),
-            ours: String(Math.round(costAt(byName[r.name].ours, 0))),
-            // THE PROXY ARM, MEASURED AND NOT YET PUBLISHED AS `ours`. See
-            // `armsFor` for why this exists: `ours` is the block arm the MCP
-            // tools apply, and this is the arm a proxy user is actually billed
-            // for. `null` means the arm does not apply to this payload or the
-            // proxy declined to rewrite cached content.
-            proxy:
-              byName[r.name].proxy === null
-                ? null
-                : String(Math.round(costAt(byName[r.name].proxy, 0))),
-            preset: String(Math.round(costAt(byName[r.name].preset, 0))),
-            theirs: String(Math.round(costAt(byName[r.name].theirs, 0))),
-            theirsComparableAtLeast:
-              byName[r.name].theirsComparable === null
-                ? null
-                : String(
-                    Math.round(costAt(byName[r.name].theirsComparable, 0))
+      cost: !COST_PRICED
+        ? null
+        : {
+            turns: {
+              ours: String(r.oursTurns),
+              // THE REFERENCING ARM'S TURNS, RECORDED BESIDE THE DEFAULT ARM'S.
+              // The speed column already pairs `ours-movewhole` against their
+              // best-of-any because that is the arm whose mechanism matches theirs;
+              // must-win 2b prices that same pairing, and it cannot without the
+              // round-trip count for the arm being timed.
+              oursSub: String(r.subTurns),
+              theirs: String(r.theirTurns),
+              theirsComparable:
+                r.compTurns === null ? null : String(r.compTurns),
+              preset: String(r.presetTurns),
+            },
+            handedTokens: {
+              ours: String(r.oursTokAfter),
+              theirs: String(tokens(theirs[r.name].bestText ?? '')),
+              theirsComparable:
+                r.compTokAfter === null ? null : String(r.compTokAfter),
+            },
+            wholeTokens: {
+              ours: String(r.oursTokAfter + r.oursTokSpill),
+              theirs: String(
+                tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem
+              ),
+              // A LOWER BOUND, NOT A MEASUREMENT. We never resolved the comparable
+              // arm, so its redeem tokens are unknown and priced at zero here.
+              // Their whole cost is therefore AT LEAST this, which only makes our
+              // bar harder -- but it must not be read as their measured total.
+              theirsComparableAtLeast:
+                r.compTokAfter === null ? null : String(r.compTokAfter),
+            },
+            // THE SESSION MODEL, which is what a subscription is metered on.
+            // `p0` assumes nothing is ever fetched back and `p1` that everything
+            // is; `breakEven` is the fetch rate at which the two arms cost the
+            // same, and is the only one of the three that rests on no guess about
+            // how long a session runs or how much context precedes the payload.
+            session: {
+              p0: {
+                none: String(Math.round(costAt(byName[r.name].none, 0))),
+                ours: String(Math.round(costAt(byName[r.name].ours, 0))),
+                // THE PROXY ARM, MEASURED AND NOT YET PUBLISHED AS `ours`. See
+                // `armsFor` for why this exists: `ours` is the block arm the MCP
+                // tools apply, and this is the arm a proxy user is actually billed
+                // for. `null` means the arm does not apply to this payload or the
+                // proxy declined to rewrite cached content.
+                proxy:
+                  byName[r.name].proxy === null
+                    ? null
+                    : String(Math.round(costAt(byName[r.name].proxy, 0))),
+                preset: String(Math.round(costAt(byName[r.name].preset, 0))),
+                theirs: String(Math.round(costAt(byName[r.name].theirs, 0))),
+                theirsComparableAtLeast:
+                  byName[r.name].theirsComparable === null
+                    ? null
+                    : String(
+                        Math.round(costAt(byName[r.name].theirsComparable, 0))
+                      ),
+              },
+              p1: {
+                ours: String(Math.round(costAt(byName[r.name].ours, 1))),
+                proxy:
+                  byName[r.name].proxy === null
+                    ? null
+                    : String(Math.round(costAt(byName[r.name].proxy, 1))),
+                preset: String(Math.round(costAt(byName[r.name].preset, 1))),
+                theirs: String(Math.round(costAt(byName[r.name].theirs, 1))),
+                theirsComparableAtLeast:
+                  byName[r.name].theirsComparable === null
+                    ? null
+                    : String(
+                        Math.round(costAt(byName[r.name].theirsComparable, 1))
+                      ),
+              },
+              breakEven: breakEvenLabel(crossByName[r.name]),
+              breakEvenComparable:
+                crossComparableByName[r.name] === null
+                  ? null
+                  : breakEvenLabel(crossComparableByName[r.name]),
+              // THE RATE THAT FLATTERS US LEAST, so a gate has something to stand
+              // on. Cost is quadratic in the fetch rate, so the two endpoints no
+              // longer bound the interval between them: a difference that opens
+              // upward dips in the middle, and an arm can lead at 0% and at 100%
+              // while trailing somewhere between. This is that point, found
+              // exactly rather than sampled.
+              worst: (() => {
+                const w = worstAgainst(
+                  byName[r.name].ours,
+                  byName[r.name].theirs
+                );
+                return {
+                  fetchRate: w.p.toFixed(4),
+                  ours: String(Math.round(costAt(byName[r.name].ours, w.p))),
+                  theirs: String(
+                    Math.round(costAt(byName[r.name].theirs, w.p))
                   ),
-          },
-          p1: {
-            ours: String(Math.round(costAt(byName[r.name].ours, 1))),
-            proxy:
-              byName[r.name].proxy === null
-                ? null
-                : String(Math.round(costAt(byName[r.name].proxy, 1))),
-            preset: String(Math.round(costAt(byName[r.name].preset, 1))),
-            theirs: String(Math.round(costAt(byName[r.name].theirs, 1))),
-            theirsComparableAtLeast:
-              byName[r.name].theirsComparable === null
-                ? null
-                : String(
-                    Math.round(costAt(byName[r.name].theirsComparable, 1))
+                };
+              })(),
+              // THE SAME WORST POINT against the comparable arm, found separately:
+              // the two arms are different quadratics, so the rate that flatters us
+              // least against one is not the rate that flatters us least against
+              // the other.
+              worstComparable: (() => {
+                const comp = byName[r.name].theirsComparable;
+                if (comp === null) return null;
+                const w = worstAgainst(byName[r.name].ours, comp);
+                return {
+                  fetchRate: w.p.toFixed(4),
+                  ours: String(Math.round(costAt(byName[r.name].ours, w.p))),
+                  theirsAtLeast: String(Math.round(costAt(comp, w.p))),
+                };
+              })(),
+              // THE PROXY ARM'S OWN WORST POINTS, because the two columns are now
+              // gated separately and a column without a worst point cannot be
+              // gated at all. `worst` above is the block arm's quadratic; the proxy
+              // arm is a different quadratic with a different vertex, so reusing
+              // one rate for the other would price the proxy arm at a rate chosen
+              // to flatter a different arm.
+              //
+              // `null` propagates the shape test rather than a zero: four payloads
+              // in this corpus are arrays of log lines and API records with no
+              // `role` and no `content`, so there is no request body for a proxy to
+              // rewrite and no arm to price. That is a different statement from an
+              // arm that ran and saved nothing.
+              worstProxy: (() => {
+                const px = byName[r.name].proxy;
+                if (px === null) return null;
+                const w = worstAgainst(px, byName[r.name].theirs);
+                return {
+                  fetchRate: w.p.toFixed(4),
+                  proxy: String(Math.round(costAt(px, w.p))),
+                  theirs: String(
+                    Math.round(costAt(byName[r.name].theirs, w.p))
                   ),
+                };
+              })(),
+              worstProxyComparable: (() => {
+                const px = byName[r.name].proxy;
+                const comp = byName[r.name].theirsComparable;
+                if (px === null || comp === null) return null;
+                const w = worstAgainst(px, comp);
+                return {
+                  fetchRate: w.p.toFixed(4),
+                  proxy: String(Math.round(costAt(px, w.p))),
+                  theirsAtLeast: String(Math.round(costAt(comp, w.p))),
+                };
+              })(),
+            },
           },
-          breakEven: breakEvenLabel(crossByName[r.name]),
-          breakEvenComparable:
-            crossComparableByName[r.name] === null
-              ? null
-              : breakEvenLabel(crossComparableByName[r.name]),
-          // THE RATE THAT FLATTERS US LEAST, so a gate has something to stand
-          // on. Cost is quadratic in the fetch rate, so the two endpoints no
-          // longer bound the interval between them: a difference that opens
-          // upward dips in the middle, and an arm can lead at 0% and at 100%
-          // while trailing somewhere between. This is that point, found
-          // exactly rather than sampled.
-          worst: (() => {
-            const w = worstAgainst(byName[r.name].ours, byName[r.name].theirs);
-            return {
-              fetchRate: w.p.toFixed(4),
-              ours: String(Math.round(costAt(byName[r.name].ours, w.p))),
-              theirs: String(Math.round(costAt(byName[r.name].theirs, w.p))),
-            };
-          })(),
-          // THE SAME WORST POINT against the comparable arm, found separately:
-          // the two arms are different quadratics, so the rate that flatters us
-          // least against one is not the rate that flatters us least against
-          // the other.
-          worstComparable: (() => {
-            const comp = byName[r.name].theirsComparable;
-            if (comp === null) return null;
-            const w = worstAgainst(byName[r.name].ours, comp);
-            return {
-              fetchRate: w.p.toFixed(4),
-              ours: String(Math.round(costAt(byName[r.name].ours, w.p))),
-              theirsAtLeast: String(Math.round(costAt(comp, w.p))),
-            };
-          })(),
-          // THE PROXY ARM'S OWN WORST POINTS, because the two columns are now
-          // gated separately and a column without a worst point cannot be
-          // gated at all. `worst` above is the block arm's quadratic; the proxy
-          // arm is a different quadratic with a different vertex, so reusing
-          // one rate for the other would price the proxy arm at a rate chosen
-          // to flatter a different arm.
-          //
-          // `null` propagates the shape test rather than a zero: four payloads
-          // in this corpus are arrays of log lines and API records with no
-          // `role` and no `content`, so there is no request body for a proxy to
-          // rewrite and no arm to price. That is a different statement from an
-          // arm that ran and saved nothing.
-          worstProxy: (() => {
-            const px = byName[r.name].proxy;
-            if (px === null) return null;
-            const w = worstAgainst(px, byName[r.name].theirs);
-            return {
-              fetchRate: w.p.toFixed(4),
-              proxy: String(Math.round(costAt(px, w.p))),
-              theirs: String(Math.round(costAt(byName[r.name].theirs, w.p))),
-            };
-          })(),
-          worstProxyComparable: (() => {
-            const px = byName[r.name].proxy;
-            const comp = byName[r.name].theirsComparable;
-            if (px === null || comp === null) return null;
-            const w = worstAgainst(px, comp);
-            return {
-              fetchRate: w.p.toFixed(4),
-              proxy: String(Math.round(costAt(px, w.p))),
-              theirsAtLeast: String(Math.round(costAt(comp, w.p))),
-            };
-          })(),
-        },
-      },
       // SPEED, THE SECOND MUST-WIN. Ours is measured; theirs is null until a
       // capture carries it, because `run-theirs.py` has to time their resolver
       // in the process that runs it. A null here means UNMEASURED, and the gate
@@ -2818,68 +2850,79 @@ if (process.argv[3] === '--record') {
     totals: {
       chars: { ours: pct(oursChars), theirs: pct(theirsChars) },
       costRefusal: COST_PRICED ? null : BASE.reason,
-      cost: !COST_PRICED ? null : {
-        usdPerMtok: String(USD_PER_MTOK),
-        turns: {
-          ours: String(sum((r) => r.oursTurns)),
-          theirs: String(sum((r) => r.theirTurns)),
-          preset: String(sum((r) => r.presetTurns)),
-        },
-        handedTokens: {
-          ours: String(sum((r) => r.oursTokAfter)),
-          theirs: String(sum((r) => tokens(theirs[r.name].bestText ?? ''))),
-        },
-        wholeTokens: {
-          ours: String(sum((r) => r.oursTokAfter + r.oursTokSpill)),
-          theirs: String(
-            sum((r) => tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem)
-          ),
-        },
-        // THE SAME MODEL OVER THE WHOLE CORPUS, plus the two session-shape
-        // assumptions it was evaluated under, so a reader can tell which of
-        // these figures would move if they disagreed with either.
-        session: {
-          turnsAfter: String(DEFAULTS.turnsAfter),
-          baseContextTokens: String(PARAMS.baseContextTokens),
-          baseContextSessions: String(BASE.record.sessions),
-          // NAMED, SO A READER CAN GO AND LOOK. This said 'measured', which is
-          // a claim about an act nobody could locate afterwards -- the act
-          // happened on whichever machine ran the harness and left nothing
-          // behind. The file it now names is committed, and carries when it was
-          // taken and over what.
-          baseContextSource: 'bench/subscription/results/base-context.json',
-          baseContextRecordedAt: BASE.record.recordedAt,
-          p0: {
-            none: String(Math.round(costAt(corpus.none, 0))),
-            ours: String(Math.round(costAt(corpus.ours, 0))),
-            preset: String(Math.round(costAt(corpus.preset, 0))),
-            theirs: String(Math.round(costAt(corpus.theirs, 0))),
+      cost: !COST_PRICED
+        ? null
+        : {
+            usdPerMtok: String(USD_PER_MTOK),
+            turns: {
+              ours: String(sum((r) => r.oursTurns)),
+              theirs: String(sum((r) => r.theirTurns)),
+              preset: String(sum((r) => r.presetTurns)),
+            },
+            handedTokens: {
+              ours: String(sum((r) => r.oursTokAfter)),
+              theirs: String(sum((r) => tokens(theirs[r.name].bestText ?? ''))),
+            },
+            wholeTokens: {
+              ours: String(sum((r) => r.oursTokAfter + r.oursTokSpill)),
+              theirs: String(
+                sum(
+                  (r) =>
+                    tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem
+                )
+              ),
+            },
+            // THE SAME MODEL OVER THE WHOLE CORPUS, plus the two session-shape
+            // assumptions it was evaluated under, so a reader can tell which of
+            // these figures would move if they disagreed with either.
+            session: {
+              turnsAfter: String(DEFAULTS.turnsAfter),
+              baseContextTokens: String(PARAMS.baseContextTokens),
+              baseContextSessions: String(BASE.record.sessions),
+              // NAMED, SO A READER CAN GO AND LOOK. This said 'measured', which is
+              // a claim about an act nobody could locate afterwards -- the act
+              // happened on whichever machine ran the harness and left nothing
+              // behind. The file it now names is committed, and carries when it was
+              // taken and over what.
+              baseContextSource: 'bench/subscription/results/base-context.json',
+              baseContextRecordedAt: BASE.record.recordedAt,
+              p0: {
+                none: String(Math.round(costAt(corpus.none, 0))),
+                ours: String(Math.round(costAt(corpus.ours, 0))),
+                preset: String(Math.round(costAt(corpus.preset, 0))),
+                theirs: String(Math.round(costAt(corpus.theirs, 0))),
+              },
+              p1: {
+                none: String(Math.round(costAt(corpus.none, 1))),
+                ours: String(Math.round(costAt(corpus.ours, 1))),
+                preset: String(Math.round(costAt(corpus.preset, 1))),
+                theirs: String(Math.round(costAt(corpus.theirs, 1))),
+              },
+              breakEven: breakEvenLabel(corpus.cross),
+              // The `ours` arm above compresses in place and spills nothing, so
+              // against a cache-read bill it is the wrong arm to quote alone.
+              // `preset` is the one that evicts, and it is the one that wins.
+              presetBreakEven: breakEvenLabel(
+                breakEven(corpus.preset, corpus.theirs)
+              ),
+              // What the same subscription cap buys, against doing nothing at all.
+              capMultiple: {
+                oursP0: times(costAt(corpus.none, 0), costAt(corpus.ours, 0)),
+                theirsP0: times(
+                  costAt(corpus.none, 0),
+                  costAt(corpus.theirs, 0)
+                ),
+                oursP50: times(
+                  costAt(corpus.none, 0.5),
+                  costAt(corpus.ours, 0.5)
+                ),
+                theirsP50: times(
+                  costAt(corpus.none, 0.5),
+                  costAt(corpus.theirs, 0.5)
+                ),
+              },
+            },
           },
-          p1: {
-            none: String(Math.round(costAt(corpus.none, 1))),
-            ours: String(Math.round(costAt(corpus.ours, 1))),
-            preset: String(Math.round(costAt(corpus.preset, 1))),
-            theirs: String(Math.round(costAt(corpus.theirs, 1))),
-          },
-          breakEven: breakEvenLabel(corpus.cross),
-          // The `ours` arm above compresses in place and spills nothing, so
-          // against a cache-read bill it is the wrong arm to quote alone.
-          // `preset` is the one that evicts, and it is the one that wins.
-          presetBreakEven: breakEvenLabel(
-            breakEven(corpus.preset, corpus.theirs)
-          ),
-          // What the same subscription cap buys, against doing nothing at all.
-          capMultiple: {
-            oursP0: times(costAt(corpus.none, 0), costAt(corpus.ours, 0)),
-            theirsP0: times(costAt(corpus.none, 0), costAt(corpus.theirs, 0)),
-            oursP50: times(costAt(corpus.none, 0.5), costAt(corpus.ours, 0.5)),
-            theirsP50: times(
-              costAt(corpus.none, 0.5),
-              costAt(corpus.theirs, 0.5)
-            ),
-          },
-        },
-      },
       tokens: { ours: pct(oursTokens), theirs: pct(theirsTokens) },
       // THE COMPARISON THIS HARNESS CALLS APPLES-TO-APPLES, now in the record.
       //

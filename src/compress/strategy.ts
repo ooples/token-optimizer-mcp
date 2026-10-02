@@ -557,7 +557,6 @@ function pathAddressed(
   const frontier = respectFrontier ? (floor ?? breakpoint) : null;
   const query = questionIn(request);
   const elisions: Elision[] = [];
-  const stamps: Stamp[] = [];
   const staged: DedupBlock[] = [];
 
   // A SOURCE THAT APPEARS TWICE IS COMPRESSED THE SAME WAY BOTH TIMES.
@@ -590,7 +589,10 @@ function pathAddressed(
     const touchable =
       !messageIsSigned(message) && (!respectFrontier || isAfter(at, frontier));
     if (!touchable) {
-      staged.push({ text, original: text, touchable: false });
+      // NO STAMP, BECAUSE NOTHING WAS COMPRESSED. These are the original bytes
+      // -- signed, or behind the cache frontier -- so they hold no marker of
+      // ours, and a key here would claim one.
+      staged.push({ text, original: text, touchable: false, stamp: null });
       return null;
     }
     // CACHED CONTENT IS COMPRESSED WITHOUT THE QUESTION, and this is not a
@@ -621,8 +623,15 @@ function pathAddressed(
       sourcePath: toolUseId ? sourcePaths.get(toolUseId) : undefined,
     });
     elisions.push(...result.elisions);
-    if (result.stamp !== undefined) stamps.push(result.stamp);
-    staged.push({ text: result.text, original: text, touchable: true });
+    // CARRIED ON THE BLOCK, NOT PUSHED ONTO A LIST BESIDE IT. Dedup may replace
+    // this text with a reference under a key of its own, and the decoder reads
+    // the keys positionally, so the two have to stay paired through that pass.
+    staged.push({
+      text: result.text,
+      original: text,
+      touchable: true,
+      stamp: result.stamp ?? null,
+    });
     return null;
   });
 
@@ -653,6 +662,11 @@ function pathAddressed(
   );
 
   // Nothing is added to the request: no system message, no tool, no hash.
+  // THE TEXT BLOCKS' KEYS THEN THE IMAGE BLOCKS', each in the order the walk
+  // visited them. `dedupBlocks` returns one per block rather than one per
+  // marker it wrote, because the key of a block it left alone is still the key
+  // the caller needs to read the markers already inside it.
+  const stamps = [...deduped.stamps, ...images.stamps];
   return { request: out, elisions, stamps, injectedChars: 0 };
 }
 
