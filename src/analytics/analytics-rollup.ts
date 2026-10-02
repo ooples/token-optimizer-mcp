@@ -28,6 +28,7 @@ import {
   isVerifiedExpansionDebit,
   isVerifiedSavingsEntry,
   reportedSavings,
+  verifiedInputDisplacement,
   verifiedTransportDelta,
   type SavingsClassification,
 } from './savings-classification.js';
@@ -54,6 +55,17 @@ export interface RollupKey {
   readonly route: string;
   /** What `classifySavings` returned for every row in this group. */
   readonly classification: SavingsClassification;
+  /**
+   * The measurement contract the folded rows were recorded under, or 0 for
+   * rows written before the stamp existed.
+   *
+   * A KEY DIMENSION, NOT AN ANNOTATION. Once a day is folded its rows are
+   * gone, so whatever is not in the key is unrecoverable -- and "which
+   * contract produced this number" is exactly the question a reader needs
+   * when the contract changes under them. Folding two contracts into one
+   * total answers it with a number that belongs to neither.
+   */
+  readonly measurementSchemaVersion: number;
 }
 
 /** What a folded group contributes to every figure the readers compute. */
@@ -108,6 +120,18 @@ export interface RollupSums {
   readonly pricedContextOperations: number;
   /** What the unverified rows claimed, which stays visible as an audit figure. */
   readonly unverifiedReportedSavings: number;
+  /**
+   * Tokens the caller did not spend because a tool answered instead of handing
+   * them the file, over the rows where the recorder measured both sides.
+   *
+   * SUMMED APART FROM `tokensSaved` ON PURPOSE: that figure is the signed
+   * transport delta, whose baseline is a payload, while this one's baseline is
+   * a file on disk. One reply against two different befores is not additive,
+   * and a single column would invite exactly that addition.
+   */
+  readonly inputDisplacementTokens: number;
+  /** Rows that carried a measured displacement. */
+  readonly displacementOperations: number;
   /** Earliest row in the group, kept so a fold can be audited against rows. */
   readonly firstTimestamp: string;
   /** Latest row in the group, which is the dashboard's `lastSeen`. */
@@ -136,6 +160,19 @@ function text(value: unknown): string {
 }
 
 /**
+ * The contract a row was recorded under, or 0 for one written before the
+ * stamp existed.
+ *
+ * ZERO IS A LABEL, NOT A DEFAULT. Treating an unstamped row as current would
+ * fold the history of an older contract into the totals of a newer one, which
+ * is the one thing a version stamp exists to prevent.
+ */
+function schemaVersionOf(metadata: Record<string, unknown>): number {
+  const parsed = Number(metadata.measurementSchemaVersion);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+/**
  * The group one row belongs to.
  *
  * EVERY DIMENSION A READER GROUPS BY IS HERE, and the cost of being wrong is
@@ -158,6 +195,7 @@ export function rollupKeyOf(entry: AnalyticsEntry): RollupKey | null {
     provider: text(metadata.provider),
     route: text(metadata.pricingRoute || metadata.route),
     classification: classifySavings(entry),
+    measurementSchemaVersion: schemaVersionOf(metadata),
   };
 }
 
@@ -178,6 +216,7 @@ export function rollupKeyText(key: RollupKey): string {
     key.provider,
     key.route,
     key.classification,
+    String(key.measurementSchemaVersion),
   ].join('\t');
 }
 
@@ -206,6 +245,8 @@ export function emptySums(firstTimestamp: string): RollupSums {
     contextUsd: 0,
     pricedContextOperations: 0,
     unverifiedReportedSavings: 0,
+    inputDisplacementTokens: 0,
+    displacementOperations: 0,
     firstTimestamp,
     lastTimestamp: firstTimestamp,
   };
@@ -239,6 +280,7 @@ export function foldEntry(sums: RollupSums, entry: AnalyticsEntry): RollupSums {
   const reported = reportedSavings(entry);
   const isUnverified = !isVerified && !isExpansion && reported > 0;
   const observed = hasObservedReturnedContext(entry);
+  const displacement = verifiedInputDisplacement(entry);
   const returned = nonNegative(entry.optimizedTokens);
   const contextPrice = observed ? priceEntryTokens(entry, returned) : null;
   return {
@@ -275,6 +317,9 @@ export function foldEntry(sums: RollupSums, entry: AnalyticsEntry): RollupSums {
       sums.pricedContextOperations + (contextPrice === null ? 0 : 1),
     unverifiedReportedSavings:
       sums.unverifiedReportedSavings + (isUnverified ? reported : 0),
+    inputDisplacementTokens: sums.inputDisplacementTokens + displacement,
+    displacementOperations:
+      sums.displacementOperations + (displacement === 0 ? 0 : 1),
     firstTimestamp: earlier ? entry.timestamp : sums.firstTimestamp,
     lastTimestamp: later ? entry.timestamp : sums.lastTimestamp,
   };
@@ -312,6 +357,10 @@ export function mergeSums(into: RollupSums, from: RollupSums): RollupSums {
       into.pricedContextOperations + from.pricedContextOperations,
     unverifiedReportedSavings:
       into.unverifiedReportedSavings + from.unverifiedReportedSavings,
+    inputDisplacementTokens:
+      into.inputDisplacementTokens + from.inputDisplacementTokens,
+    displacementOperations:
+      into.displacementOperations + from.displacementOperations,
     firstTimestamp:
       Date.parse(into.firstTimestamp) <= Date.parse(from.firstTimestamp)
         ? into.firstTimestamp

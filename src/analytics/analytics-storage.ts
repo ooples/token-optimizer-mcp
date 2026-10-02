@@ -56,7 +56,64 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
   /**
    * Initialize database schema
    */
+  /**
+   * Column names an existing table has, or none if it does not exist.
+   */
+  private columnsOf(table: string): Set<string> {
+    const rows = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+      name: string;
+    }>;
+    return new Set(rows.map((row) => row.name));
+  }
+
+  /**
+   * Moves an old-shaped rollup table aside so the creator below can build the
+   * current one, and returns the columns it held.
+   *
+   * RENAME RATHER THAN A SECOND DDL. The measurement contract a row was
+   * recorded under became part of the fold key, and SQLite cannot add a column
+   * to an existing primary key -- the table has to be rebuilt. Renaming it out
+   * of the way first means the rebuild uses the one `CREATE TABLE` statement
+   * this file already has, instead of a copy of that shape kept in step by
+   * hand, which is how a migrated store ends up subtly unlike a fresh one.
+   */
+  private setAsideOldRollup(): Set<string> | null {
+    const existing = this.columnsOf('analytics_rollup');
+    if (existing.size === 0) return null;
+    if (existing.has('measurement_schema_version')) return null;
+    this.db.exec(
+      `DROP TABLE IF EXISTS analytics_rollup_old;
+       ALTER TABLE analytics_rollup RENAME TO analytics_rollup_old;`
+    );
+    return existing;
+  }
+
+  /**
+   * Copies the set-aside rows into the rebuilt table and drops the old one.
+   *
+   * The rows carry no stamp, so they land under version 0 -- which is the
+   * label, not a default. A folded day cannot be re-derived, so a row written
+   * before the stamp existed can only ever say "an older contract produced
+   * this", and that is what a reader needs it to say.
+   */
+  private restoreOldRollup(columns: Set<string> | null): void {
+    if (columns === null) return;
+    const carried = [...this.columnsOf('analytics_rollup')].filter((name) =>
+      columns.has(name)
+    );
+    const names = carried.join(', ');
+    this.db.exec(
+      `INSERT INTO analytics_rollup (${names})
+         SELECT ${names} FROM analytics_rollup_old;
+       DROP TABLE analytics_rollup_old;
+       CREATE INDEX IF NOT EXISTS idx_rollup_day ON analytics_rollup(day);`
+    );
+  }
+
   private initializeDatabase(): void {
+    // BEFORE THE CREATOR RUNS, because `IF NOT EXISTS` is silent about a table
+    // that exists in an older shape.
+    const oldRollup = this.setAsideOldRollup();
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS analytics (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,6 +151,7 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
         provider TEXT NOT NULL,
         route TEXT NOT NULL,
         classification TEXT NOT NULL,
+        measurement_schema_version INTEGER NOT NULL DEFAULT 0,
         operations INTEGER NOT NULL,
         eligible_operations INTEGER NOT NULL,
         tokens_saved INTEGER NOT NULL,
@@ -116,16 +174,20 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
         context_usd REAL NOT NULL,
         priced_context_operations INTEGER NOT NULL,
         unverified_reported_savings INTEGER NOT NULL,
+        input_displacement_tokens INTEGER NOT NULL DEFAULT 0,
+        displacement_operations INTEGER NOT NULL DEFAULT 0,
         first_timestamp TEXT NOT NULL,
         last_timestamp TEXT NOT NULL,
         PRIMARY KEY (
           day, hook_phase, tool_name, mcp_server, client, client_version,
-          model, model_version, provider, route, classification
+          model, model_version, provider, route, classification,
+          measurement_schema_version
         )
       );
 
       CREATE INDEX IF NOT EXISTS idx_rollup_day ON analytics_rollup(day);
     `);
+    this.restoreOldRollup(oldRollup);
 
     const columns = new Set(
       (
@@ -488,23 +550,28 @@ const UPSERT_ROLLUP = `
   INSERT INTO analytics_rollup (
     day, hook_phase, tool_name, mcp_server, client, client_version,
     model, model_version, provider, route, classification,
+    measurement_schema_version,
     operations, eligible_operations, tokens_saved, tokens_before,
     original_tokens, optimized_tokens, reported_savings, observed_returns,
     cost_usd, priced_operations, unpriced_operations,
     verified_operations, expansion_operations, unverified_operations, verified_original_tokens, verified_reported_savings, expansion_optimized_tokens, observed_optimized_tokens, measured_optimized_tokens, context_usd, priced_context_operations, unverified_reported_savings,
+    input_displacement_tokens, displacement_operations,
     first_timestamp, last_timestamp
   ) VALUES (
     @day, @hookPhase, @toolName, @mcpServer, @client, @clientVersion,
     @model, @modelVersion, @provider, @route, @classification,
+    @measurementSchemaVersion,
     @operations, @eligibleOperations, @tokensSaved, @tokensBefore,
     @originalTokens, @optimizedTokens, @reportedSavings, @observedReturns,
     @costUsd, @pricedOperations, @unpricedOperations,
     @verifiedOperations, @expansionOperations, @unverifiedOperations, @verifiedOriginalTokens, @verifiedReportedSavings, @expansionOptimizedTokens, @observedOptimizedTokens, @measuredOptimizedTokens, @contextUsd, @pricedContextOperations, @unverifiedReportedSavings,
+    @inputDisplacementTokens, @displacementOperations,
     @firstTimestamp, @lastTimestamp
   )
   ON CONFLICT (
     day, hook_phase, tool_name, mcp_server, client, client_version,
-    model, model_version, provider, route, classification
+    model, model_version, provider, route, classification,
+    measurement_schema_version
   ) DO UPDATE SET
     operations = operations + excluded.operations,
     eligible_operations = eligible_operations + excluded.eligible_operations,
@@ -528,6 +595,8 @@ const UPSERT_ROLLUP = `
     context_usd = context_usd + excluded.context_usd,
     priced_context_operations = priced_context_operations + excluded.priced_context_operations,
     unverified_reported_savings = unverified_reported_savings + excluded.unverified_reported_savings,
+    input_displacement_tokens = input_displacement_tokens + excluded.input_displacement_tokens,
+    displacement_operations = displacement_operations + excluded.displacement_operations,
     first_timestamp = MIN(first_timestamp, excluded.first_timestamp),
     last_timestamp = MAX(last_timestamp, excluded.last_timestamp)
 `;
@@ -546,6 +615,7 @@ function rollupParams(rollup: AnalyticsRollup): Record<string, unknown> {
     provider: rollup.provider,
     route: rollup.route,
     classification: rollup.classification,
+    measurementSchemaVersion: rollup.measurementSchemaVersion,
     operations: rollup.operations,
     eligibleOperations: rollup.eligibleOperations,
     tokensSaved: rollup.tokensSaved,
@@ -568,6 +638,8 @@ function rollupParams(rollup: AnalyticsRollup): Record<string, unknown> {
     contextUsd: rollup.contextUsd,
     pricedContextOperations: rollup.pricedContextOperations,
     unverifiedReportedSavings: rollup.unverifiedReportedSavings,
+    inputDisplacementTokens: rollup.inputDisplacementTokens,
+    displacementOperations: rollup.displacementOperations,
     firstTimestamp: rollup.firstTimestamp,
     lastTimestamp: rollup.lastTimestamp,
   };
@@ -594,7 +666,13 @@ function rollupOf(row: Record<string, unknown>): AnalyticsRollup {
     // mapped onto one it does: the figures beside it were computed under the
     // class the row names, and renaming it would attach them to a gate they
     // never passed.
-    classification: String(row.classification) as AnalyticsRollup['classification'],
+    classification: String(
+      row.classification
+    ) as AnalyticsRollup['classification'],
+    // 0 FOR A ROW FOLDED BEFORE THE STAMP EXISTED, which is what marks the
+    // break rather than hiding it: such a row is labelled as coming from an
+    // older contract instead of being counted as if it came from this one.
+    measurementSchemaVersion: count(row.measurement_schema_version),
     operations: count(row.operations),
     eligibleOperations: count(row.eligible_operations),
     tokensSaved: count(row.tokens_saved),
@@ -617,6 +695,8 @@ function rollupOf(row: Record<string, unknown>): AnalyticsRollup {
     contextUsd: count(row.context_usd),
     pricedContextOperations: count(row.priced_context_operations),
     unverifiedReportedSavings: count(row.unverified_reported_savings),
+    inputDisplacementTokens: count(row.input_displacement_tokens),
+    displacementOperations: count(row.displacement_operations),
     firstTimestamp: String(row.first_timestamp),
     lastTimestamp: String(row.last_timestamp),
   };
