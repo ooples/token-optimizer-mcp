@@ -204,6 +204,36 @@ export interface AppliedPosture {
   readonly respected: readonly string[];
 }
 
+/**
+ * Every variable a posture sets, and the value it sets, for a name it knows.
+ *
+ * ONE PLACE THAT DECIDES WHAT A POSTURE IS. `applyPosture` seeds these into a
+ * live environment and `--print-env` prints them for an operator to export
+ * themselves; a second construction of the same set would eventually differ
+ * from the one the proxy actually runs, and the printed exports would then
+ * describe a configuration nobody runs.
+ *
+ * INDEPENDENT OF THE CURRENT ENVIRONMENT, deliberately: this is what the
+ * posture means, not what it would change here. `applyPosture` is the function
+ * that respects what the operator has already set.
+ */
+export function postureEnv(
+  name: string
+): Readonly<Record<string, string>> | null {
+  const posture: Posture | undefined = (
+    POSTURES as Readonly<Record<string, Posture>>
+  )[name.trim()];
+  if (posture === undefined) return null;
+  const values: Record<string, string> = {
+    [COMPRESSION_ENV]: posture.compression,
+    ...posture.values,
+  };
+  if (posture.features.length > 0) {
+    values[REQUEST_ENV] = posture.features.join(',');
+  }
+  return values;
+}
+
 /** The posture the environment names, or undefined when it names none. */
 export function postureFromEnv(
   env: NodeJS.ProcessEnv = process.env
@@ -248,13 +278,7 @@ export function applyPosture(
     return { requested: name, posture: null, seeded: [], respected: [] };
   }
 
-  const wanted: Record<string, string> = {
-    [COMPRESSION_ENV]: posture.compression,
-    ...posture.values,
-  };
-  if (posture.features.length > 0) {
-    wanted[REQUEST_ENV] = posture.features.join(',');
-  }
+  const wanted = postureEnv(name) ?? {};
 
   const seeded: string[] = [];
   const respected: string[] = [];
