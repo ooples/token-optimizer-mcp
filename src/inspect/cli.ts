@@ -28,6 +28,8 @@ import {
   type TransformationWindow,
 } from '../proxy/supervisor.js';
 import { readLedger, type LedgerRead } from './ledger.js';
+import { auditRecorders, renderAudit, type AuditReport } from './audit.js';
+import { accountingPath } from '../proxy/accounting.js';
 import { renderTransformations, totalsFor } from './render.js';
 import type { AccountingRecord } from '../proxy/accounting.js';
 
@@ -41,6 +43,15 @@ export interface Options {
   readonly full: boolean;
   readonly json: boolean;
   readonly help: boolean;
+  /**
+   * A capture directory to check the ledger against, or null for the normal
+   * per-request view.
+   *
+   * A SECOND QUESTION, NOT A SECOND FORMAT. Every other flag here changes how
+   * the records are shown; this one asks whether the records are right, which
+   * is why it has its own rendering and its own exit status.
+   */
+  readonly audit: string | null;
 }
 
 const USAGE = [
@@ -51,6 +62,7 @@ const USAGE = [
   '  --last <n>        how many transformations to show (default 10)',
   '  --port <n>        only the proxy listening on this port',
   '  --ledger <path>   read a JSONL accounting ledger instead of the live proxy',
+  '  --audit <dir>     check a proxy capture directory against the ledger',
   '  --full            every recorded field, not just the columns',
   '  --json            machine-readable output',
   '  -h, --help        this message',
@@ -65,6 +77,16 @@ const USAGE = [
   // a reader who got this far is exactly the one who wants it.
   'This is the per-request view. For what the traffic was worth in money,',
   'token-optimizer-savings totals a ledger alongside MCP tool traffic.',
+  '',
+  '--audit answers a different question: do the two recorders inside the proxy',
+  'agree about the traffic they both saw? The capture holds each request as it',
+  'arrived and the ledger holds a byte count taken from the same body, so a',
+  'count attributed to the wrong record, or taken after a re-serialization,',
+  'shows up as a value one side reports more often than the other. Both halves',
+  'have to have been running:',
+  '  TOKEN_OPTIMIZER_PROXY_CAPTURE=/path/to/capture-dir',
+  '  TOKEN_OPTIMIZER_PROXY_ACCOUNTING=/path/to/ledger.jsonl',
+  'It exits 0 only when something was compared and nothing disagreed.',
 ];
 
 /**
@@ -81,6 +103,7 @@ export function parseArguments(args: readonly string[]): Options | string {
   let full = false;
   let json = false;
   let help = false;
+  let audit: string | null = null;
   // A value that is itself a flag is a missing value, not a value. `--last
   // --json` means someone forgot the number, and silently reading `--json` as
   // the count would print a refusal about `--json` not being a number.
@@ -105,16 +128,24 @@ export function parseArguments(args: readonly string[]): Options | string {
       if (arg === '--last') last = value;
       else port = value;
       index++;
-    } else if (arg === '--ledger') {
+    } else if (arg === '--ledger' || arg === '--audit') {
       const raw = valueAt(index);
-      if (raw === null) return `${arg} needs a path`;
-      ledger = raw;
+      if (raw === null)
+        return `${arg} needs a ${arg === '--audit' ? 'directory' : 'path'}`;
+      if (arg === '--ledger') ledger = raw;
+      else audit = raw;
       index++;
     } else return `unknown option ${arg}`;
   }
   if (ledger !== null && port !== null)
     return '--port names a live listener, so it cannot be combined with --ledger';
-  return { last, port, ledger, full, json, help };
+  // THE AUDIT HAS NO LIVE SOURCE. The supervisor's window holds the last 128
+  // records in memory; the capture it would be compared against is every
+  // request since capture was switched on. Comparing the two would report a
+  // disagreement for every request the window has already evicted.
+  if (audit !== null && port !== null)
+    return '--port names a live listener, so it cannot be combined with --audit';
+  return { last, port, ledger, full, json, help, audit };
 }
 
 /**
@@ -132,6 +163,12 @@ export interface MainDependencies {
   }) => Promise<readonly TransformationWindow[] | null>;
   readonly ledger?: (path: string, last: number) => Promise<LedgerRead>;
   readonly write?: (text: string) => void;
+  readonly audit?: (
+    captureDir: string,
+    ledgerPath: string
+  ) => Promise<AuditReport>;
+  /** The environment the default ledger path is taken from. */
+  readonly env?: NodeJS.ProcessEnv;
 }
 
 /** One window's provenance, so a reader knows whose numbers these are. */
@@ -185,6 +222,8 @@ export async function main(
     dependencies.live ??
     ((options) => supervisorTransformations(process.env, options));
   const ledger = dependencies.ledger ?? readLedger;
+  const audit = dependencies.audit ?? auditRecorders;
+  const env = dependencies.env ?? process.env;
   const line = (text: string): void => write(`${text}\n`);
   const parsed = parseArguments(args);
   if (typeof parsed === 'string') {
@@ -196,6 +235,39 @@ export async function main(
   if (parsed.help) {
     for (const usage of USAGE) line(usage);
     return 0;
+  }
+
+  if (parsed.audit !== null) {
+    // THE LEDGER IS THE OTHER HALF OF THE COMPARISON, so --audit falls back to
+    // the same variable the proxy itself reads rather than to a default path.
+    // Guessing a location here would audit a file nobody configured and report
+    // that it is missing, which looks like a defect in the proxy.
+    const ledgerPath = parsed.ledger ?? accountingPath(env);
+    if (ledgerPath === null) {
+      line('--audit needs a ledger to compare the capture against');
+      line('');
+      line('Either pass one, or set the variable the proxy writes:');
+      line('  token-optimizer-inspect --audit <dir> --ledger <path>');
+      line('  TOKEN_OPTIMIZER_PROXY_ACCOUNTING=/path/to/ledger.jsonl');
+      return 2;
+    }
+    let report: AuditReport;
+    try {
+      report = await audit(parsed.audit, ledgerPath);
+    } catch (error: unknown) {
+      line(
+        `cannot audit ${parsed.audit} against ${ledgerPath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return 1;
+    }
+    if (parsed.json) line(JSON.stringify(report, null, 2));
+    else for (const text of renderAudit(report)) line(text);
+    // A DISAGREEMENT IS A FINDING, SO IT LEAVES A STATUS BEHIND. Anything a
+    // script gates on has to be able to fail, and "nothing was compared" fails
+    // for the same reason: neither answer is a confirmation.
+    return report.agreed ? 0 : 1;
   }
 
   let source: 'proxy' | 'ledger';

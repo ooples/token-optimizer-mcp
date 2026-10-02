@@ -16,6 +16,7 @@ import {
 } from '../../../src/inspect/cli.js';
 import type { TransformationWindow } from '../../../src/proxy/supervisor.js';
 import type { AccountingRecord } from '../../../src/proxy/accounting.js';
+import type { AuditReport } from '../../../src/inspect/audit.js';
 
 function record(over: Partial<AccountingRecord> = {}): AccountingRecord {
   return {
@@ -26,12 +27,18 @@ function record(over: Partial<AccountingRecord> = {}): AccountingRecord {
     beforeBytes: 400_000,
     afterBytes: 100_000,
     elisions: 12,
-    usage: { input_tokens: 2413, cache_read_input_tokens: 115_002, output_tokens: 806 },
+    usage: {
+      input_tokens: 2413,
+      cache_read_input_tokens: 115_002,
+      output_tokens: 806,
+    },
     ...over,
   };
 }
 
-function listener(over: Partial<TransformationWindow> = {}): TransformationWindow {
+function listener(
+  over: Partial<TransformationWindow> = {}
+): TransformationWindow {
   return {
     port: 51234,
     upstream: 'https://api.anthropic.com',
@@ -76,17 +83,21 @@ describe('parsing', () => {
       full: false,
       json: false,
       help: false,
+      audit: null,
     });
   });
 
   it('takes every flag', () => {
-    expect(parseArguments(['--last', '3', '--port', '51234', '--full', '--json'])).toEqual({
+    expect(
+      parseArguments(['--last', '3', '--port', '51234', '--full', '--json'])
+    ).toEqual({
       last: 3,
       port: 51234,
       ledger: null,
       full: true,
       json: true,
       help: false,
+      audit: null,
     });
   });
 
@@ -95,7 +106,9 @@ describe('parsing', () => {
   });
 
   it('refuses a bare positional, which is never a path here', () => {
-    expect(parseArguments(['ledger.jsonl'])).toBe('unknown option ledger.jsonl');
+    expect(parseArguments(['ledger.jsonl'])).toBe(
+      'unknown option ledger.jsonl'
+    );
   });
 
   it('refuses a count that is not a positive whole number', () => {
@@ -112,9 +125,9 @@ describe('parsing', () => {
   });
 
   it('refuses --port with --ledger, because a file has no listener', () => {
-    expect(String(parseArguments(['--ledger', 'x.jsonl', '--port', '1']))).toContain(
-      'cannot be combined with --ledger'
-    );
+    expect(
+      String(parseArguments(['--ledger', 'x.jsonl', '--port', '1']))
+    ).toContain('cannot be combined with --ledger');
   });
 
   it('allows --ledger with every flag that is about presentation', () => {
@@ -127,6 +140,7 @@ describe('parsing', () => {
       full: true,
       json: true,
       help: false,
+      audit: null,
     });
   });
 });
@@ -194,7 +208,10 @@ describe('the live proxy', () => {
   it('skips a listener with nothing to show, but keeps the one that has', async () => {
     const { text, deps } = harness({
       live: () =>
-        Promise.resolve([listener({ port: 1, held: 0, records: [] }), listener({ port: 2 })]),
+        Promise.resolve([
+          listener({ port: 1, held: 0, records: [] }),
+          listener({ port: 2 }),
+        ]),
     });
     await main([], deps);
     expect(text()).not.toContain('proxy on port 1');
@@ -296,16 +313,173 @@ describe('usage and json', () => {
       [
         listener({ records: [record({ beforeBytes: 1000, afterBytes: 250 })] }),
         listener({
-          records: [record({ compressed: false, beforeBytes: 1000, afterBytes: 1000 })],
+          records: [
+            record({ compressed: false, beforeBytes: 1000, afterBytes: 1000 }),
+          ],
         }),
       ],
       0
     );
-    expect(json.totals).toMatchObject({ requests: 2, compressed: 1, beforeBytes: 2000 });
+    expect(json.totals).toMatchObject({
+      requests: 2,
+      compressed: 1,
+      beforeBytes: 2000,
+    });
   });
 
   it('omits the skipped count when nothing was skipped', () => {
     expect(inspectJson('proxy', [listener()], 0)).not.toHaveProperty('skipped');
     expect(inspectJson('proxy', [listener()], 2)).toHaveProperty('skipped', 2);
+  });
+});
+
+/**
+ * `--audit` is the one flag here that asks whether the records are RIGHT rather
+ * than how to show them, so it has its own rendering and its own exit status --
+ * and both have to be wrong-way-round-proof: a script that gates on this
+ * command must see a non-zero status when the two recorders disagree, and when
+ * nothing was compared at all.
+ */
+function report(over: Partial<AuditReport> = {}): AuditReport {
+  const side = {
+    total: 2,
+    skipped: 0,
+    missing: false,
+    compared: 2,
+    excluded: 0,
+    unaligned: 0,
+  };
+  return {
+    capture: side,
+    ledger: side,
+    from: '2026-10-01T12:00:00.000Z',
+    to: '2026-10-01T12:30:00.000Z',
+    bytes: [],
+    models: [],
+    agreed: true,
+    ...over,
+  };
+}
+
+describe('an audit', () => {
+  it('compares the directory it was given against the ledger it was given', async () => {
+    const { asked, deps } = harness({
+      audit: (captureDir, ledgerPath) => {
+        asked.push({ captureDir, ledgerPath });
+        return Promise.resolve(report());
+      },
+    });
+    expect(await main(['--audit', 'cap', '--ledger', 'l.jsonl'], deps)).toBe(0);
+    expect(asked).toEqual([{ captureDir: 'cap', ledgerPath: 'l.jsonl' }]);
+  });
+
+  it('takes the ledger the proxy itself writes when none is named', async () => {
+    const { asked, deps } = harness({
+      env: { TOKEN_OPTIMIZER_PROXY_ACCOUNTING: '/var/ledger.jsonl' },
+      audit: (captureDir, ledgerPath) => {
+        asked.push({ captureDir, ledgerPath });
+        return Promise.resolve(report());
+      },
+    });
+    expect(await main(['--audit', 'cap'], deps)).toBe(0);
+    expect(asked).toEqual([
+      { captureDir: 'cap', ledgerPath: '/var/ledger.jsonl' },
+    ]);
+  });
+
+  it('refuses without a ledger, naming both ways to supply one', async () => {
+    const { text, deps } = harness({ env: {} });
+    expect(await main(['--audit', 'cap'], deps)).toBe(2);
+    expect(text()).toContain('--audit needs a ledger');
+    expect(text()).toContain('--ledger <path>');
+    expect(text()).toContain('TOKEN_OPTIMIZER_PROXY_ACCOUNTING');
+  });
+
+  it('exits non-zero on a disagreement', async () => {
+    const { text, deps } = harness({
+      audit: () =>
+        Promise.resolve(
+          report({
+            agreed: false,
+            bytes: [
+              { path: '/v1/messages', value: '400', inCapture: 2, inLedger: 1 },
+            ],
+          })
+        ),
+    });
+    expect(await main(['--audit', 'cap', '--ledger', 'l.jsonl'], deps)).toBe(1);
+    expect(text()).toContain('2 captured, 1 in the ledger');
+  });
+
+  it('exits non-zero when nothing was compared, which is not a pass', async () => {
+    const { text, deps } = harness({
+      audit: () =>
+        Promise.resolve(
+          report({
+            agreed: false,
+            capture: {
+              total: 0,
+              skipped: 0,
+              missing: true,
+              compared: 0,
+              excluded: 0,
+              unaligned: 0,
+            },
+            from: null,
+            to: null,
+          })
+        ),
+    });
+    expect(await main(['--audit', 'cap', '--ledger', 'l.jsonl'], deps)).toBe(1);
+    expect(text()).toContain('nothing was compared');
+  });
+
+  it('emits the report itself under --json', async () => {
+    const { text, deps } = harness({ audit: () => Promise.resolve(report()) });
+    expect(
+      await main(['--audit', 'cap', '--ledger', 'l.jsonl', '--json'], deps)
+    ).toBe(0);
+    expect(JSON.parse(text())).toEqual(report());
+  });
+
+  it('asks neither the proxy nor the ledger reader', async () => {
+    // THE BRANCH HAS TO BE A BRANCH. Falling through would print the
+    // per-request table under a flag that asked a different question.
+    const { asked, deps } = harness({ audit: () => Promise.resolve(report()) });
+    await main(['--audit', 'cap', '--ledger', 'l.jsonl'], deps);
+    expect(asked).toEqual([]);
+  });
+
+  it('names both paths when the audit itself cannot run', async () => {
+    const { text, deps } = harness({
+      audit: () => Promise.reject(new Error('EACCES: permission denied')),
+    });
+    expect(await main(['--audit', '/cap', '--ledger', '/l.jsonl'], deps)).toBe(
+      1
+    );
+    expect(text()).toContain('/cap');
+    expect(text()).toContain('/l.jsonl');
+    expect(text()).toContain('EACCES');
+  });
+
+  it('refuses a live listener, which cannot hold the capture it would need', async () => {
+    expect(parseArguments(['--audit', 'cap', '--port', '51234'])).toBe(
+      '--port names a live listener, so it cannot be combined with --audit'
+    );
+  });
+
+  it('asks for a directory, not a path, when the value is missing', () => {
+    expect(parseArguments(['--audit'])).toBe('--audit needs a directory');
+    expect(parseArguments(['--audit', '--json'])).toBe(
+      '--audit needs a directory'
+    );
+    expect(parseArguments(['--ledger'])).toBe('--ledger needs a path');
+  });
+
+  it('offers the flag in --help, with both variables it needs', async () => {
+    const { text, deps } = harness();
+    expect(await main(['--help'], deps)).toBe(0);
+    expect(text()).toContain('--audit <dir>');
+    expect(text()).toContain('TOKEN_OPTIMIZER_PROXY_CAPTURE');
   });
 });
