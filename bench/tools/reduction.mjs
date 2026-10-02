@@ -115,6 +115,20 @@ export function claimFor(rows) {
 const byFilePath = (path) => ({ filePath: path });
 const byPath = (path) => ({ path });
 const byFileList = (path) => ({ files: [path], cwd: dirname(path) });
+/**
+ * THE SAME QUESTION, IN THE WORDS THAT TOOL DECLARES.
+ *
+ * smart_typescript's schema has no `cwd`; the root it reads is `projectRoot`.
+ * The key was ignored in silence until unknown arguments became a refusal, and
+ * then the case recorded `NO MEASUREMENT` while the tool's own description went
+ * on claiming 85-86% from the reading it could no longer take. A refusal here is
+ * the harness asking the wrong question, which is exactly what the comment above
+ * says these builders exist to prevent.
+ */
+const byProjectFileList = (path) => ({
+  files: [path],
+  projectRoot: dirname(path),
+});
 const byEnvFile = (path) => ({ envFile: path });
 const byPathKey = (path) => ({ path });
 // A tool given a directory must be given the directory its own fixture is in.
@@ -164,7 +178,11 @@ export const CASES = [
   },
   { tool: 'smart_env', fixture: 'example.env', args: byEnvFile },
   { tool: 'smart_env', fixture: 'large.env', args: byEnvFile },
-  { tool: 'smart_typescript', fixture: 'tool-profile.ts', args: byFileList },
+  {
+    tool: 'smart_typescript',
+    fixture: 'tool-profile.ts',
+    args: byProjectFileList,
+  },
   { tool: 'smart_dependencies', fixture: 'package.json', args: byFileList },
   {
     tool: 'smart_dependencies',

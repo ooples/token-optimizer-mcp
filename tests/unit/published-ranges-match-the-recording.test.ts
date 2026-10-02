@@ -171,3 +171,46 @@ describe('every published reduction range is the recorded one', () => {
     });
   }
 });
+
+describe('the bench asks every tool in the words it declares', () => {
+  /*
+   * A RECORDING GOES STALE IN SILENCE WHEN THE QUESTION STOPS PARSING.
+   *
+   * Every assertion above compares a description to the recording, and the
+   * recording to the case list -- all three agreed while smart_typescript had
+   * stopped answering. The bench sent it `cwd`, which its schema does not
+   * declare; the key was ignored until unknown arguments became a refusal, and
+   * then a fresh run printed NO MEASUREMENT for it while the published 85-86%
+   * stayed green here, resting on a reading taken before the refusal existed.
+   *
+   * This is the cheap half of that gap: a key no schema declares is a question
+   * the tool was never going to answer, and it is visible without running the
+   * harness at all. The expensive half -- re-taking the readings -- is what
+   * `node bench/tools/reduction.mjs --record` is for.
+   */
+  const FIXTURE = join('bench', 'tools', 'fixtures', 'probe.ts');
+
+  const schemaOf = (tool: string): Record<string, unknown> => {
+    const definition = DESCRIBED[tool] as
+      | { inputSchema?: { properties?: Record<string, unknown> } }
+      | undefined;
+    return definition?.inputSchema?.properties ?? {};
+  };
+
+  for (const testCase of CASES as readonly {
+    tool: string;
+    fixture: string;
+    args: (path: string) => Record<string, unknown>;
+  }[]) {
+    it(`${testCase.tool} (${testCase.fixture}) is asked only what its schema declares`, () => {
+      const declared = schemaOf(testCase.tool);
+      // A tool missing from DESCRIBED is already a failure above; here an empty
+      // schema would silently excuse every key, so it is named rather than skipped.
+      expect(Object.keys(declared).length).toBeGreaterThan(0);
+      const undeclared = Object.keys(testCase.args(FIXTURE)).filter(
+        (key) => !(key in declared)
+      );
+      expect(undeclared).toEqual([]);
+    });
+  }
+});
