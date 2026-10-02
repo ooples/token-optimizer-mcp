@@ -105,7 +105,19 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
         cost_usd REAL NOT NULL,
         priced_operations INTEGER NOT NULL,
         unpriced_operations INTEGER NOT NULL,
+        verified_operations INTEGER NOT NULL,
+        expansion_operations INTEGER NOT NULL,
+        unverified_operations INTEGER NOT NULL,
+        verified_original_tokens INTEGER NOT NULL,
+        verified_reported_savings INTEGER NOT NULL,
+        expansion_optimized_tokens INTEGER NOT NULL,
+        observed_optimized_tokens INTEGER NOT NULL,
+        measured_optimized_tokens INTEGER NOT NULL,
+        context_usd REAL NOT NULL,
+        priced_context_operations INTEGER NOT NULL,
+        unverified_reported_savings INTEGER NOT NULL,
         first_timestamp TEXT NOT NULL,
+        last_timestamp TEXT NOT NULL,
         PRIMARY KEY (
           day, hook_phase, tool_name, mcp_server, client, client_version,
           model, model_version, provider, route, classification
@@ -478,13 +490,17 @@ const UPSERT_ROLLUP = `
     model, model_version, provider, route, classification,
     operations, eligible_operations, tokens_saved, tokens_before,
     original_tokens, optimized_tokens, reported_savings, observed_returns,
-    cost_usd, priced_operations, unpriced_operations, first_timestamp
+    cost_usd, priced_operations, unpriced_operations,
+    verified_operations, expansion_operations, unverified_operations, verified_original_tokens, verified_reported_savings, expansion_optimized_tokens, observed_optimized_tokens, measured_optimized_tokens, context_usd, priced_context_operations, unverified_reported_savings,
+    first_timestamp, last_timestamp
   ) VALUES (
     @day, @hookPhase, @toolName, @mcpServer, @client, @clientVersion,
     @model, @modelVersion, @provider, @route, @classification,
     @operations, @eligibleOperations, @tokensSaved, @tokensBefore,
     @originalTokens, @optimizedTokens, @reportedSavings, @observedReturns,
-    @costUsd, @pricedOperations, @unpricedOperations, @firstTimestamp
+    @costUsd, @pricedOperations, @unpricedOperations,
+    @verifiedOperations, @expansionOperations, @unverifiedOperations, @verifiedOriginalTokens, @verifiedReportedSavings, @expansionOptimizedTokens, @observedOptimizedTokens, @measuredOptimizedTokens, @contextUsd, @pricedContextOperations, @unverifiedReportedSavings,
+    @firstTimestamp, @lastTimestamp
   )
   ON CONFLICT (
     day, hook_phase, tool_name, mcp_server, client, client_version,
@@ -501,7 +517,19 @@ const UPSERT_ROLLUP = `
     cost_usd = cost_usd + excluded.cost_usd,
     priced_operations = priced_operations + excluded.priced_operations,
     unpriced_operations = unpriced_operations + excluded.unpriced_operations,
-    first_timestamp = MIN(first_timestamp, excluded.first_timestamp)
+    verified_operations = verified_operations + excluded.verified_operations,
+    expansion_operations = expansion_operations + excluded.expansion_operations,
+    unverified_operations = unverified_operations + excluded.unverified_operations,
+    verified_original_tokens = verified_original_tokens + excluded.verified_original_tokens,
+    verified_reported_savings = verified_reported_savings + excluded.verified_reported_savings,
+    expansion_optimized_tokens = expansion_optimized_tokens + excluded.expansion_optimized_tokens,
+    observed_optimized_tokens = observed_optimized_tokens + excluded.observed_optimized_tokens,
+    measured_optimized_tokens = measured_optimized_tokens + excluded.measured_optimized_tokens,
+    context_usd = context_usd + excluded.context_usd,
+    priced_context_operations = priced_context_operations + excluded.priced_context_operations,
+    unverified_reported_savings = unverified_reported_savings + excluded.unverified_reported_savings,
+    first_timestamp = MIN(first_timestamp, excluded.first_timestamp),
+    last_timestamp = MAX(last_timestamp, excluded.last_timestamp)
 `;
 
 /** The bound parameters for one folded group. */
@@ -529,7 +557,19 @@ function rollupParams(rollup: AnalyticsRollup): Record<string, unknown> {
     costUsd: rollup.costUsd,
     pricedOperations: rollup.pricedOperations,
     unpricedOperations: rollup.unpricedOperations,
+    verifiedOperations: rollup.verifiedOperations,
+    expansionOperations: rollup.expansionOperations,
+    unverifiedOperations: rollup.unverifiedOperations,
+    verifiedOriginalTokens: rollup.verifiedOriginalTokens,
+    verifiedReportedSavings: rollup.verifiedReportedSavings,
+    expansionOptimizedTokens: rollup.expansionOptimizedTokens,
+    observedOptimizedTokens: rollup.observedOptimizedTokens,
+    measuredOptimizedTokens: rollup.measuredOptimizedTokens,
+    contextUsd: rollup.contextUsd,
+    pricedContextOperations: rollup.pricedContextOperations,
+    unverifiedReportedSavings: rollup.unverifiedReportedSavings,
     firstTimestamp: rollup.firstTimestamp,
+    lastTimestamp: rollup.lastTimestamp,
   };
 }
 
@@ -566,6 +606,18 @@ function rollupOf(row: Record<string, unknown>): AnalyticsRollup {
     costUsd: count(row.cost_usd),
     pricedOperations: count(row.priced_operations),
     unpricedOperations: count(row.unpriced_operations),
+    verifiedOperations: count(row.verified_operations),
+    expansionOperations: count(row.expansion_operations),
+    unverifiedOperations: count(row.unverified_operations),
+    verifiedOriginalTokens: count(row.verified_original_tokens),
+    verifiedReportedSavings: count(row.verified_reported_savings),
+    expansionOptimizedTokens: count(row.expansion_optimized_tokens),
+    observedOptimizedTokens: count(row.observed_optimized_tokens),
+    measuredOptimizedTokens: count(row.measured_optimized_tokens),
+    contextUsd: count(row.context_usd),
+    pricedContextOperations: count(row.priced_context_operations),
+    unverifiedReportedSavings: count(row.unverified_reported_savings),
     firstTimestamp: String(row.first_timestamp),
+    lastTimestamp: String(row.last_timestamp),
   };
 }

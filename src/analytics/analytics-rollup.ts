@@ -25,12 +25,15 @@ import type { AnalyticsEntry } from './analytics-types.js';
 import {
   classifySavings,
   hasObservedReturnedContext,
+  isVerifiedExpansionDebit,
+  isVerifiedSavingsEntry,
   reportedSavings,
   verifiedTransportDelta,
   type SavingsClassification,
 } from './savings-classification.js';
 import {
   localDayKey,
+  priceEntryTokens,
   priceVerifiedDelta,
   UNATTRIBUTED,
 } from '../savings/windows.js';
@@ -75,8 +78,40 @@ export interface RollupSums {
   readonly pricedOperations: number;
   /** Eligible rows no catalog could price -- what keeps a model disclosed. */
   readonly unpricedOperations: number;
+  /**
+   * The dashboard's own splits, each gated by the predicate it reads with.
+   *
+   * SEPARATE FROM THE REPORT'S SUMS, NOT DERIVED FROM THEM. The dashboard and
+   * the savings report ask different questions of the same rows: the report
+   * adds a signed verified delta, while the dashboard shows a gross credit and
+   * the debit beside it, and prices the context a row returned as well as the
+   * context it saved. Deriving one set from the other would mean inferring a
+   * per-row gate from a sum, which is the mistake the fold key exists to make
+   * impossible -- so each figure is summed under its own predicate, by the same
+   * functions the dashboard would have called on the rows.
+   */
+  readonly verifiedOperations: number;
+  readonly expansionOperations: number;
+  readonly unverifiedOperations: number;
+  /** `originalTokens` over the verified rows -- the dashboard's denominator. */
+  readonly verifiedOriginalTokens: number;
+  /** Gross credit: `reportedSavings` over the verified rows. */
+  readonly verifiedReportedSavings: number;
+  /** The debit: `optimizedTokens` over the expansion rows. */
+  readonly expansionOptimizedTokens: number;
+  /** Context actually returned: `optimizedTokens` over the observed rows. */
+  readonly observedOptimizedTokens: number;
+  /** `optimizedTokens` over the measured rows -- verified and debit together. */
+  readonly measuredOptimizedTokens: number;
+  /** USD for that returned context, priced one row at a time. */
+  readonly contextUsd: number;
+  readonly pricedContextOperations: number;
+  /** What the unverified rows claimed, which stays visible as an audit figure. */
+  readonly unverifiedReportedSavings: number;
   /** Earliest row in the group, kept so a fold can be audited against rows. */
   readonly firstTimestamp: string;
+  /** Latest row in the group, which is the dashboard's `lastSeen`. */
+  readonly lastTimestamp: string;
 }
 
 /** A folded day: the dimensions, and what they contributed. */
@@ -160,7 +195,19 @@ export function emptySums(firstTimestamp: string): RollupSums {
     costUsd: 0,
     pricedOperations: 0,
     unpricedOperations: 0,
+    verifiedOperations: 0,
+    expansionOperations: 0,
+    unverifiedOperations: 0,
+    verifiedOriginalTokens: 0,
+    verifiedReportedSavings: 0,
+    expansionOptimizedTokens: 0,
+    observedOptimizedTokens: 0,
+    measuredOptimizedTokens: 0,
+    contextUsd: 0,
+    pricedContextOperations: 0,
+    unverifiedReportedSavings: 0,
     firstTimestamp,
+    lastTimestamp: firstTimestamp,
   };
 }
 
@@ -181,9 +228,19 @@ function nonNegative(value: unknown): number {
 export function foldEntry(sums: RollupSums, entry: AnalyticsEntry): RollupSums {
   const delta = verifiedTransportDelta(entry);
   const priced = delta === 0 ? null : priceVerifiedDelta(entry);
-  const earlier =
-    sums.operations === 0 ||
-    Date.parse(entry.timestamp) < Date.parse(sums.firstTimestamp);
+  const at = Date.parse(entry.timestamp);
+  const earlier = sums.operations === 0 || at < Date.parse(sums.firstTimestamp);
+  const later = sums.operations === 0 || at > Date.parse(sums.lastTimestamp);
+  // THE SAME PREDICATES THE DASHBOARD READS ROWS WITH, called here on the row
+  // rather than reconstructed from the class, so a change to either predicate
+  // reaches the folded days too.
+  const isVerified = isVerifiedSavingsEntry(entry);
+  const isExpansion = isVerifiedExpansionDebit(entry);
+  const reported = reportedSavings(entry);
+  const isUnverified = !isVerified && !isExpansion && reported > 0;
+  const observed = hasObservedReturnedContext(entry);
+  const returned = nonNegative(entry.optimizedTokens);
+  const contextPrice = observed ? priceEntryTokens(entry, returned) : null;
   return {
     operations: sums.operations + 1,
     eligibleOperations: sums.eligibleOperations + (delta === 0 ? 0 : 1),
@@ -199,7 +256,27 @@ export function foldEntry(sums: RollupSums, entry: AnalyticsEntry): RollupSums {
     pricedOperations: sums.pricedOperations + (priced === null ? 0 : 1),
     unpricedOperations:
       sums.unpricedOperations + (delta !== 0 && priced === null ? 1 : 0),
+    verifiedOperations: sums.verifiedOperations + (isVerified ? 1 : 0),
+    expansionOperations: sums.expansionOperations + (isExpansion ? 1 : 0),
+    unverifiedOperations: sums.unverifiedOperations + (isUnverified ? 1 : 0),
+    verifiedOriginalTokens:
+      sums.verifiedOriginalTokens +
+      (isVerified ? nonNegative(entry.originalTokens) : 0),
+    verifiedReportedSavings:
+      sums.verifiedReportedSavings + (isVerified ? reported : 0),
+    expansionOptimizedTokens:
+      sums.expansionOptimizedTokens + (isExpansion ? returned : 0),
+    observedOptimizedTokens:
+      sums.observedOptimizedTokens + (observed ? returned : 0),
+    measuredOptimizedTokens:
+      sums.measuredOptimizedTokens + (isVerified || isExpansion ? returned : 0),
+    contextUsd: sums.contextUsd + (contextPrice ?? 0),
+    pricedContextOperations:
+      sums.pricedContextOperations + (contextPrice === null ? 0 : 1),
+    unverifiedReportedSavings:
+      sums.unverifiedReportedSavings + (isUnverified ? reported : 0),
     firstTimestamp: earlier ? entry.timestamp : sums.firstTimestamp,
+    lastTimestamp: later ? entry.timestamp : sums.lastTimestamp,
   };
 }
 
@@ -217,10 +294,32 @@ export function mergeSums(into: RollupSums, from: RollupSums): RollupSums {
     costUsd: into.costUsd + from.costUsd,
     pricedOperations: into.pricedOperations + from.pricedOperations,
     unpricedOperations: into.unpricedOperations + from.unpricedOperations,
+    verifiedOperations: into.verifiedOperations + from.verifiedOperations,
+    expansionOperations: into.expansionOperations + from.expansionOperations,
+    unverifiedOperations: into.unverifiedOperations + from.unverifiedOperations,
+    verifiedOriginalTokens:
+      into.verifiedOriginalTokens + from.verifiedOriginalTokens,
+    verifiedReportedSavings:
+      into.verifiedReportedSavings + from.verifiedReportedSavings,
+    expansionOptimizedTokens:
+      into.expansionOptimizedTokens + from.expansionOptimizedTokens,
+    observedOptimizedTokens:
+      into.observedOptimizedTokens + from.observedOptimizedTokens,
+    measuredOptimizedTokens:
+      into.measuredOptimizedTokens + from.measuredOptimizedTokens,
+    contextUsd: into.contextUsd + from.contextUsd,
+    pricedContextOperations:
+      into.pricedContextOperations + from.pricedContextOperations,
+    unverifiedReportedSavings:
+      into.unverifiedReportedSavings + from.unverifiedReportedSavings,
     firstTimestamp:
       Date.parse(into.firstTimestamp) <= Date.parse(from.firstTimestamp)
         ? into.firstTimestamp
         : from.firstTimestamp,
+    lastTimestamp:
+      Date.parse(into.lastTimestamp) >= Date.parse(from.lastTimestamp)
+        ? into.lastTimestamp
+        : from.lastTimestamp,
   };
 }
 

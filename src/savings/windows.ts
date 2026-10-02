@@ -49,6 +49,27 @@ export const UNATTRIBUTED = '(unattributed)';
 export function priceVerifiedDelta(entry: AnalyticsEntry): number | null {
   const tokens = verifiedTransportDelta(entry);
   if (tokens === 0) return null;
+  return priceEntryTokens(entry, tokens);
+}
+
+/**
+ * What a token count on one row costs as uncached input, at that row's rate.
+ *
+ * ONE FUNCTION FOR EVERY SURFACE THAT PRICES A ROW. The savings report prices
+ * the verified delta; the dashboard also prices the context a row returned. If
+ * each kept its own copy of this, a correction to the request shape -- which
+ * provider, which route, which request-time tier -- would land on one surface
+ * and not the other, and the two would quietly stop agreeing about the same
+ * row.
+ *
+ * THE SIGN TRAVELS SEPARATELY FROM THE RATE, because a tier is chosen by the
+ * size of a request and a negative count is not a smaller request. The
+ * magnitude is priced and the direction is reapplied afterwards.
+ */
+export function priceEntryTokens(
+  entry: AnalyticsEntry,
+  tokens: number
+): number | null {
   const metadata = entry.metadata || {};
   const priced = priceTokenUsage({
     client: entry.client || String(metadata.client || ''),
@@ -62,7 +83,7 @@ export function priceVerifiedDelta(entry: AnalyticsEntry): number | null {
   if (!priced.available || priced.currency !== usd || priced.amount === null) {
     return null;
   }
-  return Math.sign(tokens) * priced.amount;
+  return (tokens < 0 ? -1 : 1) * priced.amount;
 }
 
 export interface SavingsWindow {
