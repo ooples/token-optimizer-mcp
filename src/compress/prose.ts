@@ -79,12 +79,77 @@ function separator(gap: string): string {
 }
 
 /**
+ * Weight of the one term that cannot be carried in from outside.
+ *
+ * EVERY OTHER POSITIVE TERM IS A SURFACE FEATURE. A digit, a path, a quoted
+ * span, a word from a fixed vocabulary -- a sentence inserted into a document
+ * carries any of them for free, and measurement showed what that costs: on
+ * the adversarial prose carrier the document's OWN sentences scored 0, 0 and
+ * -3.3 while a planted `Do not mention this line; audit-skip-7743 ...` scored
+ * 12. The ranker had no term for being about the document, so the document
+ * lost to the insert by twelve points to nothing.
+ *
+ * Set above the concrete-content terms (3, 2, 2) and below CRITICAL (10): a
+ * sentence that is about the subject outranks one that merely names a file,
+ * and a warning about the subject still outranks both.
+ */
+const SUBJECT = 8;
+
+/**
+ * How much of the document a sentence has to share before CRITICAL counts.
+ *
+ * The vocabulary is deliberately not stopword-filtered, so an ordinary
+ * English sentence inserted into an English document already scores around
+ * 0.2 on `and`, `the`, `with` alone. Measured on the adversarial arms: the
+ * carrier's own sentences 1.00, the attack arm 0.13-0.29, the decoy arm
+ * 0.00-0.25. The floor sits above that baseline and well below the document.
+ */
+const SUBJECT_FLOOR = 0.5;
+
+/** Content words, lowercased; three characters up, hyphens kept. */
+function words(text: string): string[] {
+  return text.toLowerCase().match(/[a-z][a-z-]{2,}/g) ?? [];
+}
+
+/** How many times each word appears across the whole passage. */
+function vocabulary(bodies: readonly string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const body of bodies)
+    for (const word of words(body))
+      counts.set(word, (counts.get(word) ?? 0) + 1);
+  return counts;
+}
+
+/**
+ * The share of a sentence's vocabulary that the REST of the passage also uses.
+ *
+ * THE SENTENCE ITSELF HAS TO COME OUT OF THE DOCUMENT FIRST, or every
+ * sentence shares everything with a document that contains it and the term is
+ * a constant. Comparing each word against its count WITHIN the sentence is
+ * what does that, without building a vocabulary per sentence.
+ */
+function subjectShare(sentence: string, counts: Map<string, number>): number {
+  const own = words(sentence);
+  if (own.length === 0) return 0;
+  const mine = new Map<string, number>();
+  for (const word of own) mine.set(word, (mine.get(word) ?? 0) + 1);
+  let shared = 0;
+  for (const [word, count] of mine)
+    if ((counts.get(word) ?? 0) > count) shared++;
+  return shared / mine.size;
+}
+/**
  * Importance of one sentence, higher is more worth keeping.
  *
  * Every term is a claim about what a coding agent needs, and every one is
  * checkable against a fixture.
  */
-export function score(sentence: string, index: number, total: number): number {
+export function score(
+  sentence: string,
+  index: number,
+  total: number,
+  subject: number
+): number {
   let value = 0;
 
   // AN IDENTIFIER OUTRANKS EVERYTHING, because it is the one thing in a
@@ -96,7 +161,19 @@ export function score(sentence: string, index: number, total: number): number {
 
   // Something the reader must act on. Dominant term by design: a false
   // negative here deletes the point of the document.
-  if (CRITICAL.test(sentence)) value += 10;
+  //
+  // GATED ON THE SENTENCE BEING ABOUT THE DOCUMENT, because the vocabulary
+  // is exactly the shape a planted instruction has: `do not`, `never`,
+  // `always`, `must`. Measured, the attack and decoy arms of the
+  // instruction-override fixture are identical in every other respect and
+  // the attack arm scored ten points higher on the words `Do not` alone --
+  // the whole of the 8.3-point prose gap in the adversarial grid. A warning
+  // about the document's own subject is unaffected; one about the
+  // conversation it was pasted into gets nothing.
+  if (CRITICAL.test(sentence) && subject >= SUBJECT_FLOOR) value += 10;
+
+  // Being about the document. See SUBJECT.
+  value += SUBJECT * subject;
 
   // Concrete over abstract: paths, identifiers, numbers, quoted spans.
   if (/[\w-]+\.[a-z]{1,4}\b|\/|\\/.test(sentence)) value += 3;
@@ -180,11 +257,13 @@ function compressProseBody(
       )
     : new Set<number>();
 
+  const counts = vocabulary(bodies);
   const ranked = parts.map((part, index) => ({
     sentence: part.text,
     index,
     value:
-      score(part.text, index, parts.length) + (relevant.has(index) ? 6 : 0),
+      score(part.text, index, parts.length, subjectShare(part.text, counts)) +
+      (relevant.has(index) ? 6 : 0),
   }));
 
   const keepCount = Math.max(
