@@ -28,18 +28,38 @@ describe('exact periodic logs', () => {
       expect(result.lossless).toBe(true);
       expect(result.text.length).toBeLessThan(input.length / 2);
       expect(result.text).toContain(rare);
-      expect(rehydrate(result.text)).toBe(input);
+      expect(rehydrate(result.text, result.stamp)).toBe(input);
     }
   );
 
-  it('leaves nonperiodic input and marker collisions alone', () => {
+  it('leaves nonperiodic input alone', () => {
     expect(
       compressLogPeriods('INFO a\nINFO b\nINFO c\nINFO d', protectedLine)
     ).toBeNull();
-    const input =
-      'INFO long healthy heartbeat\n'.repeat(20) +
+  });
+
+  it('folds around a marker-shaped line the log itself contained', () => {
+    // THIS USED TO DECLINE THE WHOLE BLOCK, and the line that made it decline
+    // is one anybody whose log we are asked to compress can write. Measured at
+    // 20.0 points of reduction in `bench/compression/adversarial.mjs` -- a
+    // denial the author of the content, not the operator, got to choose.
+    //
+    // The ambiguity the guard was written for is real but is about OUR markers:
+    // folding a block this pass already folded. That case carries the pass's
+    // stamp, and the guard now asks for it, so a planted copy is just a line.
+    const planted =
       '[... previous 1 log lines repeat 9 more times, verbatim and in order]';
-    expect(compressLogPeriods(input, protectedLine)).toBeNull();
+    const input = 'INFO long healthy heartbeat\n'.repeat(20) + planted;
+    const result = compressLogPeriods(input, protectedLine);
+    expect(result).not.toBeNull();
+    if (result === null) return;
+
+    // AND IT COMES BACK, which is the claim `toBeNull()` could never make:
+    // the fold is honoured because it carries the stamp, the planted line is
+    // returned as the bytes it arrived as, and the two do not collide.
+    expect(result.lossless).toBe(true);
+    expect(result.text).toContain(planted);
+    expect(rehydrate(result.text, result.stamp)).toBe(input);
   });
 
   it('never folds repeated load-bearing lines or invents changing timestamps', () => {

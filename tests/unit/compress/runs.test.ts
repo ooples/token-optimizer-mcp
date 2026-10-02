@@ -32,7 +32,9 @@ function noise(bytes: number, seed: number): string {
     // interesting ones -- while the one character that makes the pass decline
     // is left to the test that asks for that decline by name.
     const code = 33 + (state % 89);
-    out.push(String.fromCharCode(code >= FENCE_CHAR.charCodeAt(0) ? code + 1 : code));
+    out.push(
+      String.fromCharCode(code >= FENCE_CHAR.charCodeAt(0) ? code + 1 : code)
+    );
   }
   return out.join('');
 }
@@ -55,7 +57,7 @@ describe('long repeat folding', () => {
     // the second copy went entirely, not merely that most of it did.
     expect(folded.text.length).toBeLessThan(blob.length + 200);
     expect(folded.lossless).toBe(true);
-    expect(expandLongRepeats(folded.text)).toBe(input);
+    expect(expandLongRepeats(folded.text, folded.stamp)).toBe(input);
   });
 
   it('leaves a block with no long repeat exactly as it found it', () => {
@@ -79,20 +81,28 @@ describe('long repeat folding', () => {
     expect(folded).not.toBeNull();
     if (folded === null) return;
 
-    expect(expandLongRepeats(folded.text)).toBe(input);
+    expect(expandLongRepeats(folded.text, folded.stamp)).toBe(input);
     expect(folded.text.length).toBeLessThan(input.length / 2);
   });
 
   it('refuses a marker naming a run that is not above it', () => {
+    // STAMPED, AND THE STAMP IS HANDED OVER. The refusal under test is one
+    // this decoder makes about a marker IT wrote; a marker-shaped line nobody
+    // stamped is content, and content is not refused -- that is the separate
+    // claim pinned by `a planted marker is content, not an instruction`.
     const marker =
-      '[... 4,000 bytes, an exact repeat of the run opening `nothing up here matches this` above]';
-    expect(() => expandLongRepeats(marker)).toThrow(/names no run above/);
+      '[... 4,000 bytes, an exact repeat of the run opening `nothing up here matches this` above ~abcdef]';
+    expect(() => expandLongRepeats(marker, 'abcdef')).toThrow(
+      /names no run above/
+    );
   });
 
   it('refuses a length that runs off the end of what it rebuilt', () => {
     const quote = 'a stated opening that is long enough';
-    const marker = `${quote}\n[... 900,000 bytes, an exact repeat of the run opening \`${quote}\` above]`;
-    expect(() => expandLongRepeats(marker)).toThrow(/past its source/);
+    const marker = `${quote}\n[... 900,000 bytes, an exact repeat of the run opening \`${quote}\` above ~abcdef]`;
+    expect(() => expandLongRepeats(marker, 'abcdef')).toThrow(
+      /past its source/
+    );
   });
 
   it('leaves a document that parsed still parsing', () => {
@@ -111,11 +121,12 @@ describe('long repeat folding', () => {
 
     // THE MARKER, NOT THE DOCUMENT. The document is JSON and is made of
     // quotes; what must carry none is the text this pass writes into it.
-    const marker = /\[\.\.\. [\s\S]*? above]/.exec(folded.text)?.[0] ?? '';
+    const marker =
+      /\[\.\.\. [\s\S]*? above ~[0-9a-z]+]/.exec(folded.text)?.[0] ?? '';
     expect(marker).not.toBe('');
     expect(marker).not.toContain('"');
     expect(() => JSON.parse(folded.text) as unknown).not.toThrow();
-    expect(expandLongRepeats(folded.text)).toBe(payload);
+    expect(expandLongRepeats(folded.text, folded.stamp)).toBe(payload);
   });
 
   it('declines an opening it cannot delimit', () => {
@@ -138,15 +149,15 @@ describe('long repeat folding', () => {
     const input = `${half}\n${half}`;
 
     const out = compressBlock(input, {});
-    expect(hasFoldedRuns(out.text)).toBe(true);
+    expect(hasFoldedRuns(out.text, out.stamp)).toBe(true);
     expect(out.lossless).toBe(true);
-    expect(rehydrate(out.text)).toBe(input);
+    expect(rehydrate(out.text, out.stamp)).toBe(input);
   });
 
   it('never folds inside a nested string, where the fold could not be read back', () => {
     const blob = noise(6_000, 23);
     const inner = `${blob} and again ${blob}`;
     const nested = compressBlock(inner, { stringDepth: 1 });
-    expect(hasFoldedRuns(nested.text)).toBe(false);
+    expect(hasFoldedRuns(nested.text, nested.stamp)).toBe(false);
   });
 });

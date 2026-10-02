@@ -16,10 +16,21 @@
  * folding an error are the tokens that mattered.
  */
 
-import { count, encodeGaps, inlineMarker } from './annotate.js';
+import {
+  count,
+  encodeGaps,
+  inlineMarker,
+  isStamped,
+  withStamp,
+} from './annotate.js';
 import { compressLogPeriods } from './log-periods.js';
 import { structuralRanges } from './structural.js';
-import type { CompressionResult, Elision, EngineContext } from './types.js';
+import type {
+  CompressionResult,
+  Elision,
+  EngineContext,
+  Stamp,
+} from './types.js';
 import { spillFor, unchanged } from './types.js';
 
 /** A run shorter than this is left alone: the marker costs more than the lines. */
@@ -123,16 +134,35 @@ export function looksTemplated(text: string): boolean {
  * description of it, and the model can reconstruct the original exactly without
  * asking anyone for anything. No spill, no path, no lookup.
  */
+/*
+ * MINTS ITS OWN STAMP WHEN THE CALLER BROUGHT NONE, AND HANDS IT BACK.
+ *
+ * An engine that emits markers and tells nobody how to verify them produces
+ * output that cannot be decoded at all -- the markers are indistinguishable
+ * from content, which is the safe direction and a useless one. So the stamp
+ * travels with the result, from whichever layer created it: the router sets one
+ * for the whole block and this passes it through, and a caller reaching an
+ * engine directly gets one minted from the content it handed over.
+ */
 export function compressLog(
   text: string,
   ctx: EngineContext = {}
 ): CompressionResult {
+  const stamped = withStamp(ctx, text);
+  return { ...compressLogLines(text, stamped), stamp: stamped.stamp };
+}
+
+function compressLogLines(text: string, ctx: EngineContext): CompressionResult {
   const lines = text.split('\n');
   if (
     lines.length < MIN_RUN ||
     lines.some(
       (line) =>
-        line.trimStart().startsWith('[... ') ||
+        // A MARKER-SHAPED LINE IS NOT ONE OF OURS. Asked of the shape, this
+        // handed the author of the content a 20.0-point reduction loss for one
+        // planted line; asked of the stamp it still catches the case it was
+        // written for, a block this pass already compressed.
+        isStamped(line, ctx.stamp ?? null) ||
         /\[\d+ occurrences, (?:positions|gaps)=\[/.test(line) ||
         // THE ENCODER MUST REFUSE WHAT THE DECODER REFUSES. expandLog throws on
         // any line carrying this announcement that does not then parse as a
@@ -145,7 +175,11 @@ export function compressLog(
     )
   )
     return unchanged(text);
-  const periodic = compressLogPeriods(text, (line) => LOAD_BEARING.test(line));
+  const periodic = compressLogPeriods(
+    text,
+    (line) => LOAD_BEARING.test(line),
+    ctx.stamp ?? null
+  );
   // Return directly: later grouping must not move the lines a repeat references.
   if (periodic) return periodic;
 
@@ -225,7 +259,8 @@ export function compressLog(
       out.push(
         inlineMarker(
           `the same line, ${count(dropped, 'more time')}${tooDear ? '' : listed}`,
-          where
+          where,
+          ctx.stamp ?? null
         )
       );
       elisions.push({
@@ -259,11 +294,12 @@ export function compressLog(
   // keeping the shorter. Both are lossless, so the pick costs no fidelity.
   const scatterElisions: Elision[] = [];
   const scattered = templated(
-    foldScattered(out, scatterElisions),
-    scatterElisions
+    foldScattered(out, scatterElisions, ctx.stamp ?? null),
+    scatterElisions,
+    ctx.stamp ?? null
   );
   const templateElisions: Elision[] = [];
-  const plain = templated(out, templateElisions);
+  const plain = templated(out, templateElisions, ctx.stamp ?? null);
   const width = (lines: readonly string[]) =>
     lines.reduce((n, line) => n + line.length + 1, 0);
   const plainWins = width(plain) < width(scattered);
@@ -455,7 +491,11 @@ function commonPrefix(values: readonly string[]): string {
  * `expected 1000 to equal 1001` for a range would invent pairs that never
  * occurred.
  */
-function templated(lines: string[], elisions: Elision[]): string[] {
+function templated(
+  lines: string[],
+  elisions: Elision[],
+  stamp: Stamp
+): string[] {
   const groups = new Map<string, number[]>();
   // COMPUTED ONCE PER LINE. shapeOf and valuesOf both need the same spans,
   // and finding them is the expensive half of this pass: variableSpans runs
@@ -466,12 +506,7 @@ function templated(lines: string[], elisions: Elision[]): string[] {
   const spansByIndex = new Map<number, Array<[number, number]>>();
 
   lines.forEach((line, index) => {
-    if (
-      !line.trim() ||
-      line.includes('#') ||
-      line.trimStart().startsWith('[... ')
-    )
-      return;
+    if (!line.trim() || line.includes('#') || isStamped(line, stamp)) return;
     const spans = variableSpans(line);
     spansByIndex.set(index, spans);
     const shape = shapeOf(line, spans);
@@ -582,14 +617,14 @@ function templated(lines: string[], elisions: Elision[]): string[] {
  * matters more at this range: two identical AssertionErrors five hundred lines
  * apart are two failures, and a debugging agent needs both.
  */
-function foldScattered(lines: string[], elisions: Elision[]): string[] {
+function foldScattered(
+  lines: string[],
+  elisions: Elision[],
+  stamp: Stamp
+): string[] {
   const groups = new Map<string, number[]>();
   lines.forEach((line, index) => {
-    if (
-      !line.trim() ||
-      LOAD_BEARING.test(line) ||
-      line.trimStart().startsWith('[... ')
-    )
+    if (!line.trim() || LOAD_BEARING.test(line) || isStamped(line, stamp))
       return;
     const key = foldKey(line);
     if (!key) return;
@@ -632,7 +667,8 @@ function foldScattered(lines: string[], elisions: Elision[]): string[] {
             }
           : { firstPrefix: stampOf(lines[first]), copiesAtLines: copies }
       )}`,
-      null
+      null,
+      stamp
     );
     const removedSize = members
       .slice(1)

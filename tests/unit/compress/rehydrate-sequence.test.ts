@@ -57,7 +57,7 @@ describe('rehydrateSequence', () => {
     expect(texts[2]).toMatch(/^\[\.\.\. [\d,]+ bytes, shown above: /);
 
     const step = rehydrateSequence();
-    expect(texts.map(step)).toEqual([alpha, beta, alpha]);
+    expect(texts.map((text) => step(text))).toEqual([alpha, beta, alpha]);
   });
 
   it('resolves the cheap repeat form by its label', () => {
@@ -72,7 +72,7 @@ describe('rehydrateSequence', () => {
     );
 
     const step = rehydrateSequence();
-    expect(texts.map(step)).toEqual([alpha, alpha, alpha]);
+    expect(texts.map((text) => step(text))).toEqual([alpha, alpha, alpha]);
   });
 
   it('gives an image back-reference the image data it points at', () => {
@@ -119,27 +119,32 @@ describe('rehydrateSequence', () => {
     // nothing and the whole payload was refused. Caught in the proxy arm,
     // where the anchor store compresses the first block and spills part of
     // it, which is every request production actually serves.
+    // THE MARKER IS STAMPED AND THE STAMP IS HANDED TO EACH STEP. This
+    // fixture writes a marker the encoder would have written, so it has to
+    // carry what the encoder would have put on it; without that it is a line
+    // of content and no decoder reads a path out of it.
+    const stamp = 'abcdef';
     const spilled = `${body('spilled')}
-[... 41,000 bytes -> .token-optimizer/spill/b1-block.txt]`;
+[... 41,000 bytes ~${stamp} -> .token-optimizer/spill/b1-block.txt]`;
     const other = body('other');
     const { texts } = dedupBlocks([spilled, other, spilled].map(touchable));
     expect(texts[2]).toMatch(/^\[\.\.\. [\d,]+ bytes, shown above: /);
 
     const step = rehydrateSequence();
-    expect(() => step(texts[0])).toThrow(PathAddressedError);
-    expect(step(texts[1])).toBe(other);
+    expect(() => step(texts[0], stamp)).toThrow(PathAddressedError);
+    expect(step(texts[1], stamp)).toBe(other);
     // The reference is resolved, and the answer is the path -- not a refusal
     // to name the block, which is what this regressed to.
-    expect(() => step(texts[2])).toThrow(PathAddressedError);
-    expect(() => step(texts[2])).not.toThrow(/no single block above/);
+    expect(() => step(texts[2], stamp)).toThrow(PathAddressedError);
+    expect(() => step(texts[2], stamp)).not.toThrow(/no single block above/);
   });
 
   it('still refuses an unregistered marker family', () => {
     // The payload-level reader must not have widened into passing everything:
     // anything that is not a back-reference goes to `rehydrate` unchanged.
     const step = rehydrateSequence();
-    expect(() => step('a line\n[... 4 gizmos folded]\nanother line')).toThrow(
-      /unrecognised marker/
-    );
+    expect(() =>
+      step('a line\n[... 4 gizmos folded ~abcdef]\nanother line', 'abcdef')
+    ).toThrow(/unrecognised marker/);
   });
 });

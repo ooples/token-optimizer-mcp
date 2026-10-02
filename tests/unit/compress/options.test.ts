@@ -151,7 +151,7 @@ describe('lossless is lossless, not merely smaller', () => {
     // this shape (9171 bytes to 728, decoding byte for byte). Decoding first is
     // the stricter check: it fails if a row is dropped OR mis-encoded.
     expect(out.lossless).toBe(true);
-    const restored = rehydrate(out.text);
+    const restored = rehydrate(out.text, out.stamp);
     expect(restored).toBe(payload);
     for (let i = 0; i < 60; i += 1) expect(restored).toContain(`doc_${i}`);
   });

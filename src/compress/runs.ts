@@ -1,3 +1,4 @@
+import { stampFor, stampPattern } from './annotate.js';
 /**
  * Fold a long stretch of bytes that is an exact repeat of one already above it.
  *
@@ -18,7 +19,7 @@
  * rather than recoverable-with-a-read.
  */
 
-import type { CompressionResult, Elision } from './types.js';
+import type { CompressionResult, Elision, Stamp } from './types.js';
 
 /**
  * The window the index is built on.
@@ -141,8 +142,9 @@ function quoteFor(
 const FENCE = '`';
 
 /** What a folded run looks like in the output. */
-function markerFor(length: number, quote: string): string {
-  return `[... ${length.toLocaleString('en-US')} bytes, an exact repeat of the run opening ${FENCE}${quote}${FENCE} above]`;
+function markerFor(length: number, quote: string, stamp: Stamp): string {
+  const tag = stamp === null ? '' : ` ~${stamp}`;
+  return `[... ${length.toLocaleString('en-US')} bytes, an exact repeat of the run opening ${FENCE}${quote}${FENCE} above${tag}]`;
 }
 
 /**
@@ -155,12 +157,33 @@ function markerFor(length: number, quote: string): string {
  * lines: this pass runs last, and `rehydrate` runs it first, so no
  * line-oriented decoder ever sees the marker whole.
  */
-const FOLDED =
-  /\[\.\.\. ([\d,]+) bytes, an exact repeat of the run opening `([^`]*)` above\]/;
+/*
+ * THE SAME FORM, NARROWED TO ONE STAMP.
+ *
+ * A back-reference is not a lossy marker -- it tells the decoder to COPY text
+ * from above it -- so a forged one does not deny content, it inserts content
+ * the author of the block chose, which is the splice this whole change is
+ * about. Built per decode rather than held as a constant because the stamp is
+ * per call; the alphabet is the one `stampFor` draws from, so nothing outside
+ * it can be read as a stamp.
+ */
+function foldedWith(stamp: Stamp): RegExp {
+  return new RegExp(
+    '\\[\\.\\.\\. ([\\d,]+) bytes, an exact repeat of the run opening `([^`]*)` above' +
+      stampPattern(stamp) +
+      '\\]'
+  );
+}
 
-/** Is there a folded run anywhere in here? */
-export function hasFoldedRuns(text: string): boolean {
-  return FOLDED.test(text);
+/**
+ * Is there a folded run anywhere in here?
+ *
+ * ASKED WITH THE STAMP, because the answer decides whether `expandLongRepeats`
+ * runs at all: a caller that answered on the unstamped form would send content
+ * carrying a forged back-reference into a decoder that then refuses it.
+ */
+export function hasFoldedRuns(text: string, stamp: Stamp = null): boolean {
+  return foldedWith(stamp).test(text);
 }
 
 /**
@@ -175,8 +198,8 @@ export function hasFoldedRuns(text: string): boolean {
  * resolving to a guess. A decoder that guesses is worse than no decoder,
  * because the guess is silent.
  */
-export function expandLongRepeats(text: string): string {
-  const pattern = new RegExp(FOLDED.source, 'g');
+export function expandLongRepeats(text: string, stamp: Stamp = null): string {
+  const pattern = new RegExp(foldedWith(stamp).source, 'g');
   let out = '';
   let read = 0;
   for (;;) {
@@ -484,7 +507,24 @@ function parses(text: string): boolean {
  * the output and compare it with the input. It runs on a handful of very large
  * regions, so the comparison costs a scan and buys the whole guarantee.
  */
-export function foldLongRepeats(text: string): CompressionResult | null {
+/*
+ * `undefined` MINTS, `null` DECLINES.
+ *
+ * The stamp arrives as an argument here rather than on a context, so the two
+ * cases a context separates by key presence have to be separated by the value:
+ * a caller who wrote nothing did not think about decoding and gets a stamp back
+ * on the result, while a caller who wrote `null` means markers nothing honours.
+ */
+export function foldLongRepeats(
+  text: string,
+  stamp?: Stamp
+): CompressionResult | null {
+  const tag = stamp === undefined ? stampFor(text) : stamp;
+  const out = foldRunsOf(text, tag);
+  return out === null ? null : { ...out, stamp: tag };
+}
+
+function foldRunsOf(text: string, stamp: Stamp): CompressionResult | null {
   if (text.length < MIN_REPEAT * 2) return null;
   // WAS IT A DOCUMENT BEFORE? Asked before anything is cut, because the answer
   // is only interesting if it was yes: a cut that lands between a backslash
@@ -501,7 +541,7 @@ export function foldLongRepeats(text: string): CompressionResult | null {
   let removed = 0;
   for (const repeat of repeats) {
     out += text.slice(read, repeat.at);
-    out += markerFor(repeat.length, repeat.quote);
+    out += markerFor(repeat.length, repeat.quote, stamp);
     read = repeat.at + repeat.length;
     removed += repeat.length;
   }
@@ -512,7 +552,7 @@ export function foldLongRepeats(text: string): CompressionResult | null {
 
   let readBack: string;
   try {
-    readBack = expandLongRepeats(out);
+    readBack = expandLongRepeats(out, stamp);
   } catch {
     return null;
   }

@@ -88,7 +88,7 @@ function assertRecoverable(input: string, result: CompressionResult): void {
     expect(elision.lossless).toBe(true);
     expect(elision.recoverAt).toBeNull();
   }
-  expect(rehydrate(result.text)).toBe(input);
+  expect(rehydrate(result.text, result.stamp)).toBe(input);
 }
 
 const repeated = (() => {

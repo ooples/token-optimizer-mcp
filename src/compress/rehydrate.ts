@@ -2,13 +2,15 @@ import { expandLongRepeats } from './runs.js';
 import {
   HEADING,
   SECTION_JOIN,
-  SECTION_ORDER_MARKER,
   decodeOrder,
+  sectionOrderMarker,
 } from './segments.js';
 import { expandLog } from './expand-log.js';
+import { assertStamp } from './annotate.js';
 import { BACK_REFERENCE, ESCAPED_REFERENCE, PATH_ID_PREFIX } from './search.js';
 import { findReferent, readBackReference } from './dedup.js';
 import { readImageBackReference } from './images.js';
+import type { Stamp } from './types.js';
 
 /**
  * ONE ENTRY POINT FOR "REBUILD THE INPUT FROM THE OUTPUT ALONE", AND IT FAILS
@@ -534,10 +536,13 @@ const UNCONSUMED_SUFFIX = new RegExp(
  * Leaving the marker in place is the refusal: `rehydrate` below then throws on
  * it as an unconsumed marker instead of returning a plausible wrong answer.
  */
-export function expandFoldedSections(text: string): string {
+export function expandFoldedSections(
+  text: string,
+  stamp: Stamp = null
+): string {
   const cut = text.lastIndexOf('\n[... ');
   if (cut === -1) return text;
-  const marker = SECTION_ORDER_MARKER.exec(text.slice(cut + 1));
+  const marker = sectionOrderMarker(stamp).exec(text.slice(cut + 1));
   if (!marker) return text;
 
   const order = decodeOrder(marker[2]);
@@ -552,7 +557,23 @@ export function expandFoldedSections(text: string): string {
   return order.map((i) => kept[i]).join(SECTION_JOIN);
 }
 
-export function rehydrate(text: string): string {
+/*
+ * THE STAMP IS THE CALLER'S TO SUPPLY, and `compressBlock` returns it.
+ *
+ * Verification cannot come from the text: whatever this function could
+ * recompute from the output, the author of the content in that output could
+ * compute first -- they have this source and they write their line before we
+ * compress it. So the only thing separating our markers from theirs is a value
+ * they could not predict, and it has to arrive out of band.
+ *
+ * NULL IS NOT "ANY", IT IS "NONE". Handed no stamp this decoder honours no
+ * marker, so every marker-shaped line is content and is returned verbatim.
+ * That is the safe direction: the cost of being wrong that way is a line that
+ * reads like a marker surviving into the output, against a whole block denied
+ * and an attacker's path quoted back at the caller as ours.
+ */
+export function rehydrate(text: string, stamp: Stamp = null): string {
+  assertStamp(stamp);
   // Long repeats first of all, because the fold is the LAST thing the encoder
   // does and inverting in the other order would hand each grammar a block with
   // a hole in it. Search next: its grammar is line-structural rather than
@@ -562,10 +583,13 @@ export function rehydrate(text: string): string {
     expandTapRecords(
       expandJsonRecords(
         expandJsonRecordsByPosition(
-          expandSearchHunks(expandLongRepeats(expandFoldedSections(text)))
+          expandSearchHunks(
+            expandLongRepeats(expandFoldedSections(text, stamp), stamp)
+          )
         )
       )
-    )
+    ),
+    stamp
   );
   for (const line of out.split('\n'))
     if (UNCONSUMED.test(line) || UNCONSUMED_SUFFIX.test(line))
@@ -597,8 +621,15 @@ export function rehydrate(text: string): string {
  */
 export function rehydrateSequence(
   images: readonly string[] = []
-): (block: string) => string {
+): (block: string, stamp?: Stamp) => string {
   const above: string[] = [];
+  // EACH BLOCK'S OWN STAMP, aligned to `above` index for index. A stamp is
+  // minted per `compressBlock` call and a sequence is many such calls, so there
+  // is no one value for the whole walk: resolving a back-reference means
+  // rebuilding a block the caller handed over EARLIER, with the stamp it came
+  // with. Holding one stamp for the sequence would decode the referent against
+  // the referrer's stamp and honour none of its markers.
+  const stamps: Stamp[] = [];
   const byLabel = new Map<number, string>();
   // WHERE THE LAST REFERENCE LEFT THE READER, as an index into `above`. The run
   // form names its referent by order -- the block after that one -- so following
@@ -608,7 +639,8 @@ export function rehydrateSequence(
   // would resolve something the encoder never wrote.
   let walkedTo = -1;
 
-  return (block: string): string => {
+  return (block: string, stamp: Stamp = null): string => {
+    assertStamp(stamp);
     const ordinal = readImageBackReference(block);
     if (ordinal !== null) {
       const data = images[ordinal - 1];
@@ -634,8 +666,9 @@ export function rehydrateSequence(
       // managed to expand: a block whose bytes are one path-follow away is
       // still a block the reader has been shown.
       above.push(block);
+      stamps.push(stamp);
       walkedTo = -1;
-      return rehydrate(block);
+      return rehydrate(block, stamp);
     }
 
     const referent = reference.follows
@@ -661,8 +694,10 @@ export function rehydrateSequence(
     if (reference.label !== null) byLabel.set(reference.label, referent);
     // Advance the walk, so a stretch of run forms steps one block at a time.
     // `indexOf` is the first copy, which is the one the encoder pointed at: it
-    // records a literal's position on the same first-wins rule.
-    walkedTo = reference.follows ? walkedTo + 1 : above.indexOf(referent);
-    return rehydrate(referent);
+    // records a literal's position on the same first-wins rule. Taken once and
+    // reused, because the same index names the referent's stamp.
+    const at = reference.follows ? walkedTo + 1 : above.indexOf(referent);
+    walkedTo = at;
+    return rehydrate(referent, stamps[at] ?? null);
   };
 }

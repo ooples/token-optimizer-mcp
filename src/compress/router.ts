@@ -50,7 +50,7 @@ import { foldLongRepeats } from './runs.js';
 import { foldRepeatedSegments, looksRepetitive } from './segments.js';
 import type { CompressionResult, ContentKind, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
-import { marker } from './annotate.js';
+import { marker, withStamp } from './annotate.js';
 import { DEFAULT_TUNING } from './options.js';
 
 /**
@@ -268,7 +268,7 @@ function moveOut(text: string, ctx: EngineContext): CompressionResult | null {
   if (at === null) return null;
 
   const removed = `${text.length.toLocaleString('en-US')} bytes, moved whole`;
-  const line = marker({ removed, recoverAt: at });
+  const line = marker({ removed, recoverAt: at }, ctx.stamp ?? null);
   return {
     text: line,
     insertedLines: [line],
@@ -372,26 +372,48 @@ export function compressBlock(
   text: string,
   ctx: EngineContext = {}
 ): CompressionResult {
+  /*
+   * ONE STAMP PER CALL, MINTED HERE AND RETURNED.
+   *
+   * Every marker written below this point carries it, and a decoder honours
+   * only the markers that do, so a marker-shaped line planted in `text` is
+   * returned as the content it is instead of addressing the decoder. See
+   * `stampFor` for why a keyed MAC and not a random value.
+   *
+   * A CALLER MAY PIN IT, which is what the nested path does: an inner block
+   * compressed through `compressNested` must stamp its markers with the same
+   * value as the block containing it, or the outer decode would honour half of
+   * them. A test may pin it to read a fixed output.
+   */
+  const stamped: EngineContext = withStamp(ctx, text);
+  const stamp = stamped.stamp ?? null;
+  const carry = (result: CompressionResult): CompressionResult => ({
+    ...result,
+    stamp,
+  });
+
   // A numbered read is detected on its BARE content and re-numbered
   // afterwards. Detecting on the numbered form finds nothing at all --
   // see readNumbering, where the measurement is recorded.
   const numbering = readNumbering(text);
   if (numbering) {
-    const inner = routed(numbering.stripped, ctx);
-    if (inner.text === numbering.stripped) return unchanged(text);
+    const inner = routed(numbering.stripped, stamped);
+    if (inner.text === numbering.stripped) return carry(unchanged(text));
     // Only exact inserted markers may be unnumbered; rewrites fail closed.
     const restored = numbering.restore(inner.text, inner.insertedLines);
-    return restored === null ? unchanged(text) : { ...inner, text: restored };
+    return restored === null
+      ? carry(unchanged(text))
+      : carry({ ...inner, text: restored });
   }
 
-  const result = routed(text, ctx);
-  if ((ctx.stringDepth ?? 0) !== 0) return result;
-  const folded = foldLongRepeats(result.text);
-  if (folded === null) return result;
-  return {
+  const result = routed(text, stamped);
+  if ((stamped.stringDepth ?? 0) !== 0) return carry(result);
+  const folded = foldLongRepeats(result.text, stamp);
+  if (folded === null) return carry(result);
+  return carry({
     ...result,
     text: folded.text,
     elisions: [...result.elisions, ...folded.elisions],
     lossless: result.lossless && folded.lossless,
-  };
+  });
 }

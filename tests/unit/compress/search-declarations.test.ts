@@ -41,7 +41,7 @@ describe('exact declaration rows in search output', () => {
           'SETTING_71\t"opaque-{name}-sk-example-0123456789;\\t"'
         );
         expect(result.lossless).toBe(true);
-        expect(rehydrate(result.text)).toBe(input);
+        expect(rehydrate(result.text, result.stamp)).toBe(input);
       }
     }
   );

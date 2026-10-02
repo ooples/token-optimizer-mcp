@@ -22,7 +22,7 @@
  * real number for this engine; it does not get to claim theirs.
  */
 
-import { count, inlineMarker } from './annotate.js';
+import { count, inlineMarker, withStamp } from './annotate.js';
 import { containsStructural } from './structural.js';
 import { activeRanker } from './ranking.js';
 import { DEFAULT_TUNING } from './options.js';
@@ -135,9 +135,27 @@ export function looksLikeProse(text: string): boolean {
  * sentences" knows the shape of what it is missing, which is the difference
  * between compression and quiet damage.
  */
+/*
+ * MINTS ITS OWN STAMP WHEN THE CALLER BROUGHT NONE, AND HANDS IT BACK.
+ *
+ * An engine that emits markers and tells nobody how to verify them produces
+ * output that cannot be decoded at all -- the markers are indistinguishable
+ * from content, which is the safe direction and a useless one. So the stamp
+ * travels with the result, from whichever layer created it: the router sets one
+ * for the whole block and this passes it through, and a caller reaching an
+ * engine directly gets one minted from the content it handed over.
+ */
 export function compressProse(
   text: string,
   ctx: EngineContext = {}
+): CompressionResult {
+  const stamped = withStamp(ctx, text);
+  return { ...compressProseBody(text, stamped), stamp: stamped.stamp };
+}
+
+function compressProseBody(
+  text: string,
+  ctx: EngineContext
 ): CompressionResult {
   const tuning = ctx.tuning ?? DEFAULT_TUNING;
   // Prose elision is lossy by construction: a removed sentence cannot be
@@ -206,7 +224,8 @@ export function compressProse(
   });
   body += ` ${inlineMarker(
     `${count(dropped, 'lower-signal sentence')} removed`,
-    recoverAt
+    recoverAt,
+    ctx.stamp ?? null
   )}`;
 
   return {

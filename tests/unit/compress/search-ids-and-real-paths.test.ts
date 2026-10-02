@@ -19,11 +19,17 @@ describe('search path ids do not collide with real paths', () => {
     const input = Array.from(
       { length: 40 },
       (_, i) =>
-        '@babel/parser/lib/index.js:' + (i + 1) + ':export const NODE_' + i + ' = ' + i * 7 + ';'
+        '@babel/parser/lib/index.js:' +
+        (i + 1) +
+        ':export const NODE_' +
+        i +
+        ' = ' +
+        i * 7 +
+        ';'
     ).join('\n');
 
     const result = compressSearchResults(input);
-    expect(rehydrate(result.text)).toBe(input);
+    expect(rehydrate(result.text, result.stamp)).toBe(input);
   });
 
   it('round-trips a line that is not a hit but reads as an id', () => {
@@ -35,7 +41,7 @@ describe('search path ids do not collide with real paths', () => {
     const input = ['@0:this line was never a hit', ...hits()].join('\n');
 
     const result = compressSearchResults(input);
-    const back = rehydrate(result.text);
+    const back = rehydrate(result.text, result.stamp);
 
     expect(back).toBe(input);
     expect(back).toContain('@0:this line was never a hit');

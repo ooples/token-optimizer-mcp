@@ -61,7 +61,7 @@ describe('spillWholeBlockBelow', () => {
     // The bytes are somewhere, and it is the whole block -- a move, not a cut.
     expect(spilled).toEqual([text]);
     expect(out.text).toBe(
-      `[... ${text.length.toLocaleString('en-US')} bytes, moved whole -> /spill/block.txt]`
+      `[... ${text.length.toLocaleString('en-US')} bytes, moved whole ~${out.stamp} -> /spill/block.txt]`
     );
     expect(out.lossless).toBe(false);
     expect(out.elisions).toHaveLength(1);
@@ -136,7 +136,7 @@ describe('spillWholeBlockBelow', () => {
     // head-to-head workloads at 1.00x the input on disk against 1.44x.
     expect(spilled).toEqual([text]);
     expect(out.text).toBe(
-      `[... ${text.length.toLocaleString('en-US')} bytes, moved whole -> /spill/block.txt]`
+      `[... ${text.length.toLocaleString('en-US')} bytes, moved whole ~${out.stamp} -> /spill/block.txt]`
     );
   });
 

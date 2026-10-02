@@ -18,7 +18,6 @@ import { expandJsonRecords as expand } from '../../../src/compress/rehydrate.js'
  * claim ship unchecked earlier in this work.
  */
 
-
 const arithmetic = (n: number) =>
   '[\n' +
   Array.from(

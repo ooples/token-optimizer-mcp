@@ -29,7 +29,7 @@ describe('lossless log order and whitespace', () => {
       const input = lines.join('\n');
       const out = compressLog(input);
       expect(out.lossless).toBe(true);
-      expect(expandLog(out.text)).toBe(input);
+      expect(expandLog(out.text, out.stamp)).toBe(input);
     }
   });
   it('restores scattered copies around events with identical timestamps', () => {
@@ -48,7 +48,7 @@ describe('lossless log order and whitespace', () => {
     const out = compressLog(input);
     expect(out.text).toContain('copiesAtLines');
     expect(out.lossless).toBe(true);
-    expect(expandLog(out.text)).toBe(input);
+    expect(expandLog(out.text, out.stamp)).toBe(input);
   });
 
   it('restores interleaved templates in order and retains literal hashes', () => {
@@ -65,7 +65,7 @@ describe('lossless log order and whitespace', () => {
     const out = compressLog(input);
     expect(out.text).toContain('gaps=');
     expect(out.text).toContain('issue #123');
-    expect(expandLog(out.text)).toBe(input);
+    expect(expandLog(out.text, out.stamp)).toBe(input);
   });
 
   it('retains mixed timestamp presence and exact prefix/body whitespace', () => {
@@ -79,6 +79,6 @@ describe('lossless log order and whitespace', () => {
     ].join('\n');
     const out = compressLog(input);
     expect(out.lossless).toBe(true);
-    expect(expandLog(out.text)).toBe(input);
+    expect(expandLog(out.text, out.stamp)).toBe(input);
   });
 });

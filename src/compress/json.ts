@@ -34,7 +34,7 @@
  * and only the rows that truly repeat are elided.
  */
 
-import { count, inlineMarker } from './annotate.js';
+import { count, inlineMarker, withStamp } from './annotate.js';
 import { numericExtrema } from './json-numeric.js';
 import { compressJsonArray, compressJsonObjectMap } from './json-fragments.js';
 import {
@@ -475,9 +475,27 @@ function retrievalCostChars(tuning: Tuning): number {
   if (perToken <= 0) return Number.POSITIVE_INFINITY;
   return ((p * tuning.retrievalCostTokens) / perToken) * CHARS_PER_TOKEN;
 }
+/*
+ * MINTS ITS OWN STAMP WHEN THE CALLER BROUGHT NONE, AND HANDS IT BACK.
+ *
+ * An engine that emits markers and tells nobody how to verify them produces
+ * output that cannot be decoded at all -- the markers are indistinguishable
+ * from content, which is the safe direction and a useless one. So the stamp
+ * travels with the result, from whichever layer created it: the router sets one
+ * for the whole block and this passes it through, and a caller reaching an
+ * engine directly gets one minted from the content it handed over.
+ */
 export function compressJson(
   text: string,
   ctx: EngineContext = {}
+): CompressionResult {
+  const stamped = withStamp(ctx, text);
+  return { ...compressJsonDocument(text, stamped), stamp: stamped.stamp };
+}
+
+function compressJsonDocument(
+  text: string,
+  ctx: EngineContext
 ): CompressionResult {
   if (!looksLikeJson(text)) return unchanged(text);
 
@@ -751,7 +769,8 @@ export function compressJson(
           nullFacts(parsed as unknown[]) +
           categories.facts +
           extrema.facts,
-        at
+        at,
+        ctx.stamp ?? null
       ) +
       ']';
     // PRICED BEFORE IT IS WRITTEN, on both counts.

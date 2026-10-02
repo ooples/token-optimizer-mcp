@@ -393,7 +393,9 @@ describe('a mirrored stretch is worded once and still walks back', () => {
     expect(texts.filter((t) => RUN.test(t)).length).toBe(11);
 
     const decode = rehydrateSequence();
-    expect(texts.map(decode)).toEqual(blocks.map((b) => b.text));
+    expect(texts.map((text) => decode(text))).toEqual(
+      blocks.map((b) => b.text)
+    );
   });
 
   it('refuses a run form with no reference before it', () => {
@@ -410,7 +412,7 @@ describe('a mirrored stretch is worded once and still walks back', () => {
   it('refuses a run form whose walk was broken by a literal', () => {
     const { texts } = dedupBlocks(mirror(12));
     const decode = rehydrateSequence();
-    texts.slice(0, 14).forEach(decode);
+    texts.slice(0, 14).forEach((text) => decode(text));
     // A literal between the reference and its continuation is a stretch the
     // encoder never emits, so the decoder must not resolve one.
     expect(() => decode(big('interloper :: '))).not.toThrow();

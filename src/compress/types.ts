@@ -50,9 +50,26 @@ export interface Elision {
    * needs `recoverAt`, and the boundary refuses the elision without one.
    */
   readonly lossless: boolean;
+  /**
+   * The stamp the markers in `text` carry, or null when they carry none.
+   *
+   * A CALLER THAT MEANS TO DECODE NEEDS THIS. Verification cannot come from the
+   * output alone: whatever a decoder could recompute from the text, the author
+   * of that text could compute first.
+   */
+  readonly stamp?: Stamp;
 }
 
 /** What an engine hands back. */
+/**
+ * A marker stamp, or null for unstamped.
+ *
+ * DECLARED HERE AND NOT IMPORTED FROM `annotate.ts`, which already imports
+ * `Elision` from this file: a value import back would close a cycle. `annotate`
+ * re-exports this name so a reader finds it beside the grammar it belongs to.
+ */
+export type Stamp = string | null;
+
 export interface CompressionResult {
   /** Exact standalone marker lines inserted by the engine, including duplicates. */
   readonly insertedLines?: readonly string[];
@@ -66,6 +83,14 @@ export interface CompressionResult {
    * False when recovery needs the file or the spill.
    */
   readonly lossless: boolean;
+  /**
+   * The stamp the markers in `text` carry, or null when they carry none.
+   *
+   * A CALLER THAT MEANS TO DECODE NEEDS THIS. Verification cannot come from the
+   * output alone: whatever a decoder could recompute from the text, the author
+   * of that text could compute first.
+   */
+  readonly stamp?: Stamp;
 }
 
 /** Content classes the router can distinguish. */
@@ -148,6 +173,17 @@ export interface EngineContext {
    * pre-pass did not happen to see.
    */
   readonly embeddings?: EmbeddingCache;
+  /**
+   * The stamp every marker this pass emits must carry.
+   *
+   * ABSENT MEANS UNSTAMPED, and an unstamped marker is one no decoder will
+   * honour, so an engine reached directly in a test still round-trips through
+   * the reference decoder when both are handed nothing. `compressBlock` always
+   * sets it; see `stampFor` in `annotate.ts` for why it is a keyed MAC over the
+   * content and not a random value -- the same text must compress to the same
+   * bytes, because a cached prefix that changes is a cached prefix that misses.
+   */
+  readonly stamp?: Stamp;
 }
 
 /**

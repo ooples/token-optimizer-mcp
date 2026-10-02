@@ -82,7 +82,11 @@ const PROSE = Array.from(
 const SOURCE = 'src/handlers.ts';
 
 /** `[... body, N lines -> path:A-B]`, or `path:A` when the span is one line. */
-const BODY = /^(\s*)\[\.\.\. body, (\d+) lines? -> (.+?):(\d+)(?:-(\d+))?\]$/;
+// THE STAMP IS MATCHED AND NOT CAPTURED, so the indices below still line up.
+// Required rather than optional: a marker without one is content, and a helper
+// that followed it anyway would be reconstructing from a line nobody wrote.
+const BODY =
+  /^(\s*)\[\.\.\. body, (\d+) lines? ~[0-9a-z]+ -> (.+?):(\d+)(?:-(\d+))?\]$/;
 
 /**
  * Rebuilds the input from the output plus the file the markers point into.
@@ -207,7 +211,7 @@ describe('a lossy elision delivers what its marker promises', () => {
     // of, so a caller can score that content as one `Read` away, not lost.
     let refusal: unknown = null;
     try {
-      expandLog(lossy.text);
+      expandLog(lossy.text, lossy.stamp);
     } catch (error) {
       refusal = error;
     }
@@ -364,7 +368,9 @@ describe('the spill is the only way back, so it must hold what went', () => {
     expect(result.elisions.every((e) => e.lossless)).toBe(true);
     expect(result.lossless).toBe(true);
     expect(result.text.length).toBeLessThan(padded.length);
-    expect(JSON.parse(rehydrate(result.text))).toEqual(JSON.parse(ROWS));
+    expect(JSON.parse(rehydrate(result.text, result.stamp))).toEqual(
+      JSON.parse(ROWS)
+    );
   });
 
   it('code with no source path recovers through the block it spilled', () => {

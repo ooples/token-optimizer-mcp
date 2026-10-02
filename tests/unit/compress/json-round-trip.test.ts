@@ -157,7 +157,9 @@ describe('a JSON block that claims lossless keeps every lexeme it was given', ()
     const result = compressBlock(input, { tuning: DEFAULT_TUNING });
 
     expect(result.lossless).toBe(true);
-    expect(jsonLexemes(rehydrate(result.text))).toEqual(jsonLexemes(input));
+    expect(jsonLexemes(rehydrate(result.text, result.stamp))).toEqual(
+      jsonLexemes(input)
+    );
   });
 
   // WHICH ENCODER RAN, NOT JUST THAT SOMETHING DID. Lexeme equality holds for
@@ -260,8 +262,11 @@ describe('the gate can fail, demonstrated on the product rather than asserted', 
 
 describe('rehydrate refuses what it cannot rebuild', () => {
   it('refuses an unregistered marker family', () => {
+    // STAMPED, BECAUSE THE REFUSAL IS ABOUT OUR OWN OUTPUT. A marker-shaped
+    // line nobody stamped is content and goes back verbatim; what must never
+    // happen is this decoder silently dropping a family IT emitted.
     expect(() =>
-      rehydrate('a line\n[... 4 gizmos folded]\nanother line')
+      rehydrate('a line\n[... 4 gizmos folded ~abcdef]\nanother line', 'abcdef')
     ).toThrow(/unrecognised marker/);
   });
 
@@ -273,7 +278,10 @@ describe('rehydrate refuses what it cannot rebuild', () => {
     // and one that could not tell filed six of these on a defect queue.
     let refusal: unknown = null;
     try {
-      rehydrate('head\n[... 900 lines -> /spill/log.txt]\ntail');
+      rehydrate(
+        'head\n[... 900 lines ~abcdef -> /spill/log.txt]\ntail',
+        'abcdef'
+      );
     } catch (error) {
       refusal = error;
     }

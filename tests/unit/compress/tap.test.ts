@@ -46,7 +46,7 @@ test.each(['\n', '\r\n'])(
     const result = compressTap(input);
     expect(result.lossless).toBe(true);
     expect(result.text.length).toBeLessThan(input.length * 0.6);
-    expect(rehydrate(result.text)).toBe(input);
+    expect(rehydrate(result.text, result.stamp)).toBe(input);
   }
 );
 test('failure diagnostics, nested tests and skipped tests survive between passing groups', () => {
@@ -58,7 +58,7 @@ test('failure diagnostics, nested tests and skipped tests survive between passin
   const input = group + failure + unusual + group;
   const result = compressTap(input);
   expect(result.text).toContain(failure + unusual);
-  expect(rehydrate(result.text)).toBe(input);
+  expect(rehydrate(result.text, result.stamp)).toBe(input);
 });
 test('short, truncated or unfamiliar records do not grow or change', () => {
   for (const input of [
@@ -85,5 +85,5 @@ test('repeated failures retain every identity and exact diagnostic; changed fail
   const result = compressTap(input);
   expect(result.text).toContain('TAP failing records');
   expect(result.text).toContain('actual: 500');
-  expect(rehydrate(result.text)).toBe(input);
+  expect(rehydrate(result.text, result.stamp)).toBe(input);
 });

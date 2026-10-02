@@ -47,8 +47,8 @@ describe('a folded document keeps the order its sections stood in', () => {
     // same output for both -- and can give at most one of them back.
     expect(first.text).not.toBe(second.text);
 
-    expect(rehydrate(first.text)).toBe(FIRST);
-    expect(rehydrate(second.text)).toBe(SECOND);
+    expect(rehydrate(first.text, first.stamp)).toBe(FIRST);
+    expect(rehydrate(second.text, second.stamp)).toBe(SECOND);
   });
 
   it('asks for no spill file and no round trip', () => {
@@ -80,7 +80,13 @@ describe('the order vector', () => {
   });
 
   it('round-trips every arrangement it encodes', () => {
-    const cases = [[0, 1, 2, 3, 4], [0, 1, 2, 0, 3, 4], [0, 0, 0], [7], [0, 2, 1]];
+    const cases = [
+      [0, 1, 2, 3, 4],
+      [0, 1, 2, 0, 3, 4],
+      [0, 0, 0],
+      [7],
+      [0, 2, 1],
+    ];
     for (const order of cases) {
       expect(decodeOrder(encodeOrder(order))).toEqual(order);
     }
@@ -99,11 +105,20 @@ describe('the order vector', () => {
   });
 
   it('fails closed on a marker that does not describe the text', () => {
-    const folded = foldRepeatedSegments(FIRST).text;
+    const out = foldRepeatedSegments(FIRST);
+    const folded = out.text;
+    // THE STAMP IS CARRIED THROUGH THE TAMPERING, not stripped by it. The
+    // claim here is that a marker this encoder wrote and whose vector no
+    // longer describes the text is refused; rewriting the vector and dropping
+    // the stamp would instead produce a line nothing honours, which is a
+    // different and much weaker claim.
     const reorder = (vector: string): string => {
-      const out = folded.replace(/order: [\d,-]+\]$/, `order: ${vector}]`);
-      expect(out).not.toBe(folded);
-      return out;
+      const edited = folded.replace(
+        /order: [\d,-]+( ~[0-9a-z]+)?\]$/,
+        (_whole, stamp: string | undefined) => `order: ${vector}${stamp ?? ''}]`
+      );
+      expect(edited).not.toBe(folded);
+      return edited;
     };
     // The count the note states, the sections actually present and the vector's
     // length all came out of one encode, so any disagreement between them means
@@ -114,20 +129,20 @@ describe('the order vector', () => {
     // left in the text, and `expand-log.ts:122` refuses any `[... ` marker no
     // decoder consumed -- so the refusal is loud, which is the only kind worth
     // making.
-    expect(() => rehydrate(reorder('0-2,9,0,0,0,0,0,0,0,0'))).toThrow(
-      /unrecognised marker.*repeated sections folded/
-    );
-    expect(() => rehydrate(reorder('0-2,0,0,0,0,0,0,0,0'))).toThrow(
+    expect(() =>
+      rehydrate(reorder('0-2,9,0,0,0,0,0,0,0,0'), out.stamp)
+    ).toThrow(/unrecognised marker.*repeated sections folded/);
+    expect(() => rehydrate(reorder('0-2,0,0,0,0,0,0,0,0'), out.stamp)).toThrow(
       /unrecognised marker.*repeated sections folded/
     );
     // Not a vector at all: the marker does not even parse, so nothing is read
     // back out of it.
-    expect(() => rehydrate(reorder('0,x,2'))).toThrow(
+    expect(() => rehydrate(reorder('0,x,2'), out.stamp)).toThrow(
       /unrecognised marker.*repeated sections folded/
     );
 
     // AND THE UNTAMPERED ONE STILL GOES BACK, so the refusals above are the
     // guards firing and not the decoder having stopped working.
-    expect(rehydrate(folded)).toBe(FIRST);
+    expect(rehydrate(folded, out.stamp)).toBe(FIRST);
   });
 });

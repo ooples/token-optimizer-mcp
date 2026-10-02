@@ -1,14 +1,38 @@
-import { inlineMarker } from './annotate.js';
-import type { CompressionResult, Elision } from './types.js';
+import { inlineMarker, isStamped, stampFor } from './annotate.js';
+import type { CompressionResult, Elision, Stamp } from './types.js';
 
 /** Exact repeated sequences preserve order, timestamps and whitespace inline. */
+/*
+ * `undefined` MINTS, `null` DECLINES.
+ *
+ * The stamp arrives as an argument here rather than on a context, so the two
+ * cases a context separates by key presence have to be separated by the value:
+ * a caller who wrote nothing did not think about decoding and gets a stamp back
+ * on the result, while a caller who wrote `null` means markers nothing honours.
+ */
 export function compressLogPeriods(
   text: string,
-  protectedLine: (line: string) => boolean
+  protectedLine: (line: string) => boolean,
+  stamp?: Stamp
+): CompressionResult | null {
+  const tag = stamp === undefined ? stampFor(text) : stamp;
+  const out = periodsOf(text, protectedLine, tag);
+  return out === null ? null : { ...out, stamp: tag };
+}
+
+function periodsOf(
+  text: string,
+  protectedLine: (line: string) => boolean,
+  stamp: Stamp
 ): CompressionResult | null {
   const lines = text.split('\n');
-  // Existing marker-looking input must not become ambiguous with our encoding.
-  if (lines.some((line) => line.trimStart().startsWith('[... '))) return null;
+  // OUR OWN MARKERS MUST NOT BECOME AMBIGUOUS WITH OUR ENCODING -- but a
+  // marker-SHAPED line in the input is not one of ours, and declining the whole
+  // block on its account is 20.0 points of reduction the author of the content
+  // takes off us by writing one line, measured in `bench/compression/
+  // adversarial.mjs`. A line carrying this stamp can only have come from this
+  // pass, which is the case the ambiguity was ever about.
+  if (lines.some((line) => isStamped(line, stamp))) return null;
   const out: string[] = [];
   const elisions: Elision[] = [];
   // MEMOISED PER LINE. protectedLine is a regex scan, and the loop below tries
@@ -62,7 +86,8 @@ export function compressLogPeriods(
       if (repeats < 3) continue;
       const marker = inlineMarker(
         `previous ${period} log lines repeat ${repeats - 1} more times, verbatim and in order`,
-        null
+        null,
+        stamp
       );
       // The block joined on newlines plus a trailing one: every line's length,
       // plus one separator each. Counted rather than built, for the same

@@ -51,7 +51,10 @@ describe('the exact break-even share', () => {
     // though it had been given a chance. The horizon is measured and can move,
     // so the exact form is what the decision is written against.
     expect(
-      minRewriteShare({ ...DEFAULT_TUNING, assumedSessionTurns: JOINED_TURNS_ASSUMED })
+      minRewriteShare({
+        ...DEFAULT_TUNING,
+        assumedSessionTurns: JOINED_TURNS_ASSUMED,
+      })
     ).toBeGreaterThan(breakEvenRewriteShare(JOINED_TURNS_ASSUMED));
     expect(
       minRewriteShare({ ...DEFAULT_TUNING, assumedSessionTurns: 5 })
@@ -99,7 +102,11 @@ const joined = (history: string): ProviderRequest => ({
     {
       role: 'user',
       content: [
-        { type: 'text', text: 'carry on', cache_control: { type: 'ephemeral' } },
+        {
+          type: 'text',
+          text: 'carry on',
+          cache_control: { type: 'ephemeral' },
+        },
       ],
     },
     { role: 'assistant', content: [{ type: 'text', text: 'carrying on' }] },
@@ -152,7 +159,9 @@ describe('a joined conversation is tried rather than refused', () => {
 
   it('rewrites the cached prefix when the saving clears the break-even', () => {
     const { result, removed } = run(winner);
-    expect(removed).toBeGreaterThan(breakEvenRewriteShare(JOINED_TURNS_ASSUMED));
+    expect(removed).toBeGreaterThan(
+      breakEvenRewriteShare(JOINED_TURNS_ASSUMED)
+    );
     // AND IT IS COMMITTED. Without this the next turn re-derives the prefix
     // from scratch and changes bytes the provider is now holding as ours.
     expect(result.anchor?.reanchor).toBe(true);

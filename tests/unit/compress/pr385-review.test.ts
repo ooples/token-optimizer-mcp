@@ -58,7 +58,7 @@ test('a folded section is recoverable, inline or at a named spill', () => {
   expect(inline.lossless).toBe(true);
   expect(inline.elisions[0].lossless).toBe(true);
   expect(inline.elisions[0].recoverAt).toBeNull();
-  expect(rehydrate(inline.text)).toBe(headed);
+  expect(rehydrate(inline.text, inline.stamp)).toBe(headed);
 
   // Splitting on blank lines consumes `\n\s*\n` -- a run of whitespace of a
   // length nobody wrote down -- so that branch cannot rebuild the separators and

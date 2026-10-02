@@ -20,7 +20,7 @@
  */
 
 import { parse } from '@babel/parser';
-import { count, inlineMarker, span } from './annotate.js';
+import { count, inlineMarker, span, withStamp } from './annotate.js';
 import { activeRanker } from './ranking.js';
 import type { EmbeddingCache } from './embedding.js';
 import { DEFAULT_TUNING } from './options.js';
@@ -430,10 +430,25 @@ function liveBodies(
  * Signatures, imports, class and type declarations and decorators all survive,
  * which is what makes the output still answer "what is in this file".
  */
+/*
+ * MINTS ITS OWN STAMP WHEN THE CALLER BROUGHT NONE, AND HANDS IT BACK.
+ *
+ * An engine that emits markers and tells nobody how to verify them produces
+ * output that cannot be decoded at all -- the markers are indistinguishable
+ * from content, which is the safe direction and a useless one. So the stamp
+ * travels with the result, from whichever layer created it: the router sets one
+ * for the whole block and this passes it through, and a caller reaching an
+ * engine directly gets one minted from the content it handed over.
+ */
 export function compressCode(
   text: string,
   ctx: EngineContext = {}
 ): CompressionResult {
+  const stamped = withStamp(ctx, text);
+  return { ...compressCodeBody(text, stamped), stamp: stamped.stamp };
+}
+
+function compressCodeBody(text: string, ctx: EngineContext): CompressionResult {
   if (looksLikeDiff(text)) return unchanged(text);
   const tuning = ctx.tuning ?? DEFAULT_TUNING;
   // A replaced body is gone from the text; only its path brings it back.
@@ -527,7 +542,12 @@ export function compressCode(
     const indent = lines[from - 1]?.match(/^\s*/)?.[0] ?? '  ';
     markerAt.set(
       from,
-      indent + inlineMarker(`body, ${count(lineCount, 'line')}`, where)
+      indent +
+        inlineMarker(
+          `body, ${count(lineCount, 'line')}`,
+          where,
+          ctx.stamp ?? null
+        )
     );
     elisions.push({
       removed: `body, ${count(lineCount, 'line')}`,

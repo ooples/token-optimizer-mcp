@@ -48,7 +48,7 @@ describe('log folding keeps the timestamps it removes', () => {
     const input = clocked(9, 'connection pool warmed');
     const out = compressLog(input);
 
-    expect(expandLog(out.text)).toBe(input);
+    expect(expandLog(out.text, out.stamp)).toBe(input);
     expect(out.text.length).toBeLessThan(input.length);
     expect(out.elisions.some((e) => e.lossless)).toBe(true);
   });
@@ -93,7 +93,7 @@ describe('log folding keeps the timestamps it removes', () => {
     ).join('\n');
     const out = compressLog(terse);
 
-    expect(rehydrate(out.text)).toBe(terse);
+    expect(rehydrate(out.text, out.stamp)).toBe(terse);
     expect(out.lossless).toBe(true);
     expect(out.elisions.every((e) => e.lossless || e.recoverAt)).toBe(true);
   });

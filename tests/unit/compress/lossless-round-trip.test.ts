@@ -85,7 +85,7 @@ describe('lossless results reconstruct their input from the output alone', () =>
     // made squad-eval report 1.000 accuracy at 0.0% reduction.
     expect(result.text.length).toBeLessThan(text.length);
     expect(result.lossless).toBe(true);
-    expect(expandLog(result.text)).toBe(text);
+    expect(expandLog(result.text, result.stamp)).toBe(text);
   });
 
   it.each(FIXTURES)('$name -- a damaged output is rejected', ({ text }) => {

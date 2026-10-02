@@ -73,7 +73,7 @@ describe('plain search hunks reconstruct from the output alone', () => {
     // branch, so a failure here cannot be blamed on the covered one.
     expect(result.text).not.toContain('[exact declaration rows:');
     expect(result.text.length).toBeLessThan(input.length);
-    expect(rehydrate(result.text)).toBe(input);
+    expect(rehydrate(result.text, result.stamp)).toBe(input);
   });
 
   it('writes each match note shape, so the round trip exercised all of them', () => {
@@ -106,11 +106,23 @@ describe('a body line repeating an earlier one is written as a reference', () =>
 
   const repeated = (): string =>
     [
-      ...hits('src/a/store.ts', 10, ['function get(key: string) {', shared, '}']),
+      ...hits('src/a/store.ts', 10, [
+        'function get(key: string) {',
+        shared,
+        '}',
+      ]),
       '--',
-      ...hits('src/b/store.ts', 20, ['function fetch(key: string) {', shared, '}']),
+      ...hits('src/b/store.ts', 20, [
+        'function fetch(key: string) {',
+        shared,
+        '}',
+      ]),
       '--',
-      ...hits('src/c/store.ts', 30, ['function tap(key: string) {', other, shared]),
+      ...hits('src/c/store.ts', 30, [
+        'function tap(key: string) {',
+        other,
+        shared,
+      ]),
     ].join('\n');
 
   it('folds the repeat and rebuilds it from the reference alone', () => {
@@ -121,7 +133,7 @@ describe('a body line repeating an earlier one is written as a reference', () =>
     // Folded, not merely mentioned: the line itself survives exactly once.
     expect(result.text.split(shared).length - 1).toBe(1);
     expect(result.lossless).toBe(true);
-    expect(rehydrate(result.text)).toBe(repeated());
+    expect(rehydrate(result.text, result.stamp)).toBe(repeated());
   });
 
   it('escapes a line that would otherwise read as a reference', () => {
@@ -138,7 +150,7 @@ describe('a body line repeating an earlier one is written as a reference', () =>
     expect(result.text).toContain('[==0]');
     expect(result.text).toContain('[===7]');
     expect(result.text).toContain('[=1]');
-    expect(rehydrate(result.text)).toBe(forged);
+    expect(rehydrate(result.text, result.stamp)).toBe(forged);
   });
 
   it('leaves a repeat alone where the reference would not be shorter', () => {
@@ -149,7 +161,7 @@ describe('a body line repeating an earlier one is written as a reference', () =>
     ].join('\n');
     const result = compressSearchResults(tiny);
     expect(result.text).not.toContain('[=1]');
-    expect(rehydrate(result.text)).toBe(tiny);
+    expect(rehydrate(result.text, result.stamp)).toBe(tiny);
   });
 });
 

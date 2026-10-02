@@ -245,7 +245,7 @@ describe('log', () => {
     // one marker, templating states the shape once and lists the values -- so
     // naming one of them here would pin the choice rather than the outcome.
     expect(out.text.length).toBeLessThan(input.length / 2);
-    expect(expandLog(out.text)).toBe(input);
+    expect(expandLog(out.text, out.stamp)).toBe(input);
   });
 
   // PRESERVATION.
@@ -413,7 +413,7 @@ describe('code', () => {
   it('replaces the body with a marker naming the line range', () => {
     const out = compressCode(ts, { sourcePath: 'src/w.ts' });
     expect(out.text).toMatch(
-      /\[\.\.\. body, \d+ lines -> src\/w\.ts:\d+-\d+\]/
+      /\[\.\.\. body, \d+ lines ~[0-9a-z]+ -> src\/w\.ts:\d+-\d+\]/
     );
     expect(out.text.length).toBeLessThan(ts.length);
   });

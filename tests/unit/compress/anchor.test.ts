@@ -431,7 +431,6 @@ describe('a declined rewrite is reconsidered as the conversation grows', () => {
         `}`
     ).join(NEWLINE);
 
-
   const conversation = (turns: number): ProviderRequest => {
     const messages: unknown[] = [
       {
@@ -563,7 +562,10 @@ describe('the turn compression first bites freezes the boundary it used', () => 
    */
   const conversation = (turns: number): ProviderRequest => {
     const messages: unknown[] = [
-      { role: 'user', content: [{ type: 'text', text: 'fix the failing test' }] },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'fix the failing test' }],
+      },
     ];
     for (let i = 0; i < turns; i += 1) {
       messages.push({

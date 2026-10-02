@@ -538,7 +538,8 @@ describe('the re-anchor guard weighs only the cached prefix', () => {
    */
   const noise = (n: number): string => {
     let seed = 7;
-    const next = (): number => (seed = (seed * 1103515245 + 12345) % 2147483648);
+    const next = (): number =>
+      (seed = (seed * 1103515245 + 12345) % 2147483648);
     return Array.from({ length: n }, () => next().toString(36)).join(' ');
   };
 
@@ -556,13 +557,24 @@ describe('the re-anchor guard weighs only the cached prefix', () => {
   const joinedWith = (pad: string): ProviderRequest => ({
     system: 'You are an agent.',
     messages: [
-      { role: 'user', content: [{ type: 'text', text: 'Find the duplicates.' }] },
-      { role: 'assistant', content: [{ type: 'text', text: 'Reading it now.' }] },
-      { role: 'user', content: [{ type: 'text', text: rows(40) }] },
-      { role: 'assistant', content: [{ type: 'text', text: 'Here is what I saw.' }] },
       {
         role: 'user',
-        content: [{ type: 'text', text: pad, cache_control: { type: 'ephemeral' } }],
+        content: [{ type: 'text', text: 'Find the duplicates.' }],
+      },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Reading it now.' }],
+      },
+      { role: 'user', content: [{ type: 'text', text: rows(40) }] },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Here is what I saw.' }],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: pad, cache_control: { type: 'ephemeral' } },
+        ],
       },
       { role: 'assistant', content: [{ type: 'text', text: 'Understood.' }] },
       { role: 'user', content: [{ type: 'text', text: rows(400) }] },

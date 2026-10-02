@@ -10,7 +10,8 @@
  * Near-duplicates remain distinct under both.
  */
 
-import type { CompressionResult, EngineContext } from './types.js';
+import { stampPattern, withStamp } from './annotate.js';
+import type { CompressionResult, EngineContext, Stamp } from './types.js';
 import { spillFor, unchanged } from './types.js';
 
 /**
@@ -115,9 +116,21 @@ export function decodeOrder(vector: string): number[] | null {
   return out;
 }
 
-/** The marker the lossless fold writes, and the decoder's only entry point. */
-export const SECTION_ORDER_MARKER =
-  /^\[\.\.\. (\d+) repeated sections folded; each byte-identical to one above; order: ([\d,-]+)\]$/;
+/**
+ * The marker the lossless fold writes, and the decoder's only entry point.
+ *
+ * BUILT PER CALL, because the stamp is: an order vector is an instruction to
+ * REORDER the sections above it, so a forged one rewrites the block into an
+ * arrangement the author of the content chose. With no stamp this matches
+ * nothing and the line is content.
+ */
+export function sectionOrderMarker(stamp: Stamp): RegExp {
+  return new RegExp(
+    '^\\[\\.\\.\\. (\\d+) repeated sections folded; each byte-identical to one above; order: ([\\d,-]+)' +
+      stampPattern(stamp) +
+      '\\]$'
+  );
+}
 
 /** Duplicate share of a segmentation, used both to claim and to decide. */
 function duplicateShare(parts: readonly string[]): number {
@@ -146,10 +159,25 @@ export function looksRepetitive(text: string): boolean {
  * segment is an exact copy of one still in the text above it. That is what
  * makes this recoverable without a spill file and without a round trip.
  */
+/*
+ * MINTS ITS OWN STAMP WHEN THE CALLER BROUGHT NONE, AND HANDS IT BACK.
+ *
+ * An engine that emits markers and tells nobody how to verify them produces
+ * output that cannot be decoded at all -- the markers are indistinguishable
+ * from content, which is the safe direction and a useless one. So the stamp
+ * travels with the result, from whichever layer created it: the router sets one
+ * for the whole block and this passes it through, and a caller reaching an
+ * engine directly gets one minted from the content it handed over.
+ */
 export function foldRepeatedSegments(
   text: string,
   ctx: EngineContext = {}
 ): CompressionResult {
+  const stamped = withStamp(ctx, text);
+  return { ...foldSegmentsOf(text, stamped), stamp: stamped.stamp };
+}
+
+function foldSegmentsOf(text: string, ctx: EngineContext): CompressionResult {
   const { parts, exact } = segment(text);
   if (parts.length < MIN_SEGMENTS)
     return { text, elisions: [], lossless: true };
@@ -174,13 +202,18 @@ export function foldRepeatedSegments(
   const folded = parts.length - kept.length;
   if (!folded) return { text, elisions: [], lossless: true };
 
+  // THE STAMP BOTH NOTES CARRY, so a decoder honours the order vector only
+  // when this encoder wrote it. Empty when the caller handed none, and an
+  // unstamped marker is one no decoder in this directory will act on.
+  const suffix = ctx.stamp ? ` ~${ctx.stamp}` : '';
+
   // THE LOSSLESS CUT. `segment` reports `exact` when it split on headings, and
   // there the separator is a single `\n` it can hand back. Sections plus order
   // plus that separator IS the original, so this writes the order inline and
   // asks for no spill file -- which also makes it the only branch that works on
   // the published arm, which is handed no sink at all.
   if (exact) {
-    const note = `\n[... ${folded} repeated sections folded; each byte-identical to one above; order: ${encodeOrder(order)}]`;
+    const note = `\n[... ${folded} repeated sections folded; each byte-identical to one above; order: ${encodeOrder(order)}${suffix}]`;
     const out = `${kept.join(SECTION_JOIN)}${note}`;
     if (out.length >= text.length)
       return { text, elisions: [], lossless: true };
@@ -203,7 +236,7 @@ export function foldRepeatedSegments(
 
   const recoverAt = ctx.sourcePath || spillFor(ctx, text, 'sections.txt');
   if (!recoverAt) return unchanged(text);
-  const note = `\n[... ${folded} repeated sections folded; each is byte-identical to one above; original order and separators: ${recoverAt}]`;
+  const note = `\n[... ${folded} repeated sections folded; each is byte-identical to one above; original order and separators: ${recoverAt}${suffix}]`;
   const out = `${kept.join('\n')}${note}`;
   // NEVER GROW. Folding a handful of short segments can cost more than the note
   // saves, and a compressor that returns something larger than it was given is
