@@ -43,16 +43,21 @@
 
 import {
   OUTPUT_ARM,
+  emptyAccum,
   emptyOutputLedger,
   estimateFromBaseline,
   estimateFromHoldout,
+  mergeAccum,
   mergeOutputLedger,
+  observe,
+  observedWaste,
   recordBaseline,
   recordOutput,
   stratumKey,
   type Accum,
   type OutputSavingsEstimate,
   type OutputSavingsLedger,
+  type OutputWaste,
 } from '../proxy/output-savings.js';
 import type { AccountingRecord } from '../proxy/accounting.js';
 
@@ -68,10 +73,23 @@ import type { AccountingRecord } from '../proxy/accounting.js';
 export interface OutputLedgers {
   readonly compression: OutputSavingsLedger;
   readonly shaper: OutputSavingsLedger;
+  /**
+   * Tier 3, which needs no strata at all.
+   *
+   * ONE ACCUMULATOR, NOT A MAP, BECAUSE THERE IS NOTHING TO COMPARE AGAINST.
+   * The other two tiers stratify so that like is compared with like across two
+   * arms. An echo ratio has no second arm -- it is a property of one response --
+   * so stratifying it would only split a mean into means nobody asked for.
+   */
+  readonly echo: Accum;
 }
 
 export function emptyOutputLedgers(): OutputLedgers {
-  return { compression: emptyOutputLedger(), shaper: emptyOutputLedger() };
+  return {
+    compression: emptyOutputLedger(),
+    shaper: emptyOutputLedger(),
+    echo: emptyAccum(),
+  };
 }
 
 export function mergeOutputLedgers(
@@ -80,6 +98,7 @@ export function mergeOutputLedgers(
 ): void {
   mergeOutputLedger(into.compression, from.compression);
   mergeOutputLedger(into.shaper, from.shaper);
+  mergeAccum(into.echo, from.echo);
 }
 
 /**
@@ -123,6 +142,11 @@ export function recordOutputRow(
   ledgers: OutputLedgers,
   record: AccountingRecord
 ): void {
+  // BEFORE THE OUTPUT-TOKEN GUARD, because the two are independent instruments.
+  // A reply whose usage object never arrived was still read by the scanner, and
+  // dropping its waste figure for want of a token count would make the waste
+  // mean an average over the subset that also happened to report usage.
+  recordEcho(ledgers.echo, record);
   const emitted = record.usage.output_tokens;
   if (typeof emitted !== 'number' || !Number.isFinite(emitted) || emitted < 0)
     return;
@@ -139,6 +163,21 @@ export function recordOutputRow(
 }
 
 /**
+ * Files one row's echo ratio, if it carried one.
+ *
+ * REFUSES ANYTHING THAT IS NOT A SHARE. A ratio outside [0, 1] did not come
+ * from the scanner, and admitting it would move a published mean by an amount
+ * nothing downstream could detect -- `observe` is additive and has no opinion
+ * about range.
+ */
+function recordEcho(into: Accum, record: AccountingRecord): void {
+  const ratio = record.echoRatio;
+  if (typeof ratio !== 'number' || !Number.isFinite(ratio)) return;
+  if (ratio < 0 || ratio > 1) return;
+  observe(into, ratio);
+}
+
+/**
  * The two estimated tiers, each from the comparison that can support it.
  *
  * `measured` IS NULL WHENEVER NO HOLDOUT RAN, and the renderer prints nothing
@@ -150,12 +189,19 @@ export function recordOutputRow(
 export interface OutputTiers {
   readonly estimated: OutputSavingsEstimate;
   readonly measured: OutputSavingsEstimate | null;
+  /**
+   * Tier 3. Null unless the opt-in scanner ran, and NEVER a token figure -- it
+   * is a share of a reply, carried in its own units so nothing can add it to a
+   * saving.
+   */
+  readonly waste: OutputWaste | null;
 }
 
 export function outputTiers(ledgers: OutputLedgers): OutputTiers {
   return {
     estimated: estimateFromBaseline(ledgers.compression),
     measured: estimateFromHoldout(ledgers.shaper),
+    waste: observedWaste(ledgers.echo),
   };
 }
 
@@ -180,6 +226,12 @@ export interface SerializedOutputLedgers {
     readonly treatment: SerializedArm;
     readonly control: SerializedArm;
   };
+  /**
+   * The echo accumulator as one `[n, sum, sumsq]`, omitted when nothing was
+   * scanned -- so a day from a build or an operator without the scanner carries
+   * no field at all rather than a zero that would read as "no waste found".
+   */
+  readonly echo?: readonly number[];
 }
 
 const ARMS = ['baseline', 'treatment', 'control'] as const;
@@ -215,6 +267,9 @@ export function serializeOutputLedgers(
   return {
     compression: serializeOne(ledgers.compression),
     shaper: serializeOne(ledgers.shaper),
+    ...(ledgers.echo.n > 0
+      ? { echo: [ledgers.echo.n, ledgers.echo.sum, ledgers.echo.sumsq] }
+      : {}),
   };
 }
 
@@ -278,5 +333,14 @@ export function parseOutputLedgers(value: unknown): OutputLedgers | null {
   const seen = value as Record<string, unknown>;
   if (!parseOne(seen.compression ?? {}, ledgers.compression)) return null;
   if (!parseOne(seen.shaper ?? {}, ledgers.shaper)) return null;
+  // ABSENT IS FINE; PRESENT-AND-UNREADABLE IS NOT. The same rule the strata
+  // follow: a triple this build cannot stand behind fails the whole line, and
+  // the day is disclosed as skipped rather than folded with its waste figure
+  // quietly replaced by nothing.
+  if (seen.echo !== undefined) {
+    const echo = parseTriple(seen.echo);
+    if (echo === null) return null;
+    mergeAccum(ledgers.echo, echo);
+  }
   return ledgers;
 }

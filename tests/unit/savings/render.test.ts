@@ -35,6 +35,7 @@ import {
 import {
   OUTPUT_EVIDENCE,
   type OutputSavingsEstimate,
+  type OutputWaste,
 } from '../../../src/proxy/output-savings.js';
 import type {
   SavingsGroup,
@@ -322,6 +323,7 @@ function proxyWindow(
     upstreamMsMean: 1840,
     outputEstimated: outputEstimate(),
     outputMeasured: null,
+    outputWaste: null,
     ...over,
   };
 }
@@ -344,6 +346,16 @@ function outputEstimate(
     requests: 3,
     strata: 2,
     pooledRequests: 0,
+    ...over,
+  };
+}
+
+function outputWasteOf(over: Partial<OutputWaste> = {}): OutputWaste {
+  return {
+    evidence: OUTPUT_EVIDENCE.ObservedWaste,
+    meanRatio: 0.3125,
+    interval: { lowRatio: 0.21, highRatio: 0.414 },
+    requests: 12,
     ...over,
   };
 }
@@ -875,5 +887,46 @@ describe('rendering the output-token tiers', () => {
     ).join('\n');
     expect(text).toContain('Output tokens (estimated');
     expect(text).toContain('Output tokens (measured');
+  });
+});
+
+describe('rendering the output-waste tier', () => {
+  it('names it waste and never converts it to tokens', () => {
+    const lines = outputLines(
+      proxyReport({ windows: [proxyWindow({ outputWaste: outputWasteOf() })] })
+    );
+    const line = lines[lines.length - 1] ?? '';
+    expect(line).toContain('Output waste (observed, no counterfactual)');
+    expect(line).toContain('31.3% (95% CI 21.0% to 41.4%)');
+    expect(line).toContain('over 12 scanned replies');
+    expect(line).toContain('Not a saving');
+    // NO TOKEN FIGURE IN THIS LINE, deliberately: a share with no
+    // counterfactual must not be presentable as tokens anybody saved.
+    expect(line).not.toContain('token');
+  });
+
+  it('prints nothing when the opt-in scanner never ran', () => {
+    expect(outputLines(proxyReport()).join('\n')).not.toContain('Output waste');
+    // POSITIVE CONTROL: the same renderer does print it when there is a figure.
+    expect(
+      outputLines(
+        proxyReport({ windows: [proxyWindow({ outputWaste: outputWasteOf() })] })
+      ).join('\n')
+    ).toContain('Output waste');
+  });
+
+  it('omits the band rather than implying one when it has no spread', () => {
+    const lines = outputLines(
+      proxyReport({
+        windows: [
+          proxyWindow({
+            outputWaste: outputWasteOf({ interval: null, requests: 1 }),
+          }),
+        ],
+      })
+    );
+    const line = lines[lines.length - 1] ?? '';
+    expect(line).not.toContain('95% CI');
+    expect(line).toContain('over 1 scanned reply');
   });
 });

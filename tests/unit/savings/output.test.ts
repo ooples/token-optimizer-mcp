@@ -276,3 +276,79 @@ describe('carrying a ledger through a rollup line', () => {
     ).not.toBeNull();
   });
 });
+
+describe('the waste tier read off rows', () => {
+  it('files a ratio and ignores a row that carried none', () => {
+    const ledgers = ledgerOf([
+      record({ echoRatio: 0.25 }),
+      record({ echoRatio: 0.75 }),
+      record(),
+    ]);
+    expect(outputTiers(ledgers).waste?.requests).toBe(2);
+    expect(outputTiers(ledgers).waste?.meanRatio).toBe(0.5);
+  });
+
+  it('refuses a ratio that is not a share', () => {
+    const ledgers = ledgerOf([
+      record({ echoRatio: -0.1 }),
+      record({ echoRatio: 1.5 }),
+      record({ echoRatio: Number.NaN }),
+    ]);
+    expect(outputTiers(ledgers).waste).toBeNull();
+    // POSITIVE CONTROL: both endpoints of the unit interval are legal shares.
+    const legal = ledgerOf([
+      record({ echoRatio: 0 }),
+      record({ echoRatio: 1 }),
+    ]);
+    expect(outputTiers(legal).waste?.requests).toBe(2);
+  });
+
+  it('counts a scanned reply whose usage never arrived', () => {
+    // THE TWO INSTRUMENTS ARE INDEPENDENT. The scanner read this reply; the
+    // provider's usage object did not turn up. Dropping the waste figure for
+    // want of a token count would make the waste mean an average over only the
+    // rows that also reported usage.
+    const ledgers = ledgerOf([record({ usage: {}, echoRatio: 0.4 })]);
+    expect(ledgers.compression.treatment.size).toBe(0);
+    expect(outputTiers(ledgers).waste?.meanRatio).toBe(0.4);
+  });
+
+  it('carries the waste figure across a rollup line', () => {
+    const ledgers = ledgerOf([
+      record({ echoRatio: 0.2 }),
+      record({ echoRatio: 0.4 }),
+    ]);
+    const wire = JSON.parse(JSON.stringify(serializeOutputLedgers(ledgers)));
+    // The exact float sums, written out: n, sum of the ratios, sum of their
+    // squares. Pinned literally because the whole point of the triple is that
+    // a day's spread survives the rollup, and a rounded expectation here would
+    // pass against a serializer that quietly dropped digits.
+    expect(wire.echo).toEqual([2, 0.6000000000000001, 0.20000000000000004]);
+    const parsed = parseOutputLedgers(wire);
+    expect(parsed).not.toBeNull();
+    if (parsed === null) throw new Error('unreachable');
+    expect(outputTiers(parsed).waste).toEqual(outputTiers(ledgers).waste);
+  });
+
+  it('omits the field entirely when nothing was scanned', () => {
+    // ABSENT IS NOT ZERO. A day from an operator who never turned the scanner
+    // on must not come back as a day in which no reply echoed anything.
+    const wire = serializeOutputLedgers(ledgerOf([record()]));
+    expect('echo' in wire).toBe(false);
+    expect(parseOutputLedgers(wire)).not.toBeNull();
+    expect(outputTiers(parseOutputLedgers(wire) ?? emptyOutputLedgers()).waste)
+      .toBeNull();
+    // POSITIVE CONTROL: a scanned day does carry the field.
+    expect(
+      'echo' in serializeOutputLedgers(ledgerOf([record({ echoRatio: 0.1 })]))
+    ).toBe(true);
+  });
+
+  it('fails the whole line on an echo triple it cannot stand behind', () => {
+    expect(parseOutputLedgers({ echo: [2, 300, 40000] })).toBeNull();
+    expect(parseOutputLedgers({ echo: [1, 0.5] })).toBeNull();
+    expect(parseOutputLedgers({ echo: 'nope' })).toBeNull();
+    // POSITIVE CONTROL: a legal triple parses in the same position.
+    expect(parseOutputLedgers({ echo: [2, 0.6, 0.2] })).not.toBeNull();
+  });
+});

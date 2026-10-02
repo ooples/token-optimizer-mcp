@@ -611,6 +611,55 @@ export function estimateFromHoldout(
  * ZERO WHEN THERE IS NOTHING TO COMPARE, never a divide by zero and never a
  * fabricated ratio from a response too short to contain one n-gram.
  */
+/**
+ * Tier 3: what share of a reply the model had already been shown.
+ *
+ * NOT A SAVING, AND IT HAS NO BASELINE TO BE ONE AGAINST. The other two tiers
+ * are differences between populations. This is the mean of a per-response
+ * property, and it answers a different question: whether there is output waste
+ * worth attacking at all. It is reported in its own units -- a share of the
+ * reply -- precisely so it cannot be mistaken for, or added to, a token count.
+ *
+ * THE INTERVAL IS ABOUT THE MEAN, NOTHING MORE. It covers the sampling noise of
+ * averaging over the responses we scanned; it says nothing about whether those
+ * responses were representative, and it is null below two of them rather than
+ * collapsing to a point.
+ */
+export interface OutputWaste {
+  readonly evidence: typeof OUTPUT_EVIDENCE.ObservedWaste;
+  readonly meanRatio: number;
+  readonly interval: {
+    readonly lowRatio: number;
+    readonly highRatio: number;
+  } | null;
+  readonly requests: number;
+}
+
+/** The waste tier, or null when nothing was scanned. */
+export function observedWaste(accum: Accum): OutputWaste | null {
+  if (accum.n === 0) return null;
+  const variance = accumVariance(accum);
+  const meanRatio = accumMean(accum);
+  let interval: OutputWaste['interval'] = null;
+  if (variance !== null) {
+    const error = Z_95 * Math.sqrt(variance / accum.n);
+    // CLAMPED TO THE UNIT INTERVAL, because the quantity is a share and a
+    // normal-approximation band around a mean near 0 or 1 runs outside it. A
+    // printed bound of -4% would read as an arithmetic error rather than as the
+    // approximation being coarse at the edge.
+    interval = {
+      lowRatio: Math.max(0, meanRatio - error),
+      highRatio: Math.min(1, meanRatio + error),
+    };
+  }
+  return {
+    evidence: OUTPUT_EVIDENCE.ObservedWaste,
+    meanRatio,
+    interval,
+    requests: accum.n,
+  };
+}
+
 export function echoRatio(
   outputText: string,
   contextText: string,

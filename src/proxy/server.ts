@@ -81,6 +81,11 @@ import {
   type WireFormat,
 } from './output-shaper.js';
 import { assignArm, type OutputArm } from './output-savings.js';
+import {
+  createEchoScanner,
+  echoEnabled,
+  extractTextValues,
+} from './echo.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
@@ -1182,6 +1187,34 @@ export function requestPath(url: string | undefined): string | null {
 }
 
 /** Forwards one request upstream and pipes the response back verbatim. */
+/**
+ * An echo scanner over the text of a forwarded body, or null if there is none.
+ *
+ * THE SAME EXTRACTOR ON BOTH SIDES, which is what makes the two comparable: a
+ * context scanned by one rule and a reply scanned by another would disagree
+ * about where a word begins, and the ratio would be a comparison of two
+ * different tokenisations rather than of two texts.
+ */
+function scannerFor(body: Buffer): ReturnType<typeof createEchoScanner> {
+  try {
+    const text = extractTextValues(body.toString('utf8')).values.join(' ');
+    return createEchoScanner(text);
+  } catch {
+    // A body that will not decode as text yields no figure, and costs the
+    // request nothing.
+    return null;
+  }
+}
+
+/** The echo field, or nothing at all when there is no figure to stand behind. */
+function echoFacts(
+  echo: ReturnType<typeof createEchoScanner>
+): { readonly echoRatio?: number } {
+  if (echo === null) return {};
+  const ratio = echo.ratio();
+  return ratio === null ? {} : { echoRatio: ratio };
+}
+
 function forward(
   upstream: string,
   req: IncomingMessage,
@@ -1320,6 +1353,18 @@ function forward(
         // parameter existed, the call site never passed it, and every test fed
         // the tap plaintext so nothing caught it.
         const encoding = upstreamRes.headers['content-encoding'];
+        // BUILT FROM THE BODY WE FORWARDED, not from the one the client sent.
+        // The model can only repeat what reached it, so a passage compression
+        // had already removed must not be counted as something it copied --
+        // measuring against the original would credit our own removal as the
+        // model's waste, which is the opposite of true.
+        //
+        // NULL UNLESS ASKED FOR. The scan holds hashes of the context while the
+        // response streams, which is the one instrument here with a real memory
+        // cost, so an operator who has not asked for an output-waste figure
+        // pays nothing. A null scanner records no field at all, which the ledger
+        // reads as "not scanned" rather than as "nothing was echoed".
+        const echo = echoEnabled() ? scannerFor(body) : null;
         tapUsage(
           upstreamRes,
           (usage) => {
@@ -1339,11 +1384,13 @@ function forward(
                   upstreamMs: performance.now() - upstreamStarted,
                 },
                 usage,
+                ...echoFacts(echo),
               },
               tokens
             );
           },
-          typeof encoding === 'string' ? encoding : undefined
+          typeof encoding === 'string' ? encoding : undefined,
+          echo === null ? undefined : (text) => echo.push(text)
         );
       }
       // Codex closes after its terminal SSE event, even if the provider keeps

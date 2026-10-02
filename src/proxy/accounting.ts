@@ -221,6 +221,24 @@ export interface AccountingRecord extends CompressionFacts {
    * proxy built without token accounting, so an old ledger line stays valid.
    */
   readonly tokens?: TokenAccountingFacts;
+  /**
+   * The share of this reply's word n-grams that were already in the context.
+   *
+   * OUTPUT WASTE, WHICH IS NOT A SAVING. The other output figures in this
+   * feature are differences between two populations. This one has no
+   * counterfactual at all -- it is a property of a single response, and it says
+   * how much of the reply the model had already been shown. A high ratio is an
+   * opportunity to attack, never a token anyone saved, and nothing may add it to
+   * one.
+   *
+   * ABSENT WHEN NOT SCANNED, which is a different fact from zero. The scan is
+   * opt-in, refuses a context too short or too large to stand behind, and
+   * refuses a body it could not finish reading -- so a missing field means "no
+   * figure", while a `0` means "measured, and nothing was echoed".
+   *
+   * A RATIO, NEVER THE TEXT IT CAME FROM. See `./echo.ts`.
+   */
+  readonly echoRatio?: number;
 }
 
 /** The ledger path, or null when accounting was not asked for. */
@@ -321,7 +339,19 @@ function maybePrune(path: string): void {
 export function tapUsage(
   stream: Readable,
   done: (usage: RequestUsage) => void,
-  contentEncoding?: string
+  contentEncoding?: string,
+  /**
+   * An extra reader of the decoded response text, for an instrument that needs
+   * the words rather than the usage numbers.
+   *
+   * SHARES THE ONE DECODE. The tap already decompresses the response to find
+   * the usage object, and a second consumer attaching its own decoder would
+   * double that cost on the one stream the proxy must not slow down. It is
+   * handed the same decoded text, in order, and whatever it throws is swallowed
+   * for the same reason everything else here is -- the response has already
+   * been delivered.
+   */
+  watch?: (text: string) => void
 ): void {
   const usage: RequestUsage = {};
   const parser = new UsageParser((value) => mergeUsage(value, usage));
@@ -353,6 +383,13 @@ export function tapUsage(
 
   const absorb = (text: string): void => {
     parser.write(text);
+    if (watch === undefined) return;
+    try {
+      watch(text);
+    } catch {
+      // An instrument that fails is an instrument that reports nothing. It is
+      // never the response's problem.
+    }
   };
 
   if (decoder) {

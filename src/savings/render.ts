@@ -21,7 +21,10 @@ import {
   OPERATOR_PRICE_TABLE_ENV,
   type OperatorPriceTableStatus,
 } from '../analytics/operator-prices.js';
-import type { OutputSavingsEstimate } from '../proxy/output-savings.js';
+import type {
+  OutputSavingsEstimate,
+  OutputWaste,
+} from '../proxy/output-savings.js';
 
 const BAR_WIDTH = 16;
 
@@ -332,7 +335,38 @@ export function outputLines(report: ProxySavingsReport): readonly string[] {
     );
     if (measured !== '') lines.push(measured);
   }
+  if (all.outputWaste !== null) lines.push(wasteLine(all.outputWaste));
   return lines;
+}
+
+/**
+ * Tier 3, worded so it cannot be read as a saving.
+ *
+ * NO TOKEN COUNT APPEARS IN THIS LINE, deliberately. The figure is a share of
+ * a reply with no counterfactual behind it, and converting it to tokens would
+ * invite exactly the arithmetic the ledger refuses -- adding an opportunity to
+ * a measurement. It is named as waste still present, not as anything saved.
+ */
+function wasteLine(waste: OutputWaste): string {
+  const band =
+    waste.interval === null
+      ? ''
+      : ` (95% CI ${percent(waste.interval.lowRatio)} to ${percent(
+          waste.interval.highRatio
+        )})`;
+  const requests = `${count(waste.requests)} scanned ${
+    waste.requests === 1 ? 'reply' : 'replies'
+  }`;
+  return (
+    `Output waste (observed, no counterfactual): ${percent(waste.meanRatio)}` +
+    `${band} of the average reply repeats text the model had already been ` +
+    `shown, over ${requests}. Not a saving -- this is the waste still there ` +
+    'to attack.'
+  );
+}
+
+function percent(ratio: number): string {
+  return `${(ratio * 100).toFixed(1)}%`;
 }
 
 /** One tier, or '' when the tier saw nothing and has nothing to report. */

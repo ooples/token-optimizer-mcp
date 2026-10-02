@@ -35,6 +35,7 @@ import {
   mergeOutputLedger,
   modelFamily,
   observe,
+  observedWaste,
   pooledVariance,
   recordBaseline,
   recordOutput,
@@ -373,5 +374,80 @@ describe('tier 3: waste with no counterfactual in it at all', () => {
 
   it('is insensitive to how the two sides were whitespaced', () => {
     expect(echoRatio('a  b\n c\td', 'a b c d', 2)).toBe(1);
+  });
+});
+
+describe('the waste tier, averaged over the replies that were scanned', () => {
+  const accum = (values: readonly number[]) => {
+    const made = emptyAccum();
+    for (const value of values) observe(made, value);
+    return made;
+  };
+
+  it('reports the mean share and a band around it', () => {
+    const waste = observedWaste(accum([0.2, 0.4]));
+    expect(waste?.evidence).toBe(OUTPUT_EVIDENCE.ObservedWaste);
+    expect(waste?.meanRatio).toBeCloseTo(0.3, 10);
+    expect(waste?.requests).toBe(2);
+    // Sample variance of [0.2, 0.4] is 0.02; the standard error of the mean is
+    // sqrt(0.02/2) = 0.1, so the band is 0.3 +/- 1.96 * 0.1 -- clamped at 0.
+    expect(waste?.interval?.lowRatio).toBeCloseTo(0.104, 3);
+    expect(waste?.interval?.highRatio).toBeCloseTo(0.496, 3);
+  });
+
+  it('clamps the band to the unit interval it is a share of', () => {
+    // A mean near 1 with real spread puts the normal-approximation upper bound
+    // past 1, and a printed 112% would read as an arithmetic error rather than
+    // as the approximation being coarse at the edge.
+    const waste = observedWaste(accum([0.9, 1, 1, 1]));
+    expect(waste?.interval?.highRatio).toBe(1);
+    const low = observedWaste(accum([0, 0, 0, 0.1]));
+    expect(low?.interval?.lowRatio).toBe(0);
+    // POSITIVE CONTROL: an interior mean keeps both bounds strictly inside, so
+    // the clamp is not simply pinning every band to 0 and 1.
+    const middle = observedWaste(accum([0.4, 0.5, 0.6]));
+    expect(middle?.interval?.lowRatio).toBeGreaterThan(0);
+    expect(middle?.interval?.highRatio).toBeLessThan(1);
+  });
+
+  it('has no band at all from a single reply', () => {
+    const waste = observedWaste(accum([0.42]));
+    expect(waste?.meanRatio).toBe(0.42);
+    expect(waste?.interval).toBeNull();
+  });
+
+  it('reports nothing when nothing was scanned', () => {
+    expect(observedWaste(emptyAccum())).toBeNull();
+    // POSITIVE CONTROL: a reply that echoed NOTHING is still a scanned reply,
+    // and zero waste is a finding -- not the same as no figure.
+    const none = observedWaste(accum([0, 0]));
+    expect(none).not.toBeNull();
+    expect(none?.meanRatio).toBe(0);
+  });
+
+  it('folds to the same figure a pruned day would have reported', () => {
+    // TO DOUBLE PRECISION, NOT TO THE BIT. The fold is exact in arithmetic --
+    // n, sum and sumsq are additive -- but float addition is not associative, so
+    // summing 0.09 + 0.16 before adding it lands one ulp away from adding each
+    // in turn. The invariant worth pinning is that a prune cannot move a
+    // published figure, and one part in 1e15 cannot.
+    const whole = observedWaste(accum([0.1, 0.2, 0.3, 0.4]));
+    const first = accum([0.1, 0.2]);
+    mergeAccum(first, accum([0.3, 0.4]));
+    const folded = observedWaste(first);
+    expect(folded?.requests).toBe(whole?.requests);
+    expect(folded?.meanRatio).toBeCloseTo(whole?.meanRatio ?? -1, 12);
+    expect(folded?.interval?.lowRatio).toBeCloseTo(
+      whole?.interval?.lowRatio ?? -1,
+      12
+    );
+    expect(folded?.interval?.highRatio).toBeCloseTo(
+      whole?.interval?.highRatio ?? -1,
+      12
+    );
+    // POSITIVE CONTROL: a sample that genuinely differs fails at this
+    // precision, so the agreement above is not the tolerance swallowing it.
+    const different = observedWaste(accum([0.1, 0.2, 0.3, 0.5]));
+    expect(different?.meanRatio).not.toBeCloseTo(whole?.meanRatio ?? -1, 12);
   });
 });

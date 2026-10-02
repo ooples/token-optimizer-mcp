@@ -52,7 +52,10 @@ import {
   recordOutputRow,
   type OutputLedgers,
 } from './output.js';
-import type { OutputSavingsEstimate } from '../proxy/output-savings.js';
+import type {
+  OutputSavingsEstimate,
+  OutputWaste,
+} from '../proxy/output-savings.js';
 import {
   UNATTRIBUTED,
   byName,
@@ -124,6 +127,15 @@ export interface ProxySavingsWindow {
    * must not read "the holdout found no effect".
    */
   readonly outputMeasured: OutputSavingsEstimate | null;
+  /**
+   * Tier 3: the share of a reply the model had already been shown, averaged
+   * over the responses the opt-in scanner read.
+   *
+   * NULL UNLESS THE SCANNER RAN, AND NEVER A TOKEN COUNT. It is output waste
+   * with no counterfactual -- an opportunity, not a saving -- and it is carried
+   * in its own units so nothing downstream can add it to one.
+   */
+  readonly outputWaste: OutputWaste | null;
 }
 
 /**
@@ -233,6 +245,7 @@ function freezeWindow(
     upstreamMsMean: mean(totals.upstreamMs, totals.timedRequests),
     outputEstimated: tiers.estimated,
     outputMeasured: tiers.measured,
+    outputWaste: tiers.waste,
   });
 }
 
