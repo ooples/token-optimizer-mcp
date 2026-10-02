@@ -28,6 +28,7 @@ import {
   isVerifiedExpansionDebit,
   isVerifiedSavingsEntry,
   reportedSavings,
+  declaredInputDisplacement,
   verifiedInputDisplacement,
   verifiedTransportDelta,
   type SavingsClassification,
@@ -130,6 +131,13 @@ export interface RollupSums {
    * and a single column would invite exactly that addition.
    */
   readonly inputDisplacementTokens: number;
+  /**
+   * Tokens a tool DECLARED it displaced, kept apart from the measured figure
+   * above because the evidence behind them differs: one was counted twice by
+   * this process, the other once here and once by the tool.
+   */
+  readonly declaredDisplacementTokens: number;
+  readonly declaredOperations: number;
   /** Rows that carried a measured displacement. */
   readonly displacementOperations: number;
   /** Earliest row in the group, kept so a fold can be audited against rows. */
@@ -247,6 +255,8 @@ export function emptySums(firstTimestamp: string): RollupSums {
     unverifiedReportedSavings: 0,
     inputDisplacementTokens: 0,
     displacementOperations: 0,
+    declaredDisplacementTokens: 0,
+    declaredOperations: 0,
     firstTimestamp,
     lastTimestamp: firstTimestamp,
   };
@@ -281,6 +291,7 @@ export function foldEntry(sums: RollupSums, entry: AnalyticsEntry): RollupSums {
   const isUnverified = !isVerified && !isExpansion && reported > 0;
   const observed = hasObservedReturnedContext(entry);
   const displacement = verifiedInputDisplacement(entry);
+  const declared = declaredInputDisplacement(entry);
   const returned = nonNegative(entry.optimizedTokens);
   const contextPrice = observed ? priceEntryTokens(entry, returned) : null;
   return {
@@ -320,6 +331,8 @@ export function foldEntry(sums: RollupSums, entry: AnalyticsEntry): RollupSums {
     inputDisplacementTokens: sums.inputDisplacementTokens + displacement,
     displacementOperations:
       sums.displacementOperations + (displacement === 0 ? 0 : 1),
+    declaredDisplacementTokens: sums.declaredDisplacementTokens + declared,
+    declaredOperations: sums.declaredOperations + (declared === 0 ? 0 : 1),
     firstTimestamp: earlier ? entry.timestamp : sums.firstTimestamp,
     lastTimestamp: later ? entry.timestamp : sums.lastTimestamp,
   };
@@ -361,6 +374,9 @@ export function mergeSums(into: RollupSums, from: RollupSums): RollupSums {
       into.inputDisplacementTokens + from.inputDisplacementTokens,
     displacementOperations:
       into.displacementOperations + from.displacementOperations,
+    declaredDisplacementTokens:
+      into.declaredDisplacementTokens + from.declaredDisplacementTokens,
+    declaredOperations: into.declaredOperations + from.declaredOperations,
     firstTimestamp:
       Date.parse(into.firstTimestamp) <= Date.parse(from.firstTimestamp)
         ? into.firstTimestamp

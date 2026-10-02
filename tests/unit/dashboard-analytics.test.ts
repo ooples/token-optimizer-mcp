@@ -4,6 +4,7 @@ import {
   type DashboardAnalyticsReport,
 } from '../../src/server/dashboard-analytics.js';
 import { foldEntries } from '../../src/analytics/analytics-rollup.js';
+import { SAVINGS_MEASUREMENT_SCHEMA_VERSION } from '../../src/analytics/savings-classification.js';
 import type { AnalyticsEntry } from '../../src/analytics/analytics-types.js';
 
 function row(overrides: Partial<AnalyticsEntry> = {}): AnalyticsEntry {
@@ -365,6 +366,34 @@ describe('dashboard analytics across a measurement contract change', () => {
     },
   });
 
+  /**
+   * A row credited on the tool's own word for its before, under the contract
+   * that first admitted one.
+   */
+  const declared = row({
+    toolName: 'smart_package_json',
+    originalTokens: 8_100,
+    optimizedTokens: 420,
+    tokensSaved: 7_680,
+    savingsMeasured: true,
+    client: 'claude-code',
+    measurementId: 'measurement-e',
+    timestamp: '2026-08-12T12:09:00.000Z',
+    metadata: {
+      measurementId: 'measurement-e',
+      measurementSchemaVersion: SAVINGS_MEASUREMENT_SCHEMA_VERSION,
+      measurement: 'declared-input-displacement',
+      measurementClass: 'declared-input-displacement',
+      baselineKind: 'declared-displaced-input',
+      declaredBaselineTokens: 8_100,
+      declaredBaselineSource: 'resolved-project-file',
+      baselineBytes: null,
+      returnedBytes: 1_680,
+      bytesSaved: 0,
+      returnedSha256: 'c'.repeat(64),
+    },
+  });
+
   it('labels each contract instead of only publishing their sum', () => {
     /*
      * A DAY ALREADY FOLDED CANNOT BE RE-MEASURED under a newer contract: its
@@ -373,14 +402,27 @@ describe('dashboard analytics across a measurement contract change', () => {
      * could have come from either.
      */
     const report = summarizeDashboardAnalytics(
-      [verified, legacyRow, displaced],
+      [verified, legacyRow, displaced, declared],
       {}
     );
     const contracts = report.summary.contracts;
 
-    // NEWEST FIRST, so the definition in force now leads.
-    expect(contracts.map((c) => c.measurementSchemaVersion)).toEqual([3, 2, 0]);
-    expect(contracts.map((c) => c.current)).toEqual([true, false, false]);
+    // NEWEST FIRST, so the definition in force now leads. Version 3 is the
+    // interesting one: it is no longer current, and its input-displacement
+    // credit survives anyway, because the transport and displacement contracts
+    // did not change when version 4 admitted a declared baseline.
+    expect(contracts.map((c) => c.measurementSchemaVersion)).toEqual([
+      SAVINGS_MEASUREMENT_SCHEMA_VERSION,
+      3,
+      2,
+      0,
+    ]);
+    expect(contracts.map((c) => c.current)).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
 
     const byVersion = new Map(
       contracts.map((c) => [c.measurementSchemaVersion, c])
@@ -393,6 +435,11 @@ describe('dashboard analytics across a measurement contract change', () => {
     // ... and the displacement credit is not a transport credit.
     expect(byVersion.get(3)?.totalTokensSaved).toBe(0);
     expect(byVersion.get(3)?.inputDisplacementTokens).toBe(4_637);
+    // ... and a declared baseline is neither of the two, under any contract.
+    const now = byVersion.get(SAVINGS_MEASUREMENT_SCHEMA_VERSION);
+    expect(now?.totalTokensSaved).toBe(0);
+    expect(now?.inputDisplacementTokens).toBe(0);
+    expect(now?.declaredDisplacementTokens).toBe(7_680);
 
     // POSITIVE CONTROL: the shares account for every operation the headline
     // counted, so a label cannot be dropped without this failing.
@@ -410,13 +457,13 @@ describe('dashboard analytics across a measurement contract change', () => {
      * rows, so a dimension missing from that key can never be recovered -- the
      * attribution would silently collapse into one unlabelled total.
      */
-    const population = [verified, legacyRow, displaced];
+    const population = [verified, legacyRow, displaced, declared];
     const rows = summarizeDashboardAnalytics(population, {});
     const folded = summarizeDashboardAnalytics([], {
       rollups: foldEntries(population),
     });
 
-    expect(rows.summary.contracts).toHaveLength(3);
+    expect(rows.summary.contracts).toHaveLength(4);
     expect(folded.summary.contracts).toEqual(rows.summary.contracts);
   });
 

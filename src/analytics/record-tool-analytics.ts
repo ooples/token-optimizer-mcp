@@ -23,6 +23,7 @@ import {
 } from './savings-classification.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { measureDisplacedInput } from './displaced-input.js';
+import { asDeclaredBaseline } from '../tools/shared/savings.js';
 
 /** MCP tool result shape (the parts we read). */
 interface McpToolResult {
@@ -276,16 +277,42 @@ export async function recordToolAnalytics(
       displaced.tokens > returnedTokens &&
       displaced.bytes > returnedBytes;
 
+    const resultMeta = result._meta?.tokenOptimizer;
+    const transportMeta =
+      resultMeta && typeof resultMeta === 'object'
+        ? (resultMeta as Record<string, unknown>)
+        : {};
+
+    /*
+     * THE ONE CASE THE ARGUMENTS CANNOT REACH, AND THE ONLY THING A TOOL IS
+     * STILL ALLOWED TO SAY ABOUT ITS OWN SAVING.
+     *
+     * `measureDisplacedInput` above counts the files the caller's own arguments
+     * name, which covers nearly the whole fleet. What it cannot do is apply a
+     * tool's private resolution rule -- a directory the tool finds a file under,
+     * an `extends` chain only the tool walks -- so for those the before is
+     * declared by the tool and the after is still measured here.
+     *
+     * TAKEN ONLY WHEN THE RECORDER HAS NOTHING OF ITS OWN. `displaced === null`
+     * rather than `!displacementMeasured`: if the named input WAS read and did
+     * not come out ahead, that is the answer, and a larger declared figure must
+     * not be allowed to overrule a measurement that disagrees with it.
+     */
+    const declaration = asDeclaredBaseline(transportMeta.displacedBaseline);
+    const declarationMeasured =
+      !savingsMeasured &&
+      displaced === null &&
+      declaration !== null &&
+      declaration.baselineTokens > returnedTokens;
+
     const originalTokens = savingsMeasured
       ? baselineTokens
       : displacementMeasured && displaced
         ? displaced.tokens
-        : returnedTokens;
-    const tokensSaved = savingsMeasured
-      ? baselineTokens - returnedTokens
-      : displacementMeasured && displaced
-        ? displaced.tokens - returnedTokens
-        : 0;
+        : declarationMeasured && declaration
+          ? declaration.baselineTokens
+          : returnedTokens;
+    const tokensSaved = originalTokens - returnedTokens;
 
     const sessionId =
       process.env.TOKEN_OPTIMIZER_SESSION_ID ||
@@ -293,11 +320,6 @@ export async function recordToolAnalytics(
         ? ((payload as Record<string, unknown>).sessionId as string | undefined)
         : undefined);
 
-    const resultMeta = result._meta?.tokenOptimizer;
-    const transportMeta =
-      resultMeta && typeof resultMeta === 'object'
-        ? (resultMeta as Record<string, unknown>)
-        : {};
     const measurementId = attribution.operationId || randomUUID();
     const expansionRef =
       typeof transportMeta.expansionRef === 'string'
@@ -322,7 +344,8 @@ export async function recordToolAnalytics(
       originalTokens,
       optimizedTokens: returnedTokens,
       tokensSaved,
-      savingsMeasured: savingsMeasured || displacementMeasured,
+      savingsMeasured:
+        savingsMeasured || displacementMeasured || declarationMeasured,
       measurementId,
       ...(sessionId ? { sessionId } : {}),
       ...(attribution.client ? { client: attribution.client } : {}),
@@ -340,29 +363,54 @@ export async function recordToolAnalytics(
           ? 'materialized-transport-before-after'
           : displacementMeasured
             ? 'measured-input-displacement'
-            : expansionRef && creditedMeasurementId
-              ? 'actual-expansion-transport-debit'
-              : 'actual-return-context-only',
+            : declarationMeasured
+              ? 'declared-input-displacement'
+              : expansionRef && creditedMeasurementId
+                ? 'actual-expansion-transport-debit'
+                : 'actual-return-context-only',
         measurementClass: savingsMeasured
           ? 'verified-transport-reduction'
           : displacementMeasured
             ? 'verified-input-displacement'
-            : expansionRef && creditedMeasurementId
-              ? 'verified-transport-expansion-debit'
-              : 'observed-return-only',
+            : declarationMeasured
+              ? 'declared-input-displacement'
+              : expansionRef && creditedMeasurementId
+                ? 'verified-transport-expansion-debit'
+                : 'observed-return-only',
         baselineKind: savingsMeasured
           ? 'materialized-undisclosed-mcp-result'
           : displacementMeasured
             ? 'measured-displaced-input'
-            : null,
-        baselineBytes:
-          displacementMeasured && displaced ? displaced.bytes : baselineBytes,
+            : declarationMeasured
+              ? 'declared-displaced-input'
+              : null,
+        /*
+         * NULL ON A DECLARED ROW, NOT THE REPLY'S OWN SIZE. A tool declares a
+         * token count and nothing else, so there is no before in bytes to
+         * store -- and a byte figure copied off the after would read exactly
+         * like a measured one while meaning nothing. The classifier refuses a
+         * declared row that carries one.
+         */
+        baselineBytes: declarationMeasured
+          ? null
+          : displacementMeasured && displaced
+            ? displaced.bytes
+            : baselineBytes,
         returnedBytes,
         bytesSaved: savingsMeasured
           ? baselineBytes - returnedBytes
           : displacementMeasured && displaced
             ? displaced.bytes - returnedBytes
             : 0,
+        /** What the tool said it stood in for, and what it counted to say so. */
+        declaredBaselineTokens:
+          declarationMeasured && declaration
+            ? declaration.baselineTokens
+            : null,
+        declaredBaselineSource:
+          declarationMeasured && declaration
+            ? declaration.baselineSource
+            : null,
         baselineSha256: baselineText ? sha256(baselineText) : null,
         /*
          * Recorded whenever it could be measured, including on rows the
@@ -385,7 +433,9 @@ export async function recordToolAnalytics(
         tokenCountMethod: 'tiktoken-gpt-4-compatible-local-estimate',
         tokenCounterModel: resultTokenCounter.model,
         reportedToolSavings:
-          savingsMeasured || displacementMeasured ? null : reported,
+          savingsMeasured || displacementMeasured || declarationMeasured
+            ? null
+            : reported,
         client: attribution.client || 'unattributed',
         clientVersion: attribution.clientVersion || null,
         model: attribution.model || null,

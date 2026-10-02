@@ -539,6 +539,15 @@ function renderAccounting(analytics, balance) {
         : 'no call named a file we could count',
     ],
     [
+      'Declared, not measured',
+      summary?.declaredOperations
+        ? compact(summary.declaredDisplacementTokens)
+        : 'None',
+      summary?.declaredOperations
+        ? `${fmt(summary.declaredOperations)} operations whose baseline only the tool could name; the reply was still counted here`
+        : 'every credited baseline was counted here',
+    ],
+    [
       'Graph memory cost',
       balance ? compact(graphCost) : 'Not measured',
       balance

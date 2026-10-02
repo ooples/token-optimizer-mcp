@@ -14,6 +14,7 @@ import {
   isVerifiedExpansionDebit,
   reportedSavings,
   verifiedTransportDelta,
+  declaredInputDisplacement,
   verifiedInputDisplacement,
   type SavingsClassification,
 } from '../analytics/savings-classification.js';
@@ -114,6 +115,14 @@ export interface DashboardAnalyticsReport {
     inputDisplacementTokens: number;
     displacementOperations: number;
     /**
+     * The same avoidance on weaker evidence: the before was DECLARED by the
+     * tool because the recorder could not reach it from the arguments, and
+     * only the after was counted here. Published as its own figure so a
+     * reader can see how much of a total rests on a tool's own word.
+     */
+    declaredDisplacementTokens: number;
+    declaredOperations: number;
+    /**
      * What each measurement contract in this store contributed.
      *
      * THE BREAK IS SHOWN, NOT SUMMED ACROSS. Every figure above spans every
@@ -130,6 +139,7 @@ export interface DashboardAnalyticsReport {
       verifiedSavingsOperations: number;
       totalTokensSaved: number;
       inputDisplacementTokens: number;
+      declaredDisplacementTokens: number;
       firstSeen: string | null;
       lastSeen: string | null;
     }>;
@@ -244,6 +254,8 @@ interface Split {
    */
   inputDisplacementTokens: number;
   displacementOperations: number;
+  declaredDisplacementTokens: number;
+  declaredOperations: number;
   contextUsd: number;
   pricedContextOperations: number;
   savedUsd: number;
@@ -268,6 +280,8 @@ function emptySplit(): Split {
     unverifiedReportedTokensSaved: 0,
     inputDisplacementTokens: 0,
     displacementOperations: 0,
+    declaredDisplacementTokens: 0,
+    declaredOperations: 0,
     contextUsd: 0,
     pricedContextOperations: 0,
     savedUsd: 0,
@@ -309,6 +323,9 @@ function addRow(split: Split, entry: AnalyticsEntry): void {
   const displacement = verifiedInputDisplacement(entry);
   split.inputDisplacementTokens += displacement;
   split.displacementOperations += displacement === 0 ? 0 : 1;
+  const declared = declaredInputDisplacement(entry);
+  split.declaredDisplacementTokens += declared;
+  split.declaredOperations += declared === 0 ? 0 : 1;
   if (observed) {
     const priced = inputEquivalent(entry, entry.optimizedTokens);
     if (priced !== null) {
@@ -344,6 +361,8 @@ function addFolded(split: Split, rollup: AnalyticsRollup): void {
   split.unverifiedReportedTokensSaved += rollup.unverifiedReportedSavings;
   split.inputDisplacementTokens += rollup.inputDisplacementTokens;
   split.displacementOperations += rollup.displacementOperations;
+  split.declaredDisplacementTokens += rollup.declaredDisplacementTokens;
+  split.declaredOperations += rollup.declaredOperations;
   split.contextUsd += rollup.contextUsd;
   split.pricedContextOperations += rollup.pricedContextOperations;
   split.savedUsd += rollup.costUsd;
@@ -607,6 +626,7 @@ export function summarizeDashboardAnalytics(
         verifiedSavingsOperations: split.verifiedOperations,
         totalTokensSaved: netTokensSaved(split),
         inputDisplacementTokens: split.inputDisplacementTokens,
+        declaredDisplacementTokens: split.declaredDisplacementTokens,
         firstSeen: split.firstSeen,
         lastSeen: split.lastSeen,
       };
@@ -649,6 +669,8 @@ export function summarizeDashboardAnalytics(
       foldedDays,
       inputDisplacementTokens: total.inputDisplacementTokens,
       displacementOperations: total.displacementOperations,
+      declaredDisplacementTokens: total.declaredDisplacementTokens,
+      declaredOperations: total.declaredOperations,
       contracts,
     },
     byAction,

@@ -176,6 +176,8 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
         unverified_reported_savings INTEGER NOT NULL,
         input_displacement_tokens INTEGER NOT NULL DEFAULT 0,
         displacement_operations INTEGER NOT NULL DEFAULT 0,
+        declared_displacement_tokens INTEGER NOT NULL DEFAULT 0,
+        declared_operations INTEGER NOT NULL DEFAULT 0,
         first_timestamp TEXT NOT NULL,
         last_timestamp TEXT NOT NULL,
         PRIMARY KEY (
@@ -556,6 +558,7 @@ const UPSERT_ROLLUP = `
     cost_usd, priced_operations, unpriced_operations,
     verified_operations, expansion_operations, unverified_operations, verified_original_tokens, verified_reported_savings, expansion_optimized_tokens, observed_optimized_tokens, measured_optimized_tokens, context_usd, priced_context_operations, unverified_reported_savings,
     input_displacement_tokens, displacement_operations,
+    declared_displacement_tokens, declared_operations,
     first_timestamp, last_timestamp
   ) VALUES (
     @day, @hookPhase, @toolName, @mcpServer, @client, @clientVersion,
@@ -566,6 +569,7 @@ const UPSERT_ROLLUP = `
     @costUsd, @pricedOperations, @unpricedOperations,
     @verifiedOperations, @expansionOperations, @unverifiedOperations, @verifiedOriginalTokens, @verifiedReportedSavings, @expansionOptimizedTokens, @observedOptimizedTokens, @measuredOptimizedTokens, @contextUsd, @pricedContextOperations, @unverifiedReportedSavings,
     @inputDisplacementTokens, @displacementOperations,
+    @declaredDisplacementTokens, @declaredOperations,
     @firstTimestamp, @lastTimestamp
   )
   ON CONFLICT (
@@ -597,6 +601,8 @@ const UPSERT_ROLLUP = `
     unverified_reported_savings = unverified_reported_savings + excluded.unverified_reported_savings,
     input_displacement_tokens = input_displacement_tokens + excluded.input_displacement_tokens,
     displacement_operations = displacement_operations + excluded.displacement_operations,
+    declared_displacement_tokens = declared_displacement_tokens + excluded.declared_displacement_tokens,
+    declared_operations = declared_operations + excluded.declared_operations,
     first_timestamp = MIN(first_timestamp, excluded.first_timestamp),
     last_timestamp = MAX(last_timestamp, excluded.last_timestamp)
 `;
@@ -640,6 +646,8 @@ function rollupParams(rollup: AnalyticsRollup): Record<string, unknown> {
     unverifiedReportedSavings: rollup.unverifiedReportedSavings,
     inputDisplacementTokens: rollup.inputDisplacementTokens,
     displacementOperations: rollup.displacementOperations,
+    declaredDisplacementTokens: rollup.declaredDisplacementTokens,
+    declaredOperations: rollup.declaredOperations,
     firstTimestamp: rollup.firstTimestamp,
     lastTimestamp: rollup.lastTimestamp,
   };
@@ -697,6 +705,8 @@ function rollupOf(row: Record<string, unknown>): AnalyticsRollup {
     unverifiedReportedSavings: count(row.unverified_reported_savings),
     inputDisplacementTokens: count(row.input_displacement_tokens),
     displacementOperations: count(row.displacement_operations),
+    declaredDisplacementTokens: count(row.declared_displacement_tokens),
+    declaredOperations: count(row.declared_operations),
     firstTimestamp: String(row.first_timestamp),
     lastTimestamp: String(row.last_timestamp),
   };

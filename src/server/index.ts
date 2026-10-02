@@ -108,6 +108,7 @@ import { getMcpServerAnalyticsTool } from '../tools/analytics/get-mcp-server-ana
 import { getExportAnalyticsTool } from '../tools/analytics/export-analytics.js';
 import { getOptimizationReportTool } from '../tools/analytics/get-optimization-report.js';
 import { recordToolAnalytics } from '../analytics/record-tool-analytics.js';
+import { liftDeclaredBaseline } from '../tools/shared/savings.js';
 import { OptimizationStorageTool } from '../tools/optimization-storage-tool.js';
 import { ContextDeltaTool } from '../tools/context-delta-tool.js';
 import { SessionManager } from '../core/session-manager.js';
@@ -447,6 +448,32 @@ function toResultText(result: unknown): string {
     return result;
   }
   return JSON.stringify(result);
+}
+
+/**
+ * THE ONE PLACE A TOOL RESULT BECOMES A RESPONSE.
+ *
+ * Eighty-one dispatch cases each built this same block by hand, which is why
+ * there was nowhere to put a step that applies to all of them. The step is
+ * lifting the declared baseline: a tool that knows what it stood in for hangs
+ * that on `DECLARED_BASELINE_KEY`, and it is taken off here -- before the text
+ * is serialised, so it is never part of what the caller pays for -- and carried
+ * the rest of the way in `_meta`, where the analytics recorder reads it.
+ *
+ * A DECLARATION IS NOT A SAVING. It names a before and carries no arithmetic,
+ * because the after is measured once, at the wire, by the party that holds it.
+ */
+function textResult(result: unknown): {
+  content: Array<{ type: string; text: string }>;
+  _meta?: Record<string, unknown>;
+} {
+  const { payload, declaration } = liftDeclaredBaseline(result);
+  const content = [{ type: 'text', text: toResultText(payload) }];
+  if (!declaration) return { content };
+  return {
+    content,
+    _meta: { tokenOptimizer: { displacedBaseline: declaration } },
+  };
 }
 
 /**
@@ -1325,28 +1352,14 @@ async function handleToolCall(request: {
         const options = args as any;
         const result = await predictiveCache.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'cache_warmup': {
         const options = args as any;
         const result = await cacheWarmup.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       // Code analysis tools
@@ -1357,74 +1370,32 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_dependencies': {
         const result = await runSmartDependencies(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_exports': {
         const result = await runSmartExports(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_imports': {
         const result = await runSmartImports(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_refactor': {
         const result = await runSmartRefactor(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_security': {
         const result = await runSmartSecurity(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_symbols': {
@@ -1434,26 +1405,12 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_typescript': {
         const result = await runSmartTypescript(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_config_read': {
@@ -1463,62 +1420,27 @@ async function handleToolCall(request: {
         // what the schema documents got "Config file not found: undefined".
         const { path: configPath, ...configOptions } = args as any;
         const result = await runSmartConfigRead(configPath, configOptions);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_env': {
         const result = await runSmartEnv(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_package_json': {
         const result = await runSmartPackageJson(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_tsconfig': {
         const result = await runSmartTsconfig(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_pretty': {
         const result = await runSmartPretty(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_process': {
@@ -1528,14 +1450,7 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_service': {
@@ -1545,41 +1460,20 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_ast_grep': {
         const options = args as any;
         const result = await smartAstGrep.grep(options.pattern, options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'cache_analytics': {
         const options = args as any;
         const result = await cacheAnalytics.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'cache_benchmark': {
@@ -1591,473 +1485,228 @@ async function handleToolCall(request: {
           metrics
         );
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'cache_compression': {
         const options = args as any;
         const result = await runCacheCompression(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'cache_invalidation': {
         const options = args as any;
         const result = await cacheInvalidation.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'cache_optimizer': {
         const options = args as any;
         const result = await cacheOptimizer.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'cache_partition': {
         const options = args as any;
         const result = await cachePartition.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'cache_replication': {
         const options = args as any;
         const result = await cacheReplication.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_cache': {
         const options = args as any;
         const result = await smartCache.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_sql': {
         const options = args as any;
         const result = await smartSql.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_schema': {
         const options = args as any;
         const result = await smartSchema.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_api_fetch': {
         const options = args as any;
         const result = await smartApiFetch.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_cache_api': {
         const options = args as any;
         const result = await smartCacheApi.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_database': {
         const options = args as any;
         const result = await smartDatabase.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_graphql': {
         const options = args as any;
         const result = await smartGraphQL.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_migration': {
         const options = args as any;
         const result = await smartMigration.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_orm': {
         const options = args as any;
         const result = await smartOrm.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_rest': {
         const options = args as any;
         const result = await smartRest.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_websocket': {
         const options = args as any;
         const result = await smartWebSocket.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_processes': {
         const options = args as any;
         const result = await smartProcesses.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_network': {
         const options = args as any;
         const result = await smartNetwork.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_logs': {
         const options = args as any;
         const result = await smartLogs.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_lint': {
         const options = args as any;
         const result = await smartLint.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_install': {
         const options = args as any;
         const result = await smartInstall.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_docker': {
         const options = args as any;
         const result = await smartDocker.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_build': {
         const options = args as any;
         const result = await smartBuild.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_system_metrics': {
         const options = args as any;
         const result = await smartSystemMetrics.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_test': {
         const options = args as any;
         const result = await smartTest.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_typecheck': {
         const options = args as any;
         const result = await smartTypeCheck.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_cron': {
         const options = args as any;
         const result = await smartCron.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_user': {
         const options = args as any;
         const result = await smartUser.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_diff': {
         const options = args as SmartDiffOptions;
         const result = await smartDiff.diff(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_branch': {
         const options = args as SmartBranchOptions;
         const result = await smartBranch.branch(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_merge': {
         const options = args as SmartMergeOptions;
         const result = await smartMerge.merge(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_status': {
         const options = args as SmartStatusOptions;
         const result = await smartStatus.status(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_log': {
         const options = args as SmartLogOptions;
         const result = await smartLog.log(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_read': {
         const { path, ...options } = args as any;
         const result = await memoizedSmartRead(path, options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_write': {
@@ -2067,41 +1716,20 @@ async function handleToolCall(request: {
         // entry so the next smart_read/grep/glob reflects the new state
         // instead of waiting for TTL expiry.
         memoRegistry.clearAll();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_edit': {
         const { path, operations, ...options } = args as any;
         const result = await runSmartEdit(path, operations, options);
         memoRegistry.clearAll();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_glob': {
         const { pattern, ...options } = args as any;
         const result = await memoizedSmartGlob(pattern, options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'wiki_write': {
@@ -2109,18 +1737,14 @@ async function handleToolCall(request: {
         // other tool so it carries a schema and a dispatch case, which the
         // reachability suite requires of everything advertised.
         const result = await wikiWrite(args as any);
-        return {
-          content: [{ type: 'text', text: toResultText(result) }],
-        };
+        return textResult(result);
       }
       case 'wiki_read': {
         // The read counterpart to wiki_write. Until this existed the graph had a
         // deliberate write path and no deliberate read path, so a subagent -- which
         // never receives the SessionStart briefing -- could not reach it at all.
         const result = await wikiRead(args as any);
-        return {
-          content: [{ type: 'text', text: toResultText(result) }],
-        };
+        return textResult(result);
       }
       case 'wiki_query': {
         // The general read path: one finding by key, a ranked search over claims,
@@ -2131,9 +1755,7 @@ async function handleToolCall(request: {
         // to call this for detail since injection landed, so a missing dispatch
         // case here is the difference between an escape hatch and a dead end.
         const result = await wikiQuery(args as WikiQueryOptions);
-        return {
-          content: [{ type: 'text', text: toResultText(result) }],
-        };
+        return textResult(result);
       }
       case 'context_page':
       case 'context_receipt_verify':
@@ -2141,265 +1763,123 @@ async function handleToolCall(request: {
       case 'checkpoint_handoff':
       case 'outcome_report': {
         const result = await runUcrTool(name, args);
-        return {
-          content: [{ type: 'text', text: toResultText(result) }],
-        };
+        return textResult(result);
       }
       case 'smart_grep': {
         const { pattern, ...options } = args as any;
         const result = await memoizedSmartGrep(pattern, options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'optimization_storage': {
         const result = optimizationStorage.run(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'context_delta': {
         const result = contextDelta.run(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'alert_manager': {
         const options = args as any;
         const result = await alertManager.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'metric_collector': {
         const options = args as any;
         const result = await metricCollectorTool.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'monitoring_integration': {
         const options = args as any;
         const result = await monitoringIntegration.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'custom_widget': {
         const options = args as any;
         const result = await customWidget.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'data_visualizer': {
         const options = args as any;
         const result = await dataVisualizer.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'health_monitor': {
         const options = args as any;
         const result = await healthMonitor.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'log_dashboard': {
         const options = args as any;
         const result = await logDashboard.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'intelligent-assistant': {
         const options = args as any;
         const result = await runIntelligentAssistant(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'natural-language-query': {
         const options = args as any;
         const result = await runNaturalLanguageQuery(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'pattern-recognition': {
         const options = args as any;
         const result = await runPatternRecognition(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'predictive-analytics': {
         const options = args as any;
         const result = await runPredictiveAnalytics(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'recommendation-engine': {
         const options = args as any;
         const result = await runRecommendationEngine(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart-summarization': {
         const options = args as any;
         const result = await runSmartSummarization(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
       case 'anomaly_explainer': {
         const options = args as unknown as AnomalyExplainerOptions;
         const result = await runAnomalyExplainer(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'knowledge_graph': {
         const options = args as unknown as KnowledgeGraphOptions;
         const result = await knowledgeGraph.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'sentiment_analysis': {
         const options = args as unknown as SentimentAnalysisOptions;
         const result = await sentimentAnalysis.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'smart_workflow': {
         const request = args as unknown as SmartWorkflowRequest;
         const result = await smartWorkflow.run(request);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: toResultText(result),
-            },
-          ],
-        };
+        return textResult(result);
       }
 
       case 'get_hook_analytics': {

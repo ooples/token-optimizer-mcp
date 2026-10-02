@@ -165,6 +165,11 @@ export async function discloseResult(
       _meta: {
         ...(result._meta || {}),
         tokenOptimizer: {
+          // SPREAD, NOT REPLACED. A tool's declared baseline arrives on this
+          // same key, and overwriting the object dropped it for exactly the
+          // tools whose reply disclosure chose to trim -- the ones with the
+          // largest before to declare.
+          ...(result._meta?.tokenOptimizer || {}),
           disclosureRef: ref,
           disclosureMode: out.mode,
         },
