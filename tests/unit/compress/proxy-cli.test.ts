@@ -143,6 +143,22 @@ const stop = async (child: ChildProcessWithoutNullStreams): Promise<void> => {
   await once(child, 'exit');
 };
 
+/**
+ * Waits for the banner, because `start` resolves on the first STDOUT line and the
+ * banner goes to the other pipe -- so asserting straight away races two streams
+ * and reads an empty string, which `not.toContain` would happily accept.
+ */
+const settled = async (stderr: () => string): Promise<string> => {
+  for (
+    let waited = 0;
+    waited < 60 && !stderr().includes('listening on');
+    waited++
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return stderr();
+};
+
 describe('the proxy command-line entrypoint', () => {
   const running: ChildProcessWithoutNullStreams[] = [];
   const servers: Server[] = [];
@@ -380,6 +396,72 @@ describe('the proxy command-line entrypoint', () => {
     running.push(child);
 
     expect(url).toBe(`http://127.0.0.1:${wanted}`);
+  });
+  /*
+   * THE POSTURE DISCLOSURE, SPAWNED, because the promise it makes is about a
+   * stream an operator is watching. `postureNotice` can be unit-tested into a
+   * string all day; what matters is that the string reaches stderr of the process
+   * a user actually starts, every time, and never stdout -- a launcher reads
+   * stdout for the URL and a second line there would break it.
+   */
+  it('discloses on stderr what a posture turned on, and keeps stdout to the URL', async () => {
+    const started = await start([], {
+      TOKEN_OPTIMIZER_POSTURE: 'max-lossy',
+      TOKEN_OPTIMIZER_ROLLOUT_CHANNEL: 'canary',
+    });
+    running.push(started.child);
+
+    const banner = await settled(started.stderr);
+    expect(banner).toContain('POSTURE max-lossy');
+    // Every feature named by its own switch, so the line answers "how do I turn
+    // this off" without sending anyone to the docs.
+    expect(banner).toContain('ON: drop_thinking');
+    expect(banner).toContain('TOKEN_OPTIMIZER_PROXY_DROP_THINKING=0');
+    expect(banner).toContain('Unset TOKEN_OPTIMIZER_POSTURE');
+    // Exactly one line on stdout, still. The disclosure must not have leaked
+    // into the stream a launcher parses.
+    expect(started.stdout().trim()).toBe(started.url);
+  });
+
+  it('takes the posture as a flag too, and names it in --help', async () => {
+    // THE FLAG PATH IS ITS OWN WIRE. The environment reaches `postureFromEnv`
+    // inside `startProxy`; a flag has to travel through `parseArgs` and the
+    // options object, and nothing above would notice if that argument were
+    // dropped on the way.
+    const started = await start(['--posture', 'lean']);
+    running.push(started.child);
+    expect(await settled(started.stderr)).toContain('POSTURE lean');
+
+    // ON STDERR, like the rest of the usage text: stdout is the URL and nothing
+    // else, which is the contract a launcher parses.
+    const help = await runToExit(['--help']);
+    expect(help.stderr).toContain('--posture NAME');
+    // Every shipped name listed, so --help is where an operator learns them.
+    expect(help.stderr).toContain('max-lossy');
+    expect(help.stdout).toBe('');
+  });
+
+  it('says a posture name it does not know rather than running defaults quietly', async () => {
+    const started = await start([], { TOKEN_OPTIMIZER_POSTURE: 'maximum' });
+    running.push(started.child);
+
+    const banner = await settled(started.stderr);
+    expect(banner).toContain('UNKNOWN POSTURE "maximum"');
+    expect(banner).toContain('max-lossy');
+    // POSITIVE CONTROL: the proxy still came up, because the only thing this
+    // file fails loudly on is a cleartext upstream.
+    expect(started.url).toContain('http://127.0.0.1:');
+  });
+
+  it('prints no posture line at all when none was named', async () => {
+    const started = await start([], { TOKEN_OPTIMIZER_POSTURE: '' });
+    running.push(started.child);
+
+    const banner = await settled(started.stderr);
+    expect(banner).not.toContain('POSTURE');
+    // The control: the banner did print, so the absence above is the posture's
+    // and not an empty stderr.
+    expect(banner).toContain('token-optimizer proxy listening on');
   });
 });
 

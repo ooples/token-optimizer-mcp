@@ -27,6 +27,7 @@ import {
   resolveRollout,
 } from '../../../src/rollout/resolve.js';
 import { RolloutChannel } from '../../../src/rollout/channel.js';
+import { POSTURE_ENV } from '../../../src/proxy/posture.js';
 
 /** A run with nothing inherited from the box this is running on. */
 function run(args: readonly string[], extra: Record<string, string> = {}) {
@@ -282,5 +283,49 @@ describe('main', () => {
     await expect(r.code).resolves.toBe(2);
     expect(r.text()).toContain('unknown option --nope');
     expect(r.text()).toContain('--strict');
+  });
+});
+
+describe('a posture the environment names', () => {
+  it('is resolved here, so the inspector does not under-report the proxy', async () => {
+    const ran = run([], {
+      [POSTURE_ENV]: 'max-lossy',
+      [CHANNEL_ENV]: RolloutChannel.Canary,
+    });
+    expect(await ran.code).toBe(0);
+    const text = ran.text();
+    expect(text).toContain('posture max-lossy');
+    expect(text).toContain(FeatureName.DropThinking);
+    // THE CONTROL, AND IT IS THE WHOLE POINT. Without the posture the same
+    // channel reports nothing requested, so the line above is the posture being
+    // interpreted rather than a canary default.
+    const bare = run([], { [CHANNEL_ENV]: RolloutChannel.Canary });
+    expect(await bare.code).toBe(0);
+    expect(bare.text()).not.toContain('posture');
+  });
+
+  it('names a posture it does not know instead of printing a plain default', async () => {
+    const ran = run([], { [POSTURE_ENV]: 'maximum' });
+    expect(await ran.code).toBe(0);
+    expect(ran.text()).toContain('is not a posture this version knows');
+    // The control: a known name is not reported as unknown.
+    expect(run([], { [POSTURE_ENV]: 'lean' }).text()).not.toContain(
+      'not a posture'
+    );
+  });
+
+  it('leaves the environment it was handed untouched', async () => {
+    const handed: NodeJS.ProcessEnv = { [POSTURE_ENV]: 'max-lossy' };
+    const written: string[] = [];
+    await main([], {
+      env: handed,
+      write: (text: string) => void written.push(text),
+    });
+    // AN INSPECTOR THAT SEEDED ITS CALLER'S ENVIRONMENT would leave a resolved
+    // posture behind for whatever ran next in the same process.
+    expect(Object.keys(handed)).toEqual([POSTURE_ENV]);
+    // The control: it did resolve the posture, so the absence above is a copy
+    // being used and not a posture that was ignored.
+    expect(written.join('')).toContain('posture max-lossy');
   });
 });
