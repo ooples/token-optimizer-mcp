@@ -119,7 +119,8 @@ test('a clean stop writes the lines it still owed, with no help from the caller'
       upstream.listen(0, '127.0.0.1', resolve)
     );
     const address = upstream.address();
-    if (!address || typeof address === 'string') throw Error('No upstream port');
+    if (!address || typeof address === 'string')
+      throw Error('No upstream port');
     proxy = await startProxy({
       port: 0,
       upstream: `http://127.0.0.1:${address.port}`,
