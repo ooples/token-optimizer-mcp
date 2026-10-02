@@ -21,7 +21,6 @@ import {
 } from './smart-complexity.js';
 import { decodeTable, encodeTable, type Table } from '../shared/table.js';
 import { displayPath } from '../shared/report-shape.js';
-import { measured } from '../shared/savings.js';
 
 export interface SmartRefactorOptions {
   filePath?: string;
@@ -136,27 +135,17 @@ export interface SmartRefactorResult {
   suggestions: Table;
   /** Per-type advice, keyed by `type`, referenced by the rows above. */
   guidance: Record<string, RefactorGuidance>;
-  metrics: {
-    /** Cost of reading the file this tool analysed, which is what it replaces. */
-    originalTokens: number;
-    /**
-     * Cost of this response as it is sent, minus this metrics block.
-     *
-     * It used to be the length of a private compactResult() summary -- four
-     * abbreviated fields per suggestion -- that no caller ever received,
-     * measured against JSON.stringify(result, null, 2), whose indentation no
-     * caller receives either. Neither side was the thing being reported on.
-     */
-    compactedTokens: number;
-    /** Signed: a response costing more than the file reports a negative. */
-    reductionPercentage: number;
-  };
+  // NO metrics FIELD, DELIBERATELY. The after half was never knowable here:
+  // the text a caller is billed for is assembled from this object after it is
+  // returned, so a count taken inside the tool describes a different artifact
+  // than the one that was sent. It is counted once now, at the wire. The
+  // before half is the file named in the arguments, which the recorder reads
+  // for itself, so there is nothing left for this reply to assert.
 }
 
 export class SmartRefactorTool {
   private cache: CacheEngine;
   private metrics: MetricsCollector;
-  private tokenCounter: TokenCounter;
   private cacheNamespace = 'smart_refactor';
   private projectRoot: string;
   private complexityTool: SmartComplexityTool;
@@ -168,7 +157,6 @@ export class SmartRefactorTool {
     projectRoot?: string
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
     this.complexityTool = getSmartComplexityTool(cache, tokenCounter, metrics);
@@ -235,8 +223,6 @@ export class SmartRefactorTool {
           operation: 'smart_refactor',
           duration: Date.now() - startTime,
           cacheHit: true,
-          inputTokens: cached.metrics.originalTokens,
-          cachedTokens: cached.metrics.compactedTokens,
           success: true,
         });
         return cached;
@@ -330,41 +316,18 @@ export class SmartRefactorTool {
       },
       suggestions: encodeTable(rows as unknown as Record<string, unknown>[]),
       guidance,
-      metrics: {
-        originalTokens: 0,
-        compactedTokens: 0,
-        reductionPercentage: 0,
-      },
     };
-
-    // THE SOURCE IS THE BASELINE, AND THE RESPONSE IS COUNTED AS IT IS SENT.
-    // A caller reaches for this tool instead of reading the file and finding
-    // the refactorings itself, so the file is what the saving is against. The
-    // metrics block itself is excluded because it reports on the rest, and
-    // counting it would make the figure depend on its own digits.
-    const { metrics: _placeholder, ...served } = result;
-    const savings = measured(
-      this.tokenCounter.count(content).tokens,
-      this.tokenCounter.count(JSON.stringify(served)).tokens
-    );
-    result.metrics.originalTokens = savings.originalTokenCount;
-    result.metrics.compactedTokens = savings.tokenCount;
-    result.metrics.reductionPercentage = parseFloat(
-      ((savings.tokensSaved / (savings.originalTokenCount || 1)) * 100).toFixed(
-        2
-      )
-    );
 
     // Cache result
     this.cacheResult(cacheKey, result);
 
-    // Record metrics
+    // NO TOKEN FIGURES HERE EITHER. These two fields fed cache_analytics a
+    // savings total built entirely from tool self-claims, in parallel with the
+    // one the recorder measures. One measurement, one place.
     this.metrics.record({
       operation: 'smart_refactor',
       duration: Date.now() - startTime,
       cacheHit: false,
-      inputTokens: result.metrics.originalTokens,
-      cachedTokens: result.metrics.compactedTokens,
       success: true,
     });
 

@@ -14,7 +14,6 @@ import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { displayPath } from '../shared/report-shape.js';
-import { measured } from '../shared/savings.js';
 import { encodeTable, type Table } from '../shared/table.js';
 
 /**
@@ -107,46 +106,35 @@ export interface SmartComplexityResult {
   // 133 to 139 tokens a copy. summary.totalComplexity is the one that stays,
   // because it sits with the rest of the file-level answer.
   recommendations: string[];
-  metrics: {
-    /** Tokens the source file itself costs, which is what reading it would cost. */
-    originalTokens: number;
-    /**
-     * Tokens of this response as it is sent, not counting this metrics block.
-     *
-     * This used to be the size of a SEPARATE seven-field summary that the tool
-     * built solely to be counted and then discarded -- never the response, and
-     * never sent to anyone. Against an equally invented baseline (the response
-     * pretty-printed at indent 2, another shape nobody receives) it published
-     * a 95.85% reduction on a file where the real response cost 44% MORE than
-     * reading the source.
-     */
-    compactedTokens: number;
-    /**
-     * (originalTokens - compactedTokens) / originalTokens, as a percentage.
-     *
-     * NEGATIVE when this response costs more than the file it analysed, which
-     * is reported rather than clamped: on a small file with many small
-     * functions, per-function metrics genuinely cost more than the code.
-     */
-    reductionPercentage: number;
-  };
+  // NO metrics FIELD, DELIBERATELY, AND NO SAVING STATED ANYWHERE IN A REPLY.
+  // This tool used to publish originalTokens, compactedTokens and a reduction
+  // percentage computed from them. Both halves were guesses about a reply the
+  // tool cannot see: the text a caller is charged for is built after this
+  // object is returned, out of this object plus a report and its metadata, so
+  // no figure counted in here is the figure that was sent. The after is now
+  // counted once, at the wire, by the party that holds the bytes; the before
+  // is the file named in the arguments, which the recorder reads for itself.
+  // Nothing is left for the tool to say, so it says nothing -- and the three
+  // fields' own digits stop being part of what the caller pays for.
 }
 
 export class SmartComplexityTool {
   private cache: CacheEngine;
   private metrics: MetricsCollector;
-  private tokenCounter: TokenCounter;
   private cacheNamespace = 'smart_complexity';
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED, which is the point: this tool no longer counts
+    // tokens, because the only thing it was counting them for was a saving it
+    // was not in a position to measure. The parameter stays so that every
+    // analysis tool is still built by the same three-argument factory call.
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
@@ -208,8 +196,6 @@ export class SmartComplexityTool {
           operation: 'smart_complexity',
           duration: Date.now() - startTime,
           cacheHit: true,
-          inputTokens: cached.metrics.originalTokens,
-          cachedTokens: cached.metrics.compactedTokens,
           success: true,
         });
         return cached;
@@ -279,48 +265,19 @@ export class SmartComplexityTool {
       },
       functions: encodeTable(functions as unknown as Record<string, unknown>[]),
       recommendations,
-      metrics: {
-        originalTokens: 0,
-        compactedTokens: 0,
-        reductionPercentage: 0,
-      },
-    };
-
-    // THE SOURCE IS THE BASELINE, AND THE RESPONSE IS COUNTED AS IT IS SENT.
-    //
-    // Both figures used to be invented. The baseline was this same result
-    // pretty-printed at indent 2 -- a shape no caller ever receives, inflated
-    // by its own indentation -- and the treatment was a seven-field summary
-    // built by a private compactResult() helper whose only caller was this
-    // count, so the tool was comparing two artifacts it never sent and
-    // publishing the difference as its saving. What this tool actually
-    // replaces is reading the file, so that is the baseline.
-    const originalTokens = this.tokenCounter.count(content).tokens;
-    // Counted without the metrics block, so the number is not trying to
-    // account for its own digits.
-    const { metrics: _placeholder, ...served } = result;
-    const compactedTokens = this.tokenCounter.count(
-      JSON.stringify(served)
-    ).tokens;
-    const savings = measured(originalTokens, compactedTokens);
-    result.metrics = {
-      originalTokens: savings.originalTokenCount,
-      compactedTokens: savings.tokenCount,
-      reductionPercentage: round(
-        (savings.tokensSaved / (savings.originalTokenCount || 1)) * 100
-      ),
     };
 
     // Cache result
     this.cacheResult(cacheKey, result);
 
-    // Record metrics
+    // NO TOKEN FIGURES ON THIS RECORD EITHER. inputTokens and cachedTokens
+    // were the two halves of the deleted claim, and cache_analytics sums them
+    // into a second savings total that nothing measured. The duration, the
+    // cache outcome and the success are things this tool genuinely observed.
     this.metrics.record({
       operation: 'smart_complexity',
       duration: Date.now() - startTime,
       cacheHit: false,
-      inputTokens: result.metrics.originalTokens,
-      cachedTokens: result.metrics.compactedTokens,
       success: true,
     });
 

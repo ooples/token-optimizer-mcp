@@ -102,14 +102,14 @@ export interface SmartSymbolsResult {
     symbols: string[];
   }>;
 
-  /**
-   * Token reduction metrics
-   */
-  metrics: {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercentage: number;
-  };
+  // NO metrics FIELD, DELIBERATELY. The block that stood here was arithmetic
+  // over constants: a hundred bytes assumed per symbol for the "original", a
+  // flat two hundred for a "compacted" summary, both divided by four to call
+  // themselves tokens. No file was read for either figure and no response was
+  // measured, so the percentage it published was a property of the symbol
+  // count alone. Both halves are now the business of the party that holds the
+  // bytes -- the before is the file named in the arguments, read by the
+  // recorder, and the after is the reply, counted once at the wire.
 }
 
 export class SmartSymbolsTool {
@@ -174,9 +174,6 @@ export class SmartSymbolsTool {
           duration: Date.now() - startTime,
           success: true,
           cacheHit: true,
-          inputTokens: cached.metrics.originalTokens,
-          savedTokens:
-            cached.metrics.originalTokens - cached.metrics.compactedTokens,
         });
 
         return cached;
@@ -228,21 +225,19 @@ export class SmartSymbolsTool {
       },
       symbols,
       imports,
-      metrics: this.calculateMetrics(symbols, imports),
     };
 
     // Cache the result
     this.cacheResult(cacheKey, result);
 
-    // Record metrics
+    // NO TOKEN FIGURES ON THE RECORD. savedTokens was the difference of two
+    // assumed constants, and cache_analytics summed it into a savings total
+    // that no measurement stood behind.
     this.metrics.record({
       operation: 'smart_symbols',
       duration,
       success: true,
       cacheHit: false,
-      inputTokens: result.metrics.originalTokens,
-      savedTokens:
-        result.metrics.originalTokens - result.metrics.compactedTokens,
     });
 
     return result;
@@ -573,49 +568,6 @@ export class SmartSymbolsTool {
   }
 
   /**
-   * Calculate token reduction metrics
-   */
-  private calculateMetrics(
-    symbols: SymbolInfo[],
-    imports?: Array<{ module: string; symbols: string[] }>
-  ): {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercentage: number;
-  } {
-    // Original: Full symbol details with types, docs, references
-    let originalSize = 0;
-    symbols.forEach((sym) => {
-      originalSize += 100; // Base symbol info
-      originalSize += sym.type?.length || 0;
-      originalSize += sym.documentation?.length || 0;
-      originalSize += 20; // Location, scope, etc.
-    });
-
-    if (imports) {
-      imports.forEach((imp) => {
-        originalSize += 50 + imp.symbols.join(', ').length;
-      });
-    }
-
-    // Compacted: Summary + symbol names only
-    const summarySize = 200;
-    const symbolListSize = symbols.map((s) => s.name).join(', ').length;
-    const compactedSize = summarySize + symbolListSize;
-
-    const originalTokens = Math.ceil(originalSize / 4);
-    const compactedTokens = Math.ceil(compactedSize / 4);
-
-    return {
-      originalTokens,
-      compactedTokens,
-      reductionPercentage: Math.round(
-        ((originalTokens - compactedTokens) / originalTokens) * 100
-      ),
-    };
-  }
-
-  /**
    * Generate cache key
    */
   private async generateCacheKey(
@@ -786,12 +738,6 @@ export async function runSmartSymbols(
       });
       output += '\n';
     }
-
-    // Metrics
-    output += `Token Reduction:\n`;
-    output += `  Original: ${result.metrics.originalTokens} tokens\n`;
-    output += `  Compacted: ${result.metrics.compactedTokens} tokens\n`;
-    output += `  Reduction: ${result.metrics.reductionPercentage}%\n`;
 
     return output;
   } finally {
