@@ -124,6 +124,89 @@ describe('proxy token accounting worker (built)', () => {
     expect(Date.now() - started).toBeLessThan(30_000);
   });
 
+  it('counts the prompt a deferred request becomes, not the body it sent', () => {
+    // THE DEFAULT CONFIGURATION, MEASURED WRONG. Tool deferral marks schemas
+    // `defer_loading: true` and prepends a search tool, so the request GROWS on
+    // the wire while the prompt the provider assembles from it loses most of
+    // its size. Counting the wire therefore filed the largest saving the proxy
+    // makes as an expansion debit -- measured at -194 tokens on a 40-tool
+    // request whose prompt-level saving is +6284 -- and this is the only place
+    // it can be seen, because it is a claim about which BODY was counted and
+    // the unit suites have no counter to ask.
+    const out = inFreshProcess(`
+      const http = await import('node:http');
+      const fs = await import('node:fs');
+      const os = await import('node:os');
+      const path = await import('node:path');
+      const { startProxy } = await import(${JSON.stringify(PROXY)});
+
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-defer-'));
+      const ledger = path.join(dir, 'ledger.jsonl');
+      process.env.TOKEN_OPTIMIZER_PROXY_ACCOUNTING = ledger;
+
+      const upstream = http.createServer((req, res) => {
+        req.on('data', () => {});
+        req.on('end', () => {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ usage: { input_tokens: 941, output_tokens: 2 } }));
+        });
+      });
+      await new Promise((r) => upstream.listen(0, '127.0.0.1', r));
+      const proxy = await startProxy({
+        port: 0,
+        upstream: 'http://127.0.0.1:' + upstream.address().port,
+        knowledge: false,
+      });
+      // VERBOSE SCHEMAS, because deferral only defers what is worth deferring
+      // and a request of forty one-line tools is not a request anyone sends.
+      const tools = Array.from({ length: 40 }, (unused, i) => ({
+        name: 'tool_' + i,
+        description:
+          'Operates on resource ' + i + '. Takes a path and a mode and reports ' +
+          'what it did, at some length, because a real tool schema is prose.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'The file to operate on.' },
+            mode: { type: 'string', description: 'One of read, write, append.' },
+          },
+          required: ['path'],
+        },
+      }));
+      const body = JSON.stringify({
+        model: 'claude-opus-4-20250514',
+        messages: [{ role: 'user', content: 'rename the handler in server.ts' }],
+        tools,
+      });
+      const res = await fetch('http://127.0.0.1:' + proxy.server.address().port + '/v1/messages', {
+        method: 'POST',
+        body,
+        headers: { 'content-type': 'application/json' },
+      });
+      await res.text();
+      for (let i = 0; i < 200 && !fs.existsSync(ledger); i += 1) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      await new Promise((r) => proxy.server.close(r));
+      await new Promise((r) => upstream.close(r));
+      // ONE REQUEST, ONE ROW, so the whole file is the row and nothing has to
+      // be split out of it.
+      console.log(fs.readFileSync(ledger, 'utf8').trim());
+      fs.rmSync(dir, { recursive: true, force: true });
+    `);
+
+    const row = JSON.parse(out);
+    expect(row.deferredTools).toBeGreaterThan(0);
+    // THE WIRE WENT THE OTHER WAY, in the row's own bytes: we sent more than we
+    // were given. This is the control that makes the counts below a finding
+    // rather than a coincidence -- there is no positive wire delta to read.
+    expect(row.afterBytes).toBeGreaterThan(row.beforeBytes);
+    expect(row.tokens.measured).toBe(true);
+    expect(row.tokens.afterTokens).toBeLessThan(row.tokens.beforeTokens / 2);
+    // AND THE CLASS IT LANDS IN. A debit here is the defect, not a near miss.
+    expect(row.tokens.afterTokens).toBeLessThan(row.tokens.beforeTokens);
+  });
+
   it('puts measured token counts on the proxy ledger row', () => {
     // THE WHOLE WIRE, END TO END. The unit suites inject a backend and so can
     // never see the thread; the proxy suites run from TypeScript, where the

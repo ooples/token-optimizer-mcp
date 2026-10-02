@@ -113,6 +113,15 @@ export function classifyProxySavings(
   if (before === null || after === null) return PROXY_SAVINGS.Uncounted;
   if (after > before) return PROXY_SAVINGS.ExpansionDebit;
   if (after === before) return PROXY_SAVINGS.NoChange;
+  // A DEFERRED ROW IS A REDUCTION WE DO NOT CALIBRATE, and the reason is a bias
+  // with a known direction rather than a doubt. The search tool the proxy
+  // prepends when it defers is a two-field stub that the provider expands into
+  // a full schema server-side, so the prompt the provider billed contains bytes
+  // that were never in the body we counted. Our side therefore reads low by one
+  // schema on exactly these rows, and a calibration column is worth having only
+  // while every gap in it is encoder disagreement. The deferral holdout
+  // measures these rows from the provider's own usage instead.
+  if (record.deferredTools) return PROXY_SAVINGS.Reduction;
   return billedPromptTokens(record.usage) === null
     ? PROXY_SAVINGS.Reduction
     : PROXY_SAVINGS.CalibratedReduction;
@@ -145,7 +154,11 @@ export function proxyTokensBefore(record: AccountingRecord): number {
  *
  * THE INSTRUMENT MEASURING ITSELF. Both numbers describe one identical byte
  * sequence, so any gap between them is encoder disagreement and nothing else:
- * there is no sampling, no modelling and no assumption in it. Summed over a
+ * there is no sampling, no modelling and no assumption in it. That is a claim
+ * about the rows this admits, and it is why it admits so few: a request whose
+ * tools were deferred is billed for a prompt the provider assembled, holding a
+ * search schema we never sent and omitting the schemas we did, so its gap is
+ * not encoder disagreement and `classifyProxySavings` keeps it out. Summed over a
  * window it is the answer to "how far should I trust the column next to this
  * one", which is a question no other savings surface in this product can
  * answer at all.

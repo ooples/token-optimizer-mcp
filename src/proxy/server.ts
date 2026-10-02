@@ -81,11 +81,7 @@ import {
   type WireFormat,
 } from './output-shaper.js';
 import { assignArm, type OutputArm } from './output-savings.js';
-import {
-  createEchoScanner,
-  echoEnabled,
-  extractTextValues,
-} from './echo.js';
+import { createEchoScanner, echoEnabled, extractTextValues } from './echo.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
@@ -1207,12 +1203,80 @@ function scannerFor(body: Buffer): ReturnType<typeof createEchoScanner> {
 }
 
 /** The echo field, or nothing at all when there is no figure to stand behind. */
-function echoFacts(
-  echo: ReturnType<typeof createEchoScanner>
-): { readonly echoRatio?: number } {
+function echoFacts(echo: ReturnType<typeof createEchoScanner>): {
+  readonly echoRatio?: number;
+} {
   if (echo === null) return {};
   const ratio = echo.ratio();
   return ratio === null ? {} : { echoRatio: ratio };
+}
+
+/** The marker tool deferral sets: the one byte sequence worth scanning for. */
+const DEFER_MARKER = 'defer_loading';
+
+/**
+ * The bytes the provider will bill as prompt, which are not the bytes we send.
+ *
+ * DEFERRAL DOES NOT REMOVE A SCHEMA FROM THE REQUEST. It marks the schema
+ * `defer_loading: true` and prepends a search tool, and the PROVIDER is what
+ * declines to place a marked schema in context. So the request on the wire is
+ * LARGER than the one we were given while the prompt it becomes is far smaller:
+ * measured on one 40-tool request, 7228 tokens in, 7422 out, 944 in the prompt.
+ * Counting the wire therefore reported -194 where the truth is +6284 -- not an
+ * imprecision but the wrong SIGN, on a feature that is on by default, and the
+ * row was classified an expansion debit and charged against the headline.
+ *
+ * ONE CORRECTION REACHES FOUR SURFACES. `proxyTransportDelta`,
+ * `classifyProxySavings`, `proxyCalibration` and `priceProxyDelta` each read
+ * `afterTokens` and nothing else, so making the prompt the unit of account at
+ * the point of measurement makes the delta, the class, the calibration and the
+ * price prompt-level together, with no fifth place left reading the wire.
+ *
+ * COUNTED, NOT ESTIMATED. We hold the schemas we marked, so the prompt-side
+ * body is constructed exactly rather than modelled. One thing in it is not ours
+ * to count: the search tool we prepend is a two-field stub the provider expands
+ * into a real schema, so our prompt-side count omits bytes the provider bills
+ * and the delta is an UPPER bound, high by that one schema. The deferral
+ * holdout is what measures the net from the provider's own usage.
+ *
+ * BOTH SIDES, because a client may mark its own tools and `deferTools` passes
+ * those through untouched and uncounted. They were never in the client's prompt
+ * either, so leaving them in the before side would credit us with a saving the
+ * provider was already making.
+ *
+ * NULL MEANS DO NOT COUNT THIS ROW. A body that will not parse, or one carrying
+ * no marker although the summary claims a deferral, leaves the two sides
+ * incomparable -- and the wire delta is not a safe fallback, because the wire
+ * delta is exactly the wrong-signed number this exists to replace. An absent
+ * count classifies the row `uncounted`, which is the truth about it.
+ */
+export function promptSideBody(
+  sent: Buffer,
+  deferredTools?: number
+): Buffer | null {
+  // A BYTE SCAN BEFORE A PARSE. The marker is absent from almost every request
+  // and this runs on all of them, so the cost of being right is one memmem.
+  if (!sent.includes(DEFER_MARKER)) return deferredTools ? null : sent;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(sent.toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== 'object')
+    return deferredTools ? null : sent;
+  const tools = (parsed as { tools?: unknown }).tools;
+  if (!Array.isArray(tools)) return deferredTools ? null : sent;
+  const kept = tools.filter(
+    (tool) =>
+      (tool as { defer_loading?: unknown } | null)?.defer_loading !== true
+  );
+  if (kept.length === tools.length) return deferredTools ? null : sent;
+  try {
+    return Buffer.from(JSON.stringify({ ...parsed, tools: kept }), 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 function forward(
@@ -1758,7 +1822,19 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
       // bodies exist here and only here -- `body` is the request we were given
       // and `next` the one we are about to send, and nobody will ever bill us
       // for the first of them, which is why it has to be counted locally.
-      const counted = trackCount(tokenAccounting.countPair(body, next));
+      // THE PROMPT IS THE UNIT, NOT THE WIRE. `promptSideBody` explains why in
+      // full; the short of it is that deferral moves tool schemas out of the
+      // PROMPT while leaving them on the wire, so a wire count of a deferred
+      // request reports the wrong sign. Null from either side means the two are
+      // not comparable, and the row goes out uncounted rather than wrong: every
+      // surface downstream treats an absent count as `uncounted` and names it,
+      // whereas a wrong count is indistinguishable from a right one.
+      const beforePrompt = promptSideBody(body);
+      const afterPrompt = promptSideBody(next, summary.deferredTools);
+      const counted =
+        beforePrompt === null || afterPrompt === null
+          ? undefined
+          : trackCount(tokenAccounting.countPair(beforePrompt, afterPrompt));
       forward(
         upstream,
         req,

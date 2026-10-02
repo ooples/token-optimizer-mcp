@@ -82,6 +82,30 @@ describe('classifying one proxy ledger row', () => {
     );
   });
 
+  it('keeps a deferred row out of the calibrated class', () => {
+    // THE PROVIDER ASSEMBLED THIS PROMPT, SO WE CANNOT CHECK OUR COUNT AGAINST
+    // IT. The search tool the proxy prepends when it defers is a two-field stub
+    // the provider expands into a full schema server-side, so the billed prompt
+    // holds bytes that were never in the body we counted and our side reads low
+    // by one schema. The row is still a measured reduction -- it is the largest
+    // one the proxy makes -- it just cannot serve as a calibration.
+    const deferred = record({ deferredTools: 37 });
+    expect(classifyProxySavings(deferred)).toBe(PROXY_SAVINGS.Reduction);
+    expect(proxyCalibration(deferred)).toBeNull();
+
+    // THE SAVING SURVIVES THE EXCLUSION. A row kept out of the trust column is
+    // not a row kept out of the headline, and reading this as zero would hand
+    // back exactly the understatement the prompt-level count was built to fix.
+    expect(proxyTransportDelta(deferred)).toBe(750);
+
+    // POSITIVE CONTROL: the identical row without the deferral is calibrated,
+    // so the exclusion is about the field and not about the record.
+    expect(classifyProxySavings(record())).toBe(
+      PROXY_SAVINGS.CalibratedReduction
+    );
+    expect(proxyCalibration(record())).toEqual({ ours: 250, billed: 240 });
+  });
+
   it('names a request we made bigger rather than calling it a saving', () => {
     const grown = record({
       tokens: {
