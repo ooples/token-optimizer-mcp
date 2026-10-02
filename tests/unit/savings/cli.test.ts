@@ -124,11 +124,16 @@ function harness(
 }
 
 describe('parseArguments', () => {
-  it('defaults to ten rows, text output and no help', () => {
+  it('defaults to ten rows, text output, no help and no gate', () => {
     expect(parseArguments([])).toEqual({
       topN: 10,
       format: SAVINGS_FORMAT.Text,
       help: false,
+      // THE GATE'S WINDOW HAS A DEFAULT; THE GATE ITSELF DOES NOT. `minSavings`
+      // is absent, which is what makes this a report rather than a check, and
+      // a default target here would start failing runs nobody asked to gate.
+      window: '7d',
+      requireClients: [],
     });
   });
 
@@ -568,6 +573,148 @@ describe('the ids these fixtures rely on being absent', () => {
     // The positive control: the ids they are contrasted with ARE priced.
     for (const id of ['gpt-5.6-sol', 'claude-opus-5']) {
       expect(MODEL_PRICE_CATALOG.some((row) => row.model === id)).toBe(true);
+    }
+  });
+});
+
+/*
+ * THE GATE, AT THE COMMAND'S OWN BOUNDARY.
+ *
+ * `gate.test.ts` holds the arithmetic and the refusal rules. What can only be
+ * tested here is whether the command carries the verdict out: the status code a
+ * CI job branches on, the verdict reaching each format, and the flags that
+ * would otherwise run no gate at all while exiting 0.
+ */
+describe('the savings gate', () => {
+  it('exits 0 and says PASS when every measured half clears the bar', async () => {
+    const { deps, text } = harness({ entries: [verified()] });
+    expect(await main(['--min-savings', '50'], deps)).toBe(0);
+    expect(text()).toContain('Savings gate: PASS');
+    expect(text()).toContain('Last 7 days, target 50.0%');
+  });
+
+  it('exits 1 and says FAIL when a half is under the bar', async () => {
+    const { deps, text } = harness({ entries: [verified()] });
+    // THE ONLY DIFFERENCE from the case above is the target, so the non-zero
+    // status is the gate working and not the command failing for some other
+    // reason -- which is the whole claim a CI job rests on.
+    expect(await main(['--min-savings', '90'], deps)).toBe(1);
+    expect(text()).toContain('Savings gate: FAIL');
+  });
+
+  it('exits 1 when nothing was measured, rather than passing at zero', async () => {
+    const { deps, text } = harness({ entries: [] });
+    expect(await main(['--min-savings', '1'], deps)).toBe(1);
+    expect(text()).toContain('not measured');
+  });
+
+  it('exits 0 with no gate at all, so a report is still a report', async () => {
+    const { deps, text } = harness({ entries: [] });
+    expect(await main([], deps)).toBe(0);
+    expect(text()).not.toContain('Savings gate');
+  });
+
+  it('carries the verdict into the json, and the status with it', async () => {
+    const { deps, text } = harness({ entries: [verified()] });
+    expect(await main(['--json', '--min-savings', '90'], deps)).toBe(1);
+    const parsed = JSON.parse(text()) as {
+      gate: { passed: boolean; window: string; checks: readonly unknown[] };
+    };
+    expect(parsed.gate.passed).toBe(false);
+    expect(parsed.gate.window).toBe('7d');
+    expect(parsed.gate.checks).toHaveLength(1);
+  });
+
+  it('leaves the csv table alone and carries the verdict as the status', async () => {
+    const { deps, text } = harness({ entries: [verified()] });
+    expect(await main(['--format', 'csv', '--min-savings', '90'], deps)).toBe(
+      1
+    );
+    // A VERDICT IS NOT A ROW. Appending one would break a consumer appending
+    // these files to a series, so the table is unchanged and the code carries
+    // it -- and the header is still the header.
+    expect(text()).not.toContain('Savings gate');
+    expect(text().split('\n')[0]).toContain('source,section');
+  });
+
+  it('reaches the empty-report branch with a verdict, not an exit 0', async () => {
+    // AN ENTRY WITH NO PROVABLE BEFORE-STATE: recorded, so the report is not
+    // the fresh-install text, but nothing the gate can measure either.
+    const { deps, text } = harness({
+      entries: [verified({ metadata: { measurementSchemaVersion: 1 } })],
+    });
+    expect(await main(['--min-savings', '10'], deps)).toBe(1);
+    expect(text()).toContain('No verified MCP savings recorded yet.');
+    expect(text()).toContain('Savings gate: FAIL');
+  });
+
+  it('gates a named client, and fails one that recorded nothing', async () => {
+    const { deps, text } = harness({ entries: [verified()] });
+    expect(
+      await main(
+        ['--min-savings', '50', '--require-client', 'codex', '--window', 'all'],
+        deps
+      )
+    ).toBe(1);
+    expect(text()).toContain('client codex');
+    expect(text()).toContain('All time, target 50.0%');
+    // THE CONTROL: the client that is there passes the identical invocation.
+    const second = harness({ entries: [verified()] });
+    expect(
+      await main(
+        [
+          '--min-savings',
+          '50',
+          '--require-client',
+          'claude-code',
+          '--window',
+          'all',
+        ],
+        second.deps
+      )
+    ).toBe(0);
+  });
+
+  it('refuses a gate flag that would otherwise run no gate', async () => {
+    expect(parseArguments(['--window', '7d'])).toBe(
+      '--window only applies with --min-savings'
+    );
+    expect(parseArguments(['--require-client', 'codex'])).toBe(
+      '--require-client only applies with --min-savings'
+    );
+    expect(parseArguments(['--min-savings'])).toBe(
+      '--min-savings needs a percent from 0 to 100'
+    );
+    for (const bad of ['-1', '101', 'half', '--json']) {
+      expect(parseArguments(['--min-savings', bad])).toBe(
+        '--min-savings needs a percent from 0 to 100'
+      );
+    }
+    expect(parseArguments(['--window', 'weekly', '--min-savings', '5'])).toBe(
+      '--window does not know weekly; it takes today, 7d, 30d, all'
+    );
+    // Positive control: the same flags with good values are accepted.
+    expect(
+      parseArguments([
+        '--min-savings',
+        '12.5',
+        '--window',
+        '30d',
+        '--require-client',
+        'codex',
+      ])
+    ).toMatchObject({
+      minSavings: 12.5,
+      window: '30d',
+      requireClients: ['codex'],
+    });
+  });
+
+  it('offers all three flags in its usage text', async () => {
+    const { deps, text } = harness();
+    expect(await main(['--help'], deps)).toBe(0);
+    for (const flag of ['--min-savings', '--window', '--require-client']) {
+      expect(text()).toContain(flag);
     }
   });
 });

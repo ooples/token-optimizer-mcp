@@ -39,6 +39,14 @@ import {
   renderSavings,
 } from './render.js';
 import { loadProxyInput, PROXY_INPUT, type ProxyInput } from './proxy.js';
+import {
+  GATE_WINDOW,
+  GATE_WINDOWS,
+  evaluateGate,
+  gateJson,
+  renderGate,
+  type GateWindow,
+} from './gate.js';
 import { renderSavingsCsv } from './csv.js';
 
 const DEFAULT_TOP_N = 10;
@@ -61,6 +69,19 @@ export interface Options {
    * dropped half of what the product does is the defect this command had.
    */
   readonly proxyLedger?: string;
+  /**
+   * A percentage every measured half must reach, or undefined for no gate.
+   *
+   * A REPORT AND A GATE ARE TWO DIFFERENT QUESTIONS, which is why this is a
+   * flag and not the default: rendering what happened must not start failing
+   * because a figure moved, and a rollout that needs a bar needs a status code
+   * rather than a table somebody reads.
+   */
+  readonly minSavings?: number;
+  /** The window the gate measures. Only meaningful with `minSavings`. */
+  readonly window: GateWindow;
+  /** Clients that must each have traffic in that window and meet the bar. */
+  readonly requireClients: readonly string[];
 }
 
 /**
@@ -100,6 +121,21 @@ const USAGE = [
   '  --format <name>       text (default), json, or csv',
   '  --json                the same as --format json',
   '  --proxy-ledger <path> read this proxy ledger instead of the configured one',
+  '  --min-savings <pct>   fail unless every measured half reaches this percent',
+  '  --window <name>       which window the gate measures: ' +
+    GATE_WINDOWS.join(' | ') +
+    ' (default 7d)',
+  '  --require-client <n>  this client must have traffic in that window and',
+  '                        meet the bar too; repeat the flag for more. A named',
+  '                        client that recorded nothing is a failure, never a',
+  '                        silent pass.',
+  '',
+  'the gate exits 1 when a check fails. Each measured half is held to the target',
+  'separately rather than blended, because they count different things; a half',
+  'that was never configured is not checked and the verdict says so. A check with',
+  'no measured operations fails -- 0 >= 0 is the one pass nobody wants. Under',
+  '--format csv the table stays measurements only and the verdict is the status',
+  'code alone.',
   '',
   'csv is one flat table of both halves: source and section name the grain, and',
   'an empty cell means a figure this command does not measure at that grain --',
@@ -124,10 +160,27 @@ function positiveInteger(raw: string | undefined): number | null {
   return value > 0 ? value : null;
 }
 
+/**
+ * A percentage between 0 and 100, or null.
+ *
+ * DECIMALS ARE ALLOWED because a target of 12.5% is a real thing to agree on,
+ * and OVER 100 IS REFUSED because no measurement here can reach it -- a gate
+ * set to 150 would fail forever and read as the product being broken.
+ */
+function percentArgument(raw: string | undefined): number | null {
+  if (raw === undefined || raw.startsWith('--')) return null;
+  if (!/^[0-9]+(\.[0-9]+)?$/.test(raw)) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
+}
+
 export function parseArguments(args: readonly string[]): Options | string {
   let topN = DEFAULT_TOP_N;
   let help = false;
   let proxyLedger: string | undefined;
+  let minSavings: number | undefined;
+  let window: GateWindow | undefined;
+  const requireClients: string[] = [];
   /*
    * THE FLAG THAT CHOSE THE FORMAT IS REMEMBERED, NOT JUST THE FORMAT. Two
    * flags asking for two different renderings is a mistake worth naming in the
@@ -170,14 +223,50 @@ export function parseArguments(args: readonly string[]): Options | string {
       if (value === null) return '--proxy-ledger needs a path';
       proxyLedger = value;
       i++;
+    } else if (arg === '--min-savings') {
+      const value = percentArgument(args[i + 1]);
+      if (value === null) return '--min-savings needs a percent from 0 to 100';
+      minSavings = value;
+      i++;
+    } else if (arg === '--window') {
+      const value = valueArgument(args[i + 1]);
+      if (value === null) return '--window needs a name';
+      const named = GATE_WINDOWS.find((candidate) => candidate === value);
+      if (named === undefined) {
+        return `--window does not know ${value}; it takes ${GATE_WINDOWS.join(', ')}`;
+      }
+      window = named;
+      i++;
+    } else if (arg === '--require-client') {
+      const value = valueArgument(args[i + 1]);
+      if (value === null) return '--require-client needs a client name';
+      requireClients.push(value);
+      i++;
     } else {
       return `unknown argument: ${arg}`;
     }
   }
   const settled = format ?? SAVINGS_FORMAT.Text;
-  return proxyLedger === undefined
-    ? { topN, format: settled, help }
-    : { topN, format: settled, help, proxyLedger };
+  // A GATE FLAG WITH NO GATE IS A TYPO, NOT A DEFAULT. Both of these only
+  // narrow a check, so accepting them without --min-savings would run no gate
+  // at all and exit 0 -- the exact outcome a CI job is relying on the flags to
+  // prevent.
+  if (minSavings === undefined && window !== undefined) {
+    return '--window only applies with --min-savings';
+  }
+  if (minSavings === undefined && requireClients.length > 0) {
+    return '--require-client only applies with --min-savings';
+  }
+  const base = {
+    topN,
+    format: settled,
+    help,
+    window: window ?? GATE_WINDOW.SevenDays,
+    requireClients: Object.freeze([...requireClients]),
+  };
+  const withLedger =
+    proxyLedger === undefined ? base : { ...base, proxyLedger };
+  return minSavings === undefined ? withLedger : { ...withLedger, minSavings };
 }
 
 /**
@@ -363,9 +452,39 @@ export async function main(
     now
   );
 
+  /*
+   * THE GATE IS EVALUATED ONCE, FROM THE SAME READ THE REPORT USED. Re-reading
+   * the rows for it would let a write land between the two and publish a table
+   * that disagrees with its own verdict.
+   */
+  const verdict =
+    parsed.minSavings === undefined
+      ? null
+      : evaluateGate(
+          {
+            entries: analytics.entries,
+            rollups: analytics.rollups,
+            proxy,
+            now,
+          },
+          {
+            targetPercent: parsed.minSavings,
+            window: parsed.window,
+            clients: parsed.requireClients,
+          }
+        );
+  const status = verdict === null || verdict.passed ? 0 : 1;
+
   if (parsed.format === SAVINGS_FORMAT.Json) {
-    line(JSON.stringify(savingsJson(report, proxy), null, 2));
-    return 0;
+    const body = savingsJson(report, proxy);
+    line(
+      JSON.stringify(
+        verdict === null ? body : { ...body, gate: gateJson(verdict) },
+        null,
+        2
+      )
+    );
+    return status;
   }
 
   /*
@@ -376,8 +495,11 @@ export async function main(
    * header to stay the header.
    */
   if (parsed.format === SAVINGS_FORMAT.Csv) {
+    // THE TABLE STAYS A TABLE. A verdict is not a measurement at any grain
+    // this file has, and appending it as rows would break every consumer
+    // appending these files to a series. The status code carries it.
     for (const text of renderSavingsCsv(report, proxy)) line(text);
-    return 0;
+    return status;
   }
 
   if (report.eligibleEntries === 0) {
@@ -401,7 +523,8 @@ export async function main(
     }
     line('');
     for (const text of inputLines(report, proxy)) line(text);
-    return 0;
+    if (verdict !== null) for (const text of renderGate(verdict)) line(text);
+    return status;
   }
 
   line(
@@ -411,7 +534,8 @@ export async function main(
       priceTable: operatorPriceTableStatus(),
     })
   );
-  return 0;
+  if (verdict !== null) for (const text of renderGate(verdict)) line(text);
+  return status;
 }
 
 /*

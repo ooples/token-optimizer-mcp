@@ -103,6 +103,17 @@ export interface SavingsGroup {
   readonly name: string;
   readonly operations: number;
   readonly tokensSaved: number;
+  /**
+   * The before-state of the SAME rows `tokensSaved` came from.
+   *
+   * A GROUP CAN BE HELD TO A PERCENTAGE ONLY IF IT CARRIES ITS OWN
+   * DENOMINATOR. Without this field the only honest question to ask of a
+   * client is "did it save anything at all", and a gate built on that would
+   * pass a client whose traffic we barely touched.
+   */
+  readonly tokensBefore: number;
+  /** `tokensSaved` over `tokensBefore`, by the same rule the windows use. */
+  readonly savingsPercent: number;
   readonly costUsd: number | null;
   readonly pricedOperations: number;
   readonly eligibleOperations: number;
@@ -301,32 +312,57 @@ function percent(saved: number, before: number): number {
   return before > 0 ? (saved / before) * 100 : 0;
 }
 
+/**
+ * The rows a dated window covers.
+ *
+ * AN UNPARSEABLE STAMP IS OUT OF EVERY DATED WINDOW, not silently in all of
+ * them: it cannot be placed, and placing it anyway would move a number an
+ * operator reads as a day's work.
+ *
+ * ONE DEFINITION, because both the windows and the savings gate ask this same
+ * question. A gate that filtered rows its own way would eventually hold a
+ * client to a period the report never showed.
+ */
+export function withinWindow(
+  entries: readonly AnalyticsEntry[],
+  since: Date | null
+): readonly AnalyticsEntry[] {
+  if (since === null) return entries;
+  return entries.filter((entry) => {
+    const at = Date.parse(entry.timestamp);
+    return Number.isFinite(at) && at >= since.getTime();
+  });
+}
+
+/**
+ * The folded days a dated window covers.
+ *
+ * A FOLDED DAY IS IN OR OUT WHOLE. Every dated window opens at a local
+ * midnight and a fold never spans two local days, so the day it names is
+ * either entirely inside this window or entirely outside it -- which is what
+ * makes a day the exact grain rather than an approximate one.
+ */
+export function foldedWithin(
+  rollups: readonly AnalyticsRollup[],
+  since: Date | null
+): readonly AnalyticsRollup[] {
+  if (since === null) return rollups;
+  return rollups.filter((folded) => {
+    const start = startOfDayKey(folded.day);
+    return start !== null && start.getTime() >= since.getTime();
+  });
+}
+
 export function summarize(
   entries: readonly AnalyticsEntry[],
   label: string,
   since: Date | null,
   rollups: readonly AnalyticsRollup[] = []
 ): SavingsWindow {
-  const inWindow =
-    since === null
-      ? entries
-      : entries.filter((entry) => {
-          const at = Date.parse(entry.timestamp);
-          // AN UNPARSEABLE STAMP IS OUT OF EVERY DATED WINDOW, not silently in
-          // all of them: it cannot be placed, and placing it anyway would move
-          // a number an operator reads as a day's work.
-          return Number.isFinite(at) && at >= since.getTime();
-        });
-  // A FOLDED DAY IS IN OR OUT WHOLE. Every dated window opens at a local
-  // midnight and a fold never spans two local days, so the day it names is
-  // either entirely inside this window or entirely outside it -- which is what
-  // makes a day the exact grain rather than an approximate one.
-  const foldedInWindow = rollups.filter((folded) => {
-    if (since === null) return true;
-    const start = startOfDayKey(folded.day);
-    return start !== null && start.getTime() >= since.getTime();
-  });
-  const totals = accumulate(inWindow, foldedInWindow);
+  const totals = accumulate(
+    withinWindow(entries, since),
+    foldedWithin(rollups, since)
+  );
   return Object.freeze({
     label,
     since: since === null ? null : since.toISOString(),
@@ -387,6 +423,8 @@ export function groupBy(
         name,
         operations: totals.operations,
         tokensSaved: totals.tokensSaved,
+        tokensBefore: totals.tokensBefore,
+        savingsPercent: percent(totals.tokensSaved, totals.tokensBefore),
         costUsd: totals.costUsd,
         pricedOperations: totals.pricedOperations,
         eligibleOperations: totals.eligibleOperations,
@@ -395,9 +433,7 @@ export function groupBy(
   }
   // Largest saving first, then by name so two equal rows keep a stable order
   // across runs -- a report that reshuffles itself is one nobody can diff.
-  rows.sort(
-    (a, b) => b.tokensSaved - a.tokensSaved || byName(a, b)
-  );
+  rows.sort((a, b) => b.tokensSaved - a.tokensSaved || byName(a, b));
   return Object.freeze(rows);
 }
 

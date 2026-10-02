@@ -132,13 +132,18 @@ function groupRow(
     source,
     section,
     name: group.name,
-    // A GROUP SPANS EVERY WINDOW, so it opens at no instant and carries no
-    // before-state; both cells stay empty rather than borrowing a window's.
+    // A GROUP SPANS EVERY WINDOW, so it opens at no instant and the cell stays
+    // empty rather than borrowing a window's.
     since: null,
     operations: group.operations,
-    tokens_before: null,
+    // THE BEFORE-STATE IS THE GROUP'S OWN, taken from the same rows its saving
+    // came from, so the percentage here is this group's and not a share of a
+    // window's. It is filled because a row that carries a saving with no
+    // denominator cannot be held to a target -- which is what the savings gate
+    // does with it.
+    tokens_before: group.tokensBefore,
     tokens_saved: group.tokensSaved,
-    savings_percent: null,
+    savings_percent: group.savingsPercent,
     cost_usd: group.costUsd,
     priced_operations: group.pricedOperations,
     eligible_operations: group.eligibleOperations,

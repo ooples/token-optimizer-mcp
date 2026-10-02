@@ -417,6 +417,8 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
             name,
             operations: totals.countedRequests,
             tokensSaved: totals.tokensSaved,
+            tokensBefore: totals.tokensBefore,
+            savingsPercent: percent(totals.tokensSaved, totals.tokensBefore),
             costUsd: totals.pricedRequests > 0 ? totals.cost : null,
             pricedOperations: totals.pricedRequests,
             eligibleOperations: totals.countedRequests,

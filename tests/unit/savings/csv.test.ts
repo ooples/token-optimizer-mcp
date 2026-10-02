@@ -169,13 +169,15 @@ describe('the flat table', () => {
     const rows = savingsCsvRows(report, NOT_CONFIGURED);
     const model = rows.find((row) => row.section === CSV_SECTION.ByModel);
     expect(model?.name).toBe('claude-opus-5');
-    // A GROUP SPANS EVERY WINDOW, so it has no opening instant, no
-    // before-state and no percentage -- three empty cells, not three zeros.
+    // A GROUP SPANS EVERY WINDOW, so it has no opening instant -- an empty
+    // cell, not a zero and not a borrowed window's.
     expect(model?.since).toBeNull();
-    expect(model?.tokens_before).toBeNull();
-    expect(model?.savings_percent).toBeNull();
     // THE CONTROL: the figures a group does have are present and non-zero, so
-    // the three nulls above are not simply an unpopulated row.
+    // the null above is not simply an unpopulated row. The before-state is
+    // among them: a group carries the denominator of the same rows its saving
+    // came from, which is what lets a client be held to a percentage.
+    expect(model?.tokens_before).toBe(1000);
+    expect(model?.savings_percent).toBe(60);
     expect(model?.tokens_saved).toBe(600);
     expect(model?.operations).toBe(1);
     const client = rows.find((row) => row.section === CSV_SECTION.ByClient);
