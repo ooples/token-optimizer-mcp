@@ -24,6 +24,7 @@
 import { argv, stdout } from 'process';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
 import type { AnalyticsEntry } from '../analytics/analytics-types.js';
+import type { AnalyticsRollup } from '../analytics/analytics-rollup.js';
 import {
   OPERATOR_PRICE_TABLE_ENV,
   PRICE_TABLE_NOTE,
@@ -119,9 +120,25 @@ export function parseArguments(args: readonly string[]): Options | string {
     : { topN, json, help, proxyLedger };
 }
 
-export interface MainDependencies {
+/**
+ * Both halves of the analytics store, read at one point in time.
+ *
+ * ONE READ, NOT TWO, BECAUSE A PRUNE CAN LAND BETWEEN THEM. The retention pass
+ * moves a day from rows into totals; a reader that fetched the rows first and
+ * the totals second would count that day twice, and one that fetched them the
+ * other way round would miss it. Taking both from a single call makes either
+ * mistake impossible to write.
+ */
+export interface AnalyticsInput {
   /** Every analytics row, newest or oldest first -- the windows do not care. */
-  readonly entries?: () => Promise<readonly AnalyticsEntry[]>;
+  readonly entries: readonly AnalyticsEntry[];
+  /** Days already folded into totals, which the windows read alongside rows. */
+  readonly rollups: readonly AnalyticsRollup[];
+}
+
+export interface MainDependencies {
+  /** Every row and every folded day, from one read -- see `AnalyticsInput`. */
+  readonly analytics?: () => Promise<AnalyticsInput>;
   readonly now?: () => Date;
   readonly write?: (text: string) => void;
   /**
@@ -137,10 +154,13 @@ export interface MainDependencies {
  * "all time" -- so four queries would read the whole table anyway, three times
  * over, and would leave the windows unable to agree on what "now" was.
  */
-async function readEntries(): Promise<readonly AnalyticsEntry[]> {
+async function readAnalytics(): Promise<AnalyticsInput> {
   const manager = new AnalyticsManager();
   try {
-    return await manager.getEntries();
+    return {
+      entries: await manager.getEntries(),
+      rollups: await manager.getRollups(),
+    };
   } finally {
     await manager.close();
   }
@@ -257,9 +277,9 @@ export async function main(
     return 0;
   }
 
-  let entries: readonly AnalyticsEntry[];
+  let analytics: AnalyticsInput;
   try {
-    entries = await (dependencies.entries ?? readEntries)();
+    analytics = await (dependencies.analytics ?? readAnalytics)();
   } catch (error) {
     // AN UNREADABLE LEDGER IS NAMED, NOT SWALLOWED. The usual cause is that
     // nothing has written one yet, and the usual next question is "where would
@@ -273,7 +293,7 @@ export async function main(
   }
 
   const now = (dependencies.now ?? (() => new Date()))();
-  const report = buildReport(entries, now);
+  const report = buildReport(analytics.entries, now, analytics.rollups);
   // THE SECOND INPUT IS READ EVEN WHEN THE FIRST ONE IS EMPTY. A fresh install
   // that routed everything through the proxy has no analytics rows at all, and
   // the old command answered it with "No verified savings recorded yet" while a

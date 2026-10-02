@@ -127,6 +127,23 @@ const INPUT_LABEL_WIDTH = Math.max(MCP_SECTION.length, PROXY_SECTION.length);
  * that an operator can act on say what the action is rather than only that
  * there are no numbers.
  */
+/**
+ * How much of an input came from days that are no longer rows.
+ *
+ * DISCLOSED ON THE INPUT LINE, NOT HIDDEN BEHIND EQUAL TOTALS. The fold keeps
+ * every figure in this report exact, so nothing above this line changes when a
+ * day ages out -- but what can still be *asked* of that day does change: it can
+ * no longer be filtered by session or exported row by row. An operator who
+ * queried a folded day and got nothing back would otherwise have no way to tell
+ * "nothing happened" from "it is a total now".
+ */
+export function foldedNote(operations: number, days: number): string {
+  if (days <= 0 || operations <= 0) return '';
+  return ` (${count(operations)} from ${count(days)} folded ${
+    days === 1 ? 'day' : 'days'
+  })`;
+}
+
 export function inputLines(
   report: SavingsReport,
   proxy: ProxyInput
@@ -138,7 +155,10 @@ export function inputLines(
   } read, ${count(report.eligibleEntries)} measurable`;
   const lines = [
     'Inputs:',
-    `${label(MCP_SECTION)}analytics database -- ${operations}`,
+    `${label(MCP_SECTION)}analytics database -- ${operations}${foldedNote(
+      report.foldedOperations,
+      report.foldedDays
+    )}`,
   ];
   if (proxy.kind === PROXY_INPUT.NotConfigured) {
     lines.push(
@@ -168,7 +188,13 @@ export function inputLines(
           proxyReport.skippedLines === 1 ? 'line' : 'lines'
         } skipped`
       : '';
-  lines.push(`${label(PROXY_SECTION)}${proxy.path} -- ${requests}${skipped}`);
+  const folded = foldedNote(
+    proxyReport.rolledUpRecords,
+    proxyReport.rolledUpDays
+  );
+  lines.push(
+    `${label(PROXY_SECTION)}${proxy.path} -- ${requests}${skipped}${folded}`
+  );
   return lines;
 }
 

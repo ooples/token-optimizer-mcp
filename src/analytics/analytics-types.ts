@@ -2,6 +2,8 @@
  * Type definitions for granular token analytics
  */
 
+import type { AnalyticsRollup } from './analytics-rollup.js';
+
 /**
  * Hook phases where analytics can be tracked
  */
@@ -172,6 +174,15 @@ export interface AnalyticsStorage {
   clear(): Promise<void>;
   /** Get total count of stored entries */
   count(): Promise<number>;
+  /**
+   * Days already folded into totals, which the report reads alongside rows.
+   *
+   * PART OF THE INTERFACE, NOT AN IMPLEMENTATION DETAIL, because a reader that
+   * forgets to ask for these reports less savings than the product earned --
+   * and it reports it without any sign that something is missing, which is the
+   * worst shape a wrong number can take.
+   */
+  getRollups(): Promise<readonly AnalyticsRollup[]>;
   /** Close the storage and flush any pending writes */
   close(): void;
 }

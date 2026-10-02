@@ -13,6 +13,7 @@ import {
 } from '../../../src/savings/proxy.js';
 import type { AccountingRecord } from '../../../src/proxy/accounting.js';
 import type { AnalyticsEntry } from '../../../src/analytics/analytics-types.js';
+import type { AnalyticsRollup } from '../../../src/analytics/analytics-rollup.js';
 import { MODEL_PRICE_CATALOG } from '../../../src/analytics/provider-pricing.js';
 import { OPERATOR_PRICE_TABLE_ENV } from '../../../src/analytics/operator-prices.js';
 
@@ -94,6 +95,7 @@ function proxyRead(
 function harness(
   over: {
     entries?: readonly AnalyticsEntry[];
+    rollups?: readonly AnalyticsRollup[];
     fail?: Error;
     now?: Date;
     proxy?: ProxyInput;
@@ -103,9 +105,9 @@ function harness(
   return {
     text: () => text,
     deps: {
-      entries: async () => {
+      analytics: async () => {
         if (over.fail) throw over.fail;
-        return over.entries ?? [];
+        return { entries: over.entries ?? [], rollups: over.rollups ?? [] };
       },
       now: () => over.now ?? new Date(),
       proxy: async () => over.proxy ?? { kind: PROXY_INPUT.NotConfigured },
@@ -196,9 +198,9 @@ describe('main', () => {
     const { text, deps } = harness();
     const code = await main(['--help'], {
       ...deps,
-      entries: async () => {
+      analytics: async () => {
         asked++;
-        return [];
+        return { entries: [], rollups: [] };
       },
     });
     expect(code).toBe(0);

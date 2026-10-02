@@ -28,6 +28,9 @@ import {
 } from '../analytics/provider-pricing.js';
 import { verifiedTransportDelta } from '../analytics/savings-classification.js';
 import type { AnalyticsEntry } from '../analytics/analytics-types.js';
+// TYPE ONLY, AND IT HAS TO STAY THAT WAY: the fold imports this module for its
+// pricing, so a value import here would close a cycle between the two.
+import type { AnalyticsRollup } from '../analytics/analytics-rollup.js';
 
 /** The group name used for a row that carries no attribution of its own. */
 export const UNATTRIBUTED = '(unattributed)';
@@ -94,6 +97,18 @@ export interface SavingsReport {
   readonly eligibleEntries: number;
   /** Model ids an eligible row named that the catalog has no price for. */
   readonly unpricedModels: readonly string[];
+  /**
+   * How much of the report above came from days that are no longer rows.
+   *
+   * DISCLOSED, BECAUSE IT CHANGES WHAT ELSE CAN BE ASKED. The figures are the
+   * same either way -- that is the point of folding rather than deleting --
+   * but a folded day can no longer be filtered by session or exported row by
+   * row, and an operator who cannot see that a day was folded would read an
+   * empty session query as an empty day.
+   */
+  readonly foldedOperations: number;
+  /** Local days the figures above drew from totals rather than rows. */
+  readonly foldedDays: number;
 }
 
 /**
@@ -177,7 +192,10 @@ export function windowBoundaries(
  * traffic arrived, reading as the compressor getting worse at exactly the
  * moment it was being told less about.
  */
-function accumulate(entries: readonly AnalyticsEntry[]): {
+function accumulate(
+  entries: readonly AnalyticsEntry[],
+  rollups: readonly AnalyticsRollup[] = []
+): {
   operations: number;
   tokensSaved: number;
   tokensBefore: number;
@@ -203,6 +221,19 @@ function accumulate(entries: readonly AnalyticsEntry[]): {
     cost += priced;
     pricedOperations += 1;
   }
+  for (const folded of rollups) {
+    // A FOLDED GROUP IS ALREADY CLASSIFIED AND ALREADY PRICED, so there is
+    // nothing per-row left to decide here: the arithmetic above ran once, at
+    // fold time, on the rows this group replaced. Re-deciding anything would
+    // mean deciding it from a sum, which is the mistake the fold key exists to
+    // make impossible.
+    operations += folded.operations;
+    eligibleOperations += folded.eligibleOperations;
+    tokensSaved += folded.tokensSaved;
+    tokensBefore += folded.tokensBefore;
+    cost += folded.costUsd;
+    pricedOperations += folded.pricedOperations;
+  }
   return {
     operations,
     tokensSaved,
@@ -220,7 +251,8 @@ function percent(saved: number, before: number): number {
 export function summarize(
   entries: readonly AnalyticsEntry[],
   label: string,
-  since: Date | null
+  since: Date | null,
+  rollups: readonly AnalyticsRollup[] = []
 ): SavingsWindow {
   const inWindow =
     since === null
@@ -232,7 +264,16 @@ export function summarize(
           // a number an operator reads as a day's work.
           return Number.isFinite(at) && at >= since.getTime();
         });
-  const totals = accumulate(inWindow);
+  // A FOLDED DAY IS IN OR OUT WHOLE. Every dated window opens at a local
+  // midnight and a fold never spans two local days, so the day it names is
+  // either entirely inside this window or entirely outside it -- which is what
+  // makes a day the exact grain rather than an approximate one.
+  const foldedInWindow = rollups.filter((folded) => {
+    if (since === null) return true;
+    const start = startOfDayKey(folded.day);
+    return start !== null && start.getTime() >= since.getTime();
+  });
+  const totals = accumulate(inWindow, foldedInWindow);
   return Object.freeze({
     label,
     since: since === null ? null : since.toISOString(),
@@ -258,7 +299,11 @@ export function summarize(
  */
 export function groupBy(
   entries: readonly AnalyticsEntry[],
-  key: (entry: AnalyticsEntry) => string
+  key: (entry: AnalyticsEntry) => string,
+  folded: {
+    readonly rollups: readonly AnalyticsRollup[];
+    readonly key: (rollup: AnalyticsRollup) => string;
+  } = { rollups: [], key: () => '' }
 ): readonly SavingsGroup[] {
   const buckets = new Map<string, AnalyticsEntry[]>();
   for (const entry of entries) {
@@ -268,9 +313,22 @@ export function groupBy(
     if (bucket === undefined) buckets.set(name, [entry]);
     else bucket.push(entry);
   }
+  // THE SAME GATE, ON THE FOLDED SIDE. A group whose every row failed the
+  // provenance gate contributed no eligible operations, so it is left out here
+  // exactly as its rows would have been -- otherwise a breakdown would start
+  // listing models at zero the moment their rows aged out.
+  const foldedBuckets = new Map<string, AnalyticsRollup[]>();
+  for (const rollup of folded.rollups) {
+    if (rollup.eligibleOperations === 0) continue;
+    const name = folded.key(rollup).trim() || UNATTRIBUTED;
+    const bucket = foldedBuckets.get(name);
+    if (bucket === undefined) foldedBuckets.set(name, [rollup]);
+    else bucket.push(rollup);
+  }
   const rows: SavingsGroup[] = [];
-  for (const [name, bucket] of buckets) {
-    const totals = accumulate(bucket);
+  for (const name of new Set([...buckets.keys(), ...foldedBuckets.keys()])) {
+    const bucket = buckets.get(name) ?? [];
+    const totals = accumulate(bucket, foldedBuckets.get(name) ?? []);
     rows.push(
       Object.freeze({
         name,
@@ -305,9 +363,17 @@ export function groupBy(
  * one. An absent number can be chased; a fabricated one cannot be detected.
  */
 export function unpricedModels(
-  entries: readonly AnalyticsEntry[]
+  entries: readonly AnalyticsEntry[],
+  rollups: readonly AnalyticsRollup[] = []
 ): readonly string[] {
   const names = new Set<string>();
+  for (const folded of rollups) {
+    // THE COUNT IS WHAT SURVIVES THE FOLD, not the per-row verdict: a group
+    // whose eligible rows all failed to price is exactly a model this note has
+    // to keep naming, and the fold stored how many did.
+    if (folded.unpricedOperations === 0) continue;
+    names.add(folded.model.trim() || UNATTRIBUTED);
+  }
   for (const entry of entries) {
     if (verifiedTransportDelta(entry) === 0) continue;
     if (priceVerifiedDelta(entry) !== null) continue;
@@ -319,26 +385,50 @@ export function unpricedModels(
   return Object.freeze([...names].sort());
 }
 
+/**
+ * The whole report, from live rows and from whatever has been folded away.
+ *
+ * THE FOLDED DAYS ARE PART OF EVERY FIGURE, not a footnote beside them. The
+ * alternative -- rows for the recent window and a note saying older work
+ * existed -- is the failure this policy was written to avoid: a product that
+ * reports less the longer it runs, because the evidence of its own work was
+ * deleted to save a disk.
+ */
 export function buildReport(
   entries: readonly AnalyticsEntry[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  rollups: readonly AnalyticsRollup[] = []
 ): SavingsReport {
+  let foldedOperations = 0;
+  let foldedEligible = 0;
+  const foldedDays = new Set<string>();
+  for (const folded of rollups) {
+    foldedOperations += folded.operations;
+    foldedEligible += folded.eligibleOperations;
+    foldedDays.add(folded.day);
+  }
   return Object.freeze({
     windows: Object.freeze(
       windowBoundaries(now).map((bound) =>
-        summarize(entries, bound.label, bound.since)
+        summarize(entries, bound.label, bound.since, rollups)
       )
     ),
-    byModel: groupBy(entries, (entry) =>
-      String(entry.model || (entry.metadata || {}).model || '')
+    byModel: groupBy(
+      entries,
+      (entry) => String(entry.model || (entry.metadata || {}).model || ''),
+      { rollups, key: (folded) => folded.model }
     ),
-    byClient: groupBy(entries, (entry) =>
-      String(entry.client || (entry.metadata || {}).client || '')
+    byClient: groupBy(
+      entries,
+      (entry) => String(entry.client || (entry.metadata || {}).client || ''),
+      { rollups, key: (folded) => folded.client }
     ),
-    totalEntries: entries.length,
-    eligibleEntries: entries.filter(
-      (entry) => verifiedTransportDelta(entry) !== 0
-    ).length,
-    unpricedModels: unpricedModels(entries),
+    totalEntries: entries.length + foldedOperations,
+    eligibleEntries:
+      entries.filter((entry) => verifiedTransportDelta(entry) !== 0).length +
+      foldedEligible,
+    unpricedModels: unpricedModels(entries, rollups),
+    foldedOperations,
+    foldedDays: foldedDays.size,
   });
 }
