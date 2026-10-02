@@ -22,6 +22,7 @@ import {
   SAVINGS_MEASUREMENT_SCHEMA_VERSION,
 } from './savings-classification.js';
 import { createHash, randomUUID } from 'node:crypto';
+import { measureDisplacedInput } from './displaced-input.js';
 
 /** MCP tool result shape (the parts we read). */
 interface McpToolResult {
@@ -192,7 +193,14 @@ export async function recordToolAnalytics(
     modelSource?: string | null;
     operationId?: string | null;
   } = {},
-  baselineResult: McpToolResult | null = null
+  baselineResult: McpToolResult | null = null,
+  /**
+   * The arguments the caller passed. They name the files this call read on the
+   * caller's behalf, which is the one baseline the recorder could never see:
+   * what reading them yourself would have cost. Absent, the row records only
+   * what it can measure, as before.
+   */
+  callArguments: unknown = null
 ): Promise<void> {
   try {
     if (!result || result.isError) return;
@@ -248,8 +256,36 @@ export async function recordToolAnalytics(
       baselineText !== text &&
       baselineTokens > returnedTokens &&
       baselineBytes > returnedBytes;
-    const originalTokens = savingsMeasured ? baselineTokens : returnedTokens;
-    const tokensSaved = savingsMeasured ? baselineTokens - returnedTokens : 0;
+    /*
+     * THE BASELINE ONLY THE CALLER'S ARGUMENTS KNOW, MEASURED HERE.
+     *
+     * The transport measurement above compares this reply against the same
+     * tool's own undisclosed payload, so it can only ever credit what the
+     * disclosure layer trimmed. It cannot express the claim the product is
+     * actually built on -- that a 300-token answer stood in for reading a
+     * 4,937-token file -- because that baseline lives on disk, not in a
+     * payload. So it is read and counted here, by the same counter that
+     * counted the reply, and the tool's own opinion of the ratio is not
+     * consulted at all.
+     */
+    const displaced = await measureDisplacedInput(callArguments);
+    const displacementMeasured =
+      !savingsMeasured &&
+      displaced !== null &&
+      displaced.sha256 !== sha256(text) &&
+      displaced.tokens > returnedTokens &&
+      displaced.bytes > returnedBytes;
+
+    const originalTokens = savingsMeasured
+      ? baselineTokens
+      : displacementMeasured && displaced
+        ? displaced.tokens
+        : returnedTokens;
+    const tokensSaved = savingsMeasured
+      ? baselineTokens - returnedTokens
+      : displacementMeasured && displaced
+        ? displaced.tokens - returnedTokens
+        : 0;
 
     const sessionId =
       process.env.TOKEN_OPTIMIZER_SESSION_ID ||
@@ -286,7 +322,7 @@ export async function recordToolAnalytics(
       originalTokens,
       optimizedTokens: returnedTokens,
       tokensSaved,
-      savingsMeasured,
+      savingsMeasured: savingsMeasured || displacementMeasured,
       measurementId,
       ...(sessionId ? { sessionId } : {}),
       ...(attribution.client ? { client: attribution.client } : {}),
@@ -302,21 +338,43 @@ export async function recordToolAnalytics(
         measurementSchemaVersion: SAVINGS_MEASUREMENT_SCHEMA_VERSION,
         measurement: savingsMeasured
           ? 'materialized-transport-before-after'
-          : expansionRef && creditedMeasurementId
-            ? 'actual-expansion-transport-debit'
-            : 'actual-return-context-only',
+          : displacementMeasured
+            ? 'measured-input-displacement'
+            : expansionRef && creditedMeasurementId
+              ? 'actual-expansion-transport-debit'
+              : 'actual-return-context-only',
         measurementClass: savingsMeasured
           ? 'verified-transport-reduction'
-          : expansionRef && creditedMeasurementId
-            ? 'verified-transport-expansion-debit'
-            : 'observed-return-only',
+          : displacementMeasured
+            ? 'verified-input-displacement'
+            : expansionRef && creditedMeasurementId
+              ? 'verified-transport-expansion-debit'
+              : 'observed-return-only',
         baselineKind: savingsMeasured
           ? 'materialized-undisclosed-mcp-result'
-          : null,
-        baselineBytes,
+          : displacementMeasured
+            ? 'measured-displaced-input'
+            : null,
+        baselineBytes:
+          displacementMeasured && displaced ? displaced.bytes : baselineBytes,
         returnedBytes,
-        bytesSaved: savingsMeasured ? baselineBytes - returnedBytes : 0,
+        bytesSaved: savingsMeasured
+          ? baselineBytes - returnedBytes
+          : displacementMeasured && displaced
+            ? displaced.bytes - returnedBytes
+            : 0,
         baselineSha256: baselineText ? sha256(baselineText) : null,
+        /*
+         * Recorded whenever it could be measured, including on rows the
+         * transport class won, so a later audit can see the displacement a row
+         * was NOT credited with. Only the class decides what gets summed; two
+         * befores for one after are not additive, and labelling both while
+         * crediting one is how that stays visible rather than tempting.
+         */
+        displacedInputTokens: displaced ? displaced.tokens : null,
+        displacedInputBytes: displaced ? displaced.bytes : null,
+        displacedInputSha256: displaced ? displaced.sha256 : null,
+        displacedInputFiles: displaced ? displaced.files : null,
         returnedSha256: sha256(text),
         disclosureRef:
           typeof transportMeta.disclosureRef === 'string'
@@ -326,7 +384,8 @@ export async function recordToolAnalytics(
         creditedMeasurementId,
         tokenCountMethod: 'tiktoken-gpt-4-compatible-local-estimate',
         tokenCounterModel: resultTokenCounter.model,
-        reportedToolSavings: savingsMeasured ? null : reported,
+        reportedToolSavings:
+          savingsMeasured || displacementMeasured ? null : reported,
         client: attribution.client || 'unattributed',
         clientVersion: attribution.clientVersion || null,
         model: attribution.model || null,

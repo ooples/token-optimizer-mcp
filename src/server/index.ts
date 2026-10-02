@@ -186,6 +186,13 @@ const metrics = new MetricsCollector();
 const analyticsManager = new AnalyticsManager();
 const ANALYTICS_PROCESS_ID = randomUUID();
 
+/*
+ * The seven tools answered this way take no path argument -- they report on the
+ * tool log, the cache or the install, not on a file -- so no displaced input is
+ * passed here. A tool that gains one must pass its arguments through, which is
+ * what the test asserting the path vocabulary against the published schemas is
+ * there to catch.
+ */
 async function recordDirectToolResult<T>(
   toolName: string,
   operation: () => T | Promise<T>,
@@ -2609,7 +2616,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
       request.params.name,
       disclosed,
       { ...(await mcpEvidence.analyticsAttribution()), operationId },
-      result
+      result,
+      // The arguments as the caller sent them, so the recorder can count the
+      // input this call stood in for instead of taking the tool's word for it.
+      request.params.arguments
     );
     // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
     // per-tool is what keeps it a single policy instead of ninety. The elapsed
