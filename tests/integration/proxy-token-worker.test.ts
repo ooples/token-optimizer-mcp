@@ -51,7 +51,10 @@ function inFreshProcess(snippet: string): string {
     [
       '--input-type=module',
       '-e',
-      [`const m = await import(${JSON.stringify(pathToFileURL(MODULE).href)});`, snippet].join('\n'),
+      [
+        `const m = await import(${JSON.stringify(pathToFileURL(MODULE).href)});`,
+        snippet,
+      ].join('\n'),
     ],
     { encoding: 'utf8', timeout: 60_000 }
   ).trim();
@@ -207,6 +210,95 @@ describe('proxy token accounting worker (built)', () => {
     expect(row.tokens.afterTokens).toBeLessThan(row.tokens.beforeTokens);
   });
 
+  it('carries the deferral holdout arm onto the ledger row', () => {
+    // THE RECURRING DEFECT IN THIS PACKAGE IS A CAPABILITY THAT IS GREEN AND
+    // UNREACHED. The arm label is the whole holdout: without it on the row, the
+    // estimator has rows and no arms and reports nothing, which looks exactly
+    // like an experiment that found no effect. And it must appear on the
+    // CONTROL arm above all, because the control arm is made of requests the
+    // feature deliberately did nothing to -- a label written only where the
+    // feature acted is a trial with one arm in it.
+    const out = inFreshProcess(`
+      const http = await import('node:http');
+      const fs = await import('node:fs');
+      const os = await import('node:os');
+      const path = await import('node:path');
+      const { startProxy } = await import(${JSON.stringify(PROXY)});
+
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-arm-'));
+      const ledger = path.join(dir, 'ledger.jsonl');
+      process.env.TOKEN_OPTIMIZER_PROXY_ACCOUNTING = ledger;
+      // EVERY CONVERSATION WITHHELD, so one request is enough to prove the
+      // control arm is labelled and left alone.
+      process.env.TOKEN_OPTIMIZER_PROXY_DEFER_HOLDOUT = '1';
+
+      const seen = [];
+      const upstream = http.createServer((req, res) => {
+        const chunks = [];
+        req.on('data', (c) => chunks.push(c));
+        req.on('end', () => {
+          seen.push(Buffer.concat(chunks).toString('utf8'));
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ usage: { input_tokens: 7228, output_tokens: 2 } }));
+        });
+      });
+      await new Promise((r) => upstream.listen(0, '127.0.0.1', r));
+      const proxy = await startProxy({
+        port: 0,
+        upstream: 'http://127.0.0.1:' + upstream.address().port,
+        knowledge: false,
+      });
+      const tools = Array.from({ length: 40 }, (unused, i) => ({
+        name: 'tool_' + i,
+        description:
+          'Operates on resource ' + i + '. Takes a path and a mode and reports ' +
+          'what it did, at some length, because a real tool schema is prose.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'The file to operate on.' },
+            mode: { type: 'string', description: 'One of read, write, append.' },
+          },
+          required: ['path'],
+        },
+      }));
+      const body = JSON.stringify({
+        model: 'claude-opus-4-20250514',
+        messages: [{ role: 'user', content: 'rename the handler in server.ts' }],
+        tools,
+      });
+      const res = await fetch('http://127.0.0.1:' + proxy.server.address().port + '/v1/messages', {
+        method: 'POST',
+        body,
+        headers: { 'content-type': 'application/json' },
+      });
+      await res.text();
+      for (let i = 0; i < 200 && !fs.existsSync(ledger); i += 1) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      await new Promise((r) => proxy.server.close(r));
+      await new Promise((r) => upstream.close(r));
+      // ONE OBJECT, ONE LINE: the row plus what the upstream was actually sent,
+      // so the arm and the bytes it describes are checked against each other.
+      console.log(JSON.stringify({
+        row: JSON.parse(fs.readFileSync(ledger, 'utf8').trim()),
+        markers: (seen[0].match(/defer_loading/g) ?? []).length,
+      }));
+      fs.rmSync(dir, { recursive: true, force: true });
+    `);
+
+    const { row, markers } = JSON.parse(out);
+    expect(row.deferralArm).toBe('control');
+    // WITHHELD, AND THE WIRE AGREES. Nothing was marked, so the provider was
+    // billed for every schema -- which is what makes this arm the comparison.
+    expect(markers).toBe(0);
+    expect(row.deferredTools ?? 0).toBe(0);
+    // THE PROVIDER'S PROMPT COUNT IS ON THE SAME ROW AS THE ARM, which is the
+    // one thing the estimator cannot work around: a label without a billed
+    // prompt figure beside it contributes nothing.
+    expect(row.usage.input_tokens).toBe(7228);
+  });
+
   it('puts measured token counts on the proxy ledger row', () => {
     // THE WHOLE WIRE, END TO END. The unit suites inject a backend and so can
     // never see the thread; the proxy suites run from TypeScript, where the
@@ -260,7 +352,9 @@ describe('proxy token accounting worker (built)', () => {
 
     const record = JSON.parse(out);
     expect(record.tokens.measured).toBe(true);
-    expect(record.tokens.method).toBe('tiktoken-gpt-4-compatible-local-estimate');
+    expect(record.tokens.method).toBe(
+      'tiktoken-gpt-4-compatible-local-estimate'
+    );
     // The bytes were already recorded and are the wrong unit; these are the
     // same request counted in the unit the provider charges in.
     expect(record.beforeBytes).toBeGreaterThan(0);

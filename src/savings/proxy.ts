@@ -47,6 +47,7 @@ import {
 import {
   emptyOutputLedgers,
   mergeOutputLedgers,
+  deferralTier,
   outputTiers,
   parseOutputLedgers,
   recordOutputRow,
@@ -136,6 +137,25 @@ export interface ProxySavingsWindow {
    * in its own units so nothing downstream can add it to one.
    */
   readonly outputWaste: OutputWaste | null;
+  /**
+   * What tool deferral did to the PROMPT side, MEASURED by the provider.
+   *
+   * INPUT TOKENS, NOT OUTPUT TOKENS, and the only field here that is. It sits
+   * beside the output tiers because it is the same kind of evidence -- a
+   * randomized difference read off the provider's own meter -- but its unit is
+   * the other side of the bill, so it is never summed with them.
+   *
+   * IT IS THE CHECK ON A NUMBER WE ALREADY COMPUTE. The deferred schemas are
+   * counted exactly, so `tokensSaved` above already carries deferral's effect
+   * at prompt level. What no arithmetic of ours can show is that the provider
+   * honoured the beta and left those schemas out of the context it charged for.
+   * This figure is the gap between the billed prompt tokens of conversations
+   * whose tools were deferred and those randomly withheld from the feature.
+   *
+   * NULL UNLESS A HOLDOUT RAN, which is the default, because a holdout makes
+   * its control arm pay full price on purpose.
+   */
+  readonly deferralMeasured: OutputSavingsEstimate | null;
 }
 
 /**
@@ -246,6 +266,7 @@ function freezeWindow(
     outputEstimated: tiers.estimated,
     outputMeasured: tiers.measured,
     outputWaste: tiers.waste,
+    deferralMeasured: deferralTier(output),
   });
 }
 
@@ -402,9 +423,7 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
           })
         );
       }
-      byModel.sort(
-        (a, b) => b.tokensSaved - a.tokensSaved || byName(a, b)
-      );
+      byModel.sort((a, b) => b.tokensSaved - a.tokensSaved || byName(a, b));
       // DERIVED FROM THE BUCKETS, not a fourth counter: a model whose counted
       // rows outnumber its priced ones had at least one row the catalog could
       // not price. A bucket with no counted rows at all is an unbilled model,

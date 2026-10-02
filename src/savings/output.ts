@@ -60,6 +60,7 @@ import {
   type OutputWaste,
 } from '../proxy/output-savings.js';
 import type { AccountingRecord } from '../proxy/accounting.js';
+import { billedPromptTokens, wasBilled } from '../analytics/proxy-savings.js';
 
 /**
  * The two comparisons, kept apart.
@@ -73,6 +74,25 @@ import type { AccountingRecord } from '../proxy/accounting.js';
 export interface OutputLedgers {
   readonly compression: OutputSavingsLedger;
   readonly shaper: OutputSavingsLedger;
+  /**
+   * The deferral holdout, which is on the OTHER SIDE OF THE BILL.
+   *
+   * ITS UNIT IS PROMPT TOKENS, NOT OUTPUT TOKENS, and that is the one thing a
+   * reader of this structure has to keep straight: the figure it produces must
+   * never be added to either of the two above. It lives here because it is the
+   * same shape, folds the same way and is pruned by the same policy -- a
+   * control-vs-treatment comparison over pre-treatment strata -- and because a
+   * second parallel set of files to serialize, validate and retain would be a
+   * second thing to get wrong for no gain.
+   *
+   * WHY IT IS MEASURED AND NOT COMPUTED. Deferral's saving lands in the prompt
+   * the provider assembles, which we never see. The computed figure counts the
+   * schemas we marked and is right about them, but it cannot count the search
+   * schema the provider expands server-side, so it is an upper bound. This
+   * comparison takes both arms' billed prompt tokens from the provider's own
+   * usage and is therefore net of everything, including that.
+   */
+  readonly deferral: OutputSavingsLedger;
   /**
    * Tier 3, which needs no strata at all.
    *
@@ -88,6 +108,7 @@ export function emptyOutputLedgers(): OutputLedgers {
   return {
     compression: emptyOutputLedger(),
     shaper: emptyOutputLedger(),
+    deferral: emptyOutputLedger(),
     echo: emptyAccum(),
   };
 }
@@ -98,6 +119,7 @@ export function mergeOutputLedgers(
 ): void {
   mergeOutputLedger(into.compression, from.compression);
   mergeOutputLedger(into.shaper, from.shaper);
+  mergeOutputLedger(into.deferral, from.deferral);
   mergeAccum(into.echo, from.echo);
 }
 
@@ -117,8 +139,7 @@ const BYTES_PER_TOKEN = 4;
 
 function preTreatmentTokens(record: AccountingRecord): number {
   const measured = record.tokens;
-  if (measured !== undefined && measured.measured)
-    return measured.beforeTokens;
+  if (measured !== undefined && measured.measured) return measured.beforeTokens;
   return Math.round(record.beforeBytes / BYTES_PER_TOKEN);
 }
 
@@ -147,19 +168,59 @@ export function recordOutputRow(
   // dropping its waste figure for want of a token count would make the waste
   // mean an average over the subset that also happened to report usage.
   recordEcho(ledgers.echo, record);
+  // ALSO BEFORE THE OUTPUT GUARD, and for the same reason: this comparison is
+  // about the prompt, and a reply whose output count never arrived says nothing
+  // about what the prompt cost. Gating it on output tokens would silently
+  // restrict the input-side experiment to the subset of requests that also
+  // reported an output figure.
+  recordDeferral(ledgers.deferral, record, stratumFor(record));
   const emitted = record.usage.output_tokens;
   if (typeof emitted !== 'number' || !Number.isFinite(emitted) || emitted < 0)
     return;
-  const key = stratumKey({
+  const key = stratumFor(record);
+  if (record.compressed)
+    recordOutput(ledgers.compression, OUTPUT_ARM.Treatment, key, emitted);
+  else recordBaseline(ledgers.compression, key, emitted);
+  if (record.outputArm !== undefined)
+    recordOutput(ledgers.shaper, record.outputArm, key, emitted);
+}
+
+/** The stratum a row belongs to, from PRE-TREATMENT features only. */
+function stratumFor(record: AccountingRecord): string {
+  return stratumKey({
     model: record.model ?? '',
     messageCount: record.messageCount ?? 0,
     inputTokens: preTreatmentTokens(record),
     hasTools: (record.toolCount ?? 0) > 0,
   });
-  if (record.compressed) recordOutput(ledgers.compression, OUTPUT_ARM.Treatment, key, emitted);
-  else recordBaseline(ledgers.compression, key, emitted);
-  if (record.outputArm !== undefined)
-    recordOutput(ledgers.shaper, record.outputArm, key, emitted);
+}
+
+/**
+ * Files one row into the deferral comparison, if it was in one.
+ *
+ * THE PROVIDER'S FIGURE, NOT OURS. Every other number this module files is one
+ * we counted; this one is read off the bill, which is the entire point of the
+ * tier. Our own count of a deferred request is a count of a body the provider
+ * reassembled before billing it, so a comparison between arms using our numbers
+ * would be a comparison between what we think two prompts cost.
+ *
+ * ONLY A BILLED ROW, and only one that reported a prompt count. A 429 or a
+ * transport failure was never charged, and entering it as zero would pull
+ * whichever arm failed more often toward nothing -- the same trap the output
+ * guard above avoids, and the one place where an arm imbalance could otherwise
+ * manufacture a saving out of errors.
+ */
+function recordDeferral(
+  ledger: OutputSavingsLedger,
+  record: AccountingRecord,
+  key: string
+): void {
+  const arm = record.deferralArm;
+  if (arm === undefined) return;
+  if (!wasBilled(record)) return;
+  const billed = billedPromptTokens(record.usage);
+  if (billed === null) return;
+  recordOutput(ledger, arm, key, billed);
 }
 
 /**
@@ -206,6 +267,33 @@ export function outputTiers(ledgers: OutputLedgers): OutputTiers {
 }
 
 /**
+ * The deferral holdout's figure, in PROMPT tokens -- deliberately not a tier.
+ *
+ * IT IS NOT A MEMBER OF `OutputTiers` AND MUST NEVER BECOME ONE. Every number
+ * in that interface is output tokens; this one is input tokens, and the two sit
+ * on opposite sides of the bill at different prices. Returning it separately is
+ * the type system saying what a comment would only ask: nothing can add this to
+ * an output saving by accident, because there is no field to add it into.
+ *
+ * WHY IT EXISTS BESIDE THE COMPUTED PROMPT DELTA. We count the deferred schemas
+ * exactly -- we hold them -- so the computed prompt-level delta is arithmetic,
+ * not an estimate. What arithmetic cannot establish is whether the provider
+ * honoured the beta and actually left those schemas out of the context it
+ * billed. This figure is the difference between the billed `input_tokens` of
+ * conversations whose tools were deferred and those randomly withheld from the
+ * feature, so it comes from the provider's own meter and answers exactly that.
+ *
+ * NULL UNLESS A HOLDOUT RAN, which is the normal case: a holdout makes the
+ * control arm pay for schemas the treatment arm does not, so it is off by
+ * default and the computed figure has to stand without it.
+ */
+export function deferralTier(
+  ledgers: OutputLedgers
+): OutputSavingsEstimate | null {
+  return estimateFromHoldout(ledgers.deferral);
+}
+
+/**
  * One arm's strata as a plain object, for a rollup file.
  *
  * THREE NUMBERS PER STRATUM, IN AN ARRAY, because a rollup line is written once
@@ -222,6 +310,11 @@ export interface SerializedOutputLedgers {
     readonly control: SerializedArm;
   };
   readonly shaper: {
+    readonly baseline: SerializedArm;
+    readonly treatment: SerializedArm;
+    readonly control: SerializedArm;
+  };
+  readonly deferral: {
     readonly baseline: SerializedArm;
     readonly treatment: SerializedArm;
     readonly control: SerializedArm;
@@ -267,6 +360,7 @@ export function serializeOutputLedgers(
   return {
     compression: serializeOne(ledgers.compression),
     shaper: serializeOne(ledgers.shaper),
+    deferral: serializeOne(ledgers.deferral),
     ...(ledgers.echo.n > 0
       ? { echo: [ledgers.echo.n, ledgers.echo.sum, ledgers.echo.sumsq] }
       : {}),
@@ -301,7 +395,9 @@ function parseTriple(value: unknown): Accum | null {
 function parseArm(value: unknown, into: Map<string, Accum>): boolean {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
     return false;
-  for (const [key, triple] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, triple] of Object.entries(
+    value as Record<string, unknown>
+  )) {
     const accum = parseTriple(triple);
     if (accum === null) return false;
     into.set(key, accum);
@@ -333,6 +429,10 @@ export function parseOutputLedgers(value: unknown): OutputLedgers | null {
   const seen = value as Record<string, unknown>;
   if (!parseOne(seen.compression ?? {}, ledgers.compression)) return null;
   if (!parseOne(seen.shaper ?? {}, ledgers.shaper)) return null;
+  // ABSENT IS AN EMPTY LEDGER, which is what every rollup line written before
+  // the deferral holdout existed carries. It contributes no rows, rather than
+  // failing a day that was folded correctly under the rules it had then.
+  if (!parseOne(seen.deferral ?? {}, ledgers.deferral)) return null;
   // ABSENT IS FINE; PRESENT-AND-UNREADABLE IS NOT. The same rule the strata
   // follow: a triple this build cannot stand behind fails the whole line, and
   // the day is disclosed as skipped rather than folded with its waste figure

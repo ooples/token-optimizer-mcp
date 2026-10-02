@@ -10,6 +10,7 @@ import {
   asSavingsWindow,
   bar,
   calibrationLine,
+  deferralLine,
   latencyLine,
   outputLines,
   count,
@@ -324,6 +325,7 @@ function proxyWindow(
     outputEstimated: outputEstimate(),
     outputMeasured: null,
     outputWaste: null,
+    deferralMeasured: null,
     ...over,
   };
 }
@@ -629,7 +631,11 @@ describe('the price-table note', () => {
    */
   it('names the refusal and its reason ahead of anything else', () => {
     const note = priceTableNote(
-      { path: '/rates.json', contracts: 0, error: 'models[0] (x): "output" must be a number' },
+      {
+        path: '/rates.json',
+        contracts: 0,
+        error: 'models[0] (x): "output" must be a number',
+      },
       3
     );
     expect(note).toContain('/rates.json');
@@ -637,9 +643,9 @@ describe('the price-table note', () => {
     expect(note).toContain('"output" must be a number');
     // Positive control: the invitation is what the SAME unpriced count prints
     // when no table was named, so the refusal really did take precedence.
-    expect(priceTableNote({ path: null, contracts: 0, error: null }, 3)).toContain(
-      OPERATOR_PRICE_TABLE_ENV
-    );
+    expect(
+      priceTableNote({ path: null, contracts: 0, error: null }, 3)
+    ).toContain(OPERATOR_PRICE_TABLE_ENV);
   });
 
   it('counts the rates a loaded table contributed and labels them as the operators own', () => {
@@ -658,13 +664,18 @@ describe('the price-table note', () => {
   });
 
   it('invites a table only while something is actually unpriced', () => {
-    const invited = priceTableNote({ path: null, contracts: 0, error: null }, 2);
+    const invited = priceTableNote(
+      { path: null, contracts: 0, error: null },
+      2
+    );
     expect(invited).toContain(OPERATOR_PRICE_TABLE_ENV);
     expect(invited).toContain('nothing is ever charged at a default rate');
     // NOTHING TO SAY IS SAID WITH NOTHING. Every model priced and no table
     // configured is the ordinary case, and advertising an env var there would
     // put a line on every report that no reader needs.
-    expect(priceTableNote({ path: null, contracts: 0, error: null }, 0)).toBe('');
+    expect(priceTableNote({ path: null, contracts: 0, error: null }, 0)).toBe(
+      ''
+    );
   });
 
   it('puts the line on the report itself, not only in the helper', () => {
@@ -776,7 +787,9 @@ describe('the latency the saving cost', () => {
     // THE CONTROL: a report with no requests at all prints nothing, so the
     // sentence above is a disclosure about a ledger that was read, not the
     // default text of an empty one.
-    expect(latencyLine(proxyReport({ windows: [proxyWindow({ requests: 0 })] }))).toBe('');
+    expect(
+      latencyLine(proxyReport({ windows: [proxyWindow({ requests: 0 })] }))
+    ).toBe('');
   });
 });
 
@@ -826,8 +839,12 @@ describe('rendering the output-token tiers', () => {
       })
     );
     expect(lines).toHaveLength(2);
-    expect(lines[1]).toContain("measured, from the shaper's randomized holdout");
-    expect(lines[1]).toContain('the only output figure here that is a measurement');
+    expect(lines[1]).toContain(
+      "measured, from the shaper's randomized holdout"
+    );
+    expect(lines[1]).toContain(
+      'the only output figure here that is a measurement'
+    );
   });
 
   it('says a missing interval is missing instead of implying certainty', () => {
@@ -910,7 +927,9 @@ describe('rendering the output-waste tier', () => {
     // POSITIVE CONTROL: the same renderer does print it when there is a figure.
     expect(
       outputLines(
-        proxyReport({ windows: [proxyWindow({ outputWaste: outputWasteOf() })] })
+        proxyReport({
+          windows: [proxyWindow({ outputWaste: outputWasteOf() })],
+        })
       ).join('\n')
     ).toContain('Output waste');
   });
@@ -928,5 +947,72 @@ describe('rendering the output-waste tier', () => {
     const line = lines[lines.length - 1] ?? '';
     expect(line).not.toContain('95% CI');
     expect(line).toContain('over 1 scanned reply');
+  });
+});
+
+/**
+ * THE PROMPT-SIDE LINE, WHOSE WHOLE JOB IS TO NOT BE READ AS AN OUTPUT SAVING
+ * AND TO NOT BE ADDED TO THE HEADLINE. It is the tool-deferral holdout's
+ * figure: input tokens, measured by the provider, confirming part of a saving
+ * the table above already counted.
+ */
+describe('the deferral holdout line', () => {
+  const windowWith = (estimate: OutputSavingsEstimate | null) =>
+    proxyReport({ windows: [proxyWindow({ deferralMeasured: estimate })] });
+
+  it('says prompt tokens, never output tokens', () => {
+    const line = deferralLine(
+      windowWith(
+        outputEstimate({ evidence: OUTPUT_EVIDENCE.Measured, tokens: 6284 })
+      )
+    );
+    expect(line).toContain('6,284 fewer prompt tokens');
+    // THE FAILURE THIS FORBIDS IS A TEMPLATE TELLING A LIE. The formatter had
+    // the word `output` welded into its sentence, so routing a prompt-side
+    // figure through it would have printed "6,284 fewer output tokens" --
+    // a false statement about the other half of the bill, produced by nobody.
+    expect(line).not.toContain('output');
+    // POSITIVE CONTROL: the output tiers still say output through the same
+    // formatter, so the word was parameterized rather than deleted.
+    expect(outputLines(proxyReport({ windows: [proxyWindow()] }))[0]).toContain(
+      'output tokens'
+    );
+  });
+
+  it('names itself a confirmation rather than an addition', () => {
+    const line = deferralLine(
+      windowWith(outputEstimate({ evidence: OUTPUT_EVIDENCE.Measured }))
+    );
+    expect(line).toContain('tool-deferral holdout');
+    expect(line).toContain('confirms part of the saving already counted above');
+  });
+
+  it('prints nothing when no holdout ran', () => {
+    // SILENCE, NOT A ZERO. A holdout costs its control arm real money and is
+    // off by default, so the usual state is no experiment -- and an operator
+    // who never started one must not read a line saying deferral saved
+    // nothing.
+    expect(deferralLine(windowWith(null))).toBe('');
+    // POSITIVE CONTROL: the same report with an estimate does print.
+    expect(deferralLine(windowWith(outputEstimate()))).not.toBe('');
+  });
+
+  it('prints nothing when the arms exist but hold no requests', () => {
+    expect(deferralLine(windowWith(outputEstimate({ requests: 0 })))).toBe('');
+  });
+
+  it('reaches the rendered proxy section', () => {
+    const lines = renderProxySavings(
+      windowWith(outputEstimate({ evidence: OUTPUT_EVIDENCE.Measured })),
+      { topN: 3 }
+    );
+    expect(lines.some((line) => line.includes('tool-deferral holdout'))).toBe(
+      true
+    );
+    // POSITIVE CONTROL: it is absent from the same section without the figure.
+    const without = renderProxySavings(windowWith(null), { topN: 3 });
+    expect(without.some((line) => line.includes('tool-deferral holdout'))).toBe(
+      false
+    );
   });
 });

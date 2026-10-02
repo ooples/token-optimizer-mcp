@@ -10,6 +10,7 @@
  */
 
 import {
+  deferralTier,
   emptyOutputLedgers,
   mergeOutputLedgers,
   outputTiers,
@@ -213,8 +214,9 @@ describe('carrying a ledger through a rollup line', () => {
     );
     // POSITIVE CONTROL: there really are three distinct strata here, so the
     // equality above is not two empty objects agreeing.
-    expect(Object.keys(serializeOutputLedgers(forward).compression.treatment))
-      .toHaveLength(3);
+    expect(
+      Object.keys(serializeOutputLedgers(forward).compression.treatment)
+    ).toHaveLength(3);
   });
 
   it('folds exactly, so a pruned day reports what the rows did', () => {
@@ -336,8 +338,9 @@ describe('the waste tier read off rows', () => {
     const wire = serializeOutputLedgers(ledgerOf([record()]));
     expect('echo' in wire).toBe(false);
     expect(parseOutputLedgers(wire)).not.toBeNull();
-    expect(outputTiers(parseOutputLedgers(wire) ?? emptyOutputLedgers()).waste)
-      .toBeNull();
+    expect(
+      outputTiers(parseOutputLedgers(wire) ?? emptyOutputLedgers()).waste
+    ).toBeNull();
     // POSITIVE CONTROL: a scanned day does carry the field.
     expect(
       'echo' in serializeOutputLedgers(ledgerOf([record({ echoRatio: 0.1 })]))
@@ -350,5 +353,187 @@ describe('the waste tier read off rows', () => {
     expect(parseOutputLedgers({ echo: 'nope' })).toBeNull();
     // POSITIVE CONTROL: a legal triple parses in the same position.
     expect(parseOutputLedgers({ echo: [2, 0.6, 0.2] })).not.toBeNull();
+  });
+});
+
+/**
+ * THE PROMPT-SIDE LEDGER, WHICH IS WHERE THE WRONG NUMBER WOULD BE INVISIBLE.
+ * Everything else in this file files output tokens. This ledger files the
+ * provider's billed PROMPT tokens, and the two are the same shape and the same
+ * type and about different halves of the bill -- so a row filed into the wrong
+ * one is a plausible figure under a wrong name rather than a crash.
+ */
+describe('the tool-deferral holdout ledger', () => {
+  /** Billed prompt tokens, which is what this ledger is denominated in. */
+  const billed = (
+    input: number,
+    over: Partial<AccountingRecord> = {}
+  ): AccountingRecord =>
+    record({ usage: { input_tokens: input, output_tokens: 300 }, ...over });
+
+  const KEY = stratumKey({
+    model: 'claude-opus-5',
+    messageCount: 6,
+    inputTokens: 10000,
+    hasTools: false,
+  });
+
+  it('files each arm under the arm it was in', () => {
+    const ledgers = ledgerOf([
+      billed(9000, { deferralArm: OUTPUT_ARM.Control }),
+      billed(3000, { deferralArm: OUTPUT_ARM.Treatment }),
+    ]);
+    expect(ledgers.deferral.control.get(KEY)?.sum).toBe(9000);
+    expect(ledgers.deferral.treatment.get(KEY)?.sum).toBe(3000);
+    // THE FIGURE IS THE PROVIDER'S, NOT OURS. 2,500 is what our own counter
+    // said about this row's forwarded body, and it appears in the compression
+    // ledger; nothing in the deferral ledger may be derived from it.
+    expect(ledgers.deferral.control.get(KEY)?.sum).not.toBe(2500);
+  });
+
+  it('leaves the output tiers alone, because its unit is not theirs', () => {
+    const ledgers = ledgerOf([
+      billed(9000, { deferralArm: OUTPUT_ARM.Control }),
+      billed(3000, { deferralArm: OUTPUT_ARM.Treatment }),
+    ]);
+    // NO HOLDOUT RAN ON THE SHAPER, so the measured OUTPUT tier is still null
+    // even though a measured PROMPT tier is available. A ledger that shared a
+    // map would have published 6,000 prompt tokens as an output saving.
+    expect(outputTiers(ledgers).measured).toBeNull();
+    // POSITIVE CONTROL: the prompt-side estimate does exist on these rows.
+    expect(deferralTier(ledgers)?.tokens).toBe(6000);
+  });
+
+  it('reports control minus treatment, so withheld-pays-more is a saving', () => {
+    const ledgers = ledgerOf([
+      billed(9000, { deferralArm: OUTPUT_ARM.Control }),
+      billed(9400, { deferralArm: OUTPUT_ARM.Control }),
+      billed(3000, { deferralArm: OUTPUT_ARM.Treatment }),
+      billed(3200, { deferralArm: OUTPUT_ARM.Treatment }),
+    ]);
+    const estimate = deferralTier(ledgers);
+    // Two treated requests, each saving the 6,100-token gap between the arms'
+    // means: (9200 - 3100) * 2.
+    expect(estimate?.tokens).toBe(12200);
+    expect(estimate?.requests).toBe(2);
+    // SIGNED, AND THE SIGN IS CHECKED IN BOTH DIRECTIONS. If the provider were
+    // ignoring the beta the arms would bill alike and this would read near
+    // zero; if deferral somehow cost tokens it would read negative. Neither
+    // case may be silently printed as a saving.
+    const reversed = ledgerOf([
+      billed(3000, { deferralArm: OUTPUT_ARM.Control }),
+      billed(3200, { deferralArm: OUTPUT_ARM.Control }),
+      billed(9000, { deferralArm: OUTPUT_ARM.Treatment }),
+      billed(9400, { deferralArm: OUTPUT_ARM.Treatment }),
+    ]);
+    expect(deferralTier(reversed)?.tokens).toBe(-12200);
+  });
+
+  it('is absent when no holdout ran', () => {
+    // The ordinary case: deferral acts on everything and nothing is withheld,
+    // so there is no control arm and no measurement -- not a measurement of no
+    // effect, which is what a zero here would have claimed.
+    expect(deferralTier(ledgerOf([record(), record()]))).toBeNull();
+    // POSITIVE CONTROL: the same rows with arms DO produce an estimate.
+    expect(
+      deferralTier(
+        ledgerOf([
+          billed(9000, { deferralArm: OUTPUT_ARM.Control }),
+          billed(3000, { deferralArm: OUTPUT_ARM.Treatment }),
+        ])
+      )
+    ).not.toBeNull();
+  });
+
+  it('skips a row the provider never charged for', () => {
+    // A 429 OR A DROPPED CONNECTION IS NOT A CHEAP REQUEST. Entering it as
+    // zero prompt tokens would pull whichever arm failed more often toward
+    // nothing, and the arm more likely to fail is the one carrying the
+    // feature.
+    const ledgers = ledgerOf([
+      billed(9000, { deferralArm: OUTPUT_ARM.Control, status: 429 }),
+      billed(9000, {
+        deferralArm: OUTPUT_ARM.Treatment,
+        transportError: 'socket hang up',
+      }),
+    ]);
+    expect(ledgers.deferral.control.size).toBe(0);
+    expect(ledgers.deferral.treatment.size).toBe(0);
+    // POSITIVE CONTROL: the identical rows at status 200 are filed.
+    const kept = ledgerOf([
+      billed(9000, { deferralArm: OUTPUT_ARM.Control }),
+      billed(9000, { deferralArm: OUTPUT_ARM.Treatment }),
+    ]);
+    expect(kept.deferral.control.size).toBe(1);
+    expect(kept.deferral.treatment.size).toBe(1);
+  });
+
+  it('skips a billed row that reported no prompt count', () => {
+    const ledgers = ledgerOf([
+      record({
+        deferralArm: OUTPUT_ARM.Control,
+        usage: { output_tokens: 300 },
+      }),
+    ]);
+    expect(ledgers.deferral.control.size).toBe(0);
+    // POSITIVE CONTROL: the arm label is not what was rejected -- the same
+    // label with a prompt count is filed.
+    expect(
+      ledgerOf([billed(9000, { deferralArm: OUTPUT_ARM.Control })]).deferral
+        .control.size
+    ).toBe(1);
+  });
+
+  it('adds the cache tokens the provider billed for the prompt', () => {
+    // THE PROMPT IS WHAT WAS IN CONTEXT, however it was paid for. Deferral
+    // changes the tool block, the tool block lives in the cached prefix, and a
+    // figure that read `input_tokens` alone would miss the whole effect on any
+    // conversation whose prefix was being cached or read.
+    const ledgers = ledgerOf([
+      record({
+        deferralArm: OUTPUT_ARM.Control,
+        usage: {
+          input_tokens: 100,
+          cache_read_input_tokens: 8000,
+          cache_creation_input_tokens: 900,
+          output_tokens: 300,
+        },
+      }),
+    ]);
+    expect(ledgers.deferral.control.get(KEY)?.sum).toBe(9000);
+  });
+
+  it('survives a rollup round trip, and an old row without it parses', () => {
+    const ledgers = ledgerOf([
+      billed(9000, { deferralArm: OUTPUT_ARM.Control }),
+      billed(3000, { deferralArm: OUTPUT_ARM.Treatment }),
+    ]);
+    const back = parseOutputLedgers(serializeOutputLedgers(ledgers));
+    expect(back).not.toBeNull();
+    expect(deferralTier(back ?? emptyOutputLedgers())?.tokens).toBe(6000);
+    // AN OLD ROLLUP FILE HAS NO `deferral` KEY AT ALL, and must fold as an
+    // empty ledger rather than failing the whole row -- a rejected row drops
+    // every other tier that day with it.
+    const serialized = serializeOutputLedgers(ledgers) as Record<
+      string,
+      unknown
+    >;
+    delete serialized.deferral;
+    const older = parseOutputLedgers(serialized);
+    expect(older).not.toBeNull();
+    expect(deferralTier(older ?? emptyOutputLedgers())).toBeNull();
+    // POSITIVE CONTROL: the rest of the row still arrived.
+    expect(older?.compression.treatment.size).toBe(1);
+  });
+
+  it('folds two windows into one estimate', () => {
+    const left = ledgerOf([billed(9000, { deferralArm: OUTPUT_ARM.Control })]);
+    const right = ledgerOf([
+      billed(3000, { deferralArm: OUTPUT_ARM.Treatment }),
+    ]);
+    mergeOutputLedgers(left, right);
+    expect(deferralTier(left)?.tokens).toBe(6000);
+    // POSITIVE CONTROL: neither side could produce that on its own.
+    expect(deferralTier(right)).toBeNull();
   });
 });

@@ -322,6 +322,7 @@ export function outputLines(report: ProxySavingsReport): readonly string[] {
   const lines: string[] = [];
   const estimated = outputLine(
     'Output tokens (estimated, from requests we did not compress)',
+    TIER_UNIT.Output,
     all.outputEstimated,
     'Observational: the band covers sampling noise, not the chance that the ' +
       'uncompressed requests differed for some other reason.'
@@ -330,6 +331,7 @@ export function outputLines(report: ProxySavingsReport): readonly string[] {
   if (all.outputMeasured !== null) {
     const measured = outputLine(
       "Output tokens (measured, from the shaper's randomized holdout)",
+      TIER_UNIT.Output,
       all.outputMeasured,
       'Randomized: the only output figure here that is a measurement.'
     );
@@ -337,6 +339,41 @@ export function outputLines(report: ProxySavingsReport): readonly string[] {
   }
   if (all.outputWaste !== null) lines.push(wasteLine(all.outputWaste));
   return lines;
+}
+
+/**
+ * The deferral holdout's line, which belongs beside the calibration and not
+ * beside the output tiers.
+ *
+ * IT IS THE ONLY RANDOMIZED EVIDENCE ON THE PROMPT SIDE. Everything else in the
+ * input section is our own count of our own bytes, checked against the
+ * provider's bill where the row allows it. Tool deferral is the one input-side
+ * feature whose saving we cannot see at all: the schemas stay on the wire and
+ * the provider is the party that declines to put them in the context it
+ * charges for. So its figure comes from the difference between the billed
+ * prompt tokens of the conversations it acted on and the conversations
+ * randomly withheld from it.
+ *
+ * EMPTY UNLESS A HOLDOUT RAN, and empty is printed as nothing rather than as a
+ * zero: an operator who never started the experiment must not read this as
+ * "the holdout found no effect".
+ *
+ * THE LABEL SAYS `prompt`, NOT `output`, AND THAT IS LOAD-BEARING. The computed
+ * prompt saving is already in the headline above; this line is a second,
+ * independent reading of part of the same thing, and a reader who adds the two
+ * has double-counted. The wording names it as a confirmation.
+ */
+export function deferralLine(report: ProxySavingsReport): string {
+  const all = report.windows.find((window) => window.since === null);
+  if (all === undefined || all.deferralMeasured === null) return '';
+  return outputLine(
+    'Prompt tokens (measured, from the tool-deferral holdout)',
+    TIER_UNIT.Prompt,
+    all.deferralMeasured,
+    "Randomized, and read from the provider's own prompt counts: this " +
+      'confirms part of the saving already counted above rather than adding ' +
+      'to it.'
+  );
 }
 
 /**
@@ -370,8 +407,26 @@ function percent(ratio: number): string {
 }
 
 /** One tier, or '' when the tier saw nothing and has nothing to report. */
+/**
+ * WHICH SIDE OF THE BILL A TIER LINE IS DENOMINATED IN.
+ *
+ * NOT DECORATION, AND NOT A DEFAULT. Every figure `outputLine` printed until
+ * now was output tokens, so the word was welded into the sentence. The deferral
+ * holdout reports input tokens through the same formatter, and a line that read
+ * "6,284 fewer output tokens" for a prompt-side saving would be a false
+ * statement produced by a template, not by anything anyone measured -- so the
+ * unit is an argument the caller must supply.
+ */
+const TIER_UNIT = {
+  Output: 'output',
+  Prompt: 'prompt',
+} as const;
+
+type TierUnit = (typeof TIER_UNIT)[keyof typeof TIER_UNIT];
+
 function outputLine(
   label: string,
+  unit: TierUnit,
   estimate: OutputSavingsEstimate,
   note: string
 ): string {
@@ -400,10 +455,9 @@ function outputLine(
         'seen once, so their spread is borrowed from the pool.'
       : '';
   return (
-    `${label}: ${magnitude} ${direction} output ${
+    `${label}: ${magnitude} ${direction} ${unit} ${
       estimate.tokens === 1 ? 'token' : 'tokens'
-    }, ` +
-    `${share}${band}, over ${requests} in ${strata}. ${note}${pooled}`
+    }, ` + `${share}${band}, over ${requests} in ${strata}. ${note}${pooled}`
   );
 }
 
@@ -461,6 +515,8 @@ export function renderProxySavings(
   );
   const calibration = calibrationLine(report);
   if (calibration !== '') lines.push('', calibration);
+  const deferral = deferralLine(report);
+  if (deferral !== '') lines.push(deferral);
   const latency = latencyLine(report);
   if (latency !== '') lines.push(latency);
   lines.push(...outputLines(report));

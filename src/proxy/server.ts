@@ -80,7 +80,7 @@ import {
   holdoutFraction,
   type WireFormat,
 } from './output-shaper.js';
-import { assignArm, type OutputArm } from './output-savings.js';
+import { assignArm, OUTPUT_ARM, type OutputArm } from './output-savings.js';
 import { createEchoScanner, echoEnabled, extractTextValues } from './echo.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
@@ -232,6 +232,16 @@ export interface ProxySummary {
   readonly compressed: boolean;
   /** The shaper holdout arm, when one ran. See `CompressionFacts.outputArm`. */
   readonly outputArm?: OutputArm;
+  /**
+   * The tool-deferral holdout arm, when one ran. See
+   * `CompressionFacts.deferralArm`.
+   *
+   * DECLARED HERE AND NOT ONLY ON THE FACTS, because the summary is spread into
+   * the ledger record rather than copied field by field -- so a field the
+   * summary type does not admit is one the compiler will never check reached
+   * the ledger, even while it travels there at runtime.
+   */
+  readonly deferralArm?: OutputArm;
   readonly reason?: string;
   /**
    * Characters of knowledge deliberately ADDED to the request.
@@ -459,9 +469,24 @@ function compressBodyOnce(
    * which is the truth about them: nothing was shaped and nothing withheld.
    */
   let outputArm: OutputArm | undefined;
+  /**
+   * Which arm of the DEFERRAL holdout this request ended up in.
+   *
+   * A SECOND EXPERIMENT, ON THE OTHER SIDE OF THE BILL. The shaper's arms are
+   * about what the model writes; these are about what the provider charges for
+   * the prompt. They are assigned from the same hashed key and are independent
+   * of one another, so a conversation can be in the control arm of one and the
+   * treatment arm of the other.
+   *
+   * CARRIED BY EVERY RETURN, INCLUDING THE REFUSALS, because the control arm is
+   * made of requests nothing was done to. An arm recorded only when the feature
+   * acted would be a trial with one arm in it.
+   */
+  let deferralArm: OutputArm | undefined;
   const named = () => ({
     ...(model === undefined ? {} : { model }),
     ...(outputArm === undefined ? {} : { outputArm }),
+    ...(deferralArm === undefined ? {} : { deferralArm }),
   });
   // THE SAME FACT FOR THE TWO DIALECTS THAT BUILD THEIR OWN SUMMARIES. Chat
   // Completions and Responses return out of helpers that never saw the parse,
@@ -700,24 +725,49 @@ function compressBodyOnce(
   let deferred = 0;
   let deferredChars = 0;
   if (deferToolsEnabled()) {
-    try {
-      // The task text steers which non-core tools stay loaded, so the model
-      // never has to search for one -- and a search costs a round trip plus a
-      // second cold prefix write.
-      const out = deferTools(parsed, {
-        // taskIn, NOT questionIn: the tools array is part of the cached
-        // prefix, so steering it with text that changes every turn changes
-        // the prefix every turn. See taskIn for the measurement.
-        query: taskIn(parsed),
-        keepRelevant: keepToolsFromEnv(),
-        smallToolChars: smallToolCharsFromEnv(),
-      });
-      parsed = out.request;
-      deferred = out.deferredCount;
-      deferredChars = out.deferredChars;
-    } catch {
-      // Fails open like everything else here: a tools array we cannot rewrite
-      // is forwarded as it arrived.
+    // THE HOLDOUT, WHICH IS THE ONLY EVIDENCE THE BETA IS HONOURED. Everything
+    // the prompt-level count claims rests on the provider actually declining to
+    // place a marked schema in context. We cannot see the prompt it assembled;
+    // we can only see what it billed for one. So a fraction of conversations is
+    // deferred by nobody, and the difference between the two arms' billed
+    // prompt tokens is the saving measured from the provider's own figures --
+    // net of the search schema it expands server-side, which is the one part of
+    // the computed figure we are not able to count.
+    //
+    // THE SAME ASSIGNMENT FUNCTION THE SHAPER USES, read rather than copied, and
+    // hashed on the conversation so a conversation cannot change arms mid-flight
+    // -- tools live in the cached prefix, and a conversation deferred on turn 3
+    // and not on turn 4 would pay for a fresh prefix and pollute both arms.
+    //
+    // ABSENT WHEN NO EXPERIMENT IS RUNNING. With no holdout configured every
+    // request is deferred, and stamping "treatment" on all of them would fill
+    // the ledger with an arm that has nothing to be compared against.
+    const fraction = deferHoldoutFraction();
+    if (fraction > 0)
+      deferralArm = assignArm(
+        conversationKeyFor(parsed as unknown as Record<string, unknown>),
+        fraction
+      );
+    if (deferralArm !== OUTPUT_ARM.Control) {
+      try {
+        // The task text steers which non-core tools stay loaded, so the model
+        // never has to search for one -- and a search costs a round trip plus a
+        // second cold prefix write.
+        const out = deferTools(parsed, {
+          // taskIn, NOT questionIn: the tools array is part of the cached
+          // prefix, so steering it with text that changes every turn changes
+          // the prefix every turn. See taskIn for the measurement.
+          query: taskIn(parsed),
+          keepRelevant: keepToolsFromEnv(),
+          smallToolChars: smallToolCharsFromEnv(),
+        });
+        parsed = out.request;
+        deferred = out.deferredCount;
+        deferredChars = out.deferredChars;
+      } catch {
+        // Fails open like everything else here: a tools array we cannot rewrite
+        // is forwarded as it arrived.
+      }
     }
   }
 
@@ -1094,6 +1144,24 @@ export function keepToolsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 0) return DEFAULT_KEEP_RELEVANT;
   return n;
+}
+
+/**
+ * The fraction of conversations deferral is withheld from. None by default.
+ *
+ * A HOLDOUT COSTS REAL MONEY: every conversation in the control arm pays for
+ * tool schemas the treatment arm does not, which is why it is off unless an
+ * operator asks for it and why the computed tier has to stand on its own
+ * without it.
+ */
+export function deferHoldoutFraction(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const raw = Number.parseFloat(
+    (env.TOKEN_OPTIMIZER_PROXY_DEFER_HOLDOUT ?? '').trim()
+  );
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return raw >= 1 ? 1 : raw;
 }
 
 /** Deferral defaults on unless the environment explicitly disables it. */

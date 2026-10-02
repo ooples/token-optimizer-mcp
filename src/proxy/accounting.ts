@@ -112,6 +112,20 @@ export interface CompressionFacts {
    * a conversation key that is itself never recorded.
    */
   readonly outputArm?: OutputArm;
+  /**
+   * Which arm of the TOOL-DEFERRAL holdout the request was in, when one ran.
+   *
+   * THE OTHER SIDE OF THE BILL FROM `outputArm`, and here for the same reason.
+   * Deferral's saving lands in the prompt the PROVIDER assembles, which we
+   * never see; all we see is what it billed for one. So the only proof the
+   * saving is real is the difference between the billed prompt tokens of
+   * conversations whose tools were deferred and those whose were not -- and
+   * that difference needs the label and the usage on one row, which is this one.
+   *
+   * ABSENT WHEN NO EXPERIMENT RAN, never defaulted to an arm, and NOT request
+   * content: one of two fixed words from a hash of a key that is never recorded.
+   */
+  readonly deferralArm?: OutputArm;
   readonly reason?: string;
   readonly anchorReason?: string;
   readonly elisions?: number;
