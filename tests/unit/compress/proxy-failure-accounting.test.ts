@@ -165,22 +165,35 @@ test('a clean stop writes the lines it still owed, with no help from the caller'
 }, 30000);
 
 /**
- * The ledger once it holds `want` lines, or whatever it holds after a second.
+ * The ledger once it holds `want` lines, or whatever it holds when time is up.
  *
  * A BOUNDED POLL, NOT A FIXED SLEEP. The stop drains asynchronously, so there
  * is nothing to await from outside it; a sleep long enough to be reliable on a
- * loaded box is a second this suite pays on every green run, and one short
- * enough to be cheap is the flake. Returning what it found on timeout lets the
+ * loaded box is time this suite pays on every green run, and one short enough
+ * to be cheap is the flake. Returning what it found on timeout lets the
  * assertion report the shortfall rather than a timeout.
+ *
+ * A MISSING FILE IS ZERO LINES, NOT AN ERROR. The ledger is created by its
+ * first append, and on a Linux runner no append had happened yet when this was
+ * first called -- so the poll died on ENOENT before it could poll, and reported
+ * a missing file where the fact under test is how many lines arrive. The
+ * distinction is kept: nothing here creates the file, so a ledger that is never
+ * written still fails, on the line count, with the count it actually had.
  */
 async function waitForLines(
   ledger: string,
   want: number
 ): Promise<Record<string, unknown>[]> {
-  const deadline = Date.now() + 1000;
+  const deadline = Date.now() + 5000;
   let lines: Record<string, unknown>[] = [];
   for (;;) {
-    const text = (await readFile(ledger, 'utf8')).trim();
+    const text = await readFile(ledger, 'utf8').then(
+      (body) => body.trim(),
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return '';
+        throw error;
+      }
+    );
     lines =
       text === ''
         ? []
