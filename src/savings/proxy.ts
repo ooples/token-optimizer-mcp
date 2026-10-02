@@ -29,14 +29,22 @@ import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import {
   classifyProxySavings,
-  priceProxyDelta,
-  proxyCalibration,
-  proxyTokensBefore,
   proxyTransportDelta,
   PROXY_SAVINGS,
 } from '../analytics/proxy-savings.js';
 import { accountingPath, type AccountingRecord } from '../proxy/accounting.js';
 import { looksLikeRecord } from '../inspect/ledger.js';
+import {
+  addTotals,
+  emptyTotals,
+  foldRecord,
+  localDayKey,
+  looksLikeRollup,
+  rollupPath,
+  startOfDayKey,
+  type RollupRow,
+  type RollupTotals,
+} from './retention.js';
 import {
   UNATTRIBUTED,
   windowBoundaries,
@@ -85,68 +93,36 @@ export interface ProxySavingsReport {
    * catalog and both halves miss the same models.
    */
   readonly unpricedModels: readonly string[];
-}
-
-/** One window's running totals. Mutable by design: this is a fold. */
-interface Totals {
-  requests: number;
-  billedRequests: number;
-  countedRequests: number;
-  pricedRequests: number;
-  calibratedRequests: number;
-  tokensSaved: number;
-  tokensBefore: number;
-  cost: number;
-  oursTokens: number;
-  billedTokens: number;
-}
-
-function emptyTotals(): Totals {
-  return {
-    requests: 0,
-    billedRequests: 0,
-    countedRequests: 0,
-    pricedRequests: 0,
-    calibratedRequests: 0,
-    tokensSaved: 0,
-    tokensBefore: 0,
-    cost: 0,
-    oursTokens: 0,
-    billedTokens: 0,
-  };
+  /**
+   * Rows that reached these figures as a stored day's totals, not as rows.
+   *
+   * DISCLOSED, NOT HIDDEN. Past the retention window a row is replaced by the
+   * day it belonged to (`retention.ts`), which preserves every figure above
+   * exactly but not the per-request detail behind them -- so an operator who
+   * goes looking for a request in the ledger and finds the day gone has been
+   * told why, by a report that says how much of itself came from where.
+   */
+  readonly rolledUpRecords: number;
+  readonly rolledUpDays: number;
+  /**
+   * Stored days the live rows outranked, which is how a crash mid-prune reads.
+   *
+   * Not an error: the rollup is written before the ledger is rewritten so that
+   * dying between the two costs a duplicate rather than a day. This counts the
+   * duplicates that were ignored.
+   */
+  readonly supersededRollupDays: number;
 }
 
 /**
- * Folds one record into one set of totals.
+ * One window's running totals. Mutable by design: this is a fold.
  *
- * `tokensBefore` COMES FROM THE SAME ROWS AS `tokensSaved`, which is the rule
- * `windows.ts` already follows: a percentage whose numerator is the measured
- * rows and whose denominator is every row would fall as more unmeasurable
- * traffic arrived, reading as the proxy getting worse at the moment it was
- * being told less.
+ * THE SHAPE AND THE FOLD BOTH COME FROM `retention.ts`, which is also what
+ * writes the pre-folded days this reader adds back in. Two copies of this
+ * arithmetic would put a step in every figure exactly at the age where the
+ * rows stop being rows.
  */
-function fold(totals: Totals, record: AccountingRecord): void {
-  totals.requests += 1;
-  const classification = classifyProxySavings(record);
-  if (classification === PROXY_SAVINGS.Unbilled) return;
-  totals.billedRequests += 1;
-  if (classification === PROXY_SAVINGS.Uncounted) return;
-  totals.countedRequests += 1;
-  const calibration = proxyCalibration(record);
-  if (calibration !== null) {
-    totals.calibratedRequests += 1;
-    totals.oursTokens += calibration.ours;
-    totals.billedTokens += calibration.billed;
-  }
-  const delta = proxyTransportDelta(record);
-  if (delta === 0) return;
-  totals.tokensSaved += delta;
-  totals.tokensBefore += proxyTokensBefore(record);
-  const priced = priceProxyDelta(record);
-  if (priced === null) return;
-  totals.cost += priced;
-  totals.pricedRequests += 1;
-}
+type Totals = RollupTotals;
 
 function percent(saved: number, before: number): number {
   return before > 0 ? (saved / before) * 100 : 0;
@@ -176,6 +152,8 @@ function freezeWindow(
 
 export interface ProxyAggregator {
   add(record: AccountingRecord): void;
+  /** One pre-folded day, from the ledger's rollup file. */
+  addRollup(row: RollupRow): void;
   /** A line that was not a record at all. Reported, never silently dropped. */
   skip(): void;
   report(): ProxySavingsReport;
@@ -200,6 +178,54 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
   let unbilledRecords = 0;
   let uncountedRecords = 0;
   let skippedLines = 0;
+  let rolledUpRecords = 0;
+  const rolledUpDays = new Set<string>();
+  const supersededDays = new Set<string>();
+  /** Days the live rows cover, so a rollup for one can be recognised as stale. */
+  const liveDays = new Set<string>();
+  /** Rollups held until `report`, because the rows that outrank them may follow. */
+  const pending: RollupRow[] = [];
+  let settled = false;
+
+  const bucketFor = (name: string): Totals => {
+    let bucket = models.get(name);
+    if (bucket === undefined) {
+      bucket = emptyTotals();
+      models.set(name, bucket);
+    }
+    return bucket;
+  };
+
+  /**
+   * Folds one day's stored totals in, as though its rows were still here.
+   *
+   * EVERY WINDOW THE DAY OPENS INSIDE, which is exact rather than generous: a
+   * window opens at the start of a local day and a rollup covers a whole local
+   * day, so the day is either entirely within a window or entirely outside it.
+   * There is no day here to split between two windows.
+   */
+  const foldRollup = (row: RollupRow): void => {
+    const start = startOfDayKey(row.day);
+    if (start === null) {
+      skippedLines += 1;
+      return;
+    }
+    rolledUpRecords += row.records.total;
+    rolledUpDays.add(row.day);
+    totalRecords += row.records.total;
+    measuredRecords += row.records.measured;
+    unbilledRecords += row.records.unbilled;
+    uncountedRecords += row.records.uncounted;
+    skippedLines += row.records.skippedLines;
+    for (const window of windows) {
+      if (window.since === null || start.getTime() >= window.since.getTime()) {
+        addTotals(window.totals, row.totals);
+      }
+    }
+    for (const [name, totals] of Object.entries(row.byModel)) {
+      addTotals(bucketFor(name), totals);
+    }
+  };
 
   return {
     add(record: AccountingRecord): void {
@@ -215,23 +241,41 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
       // an operator reads as a day's work.
       const at = Date.parse(record.ts);
       for (const window of windows) {
-        if (window.since === null) fold(window.totals, record);
+        if (window.since === null) foldRecord(window.totals, record);
         else if (Number.isFinite(at) && at >= window.since.getTime())
-          fold(window.totals, record);
+          foldRecord(window.totals, record);
       }
+      if (Number.isFinite(at)) liveDays.add(localDayKey(new Date(at)));
       if (delta === 0) return;
       const name = (record.model ?? '').trim() || UNATTRIBUTED;
-      let bucket = models.get(name);
-      if (bucket === undefined) {
-        bucket = emptyTotals();
-        models.set(name, bucket);
-      }
-      fold(bucket, record);
+      foldRecord(bucketFor(name), record);
     },
     skip(): void {
       skippedLines += 1;
     },
+    /**
+     * Takes one stored day, to be folded in when the report is asked for.
+     *
+     * HELD RATHER THAN FOLDED NOW, because the live rows decide. A prune that
+     * died between writing the rollup and rewriting the ledger leaves a day
+     * present in both, and the rows are the half that is certainly complete --
+     * so a rollup is only used for a day no row was seen for, and the ledger
+     * may be read after this file is.
+     */
+    addRollup(row: RollupRow): void {
+      pending.push(row);
+    },
     report(): ProxySavingsReport {
+      // ONCE, EVEN IF ASKED TWICE. Folding is accumulation into the same
+      // totals, so a second call would double every stored day while leaving
+      // the live rows alone -- a report that grows by being printed.
+      if (!settled) {
+        settled = true;
+        for (const row of pending) {
+          if (liveDays.has(row.day)) supersededDays.add(row.day);
+          else foldRollup(row);
+        }
+      }
       const byModel: SavingsGroup[] = [];
       for (const [name, totals] of models) {
         byModel.push(
@@ -270,6 +314,9 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
         uncountedRecords,
         skippedLines,
         unpricedModels: Object.freeze(unpriced),
+        rolledUpRecords,
+        rolledUpDays: rolledUpDays.size,
+        supersededRollupDays: supersededDays.size,
       });
     },
   };
@@ -289,6 +336,7 @@ export async function readProxySavings(
   now: Date = new Date()
 ): Promise<ProxySavingsReport> {
   const aggregator = createProxyAggregator(now);
+  await readRollups(rollupPath(path), aggregator);
   const lines = createInterface({
     input: createReadStream(path, { encoding: 'utf8' }),
     crlfDelay: Infinity,
@@ -310,6 +358,49 @@ export async function readProxySavings(
     aggregator.add(parsed);
   }
   return aggregator.report();
+}
+
+/**
+ * Reads the stored days beside a ledger, if there are any.
+ *
+ * AN ABSENT ROLLUP FILE IS THE NORMAL CASE and not a failure: nothing writes
+ * one until a ledger is old enough or large enough to be pruned, so the
+ * overwhelming majority of installs never have one. Every other read failure
+ * propagates, because a rollup file that exists and cannot be read is missing
+ * savings an operator already earned, and reporting silence for it would be the
+ * one case where this file's figures are quietly short.
+ */
+async function readRollups(
+  path: string,
+  aggregator: ProxyAggregator
+): Promise<void> {
+  let lines;
+  try {
+    lines = createInterface({
+      input: createReadStream(path, { encoding: 'utf8' }),
+      crlfDelay: Infinity,
+    });
+    // The stream opens lazily, so the ENOENT arrives on the first read rather
+    // than here; `for await` is inside the same try for that reason.
+    for await (const line of lines) {
+      const text = line.trim();
+      if (text === '') continue;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        aggregator.skip();
+        continue;
+      }
+      if (!looksLikeRollup(parsed)) {
+        aggregator.skip();
+        continue;
+      }
+      aggregator.addRollup(parsed);
+    }
+  } catch (error) {
+    if (!isMissingFile(error)) throw error;
+  }
 }
 
 /**
