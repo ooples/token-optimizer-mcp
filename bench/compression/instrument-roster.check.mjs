@@ -62,12 +62,6 @@ const NOT_IN_CI = {
     'of the corpus figures are absent from the record, and the table does not name ' +
     'the record it was read from. All three need the README rewritten, and that ' +
     'edit is being held until the claims settle',
-  'bench/compression/adversarial.check.mjs':
-    'red today on a real defect, not on a missing figure -- a forged marker in ' +
-    'content makes rehydrate throw PathAddressedError naming the path the ' +
-    'attacker wrote, which denies expansion of the whole block in 7 of 12 cells ' +
-    'and costs 20 points of reduction. Wiring it into CI before the decoder is ' +
-    'fixed would land a red job whose cause is already known',
 };
 
 const walk = (dir, out = []) => {
