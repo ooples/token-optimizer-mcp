@@ -80,6 +80,7 @@ import {
   holdoutFraction,
   type WireFormat,
 } from './output-shaper.js';
+import { assignArm, type OutputArm } from './output-savings.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
@@ -228,6 +229,8 @@ export interface ProxySummary {
   readonly beforeBytes: number;
   readonly afterBytes: number;
   readonly compressed: boolean;
+  /** The shaper holdout arm, when one ran. See `CompressionFacts.outputArm`. */
+  readonly outputArm?: OutputArm;
   readonly reason?: string;
   /**
    * Characters of knowledge deliberately ADDED to the request.
@@ -441,7 +444,24 @@ function compressBodyOnce(
   // refused to compress -- which is what lets a row be priced even when nothing
   // was saved on it.
   let model: string | undefined;
-  const named = () => (model === undefined ? {} : { model });
+  /**
+   * Which arm of the shaper's holdout this request ended up in.
+   *
+   * SET ONLY WHEN AN EXPERIMENT IS ACTUALLY RUNNING, and left absent otherwise.
+   * With no holdout configured every request is treated, and stamping
+   * "treatment" on all of them would fill the ledger with an arm that has
+   * nothing to be compared against -- a column of labels that looks like a
+   * randomized trial and is one arm short of being one.
+   *
+   * ASSIGNED AFTER THE SHAPER HAS RUN, from what it actually did. The early
+   * refusals above return before the shaper is reached, so they carry no arm,
+   * which is the truth about them: nothing was shaped and nothing withheld.
+   */
+  let outputArm: OutputArm | undefined;
+  const named = () => ({
+    ...(model === undefined ? {} : { model }),
+    ...(outputArm === undefined ? {} : { outputArm }),
+  });
   // THE SAME FACT FOR THE TWO DIALECTS THAT BUILD THEIR OWN SUMMARIES. Chat
   // Completions and Responses return out of helpers that never saw the parse,
   // so the model is folded onto their result here rather than threaded through
@@ -569,12 +589,27 @@ function compressBodyOnce(
       : Array.isArray(parsed.input)
         ? 'responses'
         : 'messages';
+  const conversationKey = conversationKeyFor(asRecord);
+  const holdout = holdoutFraction();
   const shaped = shapeOutput(asRecord, {
     wireFormat: shapeFormat,
     enabled: shaperEnabled(),
-    holdout: holdoutFraction(),
-    conversationKey: conversationKeyFor(asRecord),
+    holdout,
+    conversationKey,
   });
+  // THE ARM INTO THE LEDGER, WHICH IS WHERE THE MEASUREMENT IS MADE. The
+  // anonymous telemetry below counts arms in aggregate and cannot answer the
+  // question the arms exist for -- what the two arms EMITTED -- because it
+  // never sees a token count. The per-request row does, so the label has to
+  // travel with it; without this field the measured tier has no data and
+  // reports, correctly but uselessly, that no holdout ever ran.
+  //
+  // READ FROM THE SHAPER'S OWN DECISION, not re-derived here. `assignArm` is a
+  // reading of `inHoldout`, so a request the shaper left alone is labelled a
+  // control and one it rewrote is labelled treated -- and the two can never
+  // disagree about a request that has already been sent.
+  if (shaperEnabled() && holdout > 0)
+    outputArm = assignArm(conversationKey, holdout);
   // THE HOLDOUT ARM'S OUTCOME, WHICH IS THE ONE NUMBER WE CANNOT GET ANY OTHER
   // WAY. The shaper leaves a fraction of conversations alone so that the shaped
   // arm has something to be compared against, and whether shaping actually pays

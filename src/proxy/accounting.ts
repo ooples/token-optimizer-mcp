@@ -25,6 +25,7 @@
  */
 
 import { appendFileSync } from 'node:fs';
+import type { OutputArm } from './output-savings.js';
 import type { Readable, Writable } from 'node:stream';
 import { createGunzip, createInflate, createBrotliDecompress } from 'node:zlib';
 import * as zlib from 'node:zlib';
@@ -92,6 +93,25 @@ function mergeUsage(usage: Record<string, unknown>, into: RequestUsage): void {
 /** What compression did to one request, as the summary already reports it. */
 export interface CompressionFacts {
   readonly compressed: boolean;
+  /**
+   * Which arm of the output-shaper holdout the request was in, when one ran.
+   *
+   * THE ONLY FIELD HERE THAT IS NOT A FACT ABOUT THE INPUT, and it is here
+   * because the question it answers cannot be answered anywhere else. The
+   * shaper withholds itself from a fraction of conversations so its effect on
+   * what the model WRITES can be measured rather than estimated, and that
+   * measurement is a difference between the two arms' output token counts --
+   * which only this row holds. A label recorded without the count, or a count
+   * recorded without the label, each make the experiment unreadable.
+   *
+   * ABSENT WHEN NO EXPERIMENT RAN, never defaulted to an arm. Every request
+   * being labelled "treatment" would read as a trial whose control arm came
+   * back empty, rather than as a trial that was never started.
+   *
+   * NOT REQUEST CONTENT. It is one of two fixed words, derived from a hash of
+   * a conversation key that is itself never recorded.
+   */
+  readonly outputArm?: OutputArm;
   readonly reason?: string;
   readonly anchorReason?: string;
   readonly elisions?: number;

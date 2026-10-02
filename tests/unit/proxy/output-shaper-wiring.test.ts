@@ -167,3 +167,62 @@ describe('the shaper arm reaches the recorder', () => {
     expect(events).toHaveLength(0);
   });
 });
+
+describe('the arm reaches the ledger row, not just the telemetry', () => {
+  /**
+   * WHY THIS IS A SEPARATE SEAM FROM THE RECORDER ABOVE. The telemetry event
+   * counts arms; it carries no token count, so it can say how often the
+   * holdout fired and never what the two arms emitted. The measured output
+   * tier is a difference between the arms' output tokens, and only the
+   * per-request ledger row holds both. A label in the wrong place is a
+   * capability that is registered, tested and green while the measurement it
+   * exists for has no data.
+   */
+  const summaryFor = (payload: Record<string, unknown>) =>
+    compressBody(Buffer.from(JSON.stringify(payload), 'utf8')).summary;
+
+  it('labels the treated arm when an experiment is running', () => {
+    process.env.TOKEN_OPTIMIZER_OUTPUT_SHAPER = '1';
+    // A hair above zero: nobody lands in the control arm, so every request
+    // this test sends is a treated one.
+    process.env.TOKEN_OPTIMIZER_OUTPUT_HOLDOUT = '0.0000001';
+    expect(summaryFor(request()).outputArm).toBe('treatment');
+  });
+
+  it('labels the arm it actually withheld shaping from', () => {
+    process.env.TOKEN_OPTIMIZER_OUTPUT_SHAPER = '1';
+    process.env.TOKEN_OPTIMIZER_OUTPUT_HOLDOUT = '1';
+    const { body, summary } = compressBody(
+      Buffer.from(JSON.stringify(request()), 'utf8')
+    );
+    expect(summary.outputArm).toBe('control');
+    // AND THE LABEL AGREES WITH THE BYTES, which is the whole point of reading
+    // the shaper's own decision rather than hashing again: a row labelled a
+    // control must have gone upstream unshaped.
+    const out = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
+    expect(out.system).toBe('You are a coding agent.');
+  });
+
+  it('carries no arm at all when no experiment was configured', () => {
+    process.env.TOKEN_OPTIMIZER_OUTPUT_SHAPER = '1';
+    delete process.env.TOKEN_OPTIMIZER_OUTPUT_HOLDOUT;
+    const summary = summaryFor(request());
+    // Not 'treatment': a trial that was never started must not read as one
+    // whose control arm came back empty.
+    expect(summary.outputArm).toBeUndefined();
+    // POSITIVE CONTROL that the row was built and the shaper did run, so the
+    // absent arm above is the refusal and not a dead code path.
+    expect(summary.beforeBytes).toBeGreaterThan(0);
+  });
+
+  it('carries no arm when the shaper itself is off', () => {
+    delete process.env.TOKEN_OPTIMIZER_OUTPUT_SHAPER;
+    process.env.TOKEN_OPTIMIZER_OUTPUT_HOLDOUT = '0.5';
+    const summary = summaryFor(request());
+    // A fraction set with the shaper off withholds nothing from anything, so
+    // there are no arms to label -- and labelling them would invite a
+    // comparison between two groups that were treated identically.
+    expect(summary.outputArm).toBeUndefined();
+    expect(summary.beforeBytes).toBeGreaterThan(0);
+  });
+});
