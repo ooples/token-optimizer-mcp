@@ -45,6 +45,15 @@ import {
   type RollupTotals,
 } from './retention.js';
 import {
+  emptyOutputLedgers,
+  mergeOutputLedgers,
+  outputTiers,
+  parseOutputLedgers,
+  recordOutputRow,
+  type OutputLedgers,
+} from './output.js';
+import type { OutputSavingsEstimate } from '../proxy/output-savings.js';
+import {
   UNATTRIBUTED,
   byName,
   localDayKey,
@@ -94,6 +103,27 @@ export interface ProxySavingsWindow {
    * trade from 3 ms in front of a 30 ms one.
    */
   readonly upstreamMsMean: number | null;
+  /**
+   * What compression appears to have done to the output side, ESTIMATED.
+   *
+   * OBSERVATIONAL, AND THE WORD IS PART OF THE FIGURE. The comparison is
+   * against rows compression declined to act on, and it declined because they
+   * were small or unusual -- so the two groups differ in ways besides the
+   * treatment, in an unknown direction, and no interval covers that. The band
+   * that travels with it covers sampling noise only.
+   *
+   * SIGNED. A negative figure says we made the model write more, and that is
+   * reported as readily as the other sign.
+   */
+  readonly outputEstimated: OutputSavingsEstimate;
+  /**
+   * What the output shaper did to the output side, MEASURED.
+   *
+   * NULL UNLESS A HOLDOUT ACTUALLY RAN, and the renderer then prints nothing
+   * rather than a null result: an operator who never started the experiment
+   * must not read "the holdout found no effect".
+   */
+  readonly outputMeasured: OutputSavingsEstimate | null;
 }
 
 /**
@@ -177,8 +207,10 @@ function percent(saved: number, before: number): number {
 function freezeWindow(
   label: string,
   since: Date | null,
-  totals: Totals
+  totals: Totals,
+  output: OutputLedgers
 ): ProxySavingsWindow {
+  const tiers = outputTiers(output);
   return Object.freeze({
     label,
     since: since === null ? null : since.toISOString(),
@@ -199,6 +231,8 @@ function freezeWindow(
     transformMsP95: transformQuantile(totals.transformBuckets, 0.95),
     transformMsMax: totals.timedRequests > 0 ? totals.transformMsMax : null,
     upstreamMsMean: mean(totals.upstreamMs, totals.timedRequests),
+    outputEstimated: tiers.estimated,
+    outputMeasured: tiers.measured,
   });
 }
 
@@ -223,6 +257,10 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
     label: bound.label,
     since: bound.since,
     totals: emptyTotals(),
+    // PER WINDOW, NOT ONE SHARED LEDGER. An output tier is a difference of
+    // means with an interval over the rows in its window, and a seven-day
+    // figure computed from every row ever recorded is not a seven-day figure.
+    output: emptyOutputLedgers(),
   }));
   const models = new Map<string, Totals>();
   let totalRecords = 0;
@@ -269,9 +307,15 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
     unbilledRecords += row.records.unbilled;
     uncountedRecords += row.records.uncounted;
     skippedLines += row.records.skippedLines;
+    // PARSED ONCE, OUTSIDE THE WINDOW LOOP. `looksLikeRollup` has already
+    // refused any row this build cannot read, so a non-null result is the
+    // normal case; the guard stays because the two functions can drift and a
+    // throw here would abort a report mid-way.
+    const output = parseOutputLedgers(row.output);
     for (const window of windows) {
       if (window.since === null || start.getTime() >= window.since.getTime()) {
         addTotals(window.totals, row.totals);
+        if (output !== null) mergeOutputLedgers(window.output, output);
       }
     }
     for (const [name, totals] of Object.entries(row.byModel)) {
@@ -293,9 +337,13 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
       // an operator reads as a day's work.
       const at = Date.parse(record.ts);
       for (const window of windows) {
-        if (window.since === null) foldRecord(window.totals, record);
-        else if (Number.isFinite(at) && at >= window.since.getTime())
+        if (window.since === null) {
           foldRecord(window.totals, record);
+          recordOutputRow(window.output, record);
+        } else if (Number.isFinite(at) && at >= window.since.getTime()) {
+          foldRecord(window.totals, record);
+          recordOutputRow(window.output, record);
+        }
       }
       if (Number.isFinite(at)) liveDays.add(localDayKey(new Date(at)));
       if (delta === 0) return;
@@ -356,7 +404,12 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
       return Object.freeze({
         windows: Object.freeze(
           windows.map((window) =>
-            freezeWindow(window.label, window.since, window.totals)
+            freezeWindow(
+              window.label,
+              window.since,
+              window.totals,
+              window.output
+            )
           )
         ),
         byModel: Object.freeze(byModel),

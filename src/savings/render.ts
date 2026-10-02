@@ -21,6 +21,7 @@ import {
   OPERATOR_PRICE_TABLE_ENV,
   type OperatorPriceTableStatus,
 } from '../analytics/operator-prices.js';
+import type { OutputSavingsEstimate } from '../proxy/output-savings.js';
 
 const BAR_WIDTH = 16;
 
@@ -297,6 +298,82 @@ export function latencyLine(report: ProxySavingsReport): string {
 }
 
 /**
+ * The output-token tiers, each labelled with the evidence it actually has.
+ *
+ * TWO LINES, NEVER BLENDED INTO ONE. The estimated tier compares requests we
+ * compressed against requests we happened not to, and the measured tier
+ * compares the shaper's two randomized arms. They are different populations
+ * answering different questions, and a single combined "output savings" figure
+ * would be readable as neither -- so each prints under its own name, and the
+ * weaker one prints the word `estimated` inside the sentence rather than in a
+ * footnote a reader can skip.
+ *
+ * A SIGNED FIGURE, BECAUSE THE ANSWER MAY BE THAT WE COST THE OPERATOR TOKENS.
+ * A terser context can plausibly make a model restate more of its own earlier
+ * work, and a renderer that printed `0` or dropped the line in that case would
+ * turn a real negative result into silence.
+ */
+export function outputLines(report: ProxySavingsReport): readonly string[] {
+  const all = report.windows.find((window) => window.since === null);
+  if (all === undefined) return [];
+  const lines: string[] = [];
+  const estimated = outputLine(
+    'Output tokens (estimated, from requests we did not compress)',
+    all.outputEstimated,
+    'Observational: the band covers sampling noise, not the chance that the ' +
+      'uncompressed requests differed for some other reason.'
+  );
+  if (estimated !== '') lines.push(estimated);
+  if (all.outputMeasured !== null) {
+    const measured = outputLine(
+      "Output tokens (measured, from the shaper's randomized holdout)",
+      all.outputMeasured,
+      'Randomized: the only output figure here that is a measurement.'
+    );
+    if (measured !== '') lines.push(measured);
+  }
+  return lines;
+}
+
+/** One tier, or '' when the tier saw nothing and has nothing to report. */
+function outputLine(
+  label: string,
+  estimate: OutputSavingsEstimate,
+  note: string
+): string {
+  if (estimate.requests === 0) return '';
+  const magnitude = count(Math.abs(estimate.tokens));
+  const direction = estimate.tokens < 0 ? 'more' : 'fewer';
+  const share =
+    estimate.percent === null
+      ? 'share not computable'
+      : `${estimate.percent.toFixed(1)}%`;
+  const band =
+    estimate.interval === null
+      ? ' (no interval: too few requests per stratum to estimate a spread)'
+      : ` (95% CI ${estimate.interval.lowPercent.toFixed(
+          1
+        )}% to ${estimate.interval.highPercent.toFixed(1)}%)`;
+  const strata = `${count(estimate.strata)} ${
+    estimate.strata === 1 ? 'stratum' : 'strata'
+  }`;
+  const requests = `${count(estimate.requests)} ${
+    estimate.requests === 1 ? 'request' : 'requests'
+  }`;
+  const pooled =
+    estimate.pooledRequests > 0
+      ? ` ${count(estimate.pooledRequests)} of those requests sit in a stratum ` +
+        'seen once, so their spread is borrowed from the pool.'
+      : '';
+  return (
+    `${label}: ${magnitude} ${direction} output ${
+      estimate.tokens === 1 ? 'token' : 'tokens'
+    }, ` +
+    `${share}${band}, over ${requests} in ${strata}. ${note}${pooled}`
+  );
+}
+
+/**
  * One bucketed quantile, rendered as the bound it actually is.
  *
  * "UNDER", NOT "=", because the histogram knows which bucket the request fell
@@ -352,6 +429,7 @@ export function renderProxySavings(
   if (calibration !== '') lines.push('', calibration);
   const latency = latencyLine(report);
   if (latency !== '') lines.push(latency);
+  lines.push(...outputLines(report));
   const gate = proxyGateNote(report);
   if (gate !== '') lines.push(gate);
   const unpriced = unpricedNote(report.unpricedModels);

@@ -11,6 +11,7 @@ import {
   bar,
   calibrationLine,
   latencyLine,
+  outputLines,
   count,
   gateNote,
   groupLines,
@@ -31,6 +32,10 @@ import {
   type ProxySavingsReport,
   type ProxySavingsWindow,
 } from '../../../src/savings/proxy.js';
+import {
+  OUTPUT_EVIDENCE,
+  type OutputSavingsEstimate,
+} from '../../../src/proxy/output-savings.js';
 import type {
   SavingsGroup,
   SavingsReport,
@@ -315,6 +320,30 @@ function proxyWindow(
     transformMsP95: { ms: 20, exceeded: false },
     transformMsMax: 18.75,
     upstreamMsMean: 1840,
+    outputEstimated: outputEstimate(),
+    outputMeasured: null,
+    ...over,
+  };
+}
+
+/**
+ * BUILT BY SPREADING, so a field added to the estimate shows up here as a tsc
+ * error rather than as `undefined` reaching a `toFixed` at runtime -- `tsc -p
+ * tsconfig.json` excludes this directory, and an incomplete literal here would
+ * compile clean and fail only when the suite runs.
+ */
+function outputEstimate(
+  over: Partial<OutputSavingsEstimate> = {}
+): OutputSavingsEstimate {
+  return {
+    evidence: OUTPUT_EVIDENCE.Estimated,
+    tokens: 1300,
+    baselineTokens: 2400,
+    percent: 54.1666,
+    interval: { lowPercent: 31.04, highPercent: 77.29 },
+    requests: 3,
+    strata: 2,
+    pooledRequests: 0,
     ...over,
   };
 }
@@ -736,5 +765,115 @@ describe('the latency the saving cost', () => {
     // sentence above is a disclosure about a ledger that was read, not the
     // default text of an empty one.
     expect(latencyLine(proxyReport({ windows: [proxyWindow({ requests: 0 })] }))).toBe('');
+  });
+});
+
+describe('rendering the output-token tiers', () => {
+  it('names the evidence inside the sentence, not in a footnote', () => {
+    const [line] = outputLines(proxyReport());
+    expect(line).toContain('estimated, from requests we did not compress');
+    expect(line).toContain('1,300 fewer output tokens');
+    expect(line).toContain('54.2% (95% CI 31.0% to 77.3%)');
+    expect(line).toContain('over 3 requests in 2 strata');
+    expect(line).toContain('the band covers sampling noise');
+  });
+
+  it('prints a cost as a cost, never as a zero or a silence', () => {
+    const [line] = outputLines(
+      proxyReport({
+        windows: [
+          proxyWindow({
+            outputEstimated: outputEstimate({
+              tokens: -400,
+              percent: -16.67,
+              interval: { lowPercent: -40.2, highPercent: 6.9 },
+            }),
+          }),
+        ],
+      })
+    );
+    expect(line).toContain('400 more output tokens');
+    expect(line).toContain('-16.7% (95% CI -40.2% to 6.9%)');
+    // POSITIVE CONTROL: the saving direction reads the other way on the same
+    // renderer, so `more` is not simply the only word it knows.
+    expect(outputLines(proxyReport())[0]).toContain('fewer output tokens');
+  });
+
+  it('prints the measured tier only when a holdout actually ran', () => {
+    expect(outputLines(proxyReport())).toHaveLength(1);
+    const lines = outputLines(
+      proxyReport({
+        windows: [
+          proxyWindow({
+            outputMeasured: outputEstimate({
+              evidence: OUTPUT_EVIDENCE.Measured,
+              tokens: 200,
+            }),
+          }),
+        ],
+      })
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain("measured, from the shaper's randomized holdout");
+    expect(lines[1]).toContain('the only output figure here that is a measurement');
+  });
+
+  it('says a missing interval is missing instead of implying certainty', () => {
+    const [line] = outputLines(
+      proxyReport({
+        windows: [
+          proxyWindow({
+            outputEstimated: outputEstimate({
+              interval: null,
+              requests: 1,
+              strata: 1,
+              pooledRequests: 1,
+            }),
+          }),
+        ],
+      })
+    );
+    expect(line).toContain('no interval: too few requests per stratum');
+    expect(line).toContain('over 1 request in 1 stratum');
+    expect(line).toContain('1 of those requests sit in a stratum seen once');
+    // POSITIVE CONTROL: neither disclosure appears when the spread is real, so
+    // they are conditional on the estimate and not pasted onto every line.
+    const full = outputLines(proxyReport())[0];
+    expect(full).not.toContain('no interval');
+    expect(full).not.toContain('borrowed from the pool');
+  });
+
+  it('reports nothing at all when no request reached the tier', () => {
+    expect(
+      outputLines(
+        proxyReport({
+          windows: [
+            proxyWindow({ outputEstimated: outputEstimate({ requests: 0 }) }),
+          ],
+        })
+      )
+    ).toEqual([]);
+    // POSITIVE CONTROL: a report with no all-time window is also empty, and the
+    // default report is not -- so neither emptiness is the renderer refusing
+    // every input.
+    expect(outputLines(proxyReport({ windows: [] }))).toEqual([]);
+    expect(outputLines(proxyReport())).not.toEqual([]);
+  });
+
+  it('puts both tiers into the rendered proxy section', () => {
+    const text = renderProxySavings(
+      proxyReport({
+        windows: [
+          proxyWindow({
+            outputMeasured: outputEstimate({
+              evidence: OUTPUT_EVIDENCE.Measured,
+            }),
+          }),
+        ],
+      }),
+      { topN: 3 }
+    ).join('\n');
+    expect(text).toContain('Output tokens (estimated');
+    expect(text).toContain('Output tokens (measured');
   });
 });

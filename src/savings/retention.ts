@@ -43,6 +43,15 @@ import {
   PROXY_SAVINGS,
 } from '../analytics/proxy-savings.js';
 import { looksLikeRecord } from '../inspect/ledger.js';
+import {
+  emptyOutputLedgers,
+  mergeOutputLedgers,
+  parseOutputLedgers,
+  recordOutputRow,
+  serializeOutputLedgers,
+  type OutputLedgers,
+  type SerializedOutputLedgers,
+} from './output.js';
 import type { AccountingRecord } from '../proxy/accounting.js';
 import {
   UNATTRIBUTED,
@@ -284,6 +293,25 @@ export interface RollupRow {
   };
   readonly totals: RollupTotals;
   readonly byModel: Readonly<Record<string, RollupTotals>>;
+  /**
+   * The day's output-savings strata, so a folded day keeps its full weight.
+   *
+   * NOT DERIVABLE FROM `totals`, which is why it is here. The output tiers are
+   * differences of means with an interval, and an interval needs the spread
+   * the rows had -- `n`, `sum` and `sumsq` per stratum per arm. A day reduced
+   * to its means would still produce a point estimate and would produce it
+   * with no band, so the first prune would quietly turn every past day's
+   * output figure into a number with no stated uncertainty.
+   *
+   * BOUNDED, so this cannot grow the file without limit: every part of a
+   * stratum key comes from a fixed vocabulary, which caps a day at 400 strata
+   * per arm however long the proxy ran -- see `src/savings/output.ts`.
+   *
+   * ABSENT ON A ROLLUP WRITTEN BEFORE THIS EXISTED, which folds as an empty
+   * ledger rather than being refused: that day contributed no output rows,
+   * which is the truth about it.
+   */
+  readonly output?: SerializedOutputLedgers;
 }
 
 const ROLLUP_KIND = 'proxy-day-rollup';
@@ -344,6 +372,11 @@ export function looksLikeRollup(value: unknown): value is RollupRow {
   for (const totals of Object.values(row.byModel as Record<string, unknown>)) {
     if (!isTotals(totals)) return false;
   }
+  // A PRESENT-BUT-UNREADABLE OUTPUT LEDGER FAILS THE WHOLE LINE, so the day is
+  // counted as skipped and disclosed rather than folded with its output half
+  // silently dropped -- which would understate every past day's output figure
+  // by exactly the days this build could not read.
+  if (parseOutputLedgers(row.output) === null) return false;
   return true;
 }
 
@@ -408,6 +441,7 @@ interface DayFold {
   skippedLines: number;
   totals: RollupTotals;
   byModel: Map<string, RollupTotals>;
+  output: OutputLedgers;
 }
 
 function emptyDay(): DayFold {
@@ -419,6 +453,7 @@ function emptyDay(): DayFold {
     skippedLines: 0,
     totals: emptyTotals(),
     byModel: new Map(),
+    output: emptyOutputLedgers(),
   };
 }
 
@@ -569,12 +604,18 @@ function freezeDay(day: string, fold: DayFold): RollupRow {
     }),
     totals: fold.totals,
     byModel: Object.freeze(byModel),
+    output: serializeOutputLedgers(fold.output),
   });
 }
 
 /** Folds one record into a day, exactly as the live reader buckets it. */
 function foldIntoDay(fold: DayFold, record: AccountingRecord): void {
   fold.total += 1;
+  // BEFORE THE CLASSIFICATION, for the same reason the timings are: the model
+  // wrote what it wrote whatever we then decided about the row's billing, and
+  // an output figure taken only from rows that classified cleanly would be an
+  // average over the sample that flatters it.
+  recordOutputRow(fold.output, record);
   const classification = classifyProxySavings(record);
   if (classification === PROXY_SAVINGS.Unbilled) fold.unbilled += 1;
   else if (classification === PROXY_SAVINGS.Uncounted) fold.uncounted += 1;
@@ -607,6 +648,13 @@ function mergeRollup(into: DayFold, row: RollupRow): void {
     }
     addTotals(bucket, totals);
   }
+  // NON-NULL BY THE TIME WE ARE HERE: `looksLikeRollup` has already refused
+  // every row whose output ledger this build cannot read, so a row that
+  // reached the fold parses. The guard is kept rather than asserted away
+  // because the two functions can drift apart, and the cost of being wrong is
+  // a thrown exception in the middle of a prune.
+  const output = parseOutputLedgers(row.output);
+  if (output !== null) mergeOutputLedgers(into.output, output);
 }
 
 /**
