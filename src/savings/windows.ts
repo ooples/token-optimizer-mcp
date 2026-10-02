@@ -279,6 +279,20 @@ function accumulate(
  * TEN DECIMALS, which is a ten-billionth of a dollar: far below the smallest
  * real price in the catalog and far above the noise being removed.
  */
+/**
+ * The last word in a group ordering, so a tie has one answer everywhere.
+ *
+ * CODE POINTS, NOT `localeCompare`. Two models that saved the same number of
+ * tokens compared equal, and the order then came from whatever collation the
+ * host's locale supplies -- so the same ledger printed its table in a different
+ * order on a different machine, with every figure identical. A published table
+ * whose row order moves for no visible reason is read as the figures having
+ * moved.
+ */
+export function byName(a: { name: string }, b: { name: string }): number {
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+}
+
 export function usd(amount: number): number {
   return Math.round(amount * 1e10) / 1e10;
 }
@@ -382,7 +396,7 @@ export function groupBy(
   // Largest saving first, then by name so two equal rows keep a stable order
   // across runs -- a report that reshuffles itself is one nobody can diff.
   rows.sort(
-    (a, b) => b.tokensSaved - a.tokensSaved || a.name.localeCompare(b.name)
+    (a, b) => b.tokensSaved - a.tokensSaved || byName(a, b)
   );
   return Object.freeze(rows);
 }

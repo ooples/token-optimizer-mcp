@@ -40,11 +40,13 @@ import {
   foldRecord,
   looksLikeRollup,
   rollupPath,
+  transformQuantile,
   type RollupRow,
   type RollupTotals,
 } from './retention.js';
 import {
   UNATTRIBUTED,
+  byName,
   localDayKey,
   startOfDayKey,
   windowBoundaries,
@@ -70,6 +72,39 @@ export interface ProxySavingsWindow {
   readonly oursTokens: number;
   /** The provider's count of those same bodies. */
   readonly billedTokens: number;
+  /**
+   * Rows that carried a timing block, which every latency figure below is over.
+   *
+   * THE DENOMINATOR IS PUBLISHED BESIDE THE FIGURES because it is not
+   * `requests`: a ledger written by a proxy built before the timings existed
+   * carries none, and the figures are then null rather than zero.
+   */
+  readonly timedRequests: number;
+  /** Mean milliseconds spent rewriting a request. Exact across the fold. */
+  readonly transformMsMean: number | null;
+  /** The median transform, as the bound of the bucket it falls in. */
+  readonly transformMsP50: LatencyBound | null;
+  /** The slow transform: what a request at the 95th percentile paid. */
+  readonly transformMsP95: LatencyBound | null;
+  /** The slowest single transform in the window. */
+  readonly transformMsMax: number | null;
+  /**
+   * Mean milliseconds the provider took, which is what our share is read
+   * against: 3 ms of transform in front of a 2-second call is a different
+   * trade from 3 ms in front of a 30 ms one.
+   */
+  readonly upstreamMsMean: number | null;
+}
+
+/**
+ * A latency figure the histogram can defend.
+ *
+ * `exceeded` SAYS THE BUCKET WAS OPEN, so the slowest requests read as "over
+ * 2000 ms" rather than as a measurement of 2000 ms -- see `transformQuantile`.
+ */
+export interface LatencyBound {
+  readonly ms: number;
+  readonly exceeded: boolean;
 }
 
 export interface ProxySavingsReport {
@@ -124,6 +159,17 @@ export interface ProxySavingsReport {
  */
 type Totals = RollupTotals;
 
+/**
+ * An average, or null when there was nothing to average.
+ *
+ * NULL RATHER THAN ZERO for the same reason every other figure here does it: a
+ * zero in a latency column reads as a transform that cost nothing, which is a
+ * false measurement rather than a missing one.
+ */
+function mean(total: number, count: number): number | null {
+  return count > 0 ? total / count : null;
+}
+
 function percent(saved: number, before: number): number {
   return before > 0 ? (saved / before) * 100 : 0;
 }
@@ -147,6 +193,12 @@ function freezeWindow(
     costUsd: totals.pricedRequests > 0 ? totals.cost : null,
     oursTokens: totals.oursTokens,
     billedTokens: totals.billedTokens,
+    timedRequests: totals.timedRequests,
+    transformMsMean: mean(totals.transformMs, totals.timedRequests),
+    transformMsP50: transformQuantile(totals.transformBuckets, 0.5),
+    transformMsP95: transformQuantile(totals.transformBuckets, 0.95),
+    transformMsMax: totals.timedRequests > 0 ? totals.transformMsMax : null,
+    upstreamMsMean: mean(totals.upstreamMs, totals.timedRequests),
   });
 }
 
@@ -290,7 +342,7 @@ export function createProxyAggregator(now: Date = new Date()): ProxyAggregator {
         );
       }
       byModel.sort(
-        (a, b) => b.tokensSaved - a.tokensSaved || a.name.localeCompare(b.name)
+        (a, b) => b.tokensSaved - a.tokensSaved || byName(a, b)
       );
       // DERIVED FROM THE BUCKETS, not a fourth counter: a model whose counted
       // rows outnumber its priced ones had at least one row the catalog could

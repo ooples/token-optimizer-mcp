@@ -27,8 +27,12 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
+  TRANSFORM_MS_BOUNDS,
+  emptyTotals,
   longestReportWindowDays,
   looksLikeRollup,
+  transformBucket,
+  transformQuantile,
   pruneProxyLedger,
   retentionDays,
   rollupPath,
@@ -139,15 +143,41 @@ function figures(report: Awaited<ReturnType<typeof readProxySavings>>) {
   return rest;
 }
 
-/** A spread of rows whose shapes exercise every branch of the fold. */
+/** One request's durations, as the proxy stamps them. */
+function timing(transformMs: number, upstreamMs = 1200) {
+  return { transformMs, upstreamMs };
+}
+
+/**
+ * A spread of rows whose shapes exercise every branch of the fold.
+ *
+ * THE TIMINGS ARE PART OF THE SPREAD, so the whole-report equality above also
+ * holds the latency figures to the fold: a mean, a median, a 95th and a maximum
+ * all have to come back the same from a day's stored buckets as from its rows.
+ * They are deliberately spread across bucket boundaries, and one row -- the 503
+ * -- is both timed and never billed, because we paid for that transform too.
+ */
 function spread(): AccountingRecord[] {
   return [
-    record({ ts: daysBack(0).toISOString() }),
-    record({ ts: daysBack(3).toISOString(), model: 'claude-sonnet-5' }),
-    record({ ts: daysBack(40).toISOString() }),
-    record({ ts: daysBack(40).toISOString(), model: 'claude-sonnet-5' }),
-    // Never charged for, so it counts as a request and nothing else.
-    record({ ts: daysBack(41).toISOString(), status: 503 }),
+    record({ ts: daysBack(0).toISOString(), timing: timing(1.4) }),
+    record({
+      ts: daysBack(3).toISOString(),
+      model: 'claude-sonnet-5',
+      timing: timing(2.5),
+    }),
+    record({ ts: daysBack(40).toISOString(), timing: timing(9.75) }),
+    record({
+      ts: daysBack(40).toISOString(),
+      model: 'claude-sonnet-5',
+      timing: timing(0.25, 90),
+    }),
+    // Never charged for, so it counts as a request and nothing else -- but the
+    // transform still ran, so its duration is still ours to report.
+    record({
+      ts: daysBack(41).toISOString(),
+      status: 503,
+      timing: timing(140, 30),
+    }),
     // Charged for, with no count of either body.
     record({ ts: daysBack(41).toISOString(), tokens: undefined }),
     // Counted, with a model no catalog prices.
@@ -230,12 +260,15 @@ describe('a day that is present as rows and as a rollup at once', () => {
         uncounted: 0,
         skippedLines: 0,
       },
+      // SPREAD ONTO A BLANK SET, so this fixture carries every field a stored
+      // day carries. A literal written out field by field goes stale the next
+      // time the fold learns to carry something, and goes stale silently.
       totals: {
+        ...emptyTotals(),
         requests: 4,
         billedRequests: 4,
         countedRequests: 4,
         pricedRequests: 4,
-        calibratedRequests: 0,
         tokensSaved: 3000,
         tokensBefore: 4000,
         cost: 0.5,
@@ -361,5 +394,104 @@ describe('lines the policy cannot read', () => {
     expect(
       written.filter((line) => looksLikeRollup(JSON.parse(line)))
     ).toHaveLength(3);
+  });
+});
+
+/**
+ * The half of the trade the report used to leave out, and what it must not claim.
+ *
+ * A SAVING WITH NO LATENCY BESIDE IT ARGUES ONE SIDE. The proxy rewrites every
+ * request an agent makes, and that rewriting costs time the operator pays on
+ * every call -- so the report now prints our transform cost next to the tokens
+ * it bought. The figures have to survive the fold like every other figure here,
+ * which the whole-report equality above already demands; what these tests pin
+ * are the three ways a latency number can be wrong while still being a number.
+ */
+describe('what the saving cost in latency', () => {
+  it('reports no latency rather than no cost when nothing was timed', async () => {
+    const untimed = [
+      record({ ts: daysBack(0).toISOString() }),
+      record({ ts: daysBack(40).toISOString() }),
+    ];
+    const ledger = ledgerOfRecords(untimed);
+
+    const before = await readProxySavings(ledger, NOW);
+    const all = before.windows.find((window) => window.since === null);
+
+    // THE POSITIVE CONTROL: these rows are measured, so the report does have
+    // figures -- it is the latency specifically that is unknown here.
+    expect(all?.countedRequests).toBe(2);
+    expect(all?.tokensSaved).toBeGreaterThan(0);
+    // A ZERO HERE WOULD CLAIM THE TRANSFORM WAS FREE, which is the one latency
+    // statement no ledger without timings can support.
+    expect(all?.timedRequests).toBe(0);
+    expect(all?.transformMsMean).toBeNull();
+    expect(all?.transformMsP50).toBeNull();
+    expect(all?.transformMsP95).toBeNull();
+    expect(all?.transformMsMax).toBeNull();
+    expect(all?.upstreamMsMean).toBeNull();
+
+    // AND IT STAYS UNKNOWN THROUGH THE FOLD, rather than becoming a zero the
+    // moment the rows are replaced by their totals.
+    pruneProxyLedger(ledger, NOW);
+    const after = await readProxySavings(ledger, NOW);
+    expect(figures(after)).toEqual(figures(before));
+  });
+
+  it('prices our transform against the call it sits in front of', async () => {
+    const ledger = ledgerOfRecords([
+      record({ ts: daysBack(0).toISOString(), timing: timing(2, 1000) }),
+      record({ ts: daysBack(0).toISOString(), timing: timing(4, 3000) }),
+    ]);
+
+    const report = await readProxySavings(ledger, NOW);
+    const all = report.windows.find((window) => window.since === null);
+
+    expect(all?.timedRequests).toBe(2);
+    // EXACT, NOT APPROXIMATE: a mean is a sum over a count, and both survive a
+    // fold exactly, so there is no tolerance to allow for here.
+    expect(all?.transformMsMean).toBe(3);
+    expect(all?.upstreamMsMean).toBe(2000);
+    expect(all?.transformMsMax).toBe(4);
+  });
+
+  it('publishes a bucketed quantile as a bound, never as a measurement', () => {
+    const buckets = TRANSFORM_MS_BOUNDS.map(() => 0);
+    // Eighteen quick transforms and two that ran away. Two, not one: at a
+    // hundred requests the 95th percentile is the 95th of them, so a single
+    // outlier in twenty sits above the quantile by definition and the figure
+    // would correctly read as quick -- which is the arithmetic, not a bug.
+    buckets[transformBucket(1.4)] = 18;
+    buckets[TRANSFORM_MS_BOUNDS.length - 1] = 2;
+
+    const median = transformQuantile(buckets, 0.5);
+    const tail = transformQuantile(buckets, 0.95);
+
+    // THE MEDIAN LANDS IN A CLOSED BUCKET, so it is reported as that bucket's
+    // upper bound and nothing is claimed about where inside it the request fell.
+    expect(median).toEqual({ ms: 2, exceeded: false });
+    // THE TAIL LANDS IN THE OPEN ONE. Reporting the last bound as a value would
+    // publish a duration the request is only known to have exceeded.
+    expect(tail?.exceeded).toBe(true);
+    expect(tail?.ms).toBe(TRANSFORM_MS_BOUNDS[TRANSFORM_MS_BOUNDS.length - 2]);
+    // THE CONTROL: an empty histogram is unknown, not instant.
+    expect(transformQuantile(TRANSFORM_MS_BOUNDS.map(() => 0), 0.5)).toBeNull();
+  });
+
+  it('counts the transform we paid for on a request that was never billed', async () => {
+    const ledger = ledgerOfRecords([
+      record({ ts: daysBack(0).toISOString(), status: 503, timing: timing(40) }),
+    ]);
+
+    const report = await readProxySavings(ledger, NOW);
+    const all = report.windows.find((window) => window.since === null);
+
+    // THE CONTROL: the row is genuinely unbilled, so it contributes no saving.
+    expect(all?.billedRequests).toBe(0);
+    expect(all?.tokensSaved).toBe(0);
+    // AND YET THE TIME WAS SPENT. Timing only the requests that went well would
+    // report our latency over exactly the sample that flatters it.
+    expect(all?.timedRequests).toBe(1);
+    expect(all?.transformMsMean).toBe(40);
   });
 });

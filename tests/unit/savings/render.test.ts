@@ -10,6 +10,7 @@ import {
   asSavingsWindow,
   bar,
   calibrationLine,
+  latencyLine,
   count,
   gateNote,
   groupLines,
@@ -308,6 +309,12 @@ function proxyWindow(
     costUsd: 0.02,
     oursTokens: 500,
     billedTokens: 480,
+    timedRequests: 5,
+    transformMsMean: 2.4,
+    transformMsP50: { ms: 3, exceeded: false },
+    transformMsP95: { ms: 20, exceeded: false },
+    transformMsMax: 18.75,
+    upstreamMsMean: 1840,
     ...over,
   };
 }
@@ -662,5 +669,72 @@ describe('the price-table note', () => {
         priceTable: NO_TABLE,
       })
     ).not.toContain(OPERATOR_PRICE_TABLE_ENV);
+  });
+});
+
+/**
+ * The line that keeps the report from arguing one side of a trade.
+ *
+ * WHAT THESE PIN IS THE WORDING, not the arithmetic -- `retention.test.ts`
+ * holds the figures to the fold. A quantile the histogram can only bound has to
+ * read as a bound in the text an operator quotes, and a ledger with no timings
+ * has to say so out loud: a missing latency line beside a large saving is read
+ * as a saving that cost nothing.
+ */
+describe('the latency the saving cost', () => {
+  it('prints our transform beside the call it sits in front of', () => {
+    const line = latencyLine(proxyReport());
+
+    expect(line).toContain('our transform added 2.4 ms per request on average');
+    // A BOUND, NOT A VALUE: the histogram knows the bucket, not the position
+    // inside it, so "under" is the strongest honest word here.
+    expect(line).toContain('median under 3.0 ms');
+    expect(line).toContain('95th under 20 ms');
+    expect(line).toContain('slowest 18.8 ms');
+    // THE SCALE OUR SHARE IS READ AGAINST.
+    expect(line).toContain('upstream call averaging 1840 ms');
+    expect(line).toContain('over 5 timed requests');
+  });
+
+  it('marks the open bucket as exceeded rather than measured', () => {
+    const line = latencyLine(
+      proxyReport({
+        windows: [
+          proxyWindow({ transformMsP95: { ms: 2000, exceeded: true } }),
+        ],
+      })
+    );
+
+    // THE CONTROL: the closed median still reads as a bound in the same line,
+    // so this is the open bucket being distinguished and not the whole line
+    // changing shape.
+    expect(line).toContain('median under 3.0 ms');
+    expect(line).toContain('95th over 2000 ms');
+    expect(line).not.toContain('95th under');
+  });
+
+  it('says the latency is unrecorded instead of saying it was free', () => {
+    const line = latencyLine(
+      proxyReport({
+        windows: [
+          proxyWindow({
+            timedRequests: 0,
+            transformMsMean: null,
+            transformMsP50: null,
+            transformMsP95: null,
+            transformMsMax: null,
+            upstreamMsMean: null,
+          }),
+        ],
+      })
+    );
+
+    expect(line).toBe(
+      'Latency cost: not recorded -- this ledger carries no request timings.'
+    );
+    // THE CONTROL: a report with no requests at all prints nothing, so the
+    // sentence above is a disclosure about a ledger that was read, not the
+    // default text of an empty one.
+    expect(latencyLine(proxyReport({ windows: [proxyWindow({ requests: 0 })] }))).toBe('');
   });
 });

@@ -100,6 +100,79 @@ export function retentionDays(now: Date = new Date()): number {
 export const MAX_LEDGER_BYTES = 16 * 1024 * 1024;
 
 /**
+ * The millisecond upper bounds of the transform-latency histogram.
+ *
+ * A HISTOGRAM, BECAUSE A SUM CANNOT ANSWER THE QUESTION. The figure an operator
+ * needs beside a saving is not the average transform cost but the one a slow
+ * request pays, and a quantile is not recoverable from a sum and a count. A
+ * fixed set of bounds is, because adding two days' bucket counts element-wise
+ * gives exactly the counts the two days' rows would have produced -- so a
+ * quantile read off a folded day is the same quantile, to the width of its
+ * bucket, that the rows themselves would have given.
+ *
+ * SPACED FOR OUR OWN HALF OF THE TRADE, not for the provider's. Transforming a
+ * request is sub-millisecond to tens of milliseconds work, so the resolution
+ * sits there; the long tail is kept coarse because past a few hundred
+ * milliseconds the only fact that matters is that it happened.
+ *
+ * THE LAST BUCKET IS UNBOUNDED, and is reported as a bound that was exceeded
+ * rather than as a number, so a pathological request can never be published as
+ * though it had been measured at 5000 ms.
+ */
+export const TRANSFORM_MS_BOUNDS: readonly number[] = Object.freeze([
+  0.5, 1, 2, 3, 5, 8, 12, 20, 30, 50, 80, 125, 200, 300, 500, 800, 1250, 2000,
+  5000, Number.POSITIVE_INFINITY,
+]);
+
+/** Which bucket a duration falls in. Never out of range: the last is open. */
+export function transformBucket(ms: number): number {
+  for (let index = 0; index < TRANSFORM_MS_BOUNDS.length; index += 1) {
+    if (ms <= TRANSFORM_MS_BOUNDS[index]) return index;
+  }
+  return TRANSFORM_MS_BOUNDS.length - 1;
+}
+
+/**
+ * A quantile of a bucketed set of transform durations.
+ *
+ * REPORTED AS AN UPPER BOUND, NOT AS A VALUE. The histogram knows that a
+ * request fell between two bounds, not where between them, so the honest figure
+ * is the bound: "95% of transforms finished within 20 ms". Interpolating inside
+ * the bucket would invent a precision the fold threw away, and the invented
+ * digits would be the ones an operator quoted.
+ *
+ * `exceeded` MARKS THE OPEN BUCKET, so the slowest requests are never published
+ * as having taken the last bound. The caller renders that as a floor.
+ *
+ * NULL WHEN NOTHING WAS TIMED, so a build that wrote no timings reads as
+ * unknown rather than as instant.
+ */
+export function transformQuantile(
+  buckets: readonly number[],
+  fraction: number
+): { readonly ms: number; readonly exceeded: boolean } | null {
+  let timed = 0;
+  for (const count of buckets) timed += count;
+  if (timed === 0) return null;
+  // CEIL, SO THE QUANTILE IS THE BOUND THAT COVERS THE FRACTION rather than
+  // one a hair under it: p95 of twenty requests is the nineteenth, not the
+  // nineteenth-point-nothing.
+  const rank = Math.max(1, Math.ceil(fraction * timed));
+  let seen = 0;
+  for (let index = 0; index < buckets.length; index += 1) {
+    seen += buckets[index];
+    if (seen < rank) continue;
+    const bound = TRANSFORM_MS_BOUNDS[index];
+    if (Number.isFinite(bound)) return { ms: bound, exceeded: false };
+    return {
+      ms: TRANSFORM_MS_BOUNDS[index - 1] ?? 0,
+      exceeded: true,
+    };
+  }
+  return null;
+}
+
+/**
  * One set of running totals: the only shape a folded day is ever stored in.
  *
  * DEFINED HERE, AND USED BY THE READER, so the two cannot drift. A field the
@@ -121,6 +194,23 @@ export interface RollupTotals {
   cost: number;
   oursTokens: number;
   billedTokens: number;
+  /**
+   * Rows that carried a timing block, which is not the same as `requests`.
+   *
+   * COUNTED SEPARATELY SO AN UNTIMED ROW IS NEVER A ZERO. A proxy built before
+   * the timings existed writes rows with no `timing` at all, and averaging
+   * those in as zero milliseconds would publish the one latency claim nobody
+   * can defend: that the transform was free.
+   */
+  timedRequests: number;
+  /** Milliseconds we spent rewriting, summed over `timedRequests`. */
+  transformMs: number;
+  /** Milliseconds the provider took, summed over the same rows. */
+  upstreamMs: number;
+  /** The slowest single transform in the day. Exact across a fold, via MAX. */
+  transformMsMax: number;
+  /** Transform durations bucketed by `TRANSFORM_MS_BOUNDS`, so a quantile folds. */
+  transformBuckets: number[];
 }
 
 export function emptyTotals(): RollupTotals {
@@ -135,6 +225,11 @@ export function emptyTotals(): RollupTotals {
     cost: 0,
     oursTokens: 0,
     billedTokens: 0,
+    timedRequests: 0,
+    transformMs: 0,
+    upstreamMs: 0,
+    transformMsMax: 0,
+    transformBuckets: TRANSFORM_MS_BOUNDS.map(() => 0),
   };
 }
 
@@ -150,6 +245,17 @@ export function addTotals(into: RollupTotals, from: RollupTotals): void {
   into.cost += from.cost;
   into.oursTokens += from.oursTokens;
   into.billedTokens += from.billedTokens;
+  into.timedRequests += from.timedRequests;
+  into.transformMs += from.transformMs;
+  into.upstreamMs += from.upstreamMs;
+  // MAX, NOT A SUM: the slowest request in two days is the slower of the two
+  // slowest, and adding them would publish a duration nothing ever took.
+  if (from.transformMsMax > into.transformMsMax)
+    into.transformMsMax = from.transformMsMax;
+  // ELEMENT-WISE, WHICH IS WHAT MAKES THE QUANTILE EXACT ACROSS THE FOLD.
+  for (let index = 0; index < into.transformBuckets.length; index += 1) {
+    into.transformBuckets[index] += from.transformBuckets[index] ?? 0;
+  }
 }
 
 /**
@@ -185,7 +291,20 @@ const ROLLUP_KIND = 'proxy-day-rollup';
 function isTotals(value: unknown): value is RollupTotals {
   if (typeof value !== 'object' || value === null) return false;
   const seen = value as Record<string, unknown>;
-  for (const field of Object.keys(emptyTotals())) {
+  for (const [field, blank] of Object.entries(emptyTotals())) {
+    // THE HISTOGRAM IS CHECKED AS A HISTOGRAM, not as a number: a stored day
+    // whose buckets are the wrong length would fold a quantile against bounds
+    // this build does not use, and the figure would look like a measurement.
+    if (Array.isArray(blank)) {
+      const buckets = seen[field];
+      if (!Array.isArray(buckets) || buckets.length !== blank.length)
+        return false;
+      for (const count of buckets) {
+        if (typeof count !== 'number' || !Number.isInteger(count) || count < 0)
+          return false;
+      }
+      continue;
+    }
     if (typeof seen[field] !== 'number' || !Number.isFinite(seen[field]))
       return false;
   }
@@ -246,6 +365,19 @@ export function foldRecord(
   record: AccountingRecord
 ): void {
   totals.requests += 1;
+  // TIMED BEFORE ANYTHING IS CLASSIFIED, because we paid for the transform
+  // whatever the provider then did with the request. A rewrite that took 40 ms
+  // and ended in a 500 cost the operator those 40 ms, and dropping it with the
+  // unbilled row would quietly report our latency only on the requests that
+  // went well -- which is the half that makes the trade look best.
+  if (record.timing) {
+    totals.timedRequests += 1;
+    totals.transformMs += record.timing.transformMs;
+    totals.upstreamMs += record.timing.upstreamMs;
+    if (record.timing.transformMs > totals.transformMsMax)
+      totals.transformMsMax = record.timing.transformMs;
+    totals.transformBuckets[transformBucket(record.timing.transformMs)] += 1;
+  }
   const classification = classifyProxySavings(record);
   if (classification === PROXY_SAVINGS.Unbilled) return;
   totals.billedRequests += 1;

@@ -15,6 +15,7 @@ import {
   type ProxyInput,
   type ProxySavingsReport,
   type ProxySavingsWindow,
+  type LatencyBound,
 } from './proxy.js';
 import {
   OPERATOR_PRICE_TABLE_ENV,
@@ -248,6 +249,69 @@ export function calibrationLine(report: ProxySavingsReport): string {
 }
 
 /**
+ * The other half of the trade: what the saving cost in latency.
+ *
+ * WHY THIS LINE EXISTS AT ALL. Every figure above it is a reduction, and a
+ * report made only of reductions argues one side of a decision. An extension
+ * that halves the bill and adds two hundred milliseconds to every request is a
+ * trade, and an operator cannot accept or refuse a trade they can only see one
+ * half of -- so our own transform cost is printed beside the saving it bought,
+ * in the same report, from the same rows.
+ *
+ * THE UPSTREAM FIGURE IS THE SCALE, not a second claim. Two milliseconds of
+ * transform in front of a two-second provider call and the same two in front of
+ * a thirty-millisecond one are different trades, and the number that separates
+ * them is the one we do not control.
+ *
+ * SAYS SO WHEN IT DOES NOT KNOW. A ledger written by a proxy built before the
+ * timings existed carries none, and the line then reports that rather than
+ * disappearing -- an absent latency line beside a large saving reads as a
+ * saving that cost nothing.
+ */
+export function latencyLine(report: ProxySavingsReport): string {
+  const all = report.windows.find((window) => window.since === null);
+  if (all === undefined || all.requests === 0) return '';
+  if (
+    all.timedRequests === 0 ||
+    all.transformMsMean === null ||
+    all.upstreamMsMean === null
+  ) {
+    return 'Latency cost: not recorded -- this ledger carries no request timings.';
+  }
+  const requests = `${count(all.timedRequests)} timed ${
+    all.timedRequests === 1 ? 'request' : 'requests'
+  }`;
+  const spread = [
+    bound('median', all.transformMsP50),
+    bound('95th', all.transformMsP95),
+    all.transformMsMax === null
+      ? ''
+      : `slowest ${all.transformMsMax.toFixed(1)} ms`,
+  ].filter((part) => part !== '');
+  const detail = spread.length > 0 ? ` (${spread.join(', ')})` : '';
+  return (
+    `Latency cost: our transform added ${all.transformMsMean.toFixed(1)} ms per ` +
+    `request on average${detail}, in front of an upstream call averaging ` +
+    `${all.upstreamMsMean.toFixed(0)} ms, over ${requests}.`
+  );
+}
+
+/**
+ * One bucketed quantile, rendered as the bound it actually is.
+ *
+ * "UNDER", NOT "=", because the histogram knows which bucket the request fell
+ * in and not where in it (`transformQuantile`); and "over" for the open last
+ * bucket, so the slowest requests are never printed as a measurement.
+ */
+function bound(name: string, value: LatencyBound | null): string {
+  if (value === null) return '';
+  const digits = value.ms < 10 ? 1 : 0;
+  return value.exceeded
+    ? `${name} over ${value.ms.toFixed(digits)} ms`
+    : `${name} under ${value.ms.toFixed(digits)} ms`;
+}
+
+/**
  * WHY THE UNCOUNTED ROWS ARE NAMED SEPARATELY FROM THE UNBILLED ONES. A request
  * the provider rejected is not a failed measurement -- there was no bill to
  * reduce -- while a billed request we could not count is exactly that, and the
@@ -286,6 +350,8 @@ export function renderProxySavings(
   );
   const calibration = calibrationLine(report);
   if (calibration !== '') lines.push('', calibration);
+  const latency = latencyLine(report);
+  if (latency !== '') lines.push(latency);
   const gate = proxyGateNote(report);
   if (gate !== '') lines.push(gate);
   const unpriced = unpricedNote(report.unpricedModels);
