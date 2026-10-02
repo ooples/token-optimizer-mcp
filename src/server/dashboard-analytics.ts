@@ -5,13 +5,16 @@ import { AnalyticsManager } from '../analytics/analytics-manager.js';
 import { SqliteAnalyticsStorage } from '../analytics/analytics-storage.js';
 import type { AnalyticsEntry } from '../analytics/analytics-types.js';
 import type { AnalyticsRollup } from '../analytics/analytics-rollup.js';
+import { schemaVersionOf } from '../analytics/analytics-rollup.js';
 import {
+  SAVINGS_MEASUREMENT_SCHEMA_VERSION,
   classifySavings,
   hasObservedReturnedContext,
   isVerifiedSavingsEntry,
   isVerifiedExpansionDebit,
   reportedSavings,
   verifiedTransportDelta,
+  verifiedInputDisplacement,
   type SavingsClassification,
 } from '../analytics/savings-classification.js';
 import {
@@ -101,6 +104,35 @@ export interface DashboardAnalyticsReport {
      */
     foldedOperations: number;
     foldedDays: number;
+    /**
+     * File reads this store measured the tool as standing in for, in tokens.
+     *
+     * ITS OWN FIGURE, NEVER FOLDED INTO `totalTokensSaved`. See the note on
+     * `Split.inputDisplacementTokens`: these two credits share one `after` and
+     * have different `before`s, so adding them would double-count the reply.
+     */
+    inputDisplacementTokens: number;
+    displacementOperations: number;
+    /**
+     * What each measurement contract in this store contributed.
+     *
+     * THE BREAK IS SHOWN, NOT SUMMED ACROSS. Every figure above spans every
+     * contract the store holds, and a reader has no way to tell a total drawn
+     * from one definition of a saving from one drawn from two. A day already
+     * folded cannot be re-measured under the newer contract -- its rows are
+     * gone -- so the honest move is to label which definition produced which
+     * part. Version 0 is a day folded before the stamp existed.
+     */
+    contracts: Array<{
+      measurementSchemaVersion: number;
+      current: boolean;
+      operations: number;
+      verifiedSavingsOperations: number;
+      totalTokensSaved: number;
+      inputDisplacementTokens: number;
+      firstSeen: string | null;
+      lastSeen: string | null;
+    }>;
   };
   byAction: DashboardActionAnalytics[];
   byClient: Array<{
@@ -201,6 +233,17 @@ interface Split {
   grossTokensSaved: number;
   expansionTokensReturned: number;
   unverifiedReportedTokensSaved: number;
+  /**
+   * File reads this tool stood in for, in tokens.
+   *
+   * SUMMED APART FROM `grossTokensSaved` ON PURPOSE. One reply measured
+   * against two different baselines -- the payload the proxy would have
+   * carried, and the file the caller would have read -- gives two befores for
+   * one after, and those are not additive. A reader who wants one figure adds
+   * them deliberately.
+   */
+  inputDisplacementTokens: number;
+  displacementOperations: number;
   contextUsd: number;
   pricedContextOperations: number;
   savedUsd: number;
@@ -223,6 +266,8 @@ function emptySplit(): Split {
     grossTokensSaved: 0,
     expansionTokensReturned: 0,
     unverifiedReportedTokensSaved: 0,
+    inputDisplacementTokens: 0,
+    displacementOperations: 0,
     contextUsd: 0,
     pricedContextOperations: 0,
     savedUsd: 0,
@@ -261,6 +306,9 @@ function addRow(split: Split, entry: AnalyticsEntry): void {
   split.grossTokensSaved += verified ? reported : 0;
   split.expansionTokensReturned += expansion ? entry.optimizedTokens : 0;
   split.unverifiedReportedTokensSaved += unverified ? reported : 0;
+  const displacement = verifiedInputDisplacement(entry);
+  split.inputDisplacementTokens += displacement;
+  split.displacementOperations += displacement === 0 ? 0 : 1;
   if (observed) {
     const priced = inputEquivalent(entry, entry.optimizedTokens);
     if (priced !== null) {
@@ -294,6 +342,8 @@ function addFolded(split: Split, rollup: AnalyticsRollup): void {
   split.grossTokensSaved += rollup.verifiedReportedSavings;
   split.expansionTokensReturned += rollup.expansionOptimizedTokens;
   split.unverifiedReportedTokensSaved += rollup.unverifiedReportedSavings;
+  split.inputDisplacementTokens += rollup.inputDisplacementTokens;
+  split.displacementOperations += rollup.displacementOperations;
   split.contextUsd += rollup.contextUsd;
   split.pricedContextOperations += rollup.pricedContextOperations;
   split.savedUsd += rollup.costUsd;
@@ -465,7 +515,9 @@ export function summarizeDashboardAnalytics(
         pricedSavingsOperations: split.pricedSavingsOperations,
         verifiedExpansionOperations: split.expansionOperations,
         unmeasuredSavingsOperations:
-          split.operations - split.verifiedOperations - split.expansionOperations,
+          split.operations -
+          split.verifiedOperations -
+          split.expansionOperations,
         observedReturnedContextOperations: split.observedOperations,
         unverifiedReportedOperations: split.unverifiedOperations,
       };
@@ -481,7 +533,9 @@ export function summarizeDashboardAnalytics(
   const clientName = (recorded: string): string =>
     recorded && recorded !== 'unattributed' ? recorded : UNRECORDED_CLIENT;
   const clientGroups = groupBy(entries, (entry) =>
-    clientName(String(entry.client || (entry.metadata || {}).client || '').trim())
+    clientName(
+      String(entry.client || (entry.metadata || {}).client || '').trim()
+    )
   );
   const foldedClients = groupBy(folded, (rollup) =>
     clientName(String(rollup.client || '').trim())
@@ -528,6 +582,39 @@ export function summarizeDashboardAnalytics(
 
   const total = splitOf(entries, folded);
 
+  /*
+   * THE SAME UNION-OF-GROUPS SHAPE AS EVERY OTHER BREAKDOWN, keyed on the
+   * measurement contract. A live row carries its stamp in metadata; a folded
+   * day carries it in the key it was folded under, which is why it had to be
+   * in that key -- a day folded without it could never be attributed again.
+   */
+  const rowContracts = groupBy(entries, (entry) =>
+    String(schemaVersionOf(entry.metadata ?? {}))
+  );
+  const foldedContracts = groupBy(folded, (rollup) =>
+    String(rollup.measurementSchemaVersion)
+  );
+  const contracts = groupNames(rowContracts, foldedContracts)
+    .map((version) => {
+      const split = splitOf(
+        rowContracts.get(version) || [],
+        foldedContracts.get(version) || []
+      );
+      return {
+        measurementSchemaVersion: Number(version),
+        current: Number(version) === SAVINGS_MEASUREMENT_SCHEMA_VERSION,
+        operations: split.operations,
+        verifiedSavingsOperations: split.verifiedOperations,
+        totalTokensSaved: netTokensSaved(split),
+        inputDisplacementTokens: split.inputDisplacementTokens,
+        firstSeen: split.firstSeen,
+        lastSeen: split.lastSeen,
+      };
+    })
+    // NEWEST CONTRACT FIRST, so the definition in force now leads the list and
+    // the older ones read as history under it.
+    .sort((a, b) => b.measurementSchemaVersion - a.measurementSchemaVersion);
+
   return {
     schemaVersion: 3,
     available: entries.length > 0 || folded.length > 0,
@@ -560,6 +647,9 @@ export function summarizeDashboardAnalytics(
       unverifiedReportedOperations: total.unverifiedOperations,
       foldedOperations,
       foldedDays,
+      inputDisplacementTokens: total.inputDisplacementTokens,
+      displacementOperations: total.displacementOperations,
+      contracts,
     },
     byAction,
     byClient,

@@ -530,6 +530,15 @@ function renderAccounting(analytics, balance) {
         : 'no quarantined claims',
     ],
     [
+      'File reads displaced',
+      summary?.displacementOperations
+        ? compact(summary.inputDisplacementTokens)
+        : 'Not measured',
+      summary?.displacementOperations
+        ? `${fmt(summary.displacementOperations)} operations answered instead of reading the named file; counted apart from Optimizer saved`
+        : 'no call named a file we could count',
+    ],
+    [
       'Graph memory cost',
       balance ? compact(graphCost) : 'Not measured',
       balance
@@ -564,8 +573,35 @@ function renderAccounting(analytics, balance) {
   section.dataset.state = hasSavingsMeasurement ? 'measured' : 'not-measured';
   section.setAttribute('aria-busy', 'false');
   note.textContent = hasDirect
-    ? `${analytics?.source || 'No MCP operation rows yet'}. ${analytics?.measurement?.tokenCountMethod || ''} ${analytics?.pricing?.explanation || 'Cost is not priced.'} Graph counterfactuals remain outside the verified MCP total.`
+    ? `${analytics?.source || 'No MCP operation rows yet'}. ${analytics?.measurement?.tokenCountMethod || ''} ${analytics?.pricing?.explanation || 'Cost is not priced.'} Graph counterfactuals remain outside the verified MCP total.${contractNote(summary)}`
     : 'No direct optimizer before/after measurements have been recorded yet.';
+}
+
+/**
+ * What each measurement contract above contributed.
+ *
+ * SHOWN BECAUSE THE CARDS SUM ACROSS IT AND CANNOT SAY SO. A day folded
+ * before a contract changed cannot be re-measured under the new one -- its
+ * rows were pruned -- so a store that has lived through a change holds totals
+ * drawn from two definitions of a saving, and one number cannot disclose that.
+ * Naming each contract's share is what keeps the older part labelled rather
+ * than quietly absorbed. Version 0 is a day folded before the stamp existed.
+ *
+ * SILENT ON A SINGLE-CONTRACT STORE, which is every new install: there is no
+ * break to show, and a line explaining one would only invite the question.
+ */
+function contractNote(summary) {
+  const contracts = Array.isArray(summary?.contracts) ? summary.contracts : [];
+  if (contracts.length < 2) return '';
+  const parts = contracts.map(
+    (row) =>
+      `v${fmt(row.measurementSchemaVersion)}${row.current ? ' (current)' : ''} ` +
+      `${fmt(row.operations)} ops / ${compact(row.totalTokensSaved)} saved`
+  );
+  return (
+    ` The totals above span ${fmt(contracts.length)} measurement contracts, ` +
+    `which define a saving differently: ${parts.join('; ')}.`
+  );
 }
 
 function renderClientLedger(session, balance) {
@@ -1042,11 +1078,12 @@ function renderTimeline(events, summary) {
       );
     return;
   }
-  host.innerHTML = events
-    .slice(0, 40)
-    .map((e) => {
-      const action = describeEvent(e);
-      return `
+  host.innerHTML =
+    events
+      .slice(0, 40)
+      .map((e) => {
+        const action = describeEvent(e);
+        return `
       <div class="event">
         <span class="ev-dot"></span>
         <span class="ev-copy">
@@ -1056,8 +1093,8 @@ function renderTimeline(events, summary) {
         <span class="ev-meta num">${action.contextTokens != null ? (action.tokens == null ? `${compact(action.contextTokens)} context · ${action.costLabel}` : `${compact(action.contextTokens)} context · ${formatUsd(action.contextUsd)} · ${action.tokens < 0 ? `${compact(Math.abs(action.tokens))} expansion debit` : `${compact(action.tokens)} saved`}`) : action.tokens ? `${compact(action.tokens)} context tokens` : action.costLabel}</span>
         <span class="ev-time">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ''}</span>
       </div>`;
-    })
-    .join('') + folded;
+      })
+      .join('') + folded;
 }
 
 function describeEvent(event) {

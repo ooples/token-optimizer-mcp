@@ -291,7 +291,10 @@ export interface OutputSavingsEstimate {
   readonly tokens: number;
   readonly baselineTokens: number;
   readonly percent: number | null;
-  readonly interval: { readonly lowPercent: number; readonly highPercent: number } | null;
+  readonly interval: {
+    readonly lowPercent: number;
+    readonly highPercent: number;
+  } | null;
   readonly requests: number;
   readonly strata: number;
   readonly pooledRequests: number;
@@ -333,7 +336,10 @@ export function recordOutput(
   outputTokens: number
 ): void {
   observe(
-    bucket(arm === OUTPUT_ARM.Treatment ? ledger.treatment : ledger.control, key),
+    bucket(
+      arm === OUTPUT_ARM.Treatment ? ledger.treatment : ledger.control,
+      key
+    ),
     outputTokens
   );
 }
@@ -412,9 +418,7 @@ export function baselineFor(
  * number of requests that leaned on it is reported so the reader can discount
  * the band accordingly.
  */
-export function pooledVariance(
-  groups: Iterable<Accum>
-): number | null {
+export function pooledVariance(groups: Iterable<Accum>): number | null {
   let weighted = 0;
   let degrees = 0;
   for (const group of groups) {
@@ -469,8 +473,7 @@ function finalize(
     if (part.variance === null) variance = null;
     else if (variance !== null) variance += part.variance;
   }
-  const percent =
-    baselineTokens > 0 ? (tokens / baselineTokens) * 100 : null;
+  const percent = baselineTokens > 0 ? (tokens / baselineTokens) * 100 : null;
   let interval: OutputSavingsEstimate['interval'] = null;
   if (variance !== null && baselineTokens > 0) {
     const error = Z_95 * Math.sqrt(variance);
@@ -535,7 +538,7 @@ export function estimateFromBaseline(
       variance:
         spread === null || referenceSpread === null
           ? null
-          : n * spread + ((n * n) * referenceSpread) / reference.n,
+          : n * spread + (n * n * referenceSpread) / reference.n,
       requests: n,
     });
   }
@@ -585,7 +588,7 @@ export function estimateFromHoldout(
       variance:
         treatedSpread === null || heldSpread === null
           ? null
-          : (n * n) * (heldSpread / held.n + treatedSpread / treated.n),
+          : n * n * (heldSpread / held.n + treatedSpread / treated.n),
       requests: n,
     });
   }

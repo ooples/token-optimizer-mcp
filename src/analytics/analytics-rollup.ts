@@ -167,7 +167,7 @@ function text(value: unknown): string {
  * fold the history of an older contract into the totals of a newer one, which
  * is the one thing a version stamp exists to prevent.
  */
-function schemaVersionOf(metadata: Record<string, unknown>): number {
+export function schemaVersionOf(metadata: Record<string, unknown>): number {
   const parsed = Number(metadata.measurementSchemaVersion);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }

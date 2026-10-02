@@ -93,7 +93,11 @@ function hashWord(word: string): number {
 }
 
 /** FNV-1a again, over the window's word hashes, so order matters. */
-function hashWindow(words: readonly number[], start: number, size: number): number {
+function hashWindow(
+  words: readonly number[],
+  start: number,
+  size: number
+): number {
   let hash = 0x811c9dc5;
   for (let offset = 0; offset < size; offset += 1) {
     let word = words[start + offset] ?? 0;

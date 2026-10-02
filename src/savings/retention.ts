@@ -129,8 +129,26 @@ export const MAX_LEDGER_BYTES = 16 * 1024 * 1024;
  * though it had been measured at 5000 ms.
  */
 export const TRANSFORM_MS_BOUNDS: readonly number[] = Object.freeze([
-  0.5, 1, 2, 3, 5, 8, 12, 20, 30, 50, 80, 125, 200, 300, 500, 800, 1250, 2000,
-  5000, Number.POSITIVE_INFINITY,
+  0.5,
+  1,
+  2,
+  3,
+  5,
+  8,
+  12,
+  20,
+  30,
+  50,
+  80,
+  125,
+  200,
+  300,
+  500,
+  800,
+  1250,
+  2000,
+  5000,
+  Number.POSITIVE_INFINITY,
 ]);
 
 /** Which bucket a duration falls in. Never out of range: the last is open. */

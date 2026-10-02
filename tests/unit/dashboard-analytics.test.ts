@@ -236,6 +236,15 @@ describe('dashboard optimizer analytics contract', () => {
  * EACH TEST COMPARES A WHOLE REPORT AGAINST ITSELF, rows against the same rows
  * folded, rather than asserting figures a future change could simply restate.
  */
+/** A row with no contract stamp at all: everything recorded before one existed. */
+const legacyRow = row({
+  toolName: 'smart_grep',
+  originalTokens: 9_000,
+  optimizedTokens: 500,
+  tokensSaved: 8_500,
+  timestamp: '2026-08-12T12:07:00.000Z',
+});
+
 describe('dashboard analytics across the retention fold', () => {
   const expansion = row({
     toolName: 'smart_read',
@@ -269,14 +278,7 @@ describe('dashboard analytics across the retention fold', () => {
       measurement: 'actual-return-context-only',
     },
   });
-  const legacy = row({
-    toolName: 'smart_grep',
-    originalTokens: 9_000,
-    optimizedTokens: 500,
-    tokensSaved: 8_500,
-    timestamp: '2026-08-12T12:07:00.000Z',
-  });
-  const population = [verified, expansion, observed, legacy];
+  const population = [verified, expansion, observed, legacyRow];
 
   /** The report as the dashboard publishes it, minus what a fold cannot keep. */
   function published(report: DashboardAnalyticsReport) {
@@ -310,7 +312,7 @@ describe('dashboard analytics across the retention fold', () => {
 
   it('adds a live row to the folded day it belongs beside', () => {
     const whole = summarizeDashboardAnalytics(population, {});
-    const split = summarizeDashboardAnalytics([legacy], {
+    const split = summarizeDashboardAnalytics([legacyRow], {
       rollups: foldEntries([verified, expansion, observed]),
     });
 
@@ -332,5 +334,105 @@ describe('dashboard analytics across the retention fold', () => {
     expect(folded.available).toBe(true);
     expect(folded.recent).toHaveLength(0);
     expect(folded.summary.foldedDays).toBe(1);
+  });
+});
+
+describe('dashboard analytics across a measurement contract change', () => {
+  /** A row proved under the contract that added input displacement. */
+  const displaced = row({
+    toolName: 'smart_dependencies',
+    originalTokens: 4_937,
+    optimizedTokens: 300,
+    tokensSaved: 4_637,
+    savingsMeasured: true,
+    client: 'claude-code',
+    measurementId: 'measurement-d',
+    timestamp: '2026-08-12T12:08:00.000Z',
+    metadata: {
+      measurementId: 'measurement-d',
+      measurementSchemaVersion: 3,
+      measurement: 'measured-input-displacement',
+      measurementClass: 'verified-input-displacement',
+      baselineKind: 'measured-displaced-input',
+      baselineBytes: 19_748,
+      returnedBytes: 1_200,
+      bytesSaved: 18_548,
+      displacedInputTokens: 4_937,
+      displacedInputBytes: 19_748,
+      displacedInputSha256: 'e'.repeat(64),
+      displacedInputFiles: 1,
+      returnedSha256: 'f'.repeat(64),
+    },
+  });
+
+  it('labels each contract instead of only publishing their sum', () => {
+    /*
+     * A DAY ALREADY FOLDED CANNOT BE RE-MEASURED under a newer contract: its
+     * rows were pruned. So the honest disclosure is which definition of a
+     * saving produced which part of the headline, not a single number that
+     * could have come from either.
+     */
+    const report = summarizeDashboardAnalytics(
+      [verified, legacyRow, displaced],
+      {}
+    );
+    const contracts = report.summary.contracts;
+
+    // NEWEST FIRST, so the definition in force now leads.
+    expect(contracts.map((c) => c.measurementSchemaVersion)).toEqual([3, 2, 0]);
+    expect(contracts.map((c) => c.current)).toEqual([true, false, false]);
+
+    const byVersion = new Map(
+      contracts.map((c) => [c.measurementSchemaVersion, c])
+    );
+    // The transport credit belongs to the contract that proved it ...
+    expect(byVersion.get(2)?.totalTokensSaved).toBe(750);
+    // ... the unversioned row earned none, and says so under its own label ...
+    expect(byVersion.get(0)?.operations).toBe(1);
+    expect(byVersion.get(0)?.totalTokensSaved).toBe(0);
+    // ... and the displacement credit is not a transport credit.
+    expect(byVersion.get(3)?.totalTokensSaved).toBe(0);
+    expect(byVersion.get(3)?.inputDisplacementTokens).toBe(4_637);
+
+    // POSITIVE CONTROL: the shares account for every operation the headline
+    // counted, so a label cannot be dropped without this failing.
+    expect(contracts.reduce((sum, c) => sum + c.operations, 0)).toBe(
+      report.summary.totalOperations
+    );
+    expect(contracts.reduce((sum, c) => sum + c.totalTokensSaved, 0)).toBe(
+      report.summary.totalTokensSaved
+    );
+  });
+
+  it('attributes the same shares after the day has been folded', () => {
+    /*
+     * THE WHOLE REASON THE STAMP IS IN THE ROLLUP KEY. A folded day keeps no
+     * rows, so a dimension missing from that key can never be recovered -- the
+     * attribution would silently collapse into one unlabelled total.
+     */
+    const population = [verified, legacyRow, displaced];
+    const rows = summarizeDashboardAnalytics(population, {});
+    const folded = summarizeDashboardAnalytics([], {
+      rollups: foldEntries(population),
+    });
+
+    expect(rows.summary.contracts).toHaveLength(3);
+    expect(folded.summary.contracts).toEqual(rows.summary.contracts);
+  });
+
+  it('keeps a displaced file read out of the transport total', () => {
+    const transportOnly = summarizeDashboardAnalytics([verified], {});
+    const both = summarizeDashboardAnalytics([verified, displaced], {});
+
+    // The displacement row adds an operation and its own figure ...
+    expect(both.summary.displacementOperations).toBe(1);
+    expect(both.summary.inputDisplacementTokens).toBe(4_637);
+    // ... and moves the transport headline by nothing at all, because one
+    // reply measured against two befores is not two savings.
+    expect(both.summary.totalTokensSaved).toBe(
+      transportOnly.summary.totalTokensSaved
+    );
+    expect(transportOnly.summary.inputDisplacementTokens).toBe(0);
+    expect(transportOnly.summary.displacementOperations).toBe(0);
   });
 });
