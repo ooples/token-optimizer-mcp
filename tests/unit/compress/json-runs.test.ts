@@ -39,12 +39,13 @@ describe('an arithmetic column reconstructs from its rule', () => {
     expect(out.text.length).toBeLessThan(input.length * 0.2);
     expect(out.lossless).toBe(true);
 
-    expect(expand(out.text)).toBe(input);
+    expect(expand(out.text, out.stamp ?? null)).toBe(input);
   });
 
   it('a damaged rule is rejected rather than silently wrong', () => {
     const input = arithmetic(120);
-    const text = compressJsonArray(input).text;
+    const encoded = compressJsonArray(input);
+    const text = encoded.text;
 
     const damaged = [
       text.replace(
@@ -61,7 +62,10 @@ describe('an arithmetic column reconstructs from its rule', () => {
     for (const candidate of damaged) {
       let rebuilt: string | null = null;
       try {
-        rebuilt = expand(candidate);
+        // WITH THE REAL KEY, or this claim is vacuous: handed no stamp the
+        // decoder honours no marker, returns the damaged text as it arrived,
+        // and `not.toBe(input)` passes without the rule ever being read.
+        rebuilt = expand(candidate, encoded.stamp ?? null);
       } catch {
         rebuilt = null;
       }
@@ -83,6 +87,6 @@ describe('an arithmetic column reconstructs from its rule', () => {
     const clause = /; slots ([^\]\n]+) count from 0/.exec(out.text);
     // `id` steps by one and may be collapsed; `phase` cycles and must not be.
     if (clause) expect(clause[1]).not.toMatch(/\b1=/);
-    expect(expand(out.text)).toBe(cycling);
+    expect(expand(out.text, out.stamp ?? null)).toBe(cycling);
   });
 });

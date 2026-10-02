@@ -262,10 +262,26 @@ test('small lexical tables reconstruct escapes, nulls and oversized integers exa
     `{"key":"x${i}","note":"quoted \\" and { braces } \\n","number":9007199254740993123,"missing":null,"same":"unchanged repeated long value"}`;
   const original =
     '[' + Array.from({ length: 9 }, (_, i) => record(i)).join(',') + ']';
-  const compact = compressJsonArray(original, 3);
+  const compact = compressJsonArray(original, undefined, 3);
   expect(compact.text.length).toBeLessThan(original.length);
+  // READ FROM THE MARKER ALONE, STAMP INCLUDED. This reimplements the decoder
+  // rather than calling it, which is the claim: the envelope states its own
+  // grammar well enough for a reader to rebuild the rows. The authenticator is
+  // now part of that grammar, and a reader holding the key matches on it -- so
+  // the pattern is assembled around the stamp the encoder returned instead of
+  // being written out as one literal.
+  const tag = ' ~' + (compact.stamp ?? '');
+  expect(compact.stamp).toMatch(/^[0-9a-z]{6}$/);
   const expanded = compact.text.replace(
-    /\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: (\[[^\n]+?\])(?:; slots ([^\]\n]+) count from 0)?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
+    new RegExp(
+      /\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: (\[[^\n]+?\])(?:; slots ([^\]\n]+) count from 0)?/
+        .source +
+        tag +
+        /\]\n([\s\S]*?)\[\/JSON fragment records/.source +
+        tag +
+        /\]\n/.source,
+      'g'
+    ),
     (_all, encoded: string, slots: string | undefined, data: string) => {
       const template = JSON.parse(encoded) as (string | number)[];
       // A column stated as a rule is omitted from every row; the cells that

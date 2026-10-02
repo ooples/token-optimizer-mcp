@@ -164,7 +164,7 @@ describe('headed json sections keep their content', () => {
     // fragments -- `r-0` is "r-" in the template joined to a slot the run rule
     // generates, and it is not a substring of the output. A substring oracle
     // here reports a lossless encoding as data loss (#415).
-    const rebuilt = expandJsonRecords(result.text);
+    const rebuilt = expandJsonRecords(result.text, result.stamp ?? null);
     for (let i = 0; i < rows.length; i += 1) {
       expect(rebuilt).toContain(`r-${i}`);
       expect(rebuilt).toContain(`obs ${i}`);

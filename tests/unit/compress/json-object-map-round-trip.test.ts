@@ -45,17 +45,19 @@ describe('a keyed object map survives its own encoding', () => {
   it('rebuilds byte for byte from the marker alone', () => {
     const text = fixture();
     const out = compressJsonObjectMap(text);
-    expect(expandJsonRecords(out.text)).toBe(text);
+    expect(expandJsonRecords(out.text, out.stamp ?? null)).toBe(text);
   });
 
   it('leaves no marker behind for the unconsumed guard to find', () => {
     const out = compressJsonObjectMap(fixture());
-    const rebuilt = expandJsonRecords(out.text);
+    const rebuilt = expandJsonRecords(out.text, out.stamp ?? null);
     // PINNED POSITIVELY FIRST. Two `not.toContain`s also hold when `rebuilt`
     // is undefined or the call never ran, so the absence of a marker is only
     // evidence beside a statement of what IS there.
     expect(rebuilt).toBe(fixture());
     expect(rebuilt).not.toContain('[JSON object map');
-    expect(rebuilt).not.toContain('[/JSON fragment records]');
+    // THE CLOSER NOW CARRIES A STAMP, so the bracket is no longer the end of
+    // the line. Matched without it, which holds for either form.
+    expect(rebuilt).not.toContain('[/JSON fragment records');
   });
 });

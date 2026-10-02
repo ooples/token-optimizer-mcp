@@ -70,7 +70,7 @@ import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import { serialiseKeepingPrefix } from './cached-prefix.js';
 import { record, libraryVersion } from '../telemetry/recorder.js';
 import { noteRequest, flushRollup } from '../telemetry/rollup.js';
-import type { SpillSink } from '../compress/types.js';
+import type { SpillSink, Stamp } from '../compress/types.js';
 import { captureDir, captureRequest } from './capture.js';
 import { compressResponses } from './responses.js';
 import { compressChatCompletions } from './chat-completions.js';
@@ -452,6 +452,19 @@ function conversationKeyFor(
     .digest('hex');
 }
 
+/**
+ * A rewritten body, with the keys its markers verify against.
+ *
+ * DELIBERATELY NOT ON `summary`. That object is `ProxySummary` and flows into
+ * the accounting ledger, which carries counts, durations and fixed vocabulary
+ * and nothing derived from the content. A stamp is derived from the content.
+ */
+interface CompressedBody {
+  readonly body: Buffer;
+  readonly summary: Omit<ProxySummary, 'path'>;
+  readonly stamps: readonly Stamp[];
+}
+
 function compressBodyOnce(
   body: Buffer,
   spill: SpillSink,
@@ -462,7 +475,7 @@ function compressBodyOnce(
   sharedGraph?: boolean,
   wireFormat?: 'chat-completions',
   suppressKnowledge?: boolean
-): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
+): CompressedBody {
   // THE MODEL, LEARNED AS SOON AS THE BODY PARSES AND CARRIED BY EVERY RETURN
   // BELOW IT. `unchanged` closes over this variable rather than taking it as an
   // argument, so a refusal reached after the parse still names the model it
@@ -509,13 +522,21 @@ function compressBodyOnce(
   const withModel = (result: {
     body: Buffer;
     summary: Omit<ProxySummary, 'path'>;
-  }): { body: Buffer; summary: Omit<ProxySummary, 'path'> } =>
+    stamps: readonly Stamp[];
+  }): CompressedBody =>
     model === undefined
       ? result
-      : { body: result.body, summary: { ...result.summary, model } };
+      : {
+          body: result.body,
+          stamps: result.stamps,
+          summary: { ...result.summary, model },
+        };
   const before = body.length;
+  // NOTHING WAS COMPRESSED, SO THERE IS NO KEY -- and an empty list says that,
+  // where a stamp would claim markers this body does not carry.
   const unchanged = (reason: string) => ({
     body,
+    stamps: [] as readonly Stamp[],
     summary: {
       beforeBytes: before,
       // NOT `before`: shaping may have replaced the buffer further down, and
@@ -589,6 +610,7 @@ function compressBodyOnce(
     }
     return {
       body,
+      stamps: [] as readonly Stamp[],
       summary: {
         beforeBytes: before,
         afterBytes: before,
@@ -955,6 +977,9 @@ function compressBodyOnce(
     // every request of two campaigns and the byte counts alone could not say why.
     return {
       body,
+      // DECLINED, SO THE CLIENT'S OWN BYTES GO ON THE WIRE. There is no marker
+      // in them and therefore no key.
+      stamps: [] as readonly Stamp[],
       summary: {
         beforeBytes: before,
         // Shaped bytes, if shaping ran -- see the note in `unchanged`.
@@ -981,6 +1006,7 @@ function compressBodyOnce(
 
   return {
     body: next,
+    stamps: result.stamps,
     summary: {
       beforeBytes: before,
       afterBytes: next.length,
@@ -1032,7 +1058,7 @@ export function compressBody(
   tuning?: Tuning,
   sharedGraph?: boolean,
   wireFormat?: 'chat-completions'
-): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
+): CompressedBody {
   const first = compressBodyOnce(
     body,
     spill,

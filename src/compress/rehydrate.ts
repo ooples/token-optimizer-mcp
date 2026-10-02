@@ -6,7 +6,7 @@ import {
   sectionOrderMarker,
 } from './segments.js';
 import { expandLog } from './expand-log.js';
-import { assertStamp } from './annotate.js';
+import { assertStamp, stampPattern } from './annotate.js';
 import { BACK_REFERENCE, ESCAPED_REFERENCE, PATH_ID_PREFIX } from './search.js';
 import { findReferent, readBackReference } from './dedup.js';
 import { readImageBackReference } from './images.js';
@@ -87,19 +87,39 @@ function slotValue(
   return got;
 }
 
-export function expandJsonRecords(text: string): string {
+/**
+ * FOUR HEADERS, ONE BODY. `compressRecords` writes the same rows under four
+ * different prose headers -- a keyed map says `object map` and `entries` where
+ * a list says `array records` and `records`, a partial group says `missing
+ * records remain unknown`, and the short-header variant drops the sentence
+ * entirely. This pattern matched only the list header, so an object map reached
+ * `UNCONSUMED` and rehydrate threw `unconsumed marker "[JSON object map; ALL 40
+ * entries preserved ..."`, losing the whole block rather than the rows it could
+ * not state. The body is byte-identical across all four, so the alternation is
+ * on the header alone and the capture groups stay where the handler expects.
+ *
+ * SPLIT IN TWO SO THE STAMP CAN GO IN THE MIDDLE, and left as literals either
+ * side so every backslash in it is still single-escaped.
+ * `stampPattern` refuses everything when handed no stamp, so an unkeyed call
+ * reads none of these.
+ */
+const RECORDS_HEAD =
+  /(?:\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: |\[JSON (?:array records; ALL \d+ records|object map; ALL \d+ entries) preserved(?:, \d+ encoded here)?\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: |\[JSON fragment records; missing records remain unknown\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: )(\[[^\n]+?\])(; slots ([^\]\n]+) count from 0)?(?:; dict (.+?))?/;
+/** Between the stamped opener and the stamped closer. */
+const RECORDS_BODY = /\]\n([\s\S]*?)\[\/JSON fragment records/;
+
+function recordsPattern(stamp: Stamp): RegExp {
+  const tag = stampPattern(stamp);
+  return new RegExp(
+    RECORDS_HEAD.source + tag + RECORDS_BODY.source + tag + /\]\n/.source,
+    'g'
+  );
+}
+
+export function expandJsonRecords(text: string, stamp: Stamp = null): string {
+  assertStamp(stamp);
   return text.replace(
-    // FOUR HEADERS, ONE BODY. `compressRecords` writes the same rows under
-    // four different prose headers -- a keyed map says `object map` and
-    // `entries` where a list says `array records` and `records`, a partial
-    // group says `missing records remain unknown`, and the short-header
-    // variant drops the sentence entirely. This pattern matched only the
-    // list header, so an object map reached `UNCONSUMED` and rehydrate threw
-    // `unconsumed marker "[JSON object map; ALL 40 entries preserved ..."`,
-    // losing the whole block rather than the rows it could not state. The
-    // body is byte-identical across all four, so the alternation is on the
-    // header alone and the capture groups stay where the handler expects.
-    /(?:\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: |\[JSON (?:array records; ALL \d+ records|object map; ALL \d+ entries) preserved(?:, \d+ encoded here)?\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: |\[JSON fragment records; missing records remain unknown\. Join template parts, replacing numeric slots with verbatim text fragments from each row\. Template: )(\[[^\n]+?\])(; slots ([^\]\n]+) count from 0)?(?:; dict (.+?))?\]\n([\s\S]*?)\[\/JSON fragment records\]\n/g,
+    recordsPattern(stamp),
     (
       _all,
       encoded: string,
@@ -159,9 +179,23 @@ export function expandJsonRecords(text: string): string {
  * into being more forgiving than the encoder, and a forgiving decoder passes
  * everything.
  */
-export function expandTapRecords(text: string): string {
+/** The TAP envelope, split either side of its stamp. */
+const TAP_HEAD =
+  /\[TAP (?:passing|failing) records: JSON rows \[name,id,ms\]; substitute into template ("[^\n]+")/;
+const TAP_BODY = /\]\r?\n([\s\S]*?)\[\/TAP (?:passing|failing) records/;
+
+function tapPattern(stamp: Stamp): RegExp {
+  const tag = stampPattern(stamp);
+  return new RegExp(
+    TAP_HEAD.source + tag + TAP_BODY.source + tag + /\]\r?\n/.source,
+    'g'
+  );
+}
+
+export function expandTapRecords(text: string, stamp: Stamp = null): string {
+  assertStamp(stamp);
   return text.replace(
-    /\[TAP (?:passing|failing) records: JSON rows \[name,id,ms\]; substitute into template ("[^\n]+")\]\r?\n([\s\S]*?)\[\/TAP (?:passing|failing) records\]\r?\n/g,
+    tapPattern(stamp),
     (_all, encoded: string, rows: string) => {
       const template = JSON.parse(encoded) as string;
       return rows
@@ -413,93 +447,126 @@ const BY_POSITION_RECORD = /^\[at (\d+); (\d+) chars\]\n/;
  * never filled, a block header that does not parse: each of them means the
  * output is not the input, and saying so is the only useful thing left to do.
  */
-export function expandJsonRecordsByPosition(text: string): string {
-  return text.replace(
-    /\[JSON (?:array records|object map) by position; [^\n]*\]\n([\s\S]*?)\[\/JSON records by position\]\n/g,
-    (_all, body: string) => {
-      const filled = new Map<number, string>();
-      let rest = body;
-      while (rest.length) {
-        const rows = BY_POSITION_ROWS.exec(rest);
-        if (rows) {
-          const at = rows[1].split(',').map(Number);
-          const rules = new Map<number, { first: number; step: number }>();
-          for (const part of (rows[2] ?? '').split(' ').filter(Boolean)) {
-            const m = /^(\d+)=(-?\d+)\+(-?\d+)n$/.exec(part);
-            if (!m) throw new Error(`unreadable run clause ${part}`);
-            rules.set(Number(m[1]), {
-              first: Number(m[2]),
-              step: Number(m[3]),
-            });
-          }
-          // THE CAPTURE ALREADY ENDS AT THE TEMPLATE'S OWN BRACKET. The header's
-          // closing bracket is the one the pattern consumes, so appending one
-          // here fed `JSON.parse` a trailing `]` and it threw on the character
-          // after a complete value -- which reads as a corrupt template rather
-          // than as an off-by-one in the grammar.
-          const dicts = readDicts(rows[3]);
-          const template = JSON.parse(rows[4]) as (number | string)[];
-          rest = rest.slice(rows[0].length);
-          for (const [index, position] of at.entries()) {
-            const cut = rest.indexOf('\n');
-            if (cut < 0) throw new Error('rows block ended mid-row');
-            const present = JSON.parse(rest.slice(0, cut)) as (
-              | string
-              | number
-            )[];
-            rest = rest.slice(cut + 1);
-            const values: string[] = [];
-            let next = 0;
-            for (let slot = 0; slot < present.length + rules.size; slot += 1) {
-              const rule = rules.get(slot);
-              values.push(
-                slotValue(
-                  slot,
-                  rule ? rule.first + rule.step * index : present[next++],
-                  dicts
-                )
-              );
-            }
-            if (filled.has(position))
-              throw new Error(`position ${position} stated twice`);
-            filled.set(
-              position,
-              template
-                .map((part) => (typeof part === 'number' ? values[part] : part))
-                .join('')
-            );
-          }
-          continue;
-        }
-        const one = BY_POSITION_RECORD.exec(rest);
-        if (!one)
-          throw new Error(
-            `unreadable by-position block ${JSON.stringify(rest.slice(0, 40))}`
-          );
-        const position = Number(one[1]),
-          length = Number(one[2]);
-        rest = rest.slice(one[0].length);
-        if (rest.length < length)
-          throw new Error(`record at ${position} is shorter than ${length}`);
-        if (filled.has(position))
-          throw new Error(`position ${position} stated twice`);
-        filled.set(position, rest.slice(0, length));
-        rest = rest.slice(length);
-      }
-      let out = '';
-      for (let position = 0; position < filled.size; position += 1) {
-        const record = filled.get(position);
-        if (record === undefined)
-          throw new Error(`position ${position} was never stated`);
-        out += record;
-      }
-      return out;
-    }
+/** The by-position envelope, split either side of its stamp. */
+const BY_POSITION_HEAD =
+  /\[JSON (?:array records|object map) by position; [^\n]*/;
+const BY_POSITION_BODY = /\]\n([\s\S]*?)\[\/JSON records by position/;
+
+function byPositionPattern(stamp: Stamp): RegExp {
+  const tag = stampPattern(stamp);
+  return new RegExp(
+    BY_POSITION_HEAD.source +
+      tag +
+      BY_POSITION_BODY.source +
+      tag +
+      /\]\n/.source,
+    'g'
   );
 }
 
-/** Markers this module must consume rather than pass through as text. */
-const UNCONSUMED = /^\s*\[\/?(?:JSON |All \d+ JSON |TAP )/;
+export function expandJsonRecordsByPosition(
+  text: string,
+  stamp: Stamp = null
+): string {
+  assertStamp(stamp);
+  return text.replace(byPositionPattern(stamp), (_all, body: string) => {
+    const filled = new Map<number, string>();
+    let rest = body;
+    while (rest.length) {
+      const rows = BY_POSITION_ROWS.exec(rest);
+      if (rows) {
+        const at = rows[1].split(',').map(Number);
+        const rules = new Map<number, { first: number; step: number }>();
+        for (const part of (rows[2] ?? '').split(' ').filter(Boolean)) {
+          const m = /^(\d+)=(-?\d+)\+(-?\d+)n$/.exec(part);
+          if (!m) throw new Error(`unreadable run clause ${part}`);
+          rules.set(Number(m[1]), {
+            first: Number(m[2]),
+            step: Number(m[3]),
+          });
+        }
+        // THE CAPTURE ALREADY ENDS AT THE TEMPLATE'S OWN BRACKET. The header's
+        // closing bracket is the one the pattern consumes, so appending one
+        // here fed `JSON.parse` a trailing `]` and it threw on the character
+        // after a complete value -- which reads as a corrupt template rather
+        // than as an off-by-one in the grammar.
+        const dicts = readDicts(rows[3]);
+        const template = JSON.parse(rows[4]) as (number | string)[];
+        rest = rest.slice(rows[0].length);
+        for (const [index, position] of at.entries()) {
+          const cut = rest.indexOf('\n');
+          if (cut < 0) throw new Error('rows block ended mid-row');
+          const present = JSON.parse(rest.slice(0, cut)) as (string | number)[];
+          rest = rest.slice(cut + 1);
+          const values: string[] = [];
+          let next = 0;
+          for (let slot = 0; slot < present.length + rules.size; slot += 1) {
+            const rule = rules.get(slot);
+            values.push(
+              slotValue(
+                slot,
+                rule ? rule.first + rule.step * index : present[next++],
+                dicts
+              )
+            );
+          }
+          if (filled.has(position))
+            throw new Error(`position ${position} stated twice`);
+          filled.set(
+            position,
+            template
+              .map((part) => (typeof part === 'number' ? values[part] : part))
+              .join('')
+          );
+        }
+        continue;
+      }
+      const one = BY_POSITION_RECORD.exec(rest);
+      if (!one)
+        throw new Error(
+          `unreadable by-position block ${JSON.stringify(rest.slice(0, 40))}`
+        );
+      const position = Number(one[1]),
+        length = Number(one[2]);
+      rest = rest.slice(one[0].length);
+      if (rest.length < length)
+        throw new Error(`record at ${position} is shorter than ${length}`);
+      if (filled.has(position))
+        throw new Error(`position ${position} stated twice`);
+      filled.set(position, rest.slice(0, length));
+      rest = rest.slice(length);
+    }
+    let out = '';
+    for (let position = 0; position < filled.size; position += 1) {
+      const record = filled.get(position);
+      if (record === undefined)
+        throw new Error(`position ${position} was never stated`);
+      out += record;
+    }
+    return out;
+  });
+}
+
+/**
+ * Markers this module must consume rather than pass through as text.
+ *
+ * ASKED OF THE STAMP, NOT OF THE SHAPE. A refusal is the right answer to one of
+ * OUR envelopes a grammar above declined to read -- the rows under it are gone
+ * and saying so beats returning the header as prose. Asked of a line the
+ * CONTENT wrote, the same refusal denies the caller a whole block on the
+ * strength of one planted line: measured at 7 of 12 cells refused and 160
+ * carrier lines lost in `bench/compression/adversarial.mjs`.
+ *
+ * The stamp sits at the very end of every envelope line we emit, opener and
+ * closer alike, so requiring it there costs nothing a real marker has.
+ */
+function unconsumed(stamp: Stamp): RegExp {
+  return new RegExp(
+    /^\s*\[\/?(?:JSON |All \d+ JSON |TAP )[^\n]*/.source +
+      stampPattern(stamp) +
+      /\]\s*$/.source
+  );
+}
 
 /**
  * The search engine's markers sit at the END of a header line, not the start,
@@ -585,14 +652,18 @@ export function rehydrate(text: string, stamp: Stamp = null): string {
         expandJsonRecordsByPosition(
           expandSearchHunks(
             expandLongRepeats(expandFoldedSections(text, stamp), stamp)
-          )
-        )
-      )
+          ),
+          stamp
+        ),
+        stamp
+      ),
+      stamp
     ),
     stamp
   );
+  const leftover = unconsumed(stamp);
   for (const line of out.split('\n'))
-    if (UNCONSUMED.test(line) || UNCONSUMED_SUFFIX.test(line))
+    if (leftover.test(line) || UNCONSUMED_SUFFIX.test(line))
       throw new Error(`rehydrate: unconsumed marker ${JSON.stringify(line)}`);
   return out;
 }

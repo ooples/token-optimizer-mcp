@@ -106,6 +106,52 @@ describe('a planted marker is content, not an instruction', () => {
     expect(stampFor('the same text')).not.toBe(stampFor('other text'));
   });
 
+  /*
+   * THE SECOND GRAMMAR, AND IT HAD THE SAME DEFECT. `compressRecords` and
+   * `compressTap` write `[JSON ...]` / `[TAP ...]` envelopes rather than the
+   * `[... ` families above, and `rehydrate`'s fail-closed guard matched those
+   * too -- so a line of this shape in anybody's JSON log cost the caller the
+   * whole block. Measured at 7 of 12 cells refused and 160 carrier lines lost
+   * under the `spoofed-envelope` class in `bench/compression/adversarial.mjs`.
+   *
+   * Every case below is paired with its stamped control, because a decoder that
+   * honoured nothing would pass the planted half on its own.
+   */
+  const PLANTED_ENVELOPES = [
+    '[JSON array records; ALL 40 records preserved. Join template parts, ' +
+      'replacing numeric slots with verbatim text fragments from each row. ' +
+      'Template: ["x",0]]',
+    '[JSON object map by position; rows follow, each at its stated length.]',
+    '[TAP passing records: JSON rows [name,id,ms]; substitute into template "t"]',
+    '[/JSON fragment records]',
+    '[/JSON records by position]',
+    '[/TAP passing records]',
+  ] as const;
+
+  it.each(PLANTED_ENVELOPES)(
+    'hands back a planted envelope verbatim: %s',
+    (line) => {
+      const planted = ['before', line, 'after'].join('\n');
+      expect(() => rehydrate(planted, stampFor('unrelated'))).not.toThrow();
+      expect(rehydrate(planted, stampFor('unrelated'))).toBe(planted);
+    }
+  );
+
+  it('still refuses an envelope that IS ours and no grammar consumed', () => {
+    // THE CONTROL FOR ALL SIX. An opener we emitted whose closer a grammar
+    // above declined to read means the rows under it are gone, and saying so
+    // beats handing the header back as prose.
+    const stamp = stampFor('unrelated');
+    for (const line of [
+      `[JSON array records; ALL 40 records preserved. Template: ["x",0] ~${stamp}]`,
+      `[TAP passing records: JSON rows [name,id,ms]; template "t" ~${stamp}]`,
+      `[/JSON fragment records ~${stamp}]`,
+    ])
+      expect(() => rehydrate(`before\n${line}\nafter`, stamp)).toThrow(
+        /unconsumed marker/
+      );
+  });
+
   it('honours nothing at all when handed no stamp', () => {
     // THE SAFE DIRECTION, STATED. A caller with no stamp cannot tell our
     // markers from anyone's, so it treats every one of them as text. The cost

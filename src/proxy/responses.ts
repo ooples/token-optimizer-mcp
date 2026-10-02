@@ -16,7 +16,7 @@ import {
 import { tokenBenefit } from './token-gate.js';
 import { classify } from '../compress/router.js';
 import type { Tuning } from '../compress/options.js';
-import type { SpillSink } from '../compress/types.js';
+import type { SpillSink, Stamp } from '../compress/types.js';
 import type { CompressionFacts } from './accounting.js';
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -30,7 +30,20 @@ export function compressResponses(
   tuning?: Tuning,
   outputLocation: (index: number) => string = (index) =>
     `input[${index}].output`
-): { body: Buffer; summary: CompressionFacts } {
+): { body: Buffer; summary: CompressionFacts; stamps: readonly Stamp[] } {
+  /*
+   * THE KEYS THIS CALL MINTED, in the order the fields were compressed.
+   *
+   * Every marker in the body carries an authenticator and a decoder honours
+   * only the markers that verify, so output handed over without its key cannot
+   * be inverted by anyone -- and `lossless` is a claim about inverting it.
+   * Returning them is what keeps that claim checkable.
+   *
+   * DELIBERATELY NOT ON `summary`. That object is `CompressionFacts` and flows
+   * into the accounting ledger, which carries counts and fixed vocabulary and
+   * nothing derived from the content. A stamp is derived from the content.
+   */
+  const stamps: Stamp[] = [];
   let elisions = 0;
   let dedupReferences = 0;
   let definitionsChanged = false;
@@ -123,6 +136,7 @@ export function compressResponses(
       }
       const result = cachedOutput(text, spill, tuning);
       if (!tokenBenefit(text, result.text)) return text;
+      stamps.push(result.stamp ?? null);
       elisions += Math.max(1, result.elisions.length);
       return result.text;
     };
@@ -202,6 +216,7 @@ export function compressResponses(
   const accepted = encoded.length < body.length;
   return {
     body: accepted ? encoded : body,
+    stamps: accepted ? stamps : [],
     summary: {
       beforeBytes: body.length,
       afterBytes: accepted ? encoded.length : body.length,

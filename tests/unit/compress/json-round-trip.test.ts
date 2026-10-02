@@ -171,7 +171,7 @@ describe('a JSON block that claims lossless keeps every lexeme it was given', ()
       tuning: DEFAULT_TUNING,
     }).text;
     expect(templated).toContain('[JSON array records;');
-    expect(templated).toContain('[/JSON fragment records]');
+    expect(templated).toContain('[/JSON fragment records');
 
     // The heterogeneous document has no repeated row shape, so the records
     // encoder must decline it -- and the minifier must still act, or that
@@ -214,6 +214,12 @@ describe('a JSON block that claims lossless keeps every lexeme it was given', ()
   });
 });
 
+/*
+ * EVERY DECODE HERE TAKES `result.stamp`, and the claims are vacuous without it.
+ * Handed no key the decoder honours no marker, returns the damaged text exactly
+ * as it arrived, and `toThrow()` passes on a comparison that never read the rule
+ * these tests exist to damage.
+ */
 describe('the gate can fail, demonstrated on the product rather than asserted', () => {
   it('a dropped record fails the comparison', () => {
     const input = repeatingRows();
@@ -224,14 +230,21 @@ describe('the gate can fail, demonstrated on the product rather than asserted', 
     // take the records template, so the literal was absent, the replace was a
     // no-op and the gate was handed back its own undamaged output.
     const lines = result.text.split('\n');
-    const close = lines.indexOf('[/JSON fragment records]');
+    // MATCHED ON THE PREFIX, because the closer now ends in its stamp rather
+    // than in its bracket -- `indexOf` of the old exact string returns -1, and
+    // the damage below would then have been a no-op the gate could not see.
+    const close = lines.findIndex((line) =>
+      line.startsWith('[/JSON fragment records')
+    );
     expect(close).toBeGreaterThan(0);
     const damaged = [...lines.slice(0, close - 1), ...lines.slice(close)].join(
       '\n'
     );
     expect(damaged).not.toBe(result.text);
     expect(() =>
-      expect(jsonLexemes(rehydrate(damaged))).toEqual(jsonLexemes(input))
+      expect(jsonLexemes(rehydrate(damaged, result.stamp))).toEqual(
+        jsonLexemes(input)
+      )
     ).toThrow();
   });
 
@@ -242,7 +255,9 @@ describe('the gate can fail, demonstrated on the product rather than asserted', 
     const damaged = result.text.replace('"id":1000', '"id":1000.0');
     expect(damaged).not.toBe(result.text);
     expect(() =>
-      expect(jsonLexemes(rehydrate(damaged))).toEqual(jsonLexemes(input))
+      expect(jsonLexemes(rehydrate(damaged, result.stamp))).toEqual(
+        jsonLexemes(input)
+      )
     ).toThrow();
   });
 
@@ -255,7 +270,9 @@ describe('the gate can fail, demonstrated on the product rather than asserted', 
     const damaged = result.text.replace(`${BS}u0041-0`, 'A-0');
     expect(damaged).not.toBe(result.text);
     expect(() =>
-      expect(jsonLexemes(rehydrate(damaged))).toEqual(jsonLexemes(input))
+      expect(jsonLexemes(rehydrate(damaged, result.stamp))).toEqual(
+        jsonLexemes(input)
+      )
     ).toThrow();
   });
 });
@@ -290,10 +307,18 @@ describe('rehydrate refuses what it cannot rebuild', () => {
       expect(refusal.recoverAt).toBe('/spill/log.txt');
   });
 
+  // THE FIXTURE CARRIES THE STAMP, because the refusal is about OUR envelope.
+  // A marker-shaped line is only ours when it verifies; without one it is a
+  // line of content, which `planted-marker-is-content.test.ts` pins.
+  const STAMP = 'abcdef';
+
   it('refuses a json marker no grammar consumed', () => {
     expect(() =>
       rehydrate(
-        '{"a":1}\n[JSON array records; ALL 3 records preserved. truncated]'
+        '{"a":1}\n[JSON array records; ALL 3 records preserved. truncated ~' +
+          STAMP +
+          ']',
+        STAMP
       )
     ).toThrow(/unconsumed marker/);
   });
@@ -305,7 +330,12 @@ describe('rehydrate refuses what it cannot rebuild', () => {
     // reconstruction it never performed.
     expect(() =>
       rehydrate(
-        'ok 1 - a\n[TAP timing records: mean 4ms]\n[/TAP timing records]'
+        'ok 1 - a\n[TAP timing records: mean 4ms ~' +
+          STAMP +
+          ']\n[/TAP timing records ~' +
+          STAMP +
+          ']',
+        STAMP
       )
     ).toThrow(/unconsumed marker/);
   });

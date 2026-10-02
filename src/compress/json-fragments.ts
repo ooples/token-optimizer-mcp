@@ -1,8 +1,9 @@
 /** Preserve truncated JSON as truncated, while templating complete flat records.
  * Never repairs a missing range, infers a missing value, or discards a visible one.
  */
-import type { CompressionResult, Elision } from './types.js';
+import type { CompressionResult, Elision, Stamp } from './types.js';
 import { unchanged } from './types.js';
+import { stampFor } from './annotate.js';
 
 export function looksLikeJsonFragments(text: string): boolean {
   return (
@@ -219,16 +220,25 @@ function records(text: string, compact = false): RecordParts[] {
   return result;
 }
 
-export function compressJsonFragments(text: string): CompressionResult {
+export function compressJsonFragments(
+  text: string,
+  stamp?: Stamp
+): CompressionResult {
   if (!looksLikeJsonFragments(text)) return unchanged(text);
-  return compressRecords(text, records(text), false);
+  const tag = stamp === undefined ? stampFor(text) : stamp;
+  return {
+    ...compressRecords(text, records(text), false, false, 'records', tag),
+    stamp: tag,
+  };
 }
 
 /** Exact full-array encoding, admitted only when every record was recognized. */
 export function compressJsonArray(
   text: string,
+  stamp?: Stamp,
   minimumRows = 32
 ): CompressionResult {
+  const tag = stamp === undefined ? stampFor(text) : stamp;
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -248,7 +258,10 @@ export function compressJsonArray(
   if (found.length !== parsed.length) found = records(text, true);
 
   if (found.length !== parsed.length) return unchanged(text);
-  return compressRecords(text, found, true, minimumRows < 32);
+  return {
+    ...compressRecords(text, found, true, minimumRows < 32, 'records', tag),
+    stamp: tag,
+  };
 }
 
 /**
@@ -272,8 +285,10 @@ export function compressJsonArray(
  */
 export function compressJsonObjectMap(
   text: string,
+  stamp?: Stamp,
   minimumEntries = 8
 ): CompressionResult {
+  const tag = stamp === undefined ? stampFor(text) : stamp;
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -327,7 +342,10 @@ export function compressJsonObjectMap(
   // Entries must be contiguous to group, which compressRecords enforces; a
   // scatter of unrelated `"k": {...}` pairs simply fails to pay and the
   // input comes back.
-  return compressRecords(text, found, true, false, 'entries');
+  return {
+    ...compressRecords(text, found, true, false, 'entries', tag),
+    stamp: tag,
+  };
 }
 /** A closing quote, as it appears raw and as it appears escaped. */
 const QUOTE = String.fromCharCode(34);
@@ -864,13 +882,32 @@ function rowLines(group: RecordParts[], shaped: Templated): string {
  * single-shape run has nothing to spend it on: every position is covered by the
  * one template, in order, which is exactly what this header already says.
  */
+/**
+ * The authenticator this pass writes into every envelope it emits.
+ *
+ * A SECOND MARKER GRAMMAR, AND THE SAME DEFECT. The `[... ` families carry a
+ * stamp so a marker-shaped line in the content is content; these envelopes did
+ * not, and `rehydrate` threw `unconsumed marker` on a line anybody whose JSON
+ * log we are asked to compress can write -- measured at 7 of 12 cells refused
+ * and 160 carrier lines lost in `bench/compression/adversarial.mjs`, under the
+ * `spoofed-envelope` class. See `stampFor` in `annotate.ts` for why the value
+ * is a keyed MAC over the content rather than a random one.
+ *
+ * IT GOES ON THE CLOSER TOO, because the refusal matches `[/JSON` as readily
+ * as `[JSON`: an unstamped closer is a line the content can plant on its own.
+ */
+function envelopeStamp(stamp: Stamp): string {
+  return stamp === null ? '' : ` ~${stamp}`;
+}
+
 function oneShapeMarker(
   group: RecordParts[],
   found: RecordParts[],
   complete: boolean,
   shortHeader: boolean,
   noun: string,
-  label: string
+  label: string,
+  stamp: Stamp
 ): string | null {
   if (group.length < 3) return null;
   const shaped = templateOf(group);
@@ -891,9 +928,12 @@ function oneShapeMarker(
     JSON.stringify(shaped.template) +
     slotClause(shaped.runs) +
     dictClause(shaped.dicts) +
+    envelopeStamp(stamp) +
     ']\n' +
     rowLines(group, shaped) +
-    '\n[/JSON fragment records]\n'
+    '\n[/JSON fragment records' +
+    envelopeStamp(stamp) +
+    ']\n'
   );
 }
 
@@ -921,7 +961,8 @@ function byPositionMarker(
   found: RecordParts[],
   complete: boolean,
   noun: string,
-  label: string
+  label: string,
+  stamp: Stamp
 ): string | null {
   if (!classes.some((cls) => cls.rows.length >= 3)) return null;
   const blocks: string[] = [];
@@ -948,9 +989,13 @@ function byPositionMarker(
     (complete ? '' : ', with missing records still unknown') +
     '. Each block fills the positions it names: rows from its template, ' +
     'numeric slots taking its fragments in order; a record verbatim at the ' +
-    'stated length.]\n' +
+    'stated length.' +
+    envelopeStamp(stamp) +
+    ']\n' +
     blocks.join('') +
-    '[/JSON records by position]\n'
+    '[/JSON records by position' +
+    envelopeStamp(stamp) +
+    ']\n'
   );
 }
 
@@ -972,7 +1017,8 @@ function legacyMarkers(
   complete: boolean,
   shortHeader: boolean,
   noun: string,
-  label: string
+  label: string,
+  stamp: Stamp
 ): { out: string; counts: number[] } {
   let out = '';
   const counts: number[] = [];
@@ -988,7 +1034,8 @@ function legacyMarkers(
       complete,
       shortHeader,
       noun,
-      label
+      label,
+      stamp
     );
     if (marker !== null && marker.length < stop - from) {
       out += marker;
@@ -1005,7 +1052,8 @@ function compressRecords(
   complete: boolean,
   shortHeader = false,
   /** What the rows ARE, so a keyed map is not announced as an array. */
-  noun = 'records'
+  noun = 'records',
+  stamp: Stamp = null
 ): CompressionResult {
   const elisions: Elision[] = [];
   const label = noun === 'entries' ? 'object map' : 'array records';
@@ -1039,11 +1087,21 @@ function compressRecords(
       complete,
       shortHeader,
       noun,
-      label
+      label,
+      stamp
     );
     const scattered =
       classes.length > 1
-        ? byPositionMarker(text, run, classes, found, complete, noun, label)
+        ? byPositionMarker(
+            text,
+            run,
+            classes,
+            found,
+            complete,
+            noun,
+            label,
+            stamp
+          )
         : null;
     // EACH CANDIDATE PASSES ITS OWN PAY TEST, IN ITS OWN UNIT. The legacy form
     // keeps the character test it has always used, so every payload the old

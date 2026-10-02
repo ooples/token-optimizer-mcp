@@ -115,9 +115,9 @@ registerEngine({
     looksLikeJsonFragments(text) || looksLikeTap(text) || looksLikeLog(text),
   compress: (text, ctx) =>
     looksLikeJsonFragments(text)
-      ? compressJsonFragments(text)
+      ? compressJsonFragments(text, ctx.stamp ?? null)
       : looksLikeTap(text)
-        ? compressTap(text)
+        ? compressTap(text, ctx.stamp ?? null)
         : compressLog(text, ctx),
 });
 

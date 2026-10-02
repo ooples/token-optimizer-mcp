@@ -66,7 +66,10 @@ export function cachedOutput(
     text.length < 1024 &&
     text.trimStart().startsWith('[')
   ) {
-    const exact = compressJsonArray(text, 3);
+    // UNDEFINED MINTS. This candidate replaces the `compressBlock` result
+    // outright, so it has to carry its own stamp for a reader to decode it
+    // with -- which is what the result it returns does.
+    const exact = compressJsonArray(text, undefined, 3);
     if (exact.text.length < result.text.length) result = exact;
   }
   // UTF-16 upper bound for retained strings; entry count also bounds overhead.

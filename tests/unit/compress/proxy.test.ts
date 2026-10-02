@@ -243,7 +243,13 @@ describe('compressBody', () => {
     // old inability rather than the property named above. What must not happen is
     // an elision against the failed sink -- a marker naming rows with no way back --
     // and decoding to the original payload is exactly the proof that none was made.
-    expect(rehydrate(sent.messages[0].content[0].text)).toBe(payload);
+    // WITH THE KEY THIS CALL MINTED, which is why `compressBody` returns one per
+    // compressed block. Handed none the decoder honours no marker at all and
+    // this assertion would fail for the wrong reason -- on a body that is in
+    // fact perfectly invertible.
+    expect(
+      rehydrate(sent.messages[0].content[0].text, out.stamps[0] ?? null)
+    ).toBe(payload);
   });
 
   // FAIL OPEN, every branch.

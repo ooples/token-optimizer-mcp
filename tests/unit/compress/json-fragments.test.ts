@@ -9,6 +9,7 @@ import {
   expandJsonRecords,
   expandJsonRecordsByPosition,
 } from '../../../src/compress/rehydrate.js';
+import type { Stamp } from '../../../src/compress/types.js';
 
 /**
  * THE SHIPPED DECODER, NOT A LOCAL COPY OF IT.
@@ -22,8 +23,16 @@ import {
  * nothing of the by-position family, so a payload encoded that way failed here
  * as a lost record rather than as the missing decoder call it was.
  */
-function expand(text: string): string {
-  return expandJsonRecords(expandJsonRecordsByPosition(text));
+/**
+ * THE KEY THE ENCODER RETURNED, not a value this file makes up.
+ *
+ * Every envelope the encoder writes carries an authenticator, and the decoder
+ * honours only the ones that verify. Handing it the result's own stamp is what
+ * a real caller does; handing it nothing is a separate claim, pinned in
+ * `planted-marker-is-content.test.ts`.
+ */
+function expand(text: string, stamp: Stamp): string {
+  return expandJsonRecords(expandJsonRecordsByPosition(text, stamp), stamp);
 }
 
 /**
@@ -93,7 +102,7 @@ test.each(['\n', '\r\n'])(
     const out = compressJsonArray(input);
     expect(out.text).toContain('ALL 120 records preserved');
     expect(out.text.length).toBeLessThan(input.length * 0.5);
-    expect(expand(asFragmentRecords(out.text))).toBe(input);
+    expect(expand(asFragmentRecords(out.text), out.stamp ?? null)).toBe(input);
   }
 );
 
@@ -119,7 +128,7 @@ test('a nested array is templated, and comes back byte for byte', () => {
   expect(out.text).not.toBe(nested);
   expect(out.lossless).toBe(true);
   expect(out.text).toContain('ALL 40 records preserved');
-  expect(expand(asFragmentRecords(out.text))).toBe(nested);
+  expect(expand(asFragmentRecords(out.text), out.stamp ?? null)).toBe(nested);
 });
 test.each(['\n', '\r\n', '\\n', '\\r\\n'])(
   'truncated JSON preserves all visible bytes, gap, and rare values %j',
@@ -131,7 +140,7 @@ test.each(['\n', '\r\n', '\\n', '\\r\\n'])(
     expect(out.text).toContain('…2000 tokens truncated…');
     expect(out.text).toContain('missing records remain unknown');
     expect(out.text).toContain('false');
-    expect(expand(out.text)).toBe(input);
+    expect(expand(out.text, out.stamp ?? null)).toBe(input);
   }
 );
 test('fragment routing works inside a real Responses tool envelope', () => {
@@ -158,9 +167,13 @@ test('fragment routing works inside a real Responses tool envelope', () => {
     }
   );
   expect(out.summary.compressed).toBe(true);
+  // THE KEY THE CALL MINTED, which is why `compressResponses` returns it: the
+  // body travels as bytes and the markers in it verify against nothing else.
   expect(
     expand(
-      JSON.parse(JSON.parse(out.body.toString()).input[0].output[0].text).output
+      JSON.parse(JSON.parse(out.body.toString()).input[0].output[0].text)
+        .output,
+      out.stamps[0] ?? null
     )
   ).toBe(input);
 });
@@ -179,15 +192,17 @@ test('ordinary JSON, nested values, changed keys, and short fragments cannot inv
   );
   const variedOut = compressJsonFragments(varied);
   expect(variedOut.text).not.toBe(varied);
-  expect(expand(variedOut.text)).toBe(varied);
+  expect(expand(variedOut.text, variedOut.stamp ?? null)).toBe(varied);
   const changed = fixture().replace('"enabled": false', '"other": false');
-  expect(expand(compressJsonFragments(changed).text)).toBe(changed);
+  const changedOut = compressJsonFragments(changed);
+  expect(expand(changedOut.text, changedOut.stamp ?? null)).toBe(changed);
 });
 test('lexical numeric and escaped-string values reconstruct exactly', () => {
   const input = fixture()
     .replace('"limit": 100', '"limit": -0.00e+0')
     .replace('"extra": null', '"extra": "\\u0061\\\\b"');
-  expect(expand(compressJsonFragments(input).text)).toBe(input);
+  const out = compressJsonFragments(input);
+  expect(expand(out.text, out.stamp ?? null)).toBe(input);
 });
 
 test('escaped structural newlines never decode escapes inside string values', () => {
@@ -197,7 +212,7 @@ test('escaped structural newlines never decode escapes inside string values', ()
   );
   const out = compressJsonFragments(input);
   expect(out.text.length).toBeLessThan(input.length * 0.8);
-  expect(expand(out.text)).toBe(input);
+  expect(expand(out.text, out.stamp ?? null)).toBe(input);
 });
 
 test('factors long ID prefixes while retaining every exact value and categorical fact', () => {
@@ -205,7 +220,7 @@ test('factors long ID prefixes while retaining every exact value and categorical
   const out = compressJsonFragments(input);
   expect(out.text.match(/route-long-shared-prefix-/g)?.length).toBe(2);
   expect(out.text).toContain('false');
-  expect(expand(out.text)).toBe(input);
+  expect(expand(out.text, out.stamp ?? null)).toBe(input);
 });
 
 test('compresses complete escaped records inside an outer truncated shell envelope', () => {
@@ -219,7 +234,7 @@ test('compresses complete escaped records inside an outer truncated shell envelo
     serialized.replace('broken', 'broken\n...2000 tokens truncated...\n');
   const out = compressJsonFragments(input);
   expect(out.text.length).toBeLessThan(input.length * 0.65);
-  expect(expand(out.text)).toBe(input);
+  expect(expand(out.text, out.stamp ?? null)).toBe(input);
   expect(out.text).toContain('2000 tokens truncated');
 });
 
@@ -248,7 +263,7 @@ test('interleaved shapes are templated by position and come back byte for byte',
   expect(out.text).toContain('by position;');
   expect(out.lossless).toBe(true);
   expect(out.text.length).toBeLessThan(input.length * 0.5);
-  expect(expand(out.text)).toBe(input);
+  expect(expand(out.text, out.stamp ?? null)).toBe(input);
 });
 
 /**
@@ -282,8 +297,11 @@ test.each([
 ])(
   'by-position decoding refuses to guess at %s',
   (_name, corrupt, complaint) => {
-    const encoded = compressJsonArray(scattered()).text;
+    const out = compressJsonArray(scattered());
+    const encoded = out.text;
     expect(encoded).toMatch(/\[at \d+; \d+ chars\]/);
-    expect(() => expand(corrupt(encoded))).toThrow(complaint);
+    expect(() => expand(corrupt(encoded), out.stamp ?? null)).toThrow(
+      complaint
+    );
   }
 );

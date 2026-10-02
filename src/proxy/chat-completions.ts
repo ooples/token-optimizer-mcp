@@ -3,7 +3,7 @@ import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { AnchorStore } from '../compress/anchor.js';
 import type { Finding } from '../compress/knowledge.js';
 import type { Tuning } from '../compress/options.js';
-import type { SpillSink } from '../compress/types.js';
+import type { SpillSink, Stamp } from '../compress/types.js';
 import type { CompressionFacts } from './accounting.js';
 
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -21,7 +21,7 @@ export function compressChatCompletions(
   findings: readonly Finding[] = [],
   tuning?: Tuning,
   sharedGraph?: boolean
-): { body: Buffer; summary: CompressionFacts } {
+): { body: Buffer; summary: CompressionFacts; stamps: readonly Stamp[] } {
   const messages = request.messages as unknown[];
   const input: Record<string, unknown>[] = [];
   const outputs = new Map<number, number>();
@@ -78,7 +78,10 @@ export function compressChatCompletions(
   );
   const normalized = { instructions, input };
   const normalizedBody = Buffer.from(JSON.stringify(normalized));
-  const knowledge = withResponsesKnowledge(
+  const knowledge = withResponsesKnowledge<{
+    body: Buffer;
+    summary: CompressionFacts;
+  }>(
     {
       body: normalizedBody,
       summary: {
@@ -136,6 +139,9 @@ export function compressChatCompletions(
       : body;
   return {
     body: final,
+    // THE KEYS THE INNER PASS MINTED, carried only when its output was accepted:
+    // a declined body is the client's own bytes and holds no marker to verify.
+    stamps: accepted ? compressed.stamps : [],
     summary: {
       ...compressed.summary,
       beforeBytes: body.length,

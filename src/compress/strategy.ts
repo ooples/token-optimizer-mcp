@@ -42,7 +42,7 @@ import {
   type Position,
   type ProviderRequest,
 } from './frontier.js';
-import type { Elision } from './types.js';
+import type { Elision, Stamp } from './types.js';
 
 export type StrategyName =
   | 'v1-frontier'
@@ -115,6 +115,20 @@ export interface StrategyResult {
   readonly elisions: readonly Elision[];
   /** Tokens of preamble this strategy ADDED to the request. */
   readonly injectedChars: number;
+  /**
+   * The authenticators the blocks in this request were compressed under.
+   *
+   * ONE PER BLOCK, NOT ONE PER REQUEST, and the difference is the provider's
+   * cache. A stamp is a keyed MAC over the block's own content, so a block that
+   * arrives unchanged next turn compresses to the same bytes and the cached
+   * prefix still matches; a stamp derived from the whole request would change on
+   * every turn and rewrite every marker behind the breakpoint.
+   *
+   * Returned because the decoder honours only markers that verify: output handed
+   * over without these cannot be inverted by anyone, and `lossless` is a claim
+   * about inverting it.
+   */
+  readonly stamps: readonly Stamp[];
   /**
    * What to remember about this conversation IF this request is the one sent.
    *
@@ -543,6 +557,7 @@ function pathAddressed(
   const frontier = respectFrontier ? (floor ?? breakpoint) : null;
   const query = questionIn(request);
   const elisions: Elision[] = [];
+  const stamps: Stamp[] = [];
   const staged: DedupBlock[] = [];
 
   // A SOURCE THAT APPEARS TWICE IS COMPRESSED THE SAME WAY BOTH TIMES.
@@ -606,6 +621,7 @@ function pathAddressed(
       sourcePath: toolUseId ? sourcePaths.get(toolUseId) : undefined,
     });
     elisions.push(...result.elisions);
+    if (result.stamp !== undefined) stamps.push(result.stamp);
     staged.push({ text: result.text, original: text, touchable: true });
     return null;
   });
@@ -637,7 +653,7 @@ function pathAddressed(
   );
 
   // Nothing is added to the request: no system message, no tool, no hash.
-  return { request: out, elisions, injectedChars: 0 };
+  return { request: out, elisions, stamps, injectedChars: 0 };
 }
 
 /**
@@ -1112,6 +1128,7 @@ export function ccrStyle(
   options: StrategyOptions = {}
 ): StrategyResult {
   const elisions: Elision[] = [];
+  const stamps: Stamp[] = [];
   const hashes: string[] = [];
   let index = 0;
   // THE CONTROL GETS DEDUP TOO, and it must. A content-addressed cache
@@ -1145,6 +1162,7 @@ export function ccrStyle(
     index += 1;
     hashes.push(marker.slice(7, 19));
     elisions.push(...result.elisions);
+    if (result.stamp !== undefined) stamps.push(result.stamp);
     byContent.set(text, marker);
     // Their form: the compressed body with an opaque marker standing in for
     // everything removed.
@@ -1159,7 +1177,8 @@ export function ccrStyle(
     () => ccrImages.replacements[ccrImageAt++] ?? null
   );
 
-  if (!index) return { request: withImages, elisions, injectedChars: 0 };
+  if (!index)
+    return { request: withImages, elisions, stamps, injectedChars: 0 };
 
   const systemText = CCR_SYSTEM.replace(
     '{HASHES}',
@@ -1176,6 +1195,7 @@ export function ccrStyle(
   return {
     request: withInjection,
     elisions,
+    stamps,
     injectedChars: systemText.length + JSON.stringify(CCR_TOOL).length,
   };
 }
@@ -1207,6 +1227,7 @@ export function v4Substitute(
   request: ProviderRequest,
   options: StrategyOptions = {}
 ): StrategyResult {
+  const substituteStamps: Stamp[] = [];
   const substitution = substituteHistory(request.messages, {
     // NO QUERY AND NO EMBEDDINGS -- those depend on the live question, so the
     // same block would compress differently as the conversation moves and the
@@ -1225,9 +1246,19 @@ export function v4Substitute(
     // tool result out and leave a path the agent can read back, which is the
     // whole mechanism. Measured on the agent-loop fixture: 24.5% reduction
     // without it against v3-history's 85.1% on identical bytes.
-    compressToolResult: (text) =>
-      compressBlock(text, { tuning: options.tuning, spill: options.spill })
-        .text,
+    // KEPT, NOT DISCARDED. These blocks are compressed here and never again,
+    // so the key each one was stamped with reaches a caller only through this
+    // array -- and without it the substituted history is output nobody can
+    // invert.
+    compressToolResult: (text) => {
+      const compressed = compressBlock(text, {
+        tuning: options.tuning,
+        spill: options.spill,
+      });
+      if (compressed.stamp !== undefined)
+        substituteStamps.push(compressed.stamp);
+      return compressed.text;
+    },
   });
   // BOTH REGIONS COUNT, and gating on `substituted` alone silently threw one
   // away. That counter tracks assistant REASONING substitutions only; tool
@@ -1252,6 +1283,7 @@ export function v4Substitute(
     // the request larger, which is the specific way a compression figure
     // becomes a lie.
     injectedChars: result.injectedChars + substitution.substituteChars,
+    stamps: [...substituteStamps, ...result.stamps],
   };
 }
 

@@ -513,7 +513,7 @@ function compressJsonDocument(
         !Number.isFinite(value) ||
         (Number.isInteger(value) && !Number.isSafeInteger(value))
       ) {
-        const exact = compressJsonArray(text);
+        const exact = compressJsonArray(text, ctx.stamp ?? null);
         return exact.text.length < text.length ? exact : unchanged(text);
       }
     }
@@ -607,8 +607,8 @@ function compressJsonDocument(
     // block from 12.9% to 50.9% and simultaneously took v3-history from 73.3%
     // to 60.4%, because the better lossless encoding preempted a much better
     // lossy one. So the candidate is carried to every exit instead.
-    const asMap = compressJsonObjectMap(text);
-    const asArray = compressJsonArray(text);
+    const asMap = compressJsonObjectMap(text, ctx.stamp ?? null);
+    const asArray = compressJsonArray(text, ctx.stamp ?? null);
     const smaller = asArray.text.length < asMap.text.length ? asArray : asMap;
     if (smaller.text.length < text.length) exact = smaller;
   }
