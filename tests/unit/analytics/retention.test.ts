@@ -371,3 +371,40 @@ describe('the analytics store under retention', () => {
     expect(figures(after)).toEqual(figures(before));
   });
 });
+
+/**
+ * The one thing the fold could still get wrong, which no total would reveal.
+ *
+ * AN EXPANSION DEBIT IS LINKED TO ITS CREDIT BY A LOOKUP THROUGH RAW ROWS.
+ * `record-tool-analytics` resolves an incoming `expansionRef` to the
+ * `measurementId` of the verified row that carries the matching
+ * `disclosureRef`, and `hasConsistentExpansionDebit` refuses the debit without
+ * it. A folded day has no per-row refs, so if a row could age out while its
+ * pointer was still expandable, the debit would silently reclassify and the
+ * dashboard would report MORE saved than it earned -- the one direction a wrong
+ * figure must never move.
+ *
+ * IT CANNOT, BECAUSE THE POINTER DIES FIRST: the artifact store serves a ref
+ * for `ARTIFACT_TTL_MS`, and rows are kept for longer than that. This pins the
+ * ordering rather than the two numbers, so changing either constant fails here
+ * instead of opening the seam.
+ */
+describe('the expansion-credit link outlives the pointer that needs it', () => {
+  it('keeps rows at least as long as a disclosure ref can be expanded', async () => {
+    const expand = (await import('../../../hooks-core/expand.mjs')) as {
+      ARTIFACT_TTL_MS: number;
+    };
+    const pointerDays = expand.ARTIFACT_TTL_MS / 86_400_000;
+
+    // POSITIVE CONTROL: both figures are real day counts, so the comparison
+    // below is a real ordering rather than something trivially true of zero.
+    expect(pointerDays).toBeGreaterThan(1);
+
+    // Checked across a year, because the window is read off the report's own
+    // local-day boundaries and a month length or a clock change moves them.
+    for (let day = 0; day < 365; day += 1) {
+      const when = new Date(2026, 0, 1 + day, 13, 0, 0, 0);
+      expect(retentionDays(when)).toBeGreaterThanOrEqual(pointerDays);
+    }
+  });
+});

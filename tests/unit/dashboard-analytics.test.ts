@@ -1,5 +1,9 @@
 import { describe, expect, it } from '@jest/globals';
-import { summarizeDashboardAnalytics } from '../../src/server/dashboard-analytics.js';
+import {
+  summarizeDashboardAnalytics,
+  type DashboardAnalyticsReport,
+} from '../../src/server/dashboard-analytics.js';
+import { foldEntries } from '../../src/analytics/analytics-rollup.js';
 import type { AnalyticsEntry } from '../../src/analytics/analytics-types.js';
 
 function row(overrides: Partial<AnalyticsEntry> = {}): AnalyticsEntry {
@@ -217,5 +221,116 @@ describe('dashboard optimizer analytics contract', () => {
     expect(report.summary.totalOperations).toBe(0);
     expect(report.byAction).toEqual([]);
     expect(report.recent).toEqual([]);
+  });
+});
+
+/**
+ * What the dashboard must still report once a day has been folded.
+ *
+ * THE RETENTION PASS RUNS ON ITS OWN, on a write, without being asked -- so the
+ * question these tests answer is not "can the dashboard read a rollup" but
+ * "does this dashboard shrink as the store ages". Row counts would not catch
+ * that: a report built from half the rows is internally consistent and still
+ * wrong by exactly the half it lost.
+ *
+ * EACH TEST COMPARES A WHOLE REPORT AGAINST ITSELF, rows against the same rows
+ * folded, rather than asserting figures a future change could simply restate.
+ */
+describe('dashboard analytics across the retention fold', () => {
+  const expansion = row({
+    toolName: 'smart_read',
+    originalTokens: 400,
+    optimizedTokens: 400,
+    tokensSaved: 0,
+    client: 'codex',
+    measurementId: 'measurement-x',
+    timestamp: '2026-08-12T12:05:00.000Z',
+    metadata: {
+      measurementId: 'measurement-x',
+      measurementSchemaVersion: 2,
+      measurementClass: 'verified-transport-expansion-debit',
+      expansionRef: 'c'.repeat(16),
+      creditedMeasurementId: 'measurement-1',
+      returnedBytes: 1_600,
+      returnedSha256: 'd'.repeat(64),
+    },
+  });
+  const observed = row({
+    toolName: 'wiki_read',
+    originalTokens: 100,
+    optimizedTokens: 100,
+    tokensSaved: 0,
+    savingsMeasured: false,
+    client: 'claude-code',
+    timestamp: '2026-08-12T12:06:00.000Z',
+    metadata: {
+      measurementSchemaVersion: 2,
+      measurementClass: 'observed-return-only',
+      measurement: 'actual-return-context-only',
+    },
+  });
+  const legacy = row({
+    toolName: 'smart_grep',
+    originalTokens: 9_000,
+    optimizedTokens: 500,
+    tokensSaved: 8_500,
+    timestamp: '2026-08-12T12:07:00.000Z',
+  });
+  const population = [verified, expansion, observed, legacy];
+
+  /** The report as the dashboard publishes it, minus what a fold cannot keep. */
+  function published(report: DashboardAnalyticsReport) {
+    const { foldedOperations, foldedDays, ...summary } = report.summary;
+    return {
+      available: report.available,
+      summary,
+      byAction: report.byAction,
+      byClient: report.byClient,
+    };
+  }
+
+  it('reports the same totals, tools and clients once every row is folded', () => {
+    const rows = summarizeDashboardAnalytics(population, {});
+    const folded = summarizeDashboardAnalytics([], {
+      rollups: foldEntries(population),
+    });
+
+    // POSITIVE CONTROL: the fixture has figures to lose. Without this the
+    // equality below would also hold for a report of nothing at all.
+    expect(rows.summary.totalOperations).toBe(4);
+    expect(rows.summary.totalTokensSaved).toBe(350);
+    expect(rows.byAction).toHaveLength(3);
+    expect(rows.byClient).toHaveLength(3);
+
+    expect(published(folded)).toEqual(published(rows));
+    expect(folded.summary.foldedOperations).toBe(4);
+    expect(folded.summary.foldedDays).toBe(1);
+    expect(rows.summary.foldedOperations).toBe(0);
+  });
+
+  it('adds a live row to the folded day it belongs beside', () => {
+    const whole = summarizeDashboardAnalytics(population, {});
+    const split = summarizeDashboardAnalytics([legacy], {
+      rollups: foldEntries([verified, expansion, observed]),
+    });
+
+    expect(published(split)).toEqual(published(whole));
+    // AND THE DISCLOSURE SPLITS WITH IT: the one live row is listable, the
+    // three folded ones are not.
+    expect(split.summary.foldedOperations).toBe(3);
+    expect(split.recent).toHaveLength(1);
+    expect(whole.recent).toHaveLength(4);
+  });
+
+  it('stays available when every row has aged into totals', () => {
+    const empty = summarizeDashboardAnalytics([], {});
+    expect(empty.available).toBe(false);
+
+    const folded = summarizeDashboardAnalytics([], {
+      rollups: foldEntries(population),
+    });
+    expect(folded.available).toBe(true);
+    expect(folded.recent).toHaveLength(0);
+    expect(folded.summary.foldedDays).toBe(1);
   });
 });

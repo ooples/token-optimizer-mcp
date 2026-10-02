@@ -4,6 +4,7 @@ import fs from 'fs';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
 import { SqliteAnalyticsStorage } from '../analytics/analytics-storage.js';
 import type { AnalyticsEntry } from '../analytics/analytics-types.js';
+import type { AnalyticsRollup } from '../analytics/analytics-rollup.js';
 import {
   classifySavings,
   hasObservedReturnedContext,
@@ -88,6 +89,18 @@ export interface DashboardAnalyticsReport {
     legacyReportedContextOperations: number;
     observedReturnedContextOperations: number;
     unverifiedReportedOperations: number;
+    /**
+     * Operations that live in folded day totals rather than in rows.
+     *
+     * DISCLOSED BECAUSE `recent` CANNOT BE FOLDED. Every total above is exact
+     * across the fold, so nothing here shrinks when a day ages out -- but the
+     * recent list is per-operation by construction and a folded day has no
+     * operations left to list. Without this an operator reading an empty tail
+     * under a large total would have no way to tell "nothing happened" from
+     * "it is a total now".
+     */
+    foldedOperations: number;
+    foldedDays: number;
   };
   byAction: DashboardActionAnalytics[];
   byClient: Array<{
@@ -161,19 +174,215 @@ function inputEquivalent(entry: AnalyticsEntry, tokens: number): number | null {
     : null;
 }
 
-function sumPriced(
-  rows: AnalyticsEntry[],
-  tokens: (entry: AnalyticsEntry) => number
-): { amount: number | null; priced: number } {
-  let amount = 0;
-  let priced = 0;
-  for (const row of rows) {
-    const value = inputEquivalent(row, tokens(row));
-    if (value === null) continue;
-    amount += value;
-    priced += 1;
+/**
+ * Every figure this dashboard shows about one set of operations.
+ *
+ * ONE ACCUMULATOR FOR BOTH SOURCES, because the store holds two: live rows, and
+ * days the retention pass has already folded into per-dimension totals. A reader
+ * that added up only the rows would report less than the product earned and
+ * would report it with no sign that anything was missing -- the worst shape a
+ * wrong number can take. So rows and folded days both reduce into this, and
+ * every published figure is read off the sum rather than off either source.
+ *
+ * THE PER-ROW GATES ARE APPLIED WHERE THE ROW IS, never re-derived from a total:
+ * a live row goes through the predicates in `addRow`, and a folded day arrives
+ * with those same predicates already applied, row by row, at fold time.
+ */
+interface Split {
+  operations: number;
+  verifiedOperations: number;
+  expansionOperations: number;
+  unverifiedOperations: number;
+  observedOperations: number;
+  legacyOperations: number;
+  verifiedOriginalTokens: number;
+  observedOptimizedTokens: number;
+  measuredOptimizedTokens: number;
+  grossTokensSaved: number;
+  expansionTokensReturned: number;
+  unverifiedReportedTokensSaved: number;
+  contextUsd: number;
+  pricedContextOperations: number;
+  savedUsd: number;
+  pricedSavingsOperations: number;
+  firstSeen: string | null;
+  lastSeen: string | null;
+}
+
+function emptySplit(): Split {
+  return {
+    operations: 0,
+    verifiedOperations: 0,
+    expansionOperations: 0,
+    unverifiedOperations: 0,
+    observedOperations: 0,
+    legacyOperations: 0,
+    verifiedOriginalTokens: 0,
+    observedOptimizedTokens: 0,
+    measuredOptimizedTokens: 0,
+    grossTokensSaved: 0,
+    expansionTokensReturned: 0,
+    unverifiedReportedTokensSaved: 0,
+    contextUsd: 0,
+    pricedContextOperations: 0,
+    savedUsd: 0,
+    pricedSavingsOperations: 0,
+    firstSeen: null,
+    lastSeen: null,
+  };
+}
+
+function earliest(current: string | null, candidate: string): string {
+  return current === null || candidate < current ? candidate : current;
+}
+
+function latest(current: string | null, candidate: string): string {
+  return current === null || candidate > current ? candidate : current;
+}
+
+/** Adds one live row, gated by the predicates that classify it. */
+function addRow(split: Split, entry: AnalyticsEntry): void {
+  const verified = isVerifiedSavingsEntry(entry);
+  const expansion = isVerifiedExpansionDebit(entry);
+  const observed = hasObservedReturnedContext(entry);
+  const reported = reportedSavings(entry);
+  const unverified = !verified && !expansion && reported > 0;
+  split.operations += 1;
+  split.verifiedOperations += verified ? 1 : 0;
+  split.expansionOperations += expansion ? 1 : 0;
+  split.unverifiedOperations += unverified ? 1 : 0;
+  split.observedOperations += observed ? 1 : 0;
+  split.legacyOperations +=
+    classifySavings(entry) === 'unverified-reported' ? 1 : 0;
+  split.verifiedOriginalTokens += verified ? entry.originalTokens : 0;
+  split.observedOptimizedTokens += observed ? entry.optimizedTokens : 0;
+  split.measuredOptimizedTokens +=
+    verified || expansion ? entry.optimizedTokens : 0;
+  split.grossTokensSaved += verified ? reported : 0;
+  split.expansionTokensReturned += expansion ? entry.optimizedTokens : 0;
+  split.unverifiedReportedTokensSaved += unverified ? reported : 0;
+  if (observed) {
+    const priced = inputEquivalent(entry, entry.optimizedTokens);
+    if (priced !== null) {
+      split.contextUsd += priced;
+      split.pricedContextOperations += 1;
+    }
   }
-  return { amount: priced ? amount : null, priced };
+  if (verified || expansion) {
+    const priced = inputEquivalent(entry, verifiedTransportDelta(entry));
+    if (priced !== null) {
+      split.savedUsd += priced;
+      split.pricedSavingsOperations += 1;
+    }
+  }
+  split.firstSeen = earliest(split.firstSeen, entry.timestamp);
+  split.lastSeen = latest(split.lastSeen, entry.timestamp);
+}
+
+/** Adds one folded day, whose per-row arithmetic already ran at fold time. */
+function addFolded(split: Split, rollup: AnalyticsRollup): void {
+  split.operations += rollup.operations;
+  split.verifiedOperations += rollup.verifiedOperations;
+  split.expansionOperations += rollup.expansionOperations;
+  split.unverifiedOperations += rollup.unverifiedOperations;
+  split.observedOperations += rollup.observedReturns;
+  split.legacyOperations +=
+    rollup.classification === 'unverified-reported' ? rollup.operations : 0;
+  split.verifiedOriginalTokens += rollup.verifiedOriginalTokens;
+  split.observedOptimizedTokens += rollup.observedOptimizedTokens;
+  split.measuredOptimizedTokens += rollup.measuredOptimizedTokens;
+  split.grossTokensSaved += rollup.verifiedReportedSavings;
+  split.expansionTokensReturned += rollup.expansionOptimizedTokens;
+  split.unverifiedReportedTokensSaved += rollup.unverifiedReportedSavings;
+  split.contextUsd += rollup.contextUsd;
+  split.pricedContextOperations += rollup.pricedContextOperations;
+  split.savedUsd += rollup.costUsd;
+  split.pricedSavingsOperations += rollup.pricedOperations;
+  split.firstSeen = earliest(split.firstSeen, rollup.firstTimestamp);
+  split.lastSeen = latest(split.lastSeen, rollup.lastTimestamp);
+}
+
+/** The figures for one group: its live rows plus its folded days. */
+function splitOf(
+  rows: readonly AnalyticsEntry[],
+  folded: readonly AnalyticsRollup[]
+): Split {
+  const split = emptySplit();
+  for (const row of rows) addRow(split, row);
+  for (const rollup of folded) addFolded(split, rollup);
+  return split;
+}
+
+/** Net verified transport avoided: the credit less the debit beside it. */
+function netTokensSaved(split: Split): number {
+  return split.grossTokensSaved - split.expansionTokensReturned;
+}
+
+function savingsPercentage(split: Split): number | null {
+  return split.verifiedOriginalTokens > 0
+    ? (netTokensSaved(split) / split.verifiedOriginalTokens) * 100
+    : null;
+}
+
+/**
+ * A dollar figure the dashboard can publish.
+ *
+ * QUANTIZED FOR THE SAME REASON THE SAVINGS REPORT QUANTIZES ITS OWN. Binary
+ * floating-point addition is not associative, so the same priced operations
+ * summed in a different order differ in their last digits -- and a folded day is
+ * summed at fold time rather than here, which is a different order. Without
+ * this, a day ageing out would move a published figure by a part in 10^15 and
+ * nothing in the product could explain why.
+ *
+ * NULL WHEN NOTHING WAS PRICED, so an absent rate reads as unknown rather than
+ * as zero dollars.
+ */
+function money(amount: number, priced: number): number | null {
+  return priced > 0 ? Math.round(amount * 1e10) / 1e10 : null;
+}
+
+/**
+ * The last word in every group ordering, so a tie has one answer.
+ *
+ * WITHOUT THIS THE ORDER IS WHATEVER ORDER THE DATA ARRIVED IN. Two tools that
+ * saved the same amount compared equal, and `sort` then left them in insertion
+ * order -- which is newest-row-first for live rows and group-discovery order for
+ * folded days. The same history therefore listed its groups differently
+ * depending on how much of it had aged out, with every figure identical.
+ *
+ * CODE-POINT ORDER, NOT `localeCompare`, because the order must not depend on
+ * the locale the server happens to be running under.
+ */
+function byName(a: { name: string }, b: { name: string }): number {
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+}
+
+function groupBy<T>(
+  items: readonly T[],
+  key: (item: T) => string
+): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const name = key(item);
+    const group = groups.get(name);
+    if (group) group.push(item);
+    else groups.set(name, [item]);
+  }
+  return groups;
+}
+
+/**
+ * Every group name either source knows about.
+ *
+ * A UNION, NOT THE ROWS' KEYS, because a tool whose every row has aged out still
+ * has totals, and a tool first seen today has no folded day yet. Iterating one
+ * source's keys would drop whichever group the other source holds alone.
+ */
+function groupNames(
+  rows: Map<string, unknown>,
+  folded: Map<string, unknown>
+): string[] {
+  return [...new Set([...rows.keys(), ...folded.keys()])];
 }
 
 /**
@@ -182,7 +391,11 @@ function sumPriced(
  */
 export function summarizeDashboardAnalytics(
   input: AnalyticsEntry[],
-  options: { limit?: number; providerUsage?: ProviderUsageSummary } = {}
+  options: {
+    limit?: number;
+    providerUsage?: ProviderUsageSummary;
+    rollups?: readonly AnalyticsRollup[];
+  } = {}
 ): DashboardAnalyticsReport {
   const limit = Math.min(100, Math.max(1, finite(options.limit) || 40));
   const price = pricing();
@@ -203,243 +416,150 @@ export function summarizeDashboardAnalytics(
     }))
     .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
 
-  const groups = new Map<string, AnalyticsEntry[]>();
-  for (const entry of entries) {
-    const name = entry.toolName.trim();
-    const group = groups.get(name) || [];
-    group.push(entry);
-    groups.set(name, group);
-  }
+  /**
+   * The days this store has already folded into totals.
+   *
+   * FILTERED THE SAME WAY THE ROWS ARE, so a group the row path would have
+   * discarded cannot reappear through the fold and change a total that the
+   * same history, unfolded, would not have had.
+   */
+  const folded = (options.rollups || []).filter(
+    (rollup) =>
+      rollup &&
+      typeof rollup.toolName === 'string' &&
+      rollup.toolName.trim() &&
+      typeof rollup.firstTimestamp === 'string' &&
+      typeof rollup.lastTimestamp === 'string'
+  );
+  const foldedOperations = folded.reduce(
+    (sum, rollup) => sum + rollup.operations,
+    0
+  );
+  const foldedDays = new Set(folded.map((rollup) => rollup.day)).size;
 
-  const byAction = [...groups.entries()]
-    .map(([name, rows]): DashboardActionAnalytics => {
-      const verifiedRows = rows.filter(isVerifiedSavingsEntry);
-      const expansionRows = rows.filter(isVerifiedExpansionDebit);
-      const observedRows = rows.filter(hasObservedReturnedContext);
-      const unverifiedRows = rows.filter(
-        (row) =>
-          !isVerifiedSavingsEntry(row) &&
-          !isVerifiedExpansionDebit(row) &&
-          reportedSavings(row) > 0
-      );
-      const totalOriginalTokens = verifiedRows.reduce(
-        (sum, row) => sum + row.originalTokens,
-        0
-      );
-      const totalOptimizedTokens = observedRows.reduce(
-        (sum, row) => sum + row.optimizedTokens,
-        0
-      );
-      const grossTokensSaved = verifiedRows.reduce(
-        (sum, row) => sum + reportedSavings(row),
-        0
-      );
-      const expansionTokensReturned = expansionRows.reduce(
-        (sum, row) => sum + row.optimizedTokens,
-        0
-      );
-      const totalTokensSaved = grossTokensSaved - expansionTokensReturned;
-      const unverifiedReportedTokensSaved = unverifiedRows.reduce(
-        (sum, row) => sum + reportedSavings(row),
-        0
-      );
-      const timestamps = rows.map((row) => row.timestamp).sort();
-      const returnedCost = sumPriced(
-        observedRows,
-        (row) => row.optimizedTokens
-      );
-      const savedCost = sumPriced([...verifiedRows, ...expansionRows], (row) =>
-        verifiedTransportDelta(row)
+  const groups = groupBy(entries, (entry) => entry.toolName.trim());
+  const foldedGroups = groupBy(folded, (rollup) => rollup.toolName.trim());
+
+  const byAction = groupNames(groups, foldedGroups)
+    .map((name): DashboardActionAnalytics => {
+      const split = splitOf(
+        groups.get(name) || [],
+        foldedGroups.get(name) || []
       );
       return {
         name,
-        totalOperations: rows.length,
-        totalOriginalTokens,
-        totalOptimizedTokens,
-        totalTokensSaved,
-        grossTokensSaved,
-        expansionTokensReturned,
-        unverifiedReportedTokensSaved,
-        savingsPercentage:
-          totalOriginalTokens > 0
-            ? (totalTokensSaved / totalOriginalTokens) * 100
-            : null,
-        contextUsd: returnedCost.amount,
-        savedUsd: savedCost.amount,
-        firstSeen: timestamps[0],
-        lastSeen: timestamps.at(-1) || timestamps[0],
-        measuredSavingsOperations: verifiedRows.length,
-        pricedReturnedContextOperations: returnedCost.priced,
-        pricedSavingsOperations: savedCost.priced,
-        verifiedExpansionOperations: expansionRows.length,
+        totalOperations: split.operations,
+        totalOriginalTokens: split.verifiedOriginalTokens,
+        totalOptimizedTokens: split.observedOptimizedTokens,
+        totalTokensSaved: netTokensSaved(split),
+        grossTokensSaved: split.grossTokensSaved,
+        expansionTokensReturned: split.expansionTokensReturned,
+        unverifiedReportedTokensSaved: split.unverifiedReportedTokensSaved,
+        savingsPercentage: savingsPercentage(split),
+        contextUsd: money(split.contextUsd, split.pricedContextOperations),
+        savedUsd: money(split.savedUsd, split.pricedSavingsOperations),
+        firstSeen: split.firstSeen || '',
+        lastSeen: split.lastSeen || split.firstSeen || '',
+        measuredSavingsOperations: split.verifiedOperations,
+        pricedReturnedContextOperations: split.pricedContextOperations,
+        pricedSavingsOperations: split.pricedSavingsOperations,
+        verifiedExpansionOperations: split.expansionOperations,
         unmeasuredSavingsOperations:
-          rows.length - verifiedRows.length - expansionRows.length,
-        observedReturnedContextOperations: observedRows.length,
-        unverifiedReportedOperations: unverifiedRows.length,
+          split.operations - split.verifiedOperations - split.expansionOperations,
+        observedReturnedContextOperations: split.observedOperations,
+        unverifiedReportedOperations: split.unverifiedOperations,
       };
     })
     .sort(
       (a, b) =>
         b.totalTokensSaved - a.totalTokensSaved ||
-        b.unverifiedReportedTokensSaved - a.unverifiedReportedTokensSaved
+        b.unverifiedReportedTokensSaved - a.unverifiedReportedTokensSaved ||
+        byName(a, b)
     );
 
-  const clientGroups = new Map<string, AnalyticsEntry[]>();
-  for (const entry of entries) {
-    const metadata = entry.metadata || {};
-    const recorded = String(entry.client || metadata.client || '').trim();
-    const name =
-      recorded && recorded !== 'unattributed'
-        ? recorded
-        : 'Historical — client not recorded';
-    const group = clientGroups.get(name) || [];
-    group.push(entry);
-    clientGroups.set(name, group);
-  }
-  const byClient = [...clientGroups.entries()]
-    .map(([name, rows]) => {
-      const observedRows = rows.filter(hasObservedReturnedContext);
-      const verifiedRows = rows.filter(isVerifiedSavingsEntry);
-      const expansionRows = rows.filter(isVerifiedExpansionDebit);
-      const unverifiedRows = rows.filter(
-        (row) =>
-          !isVerifiedSavingsEntry(row) &&
-          !isVerifiedExpansionDebit(row) &&
-          reportedSavings(row) > 0
-      );
-      const totalOptimizedTokens = observedRows.reduce(
-        (sum, row) => sum + row.optimizedTokens,
-        0
-      );
-      const grossTokensSaved = verifiedRows.reduce(
-        (sum, row) => sum + reportedSavings(row),
-        0
-      );
-      const expansionTokensReturned = expansionRows.reduce(
-        (sum, row) => sum + row.optimizedTokens,
-        0
-      );
-      const totalTokensSaved = grossTokensSaved - expansionTokensReturned;
-      const unverifiedReportedTokensSaved = unverifiedRows.reduce(
-        (sum, row) => sum + reportedSavings(row),
-        0
-      );
-      const returnedCost = sumPriced(
-        observedRows,
-        (row) => row.optimizedTokens
-      );
-      const savedCost = sumPriced([...verifiedRows, ...expansionRows], (row) =>
-        verifiedTransportDelta(row)
+  const UNRECORDED_CLIENT = 'Historical — client not recorded';
+  const clientName = (recorded: string): string =>
+    recorded && recorded !== 'unattributed' ? recorded : UNRECORDED_CLIENT;
+  const clientGroups = groupBy(entries, (entry) =>
+    clientName(String(entry.client || (entry.metadata || {}).client || '').trim())
+  );
+  const foldedClients = groupBy(folded, (rollup) =>
+    clientName(String(rollup.client || '').trim())
+  );
+  const byClient = groupNames(clientGroups, foldedClients)
+    .map((name) => {
+      const split = splitOf(
+        clientGroups.get(name) || [],
+        foldedClients.get(name) || []
       );
       return {
         name,
         attribution:
-          name === 'Historical — client not recorded'
+          name === UNRECORDED_CLIENT
             ? ('historical-unattributed' as const)
             : ('recorded' as const),
-        totalOperations: rows.length,
-        observedReturnedContextOperations: observedRows.length,
-        verifiedSavingsOperations: verifiedRows.length,
-        verifiedExpansionOperations: expansionRows.length,
-        unverifiedReportedOperations: unverifiedRows.length,
-        totalOptimizedTokens: observedRows.length ? totalOptimizedTokens : null,
+        totalOperations: split.operations,
+        observedReturnedContextOperations: split.observedOperations,
+        verifiedSavingsOperations: split.verifiedOperations,
+        verifiedExpansionOperations: split.expansionOperations,
+        unverifiedReportedOperations: split.unverifiedOperations,
+        totalOptimizedTokens: split.observedOperations
+          ? split.observedOptimizedTokens
+          : null,
         totalTokensSaved:
-          verifiedRows.length || expansionRows.length ? totalTokensSaved : null,
-        grossTokensSaved,
-        expansionTokensReturned,
-        unverifiedReportedTokensSaved,
-        contextUsd: returnedCost.amount,
-        savedUsd: savedCost.amount,
-        pricedReturnedContextOperations: returnedCost.priced,
-        pricedSavingsOperations: savedCost.priced,
+          split.verifiedOperations || split.expansionOperations
+            ? netTokensSaved(split)
+            : null,
+        grossTokensSaved: split.grossTokensSaved,
+        expansionTokensReturned: split.expansionTokensReturned,
+        unverifiedReportedTokensSaved: split.unverifiedReportedTokensSaved,
+        contextUsd: money(split.contextUsd, split.pricedContextOperations),
+        savedUsd: money(split.savedUsd, split.pricedSavingsOperations),
+        pricedReturnedContextOperations: split.pricedContextOperations,
+        pricedSavingsOperations: split.pricedSavingsOperations,
       };
     })
     .sort(
       (a, b) =>
         (b.totalTokensSaved || 0) - (a.totalTokensSaved || 0) ||
-        b.totalOperations - a.totalOperations
+        b.totalOperations - a.totalOperations ||
+        byName(a, b)
     );
 
-  const verifiedEntries = entries.filter(isVerifiedSavingsEntry);
-  const expansionEntries = entries.filter(isVerifiedExpansionDebit);
-  const observedEntries = entries.filter(hasObservedReturnedContext);
-  const historicalEntries = entries.filter(
-    (entry) => classifySavings(entry) === 'unverified-reported'
-  );
-  const unverifiedEntries = entries.filter(
-    (entry) =>
-      !isVerifiedSavingsEntry(entry) &&
-      !isVerifiedExpansionDebit(entry) &&
-      reportedSavings(entry) > 0
-  );
-  const totalOriginalTokens = verifiedEntries.reduce(
-    (sum, entry) => sum + entry.originalTokens,
-    0
-  );
-  const totalOptimizedTokens = observedEntries.reduce(
-    (sum, entry) => sum + entry.optimizedTokens,
-    0
-  );
-  const grossTokensSaved = verifiedEntries.reduce(
-    (sum, entry) => sum + reportedSavings(entry),
-    0
-  );
-  const expansionTokensReturned = expansionEntries.reduce(
-    (sum, entry) => sum + entry.optimizedTokens,
-    0
-  );
-  const totalTokensSaved = grossTokensSaved - expansionTokensReturned;
-  const unverifiedReportedTokensSaved = unverifiedEntries.reduce(
-    (sum, entry) => sum + reportedSavings(entry),
-    0
-  );
-  const measuredOptimizedTokens = [
-    ...verifiedEntries,
-    ...expansionEntries,
-  ].reduce((sum, entry) => sum + entry.optimizedTokens, 0);
-  const timestamps = entries.map((entry) => entry.timestamp).sort();
-  const totalReturnedCost = sumPriced(
-    observedEntries,
-    (entry) => entry.optimizedTokens
-  );
-  const totalSavedCost = sumPriced(
-    [...verifiedEntries, ...expansionEntries],
-    (entry) => verifiedTransportDelta(entry)
-  );
+  const total = splitOf(entries, folded);
 
   return {
     schemaVersion: 3,
-    available: entries.length > 0,
+    available: entries.length > 0 || folded.length > 0,
     source:
       'analytics.db: verified materialized MCP before/after payloads; legacy and tool-reported estimates quarantined',
     pricing: price,
     summary: {
-      totalOperations: entries.length,
-      totalOriginalTokens,
-      totalOptimizedTokens,
-      measuredOptimizedTokens,
-      totalTokensSaved,
-      grossTokensSaved,
-      expansionTokensReturned,
-      unverifiedReportedTokensSaved,
-      savingsPercentage:
-        totalOriginalTokens > 0
-          ? (totalTokensSaved / totalOriginalTokens) * 100
-          : null,
-      contextUsd: totalReturnedCost.amount,
-      savedUsd: totalSavedCost.amount,
-      firstSeen: timestamps[0] || null,
-      lastSeen: timestamps.at(-1) || null,
-      measuredSavingsOperations: verifiedEntries.length,
-      pricedReturnedContextOperations: totalReturnedCost.priced,
-      pricedSavingsOperations: totalSavedCost.priced,
-      verifiedExpansionOperations: expansionEntries.length,
+      totalOperations: total.operations,
+      totalOriginalTokens: total.verifiedOriginalTokens,
+      totalOptimizedTokens: total.observedOptimizedTokens,
+      measuredOptimizedTokens: total.measuredOptimizedTokens,
+      totalTokensSaved: netTokensSaved(total),
+      grossTokensSaved: total.grossTokensSaved,
+      expansionTokensReturned: total.expansionTokensReturned,
+      unverifiedReportedTokensSaved: total.unverifiedReportedTokensSaved,
+      savingsPercentage: savingsPercentage(total),
+      contextUsd: money(total.contextUsd, total.pricedContextOperations),
+      savedUsd: money(total.savedUsd, total.pricedSavingsOperations),
+      firstSeen: total.firstSeen,
+      lastSeen: total.lastSeen,
+      measuredSavingsOperations: total.verifiedOperations,
+      pricedReturnedContextOperations: total.pricedContextOperations,
+      pricedSavingsOperations: total.pricedSavingsOperations,
+      verifiedExpansionOperations: total.expansionOperations,
       unmeasuredSavingsOperations:
-        entries.length - verifiedEntries.length - expansionEntries.length,
-      actualReturnedContextOperations: observedEntries.length,
-      legacyReportedContextOperations: historicalEntries.length,
-      observedReturnedContextOperations: observedEntries.length,
-      unverifiedReportedOperations: unverifiedEntries.length,
+        total.operations - total.verifiedOperations - total.expansionOperations,
+      actualReturnedContextOperations: total.observedOperations,
+      legacyReportedContextOperations: total.legacyOperations,
+      observedReturnedContextOperations: total.observedOperations,
+      unverifiedReportedOperations: total.unverifiedOperations,
+      foldedOperations,
+      foldedDays,
     },
     byAction,
     byClient,
@@ -508,8 +628,12 @@ export async function readDashboardAnalytics(
   const storage = new SqliteAnalyticsStorage(dbPath);
   const manager = new AnalyticsManager(storage);
   try {
+    // ONE READ FOR BOTH HALVES: a prune can land between two reads, and it
+    // moves a day out of the rows and into the totals. Rows first then totals
+    // would count that day twice; the other order would lose it.
     const entries = await manager.getEntries();
-    const report = summarizeDashboardAnalytics(entries, { limit });
+    const rollups = await manager.getRollups();
+    const report = summarizeDashboardAnalytics(entries, { limit, rollups });
     dashboardCache = { key: cacheKey, expiresAt: Date.now() + 30_000, report };
     return report;
   } finally {
