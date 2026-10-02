@@ -81,7 +81,13 @@ export function recoverable(text, label, keys = []) {
   const ours = new Set(
     (Array.isArray(keys) ? keys : [keys]).filter((k) => typeof k === 'string')
   );
-  const STAMP_IN_MARKER = /~([0-9a-z]+)(?: -> [^\]]+)?\]/g;
+  // NOT ANCHORED ON A CLOSING BRACKET. The search engine's header is not an
+  // envelope -- `src/a.ts:11-18 ~h5nq2x` ends at the key with no bracket at
+  // all -- so a bracket-anchored scan found no key on the grep fixture and
+  // scored its recovery as zero. Loose is safe here because the acceptance
+  // test is membership below, not shape: a planted `~abcdef` is in the
+  // producer set only if it is a MAC under a secret the process never emits.
+  const STAMP_IN_MARKER = /~([0-9a-z]+)/g;
   const keyOf = (fragment) => {
     for (const m of fragment.matchAll(STAMP_IN_MARKER))
       if (ours.has(m[1])) return m[1];

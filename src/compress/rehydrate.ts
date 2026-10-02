@@ -220,7 +220,20 @@ export function expandTapRecords(text: string, stamp: Stamp = null): string {
  * and a decoder eats the next eleven lines of an unrelated log.
  */
 /** `[paths @0=src/a.ts @1=src/b.ts ...]`, as `compressSearchResults` writes it. */
-const PATH_TABLE = /^\[paths ((?:[^\s=]+=[^\s]+)(?: [^\s=]+=[^\s]+)*)\]$/;
+const PATH_TABLE_HEAD = /^\[paths ((?:[^\s=]+=[^\s]+)(?: [^\s=]+=[^\s]+)*)/;
+
+/**
+ * The table line, gated on the stamp `compressSearchResults` wrote into it.
+ *
+ * SPLIT EITHER SIDE OF THE STAMP and reassembled from `.source`, never
+ * rewritten as a string: a rebuilt string needs every backslash doubled, and
+ * the one that gets missed degrades `\s` to a literal `s` in silence.
+ */
+function pathTablePattern(stamp: Stamp): RegExp {
+  return new RegExp(
+    PATH_TABLE_HEAD.source + stampPattern(stamp) + /\]$/.source
+  );
+}
 
 // A minted id is the prefix followed by digits and nothing else.
 const MINTED_PATH_ID = new RegExp(`^${PATH_ID_PREFIX}\\d+$`);
@@ -235,13 +248,33 @@ const SEARCH_PATH = `(?:[A-Za-z]:[\\\\/][^\\s:]*|[^\\s:]*[\\\\/][^\\s:]*|[^\\s:]
  * single-number range -- is unreachable. Matching it anyway would claim every
  * bare `path:12` in the surrounding text.
  */
-const SEARCH_HEADER = new RegExp(
+const SEARCH_HEADER_HEAD =
   `^(${SEARCH_PATH}):(\\d+)-(\\d+)` +
-    '( \\(context\\)| \\(matched [\\d,-]+\\))?' +
-    '(?: \\[exact declaration rows: name<TAB>rhs; concatenate template ' +
-    '(\\[.*\\]) around the two fields; source line = range start ' +
-    '\\+ zero-based row index\\])?$'
-);
+  '( \\(context\\)| \\(matched [\\d,-]+\\))?' +
+  '(?: \\[exact declaration rows: name<TAB>rhs; concatenate template ' +
+  '(\\[.*\\]) around the two fields; source line = range start ' +
+  '\\+ zero-based row index\\])?';
+
+/**
+ * The header, gated on the stamp the encoder wrote into it.
+ *
+ * ASKED WITH THE KEY, NOT OF THE SHAPE. This reader used to answer a question
+ * about the TEXT, and a header is not an envelope -- it is `path:start-end`
+ * over a stretch of following lines -- so content carrying that shape was read
+ * as one. Measured before the stamps: a four-line block containing
+ * `src/a.ts:10-12` came back with the author`s own three lines reattributed to
+ * that file and those line numbers, no error raised, and the rebuild reported
+ * clean. That needs no adversary; grep output quoted inside grep output is a
+ * thing an agent sends.
+ *
+ * Handed no stamp this matches nothing, so such a block passes through as the
+ * content it is -- and the body lines beneath a header that did not verify are
+ * never read as body, which is what authenticates the unstamped `[=N]` form
+ * inside them without spending a key on a four-character marker.
+ */
+function searchHeaderPattern(stamp: Stamp): RegExp {
+  return new RegExp(SEARCH_HEADER_HEAD + stampPattern(stamp) + '$');
+}
 
 /** The line numbers a header says matched, as `matchNote` said them. */
 function matchedLines(
@@ -276,7 +309,9 @@ function matchedLines(
  * derived the way the encoder wrote it: `:` for a line the header calls
  * matched, `-` for one it does not.
  */
-export function expandSearchHunks(text: string): string {
+export function expandSearchHunks(text: string, stamp: Stamp = null): string {
+  assertStamp(stamp);
+  const SEARCH_HEADER = searchHeaderPattern(stamp);
   // EACH LINE CARRIES ITS OWN TERMINATOR, exactly as the engine now emits them.
   // Splitting on one guessed newline left a stray CR on every line of the other
   // kind, so a mixed-ending document's header was never matched and the decoder
@@ -300,7 +335,9 @@ export function expandSearchHunks(text: string): string {
   // THE PATH TABLE, IF THE ENCODER MINTED ONE. It is the first line or it is
   // absent; a block that never folded reads exactly as it did before.
   const paths = new Map<string, string>();
-  const table = lines.length ? PATH_TABLE.exec(lines[0].raw) : null;
+  const table = lines.length
+    ? pathTablePattern(stamp).exec(lines[0].raw)
+    : null;
   if (table) {
     for (const entry of table[1].split(' ')) {
       const at = entry.indexOf('=');
@@ -579,9 +616,13 @@ function unconsumed(stamp: Stamp): RegExp {
  * else, and `{"note":"[exact declaration rows: ...]"}` is a document this
  * helper has no business refusing.
  */
-const UNCONSUMED_SUFFIX = new RegExp(
-  `^(?:${SEARCH_PATH}):\\d+-\\d+.*\\[exact declaration rows:`
-);
+function unconsumedSuffix(stamp: Stamp): RegExp {
+  return new RegExp(
+    `^(?:${SEARCH_PATH}):\\d+-\\d+.*\\[exact declaration rows:[^\\n]*` +
+      stampPattern(stamp) +
+      '$'
+  );
+}
 
 /**
  * Applies every registered grammar, then refuses anything left over.
@@ -651,7 +692,8 @@ export function rehydrate(text: string, stamp: Stamp = null): string {
       expandJsonRecords(
         expandJsonRecordsByPosition(
           expandSearchHunks(
-            expandLongRepeats(expandFoldedSections(text, stamp), stamp)
+            expandLongRepeats(expandFoldedSections(text, stamp), stamp),
+            stamp
           ),
           stamp
         ),
@@ -662,8 +704,9 @@ export function rehydrate(text: string, stamp: Stamp = null): string {
     stamp
   );
   const leftover = unconsumed(stamp);
+  const suffix = unconsumedSuffix(stamp);
   for (const line of out.split('\n'))
-    if (leftover.test(line) || UNCONSUMED_SUFFIX.test(line))
+    if (leftover.test(line) || suffix.test(line))
       throw new Error(`rehydrate: unconsumed marker ${JSON.stringify(line)}`);
   return out;
 }

@@ -52,7 +52,8 @@ describe('exact declaration rows in search output', () => {
       '\n' +
       fixture('\\\\server\\share\\config.ts');
     expect(looksLikeSearchResults(input)).toBe(true);
-    expect(rehydrate(compressSearchResults(input).text)).toBe(input);
+    const result = compressSearchResults(input);
+    expect(rehydrate(result.text, result.stamp)).toBe(input);
   });
 
   it('retains all declarations when values contain a real tab or syntax differs', () => {
@@ -93,8 +94,9 @@ describe('exact declaration rows in search output', () => {
     // from the emitted text alone.
     const [first, ...rest] = fixture().split('\n');
     const mixed = `${first}\r\n${rest.join('\n')}`;
-    const output = compressSearchResults(mixed).text;
-    expect(rehydrate(output)).toBe(mixed);
+    const folded = compressSearchResults(mixed);
+    const output = folded.text;
+    expect(rehydrate(output, folded.stamp)).toBe(mixed);
     expect(output.length).toBeLessThan(mixed.length);
     for (const number of ['0001', '9007199254740993']) {
       const input = Array.from(

@@ -545,7 +545,9 @@ describe('search', () => {
 
   it('states the path once per hunk instead of on every line', () => {
     const out = compressSearchResults(hits);
-    expect(out.text).toContain('src/a.ts:10-12');
+    // The header anchor carries the key: a header without one is a line this
+    // engine never emits and no decoder will read.
+    expect(out.text).toContain(`src/a.ts:10-12 ~${out.stamp ?? ''}\n`);
     expect(out.text.split('src/a.ts').length - 1).toBe(1);
     expect(out.lossless).toBe(true);
   });
@@ -564,7 +566,7 @@ describe('search', () => {
     // threw or returned nothing, which is the failure this test exists to rule
     // out.
     const out = compressSearchResults(hits);
-    expect(out.text).toContain('src/a.ts:10-12\n');
+    expect(out.text).toContain(`src/a.ts:10-12 ~${out.stamp ?? ''}\n`);
     expect(out.text).not.toContain('matched 10,11,12');
   });
 

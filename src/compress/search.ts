@@ -29,6 +29,7 @@
 
 import type { CompressionResult, EngineContext } from './types.js';
 import { unchanged } from './types.js';
+import { stampFor } from './annotate.js';
 
 /**
  * `path:line: content` or `path:line- content`.
@@ -190,8 +191,43 @@ export function looksLikeSearchResults(text: string): boolean {
  */
 export function compressSearchResults(
   text: string,
-  _ctx: EngineContext = {}
+  ctx: EngineContext = {}
 ): CompressionResult {
+  /*
+   * THE AUTHENTICATOR ON THIS ENGINE'S TWO MARKERS: the hunk header and the
+   * path table.
+   *
+   * The grammar here is not an envelope, it is a HEADER -- `path:start-end`
+   * over a stretch of body lines -- and the decoder read it out of any text it
+   * was handed. Measured against `dist/` before this: a four-line block of
+   * ordinary content containing `src/a.ts:10-12` came back as
+   *
+   *   src/a.ts:10:alpha line
+   *   src/a.ts:11:beta line
+   *   src/a.ts:12:coda
+   *
+   * with no error raised. The decoder had attributed the author's own lines to
+   * a file and line numbers nobody wrote, and reported a clean rebuild. That
+   * needs no adversary: grep output quoted inside grep output is a thing a
+   * coding agent sends. A planted path table was the same defect one level up,
+   * naming a path the content's author chose.
+   *
+   * THE BODY LINES ARE NOT STAMPED, AND DO NOT NEED TO BE. `[=N]` is four
+   * characters and only written where it is shorter than the line it replaces,
+   * so an eight-character key would delete the saving outright. It is read only
+   * BENEATH a header that verified, which is what authenticates it; the pass
+   * additionally stands down whenever a real body line already reads as a
+   * reference, which is the inner layer and stays.
+   */
+  /*
+   * A CALLER WHO WROTE NOTHING DID NOT THINK ABOUT DECODING, so it gets a key
+   * minted for it and handed back on the result -- the same convention as
+   * `foldLongRepeats` and `compressTap`. Writing `null` is the other thing: it
+   * means markers no decoder will honour, which is a choice and not an
+   * omission.
+   */
+  const stamp = ctx.stamp === undefined ? stampFor(text) : ctx.stamp;
+  const tag = stamp === null ? '' : ` ~${stamp}`;
   // A HUNK HEADER CANNOT DESCRIBE MIXED LINE ENDINGS -- and the guard that
   // enforced that refused the WHOLE block on finding any, which made one stray
   // LF among 747 CRLF lines cost a 60KB grep dump its entire 56% saving. The
@@ -273,7 +309,7 @@ export function compressSearchResults(
       if (declarations) {
         out.push({
           path,
-          raw: `:${range}${marks}${declarations.note}`,
+          raw: `:${range}${marks}${declarations.note}${tag}`,
           eol,
         });
         // The hunk's LAST emitted line carries the last source line's own
@@ -290,7 +326,7 @@ export function compressSearchResults(
         );
         factoredDeclarations = true;
       } else {
-        out.push({ path, raw: `:${range}${marks}`, eol });
+        out.push({ path, raw: `:${range}${marks}${tag}`, eol });
         for (const line of buffer)
           out.push({
             path: null,
@@ -397,13 +433,17 @@ export function compressSearchResults(
     line.eol;
   const eol = out.find((line) => line.eol)?.eol ?? '\n';
   const header = folded
-    ? `[paths ${table.map((p) => `${ids.get(p)}=${p}`).join(' ')}]${eol}`
+    ? `[paths ${table.map((p) => `${ids.get(p)}=${p}`).join(' ')}${tag}]${eol}`
     : '';
   const body = header + out.map(render).join('');
   if (body.length >= text.length) return unchanged(text);
 
   return {
     text: body,
+    // THE KEY TRAVELS WITH THE OUTPUT, AND ONLY THE OUTPUT. A caller that holds
+    // `text` needs it to rehydrate; nothing that accounts for the compression
+    // may carry it, because it is derived from the content.
+    stamp,
     // Nothing was removed that the output does not fully describe: the path is
     // stated once and every line number is recoverable from the header.
     elisions: [

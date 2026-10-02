@@ -5,6 +5,7 @@ import {
   refusals,
 } from '../../bench/compression/recovery.mjs';
 import { compressBody } from '../../bench/compression/ours-engine.mjs';
+import { compressSearchResults } from '../../dist/compress/search.js';
 
 /**
  * THE GATE ON THE INSTRUMENT BEHIND EVERY CONSERVATION COLUMN.
@@ -96,6 +97,28 @@ describe('the recovery oracle', () => {
     // read our own output, which is either a real defect or a mis-addressed
     // harness -- and both of those have reached the gap list before.
     expect([...refusals.entries()]).toEqual([]);
+  });
+
+  it('finds the key in a search header, which closes on no bracket', () => {
+    /*
+     * THE OTHER WAY THE ORACLE CAN LOSE ITS KEY. Every other grammar's marker
+     * ends `~key]`, so the scan was anchored on that bracket. A search header
+     * is not an envelope: `src/a.ts:11-18 ~h5nq2x` ends AT the key. Anchored
+     * on a bracket the scan found nothing on the grep fixture and scored a
+     * fully recoverable block as a total loss.
+     */
+    const hits = [];
+    for (let i = 1; i <= 8; i++)
+      hits.push(`src/a.ts:${10 + i}:  const value${i} = compute(${i});`);
+    const input = hits.join('\n');
+    const out = compressSearchResults(input);
+    expect(out.text).not.toBe(input);
+    const found = recoverable(out.text, 'search', out.stamp);
+    expect(found).toContain('const value8 = compute(8);');
+    // And the keyless control, which must come out worse: without the key the
+    // header is a line of text and the body lines keep no path or number.
+    const blind = recoverable(out.text, 'search-blind', []);
+    expect(blind.length).toBeLessThan(found.length);
   });
 
   it('accepts a single key as well as a list', () => {
