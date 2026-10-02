@@ -55,10 +55,7 @@ export function looksLikeRecord(value: unknown): value is AccountingRecord {
 }
 
 /** The last `last` records of a JSONL ledger, oldest first. */
-export async function readLedger(
-  path: string,
-  last = 10
-): Promise<LedgerRead> {
+export async function readLedger(path: string, last = 10): Promise<LedgerRead> {
   const want = Math.max(1, Math.floor(last));
   const kept: AccountingRecord[] = [];
   let skipped = 0;

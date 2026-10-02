@@ -81,8 +81,7 @@ export function formatTime(ts: string): string {
  * percentage, and three of them stacked hide the one row that says something.
  */
 export function notesFor(record: AccountingRecord): string {
-  if (record.transportError)
-    return `no response: ${record.transportError}`;
+  if (record.transportError) return `no response: ${record.transportError}`;
   if (!record.compressed)
     return `not compressed${record.reason ? `: ${record.reason}` : ''}`;
   const parts: string[] = [];
@@ -180,10 +179,15 @@ export function detailFor(record: AccountingRecord): readonly string[] {
     if (value === undefined || value === '') return;
     lines.push(`    ${label.padEnd(18)} ${value}`);
   };
-  add('request bytes', `${formatCount(record.beforeBytes)} -> ${formatCount(record.afterBytes)}`);
+  add(
+    'request bytes',
+    `${formatCount(record.beforeBytes)} -> ${formatCount(record.afterBytes)}`
+  );
   add(
     'system',
-    record.systemChars === undefined ? undefined : formatChars(record.systemChars)
+    record.systemChars === undefined
+      ? undefined
+      : formatChars(record.systemChars)
   );
   add(
     'tools',
@@ -221,7 +225,12 @@ export function detailFor(record: AccountingRecord): readonly string[] {
       `transform ${record.timing.transformMs.toFixed(1)} ms, upstream ${record.timing.upstreamMs.toFixed(0)} ms`
     );
   const usage = record.usage ?? {};
-  add('cache writes', formatCount(usage.cache_creation_input_tokens) === '-' ? undefined : formatCount(usage.cache_creation_input_tokens));
+  add(
+    'cache writes',
+    formatCount(usage.cache_creation_input_tokens) === '-'
+      ? undefined
+      : formatCount(usage.cache_creation_input_tokens)
+  );
   return lines;
 }
 

@@ -181,7 +181,9 @@ function optionalTokenCount(
   const value = row[field];
   if (value === undefined || value === null) return null;
   if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
-    throw new Error(`${where}: "${field}" must be a positive whole token count`);
+    throw new Error(
+      `${where}: "${field}" must be a positive whole token count`
+    );
   }
   return value;
 }
@@ -242,7 +244,8 @@ function contractsOf(
     const row = entry as Record<string, unknown>;
     // The row is named by its model wherever it has one, because an index is
     // useless to whoever has to go and fix the file.
-    const named = typeof row.model === 'string' ? row.model : `models[${index}]`;
+    const named =
+      typeof row.model === 'string' ? row.model : `models[${index}]`;
     const where = `models[${index}] (${named})`;
     return {
       provider: optionalString(row, 'provider', where) ?? 'operator',
@@ -250,8 +253,7 @@ function contractsOf(
       model: requireString(row, 'model', where).toLowerCase(),
       aliases: aliasesOf(row, where),
       currency: currencyOf(row, where),
-      verifiedAt:
-        timestamp(row, 'verifiedAt', where) ?? fileVerifiedAt,
+      verifiedAt: timestamp(row, 'verifiedAt', where) ?? fileVerifiedAt,
       effectiveFrom: timestamp(row, 'effectiveFrom', where),
       effectiveTo: timestamp(row, 'effectiveTo', where),
       sourceUrl: optionalString(row, 'sourceUrl', where) ?? path,
@@ -294,8 +296,7 @@ export function loadOperatorPrices(
     // typo in the path reads as a named failure rather than as money that
     // quietly went missing. These are paths and field names out of the
     // operator's own file, which is why the message may carry them.
-    const reason =
-      error instanceof Error ? error.message : 'could not be read';
+    const reason = error instanceof Error ? error.message : 'could not be read';
     return {
       contracts: [],
       status: { path: named, contracts: 0, error: reason },

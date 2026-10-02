@@ -84,7 +84,10 @@ export interface ModelAttribution {
 }
 
 /** Nothing found, and the reason is that nothing was found. */
-const UNATTRIBUTED: ModelAttribution = { model: null, source: MODEL_SOURCES.None };
+const UNATTRIBUTED: ModelAttribution = {
+  model: null,
+  source: MODEL_SOURCES.None,
+};
 
 /**
  * GROWING WINDOWS, not one big read. The last record of a transcript is the
@@ -119,7 +122,10 @@ const SYNTHETIC = '<synthetic>';
  * JSON would be a record with its beginning missing, which is worse than no
  * record at all.
  */
-async function tailLines(path: string, bytes: number): Promise<readonly string[]> {
+async function tailLines(
+  path: string,
+  bytes: number
+): Promise<readonly string[]> {
   let size: number;
   try {
     size = (await stat(path)).size;
@@ -214,7 +220,11 @@ function sessionCandidates(primary: string): readonly string[] {
 
 /** `~/.claude/projects/<project>/<session>.jsonl`, whichever project holds it. */
 async function claudeTranscript(): Promise<string | null> {
-  const root = join(agentHome('TOKEN_OPTIMIZER_CLAUDE_HOME'), '.claude', 'projects');
+  const root = join(
+    agentHome('TOKEN_OPTIMIZER_CLAUDE_HOME'),
+    '.claude',
+    'projects'
+  );
   let projects: readonly string[];
   try {
     projects = (await readdir(root, { withFileTypes: true }))
@@ -281,7 +291,11 @@ async function newestDatedDirs(
 
 /** `~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<session>.jsonl`. */
 async function codexRollout(): Promise<string | null> {
-  const root = join(agentHome('TOKEN_OPTIMIZER_CODEX_HOME'), '.codex', 'sessions');
+  const root = join(
+    agentHome('TOKEN_OPTIMIZER_CODEX_HOME'),
+    '.codex',
+    'sessions'
+  );
   const sessions = sessionCandidates('CODEX_SESSION_ID');
   if (sessions.length === 0) return null;
   for (const dir of await newestDatedDirs(root, 3, CODEX_DAYS)) {

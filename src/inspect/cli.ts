@@ -179,8 +179,11 @@ export async function main(
   args: readonly string[],
   dependencies: MainDependencies = {}
 ): Promise<number> {
-  const write = dependencies.write ?? ((text: string) => void stdout.write(text));
-  const live = dependencies.live ?? ((options) => supervisorTransformations(process.env, options));
+  const write =
+    dependencies.write ?? ((text: string) => void stdout.write(text));
+  const live =
+    dependencies.live ??
+    ((options) => supervisorTransformations(process.env, options));
   const ledger = dependencies.ledger ?? readLedger;
   const line = (text: string): void => write(`${text}\n`);
   const parsed = parseArguments(args);
@@ -258,7 +261,8 @@ export async function main(
         ? 'the ledger holds no transformation records'
         : 'the proxy is running but has not transformed a request yet'
     );
-    if (skipped > 0) line(`${skipped} unreadable ${skipped === 1 ? 'line' : 'lines'} skipped`);
+    if (skipped > 0)
+      line(`${skipped} unreadable ${skipped === 1 ? 'line' : 'lines'} skipped`);
     return 0;
   }
   carrying.forEach((window, index) => {
@@ -271,7 +275,8 @@ export async function main(
     }))
       line(text);
   });
-  if (skipped > 0) line(`${skipped} unreadable ${skipped === 1 ? 'line' : 'lines'} skipped`);
+  if (skipped > 0)
+    line(`${skipped} unreadable ${skipped === 1 ? 'line' : 'lines'} skipped`);
   return 0;
 }
 

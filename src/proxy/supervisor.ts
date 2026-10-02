@@ -501,7 +501,11 @@ export async function runSupervisor(
           (derived === null && (savedPort !== undefined || waiting.has(key)))
         )
           return null;
-        const { server: listener, port, transformations } = await startProxy({
+        const {
+          server: listener,
+          port,
+          transformations,
+        } = await startProxy({
           upstream,
           port: derived ?? 0,
           // THE PROJECT IS THE CALLER'S, OR THERE IS NONE.
@@ -581,10 +585,10 @@ export async function runSupervisor(
          */
         const query = new URLSearchParams((req.url || '').split('?')[1] ?? '');
         const asked = Number.parseInt(query.get('last') ?? '', 10);
-        const last = Number.isSafeInteger(asked) && asked > 0 ? asked : undefined;
+        const last =
+          Number.isSafeInteger(asked) && asked > 0 ? asked : undefined;
         const wanted = query.get('port');
-        const only =
-          wanted === null ? null : Number.parseInt(wanted, 10);
+        const only = wanted === null ? null : Number.parseInt(wanted, 10);
         if (only !== null && !Number.isSafeInteger(only))
           return reply(400, { error: 'port must be a number' });
         const byPort = new Map(

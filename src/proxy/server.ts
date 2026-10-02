@@ -1358,12 +1358,11 @@ function forward(
  * holds no payload. A caller that throws the handle away loses only the
  * ability to answer questions about itself.
  */
-export async function startProxy(
-  options: ProxyOptions = {}
-): Promise<{
+export async function startProxy(options: ProxyOptions = {}): Promise<{
   server: Server;
   port: number;
   transformations: TransformationLog;
+  ledgerSettled: () => Promise<void>;
 }> {
   const upstream = options.upstream || UPSTREAM();
   if (!upstreamIsSafe(upstream)) {
@@ -1402,6 +1401,8 @@ export async function startProxy(
   // The thread and the encoder come up now rather than on the first request,
   // which would otherwise pay ~190ms of one-time cost on its measurement path.
   tokenAccounting.warmUp();
+  /** Ledger lines owed but not yet written; see `ledgerSettled` below. */
+  const pendingLedgerWrites = new Set<Promise<void>>();
   const observe = (entry: AccountingRecord, tokens?: PendingCount): void => {
     /*
      * THE RING TAKES IT NOW; THE LEDGER WAITS FOR THE COUNT. These are two
@@ -1435,9 +1436,37 @@ export async function startProxy(
     // A REFUSAL IS NAMED, NEVER A ZERO, and a rejection here is the counter
     // breaking its own no-throw contract -- so it gets a word of its own
     // rather than being folded into one of the counter's own reasons.
-    void tokens.done.then(commit, () =>
-      commit({ measured: false, reason: 'count-rejected' })
-    );
+    //
+    // HELD, NOT FIRED AND FORGOTTEN. This is the branch where the ledger line
+    // does not exist yet, so anything that ends the process or the counting
+    // thread before the count lands loses the line outright -- and loses it
+    // silently, because a short ledger looks exactly like a quiet period.
+    const settling = tokens.done
+      .then(commit, () => commit({ measured: false, reason: 'count-rejected' }))
+      .finally(() => {
+        pendingLedgerWrites.delete(settling);
+      });
+    pendingLedgerWrites.add(settling);
+  };
+
+  /**
+   * Resolves once every record that has been observed is in the ledger.
+   *
+   * A reader needs this and so does shutdown. The count for a request runs
+   * beside the upstream round trip, so against a real provider it is in hand
+   * before the response ends and the line is written synchronously -- but
+   * against a fast upstream it is not, and then the line is owed rather than
+   * written. "Owed" is indistinguishable from "did not happen" to anything
+   * reading the file, which is why this is part of the handle rather than an
+   * internal detail.
+   */
+  const ledgerSettled = async (): Promise<void> => {
+    // A commit can only remove from the set, never add, so one drain suffices;
+    // the loop is there because `await` yields and a response that ended while
+    // we were waiting may have enqueued its own.
+    while (pendingLedgerWrites.size > 0) {
+      await Promise.all([...pendingLedgerWrites]);
+    }
   };
   // ONE DIRECTORY PER PROXY, because shutdown deletes it. A shared root would mean the
   // first proxy to stop wiping the spills of every other one still running -- and a
@@ -1666,15 +1695,29 @@ export async function startProxy(
   // temp directory that nothing ever removes. Cleared when the proxy stops, which is
   // also when the last agent that could still `Read` one of those paths has gone.
   server.on('close', () => {
-    // The counting thread goes with the proxy. It is unref'd so it could not
-    // hold the process open anyway, but leaving it running past the last
-    // request it will ever be asked about is a leak on any host that keeps the
-    // process alive for something else.
-    void tokenAccounting.shutdown();
-    // WHAT WAS COUNTED SINCE THE LAST ROLLUP GOES NOW. A clean stop is the only
-    // chance to record the tail of the window; a kill loses it, which is the
-    // reason the rollups are periodic rather than one per session.
-    flushRollup();
+    // THE OWED LEDGER LINES GO FIRST, and the order is the whole point: the
+    // thread these counts are still waiting on is the thread the line below
+    // used to kill immediately, so a clean stop dropped the tail of the ledger
+    // and the tail of the rollup window together. Both now wait for the counts
+    // they are about.
+    void ledgerSettled().then(
+      () => {
+        // The counting thread goes with the proxy. It is unref'd so it could
+        // not hold the process open anyway, but leaving it running past the
+        // last request it will ever be asked about is a leak on any host that
+        // keeps the process alive for something else.
+        void tokenAccounting.shutdown();
+        // WHAT WAS COUNTED SINCE THE LAST ROLLUP GOES NOW. A clean stop is the
+        // only chance to record the tail of the window; a kill loses it, which
+        // is the reason the rollups are periodic rather than one per session.
+        flushRollup();
+      },
+      () => {
+        // A drain that rejects must still release the thread and the window.
+        void tokenAccounting.shutdown();
+        flushRollup();
+      }
+    );
     try {
       // eslint-disable-next-line n/no-sync
       rmSync(spillRoot, { recursive: true, force: true });
@@ -1689,7 +1732,7 @@ export async function startProxy(
     server.listen(options.port ?? 0, HOST, () => {
       const address = server.address();
       const port = typeof address === 'object' && address ? address.port : 0;
-      resolve({ server, port, transformations });
+      resolve({ server, port, transformations, ledgerSettled });
     });
   });
 }

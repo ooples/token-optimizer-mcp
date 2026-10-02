@@ -102,7 +102,10 @@ interface Reply {
 
 /** A tokenizer that can be swapped for a synchronous one in tests. */
 export interface TokenizerBackend {
-  count(before: string, after: string): Promise<{ beforeTokens: number; afterTokens: number }>;
+  count(
+    before: string,
+    after: string
+  ): Promise<{ beforeTokens: number; afterTokens: number }>;
   shutdown(): Promise<void>;
 }
 
@@ -191,7 +194,8 @@ function workerBackend(): TokenizerBackend {
       worker = started;
       return started;
     } catch (error) {
-      failed = error instanceof Error ? error.message : 'worker could not start';
+      failed =
+        error instanceof Error ? error.message : 'worker could not start';
       return null;
     }
   };
@@ -210,7 +214,10 @@ function workerBackend(): TokenizerBackend {
         } catch (error) {
           waiting.delete(id);
           settleRef(active);
-          resolve({ id, error: error instanceof Error ? error.message : 'post failed' });
+          resolve({
+            id,
+            error: error instanceof Error ? error.message : 'post failed',
+          });
         }
       });
       if (
@@ -220,7 +227,10 @@ function workerBackend(): TokenizerBackend {
       ) {
         throw new Error(reply.error ?? 'worker returned no counts');
       }
-      return { beforeTokens: reply.beforeTokens, afterTokens: reply.afterTokens };
+      return {
+        beforeTokens: reply.beforeTokens,
+        afterTokens: reply.afterTokens,
+      };
     },
     async shutdown() {
       const active = worker;
@@ -267,7 +277,10 @@ export interface TokenAccounting {
    * Count both bodies under one instrument. Never throws, never blocks the
    * caller's loop for the duration of the count.
    */
-  countPair(before: Buffer | string, after: Buffer | string): Promise<TokenCountResult>;
+  countPair(
+    before: Buffer | string,
+    after: Buffer | string
+  ): Promise<TokenCountResult>;
   /**
    * Starts the thread and the encoder before any request needs them.
    *
