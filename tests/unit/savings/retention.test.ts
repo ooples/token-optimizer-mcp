@@ -27,13 +27,11 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
-  localDayKey,
   longestReportWindowDays,
   looksLikeRollup,
   pruneProxyLedger,
   retentionDays,
   rollupPath,
-  startOfDayKey,
   RETENTION_MARGIN_DAYS,
 } from '../../../src/savings/retention.js';
 import {
@@ -41,6 +39,8 @@ import {
   readProxySavings,
 } from '../../../src/savings/proxy.js';
 import {
+  localDayKey,
+  startOfDayKey,
   windowBoundaries,
   startOfLocalDay,
 } from '../../../src/savings/windows.js';

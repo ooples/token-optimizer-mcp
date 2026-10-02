@@ -44,7 +44,13 @@ import {
 } from '../analytics/proxy-savings.js';
 import { looksLikeRecord } from '../inspect/ledger.js';
 import type { AccountingRecord } from '../proxy/accounting.js';
-import { UNATTRIBUTED, startOfLocalDay, windowBoundaries } from './windows.js';
+import {
+  UNATTRIBUTED,
+  localDayKey,
+  startOfDayKey,
+  startOfLocalDay,
+  windowBoundaries,
+} from './windows.js';
 
 /**
  * Days kept past the longest window the report shows.
@@ -92,41 +98,6 @@ export function retentionDays(now: Date = new Date()): number {
  * only one path that ever removes a row.
  */
 export const MAX_LEDGER_BYTES = 16 * 1024 * 1024;
-
-/**
- * The local calendar day a stamp falls in, as `YYYY-MM-DD`.
- *
- * LOCAL, NOT UTC, because the report's windows are local days. A UTC key would
- * put the evening's requests in tomorrow for anyone east of Greenwich, and a
- * folded day would then straddle a boundary that the raw rows did not.
- */
-export function localDayKey(at: Date): string {
-  const year = at.getFullYear();
-  const month = `${at.getMonth() + 1}`.padStart(2, '0');
-  const day = `${at.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-/** Midnight that opens a `YYYY-MM-DD` key, in local time, or null if unparseable. */
-export function startOfDayKey(key: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
-  if (match === null) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const at = new Date(year, month - 1, day, 0, 0, 0, 0);
-  // A ROUND TRIP, NOT A RANGE CHECK: `new Date(2026, 1, 31)` is March 3rd, and
-  // only comparing the parts back catches a key that named a day that is not
-  // one. The report would otherwise fold a day into a window it never fell in.
-  if (
-    at.getFullYear() !== year ||
-    at.getMonth() !== month - 1 ||
-    at.getDate() !== day
-  ) {
-    return null;
-  }
-  return at;
-}
 
 /**
  * One set of running totals: the only shape a folded day is ever stored in.
