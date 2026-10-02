@@ -62,6 +62,12 @@ const NOT_IN_CI = {
     'of the corpus figures are absent from the record, and the table does not name ' +
     'the record it was read from. All three need the README rewritten, and that ' +
     'edit is being held until the claims settle',
+  'bench/compression/adversarial.check.mjs':
+    'red today on a real defect, not on a missing figure -- a forged marker in ' +
+    'content makes rehydrate throw PathAddressedError naming the path the ' +
+    'attacker wrote, which denies expansion of the whole block in 7 of 12 cells ' +
+    'and costs 20 points of reduction. Wiring it into CI before the decoder is ' +
+    'fixed would land a red job whose cause is already known',
 };
 
 const walk = (dir, out = []) => {
@@ -85,14 +91,18 @@ const ok = (msg) => console.log(`  ok   ${msg}`);
 const found = walk(join(ROOT, 'bench')).sort();
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const script = pkg.scripts?.[RUNNER] ?? '';
-const listed = [...script.matchAll(/bench\/[\w./-]*\.check\.mjs/g)].map((m) => m[0]);
+const listed = [...script.matchAll(/bench\/[\w./-]*\.check\.mjs/g)].map(
+  (m) => m[0]
+);
 const workflow = readFileSync(join(ROOT, WORKFLOW), 'utf8');
 
 // A DISCOVERY THAT FINDS NOTHING PASSES EVERY RULE BELOW. It has to find at
 // least this file, since this file is one of the things it is looking for.
 const SELF = 'bench/compression/instrument-roster.check.mjs';
 if (!found.includes(SELF))
-  fail(`the walk did not find this file -- it found ${found.length}, so the roster is not being read`);
+  fail(
+    `the walk did not find this file -- it found ${found.length}, so the roster is not being read`
+  );
 else ok(`the walk found ${found.length} check file(s), including itself`);
 if (!listed.length) fail(`the ${RUNNER} script names no check files at all`);
 
@@ -102,8 +112,12 @@ for (const path of found) {
   const elsewhere = path in RUNS_ELSEWHERE;
   const excluded = path in NOT_IN_CI;
   if (Number(where) + Number(elsewhere) + Number(excluded) === 1) continue;
-  if (where) fail(`${path} is in ${RUNNER} AND in one of the exception maps -- pick one`);
-  else fail(`${path} is run by nothing: add it to ${RUNNER}, or name its runner`);
+  if (where)
+    fail(
+      `${path} is in ${RUNNER} AND in one of the exception maps -- pick one`
+    );
+  else
+    fail(`${path} is run by nothing: add it to ${RUNNER}, or name its runner`);
 }
 if (!failed) ok(`every check on disk is reached by ${RUNNER} or accounted for`);
 
@@ -154,7 +168,9 @@ for (const [path, job] of Object.entries(RUNS_ELSEWHERE)) {
   else if (!block.includes(path))
     fail(
       `${path} names job \`${job}\`, but that job does not run it` +
-        (workflow.includes(path) ? ' -- the file is named elsewhere in the workflow' : '')
+        (workflow.includes(path)
+          ? ' -- the file is named elsewhere in the workflow'
+          : '')
     );
 }
 if (!failed) ok(`every exception names a job in ${WORKFLOW} that runs it`);
@@ -162,15 +178,19 @@ if (!failed) ok(`every exception names a job in ${WORKFLOW} that runs it`);
 // RULE 4: a check nothing runs is stated, not discovered. It must be real, must
 // really be absent from CI, and must carry a reason.
 for (const [path, reason] of Object.entries(NOT_IN_CI)) {
-  if (!existsSync(join(ROOT, path))) fail(`${path} is listed as unrun but is not on disk`);
-  else if (workflow.includes(path)) fail(`${path} is listed as unrun but ${WORKFLOW} runs it`);
-  else if (!reason || reason.length < 20) fail(`${path} is unrun with no reason given`);
+  if (!existsSync(join(ROOT, path)))
+    fail(`${path} is listed as unrun but is not on disk`);
+  else if (workflow.includes(path))
+    fail(`${path} is listed as unrun but ${WORKFLOW} runs it`);
+  else if (!reason || reason.length < 20)
+    fail(`${path} is unrun with no reason given`);
 }
 
 // RULE 5: a path in the runner that is not on disk is a check that stopped
 // existing without anybody noticing the list still calls for it.
 for (const path of listed)
-  if (!found.includes(path)) fail(`${RUNNER} runs ${path}, which is not on disk`);
+  if (!found.includes(path))
+    fail(`${RUNNER} runs ${path}, which is not on disk`);
 
 for (const [path, reason] of Object.entries(NOT_IN_CI))
   console.log(`  NOTE ${path} runs in no CI job -- ${reason}`);
