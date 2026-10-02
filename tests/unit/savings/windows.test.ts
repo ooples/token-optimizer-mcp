@@ -14,6 +14,7 @@ import {
   priceVerifiedDelta,
   startOfLocalDay,
   summarize,
+  usd,
   windowBoundaries,
 } from '../../../src/savings/windows.js';
 import type { AnalyticsEntry } from '../../../src/analytics/analytics-types.js';
@@ -244,7 +245,20 @@ describe('the breakdowns', () => {
     const window = summarize(entries, 'All time', null);
     const group = groupBy(entries, (e) => String(e.model || ''))[0];
     expect(group.costUsd).toBe(window.costUsd);
-    expect(priceVerifiedDelta(entries[0])).toBe(window.costUsd);
+    // EQUALITY AT THE PRECISION THE REPORT PUBLISHES, not bit equality with
+    // the raw float. `usd` quantizes every published dollar figure so that two
+    // readings of the same history cannot disagree in the last digits -- which
+    // they otherwise do, because summing the same priced rows in a different
+    // order lands parts in 10^15 apart, and a folded day is summed at fold
+    // time rather than in the window.
+    const raw = priceVerifiedDelta(entries[0]);
+    expect(raw).not.toBeNull();
+    expect(window.costUsd).toBeCloseTo(Number(raw), 10);
+    // AND QUANTIZED, NOT MERELY CLOSE: this row's price is one of the values
+    // that is not exactly representable, so a window publishing the raw float
+    // would pass the line above and fail this one.
+    expect(Number(raw)).not.toBe(usd(Number(raw)));
+    expect(window.costUsd).toBe(usd(Number(raw)));
   });
 });
 

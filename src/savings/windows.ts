@@ -238,10 +238,28 @@ function accumulate(
     operations,
     tokensSaved,
     tokensBefore,
-    costUsd: pricedOperations > 0 ? cost : null,
+    costUsd: pricedOperations > 0 ? usd(cost) : null,
     pricedOperations,
     eligibleOperations,
   };
+}
+
+/**
+ * A dollar figure the report can publish.
+ *
+ * QUANTIZED BECAUSE ADDITION IN BINARY FLOATING POINT IS NOT ASSOCIATIVE. The
+ * same set of priced rows summed in a different order lands a few parts in
+ * 10^15 apart, so without this the report's own total depends on the order the
+ * rows came back in -- and once a day is folded, the fold sums that day first
+ * and the window adds one term where it used to add hundreds. Two readings of
+ * the same history would then disagree in the last digits, which is exactly
+ * the kind of disagreement nobody can explain and everybody distrusts.
+ *
+ * TEN DECIMALS, which is a ten-billionth of a dollar: far below the smallest
+ * real price in the catalog and far above the noise being removed.
+ */
+export function usd(amount: number): number {
+  return Math.round(amount * 1e10) / 1e10;
 }
 
 function percent(saved: number, before: number): number {
