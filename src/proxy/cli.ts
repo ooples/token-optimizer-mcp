@@ -21,12 +21,14 @@
 import { accountingPath } from './accounting.js';
 import { startProxy, proxyEnabled } from './server.js';
 import { captureDir, captureNotice } from './capture.js';
+import { POSTURES, postureNotice } from './posture.js';
 import type { ProxySummary } from './server.js';
 
 interface Args {
   readonly port: number;
   readonly upstream?: string;
   readonly preset?: string;
+  readonly posture?: string;
   readonly projectRoot?: string;
   readonly quiet: boolean;
   readonly spill: boolean;
@@ -39,7 +41,8 @@ const USAGE = [
   'token-optimizer-proxy -- compression on the wire',
   '',
   '  token-optimizer-proxy [--port N] [--upstream URL] [--preset NAME]',
-  '                        [--project-root DIR] [--quiet] [--spill]',
+  '                        [--posture NAME] [--project-root DIR] [--quiet]',
+  '                        [--spill]',
   '',
   '  --port N          Listen on this port. Default 0, meaning any free port.',
   '  --upstream URL    Where to forward. Defaults to',
@@ -48,6 +51,15 @@ const USAGE = [
   '                    loopback -- anything else is refused rather than putting',
   '                    your provider key on the wire in cleartext.',
   '  --preset NAME     balanced | aggressive | conservative | lossless.',
+  `  --posture NAME    ${Object.keys(POSTURES)
+    .sort((a, b) => a.localeCompare(b, 'en'))
+    .join(' | ')}.`,
+  '                    A posture is a preset AND the features AND the dials, as',
+  '                    one word. It SEEDS each variable, so --preset and any',
+  '                    variable you exported yourself still win. A name ending',
+  '                    in -lossy is the only kind allowed to turn on a feature',
+  '                    this channel does not run by default; what it turned on',
+  '                    is printed on stderr at start, every time.',
   "  --project-root D  Where to read this project's knowledge graph from.",
   '                    Default: the current directory.',
   '  --quiet           No per-request summaries on stderr.',
@@ -73,6 +85,7 @@ export function parseArgs(argv: readonly string[]): Args {
   let port = 0;
   let upstream: string | undefined;
   let preset: string | undefined;
+  let posture: string | undefined;
   let projectRoot: string | undefined;
   let quiet = false;
   let spill = false;
@@ -116,6 +129,9 @@ export function parseArgs(argv: readonly string[]): Args {
       case '--preset':
         preset = value();
         break;
+      case '--posture':
+        posture = value();
+        break;
       case '--project-root':
         projectRoot = value();
         break;
@@ -134,7 +150,7 @@ export function parseArgs(argv: readonly string[]): Args {
     }
   }
 
-  return { port, upstream, preset, projectRoot, quiet, spill, help };
+  return { port, upstream, preset, posture, projectRoot, quiet, spill, help };
 }
 
 function summaryLine(summary: ProxySummary): string {
@@ -186,6 +202,7 @@ export async function run(argv: readonly string[]): Promise<number> {
       port: args.port,
       upstream: args.upstream,
       preset: args.preset,
+      posture: args.posture,
       projectRoot: args.projectRoot,
       spill: args.spill,
       onSummary: args.quiet
@@ -224,6 +241,15 @@ export async function run(argv: readonly string[]): Promise<number> {
     // otherwise promises, so an operator must not be able to leave it on by
     // accident and not notice.
     (captureDir() ? `${captureNotice(captureDir() ?? '')}\n` : '') +
+      // THE SAME PROMISE, FOR THE SAME REASON. A posture is one word that can turn
+      // on five features and pin six variables, so the word is not evidence anyone
+      // understood what it did. This block is: it names what the resolver actually
+      // enabled, what the channel refused, and the variable that turns each off.
+      // Unknown names are announced too, rather than silently running defaults.
+      (started.posture === null
+        ? ''
+        : `${postureNotice(started.posture)}
+`) +
       `token-optimizer proxy listening on ${url}, forwarding to ` +
       `${args.upstream || process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM || DEFAULT_UPSTREAM}` +
       // NAMED HERE because whoever reads this line is the one reader who will

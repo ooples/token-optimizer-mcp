@@ -94,6 +94,12 @@ import {
 } from '../compress/options.js';
 import type { ProviderRequest } from '../compress/frontier.js';
 import { FeatureName, featureEnabled } from '../rollout/resolve.js';
+import {
+  type AppliedPosture,
+  type PostureName,
+  applyPosture,
+  postureFromEnv,
+} from './posture.js';
 
 /** Upstream, overridable for a gateway. */
 const UPSTREAM = (): string =>
@@ -187,6 +193,14 @@ export interface ProxyOptions {
   readonly knowledge?: boolean;
   /** Named starting point for the dials. Defaults to the environment's. */
   readonly preset?: PresetName | string;
+  /**
+   * Named full-proxy posture: a preset, a set of features, and the dials.
+   *
+   * Defaults to the environment's. A posture SEEDS variables rather than setting
+   * them, so `preset` and `compression` above, and any variable already exported,
+   * all still win -- see proxy/posture.ts.
+   */
+  readonly posture?: PostureName | string;
   /** Expert overrides, layered over the preset. */
   readonly compression?: CompressionOptions;
   /**
@@ -1577,7 +1591,26 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
   port: number;
   transformations: TransformationLog;
   ledgerSettled: () => Promise<void>;
+  /**
+   * What a named posture did to the environment, or null when none was named.
+   *
+   * RETURNED RATHER THAN PRINTED HERE. The disclosure belongs on the one stream
+   * an operator is watching when they start the proxy, and this function is also
+   * called by the supervisor and by tests, where writing to stderr would be noise
+   * that proves nothing. `proxy/cli.ts` prints it beside the capture notice.
+   */
+  posture: AppliedPosture | null;
 }> {
+  /*
+   * SEEDED FIRST, BEFORE ANYTHING IN THIS FUNCTION READS THE ENVIRONMENT.
+   *
+   * Every dial below -- the preset at the bottom of this function, keepTools and
+   * smallToolChars per request, the feature resolver -- reads `process.env` on its
+   * own. That is what makes a posture work without touching a single one of them,
+   * and it is also what makes the ORDER load-bearing: a variable seeded after its
+   * reader ran would be a posture that did nothing while reporting that it did.
+   */
+  const posture = applyPosture(options.posture ?? postureFromEnv());
   const upstream = options.upstream || UPSTREAM();
   if (!upstreamIsSafe(upstream)) {
     // FAIL LOUDLY HERE, uniquely in this file. Everything else in the proxy
@@ -1958,7 +1991,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
     server.listen(options.port ?? 0, HOST, () => {
       const address = server.address();
       const port = typeof address === 'object' && address ? address.port : 0;
-      resolve({ server, port, transformations, ledgerSettled });
+      resolve({ server, port, transformations, ledgerSettled, posture });
     });
   });
 }

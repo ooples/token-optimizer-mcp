@@ -35,6 +35,7 @@ import {
   resolveRollout,
 } from './resolve.js';
 import { describeEveryFeature, describeRollout } from './describe.js';
+import { POSTURE_ENV, applyPosture, postureFromEnv } from '../proxy/posture.js';
 
 const USAGE = [
   'token-optimizer-rollout [options]',
@@ -51,6 +52,9 @@ const USAGE = [
   '  --json                      the resolved snapshot as JSON',
   '  --strict                    exit 1 on any input that could not be used',
   '  -h, --help                  this text',
+  '',
+  `A posture named by ${POSTURE_ENV} is resolved here the same way the proxy`,
+  'resolves it, so what this prints is what that proxy would run.',
 ];
 
 interface Options {
@@ -183,9 +187,25 @@ export async function main(
       ? baseEnv
       : { ...baseEnv, [CHANNEL_ENV]: parsed.channel };
 
+  /*
+   * A POSTURE IS RESOLVED HERE TOO, OR THIS COMMAND UNDER-REPORTS.
+   *
+   * An operator who exported TOKEN_OPTIMIZER_POSTURE has asked for features by
+   * name, and the proxy will seed them at start -- so an inspector that read the
+   * variable and did not interpret it would print "not_requested" for every one
+   * of them and be wrong about the process it exists to describe.
+   *
+   * ON A COPY, ALWAYS. This command reads and writes nothing, and that includes
+   * its own environment: seeding `processEnv` would leave a resolved posture
+   * behind for whatever else this process goes on to do.
+   */
+  const seeded: NodeJS.ProcessEnv = { ...env };
+  const posture = applyPosture(postureFromEnv(env), seeded);
+  const resolveEnv = posture === null ? env : seeded;
+
   let snapshot: RolloutSnapshot;
   try {
-    snapshot = resolveRollout(env, {
+    snapshot = resolveRollout(resolveEnv, {
       requested: parsed.requested,
       disabled: parsed.disabled,
       strict: parsed.strict,
@@ -204,7 +224,19 @@ export async function main(
     const body = parsed.all
       ? describeEveryFeature(snapshot)
       : describeRollout(snapshot);
-    write(`${body.join('\n')}\n`);
+    // NAMED BEFORE THE FEATURES, so a reader knows why half of them are on. The
+    // unknown case is named too: a typo that resolved nothing prints exactly like
+    // a plain default, which is the one output a reader must not have to guess at.
+    const heading =
+      posture === null
+        ? []
+        : [
+            posture.posture === null
+              ? `${POSTURE_ENV}="${posture.requested}" is not a posture this version knows; ignored.`
+              : `posture ${posture.posture.name}, from ${POSTURE_ENV}`,
+            '',
+          ];
+    write(`${[...heading, ...body].join('\n')}\n`);
   }
 
   /*
