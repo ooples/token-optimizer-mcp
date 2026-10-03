@@ -713,6 +713,82 @@ describe('the remainder is de-indented, but only where whitespace is not content
   });
 });
 
+describe('a long string gets its own shape however deep it sits', () => {
+  /**
+   * THE RULE USED TO STOP AT ONE LEVEL. It covered the tools whose payload is
+   * `{ content: <the file> }` and missed every tool that wraps its answer: the
+   * smart_pretty family returns the formatted file at `data.format.code`, so
+   * `data` was rendered with JSON.stringify and the file stayed one escaped
+   * line inside it. Measured through the reduction bench, that one line cost
+   * smart_pretty 13-25% of the file it was formatting, and it was long enough
+   * that the bench read the fixture's own source as a published saving.
+   *
+   * The pair below is the point: the shallow case is the control, and without
+   * it a rule that had reverted to depth 1 would still pass the deep case's
+   * sibling assertions by accident.
+   */
+  const SOURCE = Array.from(
+    { length: 120 },
+    (_, i) => `export const name${i} = { k: 'v' };`
+  ).join('\n');
+
+  function labels(payload) {
+    return parseShape(JSON.stringify(payload)).sections.map((s) => s.label);
+  }
+
+  test('at the top level, where it always did', () => {
+    expect(labels({ path: '/tmp/x.ts', content: SOURCE })).toContain(
+      'content > output'
+    );
+  });
+
+  test('two levels in, named by its whole path', () => {
+    expect(
+      labels({
+        success: true,
+        data: { format: { code: SOURCE, changed: true } },
+      })
+    ).toContain('data.format.code > output');
+  });
+
+  test('and the object it came out of is rendered without it', () => {
+    // A preview that printed the stripped object AND the string would charge
+    // the caller twice for the biggest thing in the reply.
+    const sections = parseShape(
+      JSON.stringify({ data: { format: { code: SOURCE, changed: true } } })
+    ).sections;
+    const data = sections.find((s) => s.label === 'data');
+
+    expect(data).toBeDefined();
+    expect(data.lines.join('\n')).not.toContain('export const name0');
+    expect(data.lines.join('\n')).toContain('"changed": true');
+  });
+
+  test('a short nested string stays in the object', () => {
+    // The threshold is what makes this a saving rather than a shredder: a
+    // one-line field lifted into its own section costs a label and saves
+    // nothing.
+    const sections = parseShape(
+      JSON.stringify({ data: { format: { code: 'const a = 1;' } } })
+    ).sections;
+
+    expect(sections.map((s) => s.label)).not.toContain(
+      'data.format.code > output'
+    );
+    expect(sections.find((s) => s.label === 'data').lines.join('\n')).toContain(
+      'const a = 1;'
+    );
+  });
+
+  test('a long array element is left where it is', () => {
+    // Removing one shifts every index after it, so a label naming an element
+    // would describe a payload that does not exist.
+    expect(labels({ data: { lines: [SOURCE] } })).not.toContain(
+      'data.lines[0] > output'
+    );
+  });
+});
+
 describe('a caller who names a section pays for that section', () => {
   /**
    * EXPAND_TOOL has always told callers to "pass `section` to say which named

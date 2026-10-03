@@ -253,6 +253,60 @@ function splitLog(text) {
  */
 const NESTED_SHAPE_THRESHOLD = 2048;
 
+/**
+ * How deep that search goes.
+ *
+ * IT USED TO STOP AT ONE, which covered the tools whose payload is
+ * `{ content: <the file> }` and missed every tool that wraps its answer. The
+ * smart_pretty family returns the formatted file at `data.format.code`, two
+ * levels in, so `data` was rendered with JSON.stringify and the file stayed one
+ * escaped line inside it -- the exact case the comment above says this exists to
+ * prevent. Measured on token-counter.ts through smart_pretty: 3,835 tokens for a
+ * 3,368-token file, with the escape the whole of the difference, and the one
+ * line was long enough that the bench's self-claim gate read the fixture's own
+ * source as a published saving.
+ */
+const NESTED_SHAPE_DEPTH = 6;
+
+/**
+ * A value with its long string fields taken out, and those strings by path.
+ *
+ * The strings have to be REMOVED, not merely also reported: a preview that
+ * rendered the object whole and then printed the field again would charge the
+ * caller twice for the biggest thing in the reply.
+ *
+ * Object properties only, like the depth-1 rule above. Removing an array
+ * element shifts every index after it, so a label naming one would describe a
+ * payload that does not exist -- and measured across the fourteen benched tools
+ * the longest string held in an array is a sentence of advice.
+ */
+function liftNestedText(value, path, depth = 1) {
+  if (depth > NESTED_SHAPE_DEPTH || !value || typeof value !== 'object') {
+    return { stripped: value, lifted: [] };
+  }
+  const lifted = [];
+  if (Array.isArray(value)) {
+    const stripped = value.map((entry, index) => {
+      const inner = liftNestedText(entry, `${path}[${index}]`, depth + 1);
+      lifted.push(...inner.lifted);
+      return inner.stripped;
+    });
+    return { stripped, lifted };
+  }
+  const stripped = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const here = `${path}.${key}`;
+    if (typeof entry === 'string' && entry.length >= NESTED_SHAPE_THRESHOLD) {
+      lifted.push({ path: here, text: entry });
+      continue;
+    }
+    const inner = liftNestedText(entry, here, depth + 1);
+    lifted.push(...inner.lifted);
+    stripped[key] = inner.stripped;
+  }
+  return { stripped, lifted };
+}
+
 /** JSON: top-level keys, so the model learns the shape without the payload. */
 function splitJson(text) {
   let parsed;
@@ -305,7 +359,17 @@ function splitJson(text) {
       }
       continue;
     }
-    const rendered = JSON.stringify(value, null, 2) ?? 'null';
+    // The same rule, applied at every depth: a long string anywhere under
+    // this key gets its own shape, and what is left of the key is rendered
+    // without it.
+    const { stripped, lifted } = liftNestedText(value, key);
+    for (const entry of lifted) {
+      const inner = parseShape(entry.text);
+      for (const s of inner.sections) {
+        sections.push({ ...s, label: `${entry.path} > ${s.label}` });
+      }
+    }
+    const rendered = JSON.stringify(stripped, null, 2) ?? 'null';
     sections.push(jsonSection(key, rendered.split('\n'), 4, 'field'));
   }
   return sections;
