@@ -87,13 +87,21 @@ console.log(
 // consider. What the encoder does consider is this exact marker against these
 // exact records -- and the decoder inverts the marker, so the records it replaced
 // can be recovered and priced rather than guessed at.
+//
+// EACH MARKER TRAVELS WITH THE STAMP OF THE CALL THAT WROTE IT. Every marker the
+// encoder emits carries a keyed stamp, and a decoder handed none honours no
+// marker at all -- that is what makes a marker-shaped line planted in the
+// content inert. So a marker alone is not enough to price: paired with the wrong
+// stamp, or with none, the decode is a no-op, the records come back as the marker
+// itself, and every swap reads as exactly break-even. That is how this check
+// failed silently once the stamps landed.
 const markers = [];
 for (const text of blocks) {
-  const out = compressBlock(text, {}).text;
-  for (const m of out.matchAll(
-    /\[JSON (?:array records|object map) by position;[\s\S]*?\[\/JSON records by position\]\n/g
+  const result = compressBlock(text, {});
+  for (const m of result.text.matchAll(
+    /\[JSON (?:array records|object map) by position;[\s\S]*?\[\/JSON records by position(?: ~[0-9a-z]+)?\]\n/g
   ))
-    markers.push(m[0]);
+    markers.push({ text: m[0], stamp: result.stamp ?? null });
 }
 if (!markers.length) {
   console.error(
@@ -104,8 +112,18 @@ if (!markers.length) {
 }
 
 let saved = 0;
-for (const marker of markers) {
-  const replaced = expandJsonRecordsByPosition(marker);
+for (const { text: marker, stamp } of markers) {
+  const replaced = expandJsonRecordsByPosition(marker, stamp);
+  // A decode that changed nothing is not a reading. It means the stamp did not
+  // match, so `before` and `after` are the same string and the comparison below
+  // would pass or fail on nothing at all.
+  if (replaced === marker) {
+    failures.push(
+      `a marker did not decode, so there is nothing to price it against ` +
+        `(stamp ${stamp === null ? 'absent' : 'present'})`
+    );
+    continue;
+  }
   const before = real(replaced),
     after = real(marker);
   saved += before - after;
