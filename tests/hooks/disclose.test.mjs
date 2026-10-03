@@ -948,3 +948,170 @@ describe('a caller who names a section pays for that section', () => {
     expect(out.section).toBeNull();
   });
 });
+
+describe('a preview is priced at the rate this shape is expanded', () => {
+  /**
+   * A body the preview-only rule would disclose, and by a small enough margin.
+   *
+   * Four hundred tiny sections: the budget admits most of them, so the preview
+   * is nearly the whole body plus a header, a label per section and an omission
+   * tail. It clears the preview-only test, and clears it by little enough that
+   * the remainder decides -- which is the case the rate exists for. A body that
+   * previewed at a tenth of its size would be disclosed at every rate and would
+   * say nothing about which rate had been applied.
+   */
+  function manySections(count) {
+    const body = {};
+    for (let i = 0; i < count; i += 1)
+      body['section' + i] = { note: 'line ' + i, level: 'low' };
+    return JSON.stringify(body, null, 2);
+  }
+
+  const raw = manySections(400);
+
+  test('a proven hold record discloses, which is the control for the rest', () => {
+    expect(disclose(dir, raw, { holdRate: 1, ref: 'r1' })).not.toBeNull();
+  });
+
+  test('a shape nobody has held yet is charged for the remainder in full', () => {
+    // No history is not evidence of holding. The benchmark charges every
+    // expansion on every row, so until the store says otherwise the preview has
+    // to beat the body outright -- and this body does not.
+    expect(disclose(dir, raw, { holdRate: null, ref: 'r1' })).toBeNull();
+    expect(disclose(dir, raw, { ref: 'r1' })).toBeNull();
+  });
+
+  test('a shape that is always expanded is refused however good the preview', () => {
+    expect(disclose(dir, raw, { holdRate: 0, ref: 'r1' })).toBeNull();
+  });
+
+  test('the rate moves the verdict rather than switching it on and off', () => {
+    // Between the two ends there is a rate at which this body stops paying, and
+    // it is inside (0, 1): without that, 'priced at the rate' would be two
+    // thresholds wearing a number.
+    const verdicts = [0.2, 0.5, 0.8, 0.95].map(
+      (holdRate) => disclose(dir, raw, { holdRate, ref: 'r1' }) !== null
+    );
+    expect(new Set(verdicts).size).toBe(2);
+    // And it moves one way: a shape held more often is never refused where one
+    // held less often was allowed.
+    expect([...verdicts].sort()).toEqual(verdicts);
+  });
+});
+
+describe('what a cut hands back is still a value', () => {
+  /** A JSON body whose big section is cut rather than dropped whole. */
+  function withLongSection(entries) {
+    return JSON.stringify(
+      {
+        file: 'tool-profile.ts',
+        total: entries,
+        suggestions: Array.from({ length: entries }, (_, i) => ({
+          line: i + 1,
+          rule: 'prefer-const',
+          message: 'the constant on line ' + (i + 1) + ' is never reassigned',
+          severity: 'low',
+        })),
+      },
+      null,
+      2
+    );
+  }
+
+  test('a partially kept JSON section parses', () => {
+    // The question is what gets a section to the partial path at all: partial
+    // admission needs the score a question's term hits supply, and without one
+    // the section is omitted whole and this case tests nothing.
+    const out = disclose(dir, withLongSection(800), {
+      holdRate: 1,
+      question: 'which constant is never reassigned',
+      ref: 'r1',
+    });
+
+    const partial = out.kept.filter((k) => k.partial);
+    expect(partial.length).toBeGreaterThan(0);
+    for (const section of partial)
+      expect(() => JSON.parse(section.lines.join(''))).not.toThrow();
+  });
+
+  test('a cut that is not JSON is handed back exactly as it was', () => {
+    // A log has no containers to close, and closing it would corrupt it. Every
+    // line of the cut is the body's own line, not one with a closer appended or
+    // a trailing comma stripped.
+    const lines = Array.from(
+      { length: 4000 },
+      (_, i) => '2026-10-03 warn retry ' + i + ' failed, backing off'
+    );
+    const out = disclose(dir, lines.join('\n'), {
+      holdRate: 1,
+      question: 'which retry warns',
+      ref: 'r1',
+    });
+
+    // And it IS a cut, so the closer is being declined rather than never
+    // reached: a case where nothing was sliced would pass this whole test
+    // without ever consulting the guard.
+    expect(out.kept.filter((k) => k.partial).length).toBeGreaterThan(0);
+    for (const section of out.kept)
+      for (const line of section.lines) expect(lines).toContain(line);
+  });
+});
+
+describe('how far a hold record can be trusted', () => {
+  /** Serve `served` previews of one shape and expand the first `expanded`. */
+  function record(served, expanded) {
+    const refs = [];
+    for (let i = 0; i < served; i += 1)
+      refs.push(
+        capture(dir, JSON.stringify({ i, pad: 'x'.repeat(40) }), {
+          tool: 'probe',
+          shape: 'json',
+          anchors: [],
+        })
+      );
+    for (let i = 0; i < expanded; i += 1)
+      recordExpansion(dir, { ref: refs[i], tool: 'probe', shape: 'json' });
+    return previewPolicy(dir, { tool: 'probe', shape: 'json' });
+  }
+
+  test('no history reports no rate at all, rather than a perfect one', () => {
+    const policy = previewPolicy(dir, { tool: 'probe', shape: 'json' });
+    expect(policy.holdRate).toBeNull();
+    expect(policy.holdRateLower).toBeNull();
+  });
+
+  test('one unexpanded preview reads as a rate of 1 but is barely trusted', () => {
+    // The point estimate is the problem the bound solves: a shape served once
+    // and not yet followed has a perfect record and no evidence.
+    const policy = record(1, 0);
+    expect(policy.holdRate).toBe(1);
+    expect(policy.holdRateLower).toBeLessThan(0.3);
+  });
+
+  test('the bound rises with the sample where the point estimate cannot', () => {
+    const one = record(1, 0).holdRateLower;
+    const many = record(49, 0);
+    expect(many.holdRate).toBe(1);
+    expect(many.holdRateLower).toBeGreaterThan(0.9);
+    expect(many.holdRateLower).toBeGreaterThan(one);
+  });
+
+  test('a shape that gets expanded is bounded below its own rate', () => {
+    const policy = record(10, 5);
+    expect(policy.holdRate).toBe(0.5);
+    expect(policy.holdRateLower).toBeLessThan(0.5);
+    expect(policy.holdRateLower).toBeGreaterThan(0);
+  });
+
+  test('the bound stays a probability at both ends', () => {
+    for (const [served, expanded] of [
+      [1, 0],
+      [3, 3],
+      [40, 1],
+    ]) {
+      const { holdRateLower } = record(served, expanded);
+      expect(holdRateLower).toBeGreaterThanOrEqual(0);
+      expect(holdRateLower).toBeLessThanOrEqual(1);
+    }
+  });
+});
