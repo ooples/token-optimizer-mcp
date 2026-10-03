@@ -21,6 +21,7 @@
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname } from 'path';
+import { liftTextPart } from './text-part.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -93,6 +94,30 @@ function questionOf(
 }
 
 /** Every text part of a tool result, joined. */
+/**
+ * The reply as it leaves here when disclosure declines.
+ *
+ * A DECLINED DISCLOSURE IS NOT A FINISHED REPLY. Everything under the threshold
+ * leaves with its largest string field still escaped inside a JSON string, and
+ * measured on three thousand characters of this repository's own source read
+ * through smart_read that escape is a sixth to a quarter of the whole reply --
+ * 255 tokens of 1,089 on tool-profile.ts. Lifting it into its own text part
+ * withholds nothing (see restoreTextPart) and is the only step that recovers it,
+ * because the preview path recovers it already: parseShape renders a long
+ * string field through a nested shape pass, which de-escapes it on the way.
+ *
+ * So this runs on every path that returns the tool's own payload, and never on
+ * the preview path, where the body must stay one JSON document for parseShape
+ * to read.
+ */
+function asSentParts(result: ToolResult): ToolResult {
+  const { content, lifted } = liftTextPart(
+    (result?.content || []) as Array<{ type: string; text: string }>
+  );
+  if (!lifted) return result;
+  return { ...result, content };
+}
+
 function textOf(result: ToolResult): string {
   return (result?.content || [])
     .filter((part) => part?.type === 'text' && typeof part.text === 'string')
@@ -118,7 +143,7 @@ export async function discloseResult(
   if (!body) return result;
 
   const mods = await modules();
-  if (!mods) return result;
+  if (!mods) return asSentParts(result);
 
   try {
     const dir = mods.wiki.wikiDir(process.cwd());
@@ -179,7 +204,7 @@ export async function discloseResult(
           costMs: Number.isFinite(costMs) ? costMs : null,
         }),
     });
-    if (!out) return result;
+    if (!out) return asSentParts(result);
 
     return {
       ...result,
@@ -204,7 +229,7 @@ export async function discloseResult(
     };
   } catch {
     // Disclosure is an optimisation. It must never be the reason a tool fails.
-    return result;
+    return asSentParts(result);
   }
 }
 
