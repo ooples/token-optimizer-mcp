@@ -391,6 +391,62 @@ describe('a tool that names the files instead of counting them', () => {
     expect(widened.originalTokens).toBeGreaterThan(leafOnly.originalTokens);
   });
 
+  it('drops a widening too large to fit, keeping the measurement it had', async () => {
+    /*
+     * A DECLARATION MUST NEVER COST THE CALLER A MEASUREMENT IT ALREADY HAD.
+     *
+     * The union of named and resolved paths is capped, because reading
+     * hundreds of files on every call would make the accounting cost more
+     * than the work. The first version of this returned null over the cap --
+     * so smart_dependencies, whose resolved set is a transitively-walked
+     * import graph, would have turned a perfectly measurable one-file call
+     * into an unmeasured row by declaring too much.
+     *
+     * Over the cap the named files are measured on their own instead. The row
+     * then understates by whatever the tool resolved, which is the safe
+     * direction, and `resolvedInputSource` is left off it so the label can
+     * never name a resolution the figure does not include.
+     */
+    const named = bigFile('entry.ts');
+    const graph = Array.from({ length: 24 }, (_, i) => bigFile(`g${i}.ts`));
+
+    await recordToolAnalytics(
+      manager(),
+      'smart_dependencies',
+      resolvingReply(REPLY, resolvedFiles(graph, 'resolved-import-graph')),
+      {},
+      null,
+      { files: [named] }
+    );
+
+    const overCap = tracked[0];
+    // Measured, not abandoned -- and measured from the one file the arguments
+    // named, with the declaration dropped whole.
+    expect(classifySavings(overCap)).toBe('verified-input-displacement');
+    expect(overCap.metadata?.displacedInputFiles).toBe(1);
+    expect(overCap.metadata?.resolvedInputSource).toBeNull();
+
+    // THE CONTROL ARM: one fewer resolved path fits, and then the widening
+    // happens and is labelled -- so the drop above is the cap's doing and not
+    // the declaration being ignored.
+    tracked = [];
+    await recordToolAnalytics(
+      manager(),
+      'smart_dependencies',
+      resolvingReply(
+        REPLY,
+        resolvedFiles(graph.slice(0, 23), 'resolved-import-graph')
+      ),
+      {},
+      null,
+      { files: [named] }
+    );
+    const fits = tracked[0];
+    expect(fits.metadata?.displacedInputFiles).toBe(24);
+    expect(fits.metadata?.resolvedInputSource).toBe('resolved-import-graph');
+    expect(fits.originalTokens).toBeGreaterThan(overCap.originalTokens);
+  });
+
   it('counts a file named twice once', async () => {
     const leaf = bigFile('once.ts');
 

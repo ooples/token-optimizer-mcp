@@ -155,6 +155,8 @@ export type BaselineSource =
   | 'resolved-project-file'
   /** Every file in a resolved `extends` chain, not just the entry point. */
   | 'resolved-config-chain'
+  /** Every file an import walk reached, not just the entry points named. */
+  | 'resolved-import-graph'
   /** Text the caller passed inline, which exists nowhere on disk. */
   | 'inline-input'
   /** Raw output of a command this tool ran and then summarised. */
@@ -386,10 +388,11 @@ export function asDeclaredBaseline(raw: unknown): DisplacedBaseline | null {
 }
 
 /** The runtime half of `BaselineSource`, so the union can be checked. */
-const BASELINE_SOURCES: readonly BaselineSource[] = [
+export const BASELINE_SOURCES: readonly BaselineSource[] = [
   'named-input-files',
   'resolved-project-file',
   'resolved-config-chain',
+  'resolved-import-graph',
   'inline-input',
   'captured-command-output',
 ];

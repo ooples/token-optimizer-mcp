@@ -1,4 +1,5 @@
 import type { AnalyticsEntry } from './analytics-types.js';
+import { BASELINE_SOURCES } from '../tools/shared/savings.js';
 
 /**
  * Version 2 is the first analytics contract that proves a savings claim from
@@ -36,16 +37,14 @@ export type SavingsClassification =
  * What a tool is permitted to name as the baseline it displaced.
  *
  * A UNION RATHER THAN FREE TEXT, and checked on the way in, so a stored row
- * always says what was counted to get its before. `src/tools/shared/savings.ts`
- * holds the producing side of the same set.
+ * always says what was counted to get its before.
+ *
+ * RE-EXPORTED FROM THE PRODUCING SIDE RATHER THAN RESTATED. This was a second
+ * copy of the same five strings, and a sixth added next to the producer would
+ * have been accepted by every tool and then refused by this check -- a
+ * declaration that classified as unverified for no reason a reader could see.
  */
-export const DECLARED_BASELINE_SOURCES: readonly string[] = [
-  'named-input-files',
-  'resolved-project-file',
-  'resolved-config-chain',
-  'inline-input',
-  'captured-command-output',
-];
+export const DECLARED_BASELINE_SOURCES: readonly string[] = BASELINE_SOURCES;
 
 /**
  * Which schema versions each class is admissible under.

@@ -451,7 +451,7 @@ export async function recordToolAnalytics(
          * word for how much.
          */
         resolvedInputSource:
-          displacementMeasured && resolvedInput
+          displacementMeasured && resolvedInput && displaced?.widened === true
             ? resolvedInput.baselineSource
             : null,
         returnedSha256: sha256(text),

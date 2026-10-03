@@ -79,6 +79,15 @@ export interface DisplacedInput {
   readonly sha256: string;
   /** How many files were read. Never a path: a path is the caller's business. */
   readonly files: number;
+  /**
+   * Whether the tool's resolved paths are part of this figure.
+   *
+   * False when a tool declared none, and also when it declared a set too large
+   * to fit the cap -- which is measured as the named files alone. The recorder
+   * labels a row with the tool's baseline source only when this is true, so
+   * the label can never name a resolution the figure does not include.
+   */
+  readonly widened: boolean;
 }
 
 const counter = new TokenCounter();
@@ -122,8 +131,26 @@ export async function measureDisplacedInput(
   args: unknown,
   resolvedPaths: readonly string[] = []
 ): Promise<DisplacedInput | null> {
-  const paths = [...declaredPaths(args), ...resolvedPaths];
-  if (paths.length === 0 || paths.length > MAX_FILES) return null;
+  // A path named twice is one file: deduped here rather than only in the read
+  // loop below, so the cap is applied to the number of files that will be read.
+  const named = [...new Set(declaredPaths(args))];
+  if (named.length > MAX_FILES) return null;
+
+  /*
+   * A WIDENING THAT DOES NOT FIT IS DROPPED, NOT PAID FOR WITH THE BASELINE.
+   *
+   * A tool with a large resolved set -- every file in an import graph -- can
+   * push the union past the cap on a call whose own arguments name one file.
+   * Returning null there would let a declaration cost the caller the
+   * measurement it already had, so the named files are measured on their own
+   * instead. The row then understates by whatever the tool resolved, which is
+   * the safe direction, and the resolvedInputSource label is left off it.
+   */
+  const candidate = [...new Set([...named, ...resolvedPaths])];
+  const widened =
+    candidate.length <= MAX_FILES && candidate.length > named.length;
+  const paths = widened ? candidate : named;
+  if (paths.length === 0) return null;
 
   const seen = new Set<string>();
   const texts: string[] = [];
@@ -154,5 +181,6 @@ export async function measureDisplacedInput(
     bytes: Buffer.byteLength(text, 'utf8'),
     sha256: createHash('sha256').update(text, 'utf8').digest('hex'),
     files: texts.length,
+    widened,
   };
 }
