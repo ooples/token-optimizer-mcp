@@ -193,10 +193,10 @@ comparator can be checked without their clone. `node bench/compression/proof.mjs
 
 | workload             | payload | theirs | ours   | verdict |
 | -------------------- | ------: | -----: | -----: | ------- |
-| code-search          |  17765 |  92.1% |  97.5% | ours    |
-| sre-debugging        |  65694 |  92.2% |  98.3% | ours    |
-| issue-triage         |  54174 |  72.8% |  97.2% | ours    |
-| codebase-exploration |  78502 |  47.4% |  64.2% | ours    |
+| code-search          |  17765 |  92.1% |  97.8% | ours    |
+| sre-debugging        |  65694 |  92.2% |  98.6% | ours    |
+| issue-triage         |  54174 |  72.8% |  97.5% | ours    |
+| codebase-exploration |  78502 |  47.4% |  53.6% | ours    |
 
 <!-- PROOF-TABLE:END -->
 
@@ -213,9 +213,17 @@ hashbang so a concatenated block still parses moved it to 64.9%, and
 authenticating every marker with a six-character stamp took 0.2 of a point
 back, and naming a spilled file by a digest of its contents, the way the proxy
 sink really names it, instead of by its position in a counter, took another
-half point, to reach **64.2%**. Those two are the only figures here that moved
-the wrong way, and neither is a regression: both are the harness charging us
-for bytes it had been leaving out. A
+half point, to reach 64.2%. Then the currency stopped being an estimate: every
+figure in the table above is now the count Anthropic's own tokenizer returns
+for the text, recorded into a committed fixture so this stays offline, and
+under it the row reads **53.6%**. That is the largest move in this history and
+the only one that is not about the engine at all. Dividing characters by four
+had been charging the control's hex markers too much and our six-character
+stamp far too little -- a random base-31 string tokenizes at about 1.2
+characters per token, the worst case there is, so the stamp costs a measured
+6.7 tokens where chars/4 billed 2. Those three are the only figures here that
+moved the wrong way, and none of them is a regression: each is the harness
+charging us for something it had been leaving out. A
 number in prose is a fact about the tree it was measured on, which is why
 `bench/compression/readme-table.check.mjs` re-derives every figure in the block
 above from the harness rather than trusting it.
@@ -645,7 +653,7 @@ from truncation.
 
 Reduction over the content each strategy is permitted to rewrite, on fixtures
 matching the four workloads HeadRoom publishes, is the guarded table earlier in
-this section -- 97.2%, 97.5%, 98.3% and 64.2% against their 72.8%, 92.1%, 92.2%
+this section -- 97.5%, 97.8%, 98.6% and 53.6% against their 72.8%, 92.1%, 92.2%
 and 47.4%. It is stated once and checked there rather than restated here, which
 is how this copy came to claim 98.9%, 98.2%, 92.8% and 61.3% long after the
 tree had moved.

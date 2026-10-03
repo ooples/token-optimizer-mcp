@@ -120,6 +120,12 @@ export const DECLARED = [
     from: 'what this row scored before every marker carried an authenticating stamp',
   },
   {
+    figure: '64.2%',
+    anchor: 'half point, to reach',
+    kind: Source.RETRACTED,
+    from: 'what this row scored while the currency was characters over four',
+  },
+  {
     figure: '42%',
     anchor: 'wins the invoice by',
     kind: Source.DERIVED,

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { blocks, markerChars, steadyAllowance } from './proof.mjs';
+import { blocks, markerTokens, steadyAllowance } from './proof.mjs';
+import { tokens } from './currency.mjs';
 import { fixtures } from './fixtures.mjs';
 
 test('nested tool text and images contribute at the parent cache position', () => {
@@ -54,7 +55,7 @@ test('agent fixtures declare the tools they call', () => {
   }
 });
 
-test('marker characters are counted in both envelopes, not just in ours', () => {
+test('marker tokens are counted in both envelopes, not just in ours', () => {
   // AN ARM IS MEASURED BY WHAT IT EMITTED. Counting only `[... ]` would read the
   // control's output as marker-free and hand us an allowance equal to our whole
   // marker budget on every workload -- the gate would then never bind.
@@ -79,8 +80,11 @@ test('marker characters are counted in both envelopes, not just in ours', () => 
       },
     ],
   };
-  assert.equal(markerChars(ours, bp), 35);
-  assert.equal(markerChars(theirs, bp), 29);
+  // COUNTED, NOT DIVIDED. 35 characters of prose is 15 tokens and 29 of hex is
+  // 14, so these two markers cost very nearly the same despite the width
+  // between them -- which is exactly what the chars/4 allowance got wrong.
+  assert.equal(markerTokens(ours, bp), 15);
+  assert.equal(markerTokens(theirs, bp), 14);
 });
 
 test('a marker in the cached prefix is weighted at a tenth of a fresh one', () => {
@@ -95,10 +99,11 @@ test('a marker in the cached prefix is weighted at a tenth of a fresh one', () =
       { role: 'user', content: [{ type: 'text', text }] },
     ],
   };
-  const cached = markerChars(request, { message: 0, block: 0 });
-  const fresh = markerChars(request, null);
-  assert.equal(cached, text.length * 0.1 + text.length);
-  assert.equal(fresh, text.length * 2);
+  const cached = markerTokens(request, { message: 0, block: 0 });
+  const fresh = markerTokens(request, null);
+  const one = tokens(text);
+  assert.equal(cached, one * 0.1 + one);
+  assert.equal(fresh, one * 2);
   assert.ok(cached < fresh);
 });
 
@@ -112,15 +117,22 @@ test('an arm that emits no more marker text than the control earns nothing', () 
   assert.equal(steadyAllowance(100, 400), 0);
 });
 
-test('the allowance pays for marker characters and refuses anything else', () => {
+test('the allowance pays for marker tokens and refuses anything else', () => {
   // THE FAILING ARM THE TWELVE GREEN ROWS CANNOT SUPPLY. Measured on
-  // human-authored-json: our markers spend 542 cache-weighted characters against
-  // the control's 449, and we are 17 tokens dearer. That passes. An arm 40
-  // tokens dearer on the same markers does not, which is the whole point -- the
-  // allowance is for the marker, not for a regression that happens to sit beside
-  // one.
-  const allowance = steadyAllowance(542, 449);
-  assert.equal(allowance.toFixed(2), '23.25');
-  assert.ok(243 + 17 <= 243 + allowance);
+  // human-authored-json, in the counted currency: our markers spend 244
+  // cache-weighted tokens against the control's 218, and we are 25 tokens
+  // dearer. That passes, with a token and a bit to spare. An arm 40 tokens
+  // dearer on the same markers does not, which is the whole point -- the
+  // allowance is for the marker, not for a regression that happens to sit
+  // beside one.
+  //
+  // THE INPUTS USED TO BE CHARACTERS AND THE EXPECTATION WAS 23.25, which was
+  // (542 - 449) / 4. Both halves changed when the currency became a
+  // measurement: the figures below are token counts taken from the same run
+  // the published table comes from, and the allowance is now the difference
+  // itself rather than a quarter of it.
+  const allowance = steadyAllowance(244, 218);
+  assert.equal(allowance.toFixed(2), '26.00');
+  assert.ok(243 + 25 <= 243 + allowance);
   assert.ok(!(243 + 40 <= 243 + allowance));
 });

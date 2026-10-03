@@ -39,6 +39,7 @@ import { anchorStore } from '../../dist/compress/anchor.js';
 import { describeImage, isImageBlock } from '../../dist/compress/images.js';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
+import { tokens } from './currency.mjs';
 
 const CACHE_READ = 0.1;
 const CACHE_WRITE = 1.25;
@@ -84,14 +85,6 @@ function spillSink() {
     }
     return spilled.get(key);
   };
-}
-
-/** Tokens, approximated consistently across arms so comparisons are fair. */
-function tokens(text) {
-  // A ratio, applied identically to every arm. The comparison is between arms
-  // on the same content, so a shared approximation cancels; what would NOT
-  // cancel is measuring one arm differently from another.
-  return Math.ceil(text.length / 4);
 }
 
 /** Every text block in a request, with its position. */
@@ -156,24 +149,67 @@ const blockTokens = (block) =>
   typeof block.tokens === 'number' ? block.tokens : tokens(block.text);
 
 /**
- * Marker-shaped spans in a request, cache-weighted, in characters.
+ * The stamp every marker in this harness carries.
+ *
+ * THE HARNESS WAS NOT REPRODUCIBLE AND THE OLD CURRENCY COULD NOT SEE IT. A
+ * marker is authenticated by six characters the engine mints from
+ * `randomBytes(32)` once per process, so two runs of this file emit different
+ * text. Measured: 206 of the strings it prices differ between consecutive runs,
+ * with an identical length multiset and an identical character total -- which is
+ * exactly why `Math.ceil(chars / 4)` reported the same figures twice and the
+ * reproducibility check passed. The instrument was blind to the variation,
+ * rather than the variation being absent.
+ *
+ * It is not a free six characters either. Counted over 96 draws from the
+ * engine's own alphabet, the ` ~xxxxxx` suffix costs 5, 6, 7 or 8 tokens
+ * (7, 33, 40 and 16 draws respectively), mean 6.68 -- a random base-31 string
+ * is about the worst content a tokenizer can be handed, near one token per
+ * character. chars/4 charged it two. So authenticating a marker costs roughly a
+ * third again of the 15-token marker it is attached to, and the harness had been
+ * charging us a seventh of that.
+ *
+ * `withStamp` already honours a stamp the caller supplies -- the published
+ * comparator arm passes `null` to mean "do not stamp" -- so pinning one needs
+ * nothing from the engine. This draw is pinned because it costs 7 tokens: the
+ * mode of that distribution and the nearest integer to its mean. The residual
+ * bias is +0.32 tokens per marker against us, about a hundred markers across
+ * the corpus, so some thirty tokens charged to us that an average run would not
+ * pay. Pinning it also removes the run-to-run spread, which at a standard
+ * deviation of 0.85 tokens over the markers on the largest fixture was worth
+ * about six tokens either way.
+ */
+const PINNED_STAMP = 'jrmz7l';
+
+/**
+ * Marker-shaped spans in a request, cache-weighted, in tokens.
  *
  * BOTH ENVELOPES, so an arm is measured by what it emitted rather than by a
  * shape named in advance: ours reads `[... 269 bytes, next above ~x18p57]` and
  * the control's reads `<<ccr:303a32363900,blob,269>>`. Weighted the way the
  * steady column bills them -- a marker in the cached prefix is read at a tenth,
- * one in the fresh region is paid in full -- because an allowance derived from
- * characters has to be derived from the characters that are charged.
+ * one in the fresh region is paid in full -- because an allowance has to be
+ * derived from the markers that are actually charged.
+ *
+ * IN TOKENS, AND THAT IS NOT A UNIT CHANGE. These two markers are 35 and 29
+ * characters, which read as a six-character difference and, divided by four,
+ * as a token and a half. Counted, they are 15 and 14 tokens -- 2.33 and 2.07
+ * characters per token:
+ * our longer prose marker and their shorter hex one differ by one token, not by
+ * the token and a half dividing both by four granted. Counted across the whole
+ * corpus the sign reverses on ten of twelve rows: prose tokenizes better than
+ * hex, so the allowance a character difference handed us was mostly an artefact
+ * of the control's markers tokenizing worse than ours.
  */
 const MARKER_SHAPES = [/\[\.\.\. [^\]]*\]/g, /<<ccr:[^>]*>>/g];
 
-export function markerChars(request, breakpoint) {
+export function markerTokens(request, breakpoint) {
   let weighted = 0;
   for (const block of blocks(request)) {
-    let chars = 0;
+    let marked = 0;
     for (const shape of MARKER_SHAPES)
-      for (const match of block.text.matchAll(shape)) chars += match[0].length;
-    weighted += isAfter(block.at, breakpoint) ? chars : chars * CACHE_READ;
+      for (const match of block.text.matchAll(shape))
+        marked += tokens(match[0]);
+    weighted += isAfter(block.at, breakpoint) ? marked : marked * CACHE_READ;
   }
   return weighted;
 }
@@ -363,17 +399,36 @@ function runAnchored(request, options, anchors) {
  * It failed the one workload where our markers are densest and granted several
  * hundred unused tokens on the largest.
  *
- * So the allowance is measured per workload: the characters the judged arm's
- * markers spend over the control's, cache-weighted and converted at the same
- * ratio every other figure in this file uses. Floored at zero, so a workload
+ * So the allowance is measured per workload: the tokens the judged arm's
+ * markers spend over the control's, cache-weighted, each marker counted by the
+ * same authority every other figure in this file uses. Floored at zero, so a
+ * workload
  * where we emit no more marker text than the control -- raw-build-log and
  * grep-output, where neither arm back-references anything -- has to win or tie
  * outright.
  *
- * Measured when this was written, as tokens needed against tokens allowed:
- *   human-authored-json   17 / 23     repeated-reads   27 /  51
- *   codebase-exploration  19 / 257    raw-build-log     0 /   0
- *   grep-output            0 / 0      (the nine others win outright)
+ * IT WAS CHARACTERS OVER FOUR UNTIL THE CURRENCY BECAME A MEASUREMENT, and that
+ * divisor was quietly generous to us. Counted, the 35-character marker above is
+ * 15 tokens and the 29-character one is 14: ours is prose at 2.33 characters per
+ * token, theirs is hex at 2.07, and the six characters between them are worth
+ * one token, not the token and a half that dividing both by four granted. The
+ * width difference was mostly not a cost difference.
+ *
+ * MEASURED, AS CACHE-WEIGHTED MARKER TOKENS -- ours, the control's, and what
+ * the difference earns us. Counted rather than divided, our markers turn out to
+ * be CHEAPER than the control's on ten of the twelve rows, so the allowance is
+ * zero there and we win without it. Two rows earn one, and on both the gap we
+ * actually have is inside what the markers pay for:
+ *
+ *   human-authored-json   244.0 / 217.8 -> 26.2 earned, 24.8 used
+ *   repeated-reads        221.2 / 189.7 -> 31.5 earned, 30.4 used
+ *   codebase-exploration 1219.2 / 1265.7 ->  0.0 earned, 49.6 to spare
+ *   code-search           190.6 / 207.1 ->  0.0 earned, 17.6 to spare
+ *   raw-build-log           0.0 /  16.5 ->  0.0 earned, 17.6 to spare
+ *
+ * The two rows that need it are the two where our markers are densest per token
+ * of workload, which is what a per-marker allowance is for and what the flat
+ * five percent it replaced got backwards.
  */
 /**
  * The tokens an arm's own marker text earns it, over the control's.
@@ -386,7 +441,7 @@ function runAnchored(request, options, anchors) {
  * worse for reasons that have nothing to do with markers.
  */
 export function steadyAllowance(ours, theirs) {
-  return Math.max(0, (ours - theirs) / 4);
+  return Math.max(0, ours - theirs);
 }
 
 function steadyTokens(request, run, spill) {
@@ -402,10 +457,18 @@ function steadyTokens(request, run, spill) {
     ...request,
     messages: (request.messages ?? []).slice(0, 1),
   };
-  run(opening, { spill, wanted: [] });
+  run(opening, { spill, wanted: [], stamp: PINNED_STAMP });
 
-  const first = run(request, { spill, wanted: [] }).request;
-  const second = run(nextTurn(request), { spill, wanted: [] }).request;
+  const first = run(request, {
+    spill,
+    wanted: [],
+    stamp: PINNED_STAMP,
+  }).request;
+  const second = run(nextTurn(request), {
+    spill,
+    wanted: [],
+    stamp: PINNED_STAMP,
+  }).request;
 
   const breakpoint = lastCacheBreakpoint(request);
   const sentFirst = prefixText(first, breakpoint);
@@ -441,7 +504,7 @@ function steadyTokens(request, run, spill) {
     // to count its markers would be a second measurement of a different thing:
     // these arms are deterministic but their spill and anchor stores are not
     // re-entrant, and the gate compares a cost with an allowance drawn from it.
-    markerChars: markerChars(second, breakpoint),
+    markerTokens: markerTokens(second, breakpoint),
   };
 }
 
@@ -485,7 +548,10 @@ function main() {
     // workload that quoted one of our markers would otherwise hand every arm,
     // including an arm that compressed nothing, tokens it never spent.
     const freshTurn = nextTurn(before);
-    const baselineMarkers = markerChars(freshTurn, lastCacheBreakpoint(before));
+    const baselineMarkers = markerTokens(
+      freshTurn,
+      lastCacheBreakpoint(before)
+    );
     const markers = {};
     // A fifth arm: V1 with the anchor store it ships with. Kept separate from
     // `v1-frontier` so the frontier-only baseline stays readable and the
@@ -502,7 +568,11 @@ function main() {
       // A fresh sink per arm: one arm must not benefit from another's writes,
       // and no arm may be charged for the name the harness gave it.
       const armSpill = spillSink();
-      const result = run(before, { spill: armSpill, wanted: [] });
+      const result = run(before, {
+        spill: armSpill,
+        wanted: [],
+        stamp: PINNED_STAMP,
+      });
       const g = grossTokens(result.request);
       const n = netTokens(result.request);
       const e = effectiveTokens(before, result.request);
@@ -516,7 +586,7 @@ function main() {
           : run;
       const steadyResult = steadyTokens(before, steadyRun, armSpill);
       steady[name] = steadyResult.cost;
-      markers[name] = Math.max(0, steadyResult.markerChars - baselineMarkers);
+      markers[name] = Math.max(0, steadyResult.markerTokens - baselineMarkers);
 
       // SIZE IS NOT THE ONLY GATE. A compressor can post any ratio it likes
       // by discarding the rows somebody was searching for -- ours hit 95.7%
