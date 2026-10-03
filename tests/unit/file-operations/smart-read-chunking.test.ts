@@ -81,28 +81,88 @@ describe('SmartReadTool chunking', () => {
     expect(wholeResponse.length).toBeLessThan(body.length);
   });
 
-  it('reports a saving it actually delivered', async () => {
-    const { tool, file } = makeFixture();
+  it('costs less than the file, weighed whole rather than self-reported', async () => {
+    /*
+     * THIS TEST ASKED THE TOOL, AND THAT IS THE HABIT THE TOOL LOST. It read
+     * `originalTokenCount`, `tokenCount` and `tokensSaved` out of the metadata
+     * and checked they were consistent with each other -- which they always
+     * were, because one counter produced all three from the same string. What
+     * none of them could describe is the reply, which is assembled from this
+     * object after the tool has returned.
+     *
+     * The claim survives unchanged and is now measured end to end: one counter,
+     * the whole serialised reply on one side and the whole file on the other.
+     */
+    const { tool, file, body } = makeFixture();
     const result = await tool.read(file, { chunkIndex: 0 });
+    const counter = new TokenCounter();
 
-    const { originalTokenCount, tokenCount, tokensSaved } = result.metadata;
-    expect(tokenCount).toBeLessThan(originalTokenCount);
-    expect(tokensSaved).toBe(originalTokenCount - tokenCount);
-    // And the content really is only what was counted.
-    expect(new TokenCounter().count(result.content).tokens).toBe(tokenCount);
+    expect(counter.count(JSON.stringify(result)).tokens).toBeLessThan(
+      counter.count(body).tokens
+    );
+    // The reply really is one chunk of this file and not a summary of it.
+    expect(result.metadata.chunked).toBe(true);
+    expect(body).toContain(result.content.split('// [chunk')[0].trim());
   });
 
-  it('never reports a NEGATIVE saving', async () => {
-    // A single chunk plus its navigation footer can cost more than the whole
-    // file when the file is barely over chunkSize, and the subtraction then
-    // produced a negative -- which nothing downstream clamped, precisely
-    // because it was non-zero. "-14 tokens saved" is a cost wearing a minus
-    // sign; the honest number for a call that saved nothing is zero.
+  it('states no saving, under any name, at any chunk size', async () => {
+    /*
+     * ITS PREDECESSOR ASSERTED A CLAMP, WHICH IS THE SAME MISREPORT FACING THE
+     * OTHER WAY. A single chunk plus its navigation footer really can cost more
+     * than the whole file when the file is barely over chunkSize, and the old
+     * subtraction went negative there; `Math.max(0, ...)` then published that
+     * loss as a saving of zero. A call that cost the caller more is not a call
+     * that saved nothing, so the arm below is the losing one -- a file barely
+     * over the chunk size -- and what is asserted is that the tool makes no
+     * claim about it at all.
+     */
     const { tool, file } = makeFixture();
+    const SAVINGS_KEYS = [
+      'tokensSaved',
+      'savedTokens',
+      'tokenCount',
+      'originalTokenCount',
+      'optimizedTokens',
+      'compressionRatio',
+      'reductionPercentage',
+    ];
+    const savingsKeysIn = (reply: unknown): string[] => {
+      const found: string[] = [];
+      const walk = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+        for (const [key, value] of Object.entries(node)) {
+          if (SAVINGS_KEYS.includes(key)) found.push(key);
+          walk(value);
+        }
+      };
+      walk(reply);
+      return found;
+    };
+
     for (const chunkSize of [200, 400, 800]) {
       const r = await tool.read(file, { chunkSize, enableCache: false });
-      expect(r.metadata.tokensSaved).toBeGreaterThanOrEqual(0);
+      expect(savingsKeysIn(r)).toEqual([]);
     }
+
+    // THE LOSING ARM, MEASURED. A 420-character file at a 400-character chunk
+    // size: the one chunk returned carries nearly the whole file plus a footer,
+    // so the reply costs MORE than the file -- and still says nothing.
+    const dir = mkdtempSync(join(tmpdir(), 'token-optimizer-chunk-loss-'));
+    tempDirs.push(dir);
+    const small = join(dir, 'barely.ts');
+    const tiny = 'x'.repeat(420);
+    writeFileSync(small, tiny);
+    const loss = await tool.read(small, { chunkSize: 400, enableCache: false });
+    const counter = new TokenCounter();
+    expect(counter.count(JSON.stringify(loss)).tokens).toBeGreaterThan(
+      counter.count(tiny).tokens
+    );
+    expect(savingsKeysIn(loss)).toEqual([]);
+
+    // THE POSITIVE CONTROL: the walk does descend into a reply of this shape.
+    expect(savingsKeysIn({ metadata: { tokensSaved: 1 } })).toEqual([
+      'tokensSaved',
+    ]);
   });
 
   it('honours chunkIndex -- the escape hatch it tells the caller to use', async () => {

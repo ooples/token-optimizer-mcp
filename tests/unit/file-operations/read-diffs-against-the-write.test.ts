@@ -63,6 +63,18 @@ afterEach(() => {
   rmSync(workspace, { recursive: true, force: true });
 });
 
+/**
+ * What the whole reply costs, which is the only comparison worth making.
+ *
+ * Not `metadata.tokensSaved`: that counted `content` alone, and a reply is
+ * `content` plus the metadata block plus whatever the server wraps around it.
+ * Serialising it here still understates the wire a little, and understating is
+ * the safe direction for a test asserting the reply is the cheaper option.
+ */
+function costOf(reply: unknown): number {
+  return tokenCounter.count(JSON.stringify(reply)).tokens;
+}
+
 describe('smart_read after smart_write', () => {
   test('reports no changes instead of resending the file just written', async () => {
     const file = join(workspace, 'generated.ts');
@@ -79,7 +91,14 @@ describe('smart_read after smart_write', () => {
 
     expect(result.metadata.isDiff).toBe(true);
     expect(result.content).toBe('// No changes');
-    expect(result.metadata.tokensSaved).toBeGreaterThan(0);
+    // MEASURED, NOT ASKED. This asserted `metadata.tokensSaved > 0`, a figure
+    // the tool counted from the string above while the caller pays for the
+    // reply built around it afterwards. The claim was always that the reply is
+    // far cheaper than the file, so that is what is weighed -- the whole reply,
+    // against the whole file, by one counter.
+    expect(costOf(result)).toBeLessThan(
+      tokenCounter.count(ORIGINAL).tokens / 2
+    );
   });
 
   test('returns only the changed line when the file moved on after the write', async () => {
@@ -125,7 +144,12 @@ describe('smart_read after smart_edit', () => {
 
     await editor.edit(
       file,
-      { type: 'replace', startLine: 8, endLine: 8, content: 'export const value7 = 4242;' },
+      {
+        type: 'replace',
+        startLine: 8,
+        endLine: 8,
+        content: 'export const value7 = 4242;',
+      },
       { createBackup: false }
     );
 
@@ -138,7 +162,9 @@ describe('smart_read after smart_edit', () => {
     // "what changed since I changed it".
     expect(result.metadata.isDiff).toBe(true);
     expect(result.content).toBe('// No changes');
-    expect(result.metadata.tokensSaved).toBeGreaterThan(0);
+    expect(costOf(result)).toBeLessThan(
+      tokenCounter.count(ORIGINAL).tokens / 2
+    );
   });
 
   test('returns a diff when the file moves on after the edit', async () => {
@@ -152,7 +178,12 @@ describe('smart_read after smart_edit', () => {
 
     await editor.edit(
       file,
-      { type: 'replace', startLine: 8, endLine: 8, content: 'export const value7 = 4242;' },
+      {
+        type: 'replace',
+        startLine: 8,
+        endLine: 8,
+        content: 'export const value7 = 4242;',
+      },
       { createBackup: false }
     );
     writeFileSync(

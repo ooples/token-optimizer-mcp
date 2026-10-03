@@ -6,7 +6,22 @@
  * - Automatic chunking for large files
  * - Syntax-aware truncation
  * - Cache integration with git awareness
- * - Token tracking and metrics
+ * - Metrics and cache provenance
+ *
+ * WHAT A CALL SAVED IS NOT COUNTED HERE, AND NEVER COULD BE. This tool used to
+ * publish four figures about its own saving -- `tokensSaved`, `tokenCount`,
+ * `originalTokenCount` and `compressionRatio` -- every one of them counted from
+ * `finalContent`, the string the method returns. What a caller pays for is the
+ * serialised reply built around that string after the tool has returned, with
+ * its metadata block and its report text, and no code in this file can see it.
+ * Measured on a 5,416-character source file at the 4,000-character chunk
+ * default, the reply cost 1,765 tokens against the file's own 1,270 -- a 39%
+ * LOSS -- and reported `tokensSaved: 316`.
+ *
+ * So both halves are counted by the one party that sees both: the recorder
+ * reads the file named in the `path` argument for itself, and the server counts
+ * the text it actually returns. This tool declares nothing either, because its
+ * own argument already names its baseline.
  */
 
 import { readFileSync, existsSync, statSync } from 'fs';
@@ -65,10 +80,6 @@ export interface SmartReadResult {
     isDiff: boolean;
     chunked: boolean;
     truncated: boolean;
-    tokensSaved: number;
-    tokenCount: number;
-    originalTokenCount: number;
-    compressionRatio: number;
     /** How many chunks the file was split into; present only when chunked. */
     chunkCount?: number;
     /** Which chunk this response carries; present only when chunked. */
@@ -83,16 +94,19 @@ export interface SmartReadResult {
 
 export class SmartReadTool {
   private cache: CacheEngine;
-  private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED. The counter was held to count both halves of this
+    // tool's own saving: the file on disk, and the string handed back standing
+    // in for a reply the tool never sees. Both halves are now counted by the
+    // one party that sees both, so the parameter stays only to leave every
+    // caller's construction call unchanged.
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
   }
 
@@ -186,7 +200,6 @@ export class SmartReadTool {
 
     // Read file content
     const rawContent = readFileSync(filePath, encoding);
-    const originalTokens = this.tokenCounter.count(rawContent).tokens;
 
     let finalContent = rawContent;
     let isDiff = false;
@@ -197,7 +210,6 @@ export class SmartReadTool {
     let diffData:
       | { added: string[]; removed: string[]; unchanged: number }
       | undefined;
-    let tokensSaved = 0;
 
     // If we have cached data and diff mode is enabled.
     //
@@ -231,9 +243,6 @@ export class SmartReadTool {
               removed: diff.removed,
               unchanged: diff.unchanged,
             };
-
-            const diffTokens = this.tokenCounter.count(finalContent).tokens;
-            tokensSaved = Math.max(0, originalTokens - diffTokens);
           } else {
             // Diff exists but not efficient, still return full content with diff metadata
             isDiff = true;
@@ -247,10 +256,6 @@ export class SmartReadTool {
           // No changes, return minimal response
           finalContent = '// No changes';
           isDiff = true;
-          tokensSaved = Math.max(
-            0,
-            originalTokens - this.tokenCounter.count(finalContent).tokens
-          );
         }
       } catch (error) {
         // If decompression fails, fall through to normal read
@@ -267,8 +272,9 @@ export class SmartReadTool {
     // 5,416-character source file at the 4,000-character default: 1,765 tokens
     // against the file's own 1,270, a 39% LOSS, because 4,000 characters is
     // roughly a thousand tokens and any ordinary source file clears it. The
-    // response reported `tokensSaved: 316`. The clamp added earlier stopped that
-    // number going negative; it never stopped the loss it was reporting on.
+    // response reported a saving of 316 tokens on that call; that figure is gone
+    // now, along with every other one this tool stated about itself, but the loss
+    // it was reporting on is the reason this branch is reached by asking.
     //
     // Chunking still earns its keep when a caller genuinely wants part of a file
     // and will stop reading, so it stays -- reached by asking for it, with
@@ -297,9 +303,6 @@ export class SmartReadTool {
         finalContent = truncateResult.truncated;
         truncated = true;
       }
-
-      const truncatedTokens = this.tokenCounter.count(finalContent).tokens;
-      tokensSaved = originalTokens - truncatedTokens;
     } else if (
       !isDiff &&
       paginationRequested &&
@@ -330,20 +333,6 @@ export class SmartReadTool {
         allChunks[chunkIndex] +
         `\n\n// [chunk ${chunkIndex + 1} of ${allChunks.length}. ` +
         `Call smart_read again with chunkIndex=<n> for another.]`;
-
-      // The saving counted here is the saving actually DELIVERED. Previously the
-      // full `chunks` array was also attached to the response, so every chunk
-      // reached the caller while this arithmetic priced only the first -- the
-      // response cost MORE than reading the file and reported ~76% saved. An
-      // overstated saving is the one number this project must never produce.
-      // Never negative. A single chunk plus its navigation footer can exceed
-      // the whole file when the file is barely over chunkSize, and the
-      // subtraction then yields a NEGATIVE saving -- which is not clamped
-      // downstream precisely because it is non-zero. "-14 tokens saved" is a
-      // cost reported as a saving with a minus sign in front of it; the honest
-      // number for a call that saved nothing is zero.
-      const returnedTokens = this.tokenCounter.count(finalContent).tokens;
-      tokensSaved = Math.max(0, originalTokens - returnedTokens);
     }
     // Advance the read base after an edit too. Leaving a cache hit pinned to
     // its old bytes would return the same diff on every subsequent read.
@@ -351,33 +340,21 @@ export class SmartReadTool {
       cacheSet(this.cache, cacheKey, rawContent);
     }
 
-    // Calculate final metrics
-    const finalTokens = this.tokenCounter.count(finalContent).tokens;
-    // Only recalculate tokensSaved if it hasn't been set by diff mode or truncation
-    if (tokensSaved === 0 && (truncated || chunked)) {
-      tokensSaved = Math.max(0, originalTokens - finalTokens);
-    }
-
-    // Sixteen decimal places of a ratio is not precision, it is float noise the
-    // caller pays for by the token: 0.7470457902511078 costs ten tokens to say
-    // what 0.747 says in three.
-    const compressionRatio =
-      Math.round((finalContent.length / rawContent.length) * 1000) / 1000;
-
-    // Record metrics
+    // Record metrics.
+    //
+    // NO TOKEN FIELD ON THIS RECORD EITHER. The four it carried -- in, out,
+    // cached and saved -- were all derived from counting `finalContent`, so the
+    // in-process totals built from them described a string nobody is sent. What
+    // is left is what this method really knows: how long it took, whether its
+    // own cache entry hit, and which of the three shaping paths it took.
     this.metrics.record({
       operation: 'smart_read',
       duration: Date.now() - startTime,
       success: true,
       cacheHit: fromCache,
-      inputTokens: 0,
-      outputTokens: finalTokens,
-      cachedTokens: fromCache ? finalTokens : 0,
-      savedTokens: tokensSaved,
       metadata: {
         path: filePath,
         fileSize: stats.size,
-        tokensSaved,
         isDiff,
         chunked,
         truncated,
@@ -396,10 +373,6 @@ export class SmartReadTool {
         isDiff,
         chunked,
         truncated,
-        tokensSaved,
-        tokenCount: finalTokens,
-        originalTokenCount: originalTokens,
-        compressionRatio,
         // Navigation, not content. Attaching every chunk here defeated the
         // entire point of chunking: the caller received the whole file anyway.
         ...(chunked ? { chunkCount, chunkIndex } : {}),
@@ -454,10 +427,6 @@ export class SmartReadTool {
       isDiff: false,
       chunked: false,
       truncated: false,
-      tokensSaved: 0,
-      tokenCount: 0,
-      originalTokenCount: 0,
-      compressionRatio: 1,
     };
   }
 }
