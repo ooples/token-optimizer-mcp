@@ -307,6 +307,67 @@ function liftNestedText(value, path, depth = 1) {
   return { stripped, lifted };
 }
 
+/**
+ * How wide a value may be before it is broken across lines.
+ *
+ * Chosen so a whole record stays on one line and a container of records does
+ * not: across the fourteen benched tools a suggestion row, a dependency entry
+ * and a complexity record all serialise under this, while the arrays holding
+ * them run to thousands of characters.
+ */
+const LINE_WIDTH = 160;
+
+/**
+ * A value as lines, one compact entry per line.
+ *
+ * THE INDENTATION WAS NEVER FOR THE CALLER. Sections are selected and trimmed
+ * by the line, so this had to produce lines, and JSON.stringify(value, null, 2)
+ * produced them -- along with a brace or a bracket on a line of its own for
+ * every container, and two spaces per level of nesting on every line, all of it
+ * billed to whoever read the preview. Measured against the compact body each
+ * one came from:
+ *
+ *   smart_refactor    tool-profile.ts      1,639 -> 2,637 indented, 1,772 here
+ *   smart_refactor    smart-complexity.ts  2,085 -> 3,648 indented, 2,346 here
+ *   smart_complexity  smart-complexity.ts  2,587 -> 4,476 indented, 2,676 here
+ *   smart_config_read large-project         3,741 -> 4,400 indented, 4,072 here
+ *
+ * AND THE LINES ARE BETTER, not merely fewer: 104 of them where stringify made
+ * 962 for the same payload, because each one is now a whole record rather than
+ * one field of one. A budget that admits a line admits something the caller can
+ * use, and an omission counted in lines counts records.
+ *
+ * Recursion stops as soon as a value fits, so the shape is opened up only where
+ * it is too big to read in one piece -- which is exactly where a preview needs
+ * to be able to cut.
+ */
+function jsonLines(value, depth = 0) {
+  const compact = JSON.stringify(value) ?? 'null';
+  if (compact.length <= LINE_WIDTH || depth > NESTED_SHAPE_DEPTH)
+    return [compact];
+  if (Array.isArray(value)) {
+    const out = ['['];
+    value.forEach((entry, index) => {
+      const inner = jsonLines(entry, depth + 1);
+      if (index < value.length - 1) inner[inner.length - 1] += ',';
+      out.push(...inner);
+    });
+    out.push(']');
+    return out;
+  }
+  if (!value || typeof value !== 'object') return [compact];
+  const keys = Object.keys(value);
+  const out = ['{'];
+  keys.forEach((key, index) => {
+    const inner = jsonLines(value[key], depth + 1);
+    inner[0] = JSON.stringify(key) + ': ' + inner[0];
+    if (index < keys.length - 1) inner[inner.length - 1] += ',';
+    out.push(...inner);
+  });
+  out.push('}');
+  return out;
+}
+
 /** JSON: top-level keys, so the model learns the shape without the payload. */
 function splitJson(text) {
   let parsed;
@@ -327,22 +388,12 @@ function splitJson(text) {
     if (parsed.length) {
       // `?? null` because JSON.stringify(undefined) returns undefined, and .split would
       // then throw -- parseShape('[]') aborted the whole disclosure block.
-      out.push(
-        jsonSection(
-          'first element',
-          JSON.stringify(parsed[0] ?? null, null, 2).split('\n'),
-          6
-        )
-      );
+      out.push(jsonSection('first element', jsonLines(parsed[0] ?? null), 6));
     }
     const rest = parsed.slice(1);
     if (rest.length) {
       out.push(
-        jsonSection(
-          `remaining ${rest.length} elements`,
-          JSON.stringify(rest, null, 2).split('\n'),
-          1
-        )
+        jsonSection(`remaining ${rest.length} elements`, jsonLines(rest), 1)
       );
     }
     return out;
@@ -369,8 +420,7 @@ function splitJson(text) {
         sections.push({ ...s, label: `${entry.path} > ${s.label}` });
       }
     }
-    const rendered = JSON.stringify(stripped, null, 2) ?? 'null';
-    sections.push(jsonSection(key, rendered.split('\n'), 4, 'field'));
+    sections.push(jsonSection(key, jsonLines(stripped), 4, 'field'));
   }
   return sections;
 }

@@ -760,8 +760,15 @@ describe('a long string gets its own shape however deep it sits', () => {
     const data = sections.find((s) => s.label === 'data');
 
     expect(data).toBeDefined();
-    expect(data.lines.join('\n')).not.toContain('export const name0');
-    expect(data.lines.join('\n')).toContain('"changed": true');
+    // PARSED, NOT MATCHED AS TEXT. An earlier version of this looked for the
+    // spelling `"changed": true`, which pinned the renderer's padding rather
+    // than the property under test -- so switching the section renderer to one
+    // compact entry per line failed it while the behaviour it describes was
+    // unchanged. What has to hold is that the siblings survived and the lifted
+    // string did not, and that is a fact about the value, not about its spacing.
+    const rebuilt = JSON.parse(data.lines.join('\n'));
+
+    expect(rebuilt).toEqual({ format: { changed: true } });
   });
 
   test('a short nested string stays in the object', () => {
@@ -786,6 +793,80 @@ describe('a long string gets its own shape however deep it sits', () => {
     expect(labels({ data: { lines: [SOURCE] } })).not.toContain(
       'data.lines[0] > output'
     );
+  });
+});
+
+describe('a section is rendered one compact entry per line', () => {
+  /**
+   * Sections are chosen, trimmed and counted by the line, so the renderer has
+   * to produce lines -- and it produced them with
+   * JSON.stringify(value, null, 2), which bills the caller a brace on its own
+   * line per container plus two spaces per level on every line. Measured
+   * through bench/tools/reduction.mjs against the same payloads:
+   *
+   *   smart_refactor   tool-profile.ts      -87.2% -> -43.1%
+   *   smart_refactor   smart-complexity.ts   41.4% ->  51.5%
+   *   smart_complexity smart-complexity.ts   31.5% ->  44.9%
+   *
+   * Two things have to hold together, and either alone is worthless: the lines
+   * must be cheaper, and they must still BE lines, or the budget loop loses the
+   * granularity it selects with.
+   */
+  const ROWS = Array.from({ length: 40 }, (_, i) => ({
+    type: 'improve-naming',
+    severity: 'info',
+    at: [
+      [i, 13],
+      [i + 100, 31],
+    ],
+    message: 'Inconsistent naming convention in ' + 'NAME_' + i,
+    effort: 'low',
+  }));
+
+  function sectionFor(payload, label) {
+    return parseShape(JSON.stringify(payload)).sections.find(
+      (s) => s.label === label
+    );
+  }
+
+  test('costs less than the indented rendering it replaced', () => {
+    const payload = { rows: ROWS };
+    const s = sectionFor(payload, 'rows');
+    const indented = JSON.stringify(ROWS, null, 2);
+
+    expect(s.lines.join('\n').length).toBeLessThan(indented.length);
+  });
+
+  test('but is still many lines, so a budget can cut it', () => {
+    // THE CONTROL ARM. Cheaper on its own is satisfied by returning the whole
+    // thing on one line, which would silently turn every preview of a JSON
+    // payload into all-or-nothing.
+    const s = sectionFor({ rows: ROWS }, 'rows');
+
+    expect(s.lines.length).toBeGreaterThan(ROWS.length);
+  });
+
+  test('and each line is a whole record, not one field of one', () => {
+    const s = sectionFor({ rows: ROWS }, 'rows');
+    const records = s.lines.filter((line) => line.startsWith('{'));
+
+    expect(records).toHaveLength(ROWS.length);
+    expect(JSON.parse(records[0].replace(/,$/, ''))).toEqual(ROWS[0]);
+  });
+
+  test('and the whole section still parses back to the value', () => {
+    // The lines are a rendering of the payload, not a lossy summary of it.
+    const s = sectionFor({ rows: ROWS }, 'rows');
+
+    expect(JSON.parse(s.lines.join('\n'))).toEqual(ROWS);
+  });
+
+  test('a value that already fits stays on one line', () => {
+    // Opening up a shape that is small enough to read whole would spend lines
+    // for nothing -- and the omission counts would then count braces.
+    const s = sectionFor({ summary: { files: 3, errors: 0 } }, 'summary');
+
+    expect(s.lines).toEqual(['{"files":3,"errors":0}']);
   });
 });
 
