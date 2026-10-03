@@ -221,7 +221,9 @@ describe('smart_dependencies reads each file once', () => {
     const result = await tool.analyze({ cwd: root, useCache: false });
 
     expect(result.success).toBe(true);
-    expect(result.metadata.totalFiles).toBe(2);
+    // The walked count, taken off the graph: see the metadata doc comment in
+    // smart-dependencies.ts for why graph mode no longer restates it.
+    expect(result.graph.nodes.length).toBe(2);
     expect([...(result[RESOLVED_INPUT_KEY]?.paths ?? [])].sort()).toEqual(
       [join(root, 'src', 'a.ts'), join(root, 'src', 'b.ts')].sort()
     );

@@ -117,8 +117,15 @@ export interface SmartRefactorResult {
      * report, when one occurrence was one suggestion.
      */
     totalOccurrences: number;
-    bySeverity: Record<string, number>;
-    byType: Record<string, number>;
+    /**
+     * COUNTS PER SEVERITY AND PER TYPE ARE NOT SENT.
+     *
+     * They were, and they were 146 tokens across the three benched files --
+     * a tenth of the smallest reply -- for sums the caller can take from the
+     * `severity` and `type` columns of `suggestions`, which travel in the
+     * same response either way. A tally of rows the reader already has is
+     * the reader doing less adding, not the tool answering more.
+     */
     estimatedImpact: 'low' | 'medium' | 'high';
     fromCache: boolean;
   };
@@ -282,18 +289,6 @@ export class SmartRefactorTool {
     // visitor; folding them here keeps that simple and still answers once.
     const suggestions = this.foldIdenticalFindings(rawSuggestions);
 
-    // Calculate summary statistics
-    const bySeverity: Record<string, number> = {
-      info: suggestions.filter((s) => s.severity === 'info').length,
-      warning: suggestions.filter((s) => s.severity === 'warning').length,
-      error: suggestions.filter((s) => s.severity === 'error').length,
-    };
-
-    const byType: Record<string, number> = {};
-    for (const suggestion of suggestions) {
-      byType[suggestion.type] = (byType[suggestion.type] || 0) + 1;
-    }
-
     const estimatedImpact = this.calculateEstimatedImpact(suggestions);
 
     // Advice that belongs to the kind of refactoring, not to the place, is
@@ -309,8 +304,6 @@ export class SmartRefactorTool {
           (total, entry) => total + entry.locations.length,
           0
         ),
-        bySeverity,
-        byType,
         estimatedImpact,
         fromCache: false,
       },

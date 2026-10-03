@@ -144,10 +144,27 @@ export interface SmartDependenciesResult {
   success: boolean;
   mode: string;
   metadata: {
-    totalFiles: number;
-    analyzedFiles: number;
-    externalDependencies: number;
-    internalDependencies: number;
+    /**
+     * How much was walked -- ABSENT when the graph itself travels.
+     *
+     * In `circular`, `unused` and `impact` mode these are the only
+     * statement of the size of what was analysed, because those replies
+     * carry findings rather than the graph, so they are sent.
+     *
+     * In `graph` mode they are not: every one of them is a length over the
+     * `graph` payload in the same response, so sending them asks the caller
+     * to pay for arithmetic they can do on data they already have.
+     *
+     * Dropping them there also closed a disagreement. `externalDependencies`
+     * counted the UNFILTERED graph while the payload beside it was the
+     * filtered one, so with `includeExternal` off the reply stated a count
+     * for data the caller never received -- the same defect the `rawGraph`
+     * comment above describes, in the other direction.
+     */
+    totalFiles?: number;
+    analyzedFiles?: number;
+    externalDependencies?: number;
+    internalDependencies?: number;
     /*
      * NO TOKEN FIGURES HERE, DELIBERATELY.
      *
@@ -1175,11 +1192,10 @@ export class SmartDependenciesTool {
       // The SAME data the token count above describes. This returned the raw
       // Map, so the count measured one thing and the caller received another.
       graph: graphData,
+      // NO COUNTS HERE: see the metadata doc comment. Each would be a length
+      // over the `graph` above, and one of them used to be a length over a
+      // graph that was never sent.
       metadata: {
-        totalFiles: filteredGraph.size,
-        analyzedFiles: filteredGraph.size,
-        externalDependencies: this.countExternalDeps(graph),
-        internalDependencies: this.countInternalDeps(graph),
         cacheHit: false,
         incrementalUpdate: false,
       },

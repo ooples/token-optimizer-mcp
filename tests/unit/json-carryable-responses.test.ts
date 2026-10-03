@@ -87,14 +87,41 @@ describe('responses survive JSON', () => {
       ).toBe(true);
     });
 
-    it('agrees with its own metadata', async () => {
+    it('sends no count a reader could take off the graph', async () => {
       const result = JSON.parse(JSON.stringify(await analyze()));
 
-      // The metadata was right all along; the payload is what went missing.
-      expect(result.graph.nodes.length).toBe(result.metadata.totalFiles);
-      expect(result.graph.edges.length).toBe(
-        result.metadata.internalDependencies
+      // This used to assert that the counts AGREED with the graph, because
+      // for a while they were the only part of the answer that was right.
+      // Now the graph travels and they do not: every one of them was a
+      // length over rows in the same response, and one -- the external count
+      // -- was a length over a graph that had been filtered out of it.
+      expect(result.metadata.totalFiles).toBeUndefined();
+      expect(result.metadata.analyzedFiles).toBeUndefined();
+      expect(result.metadata.internalDependencies).toBeUndefined();
+      expect(result.metadata.externalDependencies).toBeUndefined();
+
+      // And the reader loses nothing: both figures are still there to take.
+      expect(result.graph.nodes.length).toBe(3);
+      expect(result.graph.edges.length).toBe(2);
+    });
+
+    it('states what it analysed in a mode that sends no graph', async () => {
+      // THE SCOPE OF THAT SILENCE, pinned from the other side. `circular`
+      // answers with findings and no graph, so there is nothing for a caller
+      // to count and the metadata is the only statement of how much was
+      // walked. A blanket removal of these counts would land here.
+      const result = JSON.parse(
+        JSON.stringify(
+          await new SmartDependenciesTool(
+            cache,
+            counter,
+            new MetricsCollector()
+          ).analyze({ cwd: root, useCache: false, mode: 'circular' })
+        )
       );
+
+      expect(result.graph).toBeUndefined();
+      expect(result.metadata.totalFiles).toBe(3);
     });
 
     it('reports no token count at all, having nothing it could count', async () => {

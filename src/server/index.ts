@@ -400,6 +400,53 @@ const ADVERTISED_TOOL_NAMES = new Set(
 );
 
 /**
+ * For each tool, the inputs whose schema publishes a `default`, and what
+ * that default is.
+ *
+ * Read by the reply pruning in ./restated.ts, which drops a scalar field
+ * equal to one of these: a reply answering `mode: 'graph'` when `graph` is
+ * the published default of its own `mode` input is restating the request,
+ * and the caller read that default out of `tools/list` before calling.
+ *
+ * ONLY the properties that publish one. A declared input with no default is
+ * a property the tool WORKS OUT -- smart_env detects `environment` when the
+ * caller names none -- and its value in a reply is the answer, not an echo.
+ * Keying on names instead cost smart_env a genuine finding.
+ *
+ * Built from the SAME definitions the server advertises, so a renamed or
+ * re-defaulted input cannot leave a stale value behind here.
+ */
+const DECLARED_DEFAULTS: ReadonlyMap<
+  string,
+  ReadonlyMap<string, unknown>
+> = new Map(
+  ADVERTISED_TOOL_DEFINITIONS.map((tool) => [
+    tool.name,
+    new Map<string, unknown>(
+      Object.entries(
+        (tool.inputSchema as { properties?: Record<string, unknown> })
+          .properties ?? {}
+      )
+        .filter(
+          ([, schema]) =>
+            typeof schema === 'object' &&
+            schema !== null &&
+            Object.hasOwn(schema, 'default')
+        )
+        .map(([property, schema]) => [
+          property,
+          (schema as { default?: unknown }).default,
+        ])
+    ),
+  ])
+);
+
+const NO_DECLARED_DEFAULTS: ReadonlyMap<string, unknown> = new Map<
+  string,
+  unknown
+>();
+
+/**
  * Both argument checks, built from the definitions this server publishes -- so
  * neither can drift from what callers read out of `tools/list`.
  */
@@ -468,10 +515,12 @@ function toResultText(result: unknown): string {
  */
 function textResult(
   result: unknown,
-  // The arguments as the caller sent them. Required, not optional, so the
-  // compiler proves every one of the eighty-one dispatch cases passes them:
-  // a case that forgot would silently stop removing the path it echoes.
-  args: unknown
+  // The arguments as the caller sent them, and the tool that was called.
+  // Both REQUIRED, not optional, so the compiler proves every one of the
+  // eighty-one dispatch cases passes them: a case that forgot would
+  // silently stop removing the path it echoes and the options it restates.
+  args: unknown,
+  tool: string
 ): {
   content: Array<{ type: string; text: string }>;
   _meta?: Record<string, unknown>;
@@ -495,7 +544,11 @@ function textResult(
   // It happens HERE, before serialisation, because here the payload is still an
   // object. One step after this it is a string, and editing an answer by pattern
   // inside prose is how a tool starts corrupting what it reports.
-  const sent = withoutRestated(payload, args);
+  const sent = withoutRestated(
+    payload,
+    args,
+    DECLARED_DEFAULTS.get(tool) ?? NO_DECLARED_DEFAULTS
+  );
   const content = [{ type: 'text', text: toResultText(sent) }];
   if (!declaration && !resolved) return { content };
   return {
@@ -1385,14 +1438,14 @@ async function handleToolCall(request: {
         const options = args as any;
         const result = await predictiveCache.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'cache_warmup': {
         const options = args as any;
         const result = await cacheWarmup.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       // Code analysis tools
@@ -1403,32 +1456,32 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_dependencies': {
         const result = await runSmartDependencies(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_exports': {
         const result = await runSmartExports(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_imports': {
         const result = await runSmartImports(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_refactor': {
         const result = await runSmartRefactor(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_security': {
         const result = await runSmartSecurity(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_symbols': {
@@ -1438,12 +1491,12 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_typescript': {
         const result = await runSmartTypescript(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_config_read': {
@@ -1453,27 +1506,27 @@ async function handleToolCall(request: {
         // what the schema documents got "Config file not found: undefined".
         const { path: configPath, ...configOptions } = args as any;
         const result = await runSmartConfigRead(configPath, configOptions);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_env': {
         const result = await runSmartEnv(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_package_json': {
         const result = await runSmartPackageJson(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_tsconfig': {
         const result = await runSmartTsconfig(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_pretty': {
         const result = await runSmartPretty(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_process': {
@@ -1483,7 +1536,7 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_service': {
@@ -1493,20 +1546,20 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_ast_grep': {
         const options = args as any;
         const result = await smartAstGrep.grep(options.pattern, options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'cache_analytics': {
         const options = args as any;
         const result = await cacheAnalytics.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'cache_benchmark': {
@@ -1518,228 +1571,228 @@ async function handleToolCall(request: {
           metrics
         );
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'cache_compression': {
         const options = args as any;
         const result = await runCacheCompression(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'cache_invalidation': {
         const options = args as any;
         const result = await cacheInvalidation.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'cache_optimizer': {
         const options = args as any;
         const result = await cacheOptimizer.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'cache_partition': {
         const options = args as any;
         const result = await cachePartition.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'cache_replication': {
         const options = args as any;
         const result = await cacheReplication.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_cache': {
         const options = args as any;
         const result = await smartCache.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_sql': {
         const options = args as any;
         const result = await smartSql.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_schema': {
         const options = args as any;
         const result = await smartSchema.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_api_fetch': {
         const options = args as any;
         const result = await smartApiFetch.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_cache_api': {
         const options = args as any;
         const result = await smartCacheApi.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_database': {
         const options = args as any;
         const result = await smartDatabase.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_graphql': {
         const options = args as any;
         const result = await smartGraphQL.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_migration': {
         const options = args as any;
         const result = await smartMigration.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_orm': {
         const options = args as any;
         const result = await smartOrm.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_rest': {
         const options = args as any;
         const result = await smartRest.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_websocket': {
         const options = args as any;
         const result = await smartWebSocket.run(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_processes': {
         const options = args as any;
         const result = await smartProcesses.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_network': {
         const options = args as any;
         const result = await smartNetwork.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_logs': {
         const options = args as any;
         const result = await smartLogs.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_lint': {
         const options = args as any;
         const result = await smartLint.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_install': {
         const options = args as any;
         const result = await smartInstall.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_docker': {
         const options = args as any;
         const result = await smartDocker.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_build': {
         const options = args as any;
         const result = await smartBuild.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_system_metrics': {
         const options = args as any;
         const result = await smartSystemMetrics.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_test': {
         const options = args as any;
         const result = await smartTest.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_typecheck': {
         const options = args as any;
         const result = await smartTypeCheck.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_cron': {
         const options = args as any;
         const result = await smartCron.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_user': {
         const options = args as any;
         const result = await smartUser.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_diff': {
         const options = args as SmartDiffOptions;
         const result = await smartDiff.diff(options);
 
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_branch': {
         const options = args as SmartBranchOptions;
         const result = await smartBranch.branch(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_merge': {
         const options = args as SmartMergeOptions;
         const result = await smartMerge.merge(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_status': {
         const options = args as SmartStatusOptions;
         const result = await smartStatus.status(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_log': {
         const options = args as SmartLogOptions;
         const result = await smartLog.log(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_read': {
         const { path, ...options } = args as any;
         const result = await memoizedSmartRead(path, options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_write': {
@@ -1749,20 +1802,20 @@ async function handleToolCall(request: {
         // entry so the next smart_read/grep/glob reflects the new state
         // instead of waiting for TTL expiry.
         memoRegistry.clearAll();
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_edit': {
         const { path, operations, ...options } = args as any;
         const result = await runSmartEdit(path, operations, options);
         memoRegistry.clearAll();
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_glob': {
         const { pattern, ...options } = args as any;
         const result = await memoizedSmartGlob(pattern, options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'wiki_write': {
@@ -1770,14 +1823,14 @@ async function handleToolCall(request: {
         // other tool so it carries a schema and a dispatch case, which the
         // reachability suite requires of everything advertised.
         const result = await wikiWrite(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
       case 'wiki_read': {
         // The read counterpart to wiki_write. Until this existed the graph had a
         // deliberate write path and no deliberate read path, so a subagent -- which
         // never receives the SessionStart briefing -- could not reach it at all.
         const result = await wikiRead(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
       case 'wiki_query': {
         // The general read path: one finding by key, a ranked search over claims,
@@ -1788,7 +1841,7 @@ async function handleToolCall(request: {
         // to call this for detail since injection landed, so a missing dispatch
         // case here is the difference between an escape hatch and a dead end.
         const result = await wikiQuery(args as WikiQueryOptions);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
       case 'context_page':
       case 'context_receipt_verify':
@@ -1796,123 +1849,123 @@ async function handleToolCall(request: {
       case 'checkpoint_handoff':
       case 'outcome_report': {
         const result = await runUcrTool(name, args);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
       case 'smart_grep': {
         const { pattern, ...options } = args as any;
         const result = await memoizedSmartGrep(pattern, options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'optimization_storage': {
         const result = optimizationStorage.run(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'context_delta': {
         const result = contextDelta.run(args as any);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'alert_manager': {
         const options = args as any;
         const result = await alertManager.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'metric_collector': {
         const options = args as any;
         const result = await metricCollectorTool.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'monitoring_integration': {
         const options = args as any;
         const result = await monitoringIntegration.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'custom_widget': {
         const options = args as any;
         const result = await customWidget.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'data_visualizer': {
         const options = args as any;
         const result = await dataVisualizer.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'health_monitor': {
         const options = args as any;
         const result = await healthMonitor.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'log_dashboard': {
         const options = args as any;
         const result = await logDashboard.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'intelligent-assistant': {
         const options = args as any;
         const result = await runIntelligentAssistant(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'natural-language-query': {
         const options = args as any;
         const result = await runNaturalLanguageQuery(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'pattern-recognition': {
         const options = args as any;
         const result = await runPatternRecognition(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'predictive-analytics': {
         const options = args as any;
         const result = await runPredictiveAnalytics(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'recommendation-engine': {
         const options = args as any;
         const result = await runRecommendationEngine(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart-summarization': {
         const options = args as any;
         const result = await runSmartSummarization(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
       case 'anomaly_explainer': {
         const options = args as unknown as AnomalyExplainerOptions;
         const result = await runAnomalyExplainer(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'knowledge_graph': {
         const options = args as unknown as KnowledgeGraphOptions;
         const result = await knowledgeGraph.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'sentiment_analysis': {
         const options = args as unknown as SentimentAnalysisOptions;
         const result = await sentimentAnalysis.run(options);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'smart_workflow': {
         const request = args as unknown as SmartWorkflowRequest;
         const result = await smartWorkflow.run(request);
-        return textResult(result, args);
+        return textResult(result, args, name);
       }
 
       case 'get_hook_analytics': {

@@ -266,6 +266,8 @@ describe('smart_dependencies names the baseline it displaced', () => {
   it('analyses the project it was pointed at, not the process cwd', async () => {
     const { dir, tool } = project(TINY);
     const r = await tool.run({ cwd: dir, mode: 'graph', useCache: false });
-    expect(r.metadata.totalFiles).toBe(Object.keys(TINY).length);
+    // The walked count, taken off the graph: see the metadata doc comment in
+    // smart-dependencies.ts for why graph mode no longer restates it.
+    expect(r.graph.nodes.length).toBe(Object.keys(TINY).length);
   });
 });
