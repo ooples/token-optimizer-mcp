@@ -838,7 +838,9 @@ export function getSmartEnv(
 // CLI Runner Function
 // ===========================
 
-export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
+export async function runSmartEnv(
+  options: SmartEnvOptions
+): Promise<SmartEnvResult> {
   const { homedir } = await import('os');
   const { join } = await import('path');
   const { TokenCounter } = await import('../../core/token-counter.js');
@@ -853,7 +855,13 @@ export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
   const tool = getSmartEnv(cache, tokenCounter, metrics);
   const result = await tool.run(options);
 
-  return JSON.stringify(result);
+  // THE OBJECT, NOT ITS TEXT. A runner that serialises its own answer puts that
+  // answer past the one seam where a reply is edited before it is sent, so the
+  // envelope pruning in src/server/restated.ts could never see it: this reply
+  // kept a success flag, a file hash and an echo of the caller path -- 28 of its
+  // 111 tokens -- while every object-returning tool had them removed. The wire
+  // bytes are unchanged otherwise, because toResultText serialises compactly too.
+  return result;
 }
 
 // ===========================

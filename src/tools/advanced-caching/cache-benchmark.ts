@@ -1494,11 +1494,13 @@ export async function runCacheBenchmark(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
   metrics: MetricsCollector
-): Promise<string> {
+): Promise<CacheBenchmarkResult> {
   const tool = new CacheBenchmark(cache, tokenCounter, metrics);
   const result = await tool.run(options);
 
-  return JSON.stringify(result);
+  // The object, not its text: see runSmartEnv. Serialising here would hide this
+  // reply from the envelope pruning in src/server/restated.ts.
+  return result;
 }
 
 /**
