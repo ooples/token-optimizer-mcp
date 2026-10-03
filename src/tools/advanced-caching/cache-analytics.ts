@@ -100,7 +100,12 @@ export interface CacheAnalyticsResult {
   };
   metadata: {
     tokensUsed: number;
-    tokensSaved: number;
+    // NO tokensSaved FIELD, DELIBERATELY. On a cache hit this reported the
+    // token count of the cached data itself, which asserts that the whole
+    // response was saved -- but a cache hit still sends the response; what was
+    // avoided was recomputing it, not transmitting it. On every other path it
+    // was the literal 0. Neither is a measurement, and the saving on this call
+    // is counted once at the wire like every other tool's.
     cacheHit: boolean;
     executionTime: number;
   };
@@ -203,7 +208,11 @@ export interface AggregatedMetrics {
   averageDuration: number;
   totalCacheHits: number;
   totalCacheMisses: number;
-  tokensSaved: number;
+  // NO tokensSaved FIELD. It summed the savedTokens that each tool put on its
+  // own MetricsCollector record -- a second savings total, built entirely from
+  // tool self-claims, running in parallel with the one the recorder measures
+  // from the bytes. Those claims are gone, so this would now be a confident
+  // zero, which is a worse statement than none.
   compressionSavings: number;
 }
 
@@ -464,9 +473,6 @@ export class CacheAnalyticsTool extends EventEmitter {
       if (cached) {
         try {
           const data = JSON.parse(cached);
-          const tokensSaved = this.tokenCounter.count(
-            JSON.stringify(data)
-          ).tokens;
 
           return {
             success: true,
@@ -474,7 +480,6 @@ export class CacheAnalyticsTool extends EventEmitter {
             data,
             metadata: {
               tokensUsed: 0,
-              tokensSaved,
               cacheHit: true,
               executionTime: Date.now() - startTime,
             },
@@ -540,7 +545,6 @@ export class CacheAnalyticsTool extends EventEmitter {
         inputTokens: 0,
         outputTokens: tokensUsed,
         cachedTokens: 0,
-        savedTokens: 0,
         metadata: { operation },
       });
 
@@ -550,7 +554,6 @@ export class CacheAnalyticsTool extends EventEmitter {
         data,
         metadata: {
           tokensUsed,
-          tokensSaved: 0,
           cacheHit: false,
           executionTime: Date.now() - startTime,
         },
@@ -567,7 +570,6 @@ export class CacheAnalyticsTool extends EventEmitter {
         inputTokens: 0,
         outputTokens: 0,
         cachedTokens: 0,
-        savedTokens: 0,
         metadata: { operation, error: errorMessage },
       });
 
@@ -900,10 +902,6 @@ export class CacheAnalyticsTool extends EventEmitter {
     const totalDuration = operations.reduce((sum, op) => sum + op.duration, 0);
     const cacheHits = operations.filter((op) => op.cacheHit).length;
 
-    const tokensSaved = operations.reduce(
-      (sum, op) => sum + (op.savedTokens || 0),
-      0
-    );
     const compressionSavings = operations.reduce(
       (sum, op) => sum + ((op.outputTokens ?? 0) - (op.cachedTokens ?? 0) || 0),
       0
@@ -916,7 +914,6 @@ export class CacheAnalyticsTool extends EventEmitter {
       averageDuration: totalDuration / (operations.length || 1),
       totalCacheHits: cacheHits,
       totalCacheMisses: operations.length - cacheHits,
-      tokensSaved,
       compressionSavings,
     };
 
