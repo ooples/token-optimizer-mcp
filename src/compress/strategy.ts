@@ -52,6 +52,23 @@ export type StrategyName =
   | 'ccr';
 
 export interface StrategyOptions {
+  /**
+   * The key every marker this strategy writes will carry, when the caller picks it.
+   *
+   * LEAVE IT OUT IN PRODUCTION. Omitted, each block is stamped with a keyed MAC
+   * over its own content, which is what makes a planted marker-shaped line
+   * unforgeable: the secret lives in `annotate.ts`, is minted once per process
+   * and is never emitted, so the author of the content cannot compute the key a
+   * decoder will honour. Pinning a value here does not expose that secret and
+   * does not let content predict a stamp -- it only lets a caller who already
+   * controls the whole request choose what its own markers authenticate as.
+   *
+   * `null` means `do not stamp`, and yields markers nothing will honour. The
+   * comparator wants exactly that for the arm it publishes, and wants a pinned
+   * value for the arm it measures, because a MAC over a secret that changes
+   * every process makes the measured text change every run.
+   */
+  readonly stamp?: Stamp;
   /** Writes content with no file of its own somewhere readable. */
   readonly spill?: (content: string, hint: string) => string;
   /**
@@ -480,7 +497,8 @@ function visitImages(
 function imagePass(
   request: ProviderRequest,
   frontier: Position | null,
-  elisions: Elision[]
+  elisions: Elision[],
+  stamp?: Stamp
 ): ReturnType<typeof dedupImages> {
   const found: { block: unknown; touchable: boolean }[] = [];
   visitImages(request, (block, at, message) => {
@@ -491,7 +509,7 @@ function imagePass(
     return null;
   });
 
-  const images = dedupImages(found);
+  const images = dedupImages(found, stamp);
   if (images.collapsed) {
     elisions.push({
       removed: `${images.collapsed} repeated image${images.collapsed === 1 ? '' : 's'}, about ${images.tokensSaved.toLocaleString('en-US')} tokens`,
@@ -613,6 +631,7 @@ function pathAddressed(
     const cached = !isAfter(at, breakpoint);
     const repeated = (sourceCounts.get(text) ?? 0) > 1;
     const result = compressBlock(text, {
+      stamp: options.stamp,
       spill: options.spill,
       query: cached || repeated ? undefined : query,
       tuning: options.tuning,
@@ -635,7 +654,7 @@ function pathAddressed(
     return null;
   });
 
-  const deduped = dedupBlocks(staged);
+  const deduped = dedupBlocks(staged, options.stamp);
   elisions.push(...deduped.elisions);
 
   // IMAGES, WHICH NOTHING ABOVE CAN SEE. Every walker here keys on
@@ -648,7 +667,8 @@ function pathAddressed(
   const images = imagePass(
     request,
     respectFrontier ? frontier : null,
-    elisions
+    elisions,
+    options.stamp
   );
 
   // Pass two writes the answers back. `mapBlocks` walks in the same order it
@@ -1166,6 +1186,7 @@ export function ccrStyle(
     // opaque markers and injected retrieval versus paths and nothing injected.
     const cached = !isAfter(_at, lastCacheBreakpoint(request));
     const result = compressBlock(text, {
+      stamp: options.stamp,
       spill: options.spill,
       query: cached ? undefined : query,
       tuning: options.tuning,
@@ -1184,7 +1205,7 @@ export function ccrStyle(
   });
 
   // The control gets the image pass too; see `imagePass`.
-  const ccrImages = imagePass(out, null, elisions);
+  const ccrImages = imagePass(out, null, elisions, options.stamp);
   let ccrImageAt = 0;
   const withImages = replaceImages(
     out,
@@ -1266,6 +1287,7 @@ export function v4Substitute(
     // invert.
     compressToolResult: (text) => {
       const compressed = compressBlock(text, {
+        stamp: options.stamp,
         tuning: options.tuning,
         spill: options.spill,
       });

@@ -234,7 +234,8 @@ export interface ImageDedupResult {
  * which one. There is nothing to look up and nothing to miss.
  */
 export function dedupImages(
-  blocks: readonly { readonly block: unknown; readonly touchable: boolean }[]
+  blocks: readonly { readonly block: unknown; readonly touchable: boolean }[],
+  stamp?: Stamp
 ): ImageDedupResult {
   const seen = new Map<string, number>();
   const replacements: (string | null)[] = [];
@@ -266,9 +267,12 @@ export function dedupImages(
     // KEYED ON THE IMAGE'S OWN BYTES, so the marker is byte-identical next turn
     // for the same screenshot -- which is the case this pass exists for, and
     // the one where a changing marker would cost a cache read every turn.
-    const stamp = stampFor(image.data);
-    replacements.push(imageBackReference(image, earlier, stamp));
-    stamps.push(stamp);
+    // A CALLER MAY PIN IT, the same way every other marker-writing pass here
+    // honours `ctx.stamp`, so a run can be reproduced byte for byte. Omitted,
+    // the key is minted over the image.
+    const key = stamp === undefined ? stampFor(image.data) : stamp;
+    replacements.push(imageBackReference(image, earlier, key));
+    stamps.push(key);
     tokensSaved += image.tokens ?? 0;
     collapsed += 1;
   }

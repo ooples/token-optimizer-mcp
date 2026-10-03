@@ -496,10 +496,27 @@ type Slot =
        * key -- which of them is chosen depends on how many other slots share
        * the referent, and must not change what the marker authenticates as.
        */
-      readonly stamp: string;
+      readonly stamp: Stamp;
     };
 
-export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
+/**
+ * The key a reference marker written by this pass will carry.
+ *
+ * MINTED HERE ONLY WHEN THE CALLER DID NOT CHOOSE. `withStamp` promises that
+ * every engine entry point honours a stamp the caller pinned, and that `null`
+ * means `do not stamp`; this pass is reached from the strategies rather than
+ * from the router, so it has to keep that promise itself. It minted
+ * unconditionally until the comparator needed a reproducible run and found that
+ * the stamp it had pinned was being ignored on exactly this path.
+ *
+ * `undefined` means the caller did not think about it, and gets a key over the
+ * bytes the reference replaced -- stable turn over turn for the same block in
+ * the same conversation, which is what keeps a cached prefix matching.
+ */
+export function dedupBlocks(
+  blocks: readonly DedupBlock[],
+  stamp?: Stamp
+): DedupResult {
   // COLLECTED BEFORE THEY ARE WORDED. How a reference should be phrased depends
   // on how many OTHER references share its referent, which is not known until
   // every block has been matched. Collecting slots first keeps that decision in
@@ -590,7 +607,7 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
         referent: earlier,
         quote,
         at: positionOf.get(earlier) ?? -1,
-        stamp: stampFor(block.original),
+        stamp: stamp === undefined ? stampFor(block.original) : stamp,
       });
       elisions.push({
         removed: `${block.original.length.toLocaleString('en-US')} bytes already shown earlier in this conversation`,
