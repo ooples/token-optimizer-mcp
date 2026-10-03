@@ -157,11 +157,13 @@ export async function discloseResult(
     // that keep getting expanded stop being the same previews.
     //
     // READ BEFORE THE CAPTURE BELOW, not after. `previewPolicy` counts served
-    // previews from the capture log, so capturing this reply first put it in
-    // its own evidence -- as a preview that had been served and not expanded,
-    // which it cannot have been yet. On a fresh store that alone read as a
-    // 1-for-1 hold record and the rate said this shape always holds.
-    const { boosts, holdRateLower } = mods.expand.previewPolicy(dir, {
+    // previews from the capture log and scales its corrections by how often the
+    // shape gets expanded, so capturing this reply first put it in its own
+    // evidence -- as a preview that had been served and not expanded, which it
+    // cannot have been yet. One reply is the whole sample on a fresh store,
+    // where it read as a perfect hold record and so cancelled the very
+    // correction the policy exists to apply.
+    const { boosts } = mods.expand.previewPolicy(dir, {
       tool: toolName,
       shape,
     });
@@ -187,15 +189,6 @@ export async function discloseResult(
       tool: toolName,
       boosts,
       ref,
-      /**
-       * How often a preview of this shape is NOT followed, as a lower bound.
-       *
-       * The bound rather than the point estimate, because this decides whether
-       * to spend the caller's tokens on a preview: a shape gets the benefit of
-       * its hold record only to the extent the record supports it, and a new
-       * shape -- which has none -- is charged for the remainder in full.
-       */
-      holdRate: holdRateLower,
       /**
        * Stores what the preview is about to withhold, and returns the pointer
        * the preview will print.

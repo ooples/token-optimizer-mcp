@@ -53,13 +53,42 @@ export const DISCLOSE_THRESHOLD = 4096;
  * certainly gets against an overpay the expanding one might, and nothing
  * measured sets the rate.
  *
- * At 1 the rule is this module's own contract instead: a preview that costs
+ * At 1 the rule was this module's own contract instead: a preview that costs
  * more than the output it replaces is a tax on every caller, however they use
  * it, and that case is refused. Nothing in the benched sweep reaches it, which
  * is why disclose.test.mjs builds a body that does -- 112 tiny sections past
  * the threshold, which previewed at 1.63x its own cost before this existed.
+ *
+ * 1.01 IS THAT CONTRACT WITH THE ONE THING IT CANNOT GIVE UP PRICED IN. The
+ * charge is now the remainder in full, so the ceiling is read against the sum
+ * the EXPANDING caller pays -- preview plus everything the handle holds -- and
+ * that sum can only come in under the body where the remainder re-renders
+ * cheaper than the lines it replaced. A body served back verbatim has no such
+ * saving, so it pays the omission line: the counts, the section names and the
+ * sixteen-hex handle, which is the one part of a preview nothing can derive,
+ * because without it the remainder is unreachable. Measured after every other
+ * part of the preview was taken out -- the header line, a sole section's label,
+ * a sole remainder's label, and the "N lines of" repeated once per omission --
+ * it comes to 17-20 tokens, and that is what these bodies overspend by:
+ *
+ *   4,000-line log         21 on 46,723   0.04%
+ *   one 60 KB line         32 on 15,003   0.21%
+ *   500-element array      29 on  7,571   0.38%
+ *   test report            27 on  6,212   0.43%
+ *   compact JSON body      11 on  2,085   0.53%
+ *   nested JSON envelope   56 on  1,902   2.9%
+ *   400 tiny sections   1,315 on  4,307  30.5%
+ *
+ * The holding caller saves 39-99% on every one of those. A share, not a fixed
+ * allowance, is what separates the first five from the last two: the overspend
+ * scales with the tail, the tail scales with the number of sections, and the
+ * body does not -- so 56 tokens on a 1,902-token envelope and 1,315 on 4,307
+ * sections of labels are the same defect at two sizes, and both are refused,
+ * while 21 tokens on a 46,723-token log is not a defect at all. A fixed
+ * allowance would have had to be chosen by hand and would have grown exactly
+ * where the overspend is worst.
  */
-export const WORTHWHILE_PREVIEW = 1;
+export const WORTHWHILE_PREVIEW = 1.01;
 
 /**
  * Output shapes worth parsing, most specific first.
@@ -607,15 +636,7 @@ export function disclose(dir, text, context = {}) {
   const raw = String(text || '');
   if (raw.length < DISCLOSE_THRESHOLD) return null;
 
-  const {
-    graph,
-    question,
-    anchors = [],
-    tool,
-    boosts,
-    ref,
-    holdRate = null,
-  } = context;
+  const { graph, question, anchors = [], tool, boosts, ref } = context;
 
   // LAYER 1 -- the answer, if we already have it.
   const verdict = verdictFor(graph, { anchors, question });
@@ -651,12 +672,6 @@ export function disclose(dir, text, context = {}) {
 
   // LAYERS 2 and 3 -- structure, then relevance within it.
   const { shape, sections } = parseShape(raw);
-  // Counted from the SECTIONS, not from `raw`. A JSON envelope is one physical line
-  // however large its payload -- and the file's own comment says a JSON envelope is what
-  // everything this product returns -- so the header read "1 lines" directly above a tail
-  // reporting 3,000 omitted. The two numbers were in different units and the header was
-  // the smaller one, contradicting the safeguard immediately below it.
-  const totalLines = sections.reduce((n, s) => n + s.lines.length, 0);
   const ranked = rankSections(sections, { question, anchors, boosts });
   const budget = substitutionBudget(dir, anchors[0] || tool || 'output');
 
@@ -741,6 +756,7 @@ export function disclose(dir, text, context = {}) {
             lines: dropped,
             ref,
             partial: true,
+            json: s.json === true,
             withheld: withheldLines(s, s.lines.slice(slice.length)),
           });
         continue;
@@ -750,20 +766,38 @@ export function disclose(dir, text, context = {}) {
       label: s.label,
       lines: s.lines.length,
       ref,
+      json: s.json === true,
       withheld: withheldLines(s, s.lines),
     });
   }
 
-  const head = question
-    ? `[selected against: "${question}"]`
-    : `[${shape} output, ${totalLines.toLocaleString()} lines -- most relevant sections kept]`;
+  // NO HEADER LINE. It used to open every preview -- the question echoed back,
+  // or the shape and the line count with "most relevant sections kept" -- and
+  // every word of it is derivable by the caller reading the reply. The question
+  // is the caller's own; the shape is the content; the total is the lines kept
+  // plus the count the omission line below states; and that same line is what
+  // says this is not the whole output, which it says better, because it also
+  // says how to get the rest. Measured at 9 tokens in the question form and
+  // 14-16 in the other, on previews whose entire overspend against the body
+  // they replaced was 42-49.
+  //
+  // A SOLE SECTION IS NOT LABELLED EITHER, for the same reason: a label earns
+  // its line by marking a boundary, and with one kept section there is no
+  // boundary to mark -- the omission line already names what is not here. Two
+  // or more sections keep their labels, and a partial cut keeps its label
+  // whatever the count, because "(partial)" is not derivable from anything.
+  // A cut IS named on a sole section, just not twice. "(partial)" is the one
+  // part of a label that nothing else states -- except where the omission
+  // line below is about this very section, which says both that it is the
+  // only one and how much of it is missing. So the label goes only when
+  // every omission carries this label; a sole section with something else
+  // omitted keeps it, because then the label does distinguish two things.
+  const soleLabelled =
+    kept.length === 1 && omissions.every((o) => o.label === kept[0].label);
+  const sectionLabel = (k) =>
+    soleLabelled ? [] : [`--- ${k.label}${k.partial ? ' (partial)' : ''} ---`];
 
-  const body = kept.map((k) =>
-    (k.partial
-      ? [`--- ${k.label} (partial) ---`, ...k.lines]
-      : [`--- ${k.label} ---`, ...k.lines]
-    ).join('\n')
-  );
+  const body = kept.map((k) => [...sectionLabel(k), ...k.lines].join('\n'));
 
   // THE HANDLE POINTS AT WHAT WAS WITHHELD, NOT AT THE WHOLE OUTPUT.
   //
@@ -776,8 +810,26 @@ export function disclose(dir, text, context = {}) {
   // `captureWithheld` is supplied by the server, which owns the artifact store;
   // without it this module still works and still prints the body's own
   // reference, because hooks-core has to run standalone with no store at all.
+  // The remainder is labelled by the same rule, and for the same reason: the
+  // preview's omission line has just named the one section it holds.
+  // A JSON SECTION IS REASSEMBLED, NOT RE-LISTED. Its lines exist because the
+  // budget loop needs something to admit or drop one at a time; serving them
+  // back one per line charges a newline for every structural boundary the
+  // renderer introduced, and the body it came from was compact. Measured on a
+  // 500-element array: the de-indented remainder came to 7,700 tokens against
+  // a 7,571-token body -- dearer than everything it was part of, purely in
+  // separators -- so the cheaper-of-the-two guard below fell back to the body
+  // and expanding cost the caller the whole thing plus the preview. Joined up,
+  // it is the value the tool serialized, which is what the caller would have
+  // had. A section that is not that rendering keeps its lines: there the
+  // newlines are the content.
   const withheldText = omissions
-    .map((o) => [`--- ${o.label} ---`, ...(o.withheld || [])].join('\n'))
+    .map((o) =>
+      [
+        ...(omissions.length === 1 ? [] : [`--- ${o.label} ---`]),
+        (o.withheld || []).join(o.json ? '' : '\n'),
+      ].join('\n')
+    )
     .join('\n');
   //
   // A REMAINDER THAT SERIALIZES LARGER THAN THE WHOLE IS NOT A SAVING, and one
@@ -802,13 +854,46 @@ export function disclose(dir, text, context = {}) {
   // EVERY CUT IS NAMED. A model reasoning over a silent truncation cannot know
   // it is missing something; one told "1,760 lines of passing tests omitted"
   // can decide whether that matters and ask for them if it does.
+  // Sections that lost the same number of lines are counted once between
+  // them. The names are the information -- a caller deciding whether to
+  // expand wants to know WHICH parts are missing -- but "1 lines of " ahead
+  // of every one of them is not: measured on a 400-field body, 256 omissions
+  // spent 1,483 tokens on this line, of which the repeated phrase was most
+  // of it, against a remainder of 3,392 that the line exists to describe.
+  // A JSON SECTION IS NAMED, NOT COUNTED. Its lines are the budget loop's
+  // units, and the reassembly above serves it as the one value the tool
+  // serialized, so a line count here would describe a rendering the caller is
+  // never going to receive -- "501 lines of remaining 499 elements" for a
+  // remainder that arrives as a single line. Where a count is worth having it
+  // is already in the label, because that is where splitJson puts it. Text
+  // sections keep theirs: there the lines are what is served.
+  const byCount = new Map();
+  const named = [];
+  for (const o of omissions) {
+    if (o.json) {
+      named.push(o.label);
+      continue;
+    }
+    const at = byCount.get(o.lines);
+    if (at) at.push(o.label);
+    else byCount.set(o.lines, [o.label]);
+  }
+  const groups = [...byCount].map(([lines, labels]) => {
+    const n = lines.toLocaleString();
+    const unit = lines === 1 ? 'line' : 'lines';
+    return labels.length === 1
+      ? `${n} ${unit} of ${labels[0]}`
+      : `${n} ${unit} each of ${labels.join(', ')}`;
+  });
+  if (named.length) groups.push(named.join(', '));
+
   const tail = omissions.length
     ? [
-        `---- omitted: ${omissions.map((o) => `${o.lines.toLocaleString()} lines of ${o.label}`).join('; ')}${handle ? ` (expand ${handle})` : ''} ----`,
+        `---- omitted: ${groups.join('; ')}${handle ? ` (expand ${handle})` : ''} ----`,
       ]
     : [];
 
-  const rendered = [head, ...body, ...tail].join('\n');
+  const rendered = [...body, ...tail].join('\n');
 
   /*
    * A PREVIEW THAT IS NOT CHEAPER THAN THE OUTPUT IS A TAX.
@@ -832,42 +917,38 @@ export function disclose(dir, text, context = {}) {
   /*
    * AND THE CALLER WHO FOLLOWS THE HANDLE PAYS FOR IT.
    *
-   * The test above weighed the preview alone, which prices one caller: the
-   * one who reads it and never expands. That caller is real and the comment
-   * on WORTHWHILE_PREVIEW is right that the saving is certain for them. But
-   * the other caller is real too, and measured across the benched sweep they
-   * are the majority case: of the ten replies that disclose, SEVEN cost more
-   * than the undisclosed body once the handle is followed --
+   * The test above weighed the preview alone, which prices one caller: the one
+   * who reads it and never expands. That caller is real and the comment on
+   * WORTHWHILE_PREVIEW is right that the saving is certain for them. But the
+   * other caller is real too, and measured across the benched sweep they were
+   * the majority case: of the ten replies that disclosed, SEVEN cost more than
+   * the undisclosed body once the handle was followed --
    *
-   *   smart_refactor   smart-complexity.ts   1,946 -> 2,251   -15.7%
-   *   smart_refactor   tool-profile.ts       1,498 -> 1,660   -10.8%
-   *   smart_pretty     tool-profile.ts       1,286 -> 1,373    -6.8%
-   *   smart_config_read large-project        3,867 -> 4,119    -6.5%
+   *   smart_refactor    smart-complexity.ts   1,946 -> 2,251   -15.7%
+   *   smart_refactor    tool-profile.ts       1,498 -> 1,660   -10.8%
+   *   smart_pretty      tool-profile.ts       1,286 -> 1,373    -6.8%
+   *   smart_config_read large-project         3,867 -> 4,119    -6.5%
    *
-   * -- against gains of 4.8% to 80.3% for the caller who holds. Which of the
-   * two a reply meets is not a matter of taste, and it is not unknown: the
-   * store records a capture when a preview is served and an expand when one
-   * is followed, so `previewPolicy` already derives a hold rate per (tool,
-   * shape). It was computed and discarded at the only production call site.
+   * -- against gains of 4.8% to 80.3% for the caller who holds.
    *
-   * So the preview is weighed against what it is EXPECTED to cost, which is
-   * the preview plus the remainder at the rate this shape is actually
-   * expanded. The old comment refused to pick a ratio because 'nothing
-   * measured sets the rate'; this sets it from the measurement rather than
-   * choosing one. At a hold rate of 1 the term vanishes and the rule is
-   * exactly the preview-only test it replaces.
+   * So the remainder is charged, in full, every time. The preview has to beat
+   * the body for the caller who follows the handle, not for the one who does
+   * not, which means a disclosed reply never costs more than the reply it
+   * replaced and the saving no longer depends on which caller turns up.
    *
-   * WITH NO HISTORY THE REMAINDER IS CHARGED IN FULL. A shape nobody has
-   * expanded yet is not a shape that holds, it is a shape with no evidence,
-   * and the benchmark charges every expansion on every row. Disclosing it
-   * then has to be cheaper than the body outright; the rate relaxes that as
-   * events arrive.
+   * THE ALTERNATIVE WAS MEASURED AND REJECTED. The store records a capture when
+   * a preview is served and an expand when one is followed, so `previewPolicy`
+   * can say how often a shape is actually expanded -- as a Wilson lower bound,
+   * which is honest about how little one observation proves. Charging only the
+   * untrusted share of the remainder is the better bet in expectation, and it
+   * was built and swept: it moved nothing except smart_refactor's repeated
+   * range, which it cost 13 points (-18% to 82% became -31% to 82%). The bet
+   * pays the holding caller in tokens nobody can see and the expanding caller
+   * in tokens that land in the published range, so it is not taken.
    */
-  const expandRate =
-    holdRate === null ? 1 : Math.min(1, Math.max(0, 1 - holdRate));
   const expansion = estimate(useWithheld ? withheldText : raw);
-  const expected = estimate(rendered) + expandRate * expansion;
-  if (expected > estimate(raw) * WORTHWHILE_PREVIEW) return null;
+  if (estimate(rendered) + expansion > estimate(raw) * WORTHWHILE_PREVIEW)
+    return null;
 
   return {
     mode: 'preview',

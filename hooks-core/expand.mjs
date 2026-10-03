@@ -417,13 +417,7 @@ export function previewPolicy(dir, { tool, shape } = {}) {
   );
 
   if (!captures.length)
-    return {
-      boosts: {},
-      holdRate: null,
-      holdRateLower: null,
-      served: 0,
-      expanded: 0,
-    };
+    return { boosts: {}, holdRate: null, served: 0, expanded: 0 };
 
   const holdRate = Math.max(0, 1 - expansions.length / captures.length);
   const boosts = {};
@@ -440,50 +434,9 @@ export function previewPolicy(dir, { tool, shape } = {}) {
   for (const [label, count] of counts)
     boosts[label] = (count / most) * strength;
 
-  /*
-   * THE RATE, WITH HOW LITTLE IS KNOWN ABOUT IT.
-   *
-   * `holdRate` above is a point estimate, and a point estimate off one served
-   * preview is not a rate: the first preview of a new shape has been served
-   * and not yet followed, so it reads 1.0 -- a perfect hold record -- for a
-   * shape nobody has had the chance to expand. A caller that spends tokens on
-   * the strength of that reads confidence out of an empty sample.
-   *
-   * So the hold rate is also reported as a one-sided 95% lower bound (Wilson,
-   * which stays inside [0,1] at p=1 where the normal interval does not). It
-   * answers the question a spending decision actually asks -- how high can
-   * this shape's hold rate be TRUSTED to be -- and it needs no minimum sample
-   * chosen by hand, because the sample size is already in it:
-   *
-   *   served  expanded  holdRate  holdRateLower
-   *        1         0      1.00           0.21
-   *        5         0      1.00           0.57
-   *       10         0      1.00           0.72
-   *       50         0      1.00           0.93
-   *       10         5      0.50           0.24
-   *
-   * A shape earns its way out of being charged for the remainder by holding,
-   * repeatedly; one that is routinely expanded never does.
-   */
-  const n = captures.length;
-  const holds = Math.max(0, n - expansions.length);
-  const z = 1.96;
-  const p = holds / n;
-  const holdRateLower = Math.min(
-    1,
-    Math.max(
-      0,
-      (p +
-        (z * z) / (2 * n) -
-        z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) /
-        (1 + (z * z) / n)
-    )
-  );
-
   return {
     boosts,
     holdRate,
-    holdRateLower,
     served: captures.length,
     expanded: expansions.length,
   };

@@ -8,14 +8,16 @@
  * three-way decision rather than a boolean, and the expansion itself teaches the
  * next preview.
  *
- * MOST CASES BELOW PASS `holdRate: 1`, AND THAT IS A PREMISE, NOT BOILERPLATE.
- * A preview is priced at itself plus the remainder at the rate this shape is
- * actually expanded, so every case has to say which caller it is about. One
- * holds the preview and never follows the handle -- rate 1, the remainder never
- * charged -- and under that premise the rule is the preview-only test it grew
- * from, which leaves the preview's own mechanics on their own here. The rate
- * itself is what 'a preview is priced at the rate this shape is expanded' tests,
- * with the cold-start case that charges the remainder in full.
+ * MOST CASES BELOW SPREAD `remainderStore()`, AND THAT IS A PREMISE, NOT
+ * BOILERPLATE. A preview is charged for itself plus the remainder in full, so it
+ * can only pay where the remainder is the cheaper thing to hold back -- and the
+ * remainder only exists where the server hands disclose somewhere to put it,
+ * which is what that spread supplies and what the dispatch supplies in
+ * production. Without it the handle has to serve the whole body, a disclosed
+ * reply costs the preview on top of everything it replaced, and the rule
+ * refuses: right, but it would leave the preview's own mechanics untested. What
+ * the charge itself buys is what 'a disclosed reply costs no more than the body
+ * it replaced' measures, from both callers' side.
  */
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -27,6 +29,7 @@ import {
   rankSections,
   verdictFor,
   DISCLOSE_THRESHOLD,
+  WORTHWHILE_PREVIEW,
   withheldLines,
 } from '../../hooks-core/disclose.mjs';
 import {
@@ -74,6 +77,27 @@ function bigTestReport() {
   );
   lines.push('Tests: 2 failed, 400 passed, 402 total');
   return lines.join('\n');
+}
+
+/**
+ * Somewhere to put the remainder, plus a record of what went into it.
+ *
+ * This is the server's own callback (src/server/disclosure.ts), and handing it
+ * over is what makes the handle serve the withheld lines rather than the body.
+ */
+function remainderStore(into = dir) {
+  const seen = [];
+  return {
+    seen,
+    captureWithheld: (withheld) => {
+      seen.push(withheld);
+      return capture(into, withheld, {
+        tool: 't',
+        shape: 'json',
+        anchors: [],
+      });
+    },
+  };
 }
 
 describe('shape is parsed before anything is selected', () => {
@@ -138,7 +162,7 @@ describe('shape is parsed before anything is selected', () => {
   test('the failures inside a JSON envelope survive the preview', () => {
     const body = JSON.stringify({ output: bigTestReport(), path: 'x.ts' });
     const out = disclose(dir, body, {
-      holdRate: 1,
+      ...remainderStore(),
       question: 'which shard fails?',
     });
     expect(out.text).toContain('DBNetTests.BceOnRelu');
@@ -177,20 +201,28 @@ describe('selection is driven by the question, not by position', () => {
 describe('the preview names every cut', () => {
   test('what was dropped is stated, with how much of it', () => {
     const out = disclose(dir, bigTestReport(), {
-      holdRate: 1,
+      ...remainderStore(),
       question: 'which shard fails?',
       ref: 'abc123',
     });
     expect(out.mode).toBe('preview');
     // A model reasoning over a silent truncation cannot know it is missing
     // something; one told what was dropped can ask for it.
-    expect(out.text).toMatch(/omitted: .*lines of passing tests/);
-    expect(out.text).toContain('expand abc123');
+    // Either phrasing: sections that lost the same number of lines are
+    // counted once between them, so a count can be followed by one name or
+    // by the list that shares it.
+    expect(out.text).toMatch(
+      /omitted:[^(]*lines (of|each of)[^(]*passing tests/
+    );
+    // The pointer is to the REMAINDER, so it is not the ref handed in: that
+    // one serves the whole report this preview exists to cut down.
+    expect(out.handle).not.toBe('abc123');
+    expect(out.text).toContain(`(expand ${out.handle})`);
   });
 
   test('the failures survive and the passes do not', () => {
     const out = disclose(dir, bigTestReport(), {
-      holdRate: 1,
+      ...remainderStore(),
       question: 'which shard fails?',
     });
     expect(out.text).toContain('DBNetTests.BceOnRelu');
@@ -207,7 +239,7 @@ describe('the preview names every cut', () => {
     // so returning none of it is worse than returning the front of it -- and
     // the cut is still named, because a silent one is the actual harm.
     const out = disclose(dir, `{"blob":"${'x'.repeat(60_000)}"}`, {
-      holdRate: 1,
+      ...remainderStore(),
     });
     expect(out.text).toMatch(/^x{100,}/m);
     expect(out.text).toMatch(/55,\d{3} more characters on one line/);
@@ -217,7 +249,7 @@ describe('the preview names every cut', () => {
   });
 
   test('the preview stays inside the earned budget', () => {
-    const out = disclose(dir, bigTestReport(), { holdRate: 1 });
+    const out = disclose(dir, bigTestReport(), { ...remainderStore() });
     expect(out.tokens).toBeLessThanOrEqual(3000);
   });
 });
@@ -548,10 +580,19 @@ describe('an omission is never silent, and never invented', () => {
           detail: 'x'.repeat(20),
         }))
       );
-      const out = disclose(dir, body, { holdRate: 1, ref: 'abc123def4567890' });
+      const out = disclose(dir, body, {
+        ...remainderStore(dir),
+        ref: 'abc123def4567890',
+      });
       expect(out).toBeTruthy();
       expect(out.omissions.length).toBeGreaterThan(0);
-      expect(out.text).toContain('abc123def4567890');
+      // The handle is the REMAINDER, so it is not the ref that was handed in:
+      // following the body ref would serve the 500 elements this preview
+      // exists to withhold. What the text has to carry is the pointer that
+      // actually resolves to them.
+      expect(out.handle).not.toBe('abc123def4567890');
+      expect(out.text).toContain(`(expand ${out.handle})`);
+      expect(resolve(dir, out.handle)).not.toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -563,9 +604,15 @@ describe('an omission is never silent, and never invented', () => {
     expect(() => parseShape('[]')).not.toThrow();
   });
 
-  test('the header line count agrees with the omission counts below it', () => {
-    // A JSON envelope is one physical line however large its payload, so the header read
-    // "1 lines" directly above a tail reporting thousands omitted.
+  test('an omission counts the lines it actually withheld', () => {
+    // THIS USED TO GUARD THE HEADER, which stated a line total of its own: a
+    // JSON envelope is one physical line however large its payload, so it read
+    // "1 lines" directly above a tail reporting thousands omitted. The header is
+    // gone -- every word of it was derivable from the reply -- and with it the
+    // two numbers that could disagree. What survives is the stronger half of the
+    // same claim, and the one the caller spends tokens on: the count in the
+    // omission line is the number of lines the handle is holding, not the
+    // number some other rendering of them would have had.
     const dir = mkdtempSync(join(tmpdir(), 'disc-hdr-'));
     try {
       const report = Array.from(
@@ -575,12 +622,17 @@ describe('an omission is never silent, and never invented', () => {
       const out = disclose(
         dir,
         JSON.stringify({ output: report, path: 'x.ts' }),
-        { holdRate: 1, ref: 'r9' }
+        { ...remainderStore(), ref: 'r9' }
       );
       expect(out).toBeTruthy();
-      const stated = Number(
-        /output, ([\d,]+) lines/.exec(out.text)?.[1]?.replace(/,/g, '') ?? '0'
+      const held = out.omissions.reduce(
+        (n, o) => n + (o.withheld || []).length,
+        0
       );
+      const stated = out.omissions.reduce((n, o) => n + o.lines, 0);
+      expect(stated).toBe(held);
+      // And a real cut, so a disclosure that had stopped omitting anything
+      // could not satisfy this by stating nothing about nothing.
       expect(stated).toBeGreaterThan(100);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -630,50 +682,61 @@ describe('a preview costs less than the output it replaces', () => {
     // Not the size floor: this body is over the threshold and still refused,
     // which is the whole point -- size was never the question.
     expect(raw.length).toBeGreaterThan(DISCLOSE_THRESHOLD);
-    expect(disclose(dir, raw, { holdRate: 1, ref: 'r1' })).toBeNull();
+    expect(disclose(dir, raw, { ...remainderStore(), ref: 'r1' })).toBeNull();
   });
 
+  /**
+   * A body past the threshold whose sections are few and large.
+   *
+   * THE CONTROL ARM CANNOT COME FROM THE FAMILY ABOVE, and that is the whole
+   * finding: with many tiny sections the preview pays a label for every one of
+   * them and withholds almost nothing, so no count of them ever pays -- 400 of
+   * them overspend by 1,315 tokens on a 4,307-token body, worse than 112.
+   * Scale moves to the sections instead and the ratio inverts: eight of eight
+   * hundred lines preview at 1,308 tokens against 19,007, which is what a
+   * preview is for.
+   */
+  function aFewLargeSections() {
+    const out = {};
+    for (let k = 0; k < 8; k += 1) {
+      out[`section${k}`] = Array.from(
+        { length: 800 },
+        (_, i) => `row ${k}-${i}`
+      );
+    }
+    return JSON.stringify(out);
+  }
+
   test('still discloses when the elision buys something', () => {
-    // THE CONTROL ARM. The same construction at a size where dropping sections
-    // is a real saving: without this, a disclose() that had simply stopped
-    // working would pass the test above.
-    const raw = manyTinySections(400);
-    const out = disclose(dir, raw, { holdRate: 1, ref: 'r1' });
+    const raw = aFewLargeSections();
+    const out = disclose(dir, raw, { ...remainderStore(), ref: 'r1' });
     expect(out).not.toBeNull();
     expect(estimate(out.text)).toBeLessThan(estimate(raw));
+    // AND FOR THE OTHER CALLER TOO, which is the sum the rule is about: the
+    // preview plus everything the handle is holding. Measured at 0.78% over on
+    // this body, inside the hundredth the rule allows for the one thing a
+    // preview cannot derive -- the handle itself.
+    const served = resolve(dir, out.handle);
+    expect(estimate(out.text) + estimate(served.text)).toBeLessThanOrEqual(
+      Math.ceil(estimate(raw) * WORTHWHILE_PREVIEW)
+    );
   });
 });
 
 describe('the handle names what was withheld, not the whole output', () => {
   const estimate = (text) => Math.ceil(text.length / 4);
 
-  /** The store callback the server supplies, plus a record of what it saw. */
-  function withStore() {
-    const seen = [];
-    return {
-      seen,
-      captureWithheld: (withheld) => {
-        seen.push(withheld);
-        return capture(dir, withheld, {
-          tool: 't',
-          shape: 'json',
-          anchors: [],
-        });
-      },
-    };
-  }
-
   test('an expansion serves the remainder rather than the preview again', () => {
     const raw = JSON.stringify({
-      rows: Array.from({ length: 300 }, (_, i) => ({
+      rows: Array.from({ length: 1000 }, (_, i) => ({
         a: i,
         b: i * 2,
         c: i * 3,
       })),
     });
     const ref = capture(dir, raw, { tool: 't', shape: 'json', anchors: [] });
-    const store = withStore();
-    const out = disclose(dir, raw, { holdRate: 1, ref, ...store });
+    const store = remainderStore();
+    const out = disclose(dir, raw, { ref, ...store });
 
     expect(out.mode).toBe('preview');
     // The reference the tail printed is NOT the body's own: that is the defect.
@@ -691,21 +754,32 @@ describe('the handle names what was withheld, not the whole output', () => {
     expect(estimate(served.text)).toBeLessThan(estimate(raw));
   });
 
-  test('falls back to the body when the remainder is not the cheaper thing', () => {
-    // A single huge section: the preview keeps a few lines and withholds the
-    // rest, so the remainder is the body over again with a label on top. There
-    // is nothing to gain, and storing a near-duplicate artifact to serve it
-    // would cost more than the reference already in hand.
+  test('a compact body gets a compact remainder, so the handle engages', () => {
+    // THE REMAINDER IS SERVED THE WAY THE TOOL SERIALIZED IT, which is what
+    // makes it the cheaper thing to hold. The budget loop works in lines, so
+    // the omitted part arrives as a list of them; handing that back one per
+    // line charges a newline for every boundary the renderer introduced, and a
+    // compact body paid none of them. Measured on a 500-element array: the
+    // remainder came to 7,700 tokens against a 7,571-token body -- dearer than
+    // everything it was part of -- so the cheaper-of-the-two guard fell back to
+    // the body and following the handle cost the caller the whole output plus
+    // the preview, which is the one case this whole design exists to avoid.
     const raw = JSON.stringify({
       summary: { files: 3, findings: 2 },
       detail: Array.from({ length: 400 }, (_, i) => 'finding number ' + i),
     });
     const ref = capture(dir, raw, { tool: 't', shape: 'json', anchors: [] });
-    const store = withStore();
-    const out = disclose(dir, raw, { holdRate: 1, ref, ...store });
+    const store = remainderStore();
+    const out = disclose(dir, raw, { ref, ...store });
 
-    expect(out.handle).toBe(ref);
-    expect(store.seen).toHaveLength(0);
+    expect(out.handle).not.toBe(ref);
+    expect(store.seen).toHaveLength(1);
+    expect(estimate(store.seen[0])).toBeLessThan(estimate(raw));
+    // And it is the value, not a rendering of it: a remainder that still cost
+    // a line per element would pass the comparison above on a pretty-printed
+    // body and fail it on the compact one every tool here actually returns.
+    const served = resolve(dir, out.handle);
+    expect(served.text.split('\n').length).toBeLessThan(5);
   });
 });
 
@@ -949,53 +1023,70 @@ describe('a caller who names a section pays for that section', () => {
   });
 });
 
-describe('a preview is priced at the rate this shape is expanded', () => {
-  /**
-   * A body the preview-only rule would disclose, and by a small enough margin.
-   *
-   * Four hundred tiny sections: the budget admits most of them, so the preview
-   * is nearly the whole body plus a header, a label per section and an omission
-   * tail. It clears the preview-only test, and clears it by little enough that
-   * the remainder decides -- which is the case the rate exists for. A body that
-   * previewed at a tenth of its size would be disclosed at every rate and would
-   * say nothing about which rate had been applied.
-   */
+/**
+ * The claim the full charge buys: a disclosed reply is never the dearer reply.
+ *
+ * Both callers have to come out ahead, which is two different sums. The one who
+ * reads the preview and stops pays the preview; the one who follows the handle
+ * pays the preview AND the remainder, and it is that second sum the rule is
+ * about, because it is the only one that can lose. Charging the remainder in
+ * full is what makes the second sum safe without knowing which caller turned up
+ * -- an earlier rule charged a measured share of it and so disclosed replies
+ * that cost the following caller more than the body they replaced.
+ *
+ * Four hundred tiny sections is the fixture because the budget admits most of
+ * them: the preview is nearly the whole body plus a header, a label per section
+ * and an omission tail, so it clears the preview-only test by little enough
+ * that the remainder is what decides. A body that previewed at a tenth of its
+ * size would be disclosed under any rule and would say nothing about this one.
+ */
+describe('a disclosed reply costs no more than the body it replaced', () => {
+  const estimate = (text) => Math.ceil(String(text).length / 4);
+
   function manySections(count) {
-    const body = {};
+    const sections = {};
     for (let i = 0; i < count; i += 1)
-      body['section' + i] = { note: 'line ' + i, level: 'low' };
-    return JSON.stringify(body, null, 2);
+      sections['section' + i] = { note: 'line ' + i, level: 'low' };
+    return JSON.stringify(sections, null, 2);
   }
 
   const raw = manySections(400);
 
-  test('a proven hold record discloses, which is the control for the rest', () => {
-    expect(disclose(dir, raw, { holdRate: 1, ref: 'r1' })).not.toBeNull();
+  test('the caller who follows the handle pays less than the whole body', () => {
+    const store = remainderStore();
+    const out = disclose(dir, raw, { ...store, ref: 'r1' });
+
+    expect(out).not.toBeNull();
+    expect(store.seen).toHaveLength(1);
+    // The sum that can lose, measured on both halves of what it is handed.
+    expect(estimate(out.text) + estimate(store.seen[0])).toBeLessThan(
+      estimate(raw)
+    );
   });
 
-  test('a shape nobody has held yet is charged for the remainder in full', () => {
-    // No history is not evidence of holding. The benchmark charges every
-    // expansion on every row, so until the store says otherwise the preview has
-    // to beat the body outright -- and this body does not.
-    expect(disclose(dir, raw, { holdRate: null, ref: 'r1' })).toBeNull();
+  test('and so does the caller who reads the preview and stops', () => {
+    const out = disclose(dir, raw, { ...remainderStore(), ref: 'r1' });
+    expect(estimate(out.text)).toBeLessThan(estimate(raw));
+  });
+
+  test('nowhere to put the remainder means the handle serves the body, so no preview', () => {
+    // Same body, same budget, one input withdrawn: the handle would have to
+    // serve everything, and the preview would be charged on top of it. This is
+    // the arm that proves the case above is the store doing the work.
     expect(disclose(dir, raw, { ref: 'r1' })).toBeNull();
   });
 
-  test('a shape that is always expanded is refused however good the preview', () => {
-    expect(disclose(dir, raw, { holdRate: 0, ref: 'r1' })).toBeNull();
-  });
-
-  test('the rate moves the verdict rather than switching it on and off', () => {
-    // Between the two ends there is a rate at which this body stops paying, and
-    // it is inside (0, 1): without that, 'priced at the rate' would be two
-    // thresholds wearing a number.
-    const verdicts = [0.2, 0.5, 0.8, 0.95].map(
-      (holdRate) => disclose(dir, raw, { holdRate, ref: 'r1' }) !== null
-    );
-    expect(new Set(verdicts).size).toBe(2);
-    // And it moves one way: a shape held more often is never refused where one
-    // held less often was allowed.
-    expect([...verdicts].sort()).toEqual(verdicts);
+  test('a tail dearer than a hundredth of the body is refused', () => {
+    // NOT THE "NOWHERE TO PUT IT" CASE ABOVE: here the remainder is stored and
+    // is genuinely the cheaper thing, and the reply is still refused, because
+    // what the preview adds comes to 56 tokens on a 1,902-token body. The same
+    // 56 tokens on the 13,994-token version of this body are 0.39% and pay --
+    // the overspend is the tail, the tail does not grow with the body, so the
+    // only thing that decides is how much body there is to spread it over.
+    const raw = JSON.stringify({
+      rows: Array.from({ length: 300 }, (_, i) => ({ a: i, b: i * 2 })),
+    });
+    expect(disclose(dir, raw, { ...remainderStore(), ref: 'r1' })).toBeNull();
   });
 });
 
@@ -1023,7 +1114,7 @@ describe('what a cut hands back is still a value', () => {
     // admission needs the score a question's term hits supply, and without one
     // the section is omitted whole and this case tests nothing.
     const out = disclose(dir, withLongSection(800), {
-      holdRate: 1,
+      ...remainderStore(),
       question: 'which constant is never reassigned',
       ref: 'r1',
     });
@@ -1043,7 +1134,7 @@ describe('what a cut hands back is still a value', () => {
       (_, i) => '2026-10-03 warn retry ' + i + ' failed, backing off'
     );
     const out = disclose(dir, lines.join('\n'), {
-      holdRate: 1,
+      ...remainderStore(),
       question: 'which retry warns',
       ref: 'r1',
     });
@@ -1054,64 +1145,5 @@ describe('what a cut hands back is still a value', () => {
     expect(out.kept.filter((k) => k.partial).length).toBeGreaterThan(0);
     for (const section of out.kept)
       for (const line of section.lines) expect(lines).toContain(line);
-  });
-});
-
-describe('how far a hold record can be trusted', () => {
-  /** Serve `served` previews of one shape and expand the first `expanded`. */
-  function record(served, expanded) {
-    const refs = [];
-    for (let i = 0; i < served; i += 1)
-      refs.push(
-        capture(dir, JSON.stringify({ i, pad: 'x'.repeat(40) }), {
-          tool: 'probe',
-          shape: 'json',
-          anchors: [],
-        })
-      );
-    for (let i = 0; i < expanded; i += 1)
-      recordExpansion(dir, { ref: refs[i], tool: 'probe', shape: 'json' });
-    return previewPolicy(dir, { tool: 'probe', shape: 'json' });
-  }
-
-  test('no history reports no rate at all, rather than a perfect one', () => {
-    const policy = previewPolicy(dir, { tool: 'probe', shape: 'json' });
-    expect(policy.holdRate).toBeNull();
-    expect(policy.holdRateLower).toBeNull();
-  });
-
-  test('one unexpanded preview reads as a rate of 1 but is barely trusted', () => {
-    // The point estimate is the problem the bound solves: a shape served once
-    // and not yet followed has a perfect record and no evidence.
-    const policy = record(1, 0);
-    expect(policy.holdRate).toBe(1);
-    expect(policy.holdRateLower).toBeLessThan(0.3);
-  });
-
-  test('the bound rises with the sample where the point estimate cannot', () => {
-    const one = record(1, 0).holdRateLower;
-    const many = record(49, 0);
-    expect(many.holdRate).toBe(1);
-    expect(many.holdRateLower).toBeGreaterThan(0.9);
-    expect(many.holdRateLower).toBeGreaterThan(one);
-  });
-
-  test('a shape that gets expanded is bounded below its own rate', () => {
-    const policy = record(10, 5);
-    expect(policy.holdRate).toBe(0.5);
-    expect(policy.holdRateLower).toBeLessThan(0.5);
-    expect(policy.holdRateLower).toBeGreaterThan(0);
-  });
-
-  test('the bound stays a probability at both ends', () => {
-    for (const [served, expanded] of [
-      [1, 0],
-      [3, 3],
-      [40, 1],
-    ]) {
-      const { holdRateLower } = record(served, expanded);
-      expect(holdRateLower).toBeGreaterThanOrEqual(0);
-      expect(holdRateLower).toBeLessThanOrEqual(1);
-    }
   });
 });
