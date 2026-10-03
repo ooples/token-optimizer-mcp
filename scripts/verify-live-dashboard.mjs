@@ -85,6 +85,29 @@ async function measureCameraStability(host) {
   });
 }
 
+/**
+ * How many cards each accounting panel defines.
+ *
+ * `renderOptimizerAccounting` and `renderProviderAccounting` in dashboard.js
+ * each build their grid from one literal list, so these are those lists'
+ * lengths and they move when a card is added. They are named here, and
+ * asserted on their own below, because they used to sit inside the
+ * `waitForFunction` calls that wait for the panels to settle: a card added to
+ * the renderer then turned a correct dashboard into a bare timeout with no
+ * figure in it and no way to tell which half of the condition had moved.
+ */
+const OVERVIEW_ACCOUNTING_CARDS = 9;
+const PROVIDER_ACCOUNTING_CARDS = 6;
+
+async function expectCardCount(selector, expected, label) {
+  const actual = await page.locator(selector).count();
+  if (actual !== expected) {
+    throw new Error(
+      `${label}: the renderer painted ${actual} card(s), this check expects ${expected}`
+    );
+  }
+}
+
 try {
   await page.goto(base, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
@@ -94,8 +117,6 @@ try {
         ['measured', 'collecting', 'not-measured'].includes(
           saved?.dataset.state
         ) &&
-        document.querySelectorAll('#accounting-grid .accounting-card')
-          .length === 7 &&
         document.querySelectorAll('#client-ledger .client-ledger-row').length >
           0
       );
@@ -103,12 +124,22 @@ try {
     undefined,
     { timeout: 20_000 }
   );
+  await expectCardCount(
+    '#accounting-grid .accounting-card',
+    OVERVIEW_ACCOUNTING_CARDS,
+    'the overview accounting panel'
+  );
   await page.waitForFunction(
     () =>
       document.querySelectorAll('#provider-accounting-grid .accounting-card')
-        .length === 6,
+        .length > 0,
     undefined,
     { timeout: 60_000 }
+  );
+  await expectCardCount(
+    '#provider-accounting-grid .accounting-card',
+    PROVIDER_ACCOUNTING_CARDS,
+    'the provider accounting panel'
   );
   await page.waitForSelector('#constellation canvas', { timeout: 30_000 });
   await page.waitForTimeout(1_100);
