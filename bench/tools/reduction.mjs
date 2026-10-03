@@ -327,6 +327,63 @@ export class Server {
  * "Unknown tool" text, records a null reduction rather than a flattering one:
  * a missing measurement must not read as a measured zero.
  */
+/**
+ * Every spelling of a saving the fourteen tools have published about themselves.
+ *
+ * All fourteen counted one, and not one of them was what the caller paid: each
+ * counted an internal object, or a compact form, or the string it was about to
+ * return -- while the reply is assembled around that string afterwards. They
+ * are gone now, both halves measured by the party that sees both, and this list
+ * is what stops one coming back. A reading cannot be trusted while the thing
+ * being read still publishes a competing figure.
+ */
+const SELF_CLAIM_KEYS = new Set([
+  'tokensSaved',
+  'savedTokens',
+  'tokenCount',
+  'originalTokenCount',
+  'originalTokens',
+  'compactedTokens',
+  'optimizedTokens',
+  'compressedTokens',
+  'compressionRatio',
+  'reductionPercentage',
+  'totalTokensSaved',
+  'averageReduction',
+]);
+
+/**
+ * KEYS, NOT WORDS.
+ *
+ * A text scan is unusable here: smart_read answers with the fixture's own
+ * source, and one of the fixtures is `token-counter.ts`, so the words
+ * themselves appear in content that is not a claim about anything. A claim is a
+ * FIELD, so the payload is parsed and its keys are walked, and string values
+ * are never looked inside.
+ *
+ * @returns the keys found, or null when the part could not be parsed -- which
+ *   is counted separately, because an instrument that silently looked at
+ *   nothing reports the same clean result as one that looked and found nothing.
+ */
+export function selfClaimsInPart(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const found = new Set();
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    for (const [key, value] of Object.entries(node)) {
+      if (SELF_CLAIM_KEYS.has(key)) found.add(key);
+      walk(value);
+    }
+  };
+  walk(parsed);
+  return [...found];
+}
+
 export async function measure(server, testCase) {
   const path = join(FIXTURES, testCase.fixture);
   // A case may name more than one file as its baseline, for a tool whose whole
@@ -341,8 +398,25 @@ export async function measure(server, testCase) {
     name: testCase.tool,
     arguments: testCase.args(path),
   });
-  const payloadOf = (message) =>
-    (message.result?.content || []).map((part) => part.text || '').join('\n');
+  // Every part of every message this case produces -- the first reply, each
+  // further chunk, each expansion, and the repeat read -- is scanned where it
+  // arrives, because a claim could be published on any one of them.
+  const claims = new Set();
+  let partsParsed = 0;
+  let partsUnparsed = 0;
+  const payloadOf = (message) => {
+    const parts = message.result?.content || [];
+    for (const part of parts) {
+      const found = selfClaimsInPart(part.text || '');
+      if (found === null) {
+        partsUnparsed += 1;
+        continue;
+      }
+      partsParsed += 1;
+      for (const key of found) claims.add(key);
+    }
+    return parts.map((part) => part.text || '').join('\n');
+  };
 
   /**
    * A PAGE IS NOT A SAVING.
@@ -449,6 +523,9 @@ export async function measure(server, testCase) {
     expansions: firstWhole.expansions,
     refused,
     detail: refused ? payload.slice(0, 160).replace(/\s+/g, ' ') : '',
+    selfClaims: [...claims].sort(),
+    partsParsed,
+    partsUnparsed,
   };
 }
 
@@ -494,7 +571,9 @@ function claimsFrom(rows) {
   const claims = {};
   for (const [tool, toolRows] of byTool) {
     const first = claimFor(toolRows);
-    const again = claimFor(toolRows.map((r) => ({ reduction: r.repeatReduction })));
+    const again = claimFor(
+      toolRows.map((r) => ({ reduction: r.repeatReduction }))
+    );
     claims[tool] = {
       first: first ? { lo: first.lo, hi: first.hi, text: first.text } : null,
       repeated: again ? { lo: again.lo, hi: again.hi, text: again.text } : null,
@@ -548,6 +627,46 @@ async function main() {
           : 'nothing measured -- no claim available'
       }`
     );
+  }
+
+  /*
+   * A SELF-CLAIM IN A REPLY VOIDS THE WHOLE SWEEP, RECORDING OR NOT.
+   *
+   * All fourteen tools used to publish a figure about their own saving, and not
+   * one of them was the figure the caller paid: each counted an internal object,
+   * a compact form it did not send, or the very string the reply would be built
+   * around afterwards. The readings below are the replacement, so a reply that
+   * still carries a competing figure makes them unsafe to read as well as
+   * unsafe to publish -- a reader has two numbers and no way to tell which is
+   * the measurement.
+   *
+   * THE SCAN HAS TO PROVE IT LOOKED. An unparseable part reports exactly like a
+   * clean one, so the parsed count is checked too: a sweep where nothing could
+   * be parsed found nothing because it saw nothing, which is a dead instrument
+   * and not a pass.
+   */
+  const claiming = rows.filter((r) => r.selfClaims.length > 0);
+  const parsedParts = rows.reduce((sum, r) => sum + r.partsParsed, 0);
+  const unparsedParts = rows.reduce((sum, r) => sum + r.partsUnparsed, 0);
+  console.log('');
+  console.log(
+    `self-claim scan: ${parsedParts} reply part(s) read, ${unparsedParts} unreadable, ` +
+      `${claiming.length} case(s) still publishing a saving`
+  );
+  if (claiming.length > 0) {
+    for (const r of claiming) {
+      console.log(`  ${r.tool} ${r.fixture} ${r.selfClaims.join(', ')}`);
+    }
+    console.log(
+      'REFUSED: a tool states a saving of its own, so these readings mean nothing.'
+    );
+    process.exit(1);
+  }
+  if (parsedParts === 0) {
+    console.log(
+      'REFUSED: no reply part could be parsed, so the self-claim scan read nothing.'
+    );
+    process.exit(1);
   }
 
   // --record writes the readings down so a description can be checked against
