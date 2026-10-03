@@ -880,9 +880,18 @@ describe('a long string gets its own shape however deep it sits', () => {
   test('a long array element is left where it is', () => {
     // Removing one shifts every index after it, so a label naming an element
     // would describe a payload that does not exist.
-    expect(labels({ data: { lines: [SOURCE] } })).not.toContain(
+    const sections = parseShape(
+      JSON.stringify({ data: { lines: [SOURCE] } })
+    ).sections;
+
+    expect(sections.map((s) => s.label)).not.toContain(
       'data.lines[0] > output'
     );
+    // AND IT IS STILL THERE, which the refusal above cannot say: a rule that
+    // dropped the element instead of leaving it would satisfy the line above
+    // exactly as well as one that did the right thing.
+    expect(sections.map((s) => s.label)).toEqual(['data']);
+    expect(sections[0].lines.join('\n')).toContain('name119');
   });
 });
 
