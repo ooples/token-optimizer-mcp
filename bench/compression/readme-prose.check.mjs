@@ -49,9 +49,7 @@ export const Source = Object.freeze({
  * that quotes the same rows. The rest of the file is not covered and this says
  * so rather than implying a sweep it does not do.
  */
-const SECTIONS = [
-  { from: '## Why it wins', to: '## The 30-second version' },
-];
+const SECTIONS = [{ from: '## Why it wins', to: '## The 30-second version' }];
 const SPAN = ['<!-- PROSE-CLAIMS:START', '<!-- PROSE-CLAIMS:END -->'];
 
 const GUARDS = [
@@ -114,6 +112,12 @@ export const DECLARED = [
     anchor: 'four `log` engine commits then moved it to',
     kind: Source.RETRACTED,
     from: 'an intermediate value on the way to the figure the table now holds',
+  },
+  {
+    figure: '64.9%',
+    anchor: 'a concatenated block still parses moved it to',
+    kind: Source.RETRACTED,
+    from: 'what this row scored before every marker carried an authenticating stamp',
   },
   {
     figure: '42%',
@@ -251,7 +255,11 @@ export function proseDrift(readme) {
   const { lines, missingHeads, guardedText } = coveredLines(readme);
   const faults = [];
   for (const head of missingHeads) {
-    faults.push({ kind: 'scope', figure: '', detail: `covered region not found: ${head}` });
+    faults.push({
+      kind: 'scope',
+      figure: '',
+      detail: `covered region not found: ${head}`,
+    });
   }
 
   for (const entry of DECLARED) {
@@ -290,7 +298,10 @@ export function proseDrift(readme) {
       checked += 1;
       if (guardedText.includes(m[0])) continue;
       const covers = DECLARED.some(
-        (d) => d.figure === m[0] && text.includes(d.anchor) && declared.has(`${d.anchor}\u0000${d.figure}`)
+        (d) =>
+          d.figure === m[0] &&
+          text.includes(d.anchor) &&
+          declared.has(`${d.anchor}\u0000${d.figure}`)
       );
       if (covers) continue;
       faults.push({
@@ -325,7 +336,8 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   }
   if (faults.length) {
     console.error('README PROSE DRIFT:');
-    for (const f of faults) console.error(`  [${f.kind}] ${f.figure} ${f.detail}`);
+    for (const f of faults)
+      console.error(`  [${f.kind}] ${f.figure} ${f.detail}`);
     console.error(
       '\nEither correct the sentence to the guarded table, or declare the figure in' +
         '\nDECLARED above with the source it actually came from.'

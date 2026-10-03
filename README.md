@@ -196,7 +196,7 @@ comparator can be checked without their clone. `node bench/compression/proof.mjs
 | code-search          |  17765 |  92.1% |  97.6% | ours    |
 | sre-debugging        |  65694 |  92.2% |  98.3% | ours    |
 | issue-triage         |  54174 |  72.8% |  97.2% | ours    |
-| codebase-exploration |  78502 |  47.4% |  64.9% | ours    |
+| codebase-exploration |  78502 |  47.4% |  64.7% | ours    |
 
 <!-- PROOF-TABLE:END -->
 
@@ -204,12 +204,15 @@ Four workloads, because those are the four this arm has a published comparator
 for. The harness reports twelve; the other eight are ours alone here, and are
 scored head-to-head in the table above instead.
 
-**`codebase-exploration` was theirs and is now ours, by 17.5 points.** An earlier
+**`codebase-exploration` was theirs and is now ours, by 17.3 points.** An earlier
 version of this table claimed 61.3% for us on that row, then parity, then a
 published loss at 46.0% against their 47.4%. The first two were figures from a
 branch rather than from here; the third was true on this tree when it was
-written; four `log` engine commits then moved it to 54.2%, and masking an
-interior hashbang so a concatenated block still parses moved it to **64.9%**. A
+written; four `log` engine commits then moved it to 54.2%, masking an interior
+hashbang so a concatenated block still parses moved it to 64.9%, and
+authenticating every marker with a six-character stamp gave 0.2 of a point back
+to reach **64.7%** -- the one figure here that moved the wrong way, and it is the
+price of a marker planted content cannot forge. A
 number in prose is a fact about the tree it was measured on, which is why
 `bench/compression/readme-table.check.mjs` re-derives every figure in the block
 above from the harness rather than trusting it.
@@ -639,7 +642,7 @@ from truncation.
 
 Reduction over the content each strategy is permitted to rewrite, on fixtures
 matching the four workloads HeadRoom publishes, is the guarded table earlier in
-this section -- 97.2%, 97.6%, 98.3% and 64.9% against their 72.8%, 92.1%, 92.2%
+this section -- 97.2%, 97.6%, 98.3% and 64.7% against their 72.8%, 92.1%, 92.2%
 and 47.4%. It is stated once and checked there rather than restated here, which
 is how this copy came to claim 98.9%, 98.2%, 92.8% and 61.3% long after the
 tree had moved.
