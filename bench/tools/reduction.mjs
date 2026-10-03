@@ -95,7 +95,24 @@ export function claimFor(rows) {
   if (usable.length === 0) return null;
   const pct = usable.map((r) => r.reduction * 100);
   const lo = Math.floor(Math.min(...pct));
-  const hi = Math.ceil(Math.max(...pct));
+  const top = Math.max(...pct);
+  /*
+   * A BRACKET MAY NOT CONTAIN AN IMPOSSIBLE FIGURE.
+   *
+   * Rounding the ceiling up is what keeps the range a superset of the
+   * readings, and that is right everywhere except at the top of the scale:
+   * 100% saved means the reply was empty, which no tool does -- a repeat read
+   * still costs its envelope. smart_read measured 98.1, 99.3 and 99.5 and the
+   * integer bracket read `98-100%`, a figure a reader can only take as a
+   * promise the tool cannot keep. So when the ceiling would land on 100 and
+   * nothing actually reached it, the edge is the largest reading instead,
+   * carried to a tenth so it still rounds outward and still brackets.
+   */
+  const ceiling = Math.ceil(top);
+  const hi =
+    ceiling === 100 && top < 100
+      ? Math.min(Math.ceil(top * 10) / 10, 99.9)
+      : ceiling;
   // A hyphen between two numbers reads as a range until one of them is
   // negative, at which point "-219--218%" is unreadable -- and a tool that
   // costs more than it saves is exactly the case a description must state

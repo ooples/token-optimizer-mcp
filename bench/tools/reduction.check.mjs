@@ -82,6 +82,26 @@ eq(
   '70%'
 );
 
+// THE ONE PLACE THE CEILING MAY NOT ROUND OUTWARD. 100% saved means an empty
+// reply, which no tool sends -- a repeat read still costs its envelope. These
+// are smart_read's three repeat readings, which bracketed to `98-100%` and put
+// a figure no tool can reach into a description.
+eq(
+  'a ceiling that would read as total saving keeps its tenth',
+  claimFor([{ reduction: 0.981 }, { reduction: 0.993 }, { reduction: 0.995 }])
+    .text,
+  '98-99.5%'
+);
+
+// THE CONTROL. Capping below 100 must not make 100 unsayable: a tool that
+// really did return nothing has to be able to say so, or the rule above turns
+// into a different kind of misreport.
+eq(
+  'a reading that truly reached total still says so',
+  claimFor([{ reduction: 1 }]).text,
+  '100%'
+);
+
 // UNMEASURED IS NOT ZERO. A tool every fixture refused must yield no claim at
 // all; returning "0%" would put a measured-looking figure in a description that
 // nothing measured, which is the situation this whole bench exists to end.
