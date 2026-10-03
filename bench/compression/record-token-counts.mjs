@@ -169,17 +169,35 @@ record.envelope = measured.envelope;
 record.ladder = measured.ladder;
 save(record);
 
+/**
+ * Every digest the last census pass asked for, hit or miss.
+ *
+ * WHAT THE FIXTURE IS PRUNED TO. A count the harness no longer looks up is not
+ * harmless: it is indistinguishable from a live one, so a reader auditing the
+ * fixture cannot tell which strings this harness actually prices. Changing the
+ * marker stamp's encoding left 190 of them behind in a single commit.
+ *
+ * SAFE BY CONSTRUCTION, AND LOUD IF IT IS NOT. The census pass and the strict
+ * pass at the end of this file run the same targets over the same inputs, so
+ * they reach the same strings; if a prune ever does drop something still
+ * needed, the strict pass that follows refuses by name in the same run.
+ */
+let reached = new Set();
+
 for (let round = 1; round <= 5; round += 1) {
   rmSync(censusPath, { force: true });
   for (const target of TARGETS)
     run(target, { TOKEN_OPTIMIZER_BENCH_CENSUS: censusPath });
 
   const fresh = new Map();
+  reached = new Set();
   if (existsSync(censusPath))
     for (const line of readFileSync(censusPath, 'utf8').split('\n')) {
       if (!line) continue;
       const { d, t } = JSON.parse(line);
-      if (!(d in record.counts)) fresh.set(d, t);
+      reached.add(d);
+      // A hit carries no text, so only a miss is something to go and count.
+      if (t !== undefined && !(d in record.counts)) fresh.set(d, t);
     }
 
   console.log(`round ${round}: ${fresh.size} string(s) to count`);
@@ -197,9 +215,17 @@ for (let round = 1; round <= 5; round += 1) {
   save(record);
 }
 
+const dead = Object.keys(record.counts).filter((d) => !reached.has(d));
+if (dead.length > 0) {
+  for (const d of dead) delete record.counts[d];
+  record.recordedAt = new Date().toISOString();
+  save(record);
+}
+
 rmSync(scratch, { recursive: true, force: true });
 console.log(
-  `${Object.keys(record.counts).length} counts recorded, ${calls} API calls`
+  `${Object.keys(record.counts).length} counts recorded, ` +
+    `${dead.length} pruned, ${calls} API calls`
 );
 
 // THE ONLY PROOF THE FIXTURE IS COMPLETE: a pass with no census and no

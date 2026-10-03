@@ -123,7 +123,17 @@ export function tokens(text) {
   const counts = fixture().counts;
   const key = digest(text);
   const have = counts[key];
-  if (typeof have === 'number') return have;
+  if (typeof have === 'number') {
+    // A HIT IS WRITTEN DOWN TOO, so the census is the set of strings this
+    // harness prices rather than only the ones it could not price. The
+    // recorder prunes anything outside that set: without hits it could not
+    // tell a count it still needs from one left behind by an encoding that no
+    // longer exists, and 190 counts of a retired marker stamp sat in the
+    // fixture looking exactly like live ones.
+    if (CENSUS)
+      appendFileSync(CENSUS, `${JSON.stringify({ d: key })}\n`, 'utf8');
+    return have;
+  }
 
   if (CENSUS) {
     if (!announced) {
