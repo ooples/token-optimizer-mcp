@@ -24,11 +24,11 @@ import { TokenCounter } from '../../../src/core/token-counter.js';
 import { SmartPretty } from '../../../src/tools/output-formatting/smart-pretty.js';
 
 const SUBJECT = [
-  "export function greet(name: string): string {",
+  'export function greet(name: string): string {',
   "  const greeting = 'hello, ' + name;",
-  "  return greeting;",
-  "}",
-  "",
+  '  return greeting;',
+  '}',
+  '',
 ].join('\n');
 
 describe('smart_pretty works on the file it was given', () => {
@@ -46,7 +46,11 @@ describe('smart_pretty works on the file it was given', () => {
     dirs.length = 0;
   });
 
-  const build = (): { tool: SmartPretty; counter: TokenCounter; dir: string } => {
+  const build = (): {
+    tool: SmartPretty;
+    counter: TokenCounter;
+    dir: string;
+  } => {
     const dir = mkdtempSync(join(tmpdir(), 'pretty-reads-'));
     dirs.push(dir);
     const cache = new CacheEngine(join(dir, 'c.db'));
@@ -54,6 +58,35 @@ describe('smart_pretty works on the file it was given', () => {
     const counter = new TokenCounter();
     const tool = new SmartPretty(cache, counter, new MetricsCollector());
     return { tool, counter, dir };
+  };
+
+  /**
+   * Every spelling of a saving this fleet has used, looked for anywhere.
+   *
+   * Checking the two fields that were deleted would pass against a reply that
+   * had simply renamed them, so the whole tree is walked against the list.
+   */
+  const savingsKeysIn = (reply: unknown): string[] => {
+    const SAVINGS_KEYS = [
+      'tokensUsed',
+      'tokensSaved',
+      'savedTokens',
+      'originalTokens',
+      'optimizedTokens',
+      'compressedTokens',
+      'reductionPercentage',
+      'compressionRatio',
+    ];
+    const found: string[] = [];
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      for (const [key, value] of Object.entries(node)) {
+        if (SAVINGS_KEYS.includes(key)) found.push(key);
+        walk(value);
+      }
+    };
+    walk(reply);
+    return found;
   };
 
   const fixture = (dir: string, source: string): string => {
@@ -117,8 +150,20 @@ describe('smart_pretty works on the file it was given', () => {
     expect(format.code).toBe('');
   });
 
-  it('reports formatting as the cost it is, not a clamped zero', async () => {
-    const { tool, counter } = build();
+  it('states no saving of its own, under any name', async () => {
+    /*
+     * THIS TEST REQUIRED A SIGNED DIFFERENCE AND WAS ASKING THE SAME QUESTION.
+     * It pinned `tokensSaved === input - tokensUsed`, which is a true statement
+     * about prettier's reflow and not a saving to anybody: a caller who passes
+     * `code` paid for the input and pays for the output, and a caller who
+     * passes `filePath` displaced a read the recorder measures for itself.
+     * Neither artifact in that subtraction is what the caller is charged for,
+     * since the reply is built around this object after the tool returns.
+     *
+     * So the reply is checked against every spelling of a saving this fleet
+     * has used, rather than against the two fields that were deleted.
+     */
+    const { tool } = build();
     // prettier reflows this into four lines with spaces inside the braces, so
     // the formatted text is strictly larger than what went in. That is the
     // case the Math.max(0, ...) clamp used to report as a saving of zero.
@@ -133,13 +178,15 @@ describe('smart_pretty works on the file it was given', () => {
     if (!format) {
       throw new Error('format result missing');
     }
-    const input = counter.count(dense).tokens;
-    expect(format.metadata.tokensUsed).toBeGreaterThan(input);
-    expect(format.metadata.tokensSaved).toBeLessThan(0);
-    expect(format.metadata.tokensSaved).toBe(
-      input - format.metadata.tokensUsed
-    );
-    expect(result.metadata.tokensSaved).toBe(format.metadata.tokensSaved);
+    const found = savingsKeysIn(result);
+    expect(found).toEqual([]);
+    // THE POSITIVE CONTROLS, twice over: the reply really is the formatted
+    // code under test, and the walk really does descend into this shape.
+    expect(format.formatted).toBe(true);
+    expect(format.code).not.toBe(dense);
+    expect(savingsKeysIn({ data: { format: { tokensSaved: 1 } } })).toEqual([
+      'tokensSaved',
+    ]);
   });
 
   it('says highlighting did not happen instead of returning plain code as highlighted', async () => {
@@ -163,11 +210,10 @@ describe('smart_pretty works on the file it was given', () => {
     expect(highlight.highlighted).toBe(false);
     expect(highlight.highlightError).toContain('highlight.js');
     expect(highlight.code).toBe(SUBJECT);
-    expect(highlight.metadata.tokensUsed).toBe(counter.count(SUBJECT).tokens);
-    expect(highlight.metadata.tokensSaved).toBe(0);
+    expect(savingsKeysIn(result)).toEqual([]);
   });
 
-  it('reports the same figures on a cache hit as on the first call', async () => {
+  it('answers a cache hit with what the first call answered', async () => {
     const { tool, dir } = build();
     const filePath = fixture(dir, SUBJECT);
     const first = await tool.run({ operation: 'format-code', filePath });
@@ -179,11 +225,16 @@ describe('smart_pretty works on the file it was given', () => {
       throw new Error('format result missing');
     }
     // The cache-hit path compared the served output against itself, which
-    // reports zero without measuring anything. A hit returns what the fresh
-    // call returned, so it costs the same; what the cache saves is time.
+    // reports zero without measuring anything. The claim it was reaching for
+    // is this one: a hit serves what the fresh call served, so it costs the
+    // caller the same and the wire counts the same text. What the cache saves
+    // is time, and that is now the only thing either path reports.
     expect(b.metadata.cacheHit).toBe(true);
-    expect(b.metadata.tokensUsed).toBe(a.metadata.tokensUsed);
-    expect(b.metadata.tokensSaved).toBe(a.metadata.tokensSaved);
+    expect(a.metadata.cacheHit).toBe(false);
+    expect(b.code).toBe(a.code);
+    expect(b.formatted).toBe(a.formatted);
+    expect(b.changes).toBe(a.changes);
+    expect(savingsKeysIn(second)).toEqual([]);
   });
 
   it('surfaces the formatter failure instead of claiming the code was fine', async () => {

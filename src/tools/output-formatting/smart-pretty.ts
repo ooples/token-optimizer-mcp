@@ -78,7 +78,6 @@ import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { readCompressedJson } from '../../utils/cache-helper.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-import { measured, unmeasured } from '../shared/savings.js';
 import { compress, decompress } from '../shared/compression-utils.js';
 import { hashContent, generateCacheKey } from '../shared/hash-utils.js';
 import { readFile } from 'fs/promises';
@@ -187,9 +186,10 @@ export interface HighlightResult {
    */
   highlightError?: string;
   theme: ThemeName;
+  /**
+   * NO TOKEN FIGURES HERE, DELIBERATELY. See SmartPrettyResult below.
+   */
   metadata: {
-    tokensUsed: number;
-    tokensSaved: number;
     cacheHit: boolean;
     highlightTime: number;
   };
@@ -208,9 +208,8 @@ export interface FormatResult {
    */
   formatError?: string;
   changes: number;
+  /** No token figures here either -- see SmartPrettyResult below. */
   metadata: {
-    tokensUsed: number;
-    tokensSaved: number;
     cacheHit: boolean;
   };
 }
@@ -241,9 +240,24 @@ export interface SmartPrettyResult {
     languageDetection?: LanguageDetectionResult;
     themeApplication?: ThemeApplicationResult;
   };
+  /*
+   * NEITHER HALF OF A SAVING CAN BE COUNTED FROM IN HERE.
+   *
+   * Two figures stood in this block, and a copy of them in each operation's
+   * own metadata. `tokensUsed` counted the code this object carries, which is
+   * most of the reply but not the reply: a caller pays for this object
+   * serialised, with the report text and the transport metadata built around
+   * it after the tool returns. `tokensSaved` subtracted that from the code
+   * that came in -- an honest comparison of two artifacts, and not a saving
+   * to anybody, because a caller who passed `code` paid for the input and
+   * pays for the output, while a caller who passed `filePath` displaced a
+   * read the recorder measures for itself.
+   *
+   * So there is nothing for this tool to declare and nothing for it to print.
+   * The before is the file the arguments name, read by the recorder, and the
+   * after is counted once at the wire.
+   */
   metadata: {
-    tokensUsed: number;
-    tokensSaved: number;
     cacheHit: boolean;
   };
 }
@@ -476,7 +490,12 @@ export class SmartPretty {
 
   constructor(
     private cache: CacheEngine,
-    private tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED. The counter was held so the tool could count both
+    // halves of its own saving: the code handed in, and the code handed back
+    // standing in for a reply it cannot see. Both halves are now counted by
+    // the one party that sees both, so the parameter stays only to leave every
+    // caller's construction call unchanged.
+    _tokenCounter: TokenCounter,
     private metricsCollector: MetricsCollector
   ) {
     this.themeCache = new Map();
@@ -520,10 +539,6 @@ export class SmartPretty {
         duration: Date.now() - startTime,
         success: result.success,
         cacheHit: result.metadata.cacheHit,
-        metadata: {
-          tokensUsed: result.metadata.tokensUsed,
-          tokensSaved: result.metadata.tokensSaved,
-        },
       });
 
       return result;
@@ -609,18 +624,9 @@ export class SmartPretty {
         }
 
         if (cachedResult) {
-          // THE BASELINE IS THE SAME ON BOTH PATHS.
-          //
-          // This compared the served output against itself -- baselineTokens =
-          // tokensUsed -- which is a tautology reporting zero, not a
-          // measurement of anything. A cache hit returns exactly what the
-          // fresh path returns, so it costs the caller exactly the same and
-          // the figure must match. What the cache saves is time.
-          const cachedSavings = measured(
-            this.tokenCounter.count(code).tokens,
-            this.tokenCounter.count(cachedResult.code).tokens
-          );
-
+          // A HIT RETURNS WHAT THE FRESH CALL RETURNED, so it costs the caller
+          // the same and is counted the same -- at the wire, once. What the
+          // cache saves is time, which is the one figure still reported.
           return {
             success: true,
             operation: 'highlight-code',
@@ -630,11 +636,7 @@ export class SmartPretty {
                 metadata: { ...cachedResult.metadata, cacheHit: true },
               },
             },
-            metadata: {
-              tokensUsed: cachedSavings.tokenCount,
-              tokensSaved: cachedSavings.tokensSaved,
-              cacheHit: true,
-            },
+            metadata: { cacheHit: true },
           };
         }
       }
@@ -710,25 +712,18 @@ export class SmartPretty {
     const highlightTime = Date.now() - highlightStartTime;
     const lineCount = highlightedCode.split('\n').length;
 
-    // HIGHLIGHTING ADDS TOKENS AND THE FIGURE HAS TO SAY SO.
+    // HIGHLIGHTING ADDS TOKENS, AND THIS IS NOT WHERE THAT GETS COUNTED.
     //
     // The baseline here was count(processedCode) * 1.5 -- "minimal overhead for
-    // fresh highlight" -- and the result was clamped with Math.max(0, ...).
-    // Markup is strictly added to the code, so tokensUsed always exceeds the
-    // input; the 1.5 existed only to make the difference positive, and the
-    // clamp caught the cases where even that was not enough. Together they
-    // guaranteed a non-negative saving for an operation that cannot save
-    // anything. The baseline is the code the caller handed in, the cost is the
-    // code handed back, and measured() reports the signed difference.
-    //
-    // It is computed here, above the result, because there were TWO metadata
-    // blocks: this inner one, hardcoded to zeros and cached in that state, and
-    // the outer one that carried the real figures. A caller reading
-    // data.highlight.metadata.tokensUsed got 0 for a payload that had just
-    // cost it 1,650 tokens. Both now report the same measurement.
-    const tokensUsed = this.tokenCounter.count(highlightedCode).tokens;
-    const savings = measured(this.tokenCounter.count(code).tokens, tokensUsed);
-
+    // fresh highlight" -- clamped with Math.max(0, ...). Markup is strictly
+    // added to the code, so the output always exceeds the input; the 1.5
+    // existed only to make the difference positive and the clamp caught what
+    // it missed, which together guaranteed a non-negative saving for an
+    // operation that cannot save anything. Replacing them with a signed
+    // difference fixed the sign and left the artifacts wrong: neither the code
+    // handed in nor the code handed back is what a caller is charged for.
+    // The reply is counted at the wire and the file, when one was named, is
+    // read by the recorder.
     const result: HighlightResult = {
       code: highlightedCode,
       language,
@@ -738,8 +733,6 @@ export class SmartPretty {
       ...(highlightFailure ? { highlightError: highlightFailure } : {}),
       theme,
       metadata: {
-        tokensUsed,
-        tokensSaved: savings.tokensSaved,
         cacheHit: false,
         highlightTime,
       },
@@ -768,11 +761,7 @@ export class SmartPretty {
       success: true,
       operation: 'highlight-code',
       data: { highlight: result },
-      metadata: {
-        tokensUsed,
-        tokensSaved: savings.tokensSaved,
-        cacheHit: false,
-      },
+      metadata: { cacheHit: false },
     };
   }
 
@@ -795,17 +784,12 @@ export class SmartPretty {
     }
 
     const result = await this.formatCodeInternal(code, language, options);
-    const tokensUsed = this.tokenCounter.count(result.code).tokens;
 
     return {
       success: true,
       operation: 'format-code',
       data: { format: result },
-      metadata: {
-        tokensUsed,
-        tokensSaved: result.metadata.tokensSaved,
-        cacheHit: result.metadata.cacheHit,
-      },
+      metadata: { cacheHit: result.metadata.cacheHit },
     };
   }
 
@@ -822,22 +806,15 @@ export class SmartPretty {
       options.hints
     );
 
-    const resultStr = JSON.stringify(detection);
     // NOTHING WAS REPLACED, SO NOTHING IS CLAIMED. Naming a language does not
-    // stand in for reading the file, so there is no baseline to subtract from
-    // and the hardcoded 0 was an answer to a question nobody had measured.
-    // unmeasured() says that explicitly rather than asserting a saving of zero.
-    const noClaim = unmeasured(this.tokenCounter.count(resultStr).tokens);
-
+    // stand in for reading the file, and the hardcoded 0 that stood here was
+    // an answer to a question nobody had measured. Saying so explicitly came
+    // next and was still a figure counted off an object that is not the reply.
     return {
       success: true,
       operation: 'detect-language',
       data: { languageDetection: detection },
-      metadata: {
-        tokensUsed: noClaim.tokenCount,
-        tokensSaved: noClaim.tokensSaved,
-        cacheHit: false,
-      },
+      metadata: { cacheHit: false },
     };
   }
 
@@ -870,20 +847,13 @@ export class SmartPretty {
       applied: true,
     };
 
-    const resultStr = JSON.stringify(result);
     // Handing back a theme definition replaces no read either -- see
-    // detect-language above for why this is unmeasured rather than zero.
-    const noClaim = unmeasured(this.tokenCounter.count(resultStr).tokens);
-
+    // detect-language above.
     return {
       success: true,
       operation: 'apply-theme',
       data: { themeApplication: result },
-      metadata: {
-        tokensUsed: noClaim.tokenCount,
-        tokensSaved: noClaim.tokensSaved,
-        cacheHit: false,
-      },
+      metadata: { cacheHit: false },
     };
   }
 
@@ -937,24 +907,15 @@ export class SmartPretty {
     // Check if language is supported
     const formatter = FORMATTER_SUPPORT[language];
     if (!formatter) {
-      // Return unformatted code. The saving is DERIVED from the fact that the
-      // code came back untouched, not asserted: measured() over equal inputs
-      // is zero, and if this path ever starts changing the code the figure
-      // follows it instead of continuing to claim nothing happened.
-      const untouched = measured(
-        this.tokenCounter.count(code).tokens,
-        this.tokenCounter.count(code).tokens
-      );
+      // Return unformatted code, and say only that: `formatted: false` with
+      // `changes: 0` is the whole answer, and a token figure beside it was a
+      // count of this object rather than of the reply built around it.
       return {
         code,
         language,
         formatted: false,
         changes: 0,
-        metadata: {
-          tokensUsed: untouched.tokenCount,
-          tokensSaved: untouched.tokensSaved,
-          cacheHit: false,
-        },
+        metadata: { cacheHit: false },
       };
     }
 
@@ -981,21 +942,11 @@ export class SmartPretty {
         cacheKey
       );
       if (cachedResult) {
-        // Same baseline as the fresh path -- see the highlight cache-hit path
-        // for why comparing the output against itself is not a measurement.
-        const cachedSavings = measured(
-          this.tokenCounter.count(code).tokens,
-          this.tokenCounter.count(cachedResult.code).tokens
-        );
-
+        // A hit returns what the fresh call returned and therefore costs the
+        // same -- see the highlight cache-hit path.
         return {
           ...cachedResult,
-          metadata: {
-            ...cachedResult.metadata,
-            cacheHit: true,
-            tokensUsed: cachedSavings.tokenCount,
-            tokensSaved: cachedSavings.tokensSaved,
-          },
+          metadata: { ...cachedResult.metadata, cacheHit: true },
         };
       }
     }
@@ -1035,26 +986,17 @@ export class SmartPretty {
 
     const changes = this.calculateChanges(code, formattedCode);
 
-    // A FORMATTER CANNOT SAVE TOKENS EITHER. This was a hardcoded 0, which
-    // happened to look harmless and was still a number nobody had measured:
-    // prettier reflows code, so the formatted text can be larger or smaller
-    // than what came in. The signed difference is the honest answer.
-    const formatSavings = measured(
-      this.tokenCounter.count(code).tokens,
-      this.tokenCounter.count(formattedCode).tokens
-    );
-
+    // A FORMATTER CANNOT SAVE TOKENS EITHER. A hardcoded 0 stood here, then a
+    // signed difference between the code in and the code out -- which is a
+    // true statement about prettier's reflow and not a saving to anyone: the
+    // caller who passed `code` paid for both halves of it.
     const result: FormatResult = {
       code: formattedCode,
       language,
       formatted,
       ...(formatFailure ? { formatError: formatFailure } : {}),
       changes,
-      metadata: {
-        tokensUsed: formatSavings.tokenCount,
-        tokensSaved: formatSavings.tokensSaved,
-        cacheHit: false,
-      },
+      metadata: { cacheHit: false },
     };
 
     // Cache the result
