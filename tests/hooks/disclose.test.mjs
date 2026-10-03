@@ -20,8 +20,9 @@
  * it replaced' measures, from both callers' side.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import {
   disclose,
@@ -45,6 +46,9 @@ import {
 } from '../../hooks-core/expand.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
+
+/** This file sits at tests/hooks, so the repository root is two up. */
+const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 let workspace;
 let dir;
@@ -720,6 +724,113 @@ describe('a preview costs less than the output it replaces', () => {
     expect(estimate(out.text) + estimate(served.text)).toBeLessThanOrEqual(
       Math.ceil(estimate(raw) * WORTHWHILE_PREVIEW)
     );
+  });
+});
+
+describe('a preview is weighed against the reply that would have shipped', () => {
+  const estimate = (text) => Math.ceil(text.length / 4);
+
+  /**
+   * A read-shaped body, and the reply the dispatch sends when disclosure declines.
+   *
+   * These are not the same length and that is the whole point. The payload holds
+   * the file as a JSON string value, so every newline, quote and backslash in it
+   * costs two characters; the reply that ships instead lifts that value into its
+   * own text part, where none of them do. Measured on this repository's own
+   * `tool-profile.ts`: 1,451 char-quarters serialised against 1,370 sent, a 5.9%
+   * difference against a tolerance of 1%.
+   *
+   * The content is read rather than generated because a fixture of even lines
+   * does not reproduce the case: the budget then keeps the whole body or none of
+   * it, and the markers land inside the tolerance whatever the escape tax is.
+   */
+  function readShaped() {
+    const code = readFileSync(
+      join(REPO, 'bench', 'tools', 'fixtures', 'tool-profile.ts'),
+      'utf8'
+    );
+    const metadata = { size: code.length };
+    return {
+      code,
+      body: JSON.stringify({ content: code, metadata }),
+      sent:
+        JSON.stringify({ content: { _textPart: ['content'] }, metadata }) +
+        '\n' +
+        code,
+    };
+  }
+
+  /** The anchor the dispatch derives from the tool's own path argument. */
+  const ANCHORS = ['bench/tools/fixtures/tool-profile.ts'];
+
+  test('refuses once the escape tax it cannot charge is taken away', () => {
+    const { body, sent } = readShaped();
+    const store = remainderStore();
+    expect(estimate(sent)).toBeLessThan(estimate(body));
+
+    /*
+     * THE CONTROL ARM IS THE SAME CALL WITHOUT `sent`, which is what the server
+     * used to make, and it still previews -- so this is the comparator moving
+     * and not the budget, the fixture or the store. Measured: 1,398
+     * char-quarters of preview and remainder, 3.7% under the serialised body
+     * and 2.0% over the reply that would actually have gone out.
+     */
+    const against = disclose(dir, body, {
+      ...store,
+      ref: 'r1',
+      tool: 'smart_read',
+      anchors: ANCHORS,
+    });
+    expect(against).not.toBeNull();
+    const spent =
+      estimate(against.text) + estimate(resolve(dir, against.handle).text);
+    expect(spent).toBeLessThanOrEqual(
+      Math.ceil(estimate(body) * WORTHWHILE_PREVIEW)
+    );
+    expect(spent).toBeGreaterThan(
+      Math.ceil(estimate(sent) * WORTHWHILE_PREVIEW)
+    );
+
+    expect(
+      disclose(dir, body, {
+        ...remainderStore(),
+        ref: 'r1',
+        tool: 'smart_read',
+        anchors: ANCHORS,
+        sent,
+      })
+    ).toBeNull();
+  });
+
+  test('still discloses what the elision pays for, sent and all', () => {
+    /*
+     * AND THIS IS THE ARM THAT MATTERS MOST. Every tool whose payload is one
+     * large text field hands `sent` a smaller number than `body`, so a gate that
+     * over-corrected would refuse all of them and delete progressive disclosure
+     * for the file-returning half of the server. Here the body is mostly
+     * withheld, the preview is a fraction of it, and supplying `sent` must not
+     * change that.
+     */
+    const payload = {};
+    for (let k = 0; k < 8; k += 1) {
+      payload['section' + k] = Array.from(
+        { length: 800 },
+        (_, i) => 'row ' + k + '-' + i
+      );
+    }
+    const body = JSON.stringify(payload);
+    // Nothing to lift out of an array, so this reply ships as it stands and the
+    // two comparators are the same string -- which is exactly why it is safe to
+    // pass one here.
+    const out = disclose(dir, body, {
+      ...remainderStore(),
+      ref: 'r1',
+      tool: 'smart_test',
+      sent: body,
+    });
+    expect(out).not.toBeNull();
+    expect(out.mode).toBe('preview');
+    expect(estimate(out.text)).toBeLessThan(estimate(body) / 2);
   });
 });
 

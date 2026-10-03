@@ -189,6 +189,17 @@ export async function discloseResult(
       tool: toolName,
       boosts,
       ref,
+      /*
+       * THE REPLY THIS ONE IS COMPETING WITH, measured rather than assumed.
+       *
+       * `body` is the dispatch's serialised payload. If disclosure declines,
+       * what ships is `asSentParts(result)` -- the same payload with its longest
+       * string field lifted out of JSON -- and that reply is cheaper than
+       * `body` by the whole escape tax of that field, 6.4% of a TypeScript
+       * fixture. Handing `body` to the preview gate as the thing to beat let the
+       * preview spend a saving it was not making.
+       */
+      sent: textOf(asSentParts(result)),
       /**
        * Stores what the preview is about to withhold, and returns the pointer
        * the preview will print.

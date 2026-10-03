@@ -510,7 +510,7 @@ export async function runSmartRead(
 export const SMART_READ_TOOL_DEFINITION = {
   name: 'smart_read',
   description:
-    'Read files with intelligent caching, diff-based updates, and syntax-aware optimization. Measured token reduction vs reading the file: -5% to -1% first read, 98-99.6% repeated on an unchanged file (bench/tools, 3 fixtures) -- a first read returns the file plus a one-field header, so it still costs a little more than reading the file; the saving is on the repeat.',
+    'Read files with intelligent caching, diff-based updates, and syntax-aware optimization. Measured token reduction vs reading the file: -2% to -1% first read, 98-99.6% repeated on an unchanged file (bench/tools, 3 fixtures) -- a first read returns the file plus a one-field header, so it still costs a little more than reading the file; the saving is on the repeat.',
   annotations: {
     title: 'Read a file efficiently',
     readOnlyHint: true,

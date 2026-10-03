@@ -628,13 +628,37 @@ export function verdictFor(
  *
  * @param dir      Graph directory, for the earned budget and the verdict layer.
  * @param text     The raw tool output.
- * @param context  { graph, question, anchors, tool, boosts, ref }
+ * @param context  { graph, question, anchors, tool, boosts, ref, sent }
  */
 export function disclose(dir, text, context = {}) {
   const raw = String(text || '');
   if (raw.length < DISCLOSE_THRESHOLD) return null;
 
   const { graph, question, anchors = [], tool, boosts, ref } = context;
+  /*
+   * WHAT THE CALLER PAYS IF THIS DECLINES -- which is not `raw`.
+   *
+   * `raw` is the tool's own serialised payload, so a tool that returns a
+   * file returns it as a JSON string value: every newline, quote and
+   * backslash in it costs two characters instead of one. The reply that
+   * actually ships when this function returns null does not: the dispatch
+   * lifts that field into its own text part first, and measured on this
+   * repository's own `tool-profile.ts` the escape alone was 87 of 1,441
+   * char-quarters, 6.4% of the body.
+   *
+   * The preview does not pay it either, because parseShape de-escapes the
+   * field on the way through. So weighing the preview against `raw` weighed
+   * it against an alternative nobody is ever charged, and handed the markers
+   * a budget six times the tolerance below: smart_read answered a
+   * 1,270-token file with a 1,134-token preview and a 186-token expansion,
+   * 1,320 against the 1,290 the undisclosed reply would have cost. The
+   * escape tax was the whole of that loss.
+   *
+   * The caller passes the text it would send instead; a caller with nothing
+   * to lift -- every hook, whose output is already text -- passes nothing and
+   * gets the old comparison, which for them is the same comparison.
+   */
+  const sent = typeof context.sent === 'string' ? context.sent : raw;
 
   // LAYER 1 -- the answer, if we already have it.
   const verdict = verdictFor(graph, { anchors, question });
@@ -945,7 +969,7 @@ export function disclose(dir, text, context = {}) {
    * in tokens that land in the published range, so it is not taken.
    */
   const expansion = estimate(useWithheld ? withheldText : raw);
-  if (estimate(rendered) + expansion > estimate(raw) * WORTHWHILE_PREVIEW)
+  if (estimate(rendered) + expansion > estimate(sent) * WORTHWHILE_PREVIEW)
     return null;
 
   return {

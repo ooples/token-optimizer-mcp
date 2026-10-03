@@ -1,6 +1,6 @@
 {
   "encoding": "cl100k_base",
-  "recorded": "2026-10-03T21:17:28.333Z",
+  "recorded": "2026-10-03T21:46:56.178Z",
   "stability": {
     "passes": 3,
     "maxTokenSpread": 0,
@@ -149,9 +149,9 @@
     },
     "smart_read": {
       "first": {
-        "lo": -5,
+        "lo": -2,
         "hi": -1,
-        "text": "-5% to -1%"
+        "text": "-2% to -1%"
       },
       "repeated": {
         "lo": 98,
@@ -191,14 +191,14 @@
     },
     "smart_pretty": {
       "first": {
-        "lo": -7,
+        "lo": -4,
         "hi": -1,
-        "text": "-7% to -1%"
+        "text": "-4% to -1%"
       },
       "repeated": {
-        "lo": -7,
+        "lo": -4,
         "hi": -1,
-        "text": "-7% to -1%"
+        "text": "-4% to -1%"
       },
       "fixtures": 3,
       "samples": 3
@@ -629,12 +629,12 @@
       "tool": "smart_read",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 1321,
-      "reduction": -0.04015748031496069,
+      "treatment": 1290,
+      "reduction": -0.015748031496062964,
       "repeatTreatment": 24,
       "repeatReduction": 0.9811023622047244,
       "chunks": 1,
-      "expansions": 1,
+      "expansions": 0,
       "refused": false,
       "detail": "",
       "selfClaims": [],
@@ -734,12 +734,12 @@
       "tool": "smart_pretty",
       "fixture": "token-counter.ts",
       "baseline": 3368,
-      "treatment": 3461,
-      "reduction": -0.027612826603325313,
-      "repeatTreatment": 3463,
-      "repeatReduction": -0.028206650831353874,
+      "treatment": 3418,
+      "reduction": -0.014845605700712694,
+      "repeatTreatment": 3418,
+      "repeatReduction": -0.014845605700712694,
       "chunks": 1,
-      "expansions": 1,
+      "expansions": 0,
       "refused": false,
       "detail": "",
       "selfClaims": [],
@@ -749,12 +749,12 @@
       "tool": "smart_pretty",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 1356,
-      "reduction": -0.06771653543307088,
-      "repeatTreatment": 1356,
-      "repeatReduction": -0.06771653543307088,
+      "treatment": 1320,
+      "reduction": -0.03937007874015741,
+      "repeatTreatment": 1320,
+      "repeatReduction": -0.03937007874015741,
       "chunks": 1,
-      "expansions": 1,
+      "expansions": 0,
       "refused": false,
       "detail": "",
       "selfClaims": [],
