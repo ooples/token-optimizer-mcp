@@ -54,20 +54,20 @@ handed the identical bytes.
      spending a turn -- in the text, or rebuilt from the text alone.
      -->
 
-| workload             | payload |        theirs |          ours | ours, preset  | ours, dial on   | zero-turn ids |
-| -------------------- | ------: | ------------: | ------------: | ------------: | --------------- | ------------: |
-| agent-loop           | 172,110 | 41.9% / 46.7% | 93.8% / 94.7% | 93.8% / 94.7% | 100.0% / 100.0% | 69 / 254 / 69 |
-| agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% | 96.3% / 97.1% | 100.0% / 100.0% | 87 / 2042 / 87 |
-| browser-session      | 782,294 | 21.8% / 13.6% | 93.7% / 28.9% | 100.0% / 99.9% | 100.0% / 99.9%  | 336 / 336 / 0 |
-| code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% | 95.8% / 96.5% | 99.9% / 99.9%   | 65 / 470 / 65 |
-| codebase-exploration | 136,113 | 99.7% / 99.6% | 65.1% / 58.0% | 100.0% / 99.9% | 100.0% / 99.9%  | 509 / 5 / 0 |
-| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% | 99.9% / 99.9% | 99.9% / 99.9%   | 1046 / 4 / 0 |
-| human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% | 96.9% / 97.2% | 99.8% / 99.9%   | 18 / 174 / 18 |
-| issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% | 95.3% / 95.9% | 99.9% / 99.9%   | 34 / 504 / 34 |
-| raw-build-log        | 158,237 | 99.8% / 99.8% | 70.7% / 47.7% | 100.0% / 100.0% | 100.0% / 100.0% | 430 / 3 / 0 |
-| relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% | 96.1% / 97.0% | 99.9% / 99.9%   | 24 / 527 / 24 |
-| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% | 100.0% / 100.0% | 361 / 405 / 0 |
-| sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% | 97.1% / 97.7% | 100.0% / 100.0% | 89 / 514 / 89 |
+| workload             | payload |        theirs |          ours |    ours, preset | ours, dial on   |  zero-turn ids |
+| -------------------- | ------: | ------------: | ------------: | --------------: | --------------- | -------------: |
+| agent-loop           | 172,110 | 41.9% / 46.7% | 93.8% / 94.7% |   93.8% / 94.7% | 100.0% / 100.0% |  69 / 254 / 69 |
+| agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% |   96.3% / 97.1% | 100.0% / 100.0% | 87 / 2042 / 87 |
+| browser-session      | 782,294 | 21.8% / 13.6% | 93.7% / 28.9% |  100.0% / 99.9% | 100.0% / 99.9%  |  336 / 336 / 0 |
+| code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% |   95.8% / 96.5% | 99.9% / 99.9%   |  65 / 470 / 65 |
+| codebase-exploration | 136,113 | 99.7% / 99.6% | 65.1% / 58.0% |  100.0% / 99.9% | 100.0% / 99.9%  |    509 / 5 / 0 |
+| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% |   99.9% / 99.9% | 99.9% / 99.9%   |   1046 / 4 / 0 |
+| human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% |   96.9% / 97.2% | 99.8% / 99.9%   |  18 / 174 / 18 |
+| issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% |   95.3% / 95.9% | 99.9% / 99.9%   |  34 / 504 / 34 |
+| raw-build-log        | 158,237 | 99.8% / 99.8% | 70.7% / 47.7% | 100.0% / 100.0% | 100.0% / 100.0% |    430 / 3 / 0 |
+| relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% |   96.1% / 97.0% | 99.9% / 99.9%   |  24 / 527 / 24 |
+| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% | 100.0% / 100.0% |  361 / 405 / 0 |
+| sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% |   97.1% / 97.7% | 100.0% / 100.0% |  89 / 514 / 89 |
 
 Recorded 2026-09-25 at `18a2d085`, by the command in the
 record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
@@ -80,9 +80,11 @@ these figures against `bench/compression/headroom/results/head-to-head.json` ins
      must appear in `totals` of
      `bench/compression/headroom/results/head-to-head.json`. Guarded by
      `node bench/compression/readme-headroom.check.mjs`; do not hand-edit. -->
+
 Over the corpus the shipped default takes **89.4%** of the characters and
 **80.9%** of the tokens; theirs takes 51.3% and 62.8%. Of the 9,919 identifiers
 planted in the corpus, 45 end up unrecoverable on our side and 8 on theirs.
+
 <!-- HEADROOM-CORPUS:END -->
 
 **Read the rows, though, because the ones we lose are not compression
@@ -191,12 +193,12 @@ comparator can be checked without their clone. `node bench/compression/proof.mjs
      `node bench/compression/proof.mjs`. Guarded by
      `node bench/compression/readme-table.check.mjs`; do not hand-edit. -->
 
-| workload             | payload | theirs | ours   | verdict |
-| -------------------- | ------: | -----: | -----: | ------- |
-| code-search          |  17765 |  92.1% |  97.8% | ours    |
-| sre-debugging        |  65694 |  92.2% |  98.6% | ours    |
-| issue-triage         |  54174 |  72.8% |  97.5% | ours    |
-| codebase-exploration |  78502 |  47.4% |  53.6% | ours    |
+| workload             | payload | theirs |  ours | verdict |
+| -------------------- | ------: | -----: | ----: | ------- |
+| code-search          |   17765 |  92.1% | 97.8% | ours    |
+| sre-debugging        |   65694 |  92.2% | 98.6% | ours    |
+| issue-triage         |   54174 |  72.8% | 97.5% | ours    |
+| codebase-exploration |   78502 |  47.4% | 53.7% | ours    |
 
 <!-- PROOF-TABLE:END -->
 
@@ -216,19 +218,29 @@ sink really names it, instead of by its position in a counter, took another
 half point, to reach 64.2%. Then the currency stopped being an estimate: every
 figure in the table above is now the count Anthropic's own tokenizer returns
 for the text, recorded into a committed fixture so this stays offline, and
-under it the row reads **53.6%**. That is the largest move in this history and
+under it the row reads **53.7%**. That is the largest move in this history and
 the only one that is not about the engine at all. Dividing characters by four
-had been charging the control's hex markers too much and our six-character
-stamp far too little -- a random base-31 string tokenizes at about 1.2
-characters per token, the worst case there is, so the stamp costs a measured
-6.7 tokens where chars/4 billed 2. Those three are the only figures here that
-moved the wrong way, and none of them is a regression: each is the harness
-charging us for something it had been leaving out. A
+had been charging the control's hex markers too much and our own stamp far too
+little -- the stamp was six characters of a vowelless base-31 alphabet then,
+and a random string over a large alphabet is close to the worst case a BPE
+tokenizer has, so it cost a measured 5.52 tokens where chars/4 billed 2. Those
+three are the only figures here that moved the wrong way, and none of them is a
+regression: each is the harness charging us for something it had been leaving
+out. Being able to see that cost is what paid for the next move: the stamp is
+now nine decimal digits, which carry slightly more entropy than those six
+characters did and cost 4 tokens on every draw rather than a mean of 5.52 that
+ranged from four to seven. Measured against the old stamp on this row -- the
+same tree, the same fixture, only the stamp pinned back to its base-31 form --
+that bought **a tenth of a point**, and a tenth is the honest size of it: a
+marker got better than a quarter cheaper, but markers are a small part of what
+the engine emits, so the headline moves far less than the per-marker saving
+suggests. A
 number in prose is a fact about the tree it was measured on, which is why
 `bench/compression/readme-table.check.mjs` re-derives every figure in the block
 above from the harness rather than trusting it.
 
 <!-- HEADROOM-CORPUS:START -->
+
 **Reduction is not the only column, and the other one goes to them.** Scored
 symmetrically on their own fixtures, of 9,919 retention units they keep
 **5,238** directly visible in the text they send and we keep **734** — we reach
@@ -238,6 +250,7 @@ alone with no extra turn, and **6,806** are behind a path in the output, one
 `Read` away; theirs redeems **4,673** through its store, one retrieval call away.
 **45 are unrecoverable on our side and 8 on theirs.** All of those numbers belong in any
 quote of any of them.
+
 <!-- HEADROOM-CORPUS:END -->
 
 Against the four comparators in this reimplemented arm: **ours on all four.**
@@ -643,6 +656,7 @@ reported beside raw ones so the trap is visible rather than inferred.
      its END must also appear inside a guarded block above, or be declared in the
      registry in bench/compression/readme-prose.check.mjs saying where it comes
      from. Run `node bench/compression/readme-prose.check.mjs`. -->
+
 **It keeps the rows that matter.** Eliding a long array after the first few rows
 scored 95.7% on a search payload here and destroyed both the UUID record and the
 error record planted in it -- the only two rows anyone would have searched for.
@@ -653,10 +667,11 @@ from truncation.
 
 Reduction over the content each strategy is permitted to rewrite, on fixtures
 matching the four workloads HeadRoom publishes, is the guarded table earlier in
-this section -- 97.5%, 97.8%, 98.6% and 53.6% against their 72.8%, 92.1%, 92.2%
+this section -- 97.5%, 97.8%, 98.6% and 53.7% against their 72.8%, 92.1%, 92.2%
 and 47.4%. It is stated once and checked there rather than restated here, which
 is how this copy came to claim 98.9%, 98.2%, 92.8% and 61.3% long after the
 tree had moved.
+
 <!-- PROSE-CLAIMS:END -->
 
 These are not their corpora, which are unpublished; the code workloads read real
@@ -988,12 +1003,12 @@ all.
 
 ### Four switches, and what each one trades
 
-| variable                          | default    | what it does                                               |
-| --------------------------------- | ---------- | ---------------------------------------------------------- |
-| `TOKEN_OPTIMIZER_PROXY`           | on         | the compression proxy itself; set `0` to opt out           |
-| `TOKEN_OPTIMIZER_COMPRESSION`     | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`       |
-| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | on         | put what this project already learned in the cached prefix |
-| `TOKEN_OPTIMIZER_PROXY_NET_SAVING` | off        | never send upstream more bytes than the client gave         |
+| variable                           | default    | what it does                                               |
+| ---------------------------------- | ---------- | ---------------------------------------------------------- |
+| `TOKEN_OPTIMIZER_PROXY`            | on         | the compression proxy itself; set `0` to opt out           |
+| `TOKEN_OPTIMIZER_COMPRESSION`      | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`       |
+| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE`  | on         | put what this project already learned in the cached prefix |
+| `TOKEN_OPTIMIZER_PROXY_NET_SAVING` | off        | never send upstream more bytes than the client gave        |
 
 Both of the `on` rows said `off` here until 7.1.0, which was wrong about the
 shipped code rather than a change of default: an unset value has always meant
@@ -1013,11 +1028,11 @@ A channel is one decision instead: `stable` is what is on by default today, and
 each wider channel carries everything the narrower ones do plus the features still
 being measured.
 
-| variable                            | default  | what it does                                              |
-| ----------------------------------- | -------- | --------------------------------------------------------- |
-| `TOKEN_OPTIMIZER_ROLLOUT_CHANNEL`   | `stable` | `stable`, `beta`, `canary`, `dev`                         |
-| `TOKEN_OPTIMIZER_FEATURES`          | unset    | a comma list of feature names to turn on within the channel |
-| `TOKEN_OPTIMIZER_DISABLE_FEATURES`  | unset    | a comma list to turn off, whatever else is set            |
+| variable                           | default  | what it does                                                |
+| ---------------------------------- | -------- | ----------------------------------------------------------- |
+| `TOKEN_OPTIMIZER_ROLLOUT_CHANNEL`  | `stable` | `stable`, `beta`, `canary`, `dev`                           |
+| `TOKEN_OPTIMIZER_FEATURES`         | unset    | a comma list of feature names to turn on within the channel |
+| `TOKEN_OPTIMIZER_DISABLE_FEATURES` | unset    | a comma list to turn off, whatever else is set              |
 
 `beta` turns on install self-repair; `canary` adds compact tool definitions. Those
 two are staged: the channel is what enables them.
@@ -1046,17 +1061,18 @@ treated as yes. Both are reported rather than guessed at:
 npm run doctor           # the channel and what it turned on
 npm run doctor -- --features   # every feature and the reason for each
 ```
+
 ### The telemetry switches
 
-| variable                        | default | what it does                                          |
-| ------------------------------- | ------- | ----------------------------------------------------- |
-| `TOKEN_OPTIMIZER_TELEMETRY`     | off     | aggregate counts into a file in your home directory   |
-| `TOKEN_OPTIMIZER_BEACON`        | off     | upload that file; requires the one above as well      |
-| `DO_NOT_TRACK`                  | unset   | overrides both, whatever else is set                  |
-| `TOKEN_OPTIMIZER_BEACON_URL`    | project | send somewhere else, for a fork or a self-hosted table |
-| `TOKEN_OPTIMIZER_BEACON_KEY`    | packed  | the key to send with; empty in a build without one    |
-| `TOKEN_OPTIMIZER_BEACON_TABLE`  | `telemetry_events` | the table to insert into                   |
-| `TOKEN_OPTIMIZER_UPDATE_CHECK` | on      | ask npm for the latest version, in `doctor` only        |
+| variable                       | default            | what it does                                           |
+| ------------------------------ | ------------------ | ------------------------------------------------------ |
+| `TOKEN_OPTIMIZER_TELEMETRY`    | off                | aggregate counts into a file in your home directory    |
+| `TOKEN_OPTIMIZER_BEACON`       | off                | upload that file; requires the one above as well       |
+| `DO_NOT_TRACK`                 | unset              | overrides both, whatever else is set                   |
+| `TOKEN_OPTIMIZER_BEACON_URL`   | project            | send somewhere else, for a fork or a self-hosted table |
+| `TOKEN_OPTIMIZER_BEACON_KEY`   | packed             | the key to send with; empty in a build without one     |
+| `TOKEN_OPTIMIZER_BEACON_TABLE` | `telemetry_events` | the table to insert into                               |
+| `TOKEN_OPTIMIZER_UPDATE_CHECK` | on                 | ask npm for the latest version, in `doctor` only       |
 
 The key is not in this repository. It is public and the package is published, so
 a committed key would be handed to everyone who runs `npm view` and could not be
