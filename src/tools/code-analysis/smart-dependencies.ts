@@ -18,7 +18,11 @@ import { parse as parseTypescript } from '@typescript-eslint/typescript-estree';
 import { parse as parseBabel } from '@babel/parser';
 import { relative, resolve, dirname, extname, join } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
-import { measured, unmeasured } from '../shared/savings.js';
+import {
+  RESOLVED_INPUT_KEY,
+  resolvedFiles,
+  type Declaring,
+} from '../shared/savings.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { hashFileMetadata, generateCacheKey } from '../shared/hash-utils.js';
@@ -144,10 +148,17 @@ export interface SmartDependenciesResult {
     analyzedFiles: number;
     externalDependencies: number;
     internalDependencies: number;
-    tokensSaved: number;
-    tokenCount: number;
-    originalTokenCount: number;
-    compressionRatio: number;
+    /*
+     * NO TOKEN FIGURES HERE, DELIBERATELY.
+     *
+     * Four stood here: a baseline read off the files in the graph, a cost
+     * counted from a JSON.stringify of the payload, their difference and their
+     * ratio. The baseline was the right thing to measure and is now declared
+     * as the paths it came from, so the recorder reads those files itself. The
+     * cost was a count of one field of this object, not of the reply built
+     * around it after the tool returns -- which is how a call that really
+     * avoided 63% of a 211-token file came to publish `tokensSaved: -11`.
+     */
     cacheHit: boolean;
     incrementalUpdate: boolean;
     /**
@@ -188,7 +199,6 @@ export class SmartDependenciesTool {
    * from a previous call's content -- the saving is skipping a redundant read
    * WITHIN one analysis, not caching across them.
    */
-  private fileTokenCounts = new Map<string, number>();
 
   /**
    * Whether a candidate module path is a file, remembered for one `analyze()`.
@@ -203,7 +213,12 @@ export class SmartDependenciesTool {
 
   constructor(
     private cache: CacheEngine,
-    private tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED. It was held to count both halves of this tool's
+    // own saving: an invented per-file baseline, and a JSON.stringify of the
+    // graph standing in for a reply the tool never sees. Both halves are now
+    // counted by the one party that sees both, so the parameter stays only to
+    // leave every caller's construction call unchanged.
+    _tokenCounter: TokenCounter,
     private metrics: MetricsCollector
   ) {}
 
@@ -213,7 +228,7 @@ export class SmartDependenciesTool {
    */
   async run(
     options: SmartDependenciesOptions = {}
-  ): Promise<SmartDependenciesResult> {
+  ): Promise<Declaring<SmartDependenciesResult>> {
     return this.analyze(options);
   }
 
@@ -222,9 +237,8 @@ export class SmartDependenciesTool {
    */
   async analyze(
     options: SmartDependenciesOptions = {}
-  ): Promise<SmartDependenciesResult> {
+  ): Promise<Declaring<SmartDependenciesResult>> {
     const startTime = Date.now();
-    this.fileTokenCounts.clear();
     this.pathExists.clear();
 
     // Default options
@@ -296,33 +310,81 @@ export class SmartDependenciesTool {
         result.metadata.searchNote = graphResult.metadata.searchNote;
       }
 
+      // SO IS CACHE PROVENANCE, AND IT WAS LOST ON ALL FOUR PATHS. Only
+      // `buildOrLoadGraph` knows whether the graph came off disk, and each mode
+      // handler builds its own metadata with `cacheHit: false` written in. So a
+      // call that did no work at all told the caller it had, `metrics.record`
+      // below stored the same false, and `getStats()` reported zero cache hits
+      // however many there were.
+      result.metadata.cacheHit = graphResult.metadata.cacheHit;
+      result.metadata.incrementalUpdate =
+        graphResult.metadata.incrementalUpdate;
+
       // Record metrics
       const duration = Date.now() - startTime;
 
+      // THE ONLY FIGURES LEFT ARE ONES THIS TOOL CAN SEE. The token fields fed
+      // off the metadata above, so they inherited every one of its errors --
+      // and `getStats()` then totalled them into a lifetime saving.
       this.metrics.record({
         operation: 'smart_dependencies',
         duration,
-        inputTokens: result.metadata.tokenCount,
-        outputTokens: 0,
-        cachedTokens: result.metadata.cacheHit
-          ? result.metadata.originalTokenCount
-          : 0,
-        savedTokens: result.metadata.tokensSaved,
         success: true,
         cacheHit: result.metadata.cacheHit,
       });
 
-      return result;
+      /*
+       * THE BEFORE IS A SET OF FILES, NOT A NUMBER THIS TOOL COUNTED.
+       *
+       * What this call displaces is reading the import graph by hand, and the
+       * old code tried to price that itself -- at first `files.length * 2000`,
+       * then a real count of a second pass over every file. Both were the
+       * tool doing arithmetic the caller pays for and nobody can check.
+       *
+       * Declared as paths instead: the recorder reads these files with the
+       * same reader and counts them with the same counter it uses on the
+       * reply, so the row comes out measured on both sides. The graph's keys
+       * are relative to `opts.cwd` (see `analyzeFile`), and the recorder
+       * resolves a relative path against ITS working directory, so they are
+       * made absolute here -- the one place that knows which root they came
+       * from.
+       *
+       * A graph larger than the recorder's file cap declares nothing, by way
+       * of `resolvedFiles` returning null, and the row is then measured from
+       * whatever the arguments named. Understating is the safe direction.
+       */
+      const displacedFiles = (
+        !result.success
+          ? // A REFUSAL DISPLACED NOTHING. `impact` without a `targetFile`, or
+            // with one that is not in the graph, answers with an error and no
+            // analysis -- and declaring the graph there would credit the call
+            // with standing in for files the caller still has to read.
+            []
+          : result.impact
+            ? [
+                // Impact answers about one file and its dependents, so that is
+                // what reading it by hand would have cost -- not the whole
+                // graph.
+                result.impact.file,
+                ...result.impact.directDependents,
+                ...result.impact.indirectDependents,
+              ]
+            : Array.from(graph.keys())
+      ).map((file) => resolve(opts.cwd, file));
+
+      return {
+        ...result,
+        [RESOLVED_INPUT_KEY]: resolvedFiles(
+          displacedFiles,
+          'resolved-import-graph'
+        ),
+      };
     } catch (error) {
       const duration = Date.now() - startTime;
 
       this.metrics.record({
         operation: 'smart_dependencies',
         duration,
-        inputTokens: 0,
-        outputTokens: 0,
-        cachedTokens: 0,
-        savedTokens: 0,
         success: false,
         cacheHit: false,
       });
@@ -335,10 +397,6 @@ export class SmartDependenciesTool {
           analyzedFiles: 0,
           externalDependencies: 0,
           internalDependencies: 0,
-          tokensSaved: 0,
-          tokenCount: 0,
-          originalTokenCount: 0,
-          compressionRatio: 0,
           cacheHit: false,
           incrementalUpdate: false,
         },
@@ -386,12 +444,13 @@ export class SmartDependenciesTool {
                 analyzedFiles: 0,
                 externalDependencies: this.countExternalDeps(cachedGraph),
                 internalDependencies: this.countInternalDeps(cachedGraph),
-                // A cache hit never recorded what the original analysis
-                // cost, so there is no baseline to compare against. This set
-                // tokensSaved and originalTokenCount to the SAME value, which
-                // is a claim to have saved 100% of the content it returned.
-                // `unmeasured()` claims nothing, which is the truth here.
-                ...unmeasured(this.measureGraphTokens(cachedGraph)),
+                // A CACHE HIT HAS A BASELINE AGAIN. It had none while the
+                // before was a number someone had to have counted at analysis
+                // time and no longer had -- so this claimed 100% of what it
+                // returned, and then claimed nothing at all. The before is a
+                // set of files, and the files are still on disk: the graph's
+                // keys are declared like any other call's and the recorder
+                // reads them.
                 cacheHit: true,
                 incrementalUpdate: false,
               },
@@ -407,13 +466,6 @@ export class SmartDependenciesTool {
             // Cache updated graph
             this.cacheGraph(cacheKey, updatedGraph, opts.ttl);
 
-            const originalTokens = this.measureFullFileTokens(
-              changedFiles,
-              opts.cwd
-            );
-            const graphTokens = this.measureGraphTokens(updatedGraph);
-            const savings = measured(originalTokens, graphTokens);
-
             return {
               success: true,
               mode: 'graph',
@@ -423,7 +475,6 @@ export class SmartDependenciesTool {
                 analyzedFiles: changedFiles.length,
                 externalDependencies: this.countExternalDeps(updatedGraph),
                 internalDependencies: this.countInternalDeps(updatedGraph),
-                ...savings,
                 cacheHit: false,
                 incrementalUpdate: true,
               },
@@ -440,8 +491,7 @@ export class SmartDependenciesTool {
               analyzedFiles: 0,
               externalDependencies: this.countExternalDeps(cachedGraph),
               internalDependencies: this.countInternalDeps(cachedGraph),
-              // See above: a cache hit has no measured baseline.
-              ...unmeasured(this.measureGraphTokens(cachedGraph)),
+              // See above: a hit declares the same files a fresh build would.
               cacheHit: true,
               incrementalUpdate: false,
             },
@@ -462,13 +512,6 @@ export class SmartDependenciesTool {
       this.cacheGraph(cacheKey, graph, opts.ttl);
     }
 
-    const originalTokens = this.measureFullFileTokens(
-      Array.from(graph.keys()),
-      opts.cwd
-    );
-    const graphTokens = this.measureGraphTokens(graph);
-    const savings = measured(originalTokens, graphTokens);
-
     return {
       success: true,
       mode: 'graph',
@@ -478,7 +521,6 @@ export class SmartDependenciesTool {
         analyzedFiles: graph.size,
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
-        ...savings,
         cacheHit: false,
         incrementalUpdate: false,
         ...(truncatedBy
@@ -560,13 +602,6 @@ export class SmartDependenciesTool {
       const ext = extname(filePath);
       const hash = hashFileMetadata(filePath);
       const relativePath = relative(cwd, filePath);
-
-      // Counted here, where the content is already in memory. See
-      // measureFullFileTokens for what this replaces.
-      this.fileTokenCounts.set(
-        relativePath,
-        this.tokenCounter.count(content).tokens
-      );
 
       const imports: DependencyImport[] = [];
       const exports: DependencyExport[] = [];
@@ -909,17 +944,6 @@ export class SmartDependenciesTool {
       }
     }
 
-    // Calculate tokens
-    const resultData = { circular };
-    const resultTokens = this.tokenCounter.count(
-      JSON.stringify(resultData)
-    ).tokens;
-    const originalTokens = this.measureFullFileTokens(
-      Array.from(graph.keys()),
-      _opts.cwd
-    );
-    const savings = measured(originalTokens, resultTokens);
-
     return {
       success: true,
       mode: 'circular',
@@ -929,7 +953,6 @@ export class SmartDependenciesTool {
         analyzedFiles: graph.size,
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
-        ...savings,
         cacheHit: false,
         incrementalUpdate: false,
       },
@@ -981,17 +1004,6 @@ export class SmartDependenciesTool {
       }
     }
 
-    // Calculate tokens
-    const resultData = { unused };
-    const resultTokens = this.tokenCounter.count(
-      JSON.stringify(resultData)
-    ).tokens;
-    const originalTokens = this.measureFullFileTokens(
-      Array.from(graph.keys()),
-      _opts.cwd
-    );
-    const savings = measured(originalTokens, resultTokens);
-
     return {
       success: true,
       mode: 'unused',
@@ -1001,7 +1013,6 @@ export class SmartDependenciesTool {
         analyzedFiles: graph.size,
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
-        ...savings,
         cacheHit: false,
         incrementalUpdate: false,
       },
@@ -1025,10 +1036,6 @@ export class SmartDependenciesTool {
           analyzedFiles: 0,
           externalDependencies: 0,
           internalDependencies: 0,
-          tokensSaved: 0,
-          tokenCount: 0,
-          originalTokenCount: 0,
-          compressionRatio: 0,
           cacheHit: false,
           incrementalUpdate: false,
         },
@@ -1046,10 +1053,6 @@ export class SmartDependenciesTool {
           analyzedFiles: 0,
           externalDependencies: 0,
           internalDependencies: 0,
-          tokensSaved: 0,
-          tokenCount: 0,
-          originalTokenCount: 0,
-          compressionRatio: 0,
           cacheHit: false,
           incrementalUpdate: false,
         },
@@ -1061,6 +1064,20 @@ export class SmartDependenciesTool {
     const indirectDependents: string[] = [];
     const visited = new Set<string>();
     const criticalPath: string[][] = [];
+    /*
+     * A DIRECT DEPENDENT IS NOT ALSO AN INDIRECT ONE.
+     *
+     * The walk below seeds its queue with the direct dependents and records
+     * every file it pops, so each direct dependent landed in both lists --
+     * and `totalImpact` adds the two lengths. One file importing the target
+     * reported an impact of 2, and a target with 30 importers reported 60.
+     *
+     * They still have to be walked, because that is how their own importers
+     * are reached, so they are excluded from the recording rather than from
+     * the queue. The target is excluded for the same reason: a cycle through
+     * it would otherwise list the changed file as affected by itself.
+     */
+    const direct = new Set(directDependents);
 
     // BFS to find all indirect dependents
     const queue: Array<{ file: string; depth: number; path: string[] }> =
@@ -1078,7 +1095,9 @@ export class SmartDependenciesTool {
       }
 
       visited.add(file);
-      indirectDependents.push(file);
+      if (!direct.has(file) && file !== opts.targetFile) {
+        indirectDependents.push(file);
+      }
 
       // Track critical paths (paths longer than 3)
       if (path.length >= 3) {
@@ -1107,17 +1126,6 @@ export class SmartDependenciesTool {
       criticalPath: criticalPath.slice(0, 10), // Top 10 critical paths
     };
 
-    // Calculate tokens
-    const resultData = { impact };
-    const resultTokens = this.tokenCounter.count(
-      JSON.stringify(resultData)
-    ).tokens;
-    const originalTokens = this.measureFullFileTokens(
-      [opts.targetFile, ...directDependents, ...indirectDependents],
-      opts.cwd
-    );
-    const savings = measured(originalTokens, resultTokens);
-
     return {
       success: true,
       mode: 'impact',
@@ -1127,7 +1135,6 @@ export class SmartDependenciesTool {
         analyzedFiles: impact.totalImpact + 1,
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
-        ...savings,
         cacheHit: false,
         incrementalUpdate: false,
       },
@@ -1162,15 +1169,6 @@ export class SmartDependenciesTool {
     const graphData: DependencyGraphPayload =
       this.compactGraphRepresentation(filteredGraph);
 
-    const resultTokens = this.tokenCounter.count(
-      JSON.stringify(graphData)
-    ).tokens;
-    const originalTokens = this.measureFullFileTokens(
-      Array.from(graph.keys()),
-      opts.cwd
-    );
-    const savings = measured(originalTokens, resultTokens);
-
     return {
       success: true,
       mode: 'graph',
@@ -1182,7 +1180,6 @@ export class SmartDependenciesTool {
         analyzedFiles: filteredGraph.size,
         externalDependencies: this.countExternalDeps(graph),
         internalDependencies: this.countInternalDeps(graph),
-        ...savings,
         cacheHit: false,
         incrementalUpdate: false,
       },
@@ -1311,72 +1308,6 @@ export class SmartDependenciesTool {
   }
 
   /**
-   * Estimate tokens for graph representation
-   */
-  /**
-   * What the graph this tool returns actually costs, tokenised.
-   *
-   * This multiplied: `graph.size * 50 + edges * 10`. Those constants were not
-   * measured from anything, and they fed the headline `tokensSaved`.
-   */
-  private measureGraphTokens(graph: Map<string, DependencyNode>): number {
-    return this.tokenCounter.count(JSON.stringify(Array.from(graph.entries())))
-      .tokens;
-  }
-
-  /**
-   * Estimate tokens for full file contents
-   */
-  /**
-   * What reading these files would ACTUALLY have cost.
-   *
-   * THE BASELINE WAS INVENTED.
-   *
-   * This returned `files.length * 2000` -- an assumed 2,000 tokens per file,
-   * measured from nothing. It was the baseline for every saving this tool
-   * reported, so the analytics showed smart_dependencies saving 790,200 tokens
-   * per call at 95.97%, a figure that would have been identical had the files
-   * been empty.
-   *
-   * An overstated saving is the one number this project must never produce
-   * (see tools/shared/savings.ts). So the files are read and counted. A file
-   * that cannot be read contributes nothing rather than an assumed average --
-   * understating is the safe direction to be wrong in.
-   */
-  private measureFullFileTokens(files: string[], cwd: string): number {
-    let total = 0;
-    for (const file of files) {
-      // ALREADY COUNTED WHILE THE FILE WAS OPEN. `analyzeFile` reads every file
-      // to parse it and records the count there, so this baseline used to read
-      // the entire project a SECOND time purely to produce a savings figure.
-      // Measured 2026-08-28 on 12,000 files: 19.58 s of readFileUtf8, 38% of a
-      // 51 s run, spent re-reading bytes the tool had just finished with.
-      //
-      // A miss still reads -- the cached-graph paths reach here without having
-      // analysed anything -- so this is a shortcut, never a different answer:
-      // the count comes from the same tokenizer over the same content.
-      const counted = this.fileTokenCounts.get(file);
-      if (counted !== undefined) {
-        total += counted;
-        continue;
-      }
-      try {
-        // RESOLVED AGAINST THE PROJECT, not the process. The graph is keyed by
-        // paths relative to `cwd` (see analyzeFile), so reading them as-is
-        // looks for them under wherever the server happens to be running and
-        // finds nothing -- which measured every baseline as 0 and turned every
-        // saving negative.
-        total += this.tokenCounter.count(
-          readFileSync(resolve(cwd, file), 'utf-8')
-        ).tokens;
-      } catch {
-        // Unreadable: contributes 0, never an assumed average.
-      }
-    }
-    return total;
-  }
-
-  /**
    * Cache graph
    */
   private cacheGraph(
@@ -1409,43 +1340,34 @@ export class SmartDependenciesTool {
   }
 
   /**
-   * Get dependency statistics
+   * How many analyses ran, and how many of them avoided the walk.
+   *
+   * IT ALSO PUBLISHED A LIFETIME SAVING, and that is gone. The two figures
+   * were `totalTokensSaved`, summed from the per-call `savedTokens` this tool
+   * used to record, and `averageReduction`, that sum over itself plus the
+   * recorded input. Both inherited every error in the per-call numbers, and
+   * those numbers came from an invented baseline -- so a project of 12,000
+   * files reported a saving of 790,200 tokens per call that would have been
+   * identical had every file been empty.
+   *
+   * Nothing records a token field here any more, so the sums would now be a
+   * constant zero, which reads as "saved nothing" rather than "not measured
+   * here". The real figures are on the analytics rows, where both halves are
+   * counted by the same party: see analytics/displaced-input.ts.
    */
   getStats(): {
     totalAnalyses: number;
     cacheHits: number;
     incrementalUpdates: number;
-    totalTokensSaved: number;
-    averageReduction: number;
   } {
     const depMetrics = this.metrics.getOperations(0, 'smart_dependencies');
 
-    const totalAnalyses = depMetrics.length;
-    const cacheHits = depMetrics.filter((m) => m.cacheHit).length;
-    const incrementalUpdates = depMetrics.filter(
-      (m) => m.metadata?.incrementalUpdate === true
-    ).length;
-    const totalTokensSaved = depMetrics.reduce(
-      (sum, m) => sum + (m.savedTokens || 0),
-      0
-    );
-    const totalInputTokens = depMetrics.reduce(
-      (sum, m) => sum + (m.inputTokens || 0),
-      0
-    );
-    const totalOriginalTokens = totalInputTokens + totalTokensSaved;
-
-    const averageReduction =
-      totalOriginalTokens > 0
-        ? (totalTokensSaved / totalOriginalTokens) * 100
-        : 0;
-
     return {
-      totalAnalyses,
-      cacheHits,
-      incrementalUpdates,
-      totalTokensSaved,
-      averageReduction,
+      totalAnalyses: depMetrics.length,
+      cacheHits: depMetrics.filter((m) => m.cacheHit).length,
+      incrementalUpdates: depMetrics.filter(
+        (m) => m.metadata?.incrementalUpdate === true
+      ).length,
     };
   }
 }
@@ -1466,7 +1388,7 @@ export function getSmartDependenciesTool(
  */
 export async function runSmartDependencies(
   options: SmartDependenciesOptions
-): Promise<SmartDependenciesResult> {
+): Promise<Declaring<SmartDependenciesResult>> {
   const cache = new CacheEngine();
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();

@@ -12,7 +12,10 @@
  *     regex was 3.9% of the run.
  *   - smart_dependencies spent 19.58 s in `measureFullFileTokens` re-reading
  *     every file purely to compute a "tokens saved" baseline, on top of the
- *     10.67 s `analyzeFile` spent reading the same bytes to parse them.
+ *     10.67 s `analyzeFile` spent reading the same bytes to parse them. The
+ *     fix counted each file's tokens while it was already open; the baseline
+ *     has since stopped being this tool's arithmetic at all, so there is no
+ *     second pass and no tokenizer call on this path either.
  *
  * Measured after: smart_security 32.0 s -> 13.1 s, smart_dependencies
  * 51.3 s -> 26.8 s, with identical outputs.
@@ -33,6 +36,7 @@ import { TokenCounter } from '../../../src/core/token-counter.js';
 import { MetricsCollector } from '../../../src/core/metrics.js';
 import { SmartSecurity } from '../../../src/tools/code-analysis/smart-security.js';
 import { SmartDependenciesTool } from '../../../src/tools/code-analysis/smart-dependencies.js';
+import { RESOLVED_INPUT_KEY } from '../../../src/tools/shared/savings.js';
 
 /**
  * A detectable secret, assembled at runtime.
@@ -114,7 +118,12 @@ describe('smart_security reads each file once', () => {
     const root = project({ 'src/a.ts': 'export const a = 1;\n' });
     const cache = newCache(root);
     const make = () =>
-      new SmartSecurity(cache, new TokenCounter(), new MetricsCollector(), root);
+      new SmartSecurity(
+        cache,
+        new TokenCounter(),
+        new MetricsCollector(),
+        root
+      );
 
     const first = await make().run({});
     const second = await make().run({});
@@ -170,7 +179,12 @@ describe('smart_security reads each file once', () => {
     const root = project({ 'src/a.ts': 'export const a = 1;\n' });
     const cache = newCache(root);
     const make = () =>
-      new SmartSecurity(cache, new TokenCounter(), new MetricsCollector(), root);
+      new SmartSecurity(
+        cache,
+        new TokenCounter(),
+        new MetricsCollector(),
+        root
+      );
 
     await make().run({});
     const cached = await make().run({});
@@ -189,11 +203,11 @@ describe('smart_security reads each file once', () => {
 });
 
 describe('smart_dependencies reads each file once', () => {
-  it('reports the same graph and the same measured baseline', async () => {
-    // `measureFullFileTokens` now reads its counts from what `analyzeFile`
-    // recorded while the file was open. Same tokenizer, same content, so the
-    // baseline must be unchanged -- and it must not be zero, which is what a
-    // broken lookup would silently produce.
+  it('reports the same graph, and names every file it read', async () => {
+    // The second pass existed to produce a baseline, so the baseline is what
+    // this has to keep. It is no longer a number: the tool names the files and
+    // the recorder measures them, which is checkable in a way the old count
+    // was not -- a broken lookup used to leave it silently zero.
     const root = project({
       'src/a.ts': "import { b } from './b';\nexport const a = b;\n",
       'src/b.ts': 'export const b = 2;\n',
@@ -208,7 +222,9 @@ describe('smart_dependencies reads each file once', () => {
 
     expect(result.success).toBe(true);
     expect(result.metadata.totalFiles).toBe(2);
-    expect(result.metadata.originalTokenCount).toBeGreaterThan(0);
+    expect([...(result[RESOLVED_INPUT_KEY]?.paths ?? [])].sort()).toEqual(
+      [join(root, 'src', 'a.ts'), join(root, 'src', 'b.ts')].sort()
+    );
   }, 120_000);
 
   it('does not point an edge at a directory that is not a node', async () => {
@@ -224,7 +240,8 @@ describe('smart_dependencies reads each file once', () => {
     // Node resolves `./foo` to `foo.ts` when it exists, so that is what the
     // edge must say.
     const root = project({
-      'src/main.ts': "import { value } from './foo';\nexport const main = value;\n",
+      'src/main.ts':
+        "import { value } from './foo';\nexport const main = value;\n",
       'src/foo.ts': 'export const value = 1;\n',
       'src/foo/index.ts': 'export const value = 2;\n',
     });
@@ -250,7 +267,8 @@ describe('smart_dependencies reads each file once', () => {
     // The other half of Node's rule, and the case the directory check must not
     // break on its way to fixing the one above.
     const root = project({
-      'src/main.ts': "import { value } from './foo';\nexport const main = value;\n",
+      'src/main.ts':
+        "import { value } from './foo';\nexport const main = value;\n",
       'src/foo/index.ts': 'export const value = 2;\n',
     });
     const tool = new SmartDependenciesTool(

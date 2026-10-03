@@ -97,15 +97,47 @@ describe('responses survive JSON', () => {
       );
     });
 
-    it('reports a token count describing the data it actually sent', async () => {
+    it('reports no token count at all, having nothing it could count', async () => {
+      /*
+       * THIS TEST ASKED FOR A COUNT THAT COULD NOT EXIST.
+       *
+       * It was written against a `tokenCount` computed on a compact form the
+       * tool then discarded in favour of the Map -- a figure describing
+       * something the caller never got, which is the defect this file is
+       * about. It was then re-pointed at the payload, within 50% plus 5, and
+       * that is as close as it could ever be: what a caller pays for is this
+       * object serialised with the report text and the transport metadata
+       * built around it after the tool returns, so no field in here is it.
+       *
+       * The three tests above pin that the payload is the graph. What the
+       * payload costs is counted once, at the wire. So the assertion is that
+       * the tool publishes no such figure under any of the names this fleet
+       * has used for one.
+       */
       const result = JSON.parse(JSON.stringify(await analyze()));
 
-      // The count was computed on the compact form, which was then discarded in
-      // favour of the Map -- so it described something the caller never got.
-      const actual = counter.count(JSON.stringify(result.graph)).tokens;
-      expect(Math.abs(actual - result.metadata.tokenCount)).toBeLessThan(
-        actual * 0.5 + 5
-      );
+      const NAMES = [
+        'tokenCount',
+        'originalTokenCount',
+        'tokensSaved',
+        'savedTokens',
+        'compressionRatio',
+      ];
+      const found: string[] = [];
+      const walk = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+        for (const [key, value] of Object.entries(node)) {
+          if (NAMES.includes(key)) found.push(key);
+          walk(value);
+        }
+      };
+      walk(result);
+      expect(found).toEqual([]);
+      // THE POSITIVE CONTROLS: the walk descends into a reply of this shape,
+      // and the reply really is the graph analysis under test.
+      walk({ metadata: { tokenCount: 1 } });
+      expect(found).toEqual(['tokenCount']);
+      expect(result.graph.nodes.length).toBe(3);
     });
   });
 
