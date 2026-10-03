@@ -28,16 +28,26 @@ describe('the README as committed', () => {
 
   it('reads the whole covered region, not a remnant of it', () => {
     const report = proseDrift(README);
-    expect(report.checked).toBe(35);
-    expect(report.coveredLines).toBe(180);
+    // FLOORS, NOT EXACT COUNTS, and the difference is what this test is for.
+    // What makes a region a remnant is that it got SMALLER; prose being added
+    // to it is the ordinary case, and an exact count turns every such edit
+    // into a failing test with nothing wrong behind it -- which is what
+    // happened, three times, until these numbers were stale enough that the
+    // test said nothing about the region at all. A region disappearing is
+    // caught on its own terms: proseDrift raises a `scope` fault for a marker
+    // pair it cannot find, which the control below holds it to.
+    expect(report.checked).toBeGreaterThanOrEqual(37);
+    expect(report.coveredLines).toBeGreaterThanOrEqual(205);
   });
 
   it('declares every figure with a reason of a known kind', () => {
     const known = new Set(Object.values(Source));
-    expect(DECLARED.length).toBe(16);
+    expect(DECLARED.length).toBeGreaterThanOrEqual(18);
     expect(DECLARED.filter((d) => !known.has(d.kind))).toEqual([]);
     expect(DECLARED.filter((d) => !d.from || !d.anchor)).toEqual([]);
-    expect(DECLARED.filter((d) => d.kind === Source.RETRACTED)).toHaveLength(9);
+    expect(
+      DECLARED.filter((d) => d.kind === Source.RETRACTED).length
+    ).toBeGreaterThanOrEqual(11);
   });
 });
 
@@ -46,13 +56,16 @@ describe('control: the check catches the drift it was written for', () => {
     // The exact defect the review found: the table says 97.2%, the sentence
     // restating it says something else.
     const drifted = README.replace(
-      'this section -- 97.2%, 97.6%',
-      'this section -- 97.3%, 97.6%'
+      'this section -- 97.5%, 97.8%',
+      'this section -- 97.4%, 97.8%'
     );
+    // The forgery has to LAND. An anchor that no longer appears in the README
+    // leaves `drifted` identical to it, and a control arm that forges nothing
+    // passes on a check that has stopped working.
     expect(drifted).not.toBe(README);
     const report = proseDrift(drifted);
     expect(kinds(report)).toEqual(['undeclared']);
-    expect(report.faults[0].figure).toBe('97.3%');
+    expect(report.faults[0].figure).toBe('97.4%');
   });
 
   it('catches a new percentage dropped into covered prose', () => {
@@ -83,7 +96,20 @@ describe('control: the check catches the drift it was written for', () => {
     // guarded table and the sentence telling that story is now false -- which
     // a check comparing prose to tables the ordinary way round would call a
     // pass.
-    const resurrected = README.replace('|  47.4% |  64.9% | ours', '|  61.3% |  64.9% | ours');
+    // BUILT FROM THE ROW, not from a pasted copy of it. The table's column
+    // widths belong to the formatter and have already moved twice, and each
+    // time a hand-copied anchor stopped matching -- so the forgery stopped
+    // being a forgery while the test went on reporting a pass.
+    const row = README.split('\n').find((line) =>
+      line.startsWith('| codebase-exploration')
+    );
+    const cells = row.split('|');
+    const resurrected = README.replace(
+      row,
+      cells
+        .map((cell, i) => (i === 4 ? cell.replace(/[\d.]+%/, '61.3%') : cell))
+        .join('|')
+    );
     expect(resurrected).not.toBe(README);
     const report = proseDrift(resurrected);
     expect(report.faults.map((f) => f.kind)).toContain('resurrected');
@@ -91,7 +117,10 @@ describe('control: the check catches the drift it was written for', () => {
   });
 
   it('catches the covered region being removed instead of fixed', () => {
-    const unscoped = README.replace('<!-- PROSE-CLAIMS:START', '<!-- prose-claims-disabled');
+    const unscoped = README.replace(
+      '<!-- PROSE-CLAIMS:START',
+      '<!-- prose-claims-disabled'
+    );
     const report = proseDrift(unscoped);
     expect(kinds(report)).toContain('scope');
     expect(report.checked).toBeLessThan(MINIMUM_FIGURES + 100);

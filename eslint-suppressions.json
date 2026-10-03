@@ -151,7 +151,7 @@
   },
   "src/tools/code-analysis/smart-dependencies.ts": {
     "n/no-sync": {
-      "count": 5
+      "count": 4
     }
   },
   "src/tools/code-analysis/smart-exports.ts": {
