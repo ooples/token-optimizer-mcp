@@ -434,11 +434,11 @@ export class SmartRefactorTool {
             message: `Complex boolean expression with ${complexity} logical operators. Consider extracting into well-named variables.`,
             suggestion:
               'Extract complex conditions into descriptively named boolean variables.',
-            codeExample: {
-              before: 'if (a && b || c && d || e && f) { }',
-              after:
-                'const hasValidInput = a && b;\nconst hasSpecialCase = c && d;\nconst hasOverride = e && f;\nif (hasValidInput || hasSpecialCase || hasOverride) { }',
-            },
+            // NO CODE EXAMPLE. It was `if (a && b || c && d || e && f)`
+            // rewritten into three named booleans, with placeholder
+            // identifiers -- the same 69 tokens whatever file was scanned,
+            // illustrating a transformation the suggestion above states in
+            // full. The example named nothing the caller had asked about.
             impact: {
               readability: 'high',
               maintainability: 'medium',
@@ -614,11 +614,10 @@ export class SmartRefactorTool {
           message: `Function '${func.name}' has high cognitive complexity (${func.complexity.cognitive}).`,
           suggestion:
             'Reduce nesting, extract helper functions, and simplify control flow.',
-          codeExample: {
-            before: 'Complex nested logic with multiple conditions',
-            after:
-              'Flat structure with early returns and extracted helper functions',
-          },
+          // NO CODE EXAMPLE. Both halves of it were prose sitting in a
+          // field a consumer reads as code -- `Complex nested logic with
+          // multiple conditions` is not a before, it is the message above
+          // restated, and the suggestion already names the transformation.
           impact: {
             complexity: func.complexity.cognitive - 15,
             readability: 'high',
@@ -788,27 +787,83 @@ export class SmartRefactorTool {
 
   /**
    * Moves each type's advice into a shared map and drops the copies that
-   * repeat it.
+   * repeat it -- BUT ONLY WHERE SHARING IT SAVES SOMETHING.
    *
-   * The entry for a type is taken from the FIRST finding of that type, so the
-   * result does not depend on a frequency count, and a field is left off a
-   * finding only when it is byte-identical to that entry -- a finding whose
-   * advice or example differs keeps its own and reads exactly as before.
+   * The entry for a type was previously taken from the first finding of that
+   * type whatever its reuse, so a type with one finding paid a dictionary key
+   * and a wrapper object to avoid repeating a value that appeared once. On the
+   * benched fixture four of the five entries served exactly one row each: 70
+   * tokens spent to deduplicate nothing.
+   *
+   * So each field is hoisted only when AT LEAST TWO findings would rely on it,
+   * counted per field, because a finding can share a type's advice while
+   * carrying its own example. A field that would serve one finding stays on
+   * that finding instead, and a type left with neither field gets no entry.
+   *
+   * Which advice is shareable follows from how it is written, not from this
+   * count: `improve-naming` states a general rule and every finding of that
+   * type repeats it, while `extract-constant` names the literal it found, so
+   * two of those findings never produce the same string and that type is now
+   * never hoisted. A field is still left off a finding only when it is
+   * byte-identical to the entry, so a finding whose advice differs keeps its
+   * own and reads exactly as before.
    */
   private hoistGuidance(suggestions: RefactorSuggestion[]): {
     guidance: Record<string, RefactorGuidance>;
     rows: RefactorSuggestionRow[];
   } {
-    const guidance: Record<string, RefactorGuidance> = {};
+    const candidates = new Map<string, RefactorGuidance>();
 
     for (const finding of suggestions) {
-      if (guidance[finding.type] === undefined) {
-        const entry: RefactorGuidance = { suggestion: finding.suggestion };
-        if (finding.codeExample !== undefined) {
-          entry.codeExample = finding.codeExample;
-        }
-        guidance[finding.type] = entry;
+      if (candidates.has(finding.type)) continue;
+      const entry: RefactorGuidance = { suggestion: finding.suggestion };
+      if (finding.codeExample !== undefined) {
+        entry.codeExample = finding.codeExample;
       }
+      candidates.set(finding.type, entry);
+    }
+
+    // How many findings each candidate field would actually save a copy of.
+    const sharesSuggestion = new Map<string, number>();
+    const sharesExample = new Map<string, number>();
+    for (const finding of suggestions) {
+      const candidate = candidates.get(finding.type);
+      if (candidate === undefined) continue;
+      if (candidate.suggestion === finding.suggestion) {
+        sharesSuggestion.set(
+          finding.type,
+          (sharesSuggestion.get(finding.type) ?? 0) + 1
+        );
+      }
+      if (
+        finding.codeExample !== undefined &&
+        JSON.stringify(candidate.codeExample) ===
+          JSON.stringify(finding.codeExample)
+      ) {
+        sharesExample.set(
+          finding.type,
+          (sharesExample.get(finding.type) ?? 0) + 1
+        );
+      }
+    }
+
+    const guidance: Record<string, RefactorGuidance> = {};
+    for (const [type, candidate] of candidates) {
+      const keepSuggestion = (sharesSuggestion.get(type) ?? 0) > 1;
+      const keepExample = (sharesExample.get(type) ?? 0) > 1;
+      if (!keepSuggestion && !keepExample) continue;
+      const entry: RefactorGuidance = {
+        suggestion: keepSuggestion ? candidate.suggestion : '',
+      };
+      if (keepExample && candidate.codeExample !== undefined) {
+        entry.codeExample = candidate.codeExample;
+      }
+      if (!keepSuggestion) {
+        // The example is shared and the advice is not, so the entry carries
+        // only the example; an empty string would read as advice that exists.
+        delete (entry as { suggestion?: string }).suggestion;
+      }
+      guidance[type] = entry;
     }
 
     const rows = suggestions.map((finding) => {

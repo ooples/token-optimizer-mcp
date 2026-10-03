@@ -96,9 +96,15 @@ describe('smart_refactor answers once per finding', () => {
     expect(naming.every((row) => row.suggestion === undefined)).toBe(true);
   });
 
-  it('keeps a finding whose advice differs from its type entry', async () => {
-    // extract-constant names the value in its advice, so two values give two
-    // different strings and only the first can be the shared entry.
+  it('leaves advice on the finding when only that one would use it', async () => {
+    // extract-constant names the value in its advice, so two findings never
+    // produce the same string and nothing of that type is ever shareable.
+    // Hoisting it anyway bought a dictionary key and a wrapper object to avoid
+    // repeating a value that appeared once -- on the benched fixture four of
+    // the five entries served exactly one row each, 70 tokens deduplicating
+    // nothing. So the entry is only built where at least two findings rely on
+    // it, and this type now has none.
+    //
     // Both literals are longer than the five characters the check needs and
     // each appears the three times it takes to be reported.
     const result = await analyse(
@@ -125,16 +131,15 @@ describe('smart_refactor answers once per finding', () => {
       [3, 21],
     ]);
     expect(constants[1].locations.map(([line]) => line)).toEqual([4, 5, 6]);
-    const shared = result.guidance['extract-constant'];
-    expect(shared).toBeDefined();
-    const carried = constants.filter((row) => row.suggestion !== undefined);
-    // Exactly the ones that do not match the shared entry keep their own.
-    expect(carried.every((row) => row.suggestion !== shared?.suggestion)).toBe(
-      true
-    );
-    expect(
-      constants.filter((row) => row.suggestion === undefined).length
-    ).toBeGreaterThanOrEqual(1);
+
+    expect(result.guidance['extract-constant']).toBeUndefined();
+    // POSITIVE, not merely "no entry": the advice still reaches the caller,
+    // on the finding it belongs to, and it still names that finding's own
+    // literal. Asserting only the absence above would pass just as well if
+    // the advice had been dropped altogether.
+    expect(constants.every((row) => row.suggestion !== undefined)).toBe(true);
+    expect(constants[0].suggestion).toContain('alphabet');
+    expect(constants[1].suggestion).toContain('betamaxine');
   });
 
   it('reports one boolean expression once, not once per nesting level', async () => {
@@ -205,5 +210,81 @@ describe('smart_refactor answers once per finding', () => {
     expect(Object.keys(result.guidance).length).toBeGreaterThan(0);
     walk({ guidance: { a: { metrics: {} } } });
     expect(found).toEqual(['metrics']);
+  });
+
+  it('builds no type entry for a type with a single finding', async () => {
+    /*
+     * THE OTHER HALF OF "sends each type advice once".
+     *
+     * That test proves two findings of a type share one entry. This one proves
+     * the threshold is real: with a single finding there is nothing to share,
+     * and an entry would cost a dictionary key and a wrapper to save nothing.
+     * Without this case a version that hoisted unconditionally -- which is what
+     * shipped -- would pass the whole file.
+     */
+    const result = await analyse(
+      'export function only() { const n = 1; return n; }\n'
+    );
+
+    const naming = rows(result).filter((row) => row.type === 'improve-naming');
+
+    expect(naming).toHaveLength(1);
+    expect(result.guidance['improve-naming']).toBeUndefined();
+    // The advice is not lost, it is on the finding.
+    expect(naming[0].suggestion).toBeTruthy();
+  });
+
+  it('sends no worked example that is not about the file it scanned', async () => {
+    /*
+     * Two of the three examples were canned, keyed on the type alone and
+     * byte-identical for every file ever scanned: simplify-conditional shipped
+     * `if (a && b || c && d || e && f)` rewritten into three named booleans,
+     * and reduce-complexity put prose -- "Complex nested logic with multiple
+     * conditions" -- in a field a consumer reads as code. Together 109 tokens
+     * per call illustrating advice the `suggestion` beside them states in full.
+     *
+     * The rule that replaced them: an example earns its place by quoting the
+     * code it is about. This fixture has a repeated literal, so the surviving
+     * extract-constant example has something real to quote, and a boolean
+     * expression complex enough to be reported, so the deleted one would be
+     * emitted here if it came back.
+     */
+    const result = await analyse(
+      [
+        "export const first = 'alphabet';",
+        "export const second = 'alphabet';",
+        "export const third = 'alphabet';",
+        'export function f(a: boolean, b: boolean, c: boolean, d: boolean) {',
+        '  if (a && b || c && d || a && c || b && d) {',
+        '    return 1;',
+        '  }',
+        '  return 0;',
+        '}',
+      ].join('\n')
+    );
+
+    const examples = [
+      ...Object.values(result.guidance).map((entry) => entry.codeExample),
+      ...rows(result).map((row) => row.codeExample),
+    ].filter((example) => example !== undefined);
+
+    // NOT VACUOUS: the fixture really does produce an example to judge, so
+    // "every example quotes the file" is a claim about something.
+    expect(examples.length).toBeGreaterThan(0);
+    for (const example of examples) {
+      expect(example.before).toContain('alphabet');
+    }
+
+    // And the finding whose example was canned is still reported -- the
+    // example went, the analysis did not.
+    expect(
+      rows(result).some((row) => row.type === 'simplify-conditional')
+    ).toBe(true);
+    expect(
+      rows(result).every(
+        (row) =>
+          row.type !== 'simplify-conditional' || row.codeExample === undefined
+      )
+    ).toBe(true);
   });
 });

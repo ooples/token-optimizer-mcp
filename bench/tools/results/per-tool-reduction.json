@@ -1,6 +1,6 @@
 {
   "encoding": "cl100k_base",
-  "recorded": "2026-10-03T04:45:35.802Z",
+  "recorded": "2026-10-03T05:13:42.515Z",
   "stability": {
     "passes": 3,
     "maxTokenSpread": 0,
@@ -79,14 +79,14 @@
     },
     "smart_refactor": {
       "first": {
-        "lo": -44,
-        "hi": 80,
-        "text": "-44% to 80%"
+        "lo": -31,
+        "hi": 82,
+        "text": "-31% to 82%"
       },
       "repeated": {
-        "lo": -44,
-        "hi": 80,
-        "text": "-44% to 80%"
+        "lo": -31,
+        "hi": 82,
+        "text": "-31% to 82%"
       },
       "fixtures": 3,
       "samples": 3
@@ -449,10 +449,10 @@
       "tool": "smart_refactor",
       "fixture": "smart-complexity.ts",
       "baseline": 4937,
-      "treatment": 2393,
-      "reduction": 0.5152926878671258,
-      "repeatTreatment": 2393,
-      "repeatReduction": 0.5152926878671258,
+      "treatment": 2251,
+      "reduction": 0.544055094186753,
+      "repeatTreatment": 2251,
+      "repeatReduction": 0.544055094186753,
       "chunks": 1,
       "expansions": 1,
       "refused": false,
@@ -464,10 +464,10 @@
       "tool": "smart_refactor",
       "fixture": "token-counter.ts",
       "baseline": 3368,
-      "treatment": 705,
-      "reduction": 0.7906769596199525,
-      "repeatTreatment": 705,
-      "repeatReduction": 0.7906769596199525,
+      "treatment": 616,
+      "reduction": 0.817102137767221,
+      "repeatTreatment": 616,
+      "repeatReduction": 0.817102137767221,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
@@ -479,10 +479,10 @@
       "tool": "smart_refactor",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 1817,
-      "reduction": -0.4307086614173228,
-      "repeatTreatment": 1817,
-      "repeatReduction": -0.4307086614173228,
+      "treatment": 1660,
+      "reduction": -0.30708661417322825,
+      "repeatTreatment": 1660,
+      "repeatReduction": -0.30708661417322825,
       "chunks": 1,
       "expansions": 1,
       "refused": false,
