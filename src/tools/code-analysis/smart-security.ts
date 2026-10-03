@@ -1348,7 +1348,7 @@ export class SmartSecurity {
         category,
         severity: highestSeverity as VulnerabilitySeverity,
         count: items.length,
-        impact: this.getCategoryImpact(category, criticalCount, highCount),
+        impact: this.getCategoryImpact(category, items.length),
         action: this.getCategoryAction(category),
       });
     }
@@ -1361,11 +1361,16 @@ export class SmartSecurity {
    */
   private getCategoryImpact(
     category: VulnerabilityCategory,
-    critical: number,
-    high: number
+    /**
+     * How many findings the category holds.
+     *
+     * THIS USED TO BE CRITICAL + HIGH, so a category whose findings were
+     * all medium or low described itself as empty: the benched fixture
+     * reported `0 cryptographic weaknesses` for a category the same reply
+     * listed one medium finding in, two sections higher up.
+     */
+    total: number
   ): string {
-    const total = critical + high;
-
     const impacts: Record<VulnerabilityCategory, string> = {
       injection: `${total} injection vulnerabilities - can lead to data breach or system compromise`,
       xss: `${total} XSS vulnerabilities - can expose user data and sessions`,
@@ -1570,7 +1575,8 @@ export async function runSmartSecurity(
     const result = await smartSec.run(options);
 
     let output = `\n🔒 Smart Security Scan ${result.summary.fromCache ? '(cached)' : ''}\n`;
-    output += `${'='.repeat(60)}\n\n`;
+    // NO RULE. Sixty equals signs restated the heading above them.
+    output += '\n';
 
     // Summary
     output += `Summary:\n`;
@@ -1600,6 +1606,24 @@ export async function runSmartSecurity(
     // Findings by severity
     if (result.findingsBySeverity.length > 0) {
       output += `Findings by Severity:\n`;
+
+      /*
+       * THE PATH ONCE, NOT ONCE PER FINDING.
+       *
+       * Every finding line used to open with `${item.file}:`, so a scan of one
+       * file printed that file's path as many times as it found something --
+       * ten repetitions of `bench/tools/fixtures/` on the benched fixture, 60
+       * tokens of a path the caller passed in as an argument. Measured on that
+       * fixture the findings section came to 322 tokens; naming the file once
+       * and leading each finding with its line and column costs 258.
+       */
+      const allFiles = new Set<string>();
+      for (const group of result.findingsBySeverity) {
+        for (const item of group.items) allFiles.add(item.file);
+      }
+      const singleFile = allFiles.size === 1 ? [...allFiles][0] : null;
+      if (singleFile !== null) output += `  in ${singleFile}\n`;
+
       for (const group of result.findingsBySeverity) {
         const icon =
           group.severity === 'critical'
@@ -1612,10 +1636,27 @@ export async function runSmartSecurity(
 
         output += `\n  ${icon} ${group.severity.toUpperCase()} (${group.count})\n`;
 
-        for (const item of group.items) {
-          output += `    ${item.file}:${item.location}\n`;
-          output += `      [${item.category}] ${item.message}\n`;
-          output += `      Fix: ${item.remediation}\n`;
+        if (singleFile !== null) {
+          for (const item of group.items) {
+            output += `    ${item.location} [${item.category}] ${item.message}\n`;
+            output += `      Fix: ${item.remediation}\n`;
+          }
+        } else {
+          // More than one file, so the path is doing work: print it once per
+          // file within the group rather than once per finding.
+          const byFile = new Map<string, typeof group.items>();
+          for (const item of group.items) {
+            const bucket = byFile.get(item.file);
+            if (bucket) bucket.push(item);
+            else byFile.set(item.file, [item]);
+          }
+          for (const [file, items] of byFile) {
+            output += `    ${file}\n`;
+            for (const item of items) {
+              output += `      ${item.location} [${item.category}] ${item.message}\n`;
+              output += `        Fix: ${item.remediation}\n`;
+            }
+          }
         }
 
         if (group.count > group.items.length) {
@@ -1625,27 +1666,52 @@ export async function runSmartSecurity(
       output += '\n';
     }
 
-    // Findings by category
-    if (result.findingsByCategory.length > 0) {
+    /*
+     * Findings by category, WHEN IT NAMES SOMETHING THE FINDINGS DO NOT.
+     *
+     * The counts in this section are counts over the section above it: every
+     * finding there carries its `[category]` tag under a severity heading, so
+     * `injection (2 total, 2 critical, 0 high)` is arithmetic the reader can do
+     * on lines they have already been charged for. The one part that is not
+     * derivable is `topFiles` -- which file a category concentrates in -- and
+     * that says nothing when the scan covered one file, which is when it was
+     * reduced to printing the caller's own argument back four times.
+     *
+     * So it is emitted on a multi-file scan and suppressed on a single-file
+     * one. Measured on the benched fixture, where one file was scanned: 140
+     * tokens, all of them restatement.
+     */
+    if (
+      result.findingsByCategory.length > 0 &&
+      result.summary.filesScanned > 1
+    ) {
       output += `Findings by Category:\n`;
       for (const cat of result.findingsByCategory.slice(0, 5)) {
         output += `\n  ${cat.category} (${cat.count} total, ${cat.criticalCount} critical, ${cat.highCount} high)\n`;
-        output += `    Most affected files:\n`;
-        for (const file of cat.topFiles) {
-          output += `      - ${file}\n`;
-        }
+        output += `    in ${cat.topFiles.join(', ')}\n`;
       }
       output += '\n';
     }
 
-    // Remediation priorities
+    /*
+     * Remediation priorities, as a ranking rather than as prose.
+     *
+     * The ranking is the part that is worth sending: it is computed from the
+     * severity mix (critical x10 + high x5 + count) and tells the reader what
+     * to take first, which the severity listing above does not. The two prose
+     * lines under each entry were canned strings keyed on the category alone --
+     * the same words for every injection finding in every file -- and the
+     * per-finding `Fix:` lines above already carry remediation at the grain
+     * that can actually be acted on.
+     *
+     * `impact` is still computed and still returned in the structured result
+     * for programmatic consumers; it is no longer re-printed here. Measured on
+     * the benched fixture: 163 tokens for four categories, 82 this way.
+     */
     if (result.remediationPriorities.length > 0) {
       output += `Remediation Priorities:\n`;
       for (const priority of result.remediationPriorities) {
-        const icon = priority.severity === 'critical' ? '🔴' : '🟠';
-        output += `\n  ${icon} [Priority ${priority.priority}] ${priority.category}\n`;
-        output += `    Impact: ${priority.impact}\n`;
-        output += `    Action: ${priority.action}\n`;
+        output += `  [${priority.priority}] ${priority.category} x${priority.count} -- ${priority.action}\n`;
       }
       output += '\n';
     }
@@ -1662,7 +1728,7 @@ export async function runSmartSecurity(
 export const SMART_SECURITY_TOOL_DEFINITION = {
   name: 'smart_security',
   description:
-    'Security vulnerability scanner with pattern detection and intelligent caching. Measured token reduction vs reading the file: -49% to 99% first read, -49% to 98% repeated (bench/tools, 4 fixtures) -- the three clean fixtures cost a flat 98 tokens each, because a scan that finds nothing says so in the same words whatever it was pointed at; the loss is the fourth, where six findings and a remediation for each outweigh the small file they were found in.',
+    'Security vulnerability scanner with pattern detection and intelligent caching. Measured token reduction vs reading the file: 15-99% first read, 15-99% repeated (bench/tools, 4 fixtures) -- the three clean fixtures cost a flat 71 tokens each, because a scan that finds nothing says so in the same words whatever it was pointed at; the fourth is the floor, where six findings and a remediation for each are reported against a 486-token file.',
   inputSchema: {
     type: 'object',
     properties: {
