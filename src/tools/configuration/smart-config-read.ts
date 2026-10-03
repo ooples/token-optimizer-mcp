@@ -20,7 +20,6 @@ import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
 import { compress } from '../shared/compression-utils.js';
 import { readCompressedJson } from '../../utils/cache-helper.js';
 import { displayPath, shortHash } from '../shared/report-shape.js';
-import { measured } from '../shared/savings.js';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 
@@ -103,21 +102,15 @@ export interface SmartConfigReadResult {
     hash: string;
     fromCache: boolean;
     isDiff: boolean;
-    /**
-     * originalTokenCount - tokenCount. NEGATIVE when the response costs more
-     * than the file it read, which is a real outcome on a small config: the
-     * response restates the file's own keys and adds errors and suggestions on
-     * top. It is reported as measured rather than clamped to zero.
-     */
-    tokensSaved: number;
-    /**
-     * Tokens of this response, not counting this metadata block -- which
-     * cannot be counted before it exists.
-     */
-    tokenCount: number;
-    /** Tokens the config file itself costs, which is what reading it would have cost. */
-    originalTokenCount: number;
-    compressionRatio: number;
+    // NO TOKEN FIGURES, DELIBERATELY. Four of them stood here: a baseline, a
+    // cost, their difference and their ratio. The baseline was honest, and is
+    // the recorder's to take -- the caller names this file in the arguments,
+    // so it is read and counted there. The cost was not: it counted the report
+    // object before this metadata block existed and before the serialised
+    // reply was built around it, which is a smaller artifact than the one the
+    // caller is billed for, so the difference and the ratio were both too
+    // generous by the size of everything the figures could not see. The after
+    // is counted once now, at the wire, by the party holding the bytes.
   };
   // NO schema FIELD, DELIBERATELY.
   //
@@ -145,16 +138,17 @@ export interface SmartConfigReadResult {
 
 export class SmartConfigReadTool {
   private cache: CacheEngine;
-  private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED: this tool no longer counts tokens, because the
+    // only figures it counted them for were ones it could not stand behind.
+    // The parameter stays so every caller's construction call is unchanged.
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
   }
 
@@ -233,14 +227,6 @@ export class SmartConfigReadTool {
 
     // THE FILE IS THE BASELINE, AND THE RESPONSE IS COUNTED AS IT IS SENT.
     //
-    // This used to count JSON.stringify(parsedConfig, null, 2): a re-serialised,
-    // re-indented copy of the parse, which is not what reading the file would
-    // have cost and not what this tool sends either. Two-space indentation on
-    // the large fixture inflates the figure it is measured against, so every
-    // ratio below was computed between two payloads that never existed. The
-    // file's own tokens are the cost this tool is supposed to be saving.
-    const originalTokens = this.tokenCounter.count(rawContent).tokens;
-
     let finalOutput: Record<string, unknown> = parsedConfig;
     let isDiff = false;
     let diffData: ConfigDiff | undefined;
@@ -377,31 +363,20 @@ export class SmartConfigReadTool {
       errors: validationErrors.length > 0 ? validationErrors : undefined,
       suggestions: suggestions.length > 0 ? suggestions : undefined,
     };
-    const finalTokens = this.tokenCounter.count(JSON.stringify(report)).tokens;
 
-    // ONE definition of the saving, from the house helper, for the metric and
-    // the response alike. Each branch above used to compute its own from
-    // whatever it had just put in `config`, clamped at zero, so a response
-    // that cost more than the file reported a saving of exactly nothing
-    // instead of a loss -- and the metric and the metadata could disagree
-    // about the same call.
-    const savings = measured(originalTokens, finalTokens);
-
-    // Record metrics
+    // NO TOKEN FIGURES ON THIS RECORD. Every one of them was derived from a
+    // count of `report` -- the object, before the metadata block and before
+    // the reply was serialised around it -- so each described an artifact
+    // nobody was charged for. What this tool genuinely observed is here.
     this.metrics.record({
       operation: 'smart_config_read',
       duration: Date.now() - startTime,
       success: true,
       cacheHit: fromCache,
-      inputTokens: 0,
-      outputTokens: finalTokens,
-      cachedTokens: fromCache ? finalTokens : 0,
-      savedTokens: savings.tokensSaved,
       metadata: {
         path: filePath,
         format: detectedFormat,
         fileSize: stats.size,
-        tokensSaved: savings.tokensSaved,
         isDiff,
         validationErrors: validationErrors.length,
         parseTime,
@@ -417,7 +392,6 @@ export class SmartConfigReadTool {
         hash: shortHash(fileHash),
         fromCache,
         isDiff,
-        ...savings,
       },
     };
   }
