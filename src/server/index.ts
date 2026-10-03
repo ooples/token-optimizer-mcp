@@ -108,7 +108,7 @@ import { getMcpServerAnalyticsTool } from '../tools/analytics/get-mcp-server-ana
 import { getExportAnalyticsTool } from '../tools/analytics/export-analytics.js';
 import { getOptimizationReportTool } from '../tools/analytics/get-optimization-report.js';
 import { recordToolAnalytics } from '../analytics/record-tool-analytics.js';
-import { liftDeclaredBaseline } from '../tools/shared/savings.js';
+import { liftDeclarations } from '../tools/shared/savings.js';
 import { OptimizationStorageTool } from '../tools/optimization-storage-tool.js';
 import { ContextDeltaTool } from '../tools/context-delta-tool.js';
 import { SessionManager } from '../core/session-manager.js';
@@ -455,24 +455,31 @@ function toResultText(result: unknown): string {
  *
  * Eighty-one dispatch cases each built this same block by hand, which is why
  * there was nowhere to put a step that applies to all of them. The step is
- * lifting the declared baseline: a tool that knows what it stood in for hangs
- * that on `DECLARED_BASELINE_KEY`, and it is taken off here -- before the text
- * is serialised, so it is never part of what the caller pays for -- and carried
- * the rest of the way in `_meta`, where the analytics recorder reads it.
+ * lifting what a tool declared about its own before: a count on
+ * `DECLARED_BASELINE_KEY`, or -- better, where the files exist -- the paths it
+ * resolved on `RESOLVED_INPUT_KEY`. Either is taken off here, before the text
+ * is serialised, so neither is ever part of what the caller pays for, and
+ * carried the rest of the way in `_meta`, where the analytics recorder reads it.
  *
  * A DECLARATION IS NOT A SAVING. It names a before and carries no arithmetic,
- * because the after is measured once, at the wire, by the party that holds it.
+ * because the after is measured once, at the wire, by the party that holds it --
+ * and in the resolved-paths case the before is measured there too.
  */
 function textResult(result: unknown): {
   content: Array<{ type: string; text: string }>;
   _meta?: Record<string, unknown>;
 } {
-  const { payload, declaration } = liftDeclaredBaseline(result);
+  const { payload, declaration, resolved } = liftDeclarations(result);
   const content = [{ type: 'text', text: toResultText(payload) }];
-  if (!declaration) return { content };
+  if (!declaration && !resolved) return { content };
   return {
     content,
-    _meta: { tokenOptimizer: { displacedBaseline: declaration } },
+    _meta: {
+      tokenOptimizer: {
+        ...(declaration ? { displacedBaseline: declaration } : {}),
+        ...(resolved ? { resolvedInputFiles: resolved } : {}),
+      },
+    },
   };
 }
 

@@ -23,11 +23,14 @@ import {
   verifiedInputDisplacement,
 } from '../../../src/analytics/savings-classification.js';
 import {
+  asResolvedInputFiles,
   DECLARED_BASELINE_KEY,
   DECLARED_TEXT_KEY,
   declaringText,
   displaced,
-  liftDeclaredBaseline,
+  liftDeclarations,
+  RESOLVED_INPUT_KEY,
+  resolvedFiles,
 } from '../../../src/tools/shared/savings.js';
 import type { AnalyticsEntry } from '../../../src/analytics/analytics-types.js';
 
@@ -48,6 +51,14 @@ function declaredReply(text: string, declaration: unknown) {
   return {
     content: [{ type: 'text', text }],
     _meta: { tokenOptimizer: { displacedBaseline: declaration } },
+  };
+}
+
+/** A reply naming the files it resolved, the way the dispatch delivers them. */
+function resolvingReply(text: string, resolved: unknown) {
+  return {
+    content: [{ type: 'text', text }],
+    _meta: { tokenOptimizer: { resolvedInputFiles: resolved } },
   };
 }
 
@@ -86,7 +97,7 @@ describe('what a tool is allowed to declare', () => {
 
 describe('the declaration leaves the payload', () => {
   it('is taken off the result the caller is charged for', () => {
-    const lifted = liftDeclaredBaseline({
+    const lifted = liftDeclarations({
       name: 'app',
       [DECLARED_BASELINE_KEY]: displaced(4937, 'resolved-project-file'),
     });
@@ -94,14 +105,15 @@ describe('the declaration leaves the payload', () => {
     expect(lifted.declaration?.baselineTokens).toBe(4937);
     // THE POSITIVE CONTROL: the same object with no reserved key comes back
     // untouched, so the test above is not passing by stripping everything.
-    expect(liftDeclaredBaseline({ name: 'app' })).toEqual({
+    expect(liftDeclarations({ name: 'app' })).toEqual({
       payload: { name: 'app' },
       declaration: null,
+      resolved: null,
     });
   });
 
   it('refuses a forged source rather than storing it', () => {
-    const lifted = liftDeclaredBaseline({
+    const lifted = liftDeclarations({
       [DECLARED_BASELINE_KEY]: {
         baselineTokens: 999999,
         baselineSource: 'trust-me',
@@ -112,9 +124,10 @@ describe('the declaration leaves the payload', () => {
 
   it('leaves a string reply alone', () => {
     // Half this fleet returns a report string, which has nowhere to put a key.
-    expect(liftDeclaredBaseline('# Report')).toEqual({
+    expect(liftDeclarations('# Report')).toEqual({
       payload: '# Report',
       declaration: null,
+      resolved: null,
     });
   });
 
@@ -131,7 +144,7 @@ describe('the declaration leaves the payload', () => {
       displaced(4937, 'resolved-project-file')
     );
     expect(typeof carried).toBe('object');
-    const lifted = liftDeclaredBaseline(carried);
+    const lifted = liftDeclarations(carried);
     expect(lifted.payload).toBe('# Report\n  Outdated: 3\n');
     expect(lifted.declaration?.baselineTokens).toBe(4937);
     expect(lifted.declaration?.baselineSource).toBe('resolved-project-file');
@@ -153,7 +166,7 @@ describe('the declaration leaves the payload', () => {
      * carrier; anything else is a real payload that happens to have the key on
      * it, and silently returning just its text would discard the rest.
      */
-    const lifted = liftDeclaredBaseline({
+    const lifted = liftDeclarations({
       [DECLARED_TEXT_KEY]: '# Report',
       name: 'app',
       [DECLARED_BASELINE_KEY]: displaced(10, 'resolved-project-file'),
@@ -276,5 +289,201 @@ describe('the declaration never overrules a measurement', () => {
       { projectRoot: dir }
     );
     expect(tracked[0].metadata?.reportedToolSavings).not.toBeNull();
+  });
+});
+
+/*
+ * THE STRONGER OF THE TWO DECLARATIONS, AND WHY IT IS STRONGER.
+ *
+ * A counted declaration asks to be believed. A tool that can name the files it
+ * read asks for nothing: the recorder reads them with the reader and counts
+ * them with the counter it already uses on the reply, so the row comes out
+ * measured on both sides. It needs no precedence rule either -- the caller's
+ * named paths and the tool's resolved ones are one set of files, measured once.
+ */
+describe('a tool that names the files instead of counting them', () => {
+  /** A file big enough that reading it genuinely costs more than the reply. */
+  function bigFile(name: string): string {
+    const path = join(dir, name);
+    writeFileSync(
+      path,
+      Array.from(
+        { length: 120 },
+        (_, i) => `export const ${name.replace(/\W/g, '')}${i} = ${i};`
+      ).join('\n'),
+      'utf8'
+    );
+    return path;
+  }
+
+  it('produces a measured row, not a declared one', async () => {
+    const resolved = bigFile('resolved.ts');
+
+    await recordToolAnalytics(
+      manager(),
+      'smart_package_json',
+      resolvingReply(REPLY, resolvedFiles([resolved], 'resolved-project-file')),
+      {},
+      null,
+      // A directory, so the arguments name nothing the recorder can read. This
+      // is exactly the call that used to need a counted declaration.
+      { projectRoot: dir }
+    );
+
+    const entry = tracked[0];
+    expect(classifySavings(entry)).toBe('verified-input-displacement');
+    expect(verifiedInputDisplacement(entry)).toBe(entry.tokensSaved);
+    // THE PART A COUNTED DECLARATION CANNOT HAVE. Bytes and a file count come
+    // out of a real read, so the row can be re-derived later; a declared row
+    // stores null for the bytes because there was never anything to measure.
+    expect(entry.metadata?.baselineBytes).toBeGreaterThan(0);
+    expect(entry.metadata?.displacedInputFiles).toBe(1);
+    expect(entry.metadata?.resolvedInputSource).toBe('resolved-project-file');
+    // And nothing was taken on trust: the declared-count fields stay empty.
+    expect(entry.metadata?.declaredBaselineTokens).toBeNull();
+    expect(declaredInputDisplacement(entry)).toBe(0);
+  });
+
+  it('widens a baseline the arguments only partly name', async () => {
+    /*
+     * THE CASE THE COUNTED DECLARATION COULD NOT REACH AT ALL. smart_tsconfig
+     * is handed one config and reads the whole `extends` chain, so the
+     * arguments name a real file and `displaced !== null` -- which is where a
+     * counted declaration is dropped, correctly, since a tool's number must
+     * not overrule a measurement. Naming the other files is not a competing
+     * before; it is the same measurement over more of the input.
+     */
+    const leaf = bigFile('tsconfig.json');
+    const base = bigFile('tsconfig.base.json');
+
+    await recordToolAnalytics(
+      manager(),
+      'smart_tsconfig',
+      resolvingReply(
+        REPLY,
+        resolvedFiles([base, leaf], 'resolved-config-chain')
+      ),
+      {},
+      null,
+      { configPath: leaf }
+    );
+
+    const widened = tracked[0];
+    expect(classifySavings(widened)).toBe('verified-input-displacement');
+    expect(widened.metadata?.displacedInputFiles).toBe(2);
+    expect(widened.metadata?.resolvedInputSource).toBe('resolved-config-chain');
+
+    // THE CONTROL ARM: the identical call with nothing declared measures the
+    // leaf alone, so the widening is the declaration's doing and not the
+    // fixture's.
+    tracked = [];
+    await recordToolAnalytics(
+      manager(),
+      'smart_tsconfig',
+      resolvingReply(REPLY, null),
+      {},
+      null,
+      { configPath: leaf }
+    );
+    const leafOnly = tracked[0];
+    expect(leafOnly.metadata?.displacedInputFiles).toBe(1);
+    expect(leafOnly.metadata?.resolvedInputSource).toBeNull();
+    expect(widened.originalTokens).toBeGreaterThan(leafOnly.originalTokens);
+  });
+
+  it('counts a file named twice once', async () => {
+    const leaf = bigFile('once.ts');
+
+    await recordToolAnalytics(
+      manager(),
+      'smart_tsconfig',
+      resolvingReply(REPLY, resolvedFiles([leaf], 'resolved-config-chain')),
+      {},
+      null,
+      { configPath: leaf }
+    );
+
+    const entry = tracked[0];
+    expect(entry.metadata?.displacedInputFiles).toBe(1);
+  });
+});
+
+describe('what a resolved-path declaration is not allowed to be', () => {
+  it('refuses a relative path rather than reading one somewhere else', () => {
+    /*
+     * The recorder resolves a relative path against ITS working directory,
+     * which is not necessarily the tool's -- so a relative declaration either
+     * measures nothing or, worse, measures whatever file happens to sit at
+     * that name next to the recorder. A tool has already resolved these paths
+     * in order to read them.
+     */
+    expect(resolvedFiles(['package.json'], 'resolved-project-file')).toBeNull();
+    expect(
+      resolvedFiles(['./a/b.json', '../c.json'], 'resolved-config-chain')
+    ).toBeNull();
+    // THE POSITIVE CONTROL: the same call with an absolute path is accepted.
+    const absolute = join(dir, 'package.json');
+    expect(resolvedFiles([absolute], 'resolved-project-file')?.paths).toEqual([
+      absolute,
+    ]);
+  });
+
+  it('refuses an empty list rather than declaring nothing', () => {
+    // Same rule as a zero baseline: a declaration that claims nothing has to
+    // read as absent, so it cannot be mistaken for a measured nothing.
+    expect(resolvedFiles([], 'resolved-config-chain')).toBeNull();
+  });
+
+  it('refuses more files than the recorder would read', () => {
+    const many = Array.from({ length: 25 }, (_, i) => join(dir, `f${i}.json`));
+    expect(resolvedFiles(many, 'resolved-config-chain')).toBeNull();
+    // THE CONTROL: one fewer is at the cap and is accepted.
+    expect(
+      resolvedFiles(many.slice(0, 24), 'resolved-config-chain')
+    ).not.toBeNull();
+  });
+
+  it('refuses a forged source and a forged shape at the boundary', () => {
+    // Re-checked where it arrives, not trusted because it came in on a
+    // reserved key: the paths here are about to become file reads.
+    expect(
+      asResolvedInputFiles({
+        paths: [join(dir, 'a.json')],
+        baselineSource: 'trust-me',
+      })
+    ).toBeNull();
+    expect(
+      asResolvedInputFiles({ baselineSource: 'resolved-project-file' })
+    ).toBeNull();
+    expect(
+      asResolvedInputFiles({
+        paths: 'not-an-array',
+        baselineSource: 'resolved-project-file',
+      })
+    ).toBeNull();
+    // THE POSITIVE CONTROL: a well-formed one survives the same boundary.
+    expect(
+      asResolvedInputFiles({
+        paths: [join(dir, 'a.json')],
+        baselineSource: 'resolved-project-file',
+      })?.paths
+    ).toEqual([join(dir, 'a.json')]);
+  });
+
+  it('travels on its own key and comes off with the text intact', () => {
+    const carried = declaringText(
+      '# Report\n  Outdated: 3\n',
+      resolvedFiles([join(dir, 'package.json')], 'resolved-project-file')
+    );
+    expect(typeof carried).toBe('object');
+    expect(carried).toHaveProperty(RESOLVED_INPUT_KEY);
+    // THE CONTROL: it did NOT land on the counted key, which a different
+    // branch of the recorder reads.
+    expect(carried).not.toHaveProperty(DECLARED_BASELINE_KEY);
+
+    const lifted = liftDeclarations(carried);
+    expect(lifted.payload).toBe('# Report\n  Outdated: 3\n');
+    expect(lifted.declaration).toBeNull();
+    expect(lifted.resolved?.baselineSource).toBe('resolved-project-file');
   });
 });

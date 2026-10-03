@@ -23,7 +23,10 @@ import {
 } from './savings-classification.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { measureDisplacedInput } from './displaced-input.js';
-import { asDeclaredBaseline } from '../tools/shared/savings.js';
+import {
+  asDeclaredBaseline,
+  asResolvedInputFiles,
+} from '../tools/shared/savings.js';
 
 /** MCP tool result shape (the parts we read). */
 interface McpToolResult {
@@ -269,19 +272,35 @@ export async function recordToolAnalytics(
      * counted the reply, and the tool's own opinion of the ratio is not
      * consulted at all.
      */
-    const displaced = await measureDisplacedInput(callArguments);
+    const resultMeta = result._meta?.tokenOptimizer;
+    const transportMeta =
+      resultMeta && typeof resultMeta === 'object'
+        ? (resultMeta as Record<string, unknown>)
+        : {};
+
+    /*
+     * THE FILES THE ARGUMENTS DO NOT NAME, STILL MEASURED HERE.
+     *
+     * A tool with a private resolution rule -- a `package.json` found under a
+     * directory, an `extends` chain walked through several configs -- is the one
+     * party that knows which files it read. It reports the paths and nothing
+     * else: they go into the same read and the same count as the named ones, so
+     * the tool contributes knowledge and not arithmetic, and the row comes out
+     * with a byte figure and a digest exactly like any other measured one.
+     */
+    const resolvedInput = asResolvedInputFiles(
+      transportMeta.resolvedInputFiles
+    );
+    const displaced = await measureDisplacedInput(
+      callArguments,
+      resolvedInput ? resolvedInput.paths : []
+    );
     const displacementMeasured =
       !savingsMeasured &&
       displaced !== null &&
       displaced.sha256 !== sha256(text) &&
       displaced.tokens > returnedTokens &&
       displaced.bytes > returnedBytes;
-
-    const resultMeta = result._meta?.tokenOptimizer;
-    const transportMeta =
-      resultMeta && typeof resultMeta === 'object'
-        ? (resultMeta as Record<string, unknown>)
-        : {};
 
     /*
      * THE ONE CASE THE ARGUMENTS CANNOT REACH, AND THE ONLY THING A TOOL IS
@@ -423,6 +442,18 @@ export async function recordToolAnalytics(
         displacedInputBytes: displaced ? displaced.bytes : null,
         displacedInputSha256: displaced ? displaced.sha256 : null,
         displacedInputFiles: displaced ? displaced.files : null,
+        /*
+         * How the tool reached the files the arguments did not name, on the
+         * rows where that widened the baseline. The count above already says
+         * how many files were read; this says which rule found the extra ones,
+         * so a reader can tell a plain named-file measurement from one that
+         * took a tool's word for WHERE to look -- while still never taking its
+         * word for how much.
+         */
+        resolvedInputSource:
+          displacementMeasured && resolvedInput
+            ? resolvedInput.baselineSource
+            : null,
         returnedSha256: sha256(text),
         disclosureRef:
           typeof transportMeta.disclosureRef === 'string'

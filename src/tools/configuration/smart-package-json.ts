@@ -11,7 +11,7 @@
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { createHash } from 'crypto';
 import { execFileSafeSync } from '../../utils/safe-exec.js';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
@@ -20,10 +20,10 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { homedir } from 'os';
 import { packageManagerInvocation } from '../build-systems/run-node-bin.js';
 import {
-  DECLARED_BASELINE_KEY,
   declaringText,
-  displaced,
-  liftDeclaredBaseline,
+  liftDeclarations,
+  RESOLVED_INPUT_KEY,
+  resolvedFiles,
   type Declaring,
 } from '../shared/savings.js';
 
@@ -236,19 +236,22 @@ interface SmartPackageJsonOutput {
 
 export class SmartPackageJson {
   private cache: CacheEngine;
-  private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
   private cacheNamespace = 'smart_package_json';
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED. This counter was held so the tool could count the
+    // package.json it had just read and declare the figure. It declares the
+    // path instead, and the counting belongs to the party that also counts the
+    // reply. The parameter stays so every caller's construction call is
+    // unchanged.
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
@@ -269,7 +272,10 @@ export class SmartPackageJson {
       maxTreeDepth = 3,
     } = options;
 
-    const packageJsonPath = join(this.projectRoot, 'package.json');
+    // ABSOLUTE, because the path is declared to the recorder and read there.
+    // A relative projectRoot would otherwise resolve against whatever working
+    // directory the recorder happens to have, which is a different file.
+    const packageJsonPath = resolve(this.projectRoot, 'package.json');
 
     // Validate package.json exists
     if (!existsSync(packageJsonPath)) {
@@ -293,7 +299,7 @@ export class SmartPackageJson {
       const cached = this.getCachedResult(cacheKey, maxCacheAge, fileHash);
       if (cached) {
         this.recordMetrics('cache_hit', Date.now() - startTime);
-        return this.transformOutput(cached, [], true, fileContent);
+        return this.transformOutput(cached, [], true, packageJsonPath);
       }
     }
 
@@ -332,7 +338,7 @@ export class SmartPackageJson {
     // Generate suggestions
     const suggestions = this.generateSuggestions(result);
 
-    return this.transformOutput(result, suggestions, false, fileContent);
+    return this.transformOutput(result, suggestions, false, packageJsonPath);
   }
 
   /**
@@ -984,7 +990,7 @@ export class SmartPackageJson {
       command?: string;
     }>,
     fromCache: boolean,
-    baseline: string
+    baselinePath: string
   ): Declaring<SmartPackageJsonOutput> {
     // Update stats with actual counts
     result.stats.outdatedPackages = result.packages.filter(
@@ -1062,14 +1068,18 @@ export class SmartPackageJson {
       suggestions,
     };
 
-    // THE ONE HALF THIS TOOL CAN MEASURE. The caller passed a projectRoot, so
-    // nothing in the arguments names the file that was read; the recorder
-    // cannot count it and this tool can, having just read it. The declaration
-    // carries no second operand and so no ratio to be wrong about.
+    // THE ONE THING THIS TOOL KNOWS THAT THE ARGUMENTS DO NOT: WHICH FILE.
+    // The caller passed a projectRoot, so nothing in the arguments names the
+    // file that was read, and the recorder would have no before to measure.
+    // What travels is the path, not a count of it -- this tool counted the
+    // content once and reported the figure, which meant a number nobody else
+    // could check standing in for a file anybody can read. The recorder reads
+    // it with the reader and the counter it uses on the reply, so the before
+    // and the after are measured by one party again.
     return {
       ...payload,
-      [DECLARED_BASELINE_KEY]: displaced(
-        this.tokenCounter.count(baseline).tokens,
+      [RESOLVED_INPUT_KEY]: resolvedFiles(
+        [baselinePath],
         'resolved-project-file'
       ),
     };
@@ -1154,9 +1164,7 @@ export async function runSmartPackageJson(
     // THE DECLARATION COMES OFF BEFORE THE REPORT IS BUILT, so none of the
     // report's lines can be written from it, and goes back on at the end as a
     // sibling of the text rather than a line inside it.
-    const { payload, declaration } = liftDeclaredBaseline(
-      await smartPkg.run(options)
-    );
+    const { payload, resolved } = liftDeclarations(await smartPkg.run(options));
     const result = payload as SmartPackageJsonOutput;
 
     let output = `\n📦 Smart Package.json Analysis ${result.summary.fromCache ? '(cached)' : ''}\n`;
@@ -1265,7 +1273,7 @@ export async function runSmartPackageJson(
     // digits themselves were part of what the caller paid for. The saving is
     // measured at the wire; what this tool knows -- the package.json it read
     // on the caller's behalf -- rides along on the reserved key instead.
-    return declaringText(output, declaration);
+    return declaringText(output, resolved);
   } finally {
     smartPkg.close();
   }

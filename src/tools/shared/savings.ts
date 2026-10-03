@@ -29,6 +29,8 @@
  * and so does this one now.
  */
 
+import { isAbsolute } from 'node:path';
+
 /**
  * Places a reported ratio is rounded to.
  *
@@ -177,6 +179,105 @@ export function displaced(
 }
 
 /**
+ * WHAT A TOOL IS ALLOWED TO SAY WHEN IT CAN NAME THE FILES INSTEAD: the paths,
+ * and let the recorder count them.
+ *
+ * `DisplacedBaseline` above is the weaker of the two declarations, because the
+ * number in it is the tool's own and has to be taken on trust. It is still the
+ * only thing available to a tool handed code inline or summarising a command's
+ * output -- there is no file for anyone else to read. But most of the tools
+ * that needed a declaration at all needed it for the opposite reason: the file
+ * exists and is perfectly readable, the caller's arguments just do not name it.
+ * smart_package_json is passed a `projectRoot` and joins `package.json` onto
+ * it; smart_tsconfig is passed one config and walks an `extends` chain through
+ * several more.
+ *
+ * For those, naming the paths is strictly better than naming a count. The
+ * recorder reads them with the same reader and counts them with the same
+ * counter it uses for the reply, so no tool arithmetic enters the ratio at all,
+ * the bytes and the digest come out measurable too, and the figure can be
+ * re-derived later from the row. It also needs no precedence rule: a tool's
+ * resolved paths and the caller's named paths are one set of files, measured
+ * once, rather than two competing befores.
+ */
+export interface ResolvedInputFiles {
+  /**
+   * Absolute paths of the files this tool read that the arguments did not name.
+   *
+   * ABSOLUTE BECAUSE THE READER IS SOMEWHERE ELSE. The recorder resolves a
+   * relative path against its own working directory, which is not necessarily
+   * the tool's, and would then measure a different file -- or, worse, a file
+   * that happens to exist there. A tool has already resolved these paths to
+   * read them, so it has the absolute form to hand.
+   */
+  readonly paths: readonly string[];
+  /** How the tool got to them, so a reader can check the claim. */
+  readonly baselineSource: BaselineSource;
+}
+
+/**
+ * The most files one declaration may name.
+ *
+ * Matches the recorder's own cap: a longer list is refused there anyway, and
+ * refusing it here means the reason is visible at the tool rather than as a
+ * silently unmeasured row.
+ */
+const MAX_DECLARED_PATHS = 24;
+
+/** Rejects a NUL, CR or LF, which no real path on either platform contains. */
+const DECLARABLE_PATH = /^[^\u0000\n\r]+$/;
+
+/**
+ * Declare the files this tool resolved and read.
+ *
+ * Returns null rather than an empty declaration when there is nothing usable,
+ * for the same reason `displaced()` does: a declaration that claims nothing
+ * must read as absent and not as a measured nothing.
+ */
+export function resolvedFiles(
+  paths: readonly string[],
+  baselineSource: BaselineSource
+): ResolvedInputFiles | null {
+  const usable = paths.filter(
+    (path) =>
+      typeof path === 'string' && isAbsolute(path) && DECLARABLE_PATH.test(path)
+  );
+  if (usable.length === 0 || usable.length > MAX_DECLARED_PATHS) return null;
+  return { paths: usable, baselineSource };
+}
+
+/**
+ * The key the resolved-path declaration travels on.
+ *
+ * A SECOND KEY RATHER THAN A UNION ON THE FIRST. The two declarations are read
+ * by different code -- one is a number the recorder has to decide whether to
+ * trust, the other is a list of files the recorder goes and measures -- and a
+ * tool uses exactly one of them, so keeping them apart means neither branch
+ * has to ask which kind it got.
+ */
+export const RESOLVED_INPUT_KEY = '__resolvedInputFiles';
+
+/**
+ * CHECKED EVERY TIME IT CROSSES A BOUNDARY, as `asDeclaredBaseline` is.
+ *
+ * What arrives here is about to be turned into file reads, so the paths are
+ * re-tested against the same rules `resolvedFiles` applied rather than trusted
+ * because they came in on a reserved key.
+ */
+export function asResolvedInputFiles(raw: unknown): ResolvedInputFiles | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+  const source = record.baselineSource;
+  if (typeof source !== 'string') return null;
+  if (!BASELINE_SOURCES.includes(source as BaselineSource)) return null;
+  if (!Array.isArray(record.paths)) return null;
+  return resolvedFiles(
+    record.paths.filter((path): path is string => typeof path === 'string'),
+    source as BaselineSource
+  );
+}
+
+/**
  * The key a tool hangs its declaration on, and the only one the dispatch lifts.
  *
  * WHY A RESERVED KEY AND NOT A FIELD IN THE REPLY. The declaration exists so a
@@ -197,6 +298,7 @@ export const DECLARED_BASELINE_KEY = '__displacedBaseline';
  */
 export type Declaring<T> = T & {
   readonly [DECLARED_BASELINE_KEY]?: DisplacedBaseline | null;
+  readonly [RESOLVED_INPUT_KEY]?: ResolvedInputFiles | null;
 };
 
 /**
@@ -220,10 +322,14 @@ export const DECLARED_TEXT_KEY = '__declaredText';
  */
 export function declaringText(
   text: string,
-  declaration: DisplacedBaseline | null
+  declaration: DisplacedBaseline | ResolvedInputFiles | null
 ): string | Record<string, unknown> {
   if (!declaration) return text;
-  return { [DECLARED_TEXT_KEY]: text, [DECLARED_BASELINE_KEY]: declaration };
+  // The two declarations ride on their own keys, so the branch that reads each
+  // one never has to ask which kind arrived.
+  const key =
+    'paths' in declaration ? RESOLVED_INPUT_KEY : DECLARED_BASELINE_KEY;
+  return { [DECLARED_TEXT_KEY]: text, [key]: declaration };
 }
 
 /**
@@ -233,28 +339,35 @@ export function declaringText(
  * tool may hand back a frozen object, and a tool that returns a string -- half
  * this fleet does -- has nowhere to put a key and simply declares nothing.
  */
-export function liftDeclaredBaseline(result: unknown): {
+export function liftDeclarations(result: unknown): {
   readonly payload: unknown;
   readonly declaration: DisplacedBaseline | null;
+  readonly resolved: ResolvedInputFiles | null;
 } {
   if (!result || typeof result !== 'object' || Array.isArray(result)) {
-    return { payload: result, declaration: null };
+    return { payload: result, declaration: null, resolved: null };
   }
   const record = result as Record<string, unknown>;
-  if (!(DECLARED_BASELINE_KEY in record)) {
-    return { payload: result, declaration: null };
+  if (!(DECLARED_BASELINE_KEY in record) && !(RESOLVED_INPUT_KEY in record)) {
+    return { payload: result, declaration: null, resolved: null };
   }
-  const { [DECLARED_BASELINE_KEY]: raw, ...payload } = record;
-  const declaration = asDeclaredBaseline(raw);
+  const {
+    [DECLARED_BASELINE_KEY]: rawBaseline,
+    [RESOLVED_INPUT_KEY]: rawResolved,
+    ...payload
+  } = record;
+  const declaration = asDeclaredBaseline(rawBaseline);
+  const resolved = asResolvedInputFiles(rawResolved);
   // THE ENVELOPE COMES OFF HERE, not at the serialiser: a tool that declared
   // alongside a text report put its string inside one, and what the caller is
   // given has to be that string and not an object wrapping it.
   const keys = Object.keys(payload);
   if (keys.length === 1 && keys[0] === DECLARED_TEXT_KEY) {
     const text = payload[DECLARED_TEXT_KEY];
-    if (typeof text === 'string') return { payload: text, declaration };
+    if (typeof text === 'string')
+      return { payload: text, declaration, resolved };
   }
-  return { payload, declaration };
+  return { payload, declaration, resolved };
 }
 
 /**

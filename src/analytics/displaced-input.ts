@@ -109,11 +109,20 @@ function declaredPaths(args: unknown): string[] {
  * this module cannot establish, and a missing baseline must read as missing
  * rather than as a measured zero -- a zero baseline is what produced
  * `tokensSaved: -11` for a tool that saves 63%.
+ *
+ * @param resolvedPaths files the arguments do not name but the tool resolved
+ *   for itself and reported: a `package.json` found under a directory, every
+ *   file in an `extends` chain. They are measured here exactly like the named
+ *   ones -- read with the same reader, counted with the same counter -- so a
+ *   tool's private resolution rule can widen the baseline without a tool's
+ *   arithmetic entering it. A path named twice across the two lists is still
+ *   counted once.
  */
 export async function measureDisplacedInput(
-  args: unknown
+  args: unknown,
+  resolvedPaths: readonly string[] = []
 ): Promise<DisplacedInput | null> {
-  const paths = declaredPaths(args);
+  const paths = [...declaredPaths(args), ...resolvedPaths];
   if (paths.length === 0 || paths.length > MAX_FILES) return null;
 
   const seen = new Set<string>();
