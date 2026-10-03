@@ -173,21 +173,13 @@ export interface SmartEnvResult {
     fileHash?: string;
     filePath?: string;
     cached: boolean;
-    /** Tokens the .env file itself costs, which is what reading it would have cost. */
-    baselineTokens: number;
-    /**
-     * Tokens of the report above, not counting this metadata block -- which
-     * cannot be counted before it exists.
-     */
-    tokensUsed: number;
-    /**
-     * baselineTokens - tokensUsed. NEGATIVE when the report costs more than the
-     * file it describes, which is a real outcome on a file of a few lines: a
-     * report that names every variable cannot be shorter than a file that is
-     * nothing but one line per variable. It is reported as measured rather than
-     * clamped to zero.
-     */
-    tokensSaved: number;
+    // NO TOKEN FIGURES, DELIBERATELY. baselineTokens, tokensUsed and their
+    // difference used to sit here. The baseline was honest -- the .env file is
+    // exactly what reading it would have cost -- but it is the recorder's to
+    // measure now, from the envFile the caller named. The other two were not:
+    // tokensUsed counted the report object before this metadata block existed
+    // and before the serialised reply was built around it, so it was never the
+    // figure the caller was charged, and the difference inherited that error.
   };
 }
 
@@ -198,7 +190,10 @@ export interface SmartEnvResult {
 export class SmartEnv {
   constructor(
     private cache: CacheEngine,
-    private tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED: this tool no longer counts tokens, because the
+    // only figure it counted them for was one it could not stand behind. The
+    // parameter stays so the construction call is unchanged for every caller.
+    _tokenCounter: TokenCounter,
     private metrics: MetricsCollector
   ) {}
 
@@ -218,15 +213,14 @@ export class SmartEnv {
         const cached = await this.getCached(cacheKey, options.ttl || 3600);
         if (cached) {
           const executionTime = Date.now() - startTime;
+          // A cache hit saves the analysis, not the tokens: the same report is
+          // still sent. No token figure belongs on this record at all -- what
+          // was sent is counted at the wire.
           this.metrics.record({
             operation: 'smart-env',
             duration: executionTime,
             success: true,
             cacheHit: true,
-            // A cache hit saves the analysis, not the tokens: the same report
-            // is still sent. Recording its size here counted a payload the
-            // caller paid for as a saving.
-            savedTokens: 0,
           });
           return cached;
         }
@@ -254,7 +248,6 @@ export class SmartEnv {
         duration: executionTime,
         success: true,
         cacheHit: false,
-        savedTokens: 0,
       });
 
       return result;
@@ -268,7 +261,6 @@ export class SmartEnv {
         duration: executionTime,
         success: false,
         cacheHit: false,
-        savedTokens: 0,
         metadata: { error: errorMessage },
       });
 
@@ -283,9 +275,6 @@ export class SmartEnv {
         },
         metadata: {
           cached: false,
-          baselineTokens: 0,
-          tokensUsed: 0,
-          tokensSaved: 0,
         },
       };
     }
@@ -445,18 +434,12 @@ export class SmartEnv {
       suggestions,
     };
 
-    const baselineTokens = this.tokenCounter.count(content).tokens;
-    const tokensUsed = this.tokenCounter.count(JSON.stringify(report)).tokens;
-
     return {
       ...report,
       metadata: {
         fileHash: fileHash === undefined ? undefined : shortHash(fileHash),
         filePath: filePath === undefined ? undefined : displayPath(filePath),
         cached: false,
-        baselineTokens,
-        tokensUsed,
-        tokensSaved: baselineTokens - tokensUsed,
       },
     };
   }
