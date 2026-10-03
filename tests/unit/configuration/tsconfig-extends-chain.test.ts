@@ -5,6 +5,11 @@ import { join } from 'path';
 import { getSmartTsConfig } from '../../../src/tools/configuration/smart-tsconfig.js';
 import { CacheEngine } from '../../../src/core/cache-engine.js';
 import { TokenCounter } from '../../../src/core/token-counter.js';
+import {
+  asResolvedInputFiles,
+  RESOLVED_INPUT_KEY,
+} from '../../../src/tools/shared/savings.js';
+import { measureDisplacedInput } from '../../../src/analytics/displaced-input.js';
 import { MetricsCollector } from '../../../src/core/metrics.js';
 
 /**
@@ -101,26 +106,60 @@ describe('smart_tsconfig resolves an extends chain', () => {
     expect(out.resolved.extendsChain).toHaveLength(2);
   });
 
-  it('measures its saving against every file in the chain', async () => {
-    const { tool, configPath } = makeTool();
+  it('declares every file in the chain, not just the one it was handed', async () => {
+    /*
+     * THE WHOLE REASON THIS TOOL DECLARES ANYTHING. The recorder measures the
+     * files a caller's arguments name, which here is the leaf alone -- and the
+     * leaf alone is a fraction of the work this tool did, so a row built from
+     * it would under-credit precisely the call the tool exists for. Walking an
+     * `extends` chain is the tool's private rule, so the tool names the files;
+     * it does not count them.
+     */
+    const { tool, configPath, basePath } = makeTool();
     const out = await tool.run({ configPath });
 
-    // Base first, joined with a newline: the order and the separator the tool
-    // merged them in, so both sides of the subtraction count the same bytes.
+    const declared = asResolvedInputFiles(out[RESOLVED_INPUT_KEY]);
+    expect(declared).not.toBeNull();
+    expect(declared?.baselineSource).toBe('resolved-config-chain');
+    // Base first, the order resolveConfig merged them in.
+    expect(declared?.paths).toEqual([basePath, configPath]);
+
+    // AND THE COUNT COMES FROM THE RECORDER, off those paths, with no figure
+    // from the tool anywhere in it.
     const counter = new TokenCounter();
     const chainTokens = counter.count([BASE, LEAF].join('\n')).tokens;
     const leafTokens = counter.count(LEAF).tokens;
+    const fromPaths = await measureDisplacedInput({}, declared?.paths ?? []);
+    expect(fromPaths?.tokens).toBe(chainTokens);
+    expect(fromPaths?.files).toBe(2);
 
-    expect(out.tokenMetrics.original).toBe(chainTokens);
-    // The control: the leaf alone is a strictly smaller baseline, so a test
-    // that passed with either number would not be testing anything. This is
-    // the figure the tool used to report.
+    // THE CONTROL: the leaf alone is a strictly smaller baseline, so a test
+    // that passed with either number would not be testing anything -- and the
+    // leaf alone is what the arguments name, which is what the recorder would
+    // have measured without the declaration.
     expect(leafTokens).toBeLessThan(chainTokens);
-    expect(out.tokenMetrics.original).not.toBe(leafTokens);
+    const fromArguments = await measureDisplacedInput({ configPath });
+    expect(fromArguments?.tokens).toBe(leafTokens);
+  });
 
-    expect(out.tokenMetrics.saved).toBe(
-      out.tokenMetrics.original - out.tokenMetrics.compact
+  it('counts the leaf once when it is both named and declared', async () => {
+    // The declaration names the whole chain including the leaf, and the caller
+    // named the leaf too. Two arguments pointing at one file must not double a
+    // baseline, which is the mistake a union of two lists invites.
+    const { tool, configPath, basePath } = makeTool();
+    const out = await tool.run({ configPath });
+    const declared = asResolvedInputFiles(out[RESOLVED_INPUT_KEY]);
+
+    const both = await measureDisplacedInput(
+      { configPath },
+      declared?.paths ?? []
     );
+    expect(both?.files).toBe(2);
+    expect(both?.tokens).toBe(
+      new TokenCounter().count([LEAF, BASE].join('\n')).tokens
+    );
+    // The control: three entries went in, two files came out.
+    expect([configPath, basePath, configPath]).toHaveLength(3);
   });
 
   it('does not answer from a cached merge after the base changes', async () => {

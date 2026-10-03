@@ -18,7 +18,11 @@ import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { hashContent, generateCacheKey } from '../shared/hash-utils.js';
 import { displayPath } from '../shared/report-shape.js';
-import { measured } from '../shared/savings.js';
+import {
+  RESOLVED_INPUT_KEY,
+  resolvedFiles,
+  type Declaring,
+} from '../shared/savings.js';
 
 // ==================== Type Definitions ====================
 
@@ -104,12 +108,14 @@ interface SmartTsConfigOutput {
   issues?: ConfigIssue[];
   suggestions?: string[];
   cacheHit: boolean;
-  tokenMetrics: {
-    original: number;
-    compact: number;
-    saved: number;
-    savingsPercent: number;
-  };
+  // NO tokenMetrics FIELD, DELIBERATELY. Four figures stood here: a baseline
+  // taken from the extends chain, a cost, their difference and their ratio. The
+  // baseline was the right thing to measure and is now declared as the paths it
+  // came from, so the recorder reads those files itself. The cost was this
+  // response serialised with the metrics block spliced out -- a careful count
+  // of an artifact nobody is sent, since the reply a caller pays for is built
+  // around this object after the tool returns. That is how +8.21% came to be
+  // printed where the wire said -2.9%.
   diff?: {
     added: string[];
     removed: string[];
@@ -121,18 +127,21 @@ interface SmartTsConfigOutput {
 
 class SmartTsConfig {
   private cache: CacheEngine;
-  private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED. This counter was held so the tool could count both
+    // halves of its own saving -- the extends chain, and this object standing in
+    // for a reply it cannot see. It declares the chain's paths instead, and both
+    // halves are counted by the party that holds the reply. The parameter stays
+    // so every caller's construction call is unchanged.
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
@@ -140,7 +149,9 @@ class SmartTsConfig {
   /**
    * Main entry point - parse and resolve tsconfig
    */
-  async run(options: SmartTsConfigOptions = {}): Promise<SmartTsConfigOutput> {
+  async run(
+    options: SmartTsConfigOptions = {}
+  ): Promise<Declaring<SmartTsConfigOutput>> {
     const startTime = Date.now();
     const configPath = this.resolveConfigPath(options.configPath);
 
@@ -182,20 +193,18 @@ class SmartTsConfig {
             options.includeIssues ?? true,
             options.includeSuggestions ?? true,
             true,
-            chainContent
+            cachedData.resolved.extendsChain
           );
 
-          // Recorded from the measurement, not before it. This said
-          // savedTokens: 0 with a comment promising the real figure would be
-          // calculated in transformOutput -- which computed it and threw it
-          // away, so every call this tool ever served contributed a zero to
-          // the metrics store regardless of what it actually saved or cost.
+          // NO TOKEN FIGURE ON THIS RECORD. It carried savedTokens from the
+          // tool's own tokenMetrics, which measured this object and not the
+          // reply built around it. The before is the chain, declared as paths
+          // and read by the recorder; the after is counted once, at the wire.
           this.metrics.record({
             operation: 'smart-tsconfig',
             duration: executionTime,
             cacheHit: true,
             success: true,
-            savedTokens: output.tokenMetrics.saved,
           });
 
           return output;
@@ -247,16 +256,15 @@ class SmartTsConfig {
         options.includeIssues ?? true,
         options.includeSuggestions ?? true,
         false,
-        chainContent
+        resolved.extendsChain
       );
 
-      // From the measurement, as on the cache-hit path above.
+      // No token figure, as on the cache-hit path above.
       this.metrics.record({
         operation: 'smart-tsconfig',
         duration: executionTime,
         cacheHit: false,
         success: true,
-        savedTokens: output.tokenMetrics.saved,
       });
 
       return output;
@@ -268,7 +276,6 @@ class SmartTsConfig {
         duration: executionTime,
         cacheHit: false,
         success: false,
-        savedTokens: 0,
       });
 
       throw error;
@@ -662,9 +669,16 @@ class SmartTsConfig {
     includeIssues: boolean = true,
     includeSuggestions: boolean = true,
     fromCache: boolean = false,
-    /** Every file in the extends chain, which is what reading this by hand costs. */
-    chainContent: string = ''
-  ): SmartTsConfigOutput {
+    /**
+     * Every file in the extends chain, which is what reading this by hand
+     * costs. DECLARED AS PATHS, NOT AS A COUNT OF THEM: the recorder cannot
+     * walk an `extends` chain from the one config the caller named, so this is
+     * the half only the tool knows -- but knowing which files is not the same
+     * as being the right party to count them, and the counting stays with the
+     * party that also counts the reply.
+     */
+    chainPaths: readonly string[] = []
+  ): Declaring<SmartTsConfigOutput> {
     const emitted: EmittedTsConfig = {
       compilerOptions: resolved.compilerOptions,
       include: resolved.include,
@@ -694,50 +708,19 @@ class SmartTsConfig {
           ? suggestions
           : undefined,
       cacheHit: fromCache,
-      tokenMetrics: {
-        original: 0,
-        compact: 0,
-        saved: 0,
-        savingsPercent: 0,
-      },
     };
 
-    // MEASURED AGAINST THE FILE, NOT AGAINST A SHAPE WE NEVER SEND.
+    // THE CHAIN, NAMED RATHER THAN COUNTED.
     //
-    // The old figure compared this response to a hypothetical fuller response --
-    // a baseline the caller never sees and cannot check, and one that was only
-    // ever bigger because the cached branch was dropping fields. The single
-    // saving a reader of this tool can verify is against the files they would
-    // otherwise have read and merged themselves, so that is the baseline.
-    const originalTokens = chainContent
-      ? this.tokenCounter.count(chainContent).tokens
-      : 0;
-    // Counted without the metrics block, so the number is not trying to account
-    // for its own digits.
-    const { tokenMetrics: _placeholder, ...counted } = output;
-    const compactTokens = this.tokenCounter.count(
-      JSON.stringify(counted)
-    ).tokens;
-    // A LOSS IS REPORTED AS A LOSS. This clamped `saved` at zero, so the one
-    // case the caller most needs to know about -- a response costing more than
-    // the file it read, which is what happens on a config that extends nothing
-    // and is already compact -- was indistinguishable from a response that
-    // broke exactly even. The house helper reports the signed difference.
-    const savings = measured(originalTokens, compactTokens);
-
-    output.tokenMetrics = {
-      original: savings.originalTokenCount,
-      compact: savings.tokenCount,
-      saved: savings.tokensSaved,
-      savingsPercent: parseFloat(
-        (
-          (savings.tokensSaved / (savings.originalTokenCount || 1)) *
-          100
-        ).toFixed(2)
-      ),
+    // A caller doing this by hand reads the config, sees what it extends, reads
+    // that, and merges them -- so the before is every file in the chain, not
+    // the leaf the arguments name. That is the one thing the recorder cannot
+    // work out for itself, and the only thing this tool still says about its
+    // own saving. The leaf appears in both lists and is counted once.
+    return {
+      ...output,
+      [RESOLVED_INPUT_KEY]: resolvedFiles(chainPaths, 'resolved-config-chain'),
     };
-
-    return output;
   }
 
   /**
@@ -770,7 +753,7 @@ export function getSmartTsConfig(
  */
 export async function runSmartTsconfig(
   options: SmartTsConfigOptions = {}
-): Promise<SmartTsConfigOutput> {
+): Promise<Declaring<SmartTsConfigOutput>> {
   const cache = new CacheEngine(
     resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'))
   );

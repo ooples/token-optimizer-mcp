@@ -5,6 +5,11 @@ import { join } from 'path';
 import { getSmartTsConfig } from '../../../src/tools/configuration/smart-tsconfig.js';
 import { CacheEngine } from '../../../src/core/cache-engine.js';
 import { TokenCounter } from '../../../src/core/token-counter.js';
+import {
+  asResolvedInputFiles,
+  RESOLVED_INPUT_KEY,
+} from '../../../src/tools/shared/savings.js';
+import { measureDisplacedInput } from '../../../src/analytics/displaced-input.js';
 import { MetricsCollector } from '../../../src/core/metrics.js';
 
 /**
@@ -129,26 +134,67 @@ describe('smart_tsconfig answers the same on a cache hit', () => {
     expect(cold.resolved.extendsChain).toBeUndefined();
   });
 
-  it('measures its saving against the file it was asked to read', async () => {
+  it('states no saving of its own, under any name', async () => {
+    /*
+     * THIS TEST PINNED THE FIGURES AND NOW PINS THEIR ABSENCE. It asked for a
+     * baseline equal to the file and a difference equal to the subtraction,
+     * both of which were as carefully computed as this comment claimed -- and
+     * both of which described an artifact nobody is sent, because the second
+     * operand was this object and not the reply built around it after the tool
+     * returns. The before is declared as the chain's paths and measured by the
+     * recorder; the after is counted once, at the wire.
+     */
     const { tool, configPath } = makeTool();
     const cold = await tool.run({ configPath });
 
-    // The old baseline was a fuller response we never send, so the percentage
-    // described a comparison the caller could not make. The only checkable
-    // baseline is the file itself.
-    const fileTokens = new TokenCounter().count(CONFIG).tokens;
-    expect(cold.tokenMetrics.original).toBe(fileTokens);
+    const SAVINGS_KEYS = [
+      'tokenMetrics',
+      'originalTokens',
+      'compactedTokens',
+      'savingsPercent',
+      'tokensSaved',
+      'savedTokens',
+      'compressionRatio',
+      'baselineTokens',
+    ];
+    const found: string[] = [];
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      for (const [key, value] of Object.entries(node)) {
+        if (SAVINGS_KEYS.includes(key)) found.push(key);
+        walk(value);
+      }
+    };
+    walk(cold);
+    expect(found).toEqual([]);
+    // THE POSITIVE CONTROL, twice: the reply really is the resolved config, and
+    // the walk really does descend into a reply of this shape.
+    expect(cold.resolved.compilerOptions.target).toBeDefined();
+    walk({ resolved: { a: { tokenMetrics: {} } } });
+    expect(found).toEqual(['tokenMetrics']);
+  });
 
-    // Was Math.max(0, ...), which asserted the clamp: a response costing more
-    // than the file reported saved: 0, the same answer as one that broke even.
-    // The subtraction is the measurement; hiding its sign hid the outcome this
-    // tool most needs to admit to.
-    expect(cold.tokenMetrics.saved).toBe(
-      fileTokens - cold.tokenMetrics.compact
+  it('declares the file it read, so the recorder has a before to measure', async () => {
+    const { tool, configPath } = makeTool();
+    const cold = await tool.run({ configPath });
+
+    // A config that extends nothing is a chain of one. The declaration still
+    // names it: the recorder reads the arguments' configPath too and counts the
+    // file once, so declaring the leaf costs nothing and the chain case below
+    // needs no separate branch in the tool.
+    const declared = asResolvedInputFiles(cold[RESOLVED_INPUT_KEY]);
+    expect(declared).not.toBeNull();
+    expect(declared?.baselineSource).toBe('resolved-config-chain');
+    expect(declared?.paths).toEqual([configPath]);
+
+    // AND IT IS A COUNT OF THE FILE, taken by the recorder from those paths --
+    // which is the figure the tool used to publish for itself.
+    const measuredFromPaths = await measureDisplacedInput(
+      {},
+      declared?.paths ?? []
     );
-    expect(cold.tokenMetrics.savingsPercent).toBeCloseTo(
-      (cold.tokenMetrics.saved / fileTokens) * 100,
-      2
+    expect(measuredFromPaths?.tokens).toBe(
+      new TokenCounter().count(CONFIG).tokens
     );
   });
 });
