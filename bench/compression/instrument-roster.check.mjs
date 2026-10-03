@@ -49,6 +49,12 @@ const RUNS_ELSEWHERE = {
   // with a populated node_modules and ERR_MODULE_NOT_FOUND on a clean checkout.
   'bench/compression/pretoken-proxy.check.mjs': 'bench-proof',
   'bench/tools/reduction.check.mjs': 'bench-proof',
+  // `adversarial` imports dist/compress/router.js through its grid module, so it
+  // belongs here for the same reason and was in the roster by mistake: it passed
+  // on a laptop with a dist/ left over from the last build and was
+  // ERR_MODULE_NOT_FOUND on the install-free job, taking the whole roster down
+  // with it before a single instrument had run.
+  'bench/compression/adversarial.check.mjs': 'bench-proof',
 };
 
 /**

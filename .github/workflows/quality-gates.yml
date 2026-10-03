@@ -753,6 +753,7 @@ jobs:
           } >> $GITHUB_STEP_SUMMARY
           status=0
           node bench/compression/pretoken-proxy.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          node bench/compression/adversarial.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           node bench/tools/reduction.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           echo '```' >> $GITHUB_STEP_SUMMARY
           exit $status
