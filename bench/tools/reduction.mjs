@@ -229,6 +229,8 @@ export class Server {
   constructor() {
     const cacheDir = mkdtempSync(join(tmpdir(), 'tool-reduction-'));
     this.cacheDir = cacheDir;
+    const wikiDir = mkdtempSync(join(tmpdir(), 'tool-reduction-wiki-'));
+    this.wikiDir = wikiDir;
     this.child = spawn(
       process.execPath,
       [join(ROOT, 'dist', 'server', 'index.js')],
@@ -248,6 +250,21 @@ export class Server {
           // left behind measures history, not the tool. Each run gets its own
           // directory, so the two columns mean what they say.
           TOKEN_OPTIMIZER_CACHE_DIR: cacheDir,
+          // AND A COLD DISCLOSURE STORE, FOR THE SAME REASON.
+          //
+          // The cache directory above is not the only thing a previous run
+          // leaves behind. Progressive disclosure keeps its capture and
+          // expansion log in the wiki directory, which is derived from the
+          // server's cwd and so ignored the fresh cache above entirely: it
+          // accumulated in the worktree across every sweep. Measured there --
+          // 1,682 previews served and 312 expanded -- and that log is what
+          // decides whether a reply discloses at all, because a preview is
+          // priced at the rate its shape is actually expanded.
+          //
+          // So the figure for a row depended on how many times this bench had
+          // been run before, and on the oracle's own expansions teaching the
+          // rate it was about to be charged at. Each run gets its own log.
+          TOKEN_OPTIMIZER_WIKI_DIR: wikiDir,
         },
         windowsHide: true,
       }
@@ -316,6 +333,7 @@ export class Server {
     this.child.kill();
     try {
       rmSync(this.cacheDir, { recursive: true, force: true });
+      rmSync(this.wikiDir, { recursive: true, force: true });
     } catch {
       // A leftover temp directory is not worth failing a measurement over.
     }
