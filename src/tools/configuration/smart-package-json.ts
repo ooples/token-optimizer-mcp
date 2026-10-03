@@ -19,6 +19,13 @@ import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { homedir } from 'os';
 import { packageManagerInvocation } from '../build-systems/run-node-bin.js';
+import {
+  DECLARED_BASELINE_KEY,
+  declaringText,
+  displaced,
+  liftDeclaredBaseline,
+  type Declaring,
+} from '../shared/savings.js';
 
 /**
  * Seconds a parsed package.json stays servable. The file is re-read whenever
@@ -216,14 +223,15 @@ interface SmartPackageJsonOutput {
     command?: string;
   }>;
 
-  /**
-   * Token reduction metrics
-   */
-  metrics: {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercentage: number;
-  };
+  // NO metrics FIELD, DELIBERATELY. The three figures that stood here were a
+  // claim this tool was not in a position to make: compactedTokens counted
+  // this payload serialised on its own, while what a caller is charged for is
+  // the human report built from it afterwards -- which is why the footer
+  // printed -92% on a call that really cost 20.9% MORE than reading the file.
+  // The after is counted once now, at the wire. The before is real and is the
+  // one thing this tool does know, because the caller named only a directory
+  // and the tool resolved package.json inside it, so it is declared on the
+  // reserved key rather than printed in the reply.
 }
 
 export class SmartPackageJson {
@@ -250,7 +258,7 @@ export class SmartPackageJson {
    */
   async run(
     options: SmartPackageJsonOptions = {}
-  ): Promise<SmartPackageJsonOutput> {
+  ): Promise<Declaring<SmartPackageJsonOutput>> {
     const startTime = Date.now();
     const {
       force = false,
@@ -977,7 +985,7 @@ export class SmartPackageJson {
     }>,
     fromCache: boolean,
     baseline: string
-  ): SmartPackageJsonOutput {
+  ): Declaring<SmartPackageJsonOutput> {
     // Update stats with actual counts
     result.stats.outdatedPackages = result.packages.filter(
       (p) => p.outdated
@@ -1054,26 +1062,16 @@ export class SmartPackageJson {
       suggestions,
     };
 
-    // The metrics block is excluded from its own count -- it cannot be
-    // measured before it exists -- so the compact figure is the payload the
-    // caller reads, short a handful of tokens for the three numbers below.
-    const originalTokens = this.tokenCounter.count(baseline).tokens;
-    const compactedTokens = this.tokenCounter.count(
-      JSON.stringify(payload, null, 2)
-    ).tokens;
-
+    // THE ONE HALF THIS TOOL CAN MEASURE. The caller passed a projectRoot, so
+    // nothing in the arguments names the file that was read; the recorder
+    // cannot count it and this tool can, having just read it. The declaration
+    // carries no second operand and so no ratio to be wrong about.
     return {
       ...payload,
-      metrics: {
-        originalTokens,
-        compactedTokens,
-        reductionPercentage:
-          originalTokens > 0
-            ? Math.round(
-                ((originalTokens - compactedTokens) / originalTokens) * 100
-              )
-            : 0,
-      },
+      [DECLARED_BASELINE_KEY]: displaced(
+        this.tokenCounter.count(baseline).tokens,
+        'resolved-project-file'
+      ),
     };
   }
 
@@ -1108,7 +1106,8 @@ export class SmartPackageJson {
       operation,
       duration,
       success: true,
-      savedTokens: 0,
+      // NO TOKEN FIGURE. The literal zero asserted a measured saving of
+      // nothing on every call, including the ones that saved a great deal.
       cacheHit: operation === 'cache_hit',
     });
   }
@@ -1138,7 +1137,7 @@ export function getSmartPackageJson(
  */
 export async function runSmartPackageJson(
   options: SmartPackageJsonOptions = {}
-): Promise<string> {
+): Promise<string | Record<string, unknown>> {
   const cache = new CacheEngine(
     resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'))
   );
@@ -1152,7 +1151,13 @@ export async function runSmartPackageJson(
   );
 
   try {
-    const result = await smartPkg.run(options);
+    // THE DECLARATION COMES OFF BEFORE THE REPORT IS BUILT, so none of the
+    // report's lines can be written from it, and goes back on at the end as a
+    // sibling of the text rather than a line inside it.
+    const { payload, declaration } = liftDeclaredBaseline(
+      await smartPkg.run(options)
+    );
+    const result = payload as SmartPackageJsonOutput;
 
     let output = `\n📦 Smart Package.json Analysis ${result.summary.fromCache ? '(cached)' : ''}\n`;
     output += `${'='.repeat(60)}\n\n`;
@@ -1255,13 +1260,12 @@ export async function runSmartPackageJson(
       output += '\n';
     }
 
-    // Metrics
-    output += `Token Reduction:\n`;
-    output += `  Original: ${result.metrics.originalTokens} tokens\n`;
-    output += `  Compacted: ${result.metrics.compactedTokens} tokens\n`;
-    output += `  Reduction: ${result.metrics.reductionPercentage}%\n`;
-
-    return output;
+    // NO TOKEN REDUCTION FOOTER. Four lines of the report were spent stating
+    // a reduction computed from a figure that was not what got sent, and the
+    // digits themselves were part of what the caller paid for. The saving is
+    // measured at the wire; what this tool knows -- the package.json it read
+    // on the caller's behalf -- rides along on the reserved key instead.
+    return declaringText(output, declaration);
   } finally {
     smartPkg.close();
   }

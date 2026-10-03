@@ -24,6 +24,8 @@ import {
 } from '../../../src/analytics/savings-classification.js';
 import {
   DECLARED_BASELINE_KEY,
+  DECLARED_TEXT_KEY,
+  declaringText,
   displaced,
   liftDeclaredBaseline,
 } from '../../../src/tools/shared/savings.js';
@@ -113,6 +115,52 @@ describe('the declaration leaves the payload', () => {
     expect(liftDeclaredBaseline('# Report')).toEqual({
       payload: '# Report',
       declaration: null,
+    });
+  });
+
+  it('gives back the same text a declaring report put in', () => {
+    /*
+     * THE WHOLE POINT OF THE ENVELOPE. A tool like smart_package_json resolves
+     * its own input file and returns a human report, so it has a before worth
+     * declaring and a string to declare it next to. The envelope is how those
+     * travel together -- and the caller has to end up with the string itself,
+     * byte for byte, not an object wrapping it, or the report turns into JSON.
+     */
+    const carried = declaringText(
+      '# Report\n  Outdated: 3\n',
+      displaced(4937, 'resolved-project-file')
+    );
+    expect(typeof carried).toBe('object');
+    const lifted = liftDeclaredBaseline(carried);
+    expect(lifted.payload).toBe('# Report\n  Outdated: 3\n');
+    expect(lifted.declaration?.baselineTokens).toBe(4937);
+    expect(lifted.declaration?.baselineSource).toBe('resolved-project-file');
+  });
+
+  it('does not wrap a report that has nothing to declare', () => {
+    // THE CONTROL ARM. A tool whose before the recorder can measure from the
+    // arguments declares nothing, and must stay exactly as cheap as before:
+    // the same string, no envelope, no allocation.
+    expect(declaringText('# Report', null)).toBe('# Report');
+    expect(declaringText('# Report', displaced(0, 'named-input-files'))).toBe(
+      '# Report'
+    );
+  });
+
+  it('keeps an envelope that carries more than the text', () => {
+    /*
+     * THE NEGATIVE CONTROL for the unwrap. Only a one-key envelope is a
+     * carrier; anything else is a real payload that happens to have the key on
+     * it, and silently returning just its text would discard the rest.
+     */
+    const lifted = liftDeclaredBaseline({
+      [DECLARED_TEXT_KEY]: '# Report',
+      name: 'app',
+      [DECLARED_BASELINE_KEY]: displaced(10, 'resolved-project-file'),
+    });
+    expect(lifted.payload).toEqual({
+      [DECLARED_TEXT_KEY]: '# Report',
+      name: 'app',
     });
   });
 });

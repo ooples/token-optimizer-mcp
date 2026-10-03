@@ -189,6 +189,44 @@ export function displaced(
 export const DECLARED_BASELINE_KEY = '__displacedBaseline';
 
 /**
+ * A result object that may be carrying a declaration.
+ *
+ * The key is optional because declaring is: most tools in this fleet name
+ * their input files in the arguments, so the recorder measures the before for
+ * itself and the tool has nothing to add.
+ */
+export type Declaring<T> = T & {
+  readonly [DECLARED_BASELINE_KEY]?: DisplacedBaseline | null;
+};
+
+/**
+ * Where a string-returning tool's text travels so a declaration can ride with
+ * it.
+ *
+ * HALF THIS FLEET RETURNS A STRING, and a string has nowhere to hang a
+ * property. The alternative was to put the baseline in the report text, which
+ * is exactly the thing this module exists to stop: a figure in the text is a
+ * figure the caller pays for and a model may quote. So the text moves into a
+ * one-key envelope for the length of the dispatch and is taken back out
+ * before it is serialised -- the caller sees the same string either way.
+ */
+export const DECLARED_TEXT_KEY = '__declaredText';
+
+/**
+ * Attach a declaration to a report that is just text.
+ *
+ * Returns the string unchanged when there is nothing to declare, so a tool
+ * that could not measure its before stays exactly as cheap as it was.
+ */
+export function declaringText(
+  text: string,
+  declaration: DisplacedBaseline | null
+): string | Record<string, unknown> {
+  if (!declaration) return text;
+  return { [DECLARED_TEXT_KEY]: text, [DECLARED_BASELINE_KEY]: declaration };
+}
+
+/**
  * Take the declaration off a tool's result, leaving the payload the caller sees.
  *
  * The payload is rebuilt without the key rather than deleted from in place: a
@@ -207,7 +245,16 @@ export function liftDeclaredBaseline(result: unknown): {
     return { payload: result, declaration: null };
   }
   const { [DECLARED_BASELINE_KEY]: raw, ...payload } = record;
-  return { payload, declaration: asDeclaredBaseline(raw) };
+  const declaration = asDeclaredBaseline(raw);
+  // THE ENVELOPE COMES OFF HERE, not at the serialiser: a tool that declared
+  // alongside a text report put its string inside one, and what the caller is
+  // given has to be that string and not an object wrapping it.
+  const keys = Object.keys(payload);
+  if (keys.length === 1 && keys[0] === DECLARED_TEXT_KEY) {
+    const text = payload[DECLARED_TEXT_KEY];
+    if (typeof text === 'string') return { payload: text, declaration };
+  }
+  return { payload, declaration };
 }
 
 /**
