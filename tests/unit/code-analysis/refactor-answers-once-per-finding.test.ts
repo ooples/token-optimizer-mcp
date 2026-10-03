@@ -160,26 +160,50 @@ describe('smart_refactor answers once per finding', () => {
     );
   });
 
-  it('measures the response it sends against the file it read', async () => {
+  it('states no saving of its own, under any name', async () => {
+    /*
+     * THIS TEST REQUIRED THE OPPOSITE AND WAS ASKING THE SAME QUESTION. It
+     * pinned a metrics block whose "after" was this reply serialised compactly
+     * with the metrics block itself removed -- a careful count of an artifact
+     * nobody is sent. What a caller pays for is built from this object after
+     * the tool returns, so no figure counted in here can be it.
+     *
+     * The before is the file the caller named in the arguments, which the
+     * recorder reads for itself, and the after is counted once at the wire. So
+     * the tool has nothing to declare and nothing to print, and the reply is
+     * checked against every spelling of a saving this fleet has used rather
+     * than against the one field that was deleted.
+     */
     const source = [
       'export function first() { const n = 1; return n; }',
       'export function second() { const q = 2; return q; }',
     ].join('\n');
     const result = await analyse(source);
 
-    const counter = new TokenCounter();
-    const { metrics, ...served } = result;
-
-    expect(metrics.originalTokens).toBe(counter.count(source).tokens);
-    expect(metrics.compactedTokens).toBe(
-      counter.count(JSON.stringify(served)).tokens
-    );
-    // Signed, so a response costing more than the file says so.
-    expect(metrics.reductionPercentage).toBeCloseTo(
-      ((metrics.originalTokens - metrics.compactedTokens) /
-        metrics.originalTokens) *
-        100,
-      2
-    );
+    const SAVINGS_KEYS = [
+      'metrics',
+      'originalTokens',
+      'compactedTokens',
+      'reductionPercentage',
+      'tokensSaved',
+      'savedTokens',
+      'originalTokenCount',
+      'compressionRatio',
+    ];
+    const found: string[] = [];
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      for (const [key, value] of Object.entries(node)) {
+        if (SAVINGS_KEYS.includes(key)) found.push(key);
+        walk(value);
+      }
+    };
+    walk(result);
+    expect(found).toEqual([]);
+    // THE POSITIVE CONTROL, twice over: the reply really is the analysis under
+    // test, and the walk really does descend into a reply of this shape.
+    expect(Object.keys(result.guidance).length).toBeGreaterThan(0);
+    walk({ guidance: { a: { metrics: {} } } });
+    expect(found).toEqual(['metrics']);
   });
 });

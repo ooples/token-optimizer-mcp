@@ -291,14 +291,14 @@ export interface SmartSecurityOutput {
     action: string;
   }>;
 
-  /**
-   * Token reduction metrics
-   */
-  metrics: {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercentage: number;
-  };
+  // NO metrics FIELD, DELIBERATELY. Both halves were counted off objects
+  // inside this tool: the "original" was the full internal result serialised,
+  // which no caller was ever going to be sent, and the "compacted" was three
+  // of its arrays, which is not the report a caller reads either. That is how
+  // one flat 85% came to be printed for three fixtures whose real figures
+  // were 98.0%, 97.1% and 92.3%. The before a caller actually displaced is
+  // the source files named in the arguments, which the recorder reads for
+  // itself; the after is the reply, counted once at the wire.
 }
 
 /**
@@ -675,7 +675,6 @@ const VULNERABILITY_PATTERNS: VulnerabilityPattern[] = [
 
 export class SmartSecurity {
   private cache: CacheEngine;
-  private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
   private cacheNamespace = 'smart_security';
   private projectRoot: string;
@@ -683,14 +682,16 @@ export class SmartSecurity {
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED. This counter was held so the tool could count
+    // both halves of its own saving; the halves were two internal objects, so
+    // what it produced was a measured figure about the wrong artifact. The
+    // parameter stays so every analysis tool is still built by the same
+    // three-argument factory call.
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string
   ) {
     this.cache = cache;
-    // Kept, not discarded. It was `_tokenCounter` and thrown away, which is why
-    // the reported savings had to be invented from per-finding guesses.
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
@@ -741,9 +742,8 @@ export class SmartSecurity {
           duration: Date.now() - startTime,
           success: true,
           cacheHit: true,
-          inputTokens: cached.metrics.originalTokens,
-          savedTokens:
-            cached.metrics.originalTokens - cached.metrics.compactedTokens,
+          // NO TOKEN FIGURES: these read the estimate back off the cached
+          // result, so the record republished it rather than measuring.
         });
 
         return cached;
@@ -795,9 +795,6 @@ export class SmartSecurity {
       duration,
       success: scanResults.success,
       cacheHit: false,
-      inputTokens: output.metrics.originalTokens,
-      savedTokens:
-        output.metrics.originalTokens - output.metrics.compactedTokens,
     });
 
     return output;
@@ -867,13 +864,11 @@ export class SmartSecurity {
       findingsBySeverity: [],
       findingsByCategory: [],
       remediationPriorities: [],
-      // Nothing was read, so nothing was saved. A reduction percentage here
-      // would be a saving claimed against a file that was never opened.
-      metrics: {
-        originalTokens: 0,
-        compactedTokens: 0,
-        reductionPercentage: 0,
-      },
+      // Nothing was read, so nothing was saved -- and nothing is said. A zeroed
+      // metrics block used to stand here to avoid claiming a saving against a
+      // file that was never opened, which was right as far as it went, but a
+      // measured zero is still a claim. The refusal now carries no figures at
+      // all, like every other reply from this tool.
     };
   }
 
@@ -1177,22 +1172,6 @@ export class SmartSecurity {
       result.findings
     );
 
-    // Calculate token metrics
-    // BOTH SIDES MEASURED. These were `findings.length * 300` and a hand-built
-    // sum of per-section guesses -- two invented numbers, whose difference was
-    // then reported as a percentage saved. The full result and the compact one
-    // are both right here, so neither has to be guessed at.
-    const originalTokens = this.tokenCounter.count(
-      JSON.stringify(result)
-    ).tokens;
-    const compactedTokens = this.tokenCounter.count(
-      JSON.stringify({
-        findingsBySeverity,
-        findingsByCategory,
-        remediationPriorities,
-      })
-    ).tokens;
-
     return {
       summary: {
         success: result.success,
@@ -1209,13 +1188,6 @@ export class SmartSecurity {
       findingsBySeverity,
       findingsByCategory,
       remediationPriorities,
-      metrics: {
-        originalTokens,
-        compactedTokens,
-        reductionPercentage: Math.round(
-          ((originalTokens - compactedTokens) / originalTokens) * 100
-        ),
-      },
     };
   }
 
@@ -1678,12 +1650,8 @@ export async function runSmartSecurity(
       output += '\n';
     }
 
-    // Token metrics
-    output += `Token Reduction:\n`;
-    output += `  Original: ${result.metrics.originalTokens} tokens\n`;
-    output += `  Compacted: ${result.metrics.compactedTokens} tokens\n`;
-    output += `  Reduction: ${result.metrics.reductionPercentage}%\n`;
-
+    // NO TOKEN REDUCTION FOOTER. Four lines stating a percentage that was a
+    // property of two internal objects, charged to the caller as digits.
     return output;
   } finally {
     smartSec.close();

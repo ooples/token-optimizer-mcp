@@ -155,13 +155,19 @@ describe('a security scan that examined nothing', () => {
 
     it('claims no token saving for a file it never read', async () => {
       const out = await run({ targets: ['nope.ts'] });
-      // A reduction percentage here is a saving measured against nothing.
-      expect(out.metrics).toEqual({
-        originalTokens: 0,
-        compactedTokens: 0,
-        reductionPercentage: 0,
-      });
+      /*
+       * THE REFUSAL USED TO CARRY A ZEROED metrics BLOCK, which was the right
+       * instinct reached the wrong way: a measured zero still asserts that
+       * somebody measured. The block is gone from every path of this tool now,
+       * so the refusal is checked for the absence instead -- and the absence
+       * is the stronger statement, because a zero can be summed and an absent
+       * field cannot.
+       */
+      expect(out).not.toHaveProperty('metrics');
       expect(out.findingsBySeverity).toEqual([]);
+      // THE POSITIVE CONTROL: the refusal really is the shape under test, so
+      // the missing field above is not a missing reply.
+      expect(out.summary.scannedNothing).toBe(true);
     });
 
     it('says the deadline stopped it, not that the path was wrong', async () => {
