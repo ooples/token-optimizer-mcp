@@ -96,18 +96,17 @@ describe('a stamp the caller pinned', () => {
 
     expect(texts(all).length).toBeGreaterThan(0);
     expect(images(all).length).toBeGreaterThan(0);
-    for (const marker of all)
-      expect(marker).toMatch(/ ~[0-9bcdfghjklmnpqrstvwxyz]{6}\]$/);
+    for (const marker of all) expect(marker).toMatch(/ ~[0-9]{9}\]$/);
     // Minted over the content, so it is not the pin the next case asks for.
-    for (const marker of all) expect(marker).not.toContain('~jrmz7l');
+    for (const marker of all) expect(marker).not.toContain('~481729503');
   });
 
   it('reaches both back-reference families', () => {
-    const all = markers(v1Frontier(repeated(), { stamp: 'jrmz7l' }).request);
+    const all = markers(v1Frontier(repeated(), { stamp: '481729503' }).request);
 
     expect(texts(all).length).toBeGreaterThan(0);
     expect(images(all).length).toBeGreaterThan(0);
-    for (const marker of all) expect(marker).toContain(' ~jrmz7l]');
+    for (const marker of all) expect(marker).toContain(' ~481729503]');
   });
 
   it('is omitted entirely when the caller passes null', () => {

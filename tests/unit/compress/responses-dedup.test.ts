@@ -271,7 +271,7 @@ test('small lexical tables reconstruct escapes, nulls and oversized integers exa
   // the pattern is assembled around the stamp the encoder returned instead of
   // being written out as one literal.
   const tag = ' ~' + (compact.stamp ?? '');
-  expect(compact.stamp).toMatch(/^[0-9a-z]{6}$/);
+  expect(compact.stamp).toMatch(/^[0-9]{9}$/);
   const expanded = compact.text.replace(
     new RegExp(
       /\[All \d+ JSON records; join template strings and row\[integer\] verbatim\. Template: (\[[^\n]+?\])(?:; slots ([^\]\n]+) count from 0)?/

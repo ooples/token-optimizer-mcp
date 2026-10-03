@@ -248,7 +248,33 @@ describe('a referent pointed at twice is spelled out once', () => {
     expect(second).toBe(
       `[... 1,189 bytes, as #1 above ${'~' + (out.stamps[at] ?? '')}]`
     );
-    expect(second.length).toBeLessThan(first.length / 2);
+
+    // THE GAP IS THE QUOTE, so it is asserted as one rather than as a ratio.
+    // `second` is pinned to the character just above, so `second.length <
+    // first.length / 2` only ever said something about how long THIS fixture's
+    // opening line happens to be -- and when the authenticator went from six
+    // base-31 characters to nine digits, to cost four tokens flat instead of a
+    // mean of 5.52, the measured 41 against 80 failed by a single character
+    // while nothing about the claim had moved. What is actually true, and what
+    // is checked below, is that the repeat carries no content at all: the
+    // legible form grows with the referent's opening line and the cheap form
+    // does not, so a wordier opening line widens the gap on its own.
+    expect(second).not.toContain('alpha(input)');
+    expect(second.length).toBeLessThan(first.length);
+
+    const wordy = `${'// '.repeat(40)}\n${ALPHA}`;
+    const [firstWordy, secondWordy] = refs(
+      dedupBlocks([
+        { text: wordy, original: wordy, touchable: false },
+        { text: wordy, original: wordy, touchable: true },
+        { text: wordy, original: wordy, touchable: true },
+      ]).texts
+    );
+    // Measured: 93 against the 80 above, while the repeat stays at 41 -- the
+    // byte counts differ but both render in five characters, so this is the
+    // repeat's whole width, not a width that happens to round the same way.
+    expect(firstWordy.length).toBeGreaterThan(first.length);
+    expect(secondWordy.length).toBe(second.length);
   });
 
   it('does not label a referent pointed at only once', () => {

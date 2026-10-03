@@ -152,7 +152,7 @@ const blockTokens = (block) =>
  * The stamp every marker in this harness carries.
  *
  * THE HARNESS WAS NOT REPRODUCIBLE AND THE OLD CURRENCY COULD NOT SEE IT. A
- * marker is authenticated by six characters the engine mints from
+ * marker is authenticated by nine digits the engine mints from
  * `randomBytes(32)` once per process, so two runs of this file emit different
  * text. Measured: 206 of the strings it prices differ between consecutive runs,
  * with an identical length multiset and an identical character total -- which is
@@ -161,24 +161,29 @@ const blockTokens = (block) =>
  * rather than the variation being absent.
  *
  * It is not a free six characters either. Counted over 96 draws from the
- * engine's own alphabet, the ` ~xxxxxx` suffix costs 5, 6, 7 or 8 tokens
- * (7, 33, 40 and 16 draws respectively), mean 6.68 -- a random base-31 string
- * is about the worst content a tokenizer can be handed, near one token per
- * character. chars/4 charged it two. So authenticating a marker costs roughly a
- * third again of the 15-token marker it is attached to, and the harness had been
- * charging us a seventh of that.
+ * engine's then-current base-31 alphabet, the ` ~xxxxxx` suffix cost 5, 6, 7 or
+ * 8 tokens (7, 33, 40 and 16 draws respectively), mean 6.68 -- a random string
+ * over a large alphabet is about the worst content a tokenizer can be handed,
+ * near one token per character. chars/4 charged it two. So authenticating a
+ * marker cost roughly a third again of the 15-token marker it hung off, and the
+ * harness had been charging us a seventh of that.
+ *
+ * THAT MEASUREMENT IS WHY THE ENCODING CHANGED, and the change is why this pin
+ * is now exact rather than representative. `annotate.ts` draws nine decimal
+ * digits, which cost 4 tokens on every one of 48 draws -- digits tokenize three
+ * to a token, so the suffix has no spread left to average over and carries
+ * slightly more entropy than the six characters it replaced.
  *
  * `withStamp` already honours a stamp the caller supplies -- the published
  * comparator arm passes `null` to mean "do not stamp" -- so pinning one needs
- * nothing from the engine. This draw is pinned because it costs 7 tokens: the
- * mode of that distribution and the nearest integer to its mean. The residual
- * bias is +0.32 tokens per marker against us, about a hundred markers across
- * the corpus, so some thirty tokens charged to us that an average run would not
- * pay. Pinning it also removes the run-to-run spread, which at a standard
- * deviation of 0.85 tokens over the markers on the largest fixture was worth
- * about six tokens either way.
+ * nothing from the engine. Any draw would now do, because they all cost the
+ * same: there is no mode to pick and no residual bias to declare, where the old
+ * encoding had to be pinned to its 7-token mode and still charged us +0.32
+ * tokens per marker against an average run. What pinning buys here is only
+ * reproducibility -- the same bytes every run, so a count recorded against them
+ * stays valid.
  */
-const PINNED_STAMP = 'jrmz7l';
+const PINNED_STAMP = '481729503';
 
 /**
  * Marker-shaped spans in a request, cache-weighted, in tokens.
