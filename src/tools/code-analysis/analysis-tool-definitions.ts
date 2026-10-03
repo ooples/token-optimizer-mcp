@@ -149,7 +149,7 @@ export const SMART_IMPORTS_TOOL_DEFINITION = {
 export const SMART_REFACTOR_TOOL_DEFINITION = {
   name: 'smart_refactor',
   description:
-    'Provides intelligent refactoring suggestions with code examples and impact analysis. Measured token reduction vs reading the file: -31% to 82% first read, -31% to 82% repeated (bench/tools, 3 fixtures) -- the loss is on the smallest fixture, where the suggestions and their code examples outweigh the 5KB file they are about.',
+    'Provides intelligent refactoring suggestions with code examples and impact analysis. Measured token reduction vs reading the file: -18% to 82% first read, -18% to 82% repeated (bench/tools, 3 fixtures) -- the loss is on the smallest fixture, where the suggestions and their code examples outweigh the 5KB file they are about.',
   inputSchema: {
     type: 'object',
     properties: {
