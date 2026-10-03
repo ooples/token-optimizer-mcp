@@ -80,8 +80,37 @@ describe('smart_tsconfig answers the same on a cache hit', () => {
     return { tool, configPath };
   }
 
+  // THE SAME CONFIG, REACHED THROUGH AN EXTENDS.
+  //
+  // The agreement this file is about -- cold and cached must answer alike --
+  // is about the merged config, and a config that extends nothing no longer
+  // sends one, because it resolves to the file the caller already has. So the
+  // fixture is read as a base here, and the tool is pointed at a one-line
+  // config that extends it. Nothing about the merge under test changes: every
+  // field asserted below still comes from CONFIG.
+  //
+  // Without this the assertions would still pass, on both sides being
+  // undefined, and would have stopped testing anything.
+  function makeExtendingTool() {
+    const dir = mkdtempSync(join(tmpdir(), 'token-optimizer-tsconfig-'));
+    dirs.push(dir);
+    const cache = new CacheEngine(join(dir, 'cache.db'));
+    caches.push(cache);
+    const basePath = join(dir, 'base.json');
+    writeFileSync(basePath, CONFIG);
+    const configPath = join(dir, 'tsconfig.json');
+    writeFileSync(configPath, '{ "extends": "./base.json" }');
+    const tool = getSmartTsConfig(
+      cache,
+      new TokenCounter(),
+      new MetricsCollector(),
+      dir
+    );
+    return { tool, configPath, basePath };
+  }
+
   it('returns the same resolved config cold and cached', async () => {
-    const { tool, configPath } = makeTool();
+    const { tool, configPath } = makeExtendingTool();
 
     const cold = await tool.run({ configPath });
     const warm = await tool.run({ configPath });
@@ -92,28 +121,28 @@ describe('smart_tsconfig answers the same on a cache hit', () => {
   });
 
   it('keeps the fields that say which files the config applies to', async () => {
-    const { tool, configPath } = makeTool();
+    const { tool, configPath } = makeExtendingTool();
 
     await tool.run({ configPath });
     const warm = await tool.run({ configPath });
 
     expect(warm.cacheHit).toBe(true);
-    expect(warm.resolved.include).toEqual(['src/**/*']);
-    expect(warm.resolved.exclude).toEqual([
+    expect(warm.resolved?.include).toEqual(['src/**/*']);
+    expect(warm.resolved?.exclude).toEqual([
       'node_modules',
       'dist',
       '**/*.test.ts',
     ]);
-    expect(warm.resolved.files).toEqual(['src/index.ts']);
+    expect(warm.resolved?.files).toEqual(['src/index.ts']);
   });
 
   it('control: the shape this replaced does drop those fields', async () => {
-    const { tool, configPath } = makeTool();
+    const { tool, configPath } = makeExtendingTool();
     const cold = await tool.run({ configPath });
 
     // What the cached branch used to build, on this very fixture.
     const oldShape = {
-      compilerOptions: cold.resolved.compilerOptions,
+      compilerOptions: cold.resolved?.compilerOptions,
       extendsChain: [configPath],
       configPath,
     };
@@ -123,15 +152,16 @@ describe('smart_tsconfig answers the same on a cache hit', () => {
   });
 
   it('does not repeat the config path inside the resolved config', async () => {
-    const { tool, configPath } = makeTool();
+    const { tool, configPath } = makeExtendingTool();
     const cold = await tool.run({ configPath });
 
-    // The path is on the response already; a config that extends nothing has no
-    // chain to report, and repeating an absolute path twice more was about a
-    // fifth of the payload on a config this size.
+    // The path is on the response already, and repeating that absolute path
+    // inside the merge was about a tenth of the payload on a config this
+    // size. The CHAIN is a different matter: those are files the caller
+    // never named, which is the one thing only the tool knows.
     expect(cold.configPath).toBe(configPath);
     expect(cold.resolved).not.toHaveProperty('configPath');
-    expect(cold.resolved.extendsChain).toBeUndefined();
+    expect(cold.resolved?.extendsChain).toHaveLength(2);
   });
 
   it('states no saving of its own, under any name', async () => {
@@ -144,7 +174,7 @@ describe('smart_tsconfig answers the same on a cache hit', () => {
      * returns. The before is declared as the chain's paths and measured by the
      * recorder; the after is counted once, at the wire.
      */
-    const { tool, configPath } = makeTool();
+    const { tool, configPath } = makeExtendingTool();
     const cold = await tool.run({ configPath });
 
     const SAVINGS_KEYS = [
@@ -169,9 +199,48 @@ describe('smart_tsconfig answers the same on a cache hit', () => {
     expect(found).toEqual([]);
     // THE POSITIVE CONTROL, twice: the reply really is the resolved config, and
     // the walk really does descend into a reply of this shape.
-    expect(cold.resolved.compilerOptions.target).toBeDefined();
+    expect(cold.resolved?.compilerOptions.target).toBeDefined();
     walk({ resolved: { a: { tokenMetrics: {} } } });
     expect(found).toEqual(['tokenMetrics']);
+  });
+
+  it('sends no merge when there was nothing to merge', async () => {
+    const { tool, configPath } = makeTool();
+    const cold = await tool.run({ configPath });
+
+    // The answer in one word. This config extends nothing, so the resolved
+    // config is the file the caller named -- 78 tokens of it, against a
+    // 76-token file, to say that reading it changed nothing.
+    expect(cold.resolution).toBe('as-written');
+    expect(cold.resolved).toBeUndefined();
+
+    // AND THE ANALYSIS STILL TRAVELS. This is the half the caller could not
+    // have worked out from the file in front of them, and dropping the echo
+    // must not drop it.
+    expect(Array.isArray(cold.suggestions)).toBe(true);
+    expect((cold.suggestions ?? []).length).toBeGreaterThan(0);
+  });
+
+  it('control: a config that does extend one gets the merge', async () => {
+    // THE POSITIVE CONTROL for the test above. If `resolved` were simply gone
+    // from the response, that test would pass just as well.
+    const { tool, configPath } = makeExtendingTool();
+    const cold = await tool.run({ configPath });
+
+    expect(cold.resolution).toBe('merged');
+    expect(cold.resolved?.compilerOptions.target).toBe('ES2022');
+  });
+
+  it('answers the same on a cache hit when there was no merge either', async () => {
+    const { tool, configPath } = makeTool();
+
+    const cold = await tool.run({ configPath });
+    const warm = await tool.run({ configPath });
+
+    expect(warm.cacheHit).toBe(true);
+    expect(warm.resolution).toBe(cold.resolution);
+    expect(warm.resolved).toBeUndefined();
+    expect(warm.suggestions).toEqual(cold.suggestions);
   });
 
   it('declares the file it read, so the recorder has a before to measure', async () => {

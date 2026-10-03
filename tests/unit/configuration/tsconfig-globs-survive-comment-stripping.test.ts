@@ -48,9 +48,7 @@ describe('smart_tsconfig reads globs, not comments', () => {
   });
 
   function naiveStrip(source: string): string {
-    return source
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/\/\/.*/g, '');
+    return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
   }
 
   async function resolveConfig(source: string) {
@@ -58,8 +56,16 @@ describe('smart_tsconfig reads globs, not comments', () => {
     dirs.push(dir);
     const cache = new CacheEngine(join(dir, 'cache.db'));
     caches.push(cache);
+    // THE FIXTURE IS READ AS A BASE, not as the config named in the call.
+    // A config that extends nothing resolves to itself, and the tool no
+    // longer hands that back -- so there would be no parsed config to read
+    // the globs out of. Wrapping it in a one-line config that extends it
+    // changes nothing about the parse under test: the comments and the
+    // globs are in this file, and the merge is what comes back.
+    const basePath = join(dir, 'base.json');
+    writeFileSync(basePath, source);
     const configPath = join(dir, 'tsconfig.json');
-    writeFileSync(configPath, source);
+    writeFileSync(configPath, '{ "extends": "./base.json" }');
 
     const tool = getSmartTsConfig(
       cache,
@@ -73,7 +79,7 @@ describe('smart_tsconfig reads globs, not comments', () => {
 
   const WITH_GLOBS = [
     '{',
-    '  // Comments are allowed here, and TypeScript\'s own docs use them.',
+    "  // Comments are allowed here, and TypeScript's own docs use them.",
     '  "compilerOptions": {',
     '    "target": "ES2022",',
     '    /* "strict": false, turned off during the migration */',
