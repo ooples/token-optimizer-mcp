@@ -64,27 +64,57 @@ export interface SmartReadOptions {
 
   // Optimization options
   preserveStructure?: boolean; // Keep important structural elements when truncating
-  includeMetadata?: boolean; // Include file metadata in response
+  // Also return path, type, hash and encoding; off by default, see
+  // SmartReadMetadata for what each of them was measured to cost.
+  includeMetadata?: boolean;
   encoding?: BufferEncoding; // File encoding (default: utf-8)
+}
+
+/**
+ * What a read reports about the file, alongside the content itself.
+ *
+ * EVERY FIELD HERE IS BILLED TO THE CALLER, which is why so few of them are
+ * sent unasked. Measured on this repository's own `tool-profile.ts`, the header
+ * cost 127 tokens of a 1167-token reply, against a first-read overhead of about
+ * 150 -- so the header was very nearly the whole of this tool's loss on a first
+ * read. Of those 127, `hash` was 41 (a sha256 in hex is close to the worst case
+ * a BPE tokenizer has), `path` 29 restating the argument the caller had just
+ * sent, `fileType` and `encoding` 7 each -- and nothing in this repository,
+ * production or test, read any of the four. The four flags added 22 more while
+ * all four were false.
+ *
+ * So `size` is unconditional, the four descriptive fields are sent when asked
+ * for, and a flag appears only when it is TRUE: the false case is the ordinary
+ * one and omission says it for nothing. `getMetadata` fills the whole shape,
+ * because a caller that wants metadata and no content wants exactly these.
+ */
+export interface SmartReadMetadata {
+  /** Present when asked for, or on an explicit metadata read. */
+  path?: string;
+  size: number;
+  /** Present when asked for, or when the file was not read as utf-8. */
+  encoding?: string;
+  /** Present when asked for, or on an explicit metadata read. */
+  fileType?: string;
+  /** Content hash. Present when asked for, or on an explicit metadata read. */
+  hash?: string;
+  /** Present only when the content came from the cache. */
+  fromCache?: boolean;
+  /** Present only when the content is a diff against an earlier read. */
+  isDiff?: boolean;
+  /** Present only when the file was split into chunks. */
+  chunked?: boolean;
+  /** Present only when the content was cut short. */
+  truncated?: boolean;
+  /** How many chunks the file was split into; present only when chunked. */
+  chunkCount?: number;
+  /** Which chunk this response carries; present only when chunked. */
+  chunkIndex?: number;
 }
 
 export interface SmartReadResult {
   content: string;
-  metadata: {
-    path: string;
-    size: number;
-    encoding: string;
-    fileType: string;
-    hash: string;
-    fromCache: boolean;
-    isDiff: boolean;
-    chunked: boolean;
-    truncated: boolean;
-    /** How many chunks the file was split into; present only when chunked. */
-    chunkCount?: number;
-    /** Which chunk this response carries; present only when chunked. */
-    chunkIndex?: number;
-  };
+  metadata: SmartReadMetadata;
   diff?: {
     added: string[];
     removed: string[];
@@ -126,7 +156,7 @@ export class SmartReadTool {
       maxSize = 100000, // 100KB default max
       chunkSize = 4000,
       preserveStructure = true,
-      includeMetadata: _includeMetadata = true,
+      includeMetadata = false,
       encoding = 'utf-8',
     } = options;
 
@@ -361,22 +391,35 @@ export class SmartReadTool {
       },
     });
 
+    const header: SmartReadMetadata = { size: stats.size };
+
+    if (includeMetadata) {
+      header.path = filePath;
+      header.fileType = fileType;
+      header.hash = fileHash;
+    }
+    // The encoding is worth a line when it is NOT the one every caller assumes,
+    // asked for or not: content decoded as latin1 and labelled nothing reads as
+    // corrupt rather than as a different encoding. Both spellings of the default
+    // count as the default, since a caller who passes one is not saying anything.
+    if (includeMetadata || (encoding !== 'utf-8' && encoding !== 'utf8')) {
+      header.encoding = encoding;
+    }
+
+    if (fromCache) header.fromCache = true;
+    if (isDiff) header.isDiff = true;
+    if (truncated) header.truncated = true;
+    if (chunked) {
+      header.chunked = true;
+      // Navigation, not content. Attaching every chunk here defeated the
+      // entire point of chunking: the caller received the whole file anyway.
+      header.chunkCount = chunkCount;
+      header.chunkIndex = chunkIndex;
+    }
+
     return {
       content: finalContent,
-      metadata: {
-        path: filePath,
-        size: stats.size,
-        encoding,
-        fileType,
-        hash: fileHash,
-        fromCache,
-        isDiff,
-        chunked,
-        truncated,
-        // Navigation, not content. Attaching every chunk here defeated the
-        // entire point of chunking: the caller received the whole file anyway.
-        ...(chunked ? { chunkCount, chunkIndex } : {}),
-      },
+      metadata: header,
       diff: diffData,
     };
   }
@@ -467,7 +510,7 @@ export async function runSmartRead(
 export const SMART_READ_TOOL_DEFINITION = {
   name: 'smart_read',
   description:
-    'Read files with intelligent caching, diff-based updates, and syntax-aware optimization. Measured token reduction vs reading the file: -14% to -3% first read, 91-98% repeated on an unchanged file (bench/tools, 3 fixtures) -- a first read returns the file and its metadata, so it costs more than reading the file; the saving is entirely on the repeat.',
+    'Read files with intelligent caching, diff-based updates, and syntax-aware optimization. Measured token reduction vs reading the file: -5% to -1% first read, 98-99.6% repeated on an unchanged file (bench/tools, 3 fixtures) -- a first read returns the file plus a one-field header, so it still costs a little more than reading the file; the saving is on the repeat.',
   annotations: {
     title: 'Read a file efficiently',
     readOnlyHint: true,
@@ -523,8 +566,9 @@ export const SMART_READ_TOOL_DEFINITION = {
       },
       includeMetadata: {
         type: 'boolean',
-        description: 'Include size, hash and encoding alongside the content',
-        default: true,
+        description:
+          'Also return the path, type, hash and encoding of the file. Off by default: they measured 84 tokens of a reply and none of them is the file',
+        default: false,
       },
       encoding: {
         type: 'string',

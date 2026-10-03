@@ -216,7 +216,7 @@ describe('SmartReadTool chunking', () => {
     const { tool, file, body } = makeFixture();
     const plain = await tool.read(file, { enableCache: false });
 
-    expect(plain.metadata.chunked).toBe(false);
+    expect(plain.metadata.chunked).toBeUndefined();
     expect(plain.metadata.chunkCount).toBeUndefined();
     expect(plain.content).toBe(body);
   });
