@@ -156,6 +156,28 @@ export async function discloseResult(
       tool: toolName,
       boosts,
       ref,
+      /**
+       * Stores what the preview is about to withhold, and returns the pointer
+       * the preview will print.
+       *
+       * THE HANDLE USED TO NAME THE WHOLE BODY, so following it paid for the
+       * preview a second time. Measured on a 1,270-token file read through
+       * smart_read: a 1,192-token preview and then 1,778 tokens to expand it,
+       * 2,970 for 1,270 of content, with the duplicated preview the biggest
+       * term in the bill. A caller holding a preview needs the remainder.
+       *
+       * Captured with the SAME anchors and tool as the body, so staleness stays
+       * answerable for the remainder exactly as it is for the whole: the
+       * artifact store is keyed on content, and these two differ.
+       */
+      captureWithheld: (withheld: string) =>
+        mods.expand.capture(dir, withheld, {
+          tool: toolName,
+          shape,
+          anchors,
+          sessionId: SESSION_ID,
+          costMs: Number.isFinite(costMs) ? costMs : null,
+        }),
     });
     if (!out) return result;
 
@@ -170,7 +192,12 @@ export async function discloseResult(
           // tools whose reply disclosure chose to trim -- the ones with the
           // largest before to declare.
           ...(result._meta?.tokenOptimizer || {}),
-          disclosureRef: ref,
+          // THE REFERENCE THE PREVIEW ACTUALLY PRINTED, which is now the
+          // remainder rather than the body. record-tool-analytics debits an
+          // expansion against the entry whose disclosureRef matches the ref the
+          // caller passed to `expand`, so recording a reference the preview
+          // never advertised would silently stop every debit from matching.
+          disclosureRef: typeof out.handle === 'string' ? out.handle : ref,
           disclosureMode: out.mode,
         },
       },

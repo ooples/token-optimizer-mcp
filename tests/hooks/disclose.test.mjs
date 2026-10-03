@@ -13,11 +13,23 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  disclose, parseShape, rankSections, verdictFor, DISCLOSE_THRESHOLD,
+  disclose,
+  parseShape,
+  rankSections,
+  verdictFor,
+  DISCLOSE_THRESHOLD,
+  withheldLines,
 } from '../../hooks-core/disclose.mjs';
 import {
-  capture, resolve, freshness, refreshDecision, recordExpansion,
-  previewPolicy, promote, previewQuality, CHEAP_REGEN_MS,
+  capture,
+  resolve,
+  freshness,
+  refreshDecision,
+  recordExpansion,
+  previewPolicy,
+  promote,
+  previewQuality,
+  CHEAP_REGEN_MS,
 } from '../../hooks-core/expand.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
@@ -37,9 +49,20 @@ const graph = () => load(dir);
 /** A test report far past the disclosure threshold, mostly passes. */
 function bigTestReport() {
   const lines = [];
-  for (let i = 0; i < 400; i++) lines.push(`  PASS  ShardTests.Case${i} elapsed 12ms and some padding text`);
-  lines.splice(120, 0, '  FAILED  DBNetTests.BceOnRelu -- expected 0.0 got NaN');
-  lines.splice(300, 0, '  FAILED  TftGradientFlow -- gradient did not reach the encoder');
+  for (let i = 0; i < 400; i++)
+    lines.push(
+      `  PASS  ShardTests.Case${i} elapsed 12ms and some padding text`
+    );
+  lines.splice(
+    120,
+    0,
+    '  FAILED  DBNetTests.BceOnRelu -- expected 0.0 got NaN'
+  );
+  lines.splice(
+    300,
+    0,
+    '  FAILED  TftGradientFlow -- gradient did not reach the encoder'
+  );
   lines.push('Tests: 2 failed, 400 passed, 402 total');
   return lines.join('\n');
 }
@@ -49,11 +72,18 @@ describe('shape is parsed before anything is selected', () => {
     const { shape, sections } = parseShape(bigTestReport());
     expect(shape).toBe('test-report');
     expect(sections.find((s) => s.label === 'failures').lines).toHaveLength(2);
-    expect(sections.find((s) => s.label === 'passing tests').lines.length).toBeGreaterThan(300);
+    expect(
+      sections.find((s) => s.label === 'passing tests').lines.length
+    ).toBeGreaterThan(300);
   });
 
   test('a diff becomes one section per file, so 39 of 40 can be dropped by name', () => {
-    const text = ['diff --git a/src/a.ts b/src/a.ts', '+one', 'diff --git a/src/b.ts b/src/b.ts', '+two'].join('\n');
+    const text = [
+      'diff --git a/src/a.ts b/src/a.ts',
+      '+one',
+      'diff --git a/src/b.ts b/src/b.ts',
+      '+two',
+    ].join('\n');
     const { shape, sections } = parseShape(text);
     expect(shape).toBe('diff');
     expect(sections.map((s) => s.label)).toEqual(['src/a.ts', 'src/b.ts']);
@@ -67,7 +97,9 @@ describe('shape is parsed before anything is selected', () => {
     ].join('\n');
     const { shape, sections } = parseShape(text);
     expect(shape).toBe('stack-trace');
-    expect(sections.find((s) => s.label === 'frames in this project').lines).toHaveLength(1);
+    expect(
+      sections.find((s) => s.label === 'frames in this project').lines
+    ).toHaveLength(1);
   });
 
   test('an unrecognised output still yields one section rather than throwing', () => {
@@ -78,12 +110,18 @@ describe('shape is parsed before anything is selected', () => {
     // The case that matters most: every tool this product ships returns a JSON
     // envelope, so a build log arrives as one enormous escaped string on a
     // single line. Selecting inside a single line is not selection at all.
-    const body = JSON.stringify({ output: bigTestReport(), path: 'x.ts', tokensSaved: 12 });
+    const body = JSON.stringify({
+      output: bigTestReport(),
+      path: 'x.ts',
+      tokensSaved: 12,
+    });
     const { shape, sections } = parseShape(body);
 
     expect(shape).toBe('json');
     expect(sections.map((s) => s.label)).toContain('output > failures');
-    expect(sections.find((s) => s.label === 'output > failures').lines).toHaveLength(2);
+    expect(
+      sections.find((s) => s.label === 'output > failures').lines
+    ).toHaveLength(2);
     // Small fields stay whole -- nesting is for payloads, not for metadata.
     expect(sections.map((s) => s.label)).toContain('tokensSaved');
   });
@@ -92,14 +130,18 @@ describe('shape is parsed before anything is selected', () => {
     const body = JSON.stringify({ output: bigTestReport(), path: 'x.ts' });
     const out = disclose(dir, body, { question: 'which shard fails?' });
     expect(out.text).toContain('DBNetTests.BceOnRelu');
-    expect(out.omissions.map((o) => o.label)).toContain('output > passing tests');
+    expect(out.omissions.map((o) => o.label)).toContain(
+      'output > passing tests'
+    );
   });
 });
 
 describe('selection is driven by the question, not by position', () => {
   test('the section naming the question outranks a heavier generic one', () => {
     const sections = parseShape(bigTestReport()).sections;
-    const ranked = rankSections(sections, { question: 'why is BceOnRelu producing NaN?' });
+    const ranked = rankSections(sections, {
+      question: 'why is BceOnRelu producing NaN?',
+    });
     expect(ranked[0].label).toBe('failures');
   });
 
@@ -122,7 +164,10 @@ describe('selection is driven by the question, not by position', () => {
 
 describe('the preview names every cut', () => {
   test('what was dropped is stated, with how much of it', () => {
-    const out = disclose(dir, bigTestReport(), { question: 'which shard fails?', ref: 'abc123' });
+    const out = disclose(dir, bigTestReport(), {
+      question: 'which shard fails?',
+      ref: 'abc123',
+    });
     expect(out.mode).toBe('preview');
     // A model reasoning over a silent truncation cannot know it is missing
     // something; one told what was dropped can ask for it.
@@ -131,7 +176,9 @@ describe('the preview names every cut', () => {
   });
 
   test('the failures survive and the passes do not', () => {
-    const out = disclose(dir, bigTestReport(), { question: 'which shard fails?' });
+    const out = disclose(dir, bigTestReport(), {
+      question: 'which shard fails?',
+    });
     expect(out.text).toContain('DBNetTests.BceOnRelu');
     expect(out.omissions.map((o) => o.label)).toContain('passing tests');
   });
@@ -165,13 +212,19 @@ describe('the strongest disclosure is none of the output at all', () => {
     writeFileSync(path, 'export function verify() { return 1; }');
     indexFile(dir, path);
     const finding = putNode(dir, {
-      kind: 'finding', key: 'f1', confidence: 0.9, derivedCost: 12_400,
+      kind: 'finding',
+      key: 'f1',
+      confidence: 0.9,
+      derivedCost: 12_400,
       claim: 'the 401s come from clock skew on the server, not token signing',
     });
     putEdge(dir, finding, 'derived_from', nodeId('file', path));
 
     const out = disclose(dir, bigTestReport(), {
-      graph: graph(), anchors: [path], question: 'is the clock skew causing the 401s?', ref: 'r1',
+      graph: graph(),
+      anchors: [path],
+      question: 'is the clock skew causing the 401s?',
+      ref: 'r1',
     });
 
     expect(out.mode).toBe('verdict');
@@ -185,27 +238,44 @@ describe('the strongest disclosure is none of the output at all', () => {
     const path = join(workspace, 'auth.ts');
     writeFileSync(path, 'export function verify() { return 1; }');
     indexFile(dir, path);
-    const finding = putNode(dir, { kind: 'finding', key: 'f1', confidence: 0.9, claim: 'skew explains the 401s' });
+    const finding = putNode(dir, {
+      kind: 'finding',
+      key: 'f1',
+      confidence: 0.9,
+      claim: 'skew explains the 401s',
+    });
     putEdge(dir, finding, 'derived_from', nodeId('file', path));
     writeFileSync(path, 'export function verify() { return 2; }');
 
-    expect(verdictFor(graph(), { anchors: [path], question: 'skew?' })).toBeNull();
+    expect(
+      verdictFor(graph(), { anchors: [path], question: 'skew?' })
+    ).toBeNull();
   });
 
   test('a low-confidence finding does not get to answer either', () => {
     const path = join(workspace, 'auth.ts');
     writeFileSync(path, 'export function verify() { return 1; }');
     indexFile(dir, path);
-    const finding = putNode(dir, { kind: 'finding', key: 'f1', confidence: 0.2, claim: 'skew explains the 401s' });
+    const finding = putNode(dir, {
+      kind: 'finding',
+      key: 'f1',
+      confidence: 0.2,
+      claim: 'skew explains the 401s',
+    });
     putEdge(dir, finding, 'derived_from', nodeId('file', path));
 
-    expect(verdictFor(graph(), { anchors: [path], question: 'skew?' })).toBeNull();
+    expect(
+      verdictFor(graph(), { anchors: [path], question: 'skew?' })
+    ).toBeNull();
   });
 });
 
 describe('the pointer serves; it does not re-run', () => {
   test('expansion returns the original with nothing re-earned', () => {
-    const ref = capture(dir, bigTestReport(), { tool: 'smart_test', shape: 'test-report' });
+    const ref = capture(dir, bigTestReport(), {
+      tool: 'smart_test',
+      shape: 'test-report',
+    });
     const out = resolve(dir, ref);
     expect(out.text).toContain('DBNetTests.BceOnRelu');
     expect(out.reEarnedTokens).toBe(0);
@@ -227,7 +297,12 @@ describe('staleness is a three-way decision, not a boolean', () => {
   const seed = (costMs) => {
     const path = join(workspace, 'auth.ts');
     writeFileSync(path, 'before');
-    const ref = capture(dir, bigTestReport(), { tool: 'smart_test', command: 'dotnet test', costMs, anchors: [path] });
+    const ref = capture(dir, bigTestReport(), {
+      tool: 'smart_test',
+      command: 'dotnet test',
+      costMs,
+      anchors: [path],
+    });
     return { path, ref };
   };
 
@@ -263,15 +338,28 @@ describe('staleness is a three-way decision, not a boolean', () => {
 
 describe('an expansion is labelled data, and is used as such', () => {
   test('a shape whose previews hold produces no corrections', () => {
-    for (let i = 0; i < 5; i++) capture(dir, `${bigTestReport()}${i}`, { tool: 't', shape: 'test-report' });
+    for (let i = 0; i < 5; i++)
+      capture(dir, `${bigTestReport()}${i}`, {
+        tool: 't',
+        shape: 'test-report',
+      });
     const policy = previewPolicy(dir, { shape: 'test-report' });
     expect(policy.holdRate).toBe(1);
     expect(Object.keys(policy.boosts)).toHaveLength(0);
   });
 
   test('a shape that keeps getting expanded boosts what people asked for', () => {
-    for (let i = 0; i < 4; i++) capture(dir, `${bigTestReport()}${i}`, { tool: 't', shape: 'test-report' });
-    for (let i = 0; i < 3; i++) recordExpansion(dir, { tool: 't', shape: 'test-report', asked: 'passing tests' });
+    for (let i = 0; i < 4; i++)
+      capture(dir, `${bigTestReport()}${i}`, {
+        tool: 't',
+        shape: 'test-report',
+      });
+    for (let i = 0; i < 3; i++)
+      recordExpansion(dir, {
+        tool: 't',
+        shape: 'test-report',
+        asked: 'passing tests',
+      });
 
     const policy = previewPolicy(dir, { shape: 'test-report' });
     expect(policy.holdRate).toBeLessThan(0.3);
@@ -280,22 +368,32 @@ describe('an expansion is labelled data, and is used as such', () => {
   });
 
   test('the correction is proportional to how badly the shape is doing', () => {
-    for (let i = 0; i < 20; i++) capture(dir, `${bigTestReport()}${i}`, { shape: 'log' });
+    for (let i = 0; i < 20; i++)
+      capture(dir, `${bigTestReport()}${i}`, { shape: 'log' });
     recordExpansion(dir, { shape: 'log', asked: 'routine log lines' });
-    const gentle = previewPolicy(dir, { shape: 'log' }).boosts['routine log lines'];
+    const gentle = previewPolicy(dir, { shape: 'log' }).boosts[
+      'routine log lines'
+    ];
 
-    for (let i = 0; i < 12; i++) recordExpansion(dir, { shape: 'log', asked: 'routine log lines' });
-    const firm = previewPolicy(dir, { shape: 'log' }).boosts['routine log lines'];
+    for (let i = 0; i < 12; i++)
+      recordExpansion(dir, { shape: 'log', asked: 'routine log lines' });
+    const firm = previewPolicy(dir, { shape: 'log' }).boosts[
+      'routine log lines'
+    ];
 
     expect(firm).toBeGreaterThan(gentle);
   });
 
   test('the refit closes the loop: the boosted section survives the next preview', () => {
-    for (let i = 0; i < 4; i++) capture(dir, `${bigTestReport()}${i}`, { shape: 'test-report' });
-    for (let i = 0; i < 4; i++) recordExpansion(dir, { shape: 'test-report', asked: 'passing tests' });
+    for (let i = 0; i < 4; i++)
+      capture(dir, `${bigTestReport()}${i}`, { shape: 'test-report' });
+    for (let i = 0; i < 4; i++)
+      recordExpansion(dir, { shape: 'test-report', asked: 'passing tests' });
 
     const { boosts } = previewPolicy(dir, { shape: 'test-report' });
-    const ranked = rankSections(parseShape(bigTestReport()).sections, { boosts });
+    const ranked = rankSections(parseShape(bigTestReport()).sections, {
+      boosts,
+    });
     expect(ranked[0].label).toBe('passing tests');
   });
 });
@@ -307,10 +405,18 @@ describe('expanding promotes, so the second expansion never happens', () => {
     indexFile(dir, path);
 
     const ref = capture(dir, bigTestReport(), { anchors: [path] });
-    promote(dir, { ref, anchor: path, claim: 'BceOnRelu goes NaN because the ReLU head feeds BCE', derivedCost: 6000 });
+    promote(dir, {
+      ref,
+      anchor: path,
+      claim: 'BceOnRelu goes NaN because the ReLU head feeds BCE',
+      derivedCost: 6000,
+    });
 
     // Surfaced on the next touch of that file, without anyone asking again.
-    const verdict = verdictFor(graph(), { anchors: [path], question: 'why does BceOnRelu produce NaN?' });
+    const verdict = verdictFor(graph(), {
+      anchors: [path],
+      question: 'why does BceOnRelu produce NaN?',
+    });
     expect(verdict.claim).toContain('ReLU head feeds BCE');
   });
 
@@ -325,9 +431,12 @@ describe('preview quality is reported, not buried', () => {
   });
 
   test('the hold rate and the worst shape are both named', () => {
-    for (let i = 0; i < 10; i++) capture(dir, `${bigTestReport()}${i}`, { shape: 'test-report' });
-    for (let i = 0; i < 5; i++) capture(dir, `log output ${i}`.repeat(500), { shape: 'log' });
-    for (let i = 0; i < 4; i++) recordExpansion(dir, { shape: 'log', asked: 'routine log lines' });
+    for (let i = 0; i < 10; i++)
+      capture(dir, `${bigTestReport()}${i}`, { shape: 'test-report' });
+    for (let i = 0; i < 5; i++)
+      capture(dir, `log output ${i}`.repeat(500), { shape: 'log' });
+    for (let i = 0; i < 4; i++)
+      recordExpansion(dir, { shape: 'log', asked: 'routine log lines' });
 
     const quality = previewQuality(dir);
     expect(quality.text).toMatch(/previews held \d+% of the time/);
@@ -353,9 +462,13 @@ describe('expand serves what it claims to serve', () => {
       expect(windowsTraversal).toContain('\\');
 
       for (const bad of [
-        '../../../etc/passwd', windowsTraversal, 'not-hex-at-all',
+        '../../../etc/passwd',
+        windowsTraversal,
+        'not-hex-at-all',
         'ABCDEF0123456789', // uppercase hex: right shape, wrong case, still refused
-        '', null, 42,
+        '',
+        null,
+        42,
       ]) {
         expect(resolve(dir, bad)).toBeNull();
       }
@@ -383,7 +496,11 @@ describe('expand serves what it claims to serve', () => {
     try {
       // Capture writes the artifact AND a metrics record; delete the metrics so only the
       // artifact survives, which is exactly the steady state being reproduced.
-      const ref = capture(dir, 'some captured output', { anchors: [], tool: 'Bash', shape: 'log' });
+      const ref = capture(dir, 'some captured output', {
+        anchors: [],
+        tool: 'Bash',
+        shape: 'log',
+      });
       rmSync(join(dir, 'metrics.jsonl'), { force: true });
       const out = resolve(dir, ref);
       expect(out).toBeTruthy();
@@ -408,9 +525,13 @@ describe('an omission is never silent, and never invented', () => {
     // pointer to recover it. Every other splitter partitions all of its input; this one did not.
     const dir = mkdtempSync(join(tmpdir(), 'disc-arr-'));
     try {
-      const body = JSON.stringify(Array.from({ length: 500 }, (_, i) => ({
-        id: i, name: `item-${i}`, detail: 'x'.repeat(20),
-      })));
+      const body = JSON.stringify(
+        Array.from({ length: 500 }, (_, i) => ({
+          id: i,
+          name: `item-${i}`,
+          detail: 'x'.repeat(20),
+        }))
+      );
       const out = disclose(dir, body, { ref: 'abc123def4567890' });
       expect(out).toBeTruthy();
       expect(out.omissions.length).toBeGreaterThan(0);
@@ -431,10 +552,19 @@ describe('an omission is never silent, and never invented', () => {
     // "1 lines" directly above a tail reporting thousands omitted.
     const dir = mkdtempSync(join(tmpdir(), 'disc-hdr-'));
     try {
-      const report = Array.from({ length: 3000 }, (_, i) => `  ok ${i} - passing test`).join('\n');
-      const out = disclose(dir, JSON.stringify({ output: report, path: 'x.ts' }), { ref: 'r9' });
+      const report = Array.from(
+        { length: 3000 },
+        (_, i) => `  ok ${i} - passing test`
+      ).join('\n');
+      const out = disclose(
+        dir,
+        JSON.stringify({ output: report, path: 'x.ts' }),
+        { ref: 'r9' }
+      );
       expect(out).toBeTruthy();
-      const stated = Number(/output, ([\d,]+) lines/.exec(out.text)?.[1]?.replace(/,/g, '') ?? '0');
+      const stated = Number(
+        /output, ([\d,]+) lines/.exec(out.text)?.[1]?.replace(/,/g, '') ?? '0'
+      );
       expect(stated).toBeGreaterThan(100);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -447,10 +577,201 @@ describe('an omission is never silent, and never invented', () => {
     // reader to spend an expand call on nothing.
     const dir = mkdtempSync(join(tmpdir(), 'disc-zero-'));
     try {
-      const out = disclose(dir, Array.from({ length: 1100 }, () => 'abcd').join('\n'), { ref: 'r1' });
-      if (out) for (const o of out.omissions) expect(o.lines).toBeGreaterThan(0);
+      const out = disclose(
+        dir,
+        Array.from({ length: 1100 }, () => 'abcd').join('\n'),
+        { ref: 'r1' }
+      );
+      if (out)
+        for (const o of out.omissions) expect(o.lines).toBeGreaterThan(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('a preview costs less than the output it replaces', () => {
+  /**
+   * A body past the threshold whose sections are many and tiny.
+   *
+   * The budget admits nearly all of them, so the preview carries almost every
+   * line AND adds a header, a label per section and an omission tail. Measured
+   * against the code before WORTHWHILE_PREVIEW existed, this body previewed at
+   * 1.63x the cost of sending it -- the tax the refusal exists to refuse.
+   */
+  function manyTinySections(count) {
+    const out = {};
+    for (let k = 0; k < count; k += 1) {
+      out['section' + k] = Array.from({ length: 6 }, (_, i) => k * 10 + i);
+    }
+    return JSON.stringify(out);
+  }
+
+  const estimate = (text) => Math.ceil(text.length / 4);
+
+  test('refuses outright when the markers cost more than the elision saves', () => {
+    const raw = manyTinySections(112);
+    // Not the size floor: this body is over the threshold and still refused,
+    // which is the whole point -- size was never the question.
+    expect(raw.length).toBeGreaterThan(DISCLOSE_THRESHOLD);
+    expect(disclose(dir, raw, { ref: 'r1' })).toBeNull();
+  });
+
+  test('still discloses when the elision buys something', () => {
+    // THE CONTROL ARM. The same construction at a size where dropping sections
+    // is a real saving: without this, a disclose() that had simply stopped
+    // working would pass the test above.
+    const raw = manyTinySections(400);
+    const out = disclose(dir, raw, { ref: 'r1' });
+    expect(out).not.toBeNull();
+    expect(estimate(out.text)).toBeLessThan(estimate(raw));
+  });
+});
+
+describe('the handle names what was withheld, not the whole output', () => {
+  const estimate = (text) => Math.ceil(text.length / 4);
+
+  /** The store callback the server supplies, plus a record of what it saw. */
+  function withStore() {
+    const seen = [];
+    return {
+      seen,
+      captureWithheld: (withheld) => {
+        seen.push(withheld);
+        return capture(dir, withheld, {
+          tool: 't',
+          shape: 'json',
+          anchors: [],
+        });
+      },
+    };
+  }
+
+  test('an expansion serves the remainder rather than the preview again', () => {
+    const raw = JSON.stringify({
+      rows: Array.from({ length: 300 }, (_, i) => ({
+        a: i,
+        b: i * 2,
+        c: i * 3,
+      })),
+    });
+    const ref = capture(dir, raw, { tool: 't', shape: 'json', anchors: [] });
+    const store = withStore();
+    const out = disclose(dir, raw, { ref, ...store });
+
+    expect(out.mode).toBe('preview');
+    // The reference the tail printed is NOT the body's own: that is the defect.
+    // A 1,270-token file read through smart_read cost 1,192 tokens to preview
+    // and then 1,778 to expand, because expanding re-sent what the preview had
+    // already delivered.
+    expect(out.handle).not.toBe(ref);
+    expect(out.text).toContain(`(expand ${out.handle})`);
+    expect(store.seen).toHaveLength(1);
+
+    const served = resolve(dir, out.handle);
+    expect(served).not.toBeNull();
+    // Cheaper than the body it is a part of, which is the property that makes
+    // following the handle worth doing at all.
+    expect(estimate(served.text)).toBeLessThan(estimate(raw));
+  });
+
+  test('falls back to the body when the remainder is not the cheaper thing', () => {
+    // A single huge section: the preview keeps a few lines and withholds the
+    // rest, so the remainder is the body over again with a label on top. There
+    // is nothing to gain, and storing a near-duplicate artifact to serve it
+    // would cost more than the reference already in hand.
+    const raw = JSON.stringify({
+      summary: { files: 3, findings: 2 },
+      detail: Array.from({ length: 400 }, (_, i) => 'finding number ' + i),
+    });
+    const ref = capture(dir, raw, { tool: 't', shape: 'json', anchors: [] });
+    const store = withStore();
+    const out = disclose(dir, raw, { ref, ...store });
+
+    expect(out.handle).toBe(ref);
+    expect(store.seen).toHaveLength(0);
+  });
+});
+
+describe('the remainder is de-indented, but only where whitespace is not content', () => {
+  test('a JSON-rendered section loses the indentation stringify added', () => {
+    // splitJson renders every value with JSON.stringify(value, null, 2) so the
+    // budget loop has lines to admit or drop. Those spaces mean nothing in the
+    // remainder an expand serves, and on a dense numeric payload they are most
+    // of it: measured on smart-complexity.ts, the indented remainder came to
+    // 7,204 characters where the whole compact body was 5,371.
+    const s = { json: true, lines: ['  {', '    "a": 1', '  }'] };
+    expect(withheldLines(s, s.lines)).toEqual(['{', '"a": 1', '}']);
+  });
+
+  test('a nested string field keeps its own leading spaces', () => {
+    // The other branch of splitJson: a file's contents arriving as one escaped
+    // JSON string are parsed for their OWN shape, and there the indentation is
+    // the content. Trimming it would hand back source that is not the source.
+    const s = { lines: ['function f() {', '  return 1;', '}'] };
+    expect(withheldLines(s, s.lines)).toEqual(s.lines);
+  });
+});
+
+describe('a caller who names a section pays for that section', () => {
+  /**
+   * EXPAND_TOOL has always told callers to "pass `section` to say which named
+   * part of the preview you needed". `resolve` took the argument, passed it to
+   * recordExpansion as a learning signal, and served the whole artifact
+   * regardless -- so naming the one section you were missing cost you every
+   * section there was.
+   */
+  const stored = [
+    '--- summary ---',
+    '{ "files": 3 }',
+    '--- findings (partial) ---',
+    'first finding',
+    'second finding',
+    '--- timings ---',
+    '{ "ms": 12 }',
+  ].join('\n');
+
+  test('selects the named section and reports that it narrowed', () => {
+    const ref = capture(dir, stored, { tool: 't', shape: 'json', anchors: [] });
+    const out = resolve(dir, ref, { section: 'findings' });
+
+    expect(out.text).toContain('first finding');
+    expect(out.text).not.toContain('{ "ms": 12 }');
+    expect(out.narrowed).toBe(true);
+    expect(out.section).toBe('findings');
+  });
+
+  test('a label the preview printed in full is matched either way round', () => {
+    // A preview labels a nested field `content > output`, and a caller asking
+    // for `output` means that one -- so matching is a substring in either
+    // direction rather than equality.
+    const text = [
+      '--- content > output ---',
+      'the output',
+      '--- other ---',
+      'x',
+    ].join('\n');
+    const ref = capture(dir, text, { tool: 't', shape: 'json', anchors: [] });
+    expect(resolve(dir, ref, { section: 'output' }).text).toContain(
+      'the output'
+    );
+  });
+
+  test('a name this artifact does not have serves the whole thing, not nothing', () => {
+    // The one answer that cannot be recovered from: an empty expansion tells
+    // the caller neither what it asked for nor that it asked wrongly.
+    const ref = capture(dir, stored, { tool: 't', shape: 'json', anchors: [] });
+    const out = resolve(dir, ref, { section: 'no such part' });
+
+    expect(out.text).toBe(stored);
+    expect(out.narrowed).toBe(false);
+  });
+
+  test('no section named at all is unchanged behaviour', () => {
+    const ref = capture(dir, stored, { tool: 't', shape: 'json', anchors: [] });
+    const out = resolve(dir, ref);
+    expect(out.text).toBe(stored);
+    expect(out.narrowed).toBe(false);
+    expect(out.section).toBeNull();
   });
 });

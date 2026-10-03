@@ -38,6 +38,28 @@ const estimate = (text) => Math.ceil(String(text || '').length / 4);
 export const DISCLOSE_THRESHOLD = 4096;
 
 /**
+ * The most a preview may cost, as a share of the output it replaces.
+ *
+ * ONE, AND NOT A KNOB. It was drafted at 0.9 on the reasoning that a preview
+ * withholding almost nothing has spent a header, a label per section and an
+ * omission tail for nothing. Measuring the fourteen benched tools falsified the
+ * number: sixteen replies are disclosed across that sweep and the largest
+ * preview is 0.892 of its body -- smart_complexity on a 4,937-token fixture,
+ * eight thousandths under the ceiling, and refusing it moves that reading from
+ * +12.6% to +8.6% because the preview plus the remainder is cheaper than the
+ * body. A threshold anywhere below 1 trades a saving the non-expanding caller
+ * certainly gets against an overpay the expanding one might, and nothing
+ * measured sets the rate.
+ *
+ * At 1 the rule is this module's own contract instead: a preview that costs
+ * more than the output it replaces is a tax on every caller, however they use
+ * it, and that case is refused. Nothing in the benched sweep reaches it, which
+ * is why disclose.test.mjs builds a body that does -- 112 tiny sections past
+ * the threshold, which previewed at 1.63x its own cost before this existed.
+ */
+export const WORTHWHILE_PREVIEW = 1;
+
+/**
  * Output shapes worth parsing, most specific first.
  *
  * `split` divides the text into labelled sections; `weight` is the intrinsic
@@ -67,7 +89,10 @@ const SHAPES = [
   },
   {
     name: 'test-report',
-    detect: (t) => /\b(FAILED|FAIL|Failed!|Assert\.|Test Suites:|\d+ (?:passed|failed))\b/.test(t),
+    detect: (t) =>
+      /\b(FAILED|FAIL|Failed!|Assert\.|Test Suites:|\d+ (?:passed|failed))\b/.test(
+        t
+      ),
     split: splitTestReport,
   },
   {
@@ -87,7 +112,46 @@ const SHAPES = [
   },
 ];
 
-const section = (label, lines, weight, kind = 'body') => ({ label, lines, weight, kind });
+const section = (label, lines, weight, kind = 'body') => ({
+  label,
+  lines,
+  weight,
+  kind,
+});
+
+/**
+ * The same section, marked as a JSON rendering of a value.
+ *
+ * `splitJson` indents every value it renders so the budget loop has lines to
+ * admit or drop -- selection inside one long line is the positional truncation
+ * this module exists to replace. That indentation is wanted in the PREVIEW and
+ * is pure cost in the remainder an `expand` serves, where JSON whitespace means
+ * nothing at all. This flag says which sections may be de-indented for that
+ * purpose, and a nested string field -- a file's own contents arriving as one
+ * escaped JSON string, where the leading spaces ARE the content -- never
+ * carries it, because it is not rendered by that stringify call.
+ */
+const jsonSection = (label, lines, weight, kind = 'body') => ({
+  ...section(label, lines, weight, kind),
+  json: true,
+});
+
+/**
+ * A withheld run of lines, as cheap as it can be served without losing
+ * anything the caller would have had.
+ *
+ * WITHOUT THIS THE WHOLE WITHHELD-REMAINDER HANDLE NEVER ENGAGES ON JSON, which
+ * is what every tool in this product returns. The remainder is built from the
+ * preview's indented lines while the artifact behind the body's own reference
+ * is the tool's compact output, so on smart_complexity's 4,937-token fixture the
+ * remainder came to 7,204 characters where the whole body was 5,371 -- bigger
+ * than everything it was a part of, and the cheaper-of-the-two guard below
+ * correctly fell back to the body every time. De-indenting removes exactly the
+ * difference: the characters stringify added for the preview's benefit.
+ */
+export function withheldLines(s, lines) {
+  return s.json ? lines.map((line) => line.trimStart()) : lines;
+}
 
 /** A test report: failures are the point, passes are the noise. */
 function splitTestReport(text) {
@@ -98,8 +162,12 @@ function splitTestReport(text) {
   const other = [];
 
   for (const line of lines) {
-    if (/\b(FAILED|FAIL|Failed!|error|Error|Assert\.)\b/.test(line)) failures.push(line);
-    else if (/\b(Tests?|Test Suites?|Passed!|Total tests|\d+ passed)\b.*\d/.test(line)) summary.push(line);
+    if (/\b(FAILED|FAIL|Failed!|error|Error|Assert\.)\b/.test(line))
+      failures.push(line);
+    else if (
+      /\b(Tests?|Test Suites?|Passed!|Total tests|\d+ passed)\b.*\d/.test(line)
+    )
+      summary.push(line);
     else if (/\b(PASS|passed|OK|ok)\b/.test(line)) passes.push(line);
     else other.push(line);
   }
@@ -139,7 +207,10 @@ function splitStack(text) {
 
   for (const line of text.split('\n')) {
     if (/^\s+(?:at |File ")/.test(line)) {
-      (/node_modules|<anonymous>|\[native code\]|System\./.test(line) ? vendor : ours).push(line);
+      (/node_modules|<anonymous>|\[native code\]|System\./.test(line)
+        ? vendor
+        : ours
+      ).push(line);
     } else {
       message.push(line);
     }
@@ -202,11 +273,23 @@ function splitJson(text) {
     if (parsed.length) {
       // `?? null` because JSON.stringify(undefined) returns undefined, and .split would
       // then throw -- parseShape('[]') aborted the whole disclosure block.
-      out.push(section('first element', JSON.stringify(parsed[0] ?? null, null, 2).split('\n'), 6));
+      out.push(
+        jsonSection(
+          'first element',
+          JSON.stringify(parsed[0] ?? null, null, 2).split('\n'),
+          6
+        )
+      );
     }
     const rest = parsed.slice(1);
     if (rest.length) {
-      out.push(section(`remaining ${rest.length} elements`, JSON.stringify(rest, null, 2).split('\n'), 1));
+      out.push(
+        jsonSection(
+          `remaining ${rest.length} elements`,
+          JSON.stringify(rest, null, 2).split('\n'),
+          1
+        )
+      );
     }
     return out;
   }
@@ -223,7 +306,7 @@ function splitJson(text) {
       continue;
     }
     const rendered = JSON.stringify(value, null, 2) ?? 'null';
-    sections.push(section(key, rendered.split('\n'), 4, 'field'));
+    sections.push(jsonSection(key, rendered.split('\n'), 4, 'field'));
   }
   return sections;
 }
@@ -247,7 +330,9 @@ export function parseShape(text) {
 function terms(...sources) {
   const out = new Set();
   for (const source of sources.flat()) {
-    for (const word of String(source || '').toLowerCase().match(/[a-z0-9_]{4,}/g) || []) {
+    for (const word of String(source || '')
+      .toLowerCase()
+      .match(/[a-z0-9_]{4,}/g) || []) {
       out.add(word);
     }
   }
@@ -261,8 +346,14 @@ function terms(...sources) {
  * nobody asked about but which is obviously important -- a failure, an error --
  * still outranks a routine one that happens to share a word with the question.
  */
-export function rankSections(sections, { question, anchors = [], boosts = {} } = {}) {
-  const wanted = terms(question, anchors.map((a) => canonicalPath(a).split('/').pop()));
+export function rankSections(
+  sections,
+  { question, anchors = [], boosts = {} } = {}
+) {
+  const wanted = terms(
+    question,
+    anchors.map((a) => canonicalPath(a).split('/').pop())
+  );
 
   return sections
     .map((s) => {
@@ -284,7 +375,10 @@ export function rankSections(sections, { question, anchors = [], boosts = {} } =
  * none of it. Only fires on a confident, fresh finding anchored to the same
  * files the output is about -- a stale or weak one is worse than the raw text.
  */
-export function verdictFor(graph, { anchors = [], question, minConfidence = 0.7 } = {}) {
+export function verdictFor(
+  graph,
+  { anchors = [], question, minConfidence = 0.7 } = {}
+) {
   if (!graph || !anchors.length) return null;
   const wanted = terms(question);
 
@@ -340,7 +434,21 @@ export function disclose(dir, text, context = {}) {
       mode: 'verdict',
       shape: null,
       ref,
-      omissions: [{ label: 'the full output', lines: raw.split('\n').length, ref }],
+      // Nothing was kept, so the withheld part is the body and its capture
+      // converges on the same content hash. Stated rather than left implicit,
+      // because the caller reads `handle` for what the text advertised.
+      handle: ref,
+      omissions: [
+        {
+          label: 'the full output',
+          lines: raw.split('\n').length,
+          ref,
+          // In verdict mode nothing was kept, so the withheld part IS the body.
+          // Capturing it yields the same content hash, which is why the handle
+          // printed here and the one a preview prints converge on one artifact.
+          withheld: raw.split('\n'),
+        },
+      ],
       text: [
         `Already established: ${verdict.claim}`,
         verdict.derivedCost
@@ -399,11 +507,21 @@ export function disclose(dir, text, context = {}) {
       if (!slice.length && s.lines.length === 1) {
         const head = s.lines[0].slice(0, Math.max(0, room * 4));
         if (head.length) {
-          kept.push({ label: s.label, lines: [head], kind: s.kind, partial: true });
+          kept.push({
+            label: s.label,
+            lines: [head],
+            kind: s.kind,
+            partial: true,
+          });
           spent += estimate(head);
           omissions.push({
             label: `${s.label} (${(s.lines[0].length - head.length).toLocaleString()} more characters on one line)`,
-            lines: 1, ref, partial: true,
+            lines: 1,
+            ref,
+            partial: true,
+            // The characters themselves, so the handle can serve what was cut
+            // rather than the whole line back with the head attached again.
+            withheld: [s.lines[0].slice(head.length)],
           });
           continue;
         }
@@ -416,37 +534,119 @@ export function disclose(dir, text, context = {}) {
         // complete section, and labelling it partial with "0 lines omitted" makes the two
         // signals a reader is meant to trust fire on content that was not withheld.
         const dropped = s.lines.length - slice.length;
-        kept.push({ label: s.label, lines: slice, kind: s.kind, partial: dropped > 0 });
+        kept.push({
+          label: s.label,
+          lines: slice,
+          kind: s.kind,
+          partial: dropped > 0,
+        });
         spent += used;
-        if (dropped > 0) omissions.push({ label: s.label, lines: dropped, ref, partial: true });
+        if (dropped > 0)
+          omissions.push({
+            label: s.label,
+            lines: dropped,
+            ref,
+            partial: true,
+            withheld: withheldLines(s, s.lines.slice(slice.length)),
+          });
         continue;
       }
     }
-    omissions.push({ label: s.label, lines: s.lines.length, ref });
+    omissions.push({
+      label: s.label,
+      lines: s.lines.length,
+      ref,
+      withheld: withheldLines(s, s.lines),
+    });
   }
 
   const head = question
     ? `[selected against: "${question}"]`
     : `[${shape} output, ${totalLines.toLocaleString()} lines -- most relevant sections kept]`;
 
-  const body = kept.map((k) => (k.partial
-    ? [`--- ${k.label} (partial) ---`, ...k.lines]
-    : [`--- ${k.label} ---`, ...k.lines]).join('\n'));
+  const body = kept.map((k) =>
+    (k.partial
+      ? [`--- ${k.label} (partial) ---`, ...k.lines]
+      : [`--- ${k.label} ---`, ...k.lines]
+    ).join('\n')
+  );
+
+  // THE HANDLE POINTS AT WHAT WAS WITHHELD, NOT AT THE WHOLE OUTPUT.
+  //
+  // It used to point at the body, so following it re-sent everything the
+  // preview had just delivered. Measured on a 1,270-token file through
+  // smart_read: a 1,192-token preview, then 1,778 tokens to expand it -- 2,970
+  // paid for 1,270 of content, and the duplicated preview was the largest
+  // single term in that bill. A caller holding the preview needs the REST.
+  //
+  // `captureWithheld` is supplied by the server, which owns the artifact store;
+  // without it this module still works and still prints the body's own
+  // reference, because hooks-core has to run standalone with no store at all.
+  const withheldText = omissions
+    .map((o) => [`--- ${o.label} ---`, ...(o.withheld || [])].join('\n'))
+    .join('\n');
+  //
+  // A REMAINDER THAT SERIALIZES LARGER THAN THE WHOLE IS NOT A SAVING, and one
+  // can. `parseShape` renders the body's sections as indented lines, so the
+  // remainder is built from a PRETTY-PRINTED view while the artifact behind
+  // `ref` is the tool's own output verbatim -- usually compact JSON. On a dense
+  // numeric payload the indentation outweighs the part that was kept: measured
+  // on smart-complexity.ts through smart_complexity, the withheld remainder was
+  // 7,204 characters where the whole compact body was 5,371, and pointing at it
+  // cost 2,786 tokens to expand against the whole body's 2,587. So the two
+  // candidates are compared, and the handle names whichever is actually cheaper
+  // to serve. Compared by length, which is what `estimate` reduces to: both
+  // strings carry the same data, so the one with less whitespace is the cheaper
+  // one in tokens as well, and the comparison is wanted on every reply.
+  const useWithheld =
+    omissions.length > 0 &&
+    typeof context.captureWithheld === 'function' &&
+    estimate(withheldText) < estimate(raw);
+  const handle =
+    (useWithheld ? context.captureWithheld(withheldText) : null) || ref;
 
   // EVERY CUT IS NAMED. A model reasoning over a silent truncation cannot know
   // it is missing something; one told "1,760 lines of passing tests omitted"
   // can decide whether that matters and ask for them if it does.
   const tail = omissions.length
-    ? [`---- omitted: ${omissions.map((o) => `${o.lines.toLocaleString()} lines of ${o.label}`).join('; ')}${ref ? ` (expand ${ref})` : ''} ----`]
+    ? [
+        `---- omitted: ${omissions.map((o) => `${o.lines.toLocaleString()} lines of ${o.label}`).join('; ')}${handle ? ` (expand ${handle})` : ''} ----`,
+      ]
     : [];
+
+  const rendered = [head, ...body, ...tail].join('\n');
+
+  /*
+   * A PREVIEW THAT IS NOT CHEAPER THAN THE OUTPUT IS A TAX.
+   *
+   * This module's own docstring says so -- "disclosing a 200-byte result costs
+   * more than it saves, and a tool that previews everything is just a tax" --
+   * but the only thing enforcing it was DISCLOSE_THRESHOLD, a floor on the
+   * INPUT's size. Size is not the question. What matters is whether the elision
+   * bought anything, and a body can be well over the threshold while the budget
+   * admits nearly all of it: the preview then carries almost every line, adds a
+   * header, a label per section and an omission tail, and the reader pays those
+   * markers for a handful of withheld lines.
+   *
+   * MEASURED ON THE PREVIEW, NOT ON THE KEPT FRACTION. The obvious rule -- stop
+   * when the kept sections are most of the body -- refuses too much: a
+   * 1,270-token file read through smart_read keeps 67% of its payload and still
+   * leaves the reader 33% better off than the raw reply, a real saving for the
+   * caller who never expands. Only the rendered preview answers the question it
+   * is actually asking, so that is what is compared, markers and all.
+   */
+  if (estimate(rendered) > estimate(raw) * WORTHWHILE_PREVIEW) return null;
 
   return {
     mode: 'preview',
     shape,
     ref,
+    // What the tail actually printed, so the caller's accounting debits the
+    // expansion against the same reference the preview advertised.
+    handle,
     kept,
     omissions,
     tokens: spent,
-    text: [head, ...body, ...tail].join('\n'),
+    text: rendered,
   };
 }
