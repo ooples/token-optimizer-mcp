@@ -38,9 +38,53 @@ import { lastCacheBreakpoint, isAfter } from '../../dist/compress/frontier.js';
 import { anchorStore } from '../../dist/compress/anchor.js';
 import { describeImage, isImageBlock } from '../../dist/compress/images.js';
 import { pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const CACHE_READ = 0.1;
 const CACHE_WRITE = 1.25;
+
+/**
+ * A spill sink for one arm, named the way the proxy's sink names files.
+ *
+ * SPILL PATHS REACH THE EMITTED TEXT, so how they are named is part of what
+ * every column measures. The previous sink was one map shared by every arm,
+ * handing out `spill/${n}-${hint}` with `n` its insertion order and the arm's
+ * own name folded into the hint to keep the arms apart. Both of those put the
+ * harness into its own measurement:
+ *
+ *   - THE ARM'S NAME WAS IN THE PATH. Measured across the corpus, `v3-history`
+ *     and `ccr` emit the same 94 paths, and ours came to 4,927 characters
+ *     against their 4,275 -- 652 characters, about 250 real tokens, that are
+ *     nothing but the eight characters by which `v3-history` is a longer word
+ *     than `ccr`. Our arm was being charged for its label.
+ *   - THE ORDINAL WAS GLOBAL. An arm that ran later got more digits per path,
+ *     so `v1-anchored` -- which runs last -- cost 22 tokens more than
+ *     `v1-frontier` on codebase-exploration while compressing identically. At
+ *     chars/4 the rounding hid it and the two tied; under a real tokenizer the
+ *     digits are tokens, and the "re-anchoring is free" gate failed on five
+ *     fixtures for a reason that was entirely the harness's bookkeeping.
+ *
+ * So each arm gets its own sink -- real isolation, rather than isolation by
+ * namespacing a shared one -- and a file is named by a fixed-width digest of
+ * its content plus the engine's own hint, which is `spillTo` in
+ * `src/proxy/server.ts` exactly. Unsalted, where the sink salts: the salt is
+ * there so a path in a shared temp directory is unguessable, and these
+ * fixtures are synthetic and this file must give the same answer twice.
+ */
+function spillSink() {
+  const spilled = new Map();
+  return (content, hint) => {
+    const key = `${hint}:${content.length}:${content}`;
+    if (!spilled.has(key)) {
+      const name = createHash('sha256')
+        .update(content)
+        .digest('hex')
+        .slice(0, 32);
+      spilled.set(key, `.token-optimizer/spill/${name}-${hint}`);
+    }
+    return spilled.get(key);
+  };
+}
 
 /** Tokens, approximated consistently across arms so comparisons are fair. */
 function tokens(text) {
@@ -402,17 +446,6 @@ function steadyTokens(request, run, spill) {
 }
 
 function main() {
-  // Content-addressed, exactly as the proxy sink is: the same bytes must
-  // spill to the same path, or two identical blocks compress to two
-  // different texts and cross-block dedup collapses neither of them.
-  const spilled = new Map();
-  const spill = (content, hint) => {
-    const key = `${hint}:${content.length}:${content}`;
-    if (!spilled.has(key))
-      spilled.set(key, `.token-optimizer/spill/${spilled.size + 1}-${hint}`);
-    return spilled.get(key);
-  };
-
   console.log(
     "\nCompression proof -- synthetic fixtures at the scale of HeadRoom's published workloads."
   );
@@ -466,8 +499,9 @@ function main() {
     };
     for (const [name, run] of Object.entries(arms)) {
       const steadyAnchors = anchorStore();
-      // A fresh spill per arm: one arm must not benefit from another's writes.
-      const armSpill = (content, hint) => spill(content, `${name}-${hint}`);
+      // A fresh sink per arm: one arm must not benefit from another's writes,
+      // and no arm may be charged for the name the harness gave it.
+      const armSpill = spillSink();
       const result = run(before, { spill: armSpill, wanted: [] });
       const g = grossTokens(result.request);
       const n = netTokens(result.request);
