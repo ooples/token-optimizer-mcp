@@ -16,6 +16,7 @@ import {
   reduction,
   claimFor,
   selfClaimsInPart,
+  contentLinesOf,
 } from './reduction.mjs';
 
 let failures = 0;
@@ -102,6 +103,7 @@ eq(
 // --- the self-claim scan ----------------------------------------------------
 // The sweep refuses outright when a tool publishes a figure about its own
 // saving, so what that scan can and cannot see is worth knowing exactly.
+const NL = String.fromCharCode(10);
 const claims = (text) => JSON.stringify(selfClaimsInPart(text));
 
 eq(
@@ -125,13 +127,52 @@ eq(
   '[]'
 );
 
-// AND THE CASE THAT MUST NOT READ AS CLEAN. A part the scan cannot parse is
-// reported as unreadable rather than as empty, because the sweep counts those
-// separately and refuses when nothing at all could be read.
+// THE SHAPE THAT WAS GOING UNREAD ALTOGETHER. Six of the fourteen answer in a
+// human report, and the first version of this scan parsed or gave up -- so it
+// read 54 of 90 parts and missed the only two figures anyone had actually caught
+// a tool printing: a -92% footer and a flat 85%, both prose, neither a field.
 eq(
-  'an unparseable part reports that it was not read',
-  claims('0 findings'),
-  'null'
+  'a figure printed in a report footer is found',
+  claims('Summary:' + NL + '  Token Savings: 85%' + NL),
+  // The label reported is whichever alternative matched -- `savings` here, since
+  // the footer separates the two words. What matters is that the line is caught.
+  '["savings"]'
+);
+eq(
+  'a report that states no figure is clean',
+  claims(
+    'Summary:' + NL + '  Files Scanned: 1' + NL + '  Total Findings: 0' + NL
+  ),
+  '[]'
+);
+
+// A LABEL, A COLON AND A NUMBER -- not a word. The words turn up in prose that
+// claims nothing, and a gate that fires on them would be unusable.
+eq(
+  'the word without a figure is not a claim',
+  claims('No changes, so nothing was saved by this read.'),
+  '[]'
+);
+
+// AND THE LINE THAT IS A CLAIM IN SHAPE AND CONTENT IN FACT. smart_pretty
+// answers with the formatted source, and bench/tools/fixtures/token-counter.ts
+// carries `percentSaved: 100,` at line 313. Subtracting the fixture's own lines
+// is what separates the two, so BOTH arms are pinned: content is clean, and the
+// same line from somewhere other than the fixture is still caught.
+const fixtureLine = 'percentSaved: 100,';
+eq(
+  "the fixture's own line is content, not a claim",
+  JSON.stringify(
+    selfClaimsInPart('  ' + fixtureLine, contentLinesOf(fixtureLine))
+  ),
+  '[]'
+);
+eq(
+  'the same line from outside the fixture is a claim',
+  JSON.stringify(
+    selfClaimsInPart('  ' + fixtureLine, contentLinesOf('nothing'))
+  ),
+  '["saved"]'
 );
 
 console.log('');

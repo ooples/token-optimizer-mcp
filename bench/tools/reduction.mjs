@@ -353,24 +353,56 @@ const SELF_CLAIM_KEYS = new Set([
 ]);
 
 /**
- * KEYS, NOT WORDS.
+ * A saving stated in prose rather than in a field.
  *
- * A text scan is unusable here: smart_read answers with the fixture's own
- * source, and one of the fixtures is `token-counter.ts`, so the words
- * themselves appear in content that is not a claim about anything. A claim is a
- * FIELD, so the payload is parsed and its keys are walked, and string values
- * are never looked inside.
+ * SIX OF THE FOURTEEN ANSWER IN A HUMAN REPORT, NOT IN JSON, and a key walk
+ * reads exactly nothing there. Both figures this sweep was built to stop were
+ * printed that way and not as fields at all: smart_package_json's footer said
+ * -92% where the wire said -20.9%, and smart_security printed a flat 85% for
+ * three fixtures of three different sizes. A gate that parses and gives up left
+ * 36 of 90 reply parts unread while reporting the fleet clean.
  *
- * @returns the keys found, or null when the part could not be parsed -- which
- *   is counted separately, because an instrument that silently looked at
- *   nothing reports the same clean result as one that looked and found nothing.
+ * A LABELLED FIGURE, NOT A WORD. The words alone appear in source that claims
+ * nothing, so what is matched is a report FIELD -- one of these labels, a colon,
+ * a number -- which is the shape a report footer has and a sentence does not.
  */
-export function selfClaimsInPart(text) {
+const PROSE_CLAIM =
+  /(tokens? saved|tokens?saved|savings?|saved|reduction|compression ratio)[^\n:]{0,8}:\s*-?[\d.,]+/i;
+
+/**
+ * KEYS WHERE THERE ARE KEYS, LABELLED FIGURES WHERE THERE ARE NOT.
+ *
+ * A plain text scan over a JSON payload is unusable: smart_read answers with the
+ * fixture's own source, and one of the fixtures is `token-counter.ts`, so the
+ * words themselves appear in content that is not a claim about anything. So a
+ * payload that parses is walked by KEY and its string values are never looked
+ * inside.
+ *
+ * A payload that does NOT parse is a human report, and is scanned line by line
+ * -- minus the lines that are the fixture's own content, because smart_pretty
+ * answers with the formatted source and `token-counter.ts` carries the line
+ * `percentSaved: 100,`, which is a claim in shape and content in fact.
+ *
+ * @param contentLines the baseline's own lines, trimmed and whitespace-collapsed
+ *   the same way the scan collapses the lines it tests. Lines the fixture
+ *   already contains are content; a report's own lines are not in it.
+ * @returns the claims found, never null: a part that cannot be parsed is still
+ *   read, so there is no longer a way for the scan to look at nothing and
+ *   report the same clean result as a scan that looked.
+ */
+export function selfClaimsInPart(text, contentLines = new Set()) {
   let parsed;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return null;
+    const found = new Set();
+    for (const raw of text.split('\n')) {
+      const line = raw.trim().replace(/\s+/g, ' ');
+      if (line === '' || contentLines.has(line)) continue;
+      const match = line.match(PROSE_CLAIM);
+      if (match) found.add(match[1].toLowerCase());
+    }
+    return [...found].sort();
   }
   const found = new Set();
   const walk = (node) => {
@@ -382,6 +414,16 @@ export function selfClaimsInPart(text) {
   };
   walk(parsed);
   return [...found];
+}
+
+/** The baseline's lines, in the form the prose scan compares against. */
+export function contentLinesOf(text) {
+  return new Set(
+    text
+      .split('\n')
+      .map((line) => line.trim().replace(/\s+/g, ' '))
+      .filter((line) => line !== '')
+  );
 }
 
 export async function measure(server, testCase) {
@@ -402,18 +444,14 @@ export async function measure(server, testCase) {
   // further chunk, each expansion, and the repeat read -- is scanned where it
   // arrives, because a claim could be published on any one of them.
   const claims = new Set();
-  let partsParsed = 0;
-  let partsUnparsed = 0;
+  const content = contentLinesOf(baselineText);
+  let partsScanned = 0;
   const payloadOf = (message) => {
     const parts = message.result?.content || [];
     for (const part of parts) {
-      const found = selfClaimsInPart(part.text || '');
-      if (found === null) {
-        partsUnparsed += 1;
-        continue;
-      }
-      partsParsed += 1;
-      for (const key of found) claims.add(key);
+      partsScanned += 1;
+      for (const key of selfClaimsInPart(part.text || '', content))
+        claims.add(key);
     }
     return parts.map((part) => part.text || '').join('\n');
   };
@@ -524,8 +562,7 @@ export async function measure(server, testCase) {
     refused,
     detail: refused ? payload.slice(0, 160).replace(/\s+/g, ' ') : '',
     selfClaims: [...claims].sort(),
-    partsParsed,
-    partsUnparsed,
+    partsScanned,
   };
 }
 
@@ -640,17 +677,19 @@ async function main() {
    * unsafe to publish -- a reader has two numbers and no way to tell which is
    * the measurement.
    *
-   * THE SCAN HAS TO PROVE IT LOOKED. An unparseable part reports exactly like a
-   * clean one, so the parsed count is checked too: a sweep where nothing could
-   * be parsed found nothing because it saw nothing, which is a dead instrument
-   * and not a pass.
+   * THE SCAN HAS TO PROVE IT LOOKED, and the first version of it could not. It
+   * walked keys and gave up on a part that would not parse, which is how six of
+   * the fourteen answer -- so it read 54 of 90 parts, said nothing was claiming,
+   * and was blind to the two figures that started this: a -92% footer and a flat
+   * 85%, both printed as prose and never fields. Every part is read now, so the
+   * count below is the count of parts, and a sweep that somehow read none of
+   * them is a dead instrument rather than a pass.
    */
   const claiming = rows.filter((r) => r.selfClaims.length > 0);
-  const parsedParts = rows.reduce((sum, r) => sum + r.partsParsed, 0);
-  const unparsedParts = rows.reduce((sum, r) => sum + r.partsUnparsed, 0);
+  const scannedParts = rows.reduce((sum, r) => sum + r.partsScanned, 0);
   console.log('');
   console.log(
-    `self-claim scan: ${parsedParts} reply part(s) read, ${unparsedParts} unreadable, ` +
+    `self-claim scan: ${scannedParts} reply part(s) read, ` +
       `${claiming.length} case(s) still publishing a saving`
   );
   if (claiming.length > 0) {
@@ -662,9 +701,9 @@ async function main() {
     );
     process.exit(1);
   }
-  if (parsedParts === 0) {
+  if (scannedParts === 0) {
     console.log(
-      'REFUSED: no reply part could be parsed, so the self-claim scan read nothing.'
+      'REFUSED: no reply part was read, so the self-claim scan proves nothing.'
     );
     process.exit(1);
   }
