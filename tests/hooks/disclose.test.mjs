@@ -7,6 +7,15 @@
  * expansion serves from the store instead of re-running, staleness is a
  * three-way decision rather than a boolean, and the expansion itself teaches the
  * next preview.
+ *
+ * MOST CASES BELOW PASS `holdRate: 1`, AND THAT IS A PREMISE, NOT BOILERPLATE.
+ * A preview is priced at itself plus the remainder at the rate this shape is
+ * actually expanded, so every case has to say which caller it is about. One
+ * holds the preview and never follows the handle -- rate 1, the remainder never
+ * charged -- and under that premise the rule is the preview-only test it grew
+ * from, which leaves the preview's own mechanics on their own here. The rate
+ * itself is what 'a preview is priced at the rate this shape is expanded' tests,
+ * with the cold-start case that charges the remainder in full.
  */
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -128,7 +137,10 @@ describe('shape is parsed before anything is selected', () => {
 
   test('the failures inside a JSON envelope survive the preview', () => {
     const body = JSON.stringify({ output: bigTestReport(), path: 'x.ts' });
-    const out = disclose(dir, body, { question: 'which shard fails?' });
+    const out = disclose(dir, body, {
+      holdRate: 1,
+      question: 'which shard fails?',
+    });
     expect(out.text).toContain('DBNetTests.BceOnRelu');
     expect(out.omissions.map((o) => o.label)).toContain(
       'output > passing tests'
@@ -165,6 +177,7 @@ describe('selection is driven by the question, not by position', () => {
 describe('the preview names every cut', () => {
   test('what was dropped is stated, with how much of it', () => {
     const out = disclose(dir, bigTestReport(), {
+      holdRate: 1,
       question: 'which shard fails?',
       ref: 'abc123',
     });
@@ -177,6 +190,7 @@ describe('the preview names every cut', () => {
 
   test('the failures survive and the passes do not', () => {
     const out = disclose(dir, bigTestReport(), {
+      holdRate: 1,
       question: 'which shard fails?',
     });
     expect(out.text).toContain('DBNetTests.BceOnRelu');
@@ -192,7 +206,9 @@ describe('the preview names every cut', () => {
     // A minified bundle, or JSON with no newlines at all. Nothing can split it,
     // so returning none of it is worse than returning the front of it -- and
     // the cut is still named, because a silent one is the actual harm.
-    const out = disclose(dir, `{"blob":"${'x'.repeat(60_000)}"}`, {});
+    const out = disclose(dir, `{"blob":"${'x'.repeat(60_000)}"}`, {
+      holdRate: 1,
+    });
     expect(out.text).toMatch(/^x{100,}/m);
     expect(out.text).toMatch(/55,\d{3} more characters on one line/);
     // And it is never empty, because an empty preview forces the very
@@ -201,7 +217,7 @@ describe('the preview names every cut', () => {
   });
 
   test('the preview stays inside the earned budget', () => {
-    const out = disclose(dir, bigTestReport(), {});
+    const out = disclose(dir, bigTestReport(), { holdRate: 1 });
     expect(out.tokens).toBeLessThanOrEqual(3000);
   });
 });
@@ -532,7 +548,7 @@ describe('an omission is never silent, and never invented', () => {
           detail: 'x'.repeat(20),
         }))
       );
-      const out = disclose(dir, body, { ref: 'abc123def4567890' });
+      const out = disclose(dir, body, { holdRate: 1, ref: 'abc123def4567890' });
       expect(out).toBeTruthy();
       expect(out.omissions.length).toBeGreaterThan(0);
       expect(out.text).toContain('abc123def4567890');
@@ -559,7 +575,7 @@ describe('an omission is never silent, and never invented', () => {
       const out = disclose(
         dir,
         JSON.stringify({ output: report, path: 'x.ts' }),
-        { ref: 'r9' }
+        { holdRate: 1, ref: 'r9' }
       );
       expect(out).toBeTruthy();
       const stated = Number(
@@ -614,7 +630,7 @@ describe('a preview costs less than the output it replaces', () => {
     // Not the size floor: this body is over the threshold and still refused,
     // which is the whole point -- size was never the question.
     expect(raw.length).toBeGreaterThan(DISCLOSE_THRESHOLD);
-    expect(disclose(dir, raw, { ref: 'r1' })).toBeNull();
+    expect(disclose(dir, raw, { holdRate: 1, ref: 'r1' })).toBeNull();
   });
 
   test('still discloses when the elision buys something', () => {
@@ -622,7 +638,7 @@ describe('a preview costs less than the output it replaces', () => {
     // is a real saving: without this, a disclose() that had simply stopped
     // working would pass the test above.
     const raw = manyTinySections(400);
-    const out = disclose(dir, raw, { ref: 'r1' });
+    const out = disclose(dir, raw, { holdRate: 1, ref: 'r1' });
     expect(out).not.toBeNull();
     expect(estimate(out.text)).toBeLessThan(estimate(raw));
   });
@@ -657,7 +673,7 @@ describe('the handle names what was withheld, not the whole output', () => {
     });
     const ref = capture(dir, raw, { tool: 't', shape: 'json', anchors: [] });
     const store = withStore();
-    const out = disclose(dir, raw, { ref, ...store });
+    const out = disclose(dir, raw, { holdRate: 1, ref, ...store });
 
     expect(out.mode).toBe('preview');
     // The reference the tail printed is NOT the body's own: that is the defect.
@@ -686,7 +702,7 @@ describe('the handle names what was withheld, not the whole output', () => {
     });
     const ref = capture(dir, raw, { tool: 't', shape: 'json', anchors: [] });
     const store = withStore();
-    const out = disclose(dir, raw, { ref, ...store });
+    const out = disclose(dir, raw, { holdRate: 1, ref, ...store });
 
     expect(out.handle).toBe(ref);
     expect(store.seen).toHaveLength(0);

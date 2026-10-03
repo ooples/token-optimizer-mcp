@@ -426,6 +426,72 @@ function splitJson(text) {
 }
 
 /**
+ * A partial section, closed so it is still a JSON value.
+ *
+ * Sections are admitted by the line and a cut lands wherever the budget runs
+ * out, which on a JSON body is usually inside a container: the preview for
+ * smart_refactor on tool-profile.ts ended mid-row, at a bare `"low",`, with two
+ * arrays and an object left open. That is not a smaller answer, it is an
+ * unparseable one -- a caller who wanted the data had no way to read what was
+ * in front of them and had to follow the handle to get anything at all. The
+ * preview was MANUFACTURING the expansion it exists to avoid.
+ *
+ * So the containers a slice leaves open are closed. The result is a JSON value
+ * holding fewer array elements and fewer keys than the body, which is what a
+ * preview is, and the omission marker beside it still says what was withheld
+ * and how to get it.
+ *
+ * CHECKED, NOT ASSUMED. The scan below tracks strings and escapes, but a
+ * section need not be JSON at all -- a log, a stack trace, or the single-line
+ * character cut above all arrive here as lines -- so the closed text is parsed
+ * before it is used and the slice is returned untouched if it does not parse.
+ * Nothing is guessed: either the preview is a value or it is what it was.
+ *
+ * The remainder behind the handle is the body's own tail, without these
+ * closers, so it continues to serve exactly the lines that were withheld.
+ */
+function closeJsonSlice(lines) {
+  const stack = [];
+  let inString = false;
+  let escaped = false;
+  for (const line of lines) {
+    for (const ch of line) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (inString && ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === '\"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === '{' || ch === '[') stack.push(ch);
+      else if (ch === '}' || ch === ']') stack.pop();
+    }
+  }
+  if (inString || !stack.length) return null;
+
+  const out = lines.slice();
+  // A trailing separator would sit before the closer, where no element follows.
+  out[out.length - 1] = out[out.length - 1].replace(/,$/, '');
+  out.push(
+    stack
+      .reverse()
+      .map((open) => (open === '{' ? '}' : ']'))
+      .join('')
+  );
+  try {
+    JSON.parse(out.join(''));
+  } catch {
+    return null;
+  }
+  return out;
+}
+/**
  * Identifies the output's shape and divides it into labelled sections.
  *
  * Falls back to a single unstructured section, which is where a purely
@@ -539,7 +605,15 @@ export function disclose(dir, text, context = {}) {
   const raw = String(text || '');
   if (raw.length < DISCLOSE_THRESHOLD) return null;
 
-  const { graph, question, anchors = [], tool, boosts, ref } = context;
+  const {
+    graph,
+    question,
+    anchors = [],
+    tool,
+    boosts,
+    ref,
+    holdRate = null,
+  } = context;
 
   // LAYER 1 -- the answer, if we already have it.
   const verdict = verdictFor(graph, { anchors, question });
@@ -648,13 +722,17 @@ export function disclose(dir, text, context = {}) {
         // complete section, and labelling it partial with "0 lines omitted" makes the two
         // signals a reader is meant to trust fire on content that was not withheld.
         const dropped = s.lines.length - slice.length;
+        // Closed where the cut left a container open, so what the caller is
+        // handed parses. Costed as what is actually printed, closers included.
+        const closed = dropped > 0 ? closeJsonSlice(slice) : null;
+        const shown = closed || slice;
         kept.push({
           label: s.label,
-          lines: slice,
+          lines: shown,
           kind: s.kind,
           partial: dropped > 0,
         });
-        spent += used;
+        spent += used + (closed ? estimate(closed[closed.length - 1]) : 0);
         if (dropped > 0)
           omissions.push({
             label: s.label,
@@ -749,7 +827,45 @@ export function disclose(dir, text, context = {}) {
    * caller who never expands. Only the rendered preview answers the question it
    * is actually asking, so that is what is compared, markers and all.
    */
-  if (estimate(rendered) > estimate(raw) * WORTHWHILE_PREVIEW) return null;
+  /*
+   * AND THE CALLER WHO FOLLOWS THE HANDLE PAYS FOR IT.
+   *
+   * The test above weighed the preview alone, which prices one caller: the
+   * one who reads it and never expands. That caller is real and the comment
+   * on WORTHWHILE_PREVIEW is right that the saving is certain for them. But
+   * the other caller is real too, and measured across the benched sweep they
+   * are the majority case: of the ten replies that disclose, SEVEN cost more
+   * than the undisclosed body once the handle is followed --
+   *
+   *   smart_refactor   smart-complexity.ts   1,946 -> 2,251   -15.7%
+   *   smart_refactor   tool-profile.ts       1,498 -> 1,660   -10.8%
+   *   smart_pretty     tool-profile.ts       1,286 -> 1,373    -6.8%
+   *   smart_config_read large-project        3,867 -> 4,119    -6.5%
+   *
+   * -- against gains of 4.8% to 80.3% for the caller who holds. Which of the
+   * two a reply meets is not a matter of taste, and it is not unknown: the
+   * store records a capture when a preview is served and an expand when one
+   * is followed, so `previewPolicy` already derives a hold rate per (tool,
+   * shape). It was computed and discarded at the only production call site.
+   *
+   * So the preview is weighed against what it is EXPECTED to cost, which is
+   * the preview plus the remainder at the rate this shape is actually
+   * expanded. The old comment refused to pick a ratio because 'nothing
+   * measured sets the rate'; this sets it from the measurement rather than
+   * choosing one. At a hold rate of 1 the term vanishes and the rule is
+   * exactly the preview-only test it replaces.
+   *
+   * WITH NO HISTORY THE REMAINDER IS CHARGED IN FULL. A shape nobody has
+   * expanded yet is not a shape that holds, it is a shape with no evidence,
+   * and the benchmark charges every expansion on every row. Disclosing it
+   * then has to be cheaper than the body outright; the rate relaxes that as
+   * events arrive.
+   */
+  const expandRate =
+    holdRate === null ? 1 : Math.min(1, Math.max(0, 1 - holdRate));
+  const expansion = estimate(useWithheld ? withheldText : raw);
+  const expected = estimate(rendered) + expandRate * expansion;
+  if (expected > estimate(raw) * WORTHWHILE_PREVIEW) return null;
 
   return {
     mode: 'preview',

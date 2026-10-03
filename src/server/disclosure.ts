@@ -153,6 +153,19 @@ export async function discloseResult(
     // Nothing is disclosed until it has been stored, or the pointer in the
     // preview would name something unreachable.
     const shape = mods.disclose.parseShape(body).shape;
+    // The refit from this tool and shape's own expansion history, so previews
+    // that keep getting expanded stop being the same previews.
+    //
+    // READ BEFORE THE CAPTURE BELOW, not after. `previewPolicy` counts served
+    // previews from the capture log, so capturing this reply first put it in
+    // its own evidence -- as a preview that had been served and not expanded,
+    // which it cannot have been yet. On a fresh store that alone read as a
+    // 1-for-1 hold record and the rate said this shape always holds.
+    const { boosts, holdRateLower } = mods.expand.previewPolicy(dir, {
+      tool: toolName,
+      shape,
+    });
+
     const ref = mods.expand.capture(dir, body, {
       tool: toolName,
       shape,
@@ -166,13 +179,6 @@ export async function discloseResult(
       costMs: Number.isFinite(costMs) ? costMs : null,
     });
 
-    // The refit from this tool and shape's own expansion history, so previews
-    // that keep getting expanded stop being the same previews.
-    const { boosts } = mods.expand.previewPolicy(dir, {
-      tool: toolName,
-      shape,
-    });
-
     const graph = anchors.length ? mods.wiki.load(dir) : null;
     const out = mods.disclose.disclose(dir, body, {
       graph,
@@ -181,6 +187,15 @@ export async function discloseResult(
       tool: toolName,
       boosts,
       ref,
+      /**
+       * How often a preview of this shape is NOT followed, as a lower bound.
+       *
+       * The bound rather than the point estimate, because this decides whether
+       * to spend the caller's tokens on a preview: a shape gets the benefit of
+       * its hold record only to the extent the record supports it, and a new
+       * shape -- which has none -- is charged for the remainder in full.
+       */
+      holdRate: holdRateLower,
       /**
        * Stores what the preview is about to withhold, and returns the pointer
        * the preview will print.
