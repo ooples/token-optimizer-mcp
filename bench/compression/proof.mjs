@@ -40,39 +40,6 @@ import { describeImage, isImageBlock } from '../../dist/compress/images.js';
 import { pathToFileURL } from 'node:url';
 
 const CACHE_READ = 0.1;
-
-/**
- * How much more than the control our steady-state cost may be: exactly what our
- * markers spend over theirs, and not a token more.
- *
- * THE OLD NUMBER WAS A FLAT 1.05 AND ITS DERIVATION WAS MEASURABLY WRONG. It
- * read: a back-reference here reads `[... 32,107 bytes, already shown above
- * starting "export class CacheEngine {"]`, theirs reads
- * `<<ccr:a1b2c3d4e5f6,blob,32107>>`, ours is about a hundred characters and
- * theirs twenty-four, so five percent is what legibility is allowed to cost.
- * Measured on the markers the arms actually emit, ours is 35 characters and
- * theirs 29 -- a fourfold overestimate of our own marker, which is how a premium
- * meant to price legibility ended up pricing nothing in particular.
- *
- * A RATIO IS ALSO THE WRONG SHAPE FOR THIS COST, which is per marker and
- * absolute. A flat percentage therefore bites hardest exactly where the bill is
- * smallest: on human-authored-json a 17-token gap is 7.0% of a 243-token
- * workload, while those same 17 tokens on repeated-reads would be 0.7% of 2,293.
- * It failed the one workload where our markers are densest and granted several
- * hundred unused tokens on the largest.
- *
- * So the allowance is measured per workload: the characters the judged arm's
- * markers spend over the control's, cache-weighted and converted at the same
- * ratio every other figure in this file uses. Floored at zero, so a workload
- * where we emit no more marker text than the control -- raw-build-log and
- * grep-output, where neither arm back-references anything -- has to win or tie
- * outright.
- *
- * Measured when this was written, as tokens needed against tokens allowed:
- *   human-authored-json   17 / 23     repeated-reads   27 /  51
- *   codebase-exploration  19 / 257    raw-build-log     0 /   0
- *   grep-output            0 / 0      (the nine others win outright)
- */
 const CACHE_WRITE = 1.25;
 
 /** Tokens, approximated consistently across arms so comparisons are fair. */
@@ -332,6 +299,38 @@ function runAnchored(request, options, anchors) {
   return result;
 }
 
+/**
+ * How much more than the control our steady-state cost may be: exactly what our
+ * markers spend over theirs, and not a token more.
+ *
+ * THE OLD NUMBER WAS A FLAT 1.05 AND ITS DERIVATION WAS MEASURABLY WRONG. It
+ * read: a back-reference here reads `[... 32,107 bytes, already shown above
+ * starting "export class CacheEngine {"]`, theirs reads
+ * `<<ccr:a1b2c3d4e5f6,blob,32107>>`, ours is about a hundred characters and
+ * theirs twenty-four, so five percent is what legibility is allowed to cost.
+ * Measured on the markers the arms actually emit, ours is 35 characters and
+ * theirs 29 -- a fourfold overestimate of our own marker, which is how a premium
+ * meant to price legibility ended up pricing nothing in particular.
+ *
+ * A RATIO IS ALSO THE WRONG SHAPE FOR THIS COST, which is per marker and
+ * absolute. A flat percentage therefore bites hardest exactly where the bill is
+ * smallest: on human-authored-json a 17-token gap is 7.0% of a 243-token
+ * workload, while those same 17 tokens on repeated-reads would be 0.7% of 2,293.
+ * It failed the one workload where our markers are densest and granted several
+ * hundred unused tokens on the largest.
+ *
+ * So the allowance is measured per workload: the characters the judged arm's
+ * markers spend over the control's, cache-weighted and converted at the same
+ * ratio every other figure in this file uses. Floored at zero, so a workload
+ * where we emit no more marker text than the control -- raw-build-log and
+ * grep-output, where neither arm back-references anything -- has to win or tie
+ * outright.
+ *
+ * Measured when this was written, as tokens needed against tokens allowed:
+ *   human-authored-json   17 / 23     repeated-reads   27 /  51
+ *   codebase-exploration  19 / 257    raw-build-log     0 /   0
+ *   grep-output            0 / 0      (the nine others win outright)
+ */
 /**
  * The tokens an arm's own marker text earns it, over the control's.
  *
