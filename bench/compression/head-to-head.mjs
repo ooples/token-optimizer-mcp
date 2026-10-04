@@ -481,7 +481,7 @@ function timeEveryWorkload(byName) {
       const samples = [];
       for (let i = 0; i < SPEED_SAMPLES; i += 1) {
         const t0 = performance.now();
-        compressBlock(text, { query: queryOf(text) });
+        compressBlock(text, { query: queryOf(text), stamp: BENCH_STAMP });
         samples.push(performance.now() - t0);
       }
       // KEPT IN RUN ORDER. Sorting loses which reading was first, and the
@@ -565,7 +565,7 @@ for (const [name, text] of Object.entries(payloads)) {
   const subMsSamples = subMsPasses.flat();
   const subSorted = [...subMsSamples].sort((a, b) => a - b);
   const subMs = subSorted[(subSorted.length - 1) >> 1];
-  const out = compressBlock(text, { query: queryOf(text) });
+  const out = compressBlock(text, { query: queryOf(text), stamp: BENCH_STAMP });
 
   // THE SUBSTITUTION ARM, MEASURED SEPARATELY AND NAMED FOR WHAT IT IS. HeadRoom
   // reaches ~99.7% on the three workloads our engines find hardest by not
