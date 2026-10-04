@@ -507,6 +507,40 @@ else
     String(recordedEncoding)
   );
 
+// --- THE GATE: WHAT A SUBSCRIPTION ACTUALLY BUYS -------------------------
+// THIS IS THE NUMBER THE WORK IS FOR, and it is the one every route above has
+// to move. `capMultiple` is what the same monthly cap buys against running with
+// no optimizer at all, so it is the user-facing form of the whole comparison --
+// not a token count, not a dollar figure on one session.
+//
+// Recorded: ours 1.61x against their 1.69x at p=0. We lose. At a 50% fetch rate
+// we lead, 1.61x against 1.59x, but a win that depends on the reader expanding
+// half of what was deferred is not the win being claimed.
+//
+// And the arm that would take it already exists. The preset arm costs 146,064
+// at p=0 against their 2,746,640 -- a raw 49.5x against doing nothing, where
+// our referencing arm manages 2.34x -- because it EVICTS. It is unusable as it
+// stands: 61 round trips, and at p=1 it costs 3,925,756, worse than doing
+// nothing per token saved, with break-even at an 87% fetch rate.
+//
+// So the target is the synthesis, which is Track 1: evict like the preset, but
+// only units that are provably dead, so the fetches the preset pays for never
+// happen. Beat 1.69x at p=0 without pushing p=1 above 3,088,040 or trips above
+// zero.
+const cap = record.totals.cost.session.capMultiple;
+const capOurs = num(cap.oursP0);
+const capTheirs = num(cap.theirsP0);
+if (!(capOurs > capTheirs))
+  bad(
+    'a subscription buys more with us than with them, nothing fetched',
+    `ours ${capOurs}x against their ${capTheirs}x -- the gate for this work, and it is not met yet`
+  );
+else
+  ok(
+    'a subscription buys more with us than with them, nothing fetched',
+    `ours ${capOurs}x against their ${capTheirs}x`
+  );
+
 console.log(
   failures === 0
     ? '\nthe p=0 gap is the handed payload, with no residual'
