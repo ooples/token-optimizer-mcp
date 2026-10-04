@@ -71,6 +71,9 @@ const TARGETS = [
   // capture is on disk -- which is why the decomposition check fails loudly on
   // the encoding instead of trusting a census to have caught it.
   ['bench/compression/head-to-head.mjs', 'hr30/merged/warm'],
+  // The prefix-survival measurement, which counts the shared run between turns
+  // as text rather than scaling a character share.
+  'bench/compression/prefix-survival.mjs',
 ];
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages/count_tokens';

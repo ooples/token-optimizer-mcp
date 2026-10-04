@@ -27,6 +27,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compressBlock } from './ours-engine.mjs';
+import { tokens } from './currency.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CORPUS = join(HERE, '..', '..', 'hr-corpus', 'natives-18.json');
@@ -74,8 +75,16 @@ for (const { name, turns } of conversations()) {
     const text = turns.slice(0, i + 1).join('\n');
     const out = compressBlock(text, { stamp: '100000001' }).text;
     if (previous !== null) {
-      survived += sharedPrefix(previous, out);
-      total += previous.length;
+      // IN TOKENS, NOT SCALED FROM CHARACTERS. The provider caches bytes, so
+      // characters are the right unit for finding where the shared run ENDS --
+      // but the discount is applied per token, and the two do not scale
+      // together: a prefix that is 87% of the characters is not 87% of the
+      // tokens, because a cut lands mid-token and because the tail that differs
+      // is usually denser than the prose in front of it. So the shared run is
+      // counted as text.
+      const shared = previous.slice(0, sharedPrefix(previous, out));
+      survived += tokens(shared);
+      total += tokens(previous);
     }
     previous = out;
   }
@@ -89,7 +98,7 @@ if (rows.length === 0) {
 } else {
   for (const row of rows)
     console.log(
-      `${row.name.padEnd(26)} ${(row.share * 100).toFixed(1).padStart(6)}% of ${row.total} prior character(s) survived`
+      `${row.name.padEnd(26)} ${(row.share * 100).toFixed(1).padStart(6)}% of ${row.total} prior token(s) survived`
     );
   const weighted =
     rows.reduce((sum, row) => sum + row.share * row.total, 0) /
