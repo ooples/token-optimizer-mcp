@@ -252,7 +252,7 @@ export const SMART_SYMBOLS_TOOL_DEFINITION = {
 export const SMART_TYPESCRIPT_TOOL_DEFINITION = {
   name: 'smart_typescript',
   description:
-    'Incremental TypeScript compilation with dependency tracking and intelligent caching. Measured token reduction vs reading the file: 87-88% first read, 87-88% repeated (bench/tools, 1 fixture).',
+    'Incremental TypeScript compilation with dependency tracking and intelligent caching. Measured token reduction vs reading the file: 92-93% first read, 92-93% repeated (bench/tools, 1 fixture).',
   inputSchema: {
     type: 'object',
     properties: {

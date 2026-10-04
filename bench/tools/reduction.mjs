@@ -11,9 +11,11 @@
  * JSON.stringify(result, null, 2) -- its OWN result, pretty-printed -- and
  * compares it against a compacted rendering of that same result. So the ratio
  * describes the tool's choice of indentation, not anything the caller avoided
- * reading. And the compact rendering is discarded: src/server/index.ts sends
- * JSON.stringify(result, null, 2), the pretty form, so the compaction the tool
- * measures never reaches the client at all.
+ * reading. And the pretty rendering it prices as the "original" is the one that
+ * is never sent: src/server/index.ts:494 serialises with toResultText, which is
+ * JSON.stringify(result) with no indent. So the ratio is between two renderings
+ * of the tool's own answer, and the larger of the two was never a cost anyone
+ * was going to pay.
  *
  * The reduction a caller experiences is a different quantity, and it is the one
  * the descriptions are read as claiming:
@@ -146,6 +148,24 @@ const byProjectFileList = (path) => ({
   files: [path],
   projectRoot: dirname(path),
 });
+/**
+ * A TYPE-CHECKER NEEDS A PROGRAM, NOT A FILE.
+ *
+ * The program is whatever the tsconfig at `projectRoot` includes, and a file
+ * it does not include has no diagnostics to report. This directory's own
+ * tsconfig includes a `src` tree that does not exist here (the include
+ * pattern cannot be written in this comment), so it defined an EMPTY program -- and the reply said
+ * `Status: Success / Errors: 0 / Files Compiled: 1` about a file it had never
+ * looked at, which this row recorded as an 87-88% saving. smart_typescript now
+ * refuses that call (see the throw in smart-typescript.ts), so the question
+ * has to be asked of a real program: `ts-program/tsconfig.json` includes
+ * exactly this fixture, which keeps the baseline the same file every other row
+ * here measures against.
+ */
+const byTsProgram = (path) => ({
+  files: [path],
+  projectRoot: join(dirname(path), 'ts-program'),
+});
 const byEnvFile = (path) => ({ envFile: path });
 const byPathKey = (path) => ({ path });
 // A tool given a directory must be given the directory its own fixture is in.
@@ -198,7 +218,7 @@ export const CASES = [
   {
     tool: 'smart_typescript',
     fixture: 'tool-profile.ts',
-    args: byProjectFileList,
+    args: byTsProgram,
   },
   // ASK IT ABOUT SOURCE, OR THE ROW MEASURES A REFUSAL.
   //

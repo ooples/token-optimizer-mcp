@@ -1,6 +1,6 @@
 {
   "encoding": "cl100k_base",
-  "recorded": "2026-10-04T00:34:37.550Z",
+  "recorded": "2026-10-04T01:14:06.136Z",
   "stability": {
     "passes": 3,
     "maxTokenSpread": 0,
@@ -121,14 +121,14 @@
     },
     "smart_typescript": {
       "first": {
-        "lo": 87,
-        "hi": 88,
-        "text": "87-88%"
+        "lo": 92,
+        "hi": 93,
+        "text": "92-93%"
       },
       "repeated": {
-        "lo": 87,
-        "hi": 88,
-        "text": "87-88%"
+        "lo": 92,
+        "hi": 93,
+        "text": "92-93%"
       },
       "fixtures": 1,
       "samples": 3
@@ -554,10 +554,10 @@
       "tool": "smart_typescript",
       "fixture": "tool-profile.ts",
       "baseline": 1270,
-      "treatment": 160,
-      "reduction": 0.8740157480314961,
-      "repeatTreatment": 162,
-      "repeatReduction": 0.8724409448818897,
+      "treatment": 99,
+      "reduction": 0.9220472440944882,
+      "repeatTreatment": 101,
+      "repeatReduction": 0.9204724409448819,
       "chunks": 1,
       "expansions": 0,
       "refused": false,
