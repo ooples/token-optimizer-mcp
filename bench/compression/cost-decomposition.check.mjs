@@ -377,6 +377,45 @@ if (ratios.length || true) {
   );
 }
 
+// --- the cost model erases our one structural advantage -----------------
+// `cachedPrefix` IS ZERO FOR EVERY ARM, which the identity at the top of this
+// file proves rather than assumes: both totals are `handed * 7.6` exactly, and
+// a cached token costs `R*(N+1)` = 5.7 instead. So the model charges all three
+// arms as if the provider never caches anything.
+//
+// That is not neutral between them. The referencing arm APPENDS -- a tool reply
+// lands at the end of the transcript and the prefix before it is untouched --
+// so a real cached prefix survives it. The proxy arm cannot: head-to-head.mjs
+// at :735 records that its output shares exactly 57 characters with its input
+// on every row that compresses, the `{"model":...,"messages":` envelope and
+// nothing more, because it rebuilds the request with `JSON.stringify`. In the
+// harness's own words, it "can leave a prefix alone in every sense that matters
+// and still destroy the cache hit on the way out". Their deferral arm rewrites
+// context too, by withholding from it.
+//
+// Crediting a prefix that genuinely survives is therefore worth, at the limit,
+// the difference between the two rates on our whole payload -- and it is not
+// flattering ourselves, it is what the provider bills. It must be MEASURED
+// though, not assumed: the credit is only for the prefix that is byte-identical
+// turn to turn, which is what :735 measures for the proxy arm and what nothing
+// yet measures for ours.
+const cachedRate = R * (N + 1);
+const atCachedRate = Math.round(num(handed.ours) * cachedRate);
+if (!(cachedRate < PER_TOKEN))
+  bad(
+    'a cached token is cheaper than a fresh one',
+    `${cachedRate} is not below ${PER_TOKEN}, so there is nothing to win by preserving a prefix`
+  );
+else
+  ok(
+    'a cached token is cheaper than a fresh one',
+    `${cachedRate} against ${PER_TOKEN.toFixed(1)}, a ${(((PER_TOKEN - cachedRate) / PER_TOKEN) * 100).toFixed(0)}% discount the model gives nobody`
+  );
+ok(
+  'route 2, revived: credit the prefix that really survives',
+  `at the cached rate our payload reads ${atCachedRate} against their ${num(p0.theirs)}, an upper bound of ${num(p0.ours) - atCachedRate} token(s) -- claimable only for the prefix measured byte-identical`
+);
+
 // --- the fetch term is a READ, and that is correct ------------------------
 // SETTLED BY OBSERVATION, HAVING FIRST BEEN ASSERTED WRONGLY. The claim was
 // that `cost-model.mjs` undercharges a fetch by pricing cache invalidation as a
