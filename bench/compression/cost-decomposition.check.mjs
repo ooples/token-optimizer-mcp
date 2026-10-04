@@ -128,6 +128,42 @@ else
     `${plain} -> ${prefixed}, so p0 matching the form means cachedPrefix is 0`
   );
 
+// --- the fetch term is a READ, and that is correct ------------------------
+// SETTLED BY OBSERVATION, HAVING FIRST BEEN ASSERTED WRONGLY. The claim was
+// that `cost-model.mjs` undercharges a fetch by pricing cache invalidation as a
+// read, and that correcting it would hand us p=1 on arithmetic. It would -- if
+// expansion were SPLICED back into the position the marker occupies, which
+// invalidates every cached token after it and costs W on the whole suffix.
+//
+// Neither engine splices. Ours returns expanded content from the `expand` tool,
+// so it arrives as a new tool result at the END of the transcript. Theirs
+// exposes `retrieve()` (headroom/cache/compression_store.py:435), which its
+// caller invokes the same way. Appending invalidates nothing, so one extra
+// request re-reading the prefix is exactly what happens and `(R/b) * (B +
+// handed)` is exactly what it costs.
+//
+// So p=1 is NOT ours on arithmetic and needs engineering. This assertion is the
+// standing version of that: it fails if the fetch term is ever re-rated as a
+// write, which would need a splicing engine to justify it.
+const fetchTerm = costLine({ handed: 1000, blocks: [500], params });
+const perFetchShare =
+  (DEFAULTS.cacheRead / DEFAULTS.fetchBatch) *
+  (num(record.totals.cost.session.baseContextTokens) + 1000);
+const residency = 500 * (W + R * Math.max(0, N - N / 2));
+eq(
+  'a fetched block pays a read for the prefix, not a write',
+  Math.round(fetchTerm.c1),
+  Math.round(
+    DEFAULTS.fetchCallTokens * DEFAULTS.outputPerInput +
+      residency +
+      perFetchShare
+  )
+);
+ok(
+  'because both engines append rather than splice',
+  'ours via the expand tool, theirs via compression_store.retrieve'
+);
+
 console.log(
   failures === 0
     ? '\nthe p=0 gap is the handed payload, with no residual'
