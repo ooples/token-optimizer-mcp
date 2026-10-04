@@ -527,19 +527,44 @@ else
 // only units that are provably dead, so the fetches the preset pays for never
 // happen. Beat 1.69x at p=0 without pushing p=1 above 3,088,040 or trips above
 // zero.
+// MEASURED ON THE ARM THAT EVICTS, which is the one a user should be given and
+// the one the published verdict never scored. `ours` compresses in place and
+// spills nothing, so its multiple is identical at every fetch rate and it loses
+// to them at all of them -- 1.61x against 1.69x. That is not the product
+// losing, it is the wrong arm being quoted: the preset was computed on every
+// workload and dropped before the cost comparison.
 const cap = record.totals.cost.session.capMultiple;
-const capOurs = num(cap.oursP0);
-const capTheirs = num(cap.theirsP0);
-if (!(capOurs > capTheirs))
-  bad(
-    'a subscription buys more with us than with them, nothing fetched',
-    `ours ${capOurs}x against their ${capTheirs}x -- the gate for this work, and it is not met yet`
-  );
-else
-  ok(
-    'a subscription buys more with us than with them, nothing fetched',
-    `ours ${capOurs}x against their ${capTheirs}x`
-  );
+for (const [rate, mine, theirs] of [
+  ['nothing fetched', 'presetP0', 'theirsP0'],
+  ['half fetched', 'presetP50', 'theirsP50'],
+]) {
+  const ours = num(cap[mine]);
+  const them = num(cap[theirs]);
+  if (!Number.isFinite(ours) || !Number.isFinite(them))
+    bad(
+      `a subscription buys more with us than with them, ${rate}`,
+      `the record carries no ${mine} or ${theirs}; re-record with head-to-head.mjs --record`
+    );
+  else if (!(ours > them))
+    bad(
+      `a subscription buys more with us than with them, ${rate}`,
+      `ours ${ours}x against their ${them}x -- the gate for this work`
+    );
+  else
+    ok(
+      `a subscription buys more with us than with them, ${rate}`,
+      `${ours}x against their ${them}x`
+    );
+}
+// AND THE PRICE OF IT, STATED NOT BURIED. The eviction is free only while
+// nothing is fetched; every one of its round trips is paid at p=1, where the
+// multiple falls to presetP1. `presetBreakEven` is the fetch rate where the
+// trade turns, and a claim that quotes p=0 without it is the same kind of
+// half-truth as their 99.8% on a withheld build log.
+ok(
+  'and what it costs when everything is fetched',
+  `${num(cap.presetP1)}x at p=1, with the trade turning at a ${record.totals.cost.session.presetBreakEven} fetch rate`
+);
 
 console.log(
   failures === 0

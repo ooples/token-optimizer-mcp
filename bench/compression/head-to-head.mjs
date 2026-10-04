@@ -2965,6 +2965,31 @@ if (process.argv[3] === '--record') {
                   costAt(corpus.none, 0.5),
                   costAt(corpus.theirs, 0.5)
                 ),
+                // THE ARM THAT EVICTS, AND THE ONE A USER SHOULD BE GIVEN.
+                //
+                // `ours` above compresses in place and spills nothing, so its
+                // multiple is the same at every fetch rate and it loses to them
+                // at all of them. The preset arm evicts, which is why it is 17.9x
+                // cheaper at rest -- and the published verdict has rested on the
+                // arm that does not, with the preset computed on every workload
+                // and then dropped before the cost comparison.
+                //
+                // Recorded at both ends so the trade is visible rather than
+                // argued: at p=0 nothing is fetched and the eviction is free, at
+                // p=1 every one of its 61 round trips is paid, and the break-even
+                // between those is `presetBreakEven`.
+                presetP0: times(
+                  costAt(corpus.none, 0),
+                  costAt(corpus.preset, 0)
+                ),
+                presetP50: times(
+                  costAt(corpus.none, 0.5),
+                  costAt(corpus.preset, 0.5)
+                ),
+                presetP1: times(
+                  costAt(corpus.none, 1),
+                  costAt(corpus.preset, 1)
+                ),
               },
             },
           },
