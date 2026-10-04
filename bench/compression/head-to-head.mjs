@@ -2520,6 +2520,17 @@ if (process.argv[3] === '--record') {
         // read 0.999537 and 0.999771, and rounding either to 1.000 would print
         // the exact claim the arm cannot support.
         bodyBehind: r.bodyRatio === null ? null : r.bodyBehind.toFixed(6),
+        // HOW MUCH OF THE PREFIX SURVIVED, which this file has always measured
+        // and never recorded. A re-serialised request is a cache miss even when
+        // nothing in it changed, and the agreement between what came in and what
+        // went out has been 57 characters on every row that compresses -- so the
+        // arm pays a write for a prefix it could have sent at the read rate.
+        // Without this in the record there is no way to tell from a recording
+        // whether an arm preserved the prefix or destroyed it, which is the
+        // difference between residency at R and residency at W: a factor of 20
+        // on the one-hour cache rate.
+        bodyCachedPrefixChars: String(r.bodyCachedPrefixChars ?? 0),
+        bodyCachedPrefixTok: String(r.bodyCachedPrefixTok ?? 0),
         // WHAT THE PROVIDER ACTUALLY SERVED FROM CACHE, in characters and in
         // the tokens cost-model.mjs discounts. Near-zero on every row that
         // compresses, because the proxy re-serialises the request; recorded so
