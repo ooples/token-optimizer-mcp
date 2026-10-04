@@ -45,11 +45,16 @@ const TARGETS = [
   'bench/tools/reduction.mjs',
   'bench/tools/reduction.check.mjs',
   // THE COMPETITIVE COMPARATOR, which counted with tiktoken cl100k_base until
-  // the currency was corrected. Its census needs the competitor's engine
-  // present, so a run without hr-corpus and the clone will not reach every
-  // payload; that is why the decomposition check fails loudly on the encoding
-  // rather than trusting a partial census to have caught it.
-  'bench/compression/head-to-head.mjs',
+  // the currency was corrected.
+  //
+  // IT TAKES THE COMPETITOR'S CAPTURE DIRECTORY AS AN ARGUMENT, so registering
+  // it bare recorded nothing: a run with no argument prints its usage line and
+  // exits, which the census read as a target that reached zero strings rather
+  // than as a target that never ran. The capture the recorded result was taken
+  // over is `hr30/merged/warm`, and the census is only as complete as whatever
+  // capture is on disk -- which is why the decomposition check fails loudly on
+  // the encoding instead of trusting a census to have caught it.
+  ['bench/compression/head-to-head.mjs', 'hr30/merged/warm'],
 ];
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages/count_tokens';
@@ -154,13 +159,27 @@ function save(record) {
   writeFileSync(FIXTURE, `${JSON.stringify({ ...record, counts }, null, 2)}\n`);
 }
 
+/**
+ * A target is a path, or a path plus the arguments it needs to do anything.
+ *
+ * REGISTERING ONE BARE THAT NEEDS AN ARGUMENT RECORDS NOTHING, and looks like
+ * success. head-to-head.mjs takes the competitor's capture directory; with no
+ * argument it printed its usage line and exited, and the census read that as a
+ * target which had reached zero new strings rather than as one which had never
+ * run. The strict pass afterwards was the only thing that noticed.
+ */
 function run(target, env) {
-  return spawnSync(process.execPath, [target], {
+  const [file, ...args] = Array.isArray(target) ? target : [target];
+  return spawnSync(process.execPath, [file, ...args], {
     cwd: REPO,
     env: { ...process.env, ...env },
     stdio: 'ignore',
   }).status;
 }
+
+/** For a message: the path, with its arguments if it has any. */
+const label = (target) =>
+  Array.isArray(target) ? target.join(' ') : String(target);
 
 const scratch = mkdtempSync(join(tmpdir(), 'token-counts-'));
 const censusPath = join(scratch, 'census.jsonl');
@@ -199,8 +218,17 @@ let reached = new Set();
 
 for (let round = 1; round <= 5; round += 1) {
   rmSync(censusPath, { force: true });
-  for (const target of TARGETS)
-    run(target, { TOKEN_OPTIMIZER_BENCH_CENSUS: censusPath });
+  for (const target of TARGETS) {
+    const status = run(target, { TOKEN_OPTIMIZER_BENCH_CENSUS: censusPath });
+    // A TARGET THAT DID NOT RUN IS NOT A TARGET THAT FOUND NOTHING. Census mode
+    // answers a miss provisionally so a target is expected to SUCCEED here; a
+    // non-zero exit means it never reached its payloads, and carrying on would
+    // record a fixture that silently omits every string it would have counted.
+    if (status !== 0)
+      throw new Error(
+        `census target ${label(target)} exited ${status}, so it reached none of its payloads; the counts it would have contributed cannot be recorded and the fixture would be silently incomplete`
+      );
+  }
 
   const fresh = new Map();
   reached = new Set();
@@ -247,7 +275,7 @@ let bad = 0;
 for (const target of TARGETS) {
   const status = run(target, { TOKEN_OPTIMIZER_BENCH_CENSUS: '' });
   console.log(
-    `strict ${target}: ${status === 0 ? 'pass' : `FAIL (exit ${status})`}`
+    `strict ${label(target)}: ${status === 0 ? 'pass' : `FAIL (exit ${status})`}`
   );
   if (status !== 0) bad += 1;
 }
