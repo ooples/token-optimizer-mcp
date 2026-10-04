@@ -317,26 +317,33 @@ if (ratios.length) {
   }
 }
 
-// --- route 4, and it is most of the gap: WE PICK THE WRONG ARM -----------
-// NOT A MISSING CAPABILITY AT ALL, on 7 of 18 workloads. The record carries a
-// `body` reading beside `ours` for every workload, and on seven of them that
-// arm -- one we already ship -- beats the arm the selector chose, by a mean of
-// 28 points: agentic-conversation 25.1% against 70.5%, sre-debugging 49.3%
-// against 86.6%, codebase-exploration 14.2% against 42.7%. The worst fixture in
-// the whole comparison is one where we had a 3x better answer in hand and did
-// not send it.
+// --- route 4: the capability exists, on the OTHER SURFACE -----------------
+// AND IT IS NOT A SELECTOR BUG, which is how this first read. The `body`
+// reading beside `ours` is not a rival strategy the selector could have picked:
+// it is the PROXY arm, which rewrites the whole outgoing request body, where
+// `ours` is the referencing arm operating on tool replies
+// (head-to-head.mjs:1189 and the note at :1486). They are two deployment
+// surfaces, not two options at one decision point, so "pick the better arm" is
+// not a flag flip -- it means routing through a proxy that has to be running
+// and configured, and the arm carries a ~15-token envelope the others do not.
 //
-// Weighted by payload and scaled so the chosen-arm sum reproduces the recorded
-// handed total, picking the better of our OWN two arms per workload moves
-// 442,276 to about 350,016 -- 76% of the 120,720-token gap, for no new
-// compression. It does not finish the job: p=0 would read about 2,660,000
-// against their 2,443,826. The rest has to come from the intra-block headroom
-// above, where 82.6% is available and 14.2% is taken.
+// What it does establish is that the COMPRESSION is not the missing piece. On 7
+// of 18 workloads the proxy arm takes a mean 28 points more than the referencing
+// arm off the same bytes: agentic-conversation 25.1% against 70.5%,
+// sre-debugging 49.3% against 86.6%, codebase-exploration 14.2% against 42.7%.
+// The worst fixture in the comparison is one where our own code already produces
+// a 3x better answer somewhere else in the system.
 //
-// This is an ESTIMATE, not a measurement: it reuses per-workload percentages
-// rather than re-running the comparison with a per-workload selector, and the
-// arms were measured independently rather than composed. It is here to rank the
-// work, and the claim gets re-recorded before it is published.
+// Weighted by payload and scaled so the referencing sum reproduces the recorded
+// handed total, the better-of-the-two per workload is about 350,016 against
+// 442,276 -- 76% of the 120,720-token gap. It would still not finish: p=0 would
+// read about 2,660,000 against their 2,443,826, and the rest has to come from
+// the intra-block headroom where 82.6% is available and 14.2% is taken.
+//
+// This is an ESTIMATE, not a measurement. It reuses per-workload percentages
+// rather than re-running with either surface changed, and the two were measured
+// independently rather than composed -- a payload cannot be rewritten twice and
+// have both savings. It ranks the work; nothing is published off it.
 if (ratios.length || true) {
   const armed = Object.values(record.workloads)
     .map((w) => ({
@@ -352,12 +359,12 @@ if (ratios.length || true) {
   const beaten = armed.filter((w) => w.body > w.ours + 0.5);
   if (beaten.length === 0)
     bad(
-      'the selector sometimes picks the weaker of our own arms',
-      'it never does, so there is no selection gain to claim'
+      'the proxy arm sometimes beats the referencing arm',
+      'it never does, so there is no headroom to borrow from it'
     );
   else
     ok(
-      'the selector picks the weaker of our own arms',
+      'the proxy arm beats the referencing arm on the same bytes',
       `on ${beaten.length} of ${armed.length} workload(s), mean ${(beaten.reduce((sum, w) => sum + (w.body - w.ours), 0) / beaten.length).toFixed(1)} points left behind, worst ${beaten.sort((a, b) => b.body - b.ours - (a.body - a.ours))[0].name}`
     );
   const held = (pick) =>
@@ -365,7 +372,7 @@ if (ratios.length || true) {
   const scale = num(handed.ours) / held((w) => w.ours);
   const bestOf = Math.round(held((w) => Math.max(w.ours, w.body)) * scale);
   ok(
-    'route 4, by choosing between arms we already ship',
+    'route 4, by bringing that compression to the referencing arm',
     `${num(handed.ours)} -> about ${bestOf} handed, ${(((num(handed.ours) - bestOf) / (num(handed.ours) - num(handed.theirs))) * 100).toFixed(0)}% of the gap, estimated not measured`
   );
 }
