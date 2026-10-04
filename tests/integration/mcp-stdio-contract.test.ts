@@ -287,16 +287,30 @@ describe('smart_read over the wire', () => {
       name: 'smart_read',
       arguments: { path },
     });
+    // THE POSITIVE CONTROL for both `not.toContain('row 0:')` assertions
+    // below: a full read DOES carry that line, so their absence later is a
+    // fact about the reply and not about the string being unreachable.
+    expect(first.content[0].text).toContain('row 0:');
+
     const second = await callTool('smart_read', { path });
-    expect(second.metadata.fromCache).toBe(true);
+    // THE CACHE HIT, READ FROM WHAT THE REPLY SAYS RATHER THAN FROM ITS
+    // BOOKKEEPING. `metadata.fromCache` is no longer on the wire: it tells the
+    // caller how this process answered, not anything about their file, and it
+    // is pruned with the rest of the restated envelope (pinned in
+    // tests/unit/server/restated.test.ts). The observable is stronger anyway --
+    // a cache hit is a reply that does not resend the file.
     expect(second.content).toContain('No changes');
+    expect(second.content).not.toContain('row 0:');
     expect(JSON.stringify(second).length).toBeLessThan(
       first.content[0].text.length
     );
     writeFileSync(path, content.replace('row 250:', 'CHANGED 250:'));
     const changed = await callTool('smart_read', { path });
-    expect(changed.metadata.isDiff).toBe(true);
+    // Likewise `metadata.isDiff`. A diff is a reply that carries the changed
+    // line and NOT the 499 that did not change; asserting that says what the
+    // flag only claimed.
     expect(changed.content).toContain('CHANGED 250:');
+    expect(changed.content).not.toContain('row 0:');
     const repeated = await callTool('smart_read', { path });
     expect(repeated.content).toContain('No changes');
     expect(repeated.content).not.toContain('CHANGED 250:');
@@ -504,7 +518,11 @@ describe('smart_edit over the wire', () => {
       operations: [{ type: 'insert', startLine: 11, content: 'L11' }],
     });
 
-    expect(payload.success).toBe(true);
+    // `success: true` duplicates the envelope's `isError: false`, so it is
+    // pruned from the reply; `success: false` is an outcome and survives. That
+    // makes `undefined` the discriminating assertion against the refusal arm
+    // above, which still reads `false` here.
+    expect(payload.success).toBeUndefined();
 
     const after = readFileSync(path, 'utf8');
     expect(after.startsWith(TEN)).toBe(true);
