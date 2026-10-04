@@ -128,6 +128,47 @@ else
     `${plain} -> ${prefixed}, so p0 matching the form means cachedPrefix is 0`
   );
 
+// --- and WHERE in the payload it is: per-unit verbosity -------------------
+// NOT THE MARKER SYNTAX, which was the first guess and was wrong. Re-encoding
+// `[... 400 lines -> src/a.ts:12-400]` to its tightest collision-safe form
+// saves 2 tokens of 17, so closing a 120,720-token gap that way would need some
+// 60,000 markers -- far more than the payload holds, for a decoder-visible
+// format change.
+//
+// The record says where it actually is. We keep FEWER units in context than
+// they do and still hand back more tokens, so each unit we keep is far more
+// verbose. Match their per-unit size at our own unit count and we land under
+// their whole payload, with no change to what we drop, no extra round trip and
+// no decoder risk.
+const ret = record.totals.retention;
+const unitsOurs = num(ret.inContext.ours);
+const unitsTheirs = num(ret.inContext.theirs);
+const perUnitOurs = num(handed.ours) / unitsOurs;
+const perUnitTheirs = num(handed.theirs) / unitsTheirs;
+if (!(unitsOurs < unitsTheirs))
+  bad(
+    'we keep fewer units in context than they do',
+    `${unitsOurs} is not fewer than ${unitsTheirs}, so the verbosity reading below does not follow`
+  );
+else
+  ok(
+    'we keep fewer units in context than they do',
+    `${unitsOurs} against ${unitsTheirs}`
+  );
+eq(
+  'yet each unit we keep is heavier',
+  Number((perUnitOurs / perUnitTheirs).toFixed(2)),
+  1.7
+);
+ok(
+  'route 3, by per-unit size',
+  `${perUnitOurs.toFixed(1)} -> ${perUnitTheirs.toFixed(1)} tokens per unit puts us at ${Math.round(unitsOurs * perUnitTheirs)}, under their ${num(handed.theirs)}`
+);
+ok(
+  'which at p=0 would read',
+  `${Math.round(unitsOurs * perUnitTheirs * PER_TOKEN)} against their ${num(p0.theirs)}`
+);
+
 // --- the fetch term is a READ, and that is correct ------------------------
 // SETTLED BY OBSERVATION, HAVING FIRST BEEN ASSERTED WRONGLY. The claim was
 // that `cost-model.mjs` undercharges a fetch by pricing cache invalidation as a
