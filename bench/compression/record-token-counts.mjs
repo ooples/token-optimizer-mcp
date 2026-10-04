@@ -69,19 +69,35 @@ let calls = 0;
 async function countRequest(text) {
   for (let attempt = 0; ; attempt += 1) {
     calls += 1;
-    const response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'oauth-2025-04-20',
-        authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [{ role: 'user', content: [{ type: 'text', text }] }],
-      }),
-    });
+    // A TRANSPORT FAILURE IS RETRYABLE TOO, and it used to escape this loop.
+    // The retry below covers HTTP statuses only, so a connection aborted mid
+    // write -- ECONNABORTED, which the comparator's six-figure payloads provoke
+    // -- threw straight out of the recorder and ended the run with a stack
+    // trace, after it had already spent every call before it. The payload size
+    // is not the problem: the largest fixture counts fine on its own.
+    let response;
+    try {
+      response = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'oauth-2025-04-20',
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [{ role: 'user', content: [{ type: 'text', text }] }],
+        }),
+      });
+    } catch (error) {
+      if (attempt >= 5)
+        throw new Error(
+          `count_tokens transport failure after ${attempt + 1} attempts on a ${text.length}-character payload: ${error.message}`
+        );
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+      continue;
+    }
     if (response.ok) return (await response.json()).input_tokens;
     const body = (await response.text()).slice(0, 200);
     const retryable = response.status === 429 || response.status >= 500;
