@@ -138,6 +138,26 @@ describe('a reply does not carry what the caller already holds', () => {
     expect(out).toEqual({ format });
   });
 
+  it('drops the stopwatch on the cache, not only the flag', () => {
+    // `cacheAge` is `cacheHit` with a duration attached, and it was the one
+    // field in any reply whose value moved when nothing about the input did --
+    // which made three benched payloads unpriceable in a currency keyed on
+    // exact bytes.
+    const out = withoutRestated(
+      { summary: { exportCount: 1, cacheAge: 162 } },
+      {}
+    );
+    expect(out).toEqual({ summary: { exportCount: 1 } });
+  });
+
+  it('keeps a duration that is not about the cache', () => {
+    // THE POSITIVE CONTROL: the rule is keyed on this one name, not on
+    // anything that looks like a measured age, so a tool reporting how old the
+    // FILE is still gets to say it.
+    const out = withoutRestated({ summary: { fileAgeDays: 162 } }, {});
+    expect(out).toEqual({ summary: { fileAgeDays: 162 } });
+  });
+
   it('drops cache state written as something other than cacheHit', () => {
     // `isDiff` says this reply is a diff against what the cache already had,
     // and `incrementalUpdate` that only changed files were walked. Both

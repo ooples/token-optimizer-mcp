@@ -190,6 +190,17 @@ export interface SmartSchemaResult {
   cacheAge?: number;
 }
 
+/**
+ * What actually goes into the cache: the result plus the moment it was written.
+ *
+ * `cacheAge` is published as a duration, and a duration needs two instants. The
+ * second one is recorded here rather than in `SmartSchemaResult` because it is
+ * a fact about this cache entry, not part of the answer about the schema.
+ */
+interface StoredSchemaResult extends SmartSchemaResult {
+  cachedAt?: number;
+}
+
 export interface SmartSchemaOutput {
   result: string;
   tokens: {
@@ -957,9 +968,18 @@ export class SmartSchema {
         return null;
       }
 
-      const result = JSON.parse(cached) as SmartSchemaResult;
+      const stored = JSON.parse(cached) as StoredSchemaResult;
+      const { cachedAt, ...result } = stored;
       result.cached = true;
-      result.cacheAge = Date.now() - Date.now(); // Would need timestamp from cache metadata
+      // ONLY WHEN THERE IS A TIMESTAMP TO SUBTRACT. This line used to read
+      // `Date.now() - Date.now()`, which is zero by construction, so every
+      // cache hit reported an age of 0ms -- a number that was rendered to the
+      // caller as a measurement and had never been measured. An entry written
+      // by a build that predates the stamp has no age, and saying nothing is
+      // the honest answer.
+      if (typeof cachedAt === 'number') {
+        result.cacheAge = Date.now() - cachedAt;
+      }
 
       return result;
     } catch (error) {
@@ -973,7 +993,11 @@ export class SmartSchema {
   ): Promise<void> {
     try {
       // Calculate size for cache
-      const serialized = JSON.stringify(result);
+      // STAMPED SO THE AGE ON A LATER HIT IS A REAL SUBTRACTION. The stamp
+      // lives on the stored envelope, not on the published result, so it is
+      // destructured off again on the way back out.
+      const stored: StoredSchemaResult = { ...result, cachedAt: Date.now() };
+      const serialized = JSON.stringify(stored);
       const originalSize = Buffer.byteLength(serialized, 'utf-8');
       const compressedSize = originalSize;
 
@@ -1075,7 +1099,7 @@ ${analysis.missingIndexes
   .join('\n')}
 ${analysis.missingIndexes.length > 5 ? `\n(+${analysis.missingIndexes.length - 5} more)` : ''}
 
-${result.cached ? `\n---\n*Cached result (age: ${this.formatDuration(result.cacheAge || 0)})*` : ''}`;
+${result.cached ? `\n---\n*Cached result${typeof result.cacheAge === 'number' ? ` (age: ${this.formatDuration(result.cacheAge)})` : ''}*` : ''}`;
   }
 
   private formatAnalysisOutput(result: SmartSchemaResult): string {

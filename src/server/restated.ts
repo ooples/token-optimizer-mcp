@@ -57,6 +57,23 @@ const CACHE_FLAGS = new Set([
 const CACHE_DIGESTS = new Set(['fileHash', 'hash', 'cacheKey']);
 
 /**
+ * Cache bookkeeping carried as a measured duration.
+ *
+ * `cacheAge` is MILLISECONDS SINCE THIS PROCESS CACHED SOMETHING -- the same
+ * fact as `cacheHit` with a stopwatch attached, and the only field in any reply
+ * whose value changes when nothing about the input has. That cost more than its
+ * three tokens: three benched replies had different bytes on every run, so the
+ * tools bench could not be denominated in recorded `count_tokens` figures at
+ * all, because a count is keyed on exact bytes.
+ *
+ * Kept as its own set rather than folded into CACHE_FLAGS because each rule
+ * prunes only the shape it describes: a flag is a boolean, a digest is a
+ * string, and an age is a number. A name that arrives carrying something else
+ * is not the field this rule knows about, and is left alone.
+ */
+const CACHE_DURATIONS = new Set(['cacheAge']);
+
+/**
  * Facts about the caller's own file, restated.
  *
  * Each is derivable from the name the caller typed: `size` by stat-ing it,
@@ -192,6 +209,7 @@ function pruneEnvelope(
     if (key === 'success' && value === true) continue;
     if (CACHE_FLAGS.has(key) && typeof value === 'boolean') continue;
     if (CACHE_DIGESTS.has(key) && typeof value === 'string') continue;
+    if (CACHE_DURATIONS.has(key) && typeof value === 'number') continue;
     if (typeof value === 'string' && echoesSupplied(value, supplied)) continue;
     // AN INPUT IS NOT A FINDING. smart_dependencies answers with
     // `mode: 'graph'` and `metadata.incrementalUpdate: true`, and both are
