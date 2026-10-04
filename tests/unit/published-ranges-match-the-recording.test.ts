@@ -51,11 +51,20 @@ interface Claim {
   samples: number;
 }
 
+interface Row {
+  tool: string;
+  fixture: string;
+  baseline: number;
+  treatment: number;
+  reduction: number | null;
+}
+
 interface Recording {
   encoding: string;
   recorded: string;
   stability: { passes: number; maxTokenSpread: number; drifting: unknown[] };
   claims: Record<string, Claim>;
+  rows: Row[];
 }
 
 /**
@@ -226,4 +235,125 @@ describe('the bench asks every tool in the words it declares', () => {
       expect(undeclared).toEqual([]);
     });
   }
+});
+
+/*
+ * THE SENTENCE AFTER THE RANGE CARRIES NUMBERS TOO.
+ *
+ * Six descriptions explain their range with a figure of their own -- a flat
+ * cost, a baseline size, a per-fixture reading, a difference in tokens. None of
+ * those was bound to anything. The block above compares the bracketed range to
+ * the recording and passed green while every one of them was stale: moving the
+ * bench onto Anthropic's counter changed four of the six and left two
+ * rationales describing the opposite of what had been measured -- smart_refactor
+ * explaining a loss it no longer has, smart_pretty explaining that nothing here
+ * can reduce anything on a fixture that now comes back shorter.
+ *
+ * So each one is derived from the recorded rows here rather than read off a
+ * description. The figures are formatted exactly as the prose writes them,
+ * thousands separator included, because the assertion is that the published
+ * sentence says this number -- not that some number is nearby.
+ */
+function rowsFor(tool: string): Row[] {
+  const rows = recording.rows.filter((r) => r.tool === tool);
+  // A tool with no rows would make every assertion below vacuous.
+  expect(rows.length).toBeGreaterThan(0);
+  return rows;
+}
+
+/** As the prose writes a count: 1676 -> "1,676". */
+const grouped = (n: number): string => n.toLocaleString('en-US');
+
+/** As the prose writes a reading: 0.2967 -> "30%". */
+const pct = (reduction: number): string => `${Math.round(reduction * 100)}%`;
+
+/**
+ * As the prose writes a small count. Prose spells a handful out, so the
+ * assertion has to as well -- and anything past this range would read as a
+ * figure rather than a word, so it falls through to the digits.
+ */
+const WORDS: Record<number, string> = {
+  1: 'one',
+  2: 'two',
+  3: 'three',
+  4: 'four',
+  5: 'five',
+  6: 'six',
+  7: 'seven',
+  8: 'eight',
+  9: 'nine',
+  10: 'ten',
+};
+
+describe('the rationale beside a published range is recorded too', () => {
+  it('smart_security states the flat cost of a scan that finds nothing', () => {
+    const rows = rowsFor('smart_security');
+    const clean = rows.filter((r) => r.fixture !== 'insecure-handlers.ts');
+    expect(clean).toHaveLength(3);
+    // The claim is that the three readings are the SAME number, which is the
+    // reason the sentence can give one figure for all of them.
+    expect(new Set(clean.map((r) => r.treatment)).size).toBe(1);
+    expect(SMART_SECURITY_TOOL_DEFINITION.description).toContain(
+      `cost a flat ${clean[0].treatment} tokens each`
+    );
+  });
+
+  it('smart_security states the size of the fixture that sets its floor', () => {
+    const floor = rowsFor('smart_security').find(
+      (r) => r.fixture === 'insecure-handlers.ts'
+    );
+    expect(floor).toBeDefined();
+    // And it really is the floor -- the sentence would be wrong about which
+    // fixture it is describing otherwise.
+    const worst = Math.min(
+      ...rowsFor('smart_security').map((r) => r.reduction ?? 1)
+    );
+    expect(floor?.reduction).toBe(worst);
+    expect(SMART_SECURITY_TOOL_DEFINITION.description).toContain(
+      `against a ${grouped(floor?.baseline ?? 0)}-token file`
+    );
+  });
+
+  it('smart_config_read states both of its first-read readings', () => {
+    const rows = rowsFor('smart_config_read');
+    const minimal = rows.find((r) => r.fixture === 'package.json');
+    const large = rows.find((r) => r.fixture === 'large-project/package.json');
+    expect(minimal?.reduction).toBeDefined();
+    expect(large?.reduction).toBeDefined();
+    expect(SMART_CONFIG_READ_TOOL_DEFINITION.description).toContain(
+      `${pct(minimal?.reduction ?? 0)} on a minimal package.json and ` +
+        `${pct(large?.reduction ?? 0)} on a ${grouped(large?.baseline ?? 0)}-token one`
+    );
+  });
+
+  it('smart_refactor states the two sides of its floor', () => {
+    const rows = rowsFor('smart_refactor');
+    const floor = rows.reduce((a, b) =>
+      (a.reduction ?? 1) <= (b.reduction ?? 1) ? a : b
+    );
+    expect(SMART_REFACTOR_TOOL_DEFINITION.description).toContain(
+      `${grouped(floor.treatment)} tokens of answer against ` +
+        `${grouped(floor.baseline)} of file`
+    );
+  });
+
+  it('smart_pretty states how much shorter its one gain is', () => {
+    const rows = rowsFor('smart_pretty');
+    const gains = rows.filter((r) => (r.reduction ?? 0) > 0);
+    // One fixture, and the sentence says so: "the third".
+    expect(gains).toHaveLength(1);
+    const shorter = gains[0].baseline - gains[0].treatment;
+    expect(SMART_PRETTY_TOOL_DEFINITION.description).toContain(
+      `comes back ${WORDS[shorter] ?? shorter} tokens shorter`
+    );
+    // And the other two cost more, which is the rest of the same sentence.
+    const losses = rows.filter((r) => (r.reduction ?? 0) < 0);
+    expect(losses).toHaveLength(2);
+    const span = losses
+      .map((r) => Math.round(Math.abs(r.reduction ?? 0) * 100))
+      .sort((a, b) => a - b);
+    expect(SMART_PRETTY_TOOL_DEFINITION.description).toContain(
+      `cost ${span[0]}-${span[1]}% more than the file`
+    );
+  });
 });
