@@ -188,3 +188,66 @@ export function batchedDrop(
   }
   return assemblyCost(bodies, shared, rates);
 }
+
+/**
+ * A STABLE PREFIX AND A VOLATILE TAIL, which is the only layout where eviction
+ * is cheap enough to repeat.
+ *
+ * Batching exists because a drop breaks the cached prefix at the drop point and
+ * everything behind it is re-written at W. Confine every mutation to a TAIL at
+ * the end of the body and that penalty is bounded by the tail's size instead of
+ * the conversation's: a suffix cut leaves the prefix byte-identical, so a drop
+ * from the tail costs nothing, and a drop can happen every turn rather than
+ * once per session.
+ *
+ * It needs all three operations to touch only the tail, and they do. New tool
+ * output APPENDS to the tail, so the stable region is untouched. A unit that
+ * proves live is PROMOTED into the stable region, which rewrites the tail but
+ * nothing before it. A unit that proves dead is CUT from the tail, which
+ * rewrites nothing at all.
+ *
+ * AND IT COMES WITH A COST NOBODY WOULD GUESS. The tail changes every turn, so
+ * every token in it is charged a write at W=2; a token in the stable prefix is
+ * charged a read at R=0.1. Tail residency is therefore TWENTY TIMES more
+ * expensive per turn than stable residency, which inverts the intuition that a
+ * staging area is cheap. The tail has to be small and drain fast, and a design
+ * that parks content there to decide about it later is paying twenty times over
+ * for the privilege. Swept over how long a unit waits in the tail before it is
+ * promoted or cut:
+ *
+ *   k=1   1,093,497   0.354x   beats their p=0
+ *   k=2   1,920,650   0.622x   beats their p=0
+ *   k=4   3,574,957   1.158x   worse than keeping everything
+ *   k=16 13,500,799   4.372x
+ *
+ * AND THAT SWEEP IS AN UPPER BOUND, NOT THE ANSWER. It charges the WHOLE tail a
+ * write every turn, which is true only if the tail is rewritten every turn. An
+ * append-only tail is not: yesterday's tail is still a prefix of today's body,
+ * so the provider has it cached and only the newly appended bytes are written.
+ * Under that discipline -- append at the end, cut only from the end, never
+ * reorder -- holding a unit in the tail costs R like anything else and the
+ * k-sweep above collapses.
+ *
+ * So the real rule is not "decide within one turn". It is "only ever append to
+ * the end and cut from the end", and the k-sweep measures the price of breaking
+ * that discipline: a promotion that inserts into the middle, or a cut that is
+ * not at the tip, costs what the numbers above say. Which of the two regimes a
+ * real implementation lands in is the next thing to measure, and it is the
+ * difference between a 2.5x win and a 1.16x loss.
+ */
+export function stableAndTail({ stable, tailAt, turnsAfter }, rates = RATES) {
+  if (typeof tailAt !== 'function')
+    throw new Error('tailAt must be a function of the turn');
+  const { cacheWrite: W, cacheRead: R } = rates;
+  let total = 0;
+  for (let t = 0; t <= turnsAfter; t += 1) {
+    const stableNow = stable(t);
+    const tailNow = tailAt(t);
+    if (!(stableNow >= 0 && tailNow >= 0))
+      throw new Error(`turn ${t} has a negative body: ${stableNow}/${tailNow}`);
+    // The prefix is cached from turn 1 onward; the tail is rewritten whenever it
+    // changes, which for a staging area is every turn it is not empty.
+    total += (t === 0 ? stableNow * W : stableNow * R) + tailNow * W;
+  }
+  return total;
+}
