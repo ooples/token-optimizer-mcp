@@ -26,11 +26,19 @@
  * of a 150,000-token payload, about 0.01%, so the product preserves the cached
  * prefix and the single-shot harness simply could not see it.
  *
- * The spread is the work. raw-build-log keeps 17.4%, browser-session 17.7%,
- * grep-output 33.2%, codebase-exploration 36.8%, repeated-reads 44.1% -- five
- * shapes where the engine rewrites most of what it already sent, and the ones a
- * volatile-tail discipline would fix. Everything else is near 100%, which is
- * what carries the weighted figure.
+ * AND THERE IS NO SPREAD TO WORK ON. The first version of this divided the
+ * shared run by the sum of ALL bodies ever sent, which punishes a conversation
+ * for growing: a turn can only re-use what the turn before it established, so
+ * the previous body is the denominator. That error made raw-build-log read
+ * 17.4%, browser-session 17.7%, grep-output 33.2% -- and I had already written
+ * them up as the shapes a volatile tail would fix.
+ *
+ * Measured against the right denominator, the worst shape in the corpus keeps
+ * 96.7% and the weighted figure is 99.9%. Localised turn by turn, the only
+ * thing that ever breaks the prefix is the client's `cache_control` marker
+ * moving from the old last message to the new one -- a 42-character difference
+ * at the very end of the previous body, not our compressor rewriting anything.
+ * There is nothing here for a tail discipline to recover.
  *
  * RUN IT WITH THE STAMP SEED. Without TOKEN_OPTIMIZER_BENCH_STAMP_SEED the
  * markers differ from the ones that were recorded, every payload digest misses,
@@ -130,8 +138,16 @@ for (const { name, turns } of conversations()) {
     }
     const sent = out.body ?? body;
     const shared = previous === null ? 0 : sharedPrefix(previous, sent);
-    sharedBytes += shared;
-    totalBytes += sent.length;
+    // AGAINST THE TURN THAT COULD HAVE BEEN CACHED, NOT AGAINST EVERY BYTE EVER
+    // SENT. The first version divided the shared run by the sum of all bodies,
+    // which punishes a conversation for GROWING: a turn can only re-use what
+    // the previous turn established, so the previous body is the denominator.
+    // That error made five shapes read 17-44% when their real per-turn
+    // agreement is over 99%.
+    if (previous !== null) {
+      sharedBytes += shared;
+      totalBytes += previous.length;
+    }
     // Priced in tokens, since that is the bill, but the prefix is found in
     // bytes because that is what the provider matches on.
     const sentTok = tokens(sent.toString('utf8'));
