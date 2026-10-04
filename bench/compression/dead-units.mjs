@@ -73,7 +73,7 @@ function fixtures() {
       .map((message) =>
         typeof message.content === 'string'
           ? message.content
-          : JSON.stringify(message.content)
+          : JSON.stringify(message.content ?? message)
       )
       .join('\n'),
   }));
