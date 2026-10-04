@@ -313,6 +313,23 @@ const resolved = existsSync(resolvedPath)
 // reproducible rather than merely repeatable.
 const ENCODING_NAME = `anthropic:${MODEL}`;
 
+/**
+ * A FIXED MARKER STAMP, so this harness's payloads have the same bytes twice.
+ *
+ * A stamp is an HMAC keyed by `SECRET = randomBytes(32)` in annotate.ts, minted
+ * once per process and never emitted. That is what makes a stamp unforgeable,
+ * and it is also what made this harness unmeasurable in a currency keyed on
+ * exact payload bytes: two census passes over the same capture produced
+ * `run1 234 run2 234 only1 72 only2 72`, so 72 of its 234 payloads had fresh
+ * digests every run and no recorded fixture could ever be complete.
+ *
+ * `options.stamp` is the seam built for exactly this. Production omits it and
+ * still gets the keyed MAC, so nothing about the forgery guarantee changes; the
+ * guarantee is held by tests/unit/compress/planted-marker-is-content.test.ts,
+ * not by this constant. Nine characters because that is `STAMP_CHARS`.
+ */
+const BENCH_STAMP = '100000001';
+
 // IMAGES ARE NOT BILLED AS THE TEXT THEY ARRIVE IN, and counting them that way
 // was not a rounding error. browser-session carries four PNG screenshots; the
 // provider charges width*height/750, which is 1,585 tokens each, while cl100k
@@ -483,6 +500,7 @@ function timeEveryWorkload(byName) {
             return `.token-optimizer/spill/t${held.length}-${hint}`;
           },
           query: queryOf(text),
+          stamp: BENCH_STAMP,
           tuning: subTuning,
         });
         subSamples.push(performance.now() - t0);
@@ -585,6 +603,7 @@ for (const [name, text] of Object.entries(payloads)) {
       return `.token-optimizer/spill/s${subSpilled.length}-${hint}`;
     },
     query: queryOf(text),
+    stamp: BENCH_STAMP,
     tuning: resolveTuning({ spillWholeBlockBelow: 1 }),
   });
   // OUR HALF OF MUST-WIN 2b, ON THE BLOCKS THIS ARM ACTUALLY MOVED OUT.
@@ -635,6 +654,7 @@ for (const [name, text] of Object.entries(payloads)) {
       return `.token-optimizer/spill/p${presetSpilled.length}-${hint}`;
     },
     query: queryOf(text),
+    stamp: BENCH_STAMP,
     tuning: resolveTuning({ spillWholeBlockBelow: 0.9 }),
   });
 
