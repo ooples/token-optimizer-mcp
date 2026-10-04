@@ -22,7 +22,37 @@
  * measuring it.
  */
 
-import { rehydrateSequence } from '../../dist/compress/rehydrate.js';
+/**
+ * THE DECODER, IF THIS ENGINE HAS ONE.
+ *
+ * A static import makes the whole harness unloadable against a build that
+ * predates the decoder, which is every baseline worth comparing against -- so
+ * the instrument could not measure the state it was built to improve on. The
+ * absence is a capability answer, not a crash: a baseline that cannot rehydrate
+ * is reported as not having that arm, and every other arm still measures.
+ */
+const decoder = await import('../../dist/compress/rehydrate.js').then(
+  (module) => module.rehydrateSequence,
+  () => null
+);
+
+/** Does this engine ship a decoder at all? */
+export const CAN_REHYDRATE = decoder !== null;
+
+/**
+ * Absent, it REFUSES in the engine's own words rather than returning something.
+ * Every call site already sits inside a try/catch that records a refusal, so a
+ * baseline without a decoder reports "no decoder in this build" against each
+ * arm that needed one -- a measurement of what the build can do, where a stub
+ * answering "nothing recovered" would have read as a decoder that failed.
+ */
+const rehydrateSequence = (...args) => {
+  if (!decoder)
+    throw new Error(
+      'no decoder in this build: dist/compress/rehydrate.js does not exist, so this engine has no rehydrate arm to measure'
+    );
+  return decoder(...args);
+};
 import { expandLongRepeats } from '../../dist/compress/runs.js';
 import { describeImage } from '../../dist/compress/images.js';
 import { PathAddressedError } from '../../dist/compress/annotate.js';
