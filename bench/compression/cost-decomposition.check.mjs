@@ -23,6 +23,7 @@
  * on the gap stops being zero.
  */
 import { DEFAULTS, costLine } from './cost-model.mjs';
+import { brotliCompressSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -199,6 +200,52 @@ ok(
   'which at p=0 would read',
   `${Math.round(unitsOurs * perUnitTheirs * PER_TOKEN)} against their ${num(p0.theirs)}`
 );
+
+// --- is 14.2% a tuning miss, or a missing capability? ---------------------
+// A MISSING CAPABILITY, and the headroom is measured rather than assumed.
+// Generic brotli -- no semantic understanding of code at all -- takes the
+// corpus entries down by 74.6% to 87.2%, where our worst workload manages
+// 14.2%. The redundancy is demonstrably there and we are not taking it.
+//
+// Brotli itself is not the fix: its output is binary and a prompt has to be
+// text the model can read. But its ratio is a legitimate BOUND on how much
+// redundancy a text-expressible encoding -- a template plus its parameters, a
+// run-length back-reference, a shared session dictionary -- could reach. And
+// every one of those is lossless and needs no fetch, which is exactly what this
+// arm promises and what their deferral cannot claim.
+const snapshot = JSON.parse(
+  readFileSync(join(HERE, 'corpus.snapshot.json'), 'utf-8')
+).entries;
+const ratios = Object.values(snapshot).map((entry) => {
+  const text =
+    typeof entry === 'string'
+      ? entry
+      : (entry.text ?? entry.content ?? JSON.stringify(entry));
+  const bytes = Buffer.from(text, 'utf8');
+  return 1 - brotliCompressSync(bytes).length / bytes.length;
+});
+const floor = Math.min(...ratios);
+// THE WORST WORKLOAD WHERE THEY BEAT US, not the worst overall. One workload
+// reads 0.2% for both arms -- content neither engine can compress, so it is no
+// evidence about headroom either way, and comparing brotli against it would
+// claim a gap that is really just incompressible input.
+const worst = Object.values(record.workloads)
+  .map((w) => ({
+    ours: num((w.tokens || {}).ours),
+    theirs: num((w.tokens || {}).theirs),
+  }))
+  .filter((w) => w.theirs > w.ours)
+  .sort((a, b) => a.ours - b.ours)[0].ours;
+if (!(floor > worst / 100))
+  bad(
+    'generic lossless compression beats our worst workload',
+    `brotli floor ${(floor * 100).toFixed(1)}% is not above our ${worst}%, so there is no measured headroom to claim`
+  );
+else
+  ok(
+    'generic lossless compression beats our worst workload',
+    `brotli reaches ${(floor * 100).toFixed(1)}%-${(Math.max(...ratios) * 100).toFixed(1)}% where we manage ${worst}%`
+  );
 
 // --- the fetch term is a READ, and that is correct ------------------------
 // SETTLED BY OBSERVATION, HAVING FIRST BEEN ASSERTED WRONGLY. The claim was
