@@ -1,6 +1,6 @@
 {
   "encoding": "anthropic:claude-sonnet-4-5-20250929",
-  "recorded": "2026-10-04T02:00:26.492Z",
+  "recorded": "2026-10-04T11:55:47.446Z",
   "stability": {
     "passes": 3,
     "maxTokenSpread": 0,
@@ -107,16 +107,16 @@
     },
     "smart_env": {
       "first": {
-        "lo": 4,
+        "lo": -27,
         "hi": 37,
-        "text": "4-37%"
+        "text": "-27% to 37%"
       },
       "repeated": {
-        "lo": 4,
+        "lo": -27,
         "hi": 37,
-        "text": "4-37%"
+        "text": "-27% to 37%"
       },
-      "fixtures": 2,
+      "fixtures": 4,
       "samples": 3
     },
     "smart_typescript": {
@@ -543,6 +543,36 @@
       "reduction": 0.3629283489096573,
       "repeatTreatment": 409,
       "repeatReduction": 0.3629283489096573,
+      "chunks": 1,
+      "expansions": 0,
+      "refused": false,
+      "detail": "",
+      "selfClaims": [],
+      "partsScanned": 2
+    },
+    {
+      "tool": "smart_env",
+      "fixture": "example.env",
+      "baseline": 116,
+      "treatment": 147,
+      "reduction": -0.26724137931034475,
+      "repeatTreatment": 147,
+      "repeatReduction": -0.26724137931034475,
+      "chunks": 1,
+      "expansions": 0,
+      "refused": false,
+      "detail": "",
+      "selfClaims": [],
+      "partsScanned": 2
+    },
+    {
+      "tool": "smart_env",
+      "fixture": "large.env",
+      "baseline": 642,
+      "treatment": 605,
+      "reduction": 0.05763239875389403,
+      "repeatTreatment": 605,
+      "repeatReduction": 0.05763239875389403,
       "chunks": 1,
       "expansions": 0,
       "refused": false,

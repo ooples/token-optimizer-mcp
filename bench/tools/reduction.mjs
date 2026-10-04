@@ -183,6 +183,22 @@ const byTsProgram = (path) => ({
   projectRoot: join(dirname(path), 'ts-program'),
 });
 const byEnvFile = (path) => ({ envFile: path });
+/**
+ * The same file with the option the description quotes a price for.
+ *
+ * `includeLocations` adds each variable's line number and the LENGTH of its
+ * value -- never the value -- back to a reply whose whole economy is that it
+ * names variables without returning any. What that costs was a sentence in the
+ * served description and a figure measured once by hand, so it could go stale
+ * in silence; it is a case now, which puts it in the recording and under the
+ * test that binds a published figure to it. The mode loses on the smaller
+ * fixture, and that is a true thing to publish about an option a caller can
+ * turn on.
+ */
+const byEnvFileWithLocations = (path) => ({
+  envFile: path,
+  includeLocations: true,
+});
 const byPathKey = (path) => ({ path });
 // A tool given a directory must be given the directory its own fixture is in.
 // Both of these used to name FIXTURES outright, so adding a second package.json
@@ -231,6 +247,12 @@ export const CASES = [
   },
   { tool: 'smart_env', fixture: 'example.env', args: byEnvFile },
   { tool: 'smart_env', fixture: 'large.env', args: byEnvFile },
+  {
+    tool: 'smart_env',
+    fixture: 'example.env',
+    args: byEnvFileWithLocations,
+  },
+  { tool: 'smart_env', fixture: 'large.env', args: byEnvFileWithLocations },
   {
     tool: 'smart_typescript',
     fixture: 'tool-profile.ts',

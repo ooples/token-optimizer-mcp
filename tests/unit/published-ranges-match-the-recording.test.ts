@@ -337,6 +337,27 @@ describe('the rationale beside a published range is recorded too', () => {
     );
   });
 
+  it('smart_env states what its second mode costs', () => {
+    // Four cases, two files in two modes. The published figure is the extra
+    // cost of the mode on each file -- a comparison BETWEEN two rows, which is
+    // why it needs the rows and cannot be read off either claim.
+    const rows = rowsFor('smart_env');
+    expect(rows).toHaveLength(4);
+    const extra = ['example.env', 'large.env'].map((fixture) => {
+      const [plain, located] = rows.filter((r) => r.fixture === fixture);
+      // The plain mode is the cheaper reply, which is the ordering the
+      // subtraction below assumes.
+      expect(located.treatment).toBeGreaterThan(plain.treatment);
+      return Math.round(
+        ((located.treatment - plain.treatment) / plain.treatment) * 100
+      );
+    });
+    const [lo, hi] = extra.sort((a, b) => a - b);
+    expect(SMART_ENV_TOOL_DEFINITION.description).toContain(
+      `costs ${lo}-${hi}% more`
+    );
+  });
+
   it('smart_pretty states how much shorter its one gain is', () => {
     const rows = rowsFor('smart_pretty');
     const gains = rows.filter((r) => (r.reduction ?? 0) > 0);

@@ -871,7 +871,7 @@ export async function runSmartEnv(
 export const SMART_ENV_TOOL_DEFINITION = {
   name: 'smart_env',
   description:
-    'Smart environment variable analyzer with security checking and suggestions. Measured token reduction vs reading the file: 4-37% first read, 4-37% repeated (bench/tools, 2 fixtures) -- it names every variable without returning any value; `includeLocations` adds each line and value length back and costs 32-48% more.',
+    'Smart environment variable analyzer with security checking and suggestions. Measured token reduction vs reading the file: -27% to 37% first read, -27% to 37% repeated (bench/tools, 4 fixtures) -- it names every variable without returning any value, which is where the saving comes from; the loss is the other mode, because `includeLocations` adds each line and the length of each value back and costs 32-48% more.',
   inputSchema: {
     type: 'object' as const,
     properties: {
