@@ -156,10 +156,16 @@ else
     'we keep fewer units in context than they do',
     `${unitsOurs} against ${unitsTheirs}`
   );
+// 1.70 UNDER cl100k, 1.45 UNDER count_tokens. Pinned rather than merely
+// reported so a drift has to be acknowledged, and re-pinned here because the
+// re-record was deliberate: the currency was corrected and the capture grew
+// from 12 workloads to 18. The direction is what the reading rests on, and it
+// survived both changes -- we still keep fewer units and still spend more on
+// each one.
 eq(
   'yet each unit we keep is heavier',
   Number((perUnitOurs / perUnitTheirs).toFixed(2)),
-  1.7
+  1.45
 );
 // AND WHY THEIR UNITS ARE SMALL, WHICH THE RATIO ALONE DOES NOT SAY. Ranked by
 // where they beat us, the gap is entirely bulk machine output:
@@ -477,8 +483,20 @@ ok(
 // Deliberately a FAILURE rather than a note. A target measured in the wrong
 // unit is worse than no target, and this one has been quoted in a pull request
 // description as the thing to beat.
-const recordedEncoding = record.harness?.encoding ?? 'cl100k_base';
-if (/cl100k|o200k|tiktoken/i.test(String(recordedEncoding)))
+// ABSENT IS ITS OWN ANSWER, NOT THE BAD ONE. This read
+// `record.harness?.encoding ?? 'cl100k_base'`, and `harness` is a STRING -- the
+// file's own path -- so the lookup was always undefined and the default always
+// fired. The assertion was therefore right about the defect for the wrong
+// reason, and would have gone on failing after the currency was fixed. A record
+// that does not state its currency is a record whose figures cannot be checked
+// at all, which is worth saying in its own words.
+const recordedEncoding = record.encoding;
+if (recordedEncoding === undefined)
+  bad(
+    'the comparison states the currency it was measured in',
+    'the record carries no `encoding`, so nothing here can be checked against a unit -- re-record with head-to-head.mjs --record'
+  );
+else if (/cl100k|o200k|tiktoken/i.test(String(recordedEncoding)))
   bad(
     'the comparison is denominated in Anthropic count_tokens',
     `it is '${recordedEncoding}', an OpenAI encoding, so every token figure here is provisional -- see head-to-head.mjs:303`

@@ -2387,6 +2387,12 @@ if (process.argv[3] === '--record') {
   };
   const record = {
     harness: 'bench/compression/head-to-head.mjs',
+    // THE CURRENCY, RECORDED RATHER THAN REMEMBERED. The token column was
+    // counted in tiktoken cl100k_base for the life of this file and nothing in
+    // the record said so, so a reader had no way to know the figures were in
+    // OpenAI's units while the claim was about Claude subscription spend. A
+    // consumer can now check what it is reading.
+    encoding: ENCODING_NAME,
     // NOT NULL MEANS NOT A MEASUREMENT -- our column came from stub arms and
     // this record describes the scorer, not the product. The mirror of
     // `__provenance__.stubArms` on their side.
