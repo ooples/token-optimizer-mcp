@@ -234,6 +234,40 @@ export function batchedDrop(
  * not at the tip, costs what the numbers above say. Which of the two regimes a
  * real implementation lands in is the next thing to measure, and it is the
  * difference between a 2.5x win and a 1.16x loss.
+ *
+ * ADVERSARIAL REVIEW OF THE ABOVE, with four things it got right by luck and
+ * two it still does not know.
+ *
+ * W=2 IS NOT A GUESS. cost-model.mjs carries `cacheWrite5m: 1.25` and
+ * `cacheWrite1h: 2.0` and defaults to the one-hour rate, so the 20x gap between
+ * tail and stable residency is the provider's published arithmetic. On a
+ * five-minute TTL it is 12.5x, which changes the numbers and not the ordering.
+ *
+ * THE LAYOUT ALREADY EXISTS, AND THE CLIENT BUILT IT. anchor.ts:279 records,
+ * verified, that Claude Code puts its `cache_control` marker on the LAST message
+ * of every request and moves it forward each turn. So the conversation is
+ * already a stable prefix and a volatile tail, and a tail at the end is working
+ * with that discipline rather than inventing one.
+ *
+ * AND SO DOES THE DISCIPLINE. src/proxy/cached-prefix.ts exports
+ * `serialiseKeepingPrefix`, wired at src/proxy/server.ts:70, and its header
+ * states the problem this file re-derived from scratch: a re-serialised request
+ * is a cache MISS even when nothing changed, the agreement is 57 characters, and
+ * the arm pays a 1.25x write for a prefix it could have sent at the read rate.
+ * None of this needed inventing.
+ *
+ * WHAT IS MISSING IS THE MEASUREMENT, AND THAT IS THE ACTIONABLE GAP.
+ * head-to-head.mjs computes `cachedPrefixChars` and `cachedPrefixTok` per row
+ * (:801, :1229) and writes NEITHER into the recorded JSON, so the single number
+ * that says which regime we are in is discarded on every run. Persisting it is
+ * the next change.
+ *
+ * TWO THINGS THIS STILL DOES NOT KNOW. Whether a unit can be promoted out of
+ * the tail at all, given that messages must alternate and a tool result cannot
+ * be freely moved -- if it cannot, promotion is out and only append-and-cut
+ * survives. And the liveness share behind every figure here is measured on
+ * THEIR eighteen fixtures, which were chosen by an engine that wins by
+ * deferring; a corpus that rewards withholding may also reward dropping.
  */
 export function stableAndTail({ stable, tailAt, turnsAfter }, rates = RATES) {
   if (typeof tailAt !== 'function')
