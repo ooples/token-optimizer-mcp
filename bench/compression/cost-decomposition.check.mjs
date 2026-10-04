@@ -317,6 +317,59 @@ if (ratios.length) {
   }
 }
 
+// --- route 4, and it is most of the gap: WE PICK THE WRONG ARM -----------
+// NOT A MISSING CAPABILITY AT ALL, on 7 of 18 workloads. The record carries a
+// `body` reading beside `ours` for every workload, and on seven of them that
+// arm -- one we already ship -- beats the arm the selector chose, by a mean of
+// 28 points: agentic-conversation 25.1% against 70.5%, sre-debugging 49.3%
+// against 86.6%, codebase-exploration 14.2% against 42.7%. The worst fixture in
+// the whole comparison is one where we had a 3x better answer in hand and did
+// not send it.
+//
+// Weighted by payload and scaled so the chosen-arm sum reproduces the recorded
+// handed total, picking the better of our OWN two arms per workload moves
+// 442,276 to about 350,016 -- 76% of the 120,720-token gap, for no new
+// compression. It does not finish the job: p=0 would read about 2,660,000
+// against their 2,443,826. The rest has to come from the intra-block headroom
+// above, where 82.6% is available and 14.2% is taken.
+//
+// This is an ESTIMATE, not a measurement: it reuses per-workload percentages
+// rather than re-running the comparison with a per-workload selector, and the
+// arms were measured independently rather than composed. It is here to rank the
+// work, and the claim gets re-recorded before it is published.
+if (ratios.length || true) {
+  const armed = Object.values(record.workloads)
+    .map((w) => ({
+      name: w.name,
+      payload: num(w.payload),
+      ours: num((w.tokens || {}).ours),
+      body:
+        (w.tokens || {}).body === undefined
+          ? num((w.tokens || {}).ours)
+          : num(w.tokens.body),
+    }))
+    .filter((w) => Number.isFinite(w.ours));
+  const beaten = armed.filter((w) => w.body > w.ours + 0.5);
+  if (beaten.length === 0)
+    bad(
+      'the selector sometimes picks the weaker of our own arms',
+      'it never does, so there is no selection gain to claim'
+    );
+  else
+    ok(
+      'the selector picks the weaker of our own arms',
+      `on ${beaten.length} of ${armed.length} workload(s), mean ${(beaten.reduce((sum, w) => sum + (w.body - w.ours), 0) / beaten.length).toFixed(1)} points left behind, worst ${beaten.sort((a, b) => b.body - b.ours - (a.body - a.ours))[0].name}`
+    );
+  const held = (pick) =>
+    armed.reduce((sum, w) => sum + w.payload * (1 - pick(w) / 100), 0);
+  const scale = num(handed.ours) / held((w) => w.ours);
+  const bestOf = Math.round(held((w) => Math.max(w.ours, w.body)) * scale);
+  ok(
+    'route 4, by choosing between arms we already ship',
+    `${num(handed.ours)} -> about ${bestOf} handed, ${(((num(handed.ours) - bestOf) / (num(handed.ours) - num(handed.theirs))) * 100).toFixed(0)}% of the gap, estimated not measured`
+  );
+}
+
 // --- the fetch term is a READ, and that is correct ------------------------
 // SETTLED BY OBSERVATION, HAVING FIRST BEEN ASSERTED WRONGLY. The claim was
 // that `cost-model.mjs` undercharges a fetch by pricing cache invalidation as a
