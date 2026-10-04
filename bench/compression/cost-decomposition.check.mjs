@@ -160,6 +160,37 @@ eq(
   Number((perUnitOurs / perUnitTheirs).toFixed(2)),
   1.7
 );
+// AND WHY THEIR UNITS ARE SMALL, WHICH THE RATIO ALONE DOES NOT SAY. Ranked by
+// where they beat us, the gap is entirely bulk machine output:
+// codebase-exploration 14.2% against their 99.6%, raw-build-log 47.7% against
+// 99.8%, then search-results, grep-output, sre-debugging, database-rows,
+// log-entries, api-responses. A 99.8% reduction on a build log is not a compact
+// rendering, it is the log withheld behind a handle -- their deferral arm, free
+// at p=0 only because nothing is fetched.
+//
+// So "match their per-unit size" must NOT be read as "defer what they defer":
+// that is the 18 round trips this work exists to avoid. The honest route is that
+// repetitive machine output is reconstructible to a few percent with no fetch at
+// all -- a template plus its parameters -- and we are leaving most of that on
+// the table on exactly the nine workloads where they look unbeatable.
+const bulk = Object.values(record.workloads)
+  .map((w) => ({
+    name: w.name,
+    ours: num((w.tokens || {}).ours),
+    theirs: num((w.tokens || {}).theirs),
+  }))
+  .filter((w) => w.theirs - w.ours > 25);
+if (bulk.length === 0)
+  bad(
+    'the gap is concentrated, not spread',
+    'no workload is more than 25 points behind, so there is no concentration to attack'
+  );
+else
+  ok(
+    'the gap is concentrated in bulk machine output',
+    `${bulk.length} workload(s) more than 25 points behind, worst ${bulk.sort((a, b) => b.theirs - b.ours - (a.theirs - a.ours))[0].name}`
+  );
+
 ok(
   'route 3, by per-unit size',
   `${perUnitOurs.toFixed(1)} -> ${perUnitTheirs.toFixed(1)} tokens per unit puts us at ${Math.round(unitsOurs * perUnitTheirs)}, under their ${num(handed.theirs)}`
