@@ -63,19 +63,35 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { get_encoding } from 'tiktoken';
+import { MODEL, tokens } from '../compression/currency.mjs';
 
-export const ENCODING_NAME = 'cl100k_base';
+/**
+ * THE CURRENCY, WHICH IS NOT OURS TO CHOOSE.
+ *
+ * Every figure this file published was counted with tiktoken `cl100k_base` --
+ * OpenAI's tokenizer. Nothing measured here is billed by OpenAI. The claim the
+ * numbers are used to make is about what a Claude subscription spends, and the
+ * only authority for that is Anthropic's own `count_tokens`, which is what
+ * `currency.mjs` serves from a recorded fixture so CI stays offline.
+ *
+ * The two encodings do not merely differ by a constant: they split code,
+ * punctuation and prose differently, so a ratio between two renderings is not
+ * preserved. Rows measured here and rows measured by the compression bench are
+ * now on one scale, which they were not before -- that bench moved to this
+ * currency first and this file was left behind.
+ *
+ * A lookup throws on a miss rather than estimating, so a payload whose bytes
+ * changed since the counts were recorded cannot be priced at all. That is why
+ * the fixtures are pinned to LF (see .gitattributes) and why no payload may
+ * carry a machine-specific string.
+ */
+export const ENCODING_NAME = `anthropic:${MODEL}`;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..', '..');
 export const FIXTURES = join(HERE, 'fixtures');
 
-let encoding = null;
-export function countTokens(text) {
-  if (!encoding) encoding = get_encoding(ENCODING_NAME);
-  return encoding.encode(text).length;
-}
+export const countTokens = tokens;
 
 /**
  * The reduction a caller sees, as a fraction. Negative when a tool costs more

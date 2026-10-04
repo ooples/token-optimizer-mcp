@@ -34,13 +34,19 @@ const close = (name, got, want) =>
     : bad(name, `got ${got}, want ${want}`);
 
 // --- the counter is a tokenizer, not a character heuristic -------------------
-// A chars/4 stand-in would answer 50 and 2 here. Both readings separate it from
-// the encoding the compression bench uses, so a row measured by this file is on
-// the same scale as one measured there.
+// A chars/4 stand-in would answer 50, 2 and 2 here, so each reading separates
+// the counter from the estimate. The figures are Anthropic's `count_tokens`,
+// served from the recorded fixture the compression bench uses, which is what
+// puts a row measured by this file on the same scale as one measured there --
+// it was counted with tiktoken `cl100k_base` until that was fixed, and the two
+// encodings split code and punctuation differently, so a ratio between them is
+// not preserved. The long run is the reading that moved: 25 under tiktoken, 68
+// here, because the model's tokenizer does not merge a repeated character
+// nearly as far.
 eq(
-  'a 200-character run is 25 tokens, not 50',
+  'a 200-character run is 68 tokens, not 50',
   countTokens('a'.repeat(200)),
-  25
+  68
 );
 eq('JSON punctuation costs more than chars/4', countTokens('{"a":1}'), 5);
 eq('one word is one token', countTokens('token'), 1);

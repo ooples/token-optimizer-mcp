@@ -37,6 +37,13 @@ const REPO = join(HERE, '..', '..');
 const TARGETS = [
   'bench/compression/proof.mjs',
   'bench/compression/proof-metrics.check.mjs',
+  // The tools bench prices every reply against reading the file it answers
+  // about, and it counted with tiktoken until it was moved onto this currency.
+  // Its payloads are byte-stable across runs (verified) and carry no
+  // machine-specific string (scanned, 0 of 37), which is what makes a
+  // content-digest-keyed fixture possible for them at all.
+  'bench/tools/reduction.mjs',
+  'bench/tools/reduction.check.mjs',
 ];
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages/count_tokens';

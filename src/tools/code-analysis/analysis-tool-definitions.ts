@@ -2,7 +2,7 @@
 export const SMART_COMPLEXITY_TOOL_DEFINITION = {
   name: 'smart_complexity',
   description:
-    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index. Measured token reduction vs reading the file: 14-69% first read, 14-69% repeated (bench/tools, 3 fixtures).',
+    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index. Measured token reduction vs reading the file: 31-73% first read, 31-73% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -53,7 +53,7 @@ export const SMART_COMPLEXITY_TOOL_DEFINITION = {
 export const SMART_EXPORTS_TOOL_DEFINITION = {
   name: 'smart_exports',
   description:
-    'Analyze TypeScript/JavaScript export statements with intelligent caching. Tracks exports, detects unused exports, and provides optimization suggestions. Measured token reduction vs reading the file: 67-98% first read, 67-98% repeated (bench/tools, 3 fixtures).',
+    'Analyze TypeScript/JavaScript export statements with intelligent caching. Tracks exports, detects unused exports, and provides optimization suggestions. Measured token reduction vs reading the file: 70-98% first read, 70-98% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -104,7 +104,7 @@ export const SMART_EXPORTS_TOOL_DEFINITION = {
 export const SMART_IMPORTS_TOOL_DEFINITION = {
   name: 'smart_imports',
   description:
-    'Analyze TypeScript/JavaScript import statements with intelligent caching. Detects unused imports, missing imports, and provides optimization suggestions. Measured token reduction vs reading the file: 92-97% first read, 92-96% repeated (bench/tools, 3 fixtures).',
+    'Analyze TypeScript/JavaScript import statements with intelligent caching. Detects unused imports, missing imports, and provides optimization suggestions. Measured token reduction vs reading the file: 92-97% first read, 92-97% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -149,7 +149,7 @@ export const SMART_IMPORTS_TOOL_DEFINITION = {
 export const SMART_REFACTOR_TOOL_DEFINITION = {
   name: 'smart_refactor',
   description:
-    'Provides intelligent refactoring suggestions with code examples and impact analysis. Measured token reduction vs reading the file: -14% to 84% first read, -14% to 84% repeated (bench/tools, 3 fixtures) -- the loss is on the smallest fixture, where the suggestions and their code examples outweigh the 5KB file they are about.',
+    'Provides intelligent refactoring suggestions with code examples and impact analysis. Measured token reduction vs reading the file: 2-85% first read, 2-85% repeated (bench/tools, 3 fixtures) -- the floor is the smallest fixture, where 19 findings and a code example for each very nearly outweigh the file they are about: 1,631 tokens of answer against 1,676 of file.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -204,7 +204,7 @@ export const SMART_REFACTOR_TOOL_DEFINITION = {
 export const SMART_SYMBOLS_TOOL_DEFINITION = {
   name: 'smart_symbols',
   description:
-    'Extract and analyze TypeScript/JavaScript symbols with scope, type, and reference information. Measured token reduction vs reading the file: 75-94% first read, 75-94% repeated (bench/tools, 3 fixtures).',
+    'Extract and analyze TypeScript/JavaScript symbols with scope, type, and reference information. Measured token reduction vs reading the file: 78-95% first read, 78-95% repeated (bench/tools, 3 fixtures).',
   inputSchema: {
     type: 'object',
     properties: {

@@ -24,7 +24,8 @@
  */
 
 import { readFileSync } from 'fs';
-import { CASES } from '../../bench/tools/reduction.mjs';
+import { CASES, ENCODING_NAME } from '../../bench/tools/reduction.mjs';
+import { MODEL } from '../../bench/compression/currency.mjs';
 import { join } from 'path';
 import {
   SMART_COMPLEXITY_TOOL_DEFINITION,
@@ -105,7 +106,19 @@ for (const { tool } of CASES as readonly { tool: string }[])
 describe('every published reduction range is the recorded one', () => {
   it('has a recording to check against', () => {
     expect(recorded.length).toBeGreaterThan(0);
-    expect(recording.encoding).toBe('cl100k_base');
+    // THE CURRENCY THE CLAIM IS MADE IN, WHICH IS NOT OURS TO CHOOSE. Every
+    // figure here was counted with tiktoken `cl100k_base` -- OpenAI's
+    // tokenizer -- while the claim it supports is about what a Claude
+    // subscription spends. The authority for that is Anthropic's own
+    // `count_tokens`, which is what `bench/compression/currency.mjs` serves
+    // from a recorded fixture so CI stays offline. The two encodings do not
+    // differ by a constant: they split code and punctuation differently, so a
+    // ratio taken under one is not preserved under the other, and a recording
+    // left on the old scale is not comparable with the compression bench.
+    expect(recording.encoding).toBe(`anthropic:${MODEL}`);
+    // And the recording was written by the same counter this file imports, so
+    // a currency change cannot land in one of the two places only.
+    expect(recording.encoding).toBe(ENCODING_NAME);
   });
 
   it('rests on readings that reproduced', () => {
