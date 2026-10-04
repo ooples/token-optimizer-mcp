@@ -145,15 +145,47 @@ export interface SupervisorRoute {
  * port. A collision with something else on the machine is handled by the caller, which retries
  * the derived port before falling back to any free port and republishing.
  */
-export function routePort(
-  upstream: string,
-  // Accepted so call sites and tests can keep pinning an environment; the window no longer
-  // depends on it.
-  _env: NodeJS.ProcessEnv = process.env
-): number {
+/**
+ * The route window, which an operator may move.
+ *
+ * ONE MACHINE CAN HOLD MORE THAN ONE SUPERVISOR. The window is 1000 ports wide and fixed, so two
+ * supervisors -- two projects, or two test workers on one CI runner -- derive their routes from
+ * the same thousand ports and collide. Whichever binds first keeps the derived port and the loser
+ * falls back to an ephemeral one, which is the stable-URL guarantee lost to nothing but
+ * coincidence. The control port already had an override for exactly this reason and the window
+ * did not, which is why a parallel run could watch a route URL answer from somebody else's
+ * supervisor.
+ *
+ * Refused rather than clamped when it would put the window inside the range the kernel allocates
+ * outbound source ports from, or on top of the control port: both are collisions the caller could
+ * simply have avoided, and a clamp would silently hand back a window they did not ask for.
+ */
+function routeBase(env: NodeJS.ProcessEnv): number {
+  const raw = (env.TOKEN_OPTIMIZER_PROXY_ROUTE_BASE || '').trim();
   // The window must END below the floor, not merely start below it, or its top would be back
   // inside the range the kernel allocates from.
-  const base = Math.min(ROUTE_BASE, EPHEMERAL_FLOOR - ROUTE_SPAN);
+  const ceiling = EPHEMERAL_FLOOR - ROUTE_SPAN;
+  if (!raw) return Math.min(ROUTE_BASE, ceiling);
+  const base = Number(raw);
+  if (!Number.isInteger(base) || base < 1024 || base > ceiling) {
+    throw new Error(
+      `TOKEN_OPTIMIZER_PROXY_ROUTE_BASE must be a port between 1024 and ${ceiling}, not '${raw}'. Above that the window would reach into ${EPHEMERAL_FLOOR}+, which the kernel hands out as outbound source ports, and a route there is demoted the moment an unrelated socket holds it.`
+    );
+  }
+  const control = controlPort(env);
+  if (control >= base && control < base + ROUTE_SPAN) {
+    throw new Error(
+      `TOKEN_OPTIMIZER_PROXY_ROUTE_BASE ${base} puts the control port ${control} inside the route window ${base}-${base + ROUTE_SPAN - 1}; whichever bound first would take it and the other would lose its stable URL.`
+    );
+  }
+  return base;
+}
+
+export function routePort(
+  upstream: string,
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const base = routeBase(env);
   const span = ROUTE_SPAN;
   // FNV-1a: a few lines, stable across Node versions, and nothing here is security-sensitive.
   let hash = 0x811c9dc5;

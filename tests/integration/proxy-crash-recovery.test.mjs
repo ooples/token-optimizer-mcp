@@ -1,6 +1,14 @@
 import { describe, it, expect } from '@jest/globals';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
+
+/**
+ * One route window per jest worker, so a parallel run cannot have two supervisors deriving from
+ * the same thousand ports. 18000 upward leaves the 17000 default to production, and the top
+ * worker stays below 31768 -- the window has to END beneath the 32768 ephemeral floor.
+ */
+const ROUTE_BASE_FOR_WORKER =
+  18000 + (Number(process.env.JEST_WORKER_ID || '1') - 1) * 1000;
 import {
   mkdtempSync,
   writeFileSync,
@@ -236,6 +244,12 @@ describe('a connected MCP session survives a dead background proxy', () => {
             TOKEN_OPTIMIZER_HOME: home,
             TOKEN_OPTIMIZER_SETTINGS: settings,
             TOKEN_OPTIMIZER_PROXY_CONTROL_PORT: String(port),
+            // A WINDOW OF THIS WORKER'S OWN. The route window is 1000 ports wide, and every
+            // jest worker on the runner derives from the same one by default -- so two
+            // supervisors collide, the loser falls back to an ephemeral port, and a route URL
+            // can answer from somebody else's supervisor. That is what "not a supervisor route"
+            // was: a 404 from a control server that had never heard of this route.
+            TOKEN_OPTIMIZER_PROXY_ROUTE_BASE: String(ROUTE_BASE_FOR_WORKER),
             TOKEN_OPTIMIZER_PROXY_AUTOSTART: '1',
             TOKEN_OPTIMIZER_DEFAULT_ROUTING: '1',
             TOKEN_OPTIMIZER_PROXY: '1',
