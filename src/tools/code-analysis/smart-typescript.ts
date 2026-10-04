@@ -14,7 +14,7 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync, statSync } from 'fs';
-import { join, relative, dirname } from 'path';
+import { join, relative, dirname, isAbsolute, normalize } from 'path';
 import { homedir } from 'os';
 import * as ts from 'typescript';
 
@@ -29,7 +29,23 @@ interface TypeScriptFile {
 interface CompilationResult {
   success: boolean;
   diagnostics: ts.Diagnostic[];
+  /**
+   * The files this really type-checked -- not the files it was asked about.
+   *
+   * It used to be the request, echoed. A name the program does not contain is
+   * skipped, so asking about one file and being told `Files Compiled: 1` with
+   * `Errors: 0` was a verdict on nothing; see notInProgram.
+   */
   filesCompiled: string[];
+  /**
+   * The files that were asked about and are not in the program.
+   *
+   * A tsconfig defines the program. A file it does not include has no
+   * diagnostics to report, and `0 errors` about it is not a true answer in a
+   * smaller font -- it is the opposite of one. These are named so a caller can
+   * see which of their paths the tsconfig does not reach.
+   */
+  notInProgram: string[];
   typeInfo?: Map<string, TypeInfo>;
 }
 
@@ -130,6 +146,15 @@ interface SmartTypeScriptOutput {
   }>;
 
   /**
+   * Of the files the caller named, the ones the program does not contain.
+   *
+   * Absent when every named file was checked. Present and non-empty means this
+   * report is about fewer files than were asked about, which a caller cannot
+   * work out from a count that only ever named successes.
+   */
+  notTypeChecked?: string[];
+
+  /**
    * Optimization suggestions
    */
   suggestions: Array<{
@@ -172,6 +197,27 @@ export class SmartTypeScript {
   }
 
   /**
+   * A path the CALLER wrote, resolved against the project root.
+   *
+   * `join(this.projectRoot, file)` was used directly, and on an absolute
+   * argument that produces a path which exists nowhere: joining the root
+   * `C:/p/fixtures` to `C:/p/fixtures/a.ts` appends the second whole path to
+   * the first, drive letter included. Every consequence of it was silent. The
+   * program had no source file under that name, so compile() skipped it and
+   * reported zero diagnostics as `Status: Success`; getAffectedFiles joined
+   * the root on a second time, so the report named a path doubled twice; and
+   * generateCacheKey's existsSync failed, so the file's content never entered
+   * the cache key and two different versions of a file shared one entry.
+   *
+   * `files` is documented as taking paths, not names, and the MCP dispatch
+   * hands over whatever the caller sent. So absolute is the ordinary case
+   * here, not the exception.
+   */
+  private resolveFromRoot(file: string): string {
+    return isAbsolute(file) ? normalize(file) : join(this.projectRoot, file);
+  }
+
+  /**
    * Run TypeScript compilation with intelligent caching and incremental mode
    */
   async run(
@@ -208,7 +254,7 @@ export class SmartTypeScript {
     }
 
     // Initialize TypeScript program
-    const tsconfigPath = join(this.projectRoot, tsconfig);
+    const tsconfigPath = this.resolveFromRoot(tsconfig);
     const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
     const parsedConfig = ts.parseJsonConfigFileContent(
       configFile.config,
@@ -230,12 +276,34 @@ export class SmartTypeScript {
 
     // Run compilation
     const result = await this.compile(filesToCompile, includeTypeInfo);
+
+    // NOTHING WAS TYPE-CHECKED, SO THERE IS NO VERDICT TO REPORT.
+    //
+    // The caller named files; the program defined by this tsconfig contains
+    // none of them. `success` is computed as "no diagnostic of category
+    // Error", which is vacuously true when no file was looked at, so this path
+    // used to answer `Status: Success / Errors: 0 / Files Compiled: 1`. That is
+    // not a weaker answer than the truth, it is the reverse of it: a caller
+    // reads it as their file being clean.
+    //
+    // It is a throw rather than a quiet report because the one thing a caller
+    // asked for -- a verdict on these files -- cannot be given at all, and the
+    // repair is in the arguments. The message names the tsconfig that defines
+    // the program and the paths it does not reach; those are the caller's own
+    // strings and this tool's own fixture paths, returned to them, and nothing
+    // here is logged or transmitted.
+    if (files.length > 0 && result.filesCompiled.length === 0) {
+      throw new Error(
+        `No file named here is part of the program that ${tsconfigPath} defines, so there is nothing to type-check and no verdict to report. Not in the program: ${result.notInProgram.join(', ')}. The program holds ${parsedConfig.fileNames.length} file(s); check the projectRoot, the tsconfig and its include/exclude patterns.`
+      );
+    }
+
     const duration = Date.now() - startTime;
 
     // Cache the result
     const output = this.transformOutput(
       result,
-      filesToCompile,
+      result.filesCompiled,
       files.length > 0
     );
     this.cacheResult(cacheKey, output);
@@ -396,8 +464,7 @@ export class SmartTypeScript {
 
     // Add changed files and their transitive dependents
     changedFiles.forEach((file) => {
-      const absolutePath = join(this.projectRoot, file);
-      addDependents(absolutePath);
+      addDependents(this.resolveFromRoot(file));
     });
 
     return Array.from(affected);
@@ -418,11 +485,20 @@ export class SmartTypeScript {
     const typeInfoMap = includeTypeInfo
       ? new Map<string, TypeInfo>()
       : undefined;
+    const checked: string[] = [];
+    const notInProgram: string[] = [];
 
     // Get diagnostics for specified files
     for (const fileName of filesToCompile) {
       const sourceFile = this.program.getSourceFile(fileName);
-      if (!sourceFile) continue;
+      // NOT A CONTINUE ANY MORE. This skipped the file in silence and left
+      // `filesCompiled` claiming it, so a program that contained none of the
+      // requested files answered `Status: Success, Errors: 0`.
+      if (!sourceFile) {
+        notInProgram.push(fileName);
+        continue;
+      }
+      checked.push(fileName);
 
       // Get semantic diagnostics (type errors)
       const fileDiagnostics = [
@@ -446,7 +522,8 @@ export class SmartTypeScript {
         diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error)
           .length === 0,
       diagnostics,
-      filesCompiled: filesToCompile,
+      filesCompiled: checked,
+      notInProgram,
       typeInfo: typeInfoMap,
     };
   }
@@ -666,6 +743,15 @@ export class SmartTypeScript {
           }
         : undefined,
       typeInfo,
+      // Omitted entirely when every named file was checked, so the common
+      // reply does not carry an empty array saying nothing went wrong.
+      ...(result.notInProgram.length > 0
+        ? {
+            notTypeChecked: result.notInProgram.map((f) =>
+              relative(this.projectRoot, f)
+            ),
+          }
+        : {}),
       suggestions,
     };
   }
@@ -820,7 +906,7 @@ export class SmartTypeScript {
     hash.update(this.cacheNamespace);
 
     // Hash tsconfig
-    const tsconfigPath = join(this.projectRoot, tsconfig);
+    const tsconfigPath = this.resolveFromRoot(tsconfig);
     if (existsSync(tsconfigPath)) {
       const content = readFileSync(tsconfigPath, 'utf-8');
       hash.update(content);
@@ -829,7 +915,7 @@ export class SmartTypeScript {
     // Hash specific files if provided (incremental mode)
     if (files.length > 0) {
       for (const file of files) {
-        const filePath = join(this.projectRoot, file);
+        const filePath = this.resolveFromRoot(file);
         if (existsSync(filePath)) {
           const fileHash = this.generateFileHash(filePath);
           hash.update(fileHash);
@@ -976,6 +1062,20 @@ export async function runSmartTypescript(
         result.dependencies.affectedFiles.slice(0, 5).forEach((file) => {
           output += `    - ${file}\n`;
         });
+      }
+      output += '\n';
+    }
+
+    // NAMED, BECAUSE THE COUNTS ABOVE CANNOT SAY IT. `Files Compiled` counts
+    // what was checked; nothing in the report used to say that a file the
+    // caller asked about was not among them.
+    if (result.notTypeChecked && result.notTypeChecked.length > 0) {
+      output += `Not type-checked -- not part of the program this tsconfig defines:\n`;
+      result.notTypeChecked.slice(0, 5).forEach((file) => {
+        output += `  - ${file}\n`;
+      });
+      if (result.notTypeChecked.length > 5) {
+        output += `  ... and ${result.notTypeChecked.length - 5} more\n`;
       }
       output += '\n';
     }
