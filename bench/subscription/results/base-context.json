@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-10-01T06:05:10.757Z",
+  "regenerate": "node bench/subscription/base-context.mjs --record",
+  "environment": {
+    "agent": "claude-code",
+    "transcriptRoot": "~/.claude/projects"
+  },
+  "toolchain": {
+    "node": "v25.6.0"
+  },
+  "sessions": 14,
+  "min": 53727,
+  "p01": 53727,
+  "p50": 65063,
+  "p99": 72794,
+  "max": 72794,
+  "spread": 0.29305442417349337,
+  "readiness": {
+    "ready": true,
+    "reason": "14 sessions, median 65063 tokens, spread 29% of the median"
+  }
+}

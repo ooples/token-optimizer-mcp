@@ -1,3 +1,4 @@
+import { reassemble } from './spill-reassembly.js';
 import { expect, test } from '@jest/globals';
 import { cachedOutput } from '../../../src/proxy/output-cache.js';
 import { compressBlock } from '../../../src/compress/router.js';
@@ -23,7 +24,15 @@ test('repeated output matches uncached compression and restores recovery content
   expect(cachedOutput(text, spill)).toEqual(expected);
   files.clear();
   expect(cachedOutput(text, spill)).toEqual(expected);
-  expect(JSON.parse(files.get('/first.json')!)).toHaveLength(240);
+  // THE POINT IS THAT THE CACHE REPLAYED THE SPILL: `files` was cleared and the
+  // second call refilled it. The spill now carries only the rows that left, so
+  // what is asserted is that the two halves still put the whole array back --
+  // which is the recovery this test is named for, and is stronger than counting
+  // rows in the spill.
+  const restored = files.get('/first.json');
+  expect(restored).toBeDefined();
+  expect(JSON.parse(restored ?? '[]').length).toBeLessThan(240);
+  expect(reassemble(expected.text, restored ?? '[]')).toEqual(JSON.parse(text));
 });
 
 test('proxy scopes and changed recovery paths never reuse another path', () => {
@@ -60,4 +69,15 @@ test('recovery failure does not corrupt cache accounting or prevent retry', () =
   expect(() => cachedOutput(text, spill)).toThrow('unavailable');
   fail = false;
   expect(cachedOutput(text, spill)).toEqual(compressBlock(text, { spill }));
+});
+
+test('a caller with no sink is cached too, and nothing it caches is fetchable', () => {
+  // `undefined` is the product default, so the cache has to serve it. It has
+  // no sink to re-check on a hit, which is why the hit path cannot simply call
+  // one, and every zero-turn caller compresses identically, so they may share
+  // entries.
+  const expected = compressBlock(text, { tuning: DEFAULT_TUNING });
+  expect(cachedOutput(text, undefined, DEFAULT_TUNING)).toEqual(expected);
+  expect(cachedOutput(text, undefined, DEFAULT_TUNING)).toEqual(expected);
+  expect(expected.lossless).toBe(true);
 });

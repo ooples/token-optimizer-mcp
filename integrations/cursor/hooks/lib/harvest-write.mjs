@@ -30,6 +30,7 @@ import {
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
+import { flagOn } from './flags.mjs';
 import { randomBytes } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -70,7 +71,7 @@ export function isEphemeralProject(projectRoot) {
 }
 
 export function quarantineSharedSource(projectRoot) {
-  if (process.env.TOKEN_OPTIMIZER_ALLOW_EPHEMERAL_SHARED === '1') return false;
+  if (flagOn('TOKEN_OPTIMIZER_ALLOW_EPHEMERAL_SHARED')) return false;
   if (!isEphemeralProject(projectRoot)) return false;
   // Isolated studies deliberately point the shared tier at scratch storage.
   // Their findings may cross their own fixture projects, but cannot escape into
@@ -78,7 +79,7 @@ export function quarantineSharedSource(projectRoot) {
   // probe that verifies the guard without writing to a real user directory.
   return (
     !process.env.TOKEN_OPTIMIZER_SHARED_DIR ||
-    process.env.TOKEN_OPTIMIZER_STRICT_SHARED_PROVENANCE === '1'
+    flagOn('TOKEN_OPTIMIZER_STRICT_SHARED_PROVENANCE')
   );
 }
 

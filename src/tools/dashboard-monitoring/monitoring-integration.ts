@@ -319,7 +319,7 @@ export class MonitoringIntegration {
     const tokensSaved = fullTokens - compressedTokens;
 
     const cacheData = JSON.stringify(compressed);
-    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length);
 
     return {
       success: true,
@@ -380,7 +380,7 @@ export class MonitoringIntegration {
     const tokensSaved = fullTokens - compressedTokens;
 
     const cacheData = JSON.stringify(compressed);
-    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
+    this.cache.set(cacheKey, cacheData, cacheData.length, cacheData.length);
 
     return {
       success: true,
@@ -656,7 +656,7 @@ export function getMonitoringIntegration(
 export const MONITORING_INTEGRATION_TOOL_DEFINITION = {
   name: 'monitoring_integration',
   description:
-    'External monitoring platform integration with 87% token reduction through data compression and intelligent caching',
+    'External monitoring platform integration with an unmeasured design target of 87% token reduction through data compression and intelligent caching',
   inputSchema: {
     type: 'object',
     properties: {

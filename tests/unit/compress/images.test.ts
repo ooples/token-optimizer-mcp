@@ -60,7 +60,9 @@ describe('recognising an image', () => {
     expect(isImageBlock(imageBlock(png(10, 10)))).toBe(true);
     expect(isImageBlock({ type: 'text', text: 'hello' })).toBe(false);
     expect(isImageBlock({ type: 'image' })).toBe(false);
-    expect(isImageBlock({ type: 'image', source: { type: 'url' } })).toBe(false);
+    expect(isImageBlock({ type: 'image', source: { type: 'url' } })).toBe(
+      false
+    );
     expect(isImageBlock(null)).toBe(false);
   });
 });
@@ -87,7 +89,9 @@ describe('reading dimensions from the header', () => {
 
   it('declines rather than guessing on a format it does not know', () => {
     // A wrong estimate is worse than none: it would be reported as a saving.
-    expect(imageSize(Buffer.from('not an image at all').toString('base64'))).toBeNull();
+    expect(
+      imageSize(Buffer.from('not an image at all').toString('base64'))
+    ).toBeNull();
     expect(imageSize('')).toBeNull();
   });
 
@@ -182,7 +186,11 @@ describe('through v1, where an image block used to be invisible', () => {
       {
         role: 'user',
         content: [
-          { type: 'text', text: 'take a look', cache_control: { type: 'ephemeral' } },
+          {
+            type: 'text',
+            text: 'take a look',
+            cache_control: { type: 'ephemeral' },
+          },
         ],
       },
       {
@@ -208,7 +216,9 @@ describe('through v1, where an image block used to be invisible', () => {
 
   it('reports it as a lossless elision, because the image is still above', () => {
     const out = v1Frontier(session(), {});
-    const elision = out.elisions.find((e) => e.removed.includes('repeated image'));
+    const elision = out.elisions.find((e) =>
+      e.removed.includes('repeated image')
+    );
     expect(elision).toBeDefined();
     expect(elision?.lossless).toBe(true);
     expect(elision?.recoverAt).toBeNull();

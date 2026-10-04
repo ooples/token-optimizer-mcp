@@ -29,6 +29,7 @@ import { writeHarvested } from './harvest-write.mjs';
 import { record } from './metrics.mjs';
 import { wikiDir, projectRootFor, load } from './wiki.mjs';
 import { readArchive } from './transcript.mjs';
+import { flagOn } from './flags.mjs';
 import { buildFeedbackDigest, validateLessons, LESSON_PROMPT } from './lessons.mjs';
 import { ORIGIN_HARVESTED } from './curate.mjs';
 import { selectForConsolidation } from './consolidate.mjs';
@@ -95,7 +96,7 @@ async function main() {
 
   // Default sends a structured digest with no file contents. The full delta is
   // opt-in because the default has to be defensible without reading the docs.
-  const full = process.env.TOKEN_OPTIMIZER_HARVEST_FULL === 'true';
+  const full = flagOn('TOKEN_OPTIMIZER_HARVEST_FULL');
   const digest = full ? buildFullDelta(transcript) : buildDigest(transcript);
   if (!digest) return;
 

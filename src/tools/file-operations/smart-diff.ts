@@ -18,7 +18,7 @@ import {
 } from '../../utils/safe-exec.js';
 import { join } from 'path';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -551,7 +551,10 @@ export async function runSmartDiff(
   // failed to open a path whose parent is a file -- surfacing as
   // "CRITICAL: Failed to initialize persistent cache database after 3 attempts"
   // on every single call to smart_diff.
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -565,7 +568,7 @@ export async function runSmartDiff(
 export const SMART_DIFF_TOOL_DEFINITION = {
   name: 'smart_diff',
   description:
-    'Get git diffs with 85% token reduction through diff-only output and smart filtering',
+    'Get git diffs with an unmeasured design target of 85% token reduction through diff-only output and smart filtering',
   inputSchema: {
     type: 'object',
     properties: {
@@ -575,11 +578,17 @@ export const SMART_DIFF_TOOL_DEFINITION = {
       },
       source: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description: 'Source commit/branch to compare from (default: HEAD)',
         default: 'HEAD',
       },
       target: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description:
           'Target commit/branch to compare to (default: working directory)',
       },
@@ -590,11 +599,19 @@ export const SMART_DIFF_TOOL_DEFINITION = {
       },
       files: {
         type: 'array',
-        items: { type: 'string' },
+        items: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 4096,
+          pattern: '^(?!-)[^\\u0000\\n\\r]+$',
+        },
         description: 'Specific files to diff',
       },
       filePattern: {
         type: 'string',
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description: 'Pattern to filter files (e.g., "*.ts")',
       },
       summaryOnly: {

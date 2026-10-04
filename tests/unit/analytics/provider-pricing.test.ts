@@ -23,7 +23,7 @@ describe('provider-aware token pricing', () => {
       route: 'openai-api',
       resolvedModel: 'gpt-5.6-sol',
       currency: 'USD',
-      amount: 0.5 + 0.025 + 0.3125 + 3,
+      amount: 0.4 + 0.02 + 0.25 + 2,
     });
   });
 
@@ -35,32 +35,67 @@ describe('provider-aware token pricing', () => {
     });
 
     expect(priced.ratesPerMillion).toMatchObject({
-      uncachedInput: 10,
-      cachedInput: 1,
-      output: 45,
+      uncachedInput: 8,
+      cachedInput: 0.8,
+      output: 30,
     });
   });
 
-  it('uses the dated Claude Sonnet 5 promotion without changing cache multipliers', () => {
-    const promotional = priceTokenUsage({
+  it('charges one standard Claude Sonnet 5 rate because the step was cancelled', () => {
+    // THIS TEST USED TO ASSERT THE OPPOSITE, and that is the point of it. The
+    // catalog carried a window handing $2/$10 over to $3/$15 on 2026-09-01, so
+    // every request after that date was billed 50% high. The pricing page's own
+    // footnote settles it: the $2/$10 price, "announced at launch as
+    // introductory pricing through August 31, 2026, is now the standard price.
+    // The previously scheduled increase to $3/$15 per million input/output
+    // tokens on September 1, 2026 will not occur."
+    const dimensions = {
+      uncachedInputTokens: 1_000_000,
+      cachedInputTokens: 1_000_000,
+      cacheWrite5mInputTokens: 1_000_000,
+      cacheWrite1hInputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+    };
+    const before = priceTokenUsage({
       model: 'claude-sonnet-5',
       timestamp: '2026-08-31T23:59:59.000Z',
-      usage: {
-        uncachedInputTokens: 1_000_000,
-        cachedInputTokens: 1_000_000,
-        cacheWrite5mInputTokens: 1_000_000,
-        cacheWrite1hInputTokens: 1_000_000,
-        outputTokens: 1_000_000,
-      },
+      usage: dimensions,
     });
-    const standard = priceTokenUsage({
+    const after = priceTokenUsage({
       model: 'claude-sonnet-5',
       timestamp: '2026-09-01T00:00:00.000Z',
-      usage: { uncachedInputTokens: 1_000_000, outputTokens: 1_000_000 },
+      usage: dimensions,
     });
 
-    expect(promotional.amount).toBe(2 + 0.2 + 2.5 + 4 + 10);
-    expect(standard.amount).toBe(3 + 15);
+    // 0.1x cache reads, 1.25x five-minute writes and 2x one-hour writes, from
+    // the multiplier table on the same page.
+    expect(before.amount).toBe(2 + 0.2 + 2.5 + 4 + 10);
+    expect(after.amount).toBe(before.amount);
+    expect(after.effectiveTo).toBeNull();
+  });
+
+  it('still steps a price on the date a vendor has actually published one', () => {
+    // The positive control for the assertion above: dated windows are not
+    // broken, they were being used to encode a future nobody had announced.
+    // Google does publish this one -- $0.75/$3.75 per million "through December
+    // 31, 2026", then $1.50/$7.50 "starting January 1, 2027".
+    const usage = {
+      uncachedInputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+    };
+    const through2026 = priceTokenUsage({
+      model: 'gemini-3.8-flash',
+      timestamp: '2026-12-31T23:59:59.000Z',
+      usage,
+    });
+    const from2027 = priceTokenUsage({
+      model: 'gemini-3.8-flash',
+      timestamp: '2027-01-01T00:00:00.000Z',
+      usage,
+    });
+
+    expect(through2026.amount).toBe(0.75 + 3.75);
+    expect(from2027.amount).toBe(1.5 + 7.5);
   });
 
   it('does not guess an ambiguous model generation or billing route', () => {
@@ -100,7 +135,10 @@ describe('provider-aware token pricing', () => {
   it('fails closed when a route does not publish a captured cache-write rate', () => {
     const priced = priceTokenUsage({
       client: 'github-copilot',
-      model: 'gpt-5.6-sol',
+      // This price list prints "Not applicable" in the cache-write column for
+      // the GPT-5.4 generation. It does publish a write rate for GPT-5.6 Sol,
+      // so that model no longer exercises the refusal.
+      model: 'gpt-5.4',
       usage: { cacheWriteInputTokens: 1_000 },
     });
 

@@ -101,6 +101,86 @@ export interface CompressionOptions {
    * of it is recoverable from what the model can see. Default true.
    */
   readonly allowLossy?: boolean;
+  /**
+   * Below this saving, move the whole block out of the request instead.
+   *
+   * SUBSTITUTION, NOT REDUCTION, and the name of this dial is the only place
+   * that can say so before somebody reads a 99% off a table. A block that our
+   * engines could only take 50% off is not made smaller by this; it is taken
+   * out of the request and replaced by `[... n bytes -> path]`, and the bytes
+   * are on disk. The ratio that produces is a measurement of a move.
+   *
+   * WHY HAVE IT AT ALL. It is what HeadRoom's content-cache references do for
+   * every block they touch, which is where their ~99.7% on `grep-output`,
+   * `raw-build-log` and `codebase-exploration` comes from -- their
+   * `<<ccr:hash,blob,32107>>` is 24 characters and the content is in a store.
+   * Ours is better on the only axis that matters after the ratio: the marker
+   * carries a path the agent already has, so following it is a `Read` it can
+   * issue itself, where a cache reference costs a retrieval round trip and
+   * degrades to `[unresolved: entry not found]` when the store has moved on.
+   *
+   * WHY IT IS OFF BY DEFAULT. Because the trade is real and it is ours to lose:
+   * measured over the twelve head-to-head workloads, 1,274 of the 1,582
+   * identifiers a reader can rebuild from the output alone are in exactly the
+   * three blocks this would move. On by default, the product would be their
+   * product with a better marker. Off by default, it is a dial for a caller who
+   * has decided that a small context matters more to them than a readable one.
+   *
+   * Expressed as the saving an engine had to reach to keep its block: 0.9 spills
+   * anything the engines could not take 90% off. 0 -- the default -- never
+   * spills, and no existing measurement moves. 1 is the like-for-like against a
+   * content cache, which moves every block it touches whatever its shape; at
+   * that setting the engines are not run at all, since nothing they produced
+   * could be kept and their spill files would only be superseded.
+   */
+  readonly spillWholeBlockBelow?: number;
+
+  /**
+   * What one retrieval round costs, in tokens, so an elision can be priced.
+   *
+   * A ROW ELISION IS NOT FREE, and until this dial existed the engine behaved
+   * as though it were: the row candidate was kept whenever its text came out
+   * shorter, which compares the request it shrinks against nothing at all. An
+   * agent that follows the marker spends a whole extra request, and that
+   * request re-reads the conversation so far before it can read the spill. On
+   * a session whose context had been measured at 65,063 tokens that re-read is
+   * 6,506 tokens at the 0.1x cache-read rate, beside 300 for the call itself
+   * (60 tokens at the 5x output rate) -- 6,806, against a spilled block that
+   * is typically a few thousand. So the elision can lose, and did.
+   *
+   * IT IS AN ASSUMPTION, NAMED SO IT CAN BE CHANGED, exactly like
+   * `assumedSessionTurns` above. The dominant term is the caller's own context
+   * size, which this engine cannot see: it is handed one block, not a
+   * conversation. 65,063 is the median measured by
+   * `bench/subscription/base-context.mjs` on the machine this was written on,
+   * and it is the only measurement of it that exists; a caller whose sessions
+   * are shorter should lower this, and one who never follows a marker at all
+   * should set it to 0 to get the old behaviour back.
+   *
+   * 0 restores the pre-pricing behaviour: any elision that shortens the text
+   * is taken, however little it saves.
+   */
+  readonly retrievalCostTokens?: number;
+
+  /**
+   * How often a marker is assumed to be followed, between 0 and 1.
+   *
+   * THE COST ABOVE IS ONLY PAID SOMETIMES, and a gate that charges it in full
+   * is a gate that assumes every marker gets followed. The first version of
+   * this pricing did exactly that and refused every row elision the corpus
+   * had: on `agent-loop` it took the priced cost from 50,151 at no fetches and
+   * 212,781 at all of them to 264,921 at both, which is worse at every rate
+   * there is. An elision that saves a lot and is rarely followed is the whole
+   * point of the mechanism; what has to be refused is the one that saves
+   * almost nothing and still costs a whole round trip when it is followed.
+   *
+   * 0.1 is the same rate used to reject merging separate spills into one file:
+   * a reader who needs one section of six needs it about a tenth of the time.
+   * It is an assumption about a caller this engine cannot see, so it is named
+   * here rather than buried. 1 prices every marker as certain to be followed,
+   * which is the conservative end; 0 disables the gate.
+   */
+  readonly assumedFetchRate?: number;
 }
 
 /** The same shape with nothing left to decide. */
@@ -124,6 +204,9 @@ export const DEFAULT_TUNING: Tuning = Object.freeze({
   knowledgeBudgetChars: 2000,
   assumedSessionTurns: 100,
   allowLossy: true,
+  spillWholeBlockBelow: 0,
+  retrievalCostTokens: 6806,
+  assumedFetchRate: 0.1,
 });
 
 export type PresetName =
@@ -215,6 +298,9 @@ export function resolveTuning(
     knowledgeBudgetChars: pick('knowledgeBudgetChars'),
     assumedSessionTurns: pick('assumedSessionTurns'),
     allowLossy: pick('allowLossy'),
+    spillWholeBlockBelow: pick('spillWholeBlockBelow'),
+    retrievalCostTokens: pick('retrievalCostTokens'),
+    assumedFetchRate: pick('assumedFetchRate'),
   };
 }
 

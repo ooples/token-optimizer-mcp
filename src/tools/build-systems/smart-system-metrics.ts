@@ -14,7 +14,7 @@ import {
   parseWindowsDiskOutput,
   parseUnixDiskOutput,
 } from '../../utils/disk-output.js';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -560,8 +560,10 @@ export class SmartSystemMetrics {
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached) as MetricsResult & { cachedAt: number };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const { cachedAt, ...result } = JSON.parse(cached) as MetricsResult & {
+        cachedAt: number;
+      };
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         return result;
@@ -711,7 +713,7 @@ export async function runSmartSystemMetrics(
   options: SmartSystemMetricsOptions = {}
 ): Promise<string> {
   const cache = new CacheEngine(
-    join(homedir(), '.token-optimizer-cache', 'cache.db')
+    resolveCacheLocation(join(homedir(), '.token-optimizer-cache', 'cache.db'))
   );
   const smartMetrics = getSmartSystemMetrics(cache, options.projectRoot);
   try {

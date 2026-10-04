@@ -11,7 +11,7 @@
  * - Generated SQL inspection
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import type { TokenCounter } from '../../core/token-counter.js';
 import type { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
@@ -824,7 +824,7 @@ export async function runSmartORM(options: SmartORMOptions): Promise<string> {
   const { MetricsCollector } = await import('../../core/metrics.js');
 
   const cache = new CacheEngineClass(
-    join(homedir(), '.hypercontext', 'cache'),
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
     100
   );
   const tokenCounter = new TokenCounter();
@@ -832,12 +832,13 @@ export async function runSmartORM(options: SmartORMOptions): Promise<string> {
   const orm = getSmartOrm(cache, tokenCounter, metrics);
   const result = await orm.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 export const SMART_ORM_TOOL_DEFINITION = {
   name: 'smart_orm',
-  description: 'ORM query optimizer with N+1 detection (83% token reduction)',
+  description:
+    'ORM query optimizer with N+1 detection (unmeasured design target: 83% token reduction)',
   inputSchema: {
     type: 'object',
     properties: {

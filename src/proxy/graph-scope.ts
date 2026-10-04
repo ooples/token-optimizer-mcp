@@ -11,6 +11,8 @@
  * behind that wall.
  */
 
+import { FeatureName, featureEnabled } from '../rollout/resolve.js';
+
 /**
  * Is this graph advising a tree other than the one it was written about?
  *
@@ -43,10 +45,7 @@ export function sharedGraphFor(
   wikiMod: { isSharedDir?: (dir: string) => boolean },
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
-  const declared = env.TOKEN_OPTIMIZER_GRAPH_SHARED;
-  if (declared !== undefined && /^(1|true|yes|on)$/i.test(declared.trim())) {
-    return true;
-  }
+  if (featureEnabled(FeatureName.SharedGraph, env)) return true;
   // An absent or unusable `isSharedDir` means no inference is available, and
   // the safe answer is the one that changes nothing: a legitimate per-project
   // graph must not lose its project claims to a module-resolution failure.

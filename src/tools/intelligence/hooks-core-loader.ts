@@ -176,14 +176,56 @@ export class HooksCoreUnavailableError extends Error {
   }
 }
 
+/** Modules already asked for, so a second call never re-enters `import()`. */
+const inFlight = new Map<string, Promise<unknown>>();
+
+/**
+ * The tail of the import chain. Never rejects -- see `loadHooksCore`.
+ */
+let chain: Promise<unknown> = Promise.resolve();
+
 /**
  * Import a hooks-core module by file name, e.g. `wiki.mjs`.
+ *
+ * ONE AT A TIME, AND ONCE EACH. `wikiQuery` asks for seven modules in a single
+ * `Promise.all`, and twenty-four of the twenty-five hooks-core modules import
+ * `staleness.mjs`, so those seven dynamic imports are seven overlapping linkings
+ * of one shared subgraph. Node's own loader tolerates that; a VM-module loader
+ * does not have to, and jest's does not -- it hands the second graph the module
+ * instance the first is still linking, and the import fails with
+ * `request for 'node:fs' can not be resolved on module .../staleness.mjs that is
+ * not linked`. That surfaced as a wiki_query suite that passed alone and failed
+ * in the full run, where the extra load changes the interleaving.
+ *
+ * Serialising costs nothing worth measuring: these are local files, the first
+ * load populates the cache below, and every later call is a resolved promise.
+ * It also removes the duplicated work of re-entering `import()` -- and, with it,
+ * the `existsSync` probes on the failure path -- on every single wiki call.
+ *
+ * A FAILED LOAD IS NOT CACHED. The fallback directory can appear after a refresh
+ * finishes, so a module that was unavailable a minute ago may load now; caching
+ * the rejection would make one badly-timed call permanent for the session.
  *
  * Throws `HooksCoreUnavailableError` only when neither the bundled copy nor a
  * compatible runtime copy can be loaded.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function loadHooksCore<T = any>(moduleName: string): Promise<T> {
+export function loadHooksCore<T = any>(moduleName: string): Promise<T> {
+  const already = inFlight.get(moduleName);
+  if (already) return already as Promise<T>;
+
+  const pending = chain.then(() => importOne<T>(moduleName));
+  // The chain itself must stay fulfilled, or one failed module would reject
+  // every import queued behind it.
+  chain = pending.catch(() => undefined);
+  inFlight.set(moduleName, pending);
+  pending.catch(() => inFlight.delete(moduleName));
+  return pending;
+}
+
+/** The actual resolution: bundled copy first, then a compatible runtime copy. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function importOne<T = any>(moduleName: string): Promise<T> {
   const bundled = pathToFileURL(path.join(bundledDir(), moduleName)).href;
   try {
     return (await import(bundled)) as T;

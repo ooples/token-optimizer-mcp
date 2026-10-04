@@ -16,7 +16,7 @@
  * - Compressed dependency graphs (88% reduction)
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import * as crypto from 'crypto';
@@ -992,7 +992,11 @@ export async function runSmartService(
   const { join } = await import('path');
 
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+    cache ||
+    new CacheEngine(
+      resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+      100
+    );
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
@@ -1011,7 +1015,7 @@ export async function runSmartService(
 export const SMART_SERVICE_TOOL_DEFINITION = {
   name: 'smart_service',
   description:
-    'Intelligent service management with smart caching (86%+ token reduction). Manage systemd, Windows Services, and Docker containers with health monitoring and dependency tracking.',
+    'Intelligent service management with smart caching (unmeasured design target: 86%+ token reduction). Manage systemd, Windows Services, and Docker containers with health monitoring and dependency tracking.',
   inputSchema: {
     type: 'object' as const,
     properties: {

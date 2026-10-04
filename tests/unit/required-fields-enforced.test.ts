@@ -27,7 +27,10 @@ const ROOT = process.cwd();
 
 /** Reads the advertised definitions out of the server source. */
 function toolDefinitions(): Array<{ name: string; required: string[] }> {
-  const server = readFileSync(join(ROOT, 'src/server/index.ts'), 'utf8');
+  const server = readFileSync(
+    join(ROOT, 'src/server/tool-definitions.ts'),
+    'utf8'
+  );
   const listStart = server.indexOf('const TOOL_DEFINITIONS = [');
   const listBlock = server.slice(
     listStart,
@@ -80,15 +83,26 @@ describe('published required fields are enforced', () => {
   it('the server derives its guards from the same list it advertises', () => {
     // If a guard were built from a hand-maintained copy, it could go stale
     // silently -- which is exactly how the required arrays became decorative.
+    const defs = readFileSync(
+      join(ROOT, 'src/server/tool-definitions.ts'),
+      'utf8'
+    );
+    expect(defs).toContain('export const TOOL_DEFINITIONS = [');
+
     const server = readFileSync(join(ROOT, 'src/server/index.ts'), 'utf8');
-    expect(server).toContain('const TOOL_DEFINITIONS = [');
     // Both guards are constructed from that array and nothing else.
     expect(server).toContain('createToolArgumentChecker(');
     expect(server).toContain(
       'ADVERTISED_TOOL_DEFINITIONS as ToolDefinitionLike[]'
     );
-    expect(server).toContain('assertRequiredFields(name, args)');
-    expect(server).toContain('assertKnownFields(name, args)');
+    // Matched on the call, not on the caller's local variable name: the
+    // argument used to be spelled `args` and is now `raw`, which changed
+    // nothing about which guards run. What matters is that all three run, so
+    // the third -- the derived schema itself -- is asserted here too; it was
+    // the one a request could previously reach the handler without.
+    expect(server).toContain('assertRequiredFields(name,');
+    expect(server).toContain('assertKnownFields(name,');
+    expect(server).toContain('validateToolArgs(name,');
     // And the handler serves that same array rather than a second literal.
     expect(server).toContain('tools: ADVERTISED_TOOL_DEFINITIONS');
 

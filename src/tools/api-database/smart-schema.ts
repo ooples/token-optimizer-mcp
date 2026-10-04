@@ -21,6 +21,7 @@ import { createHash } from 'crypto';
 import {
   CacheEngine,
   CacheEngine as CacheEngineClass,
+  resolveCacheLocation,
 } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -1180,7 +1181,7 @@ ${diff.migrationSuggestions.length > 5 ? `\n(+${diff.migrationSuggestions.length
   }
 
   private formatFullOutput(result: SmartSchemaResult): string {
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(result);
   }
 
   private formatBytes(bytes: number): string {
@@ -1235,7 +1236,7 @@ export async function runSmartSchema(
   const { join } = await import('path');
 
   const cacheInstance = new CacheEngineClass(
-    join(homedir(), '.hypercontext', 'cache'),
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
     100
   );
   const tokenCounter = new TokenCounter();
@@ -1259,7 +1260,7 @@ ${result.cached ? `Cached (age: ${result.cached})` : 'Fresh analysis'}`;
 export const SMART_SCHEMA_TOOL_DEFINITION = {
   name: 'smart_schema',
   description:
-    'Database schema analyzer with intelligent caching and 83% token reduction. Supports PostgreSQL, MySQL, and SQLite. Provides schema introspection, relationship analysis, index recommendations, and schema diff.',
+    'Database schema analyzer with intelligent caching and an unmeasured design target of 83% token reduction. Supports PostgreSQL, MySQL, and SQLite. Provides schema introspection, relationship analysis, index recommendations, and schema diff.',
   inputSchema: {
     type: 'object',
     properties: {

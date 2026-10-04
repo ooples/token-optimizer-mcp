@@ -541,3 +541,295 @@ jobs:
             echo "⚠️ Found $FIXME_COUNT FIXME comments" >> $GITHUB_STEP_SUMMARY
             grep -rn "FIXME" src --include="*.ts" >> $GITHUB_STEP_SUMMARY || true
           fi
+
+  # THE TWELVE HEAD-TO-HEAD WORKLOADS, DECIDED BY SCRIPT RATHER THAN BY EYE.
+  #
+  # Every per-workload claim in #436-#447 is a triple -- cheaper, faster, holds
+  # more of the content -- and until this job existed the only thing standing
+  # between a claim and the README was somebody reading a table correctly.
+  #
+  # IT IS A RATCHET. Nine of the twelve rows fail at least one criterion today,
+  # so a gate that failed the build for all of them would be switched off within
+  # the week. Pairs that pass are enforced and can never regress; pairs that fail
+  # are printed as open must-wins and do not fail the build. The build DOES fail
+  # when an enforced pair regresses, and when a new pair starts passing without
+  # being promoted -- an improvement nobody records is one that can be silently
+  # undone.
+  #
+  # NO npm ci AND NO BUILD, deliberately. The check reads the recorded
+  # head-to-head.json with nothing but node:fs, so it runs in seconds and cannot
+  # drift from the published tables by re-deriving anything.
+  must-win:
+    name: Must-Win Ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The open list goes to the job summary on every run, because the whole
+      # value of a ratchet is that the work still outstanding stays visible
+      # instead of living in twelve issue bodies nobody opens.
+      - name: Check the must-win ratchet
+        run: |
+          set -o pipefail
+          {
+            echo "## Must-Win Ratchet"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/must-win.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
+
+  # THE HARNESS ITSELF, CHECKED AGAINST ANSWERS FIXED BEFORE IT RAN.
+  #
+  # Every other bench check tests scoring arithmetic on synthetic totals. This
+  # one drives the real capture path -- shape routing, budget sweep, scoring,
+  # arm selection, provenance, trip-wire -- with arms whose output is a
+  # closed-form function of their input, so each figure it produces has a right
+  # answer computable in advance. That path had no tests at all, and it is where
+  # the defects that forced this project's retractions actually lived.
+  #
+  # NO HEADROOM INSTALL AND NO NETWORK: the engine is stubbed, so a failure here
+  # always means the harness is wrong and never that a capture drifted. Python
+  # is needed only to execute run-theirs.py, which is the code under test.
+  known-answer:
+    name: Known-Answer Capture Path
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Check the capture path against known answers
+        run: |
+          set -o pipefail
+          {
+            echo "## Known-Answer Capture Path"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/known-answer/capture.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
+
+
+  # THE INSTRUMENTS, EACH AGAINST INPUTS WHOSE ANSWER IS FIXED IN ADVANCE.
+  #
+  # Seven checks existed and none of them ran anywhere but on a laptop. They are
+  # the arithmetic every published figure passes through: retention buckets, the
+  # offload accounting, the effective-input-token cost model, the base context a
+  # saving is a share of, the input/output cost split, the meter calibration, and
+  # the speed verdict. A number is only as trustworthy as the last run of the
+  # check under it, and until this job that run was whenever somebody remembered.
+  #
+  # NO npm ci AND NO BUILD: every one of these imports nothing but node: and its
+  # neighbours, which is a property worth keeping -- it is why they can gate a
+  # pull request in seconds. If one of them ever needs a dependency, it belongs
+  # in an installed job below instead of being bought with an install here.
+  #
+  # TWO CHECKS OUTGREW THAT AND MOVED, rather than the rule bending for them.
+  # `pretoken-proxy` tokenises with `tiktoken` and imports the compiled engine;
+  # `bench/tools/reduction` tokenises with `tiktoken` too. Both sat in the roster
+  # and both failed here with ERR_MODULE_NOT_FOUND the first time this job ran on
+  # a clean checkout -- a laptop with a populated `node_modules` had never shown
+  # it. They run in `bench-proof` now, which installs and builds, and
+  # `instrument-roster.check.mjs` verifies that claim against this file.
+  bench-instruments:
+    name: Bench Instrument Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check every scoring instrument
+        run: |
+          set -o pipefail
+          {
+            echo "## Bench Instrument Checks"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          # THE ROSTER IS THE SCRIPT, NOT A COPY OF IT. This job used to enumerate the
+          # checks itself, and the two lists drifted: conservation, replicate-agreement
+          # and ratchet ran locally and nowhere here, and the job still printed fifteen
+          # green checks and exited 0. The check above refuses that shape now; the line
+          # below is what lets it.
+          npm run -s bench:instruments 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
+
+  # THE THREE CHECKS THAT GUARD PUBLISHED FIGURES, which ran nowhere until now.
+  #
+  # `proof-metrics` asks whether the proof harness computes what it says, and
+  # `readme-table` re-derives every figure in the README's table from the harness
+  # and refuses a README that has drifted from it. Both were in the tree, neither
+  # was in a CI job, so the numbers a reader sees first were the least guarded
+  # ones in the repository.
+  #
+  # `readme-prose` closes what the other two left open: they guard the marked
+  # TABLES, and a review then found four figures stale in the SENTENCES around
+  # them, quoting the same rows. Editing the table was checked; editing the
+  # paragraph two markers below it was not.
+  #
+  # They need the install and the build, which is why they are not in the
+  # dependency-free job above: the proof harness imports the compiled engine.
+  #
+  # AND SO DO THE TWO INSTRUMENTS THAT MOVED HERE. `pretoken-proxy` needs both
+  # `tiktoken` and `dist/`; `bench/tools/reduction` needs `tiktoken`. They are
+  # instrument checks and not README checks, so they are run as their own step --
+  # a failure names which half of the job went red without reading the log.
+  bench-proof:
+    name: Proof Harness, Instruments That Need a Build, README Figures
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Check the proof harness and the figures it publishes
+        run: |
+          set -o pipefail
+          {
+            echo "## Proof Harness and README Figures"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/proof-metrics.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          node bench/compression/readme-table.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          node bench/compression/readme-prose.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
+
+      - name: Check the instruments that need a dependency
+        run: |
+          set -o pipefail
+          {
+            echo "## Instruments That Need a Build"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/pretoken-proxy.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          node bench/compression/adversarial.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          node bench/tools/reduction.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
+
+  # THE SCORER, AND WHETHER ITS OWN CHECK WOULD CATCH ANYTHING.
+  #
+  # The capture path (the job above) is layer 1. This is layer 2: head-to-head
+  # driven end to end over a known-answer capture with three stub engines --
+  # identity, lossy by a stated amount, and a mirror of their winning arm -- so
+  # every figure in the table has a value computable before the run. The mirror
+  # profile is the one that needs no ground truth at all: both columns describe
+  # the same bytes, so any difference between them is the scorer treating one
+  # side differently from the other.
+  #
+  # THEN THE MUTATION SCORE, which is the only evidence that the checks above
+  # refuse anything. Eighteen defects this project has actually shipped, or could
+  # ship without breaking anything visibly, are reintroduced one at a time across
+  # the scorer and the subscription chain; every one must turn a check red. A
+  # survivor is a hole, and the job fails on it -- the score went 5/6 -> 6/6 and
+  # 17/18 -> 18/18 by adding the assertions two survivors exposed.
+  #
+  # This one does need the install and the build: head-to-head tokenises with
+  # tiktoken and imports the compiled engine, even when the engine it scores is
+  # stubbed.
+  known-answer-scorer:
+    name: Known-Answer Scorer and Mutation Score
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Score a known-answer capture with stub engines
+        run: |
+          set -o pipefail
+          {
+            echo "## Known-Answer Scorer"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/known-answer/scorer.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
+
+      # Runs even when the check above failed, because a red check with an
+      # unknown mutation score is a different situation from a red check whose
+      # battery still covers everything, and the difference decides what to fix.
+      - name: Publish the mutation score
+        if: always()
+        run: |
+          set -o pipefail
+          {
+            echo "## Mutation Score"
+            echo ""
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          status=0
+          node bench/compression/known-answer/mutants.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status

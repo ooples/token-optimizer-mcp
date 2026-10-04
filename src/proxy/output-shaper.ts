@@ -34,6 +34,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { FeatureName, featureEnabled } from '../rollout/resolve.js';
 
 /** The instruction appended to the system prompt. Kept short: it is paid for on every request. */
 const TERSE_NOTE =
@@ -72,8 +73,7 @@ export interface ShaperResult {
 
 /** Reads the switch. Absent means off: this changes what the model writes. */
 export function shaperEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  const raw = (env.TOKEN_OPTIMIZER_OUTPUT_SHAPER ?? '').trim().toLowerCase();
-  return raw === '1' || raw === 'on' || raw === 'true' || raw === 'yes';
+  return featureEnabled(FeatureName.OutputShaper, env);
 }
 
 /** The unshaped fraction. Invalid or absent means none. */

@@ -8,7 +8,7 @@ import {
 // that one returned any header without `[exact declaration rows:` unchanged,
 // so the plain path-prefix hunk -- everything the engine emits below 64
 // uniform lines -- was never reconstructed by it at all.
-import { rehydrate } from '../../support/rehydrate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 function fixture(
   path = 'src/settings.ts',
@@ -41,7 +41,7 @@ describe('exact declaration rows in search output', () => {
           'SETTING_71\t"opaque-{name}-sk-example-0123456789;\\t"'
         );
         expect(result.lossless).toBe(true);
-        expect(rehydrate(result.text)).toBe(input);
+        expect(rehydrate(result.text, result.stamp)).toBe(input);
       }
     }
   );
@@ -52,7 +52,8 @@ describe('exact declaration rows in search output', () => {
       '\n' +
       fixture('\\\\server\\share\\config.ts');
     expect(looksLikeSearchResults(input)).toBe(true);
-    expect(rehydrate(compressSearchResults(input).text)).toBe(input);
+    const result = compressSearchResults(input);
+    expect(rehydrate(result.text, result.stamp)).toBe(input);
   });
 
   it('retains all declarations when values contain a real tab or syntax differs', () => {
@@ -79,12 +80,24 @@ describe('exact declaration rows in search output', () => {
     expect(output).toContain('export const SETTING_0 = 7;');
   });
 
-  it('preserves mixed endings and noncanonical or unsafe line numbers verbatim', () => {
+  it('folds up to a terminator change, and keeps noncanonical line numbers verbatim', () => {
     // Construct exactly one CRLF boundary followed by LF boundaries. This is
     // deliberately mixed input, not an incomplete newline-normalization step.
+    //
+    // This once asserted the whole block came back VERBATIM, because the engine
+    // refused any mixed input outright. That refusal was all-or-nothing, and on
+    // a real ripgrep dump with 747 CRLF and 67 bare LF endings it cost the
+    // entire 55% saving -- the rule was right, its scope was not. A hunk header
+    // still cannot describe a terminator change, so a hunk now ends at one. The
+    // property the verbatim assertion stood in for is checked directly here
+    // instead, and more strictly: every byte, including every ending, comes back
+    // from the emitted text alone.
     const [first, ...rest] = fixture().split('\n');
     const mixed = `${first}\r\n${rest.join('\n')}`;
-    expect(compressSearchResults(mixed).text).toBe(mixed);
+    const folded = compressSearchResults(mixed);
+    const output = folded.text;
+    expect(rehydrate(output, folded.stamp)).toBe(mixed);
+    expect(output.length).toBeLessThan(mixed.length);
     for (const number of ['0001', '9007199254740993']) {
       const input = Array.from(
         { length: 70 },

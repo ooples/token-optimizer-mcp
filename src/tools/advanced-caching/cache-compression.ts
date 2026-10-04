@@ -1376,7 +1376,7 @@ export class CacheCompressionTool {
 export const CACHE_COMPRESSION_TOOL_DEFINITION = {
   name: 'cache_compression',
   description:
-    'Advanced compression strategies for cache optimization with 89%+ token reduction. Supports 6 algorithms (gzip, brotli, lz4, zstd, snappy, custom), adaptive selection, dictionary-based compression, and delta compression for time-series data.',
+    'Advanced compression strategies for cache optimization with an unmeasured design target of 89%+ token reduction. Supports 6 algorithms (gzip, brotli, lz4, zstd, snappy, custom), adaptive selection, dictionary-based compression, and delta compression for time-series data.',
   inputSchema: {
     type: 'object',
     properties: {

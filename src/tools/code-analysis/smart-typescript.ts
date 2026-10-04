@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart TypeScript Tool - 83% Token Reduction
  *
  * Incremental TypeScript compilation with intelligent caching:
@@ -9,7 +9,7 @@
  * - Provides actionable type error summaries
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
@@ -30,8 +30,6 @@ interface CompilationResult {
   success: boolean;
   diagnostics: ts.Diagnostic[];
   filesCompiled: string[];
-  duration: number;
-  timestamp: number;
   typeInfo?: Map<string, TypeInfo>;
 }
 
@@ -90,7 +88,6 @@ interface SmartTypeScriptOutput {
     warningCount: number;
     filesCompiled: number;
     filesFromCache: number;
-    duration: number;
     fromCache: boolean;
     incrementalMode: boolean;
   };
@@ -142,14 +139,15 @@ interface SmartTypeScriptOutput {
     impact: string;
   }>;
 
-  /**
-   * Token reduction metrics
-   */
-  metrics: {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercentage: number;
-  };
+  // NO metrics FIELD, DELIBERATELY. Neither half was ever measured. The
+  // "original" was arithmetic over constants -- 200 chars assumed per
+  // diagnostic, 100 per dependency-graph node, 150 per type, plus a flat 500
+  // of overhead, all divided by four to be called tokens -- so it described a
+  // tsc output this tool never produced and nobody was ever charged for. The
+  // "compacted" measured a summary object that is not the report a caller
+  // reads either. There is no before here for the tool to declare: the files
+  // are named in the arguments, which is where the recorder reads them, and
+  // the after is counted once at the wire.
 }
 
 export class SmartTypeScript {
@@ -201,9 +199,8 @@ export class SmartTypeScript {
           duration: Date.now() - startTime,
           success: true,
           cacheHit: true,
-          inputTokens: cached.metrics.originalTokens,
-          savedTokens:
-            cached.metrics.originalTokens - cached.metrics.compactedTokens,
+          // NO TOKEN FIGURES. Both were read back off the estimate the cached
+          // result was written with, so this record republished a guess.
         });
 
         return cached;
@@ -234,7 +231,6 @@ export class SmartTypeScript {
     // Run compilation
     const result = await this.compile(filesToCompile, includeTypeInfo);
     const duration = Date.now() - startTime;
-    result.duration = duration;
 
     // Cache the result
     const output = this.transformOutput(
@@ -250,9 +246,6 @@ export class SmartTypeScript {
       duration,
       success: result.success,
       cacheHit: false,
-      inputTokens: output.metrics.originalTokens,
-      savedTokens:
-        output.metrics.originalTokens - output.metrics.compactedTokens,
     });
 
     return output;
@@ -454,8 +447,6 @@ export class SmartTypeScript {
           .length === 0,
       diagnostics,
       filesCompiled: filesToCompile,
-      duration: 0, // Set by caller
-      timestamp: Date.now(),
       typeInfo: typeInfoMap,
     };
   }
@@ -636,12 +627,6 @@ export class SmartTypeScript {
       );
     }
 
-    // Calculate token metrics
-    const originalSize = this.estimateOriginalOutputSize(result);
-    const compactSize = this.estimateCompactSize(result, diagnosticsByCategory);
-    const originalTokens = Math.ceil(originalSize / 4);
-    const compactedTokens = Math.ceil(compactSize / 4);
-
     // Extract type information
     const typeInfo = result.typeInfo
       ? Array.from(result.typeInfo.entries()).map(([file, info]) => ({
@@ -664,7 +649,6 @@ export class SmartTypeScript {
         warningCount,
         filesCompiled: filesCompiled.length,
         filesFromCache: 0,
-        duration: result.duration,
         fromCache: false,
         incrementalMode,
       },
@@ -683,13 +667,6 @@ export class SmartTypeScript {
         : undefined,
       typeInfo,
       suggestions,
-      metrics: {
-        originalTokens,
-        compactedTokens,
-        reductionPercentage: Math.round(
-          ((originalTokens - compactedTokens) / originalTokens) * 100
-        ),
-      },
     };
   }
 
@@ -889,10 +866,12 @@ export class SmartTypeScript {
     }
 
     try {
-      const result = JSON.parse(cached) as SmartTypeScriptOutput & {
+      const { cachedAt, ...result } = JSON.parse(
+        cached
+      ) as SmartTypeScriptOutput & {
         cachedAt: number;
       };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         result.summary.fromCache = true;
@@ -915,55 +894,15 @@ export class SmartTypeScript {
     };
 
     const buffer = JSON.stringify(toCache);
-    const tokensSaved =
-      output.metrics.originalTokens - output.metrics.compactedTokens;
 
-    this.cache.set(key, buffer, 300, tokensSaved); // 5 minute TTL
+    this.cache.set(key, buffer, buffer.length, buffer.length, {
+      ttlSeconds: 300,
+    }); // 5 minute TTL
   }
 
   /**
    * Estimate original output size (full diagnostic messages)
    */
-  private estimateOriginalOutputSize(result: CompilationResult): number {
-    // Each diagnostic is ~200 chars in full TSC output
-    let size = result.diagnostics.length * 200;
-
-    // Add dependency graph size
-    size += this.dependencyGraph.size * 100;
-
-    // Add type info size if available
-    if (result.typeInfo) {
-      size += result.typeInfo.size * 150;
-    }
-
-    return size + 500; // Base overhead
-  }
-
-  /**
-   * Estimate compact output size
-   */
-  private estimateCompactSize(
-    result: CompilationResult,
-    categories: Array<{ category: string; count: number }>
-  ): number {
-    const summary = {
-      success: result.success,
-      errorCount: result.diagnostics.filter(
-        (d) => d.category === ts.DiagnosticCategory.Error
-      ).length,
-      filesCompiled: result.filesCompiled.length,
-    };
-
-    // Top 3 categories with first 3 diagnostics each
-    const topCategories = categories.slice(0, 3).map((cat) => ({
-      category: cat.category,
-      count: cat.count,
-      samples: 3,
-    }));
-
-    return JSON.stringify({ summary, topCategories }).length;
-  }
-
   /**
    * Close cache and cleanup
    */
@@ -990,7 +929,9 @@ export function getSmartTypeScriptTool(
 export async function runSmartTypescript(
   options: SmartTypeScriptOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'))
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartTS = new SmartTypeScript(
@@ -1014,7 +955,7 @@ export async function runSmartTypescript(
     if (result.summary.incrementalMode) {
       output += `  Mode: Incremental (changed files only)\n`;
     }
-    output += `  Duration: ${(result.summary.duration / 1000).toFixed(2)}s\n\n`;
+    output += '\n';
 
     // Dependency information (incremental mode)
     if (result.dependencies) {
@@ -1097,12 +1038,8 @@ export async function runSmartTypescript(
       output += '\n';
     }
 
-    // Token metrics
-    output += `Token Reduction:\n`;
-    output += `  Original: ${result.metrics.originalTokens} tokens\n`;
-    output += `  Compacted: ${result.metrics.compactedTokens} tokens\n`;
-    output += `  Reduction: ${result.metrics.reductionPercentage}%\n`;
-
+    // NO TOKEN REDUCTION FOOTER. It printed a percentage derived from two
+    // estimates, and the digits were themselves part of the bill.
     return output;
   } finally {
     smartTS.close();

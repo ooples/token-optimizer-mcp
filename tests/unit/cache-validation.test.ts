@@ -311,8 +311,12 @@ describe('Token Caching Validation', () => {
       expect(cache.getStats().totalEntries).toBe(0);
     });
 
-    // Skip in CI due to timing-dependent behavior
-    it.skip('should evict LRU entries when reaching size limit', () => {
+    // NO LONGER TIMING-DEPENDENT, AND THAT WAS THE PRODUCT'S PROBLEM, NOT THE
+    // TEST'S. Twenty writes and three reads finish inside one millisecond, so
+    // every row carried the same last_accessed_at and eviction fell through to
+    // the key tiebreaker, discarding the entries that had just been read.
+    // cache-engine now issues a strictly increasing recency stamp.
+    it('should evict LRU entries when reaching size limit', () => {
       // Add entries
       for (let i = 0; i < 20; i++) {
         cache.set(`key${i}`, `value${i}`, 100, 50);
@@ -330,12 +334,64 @@ describe('Token Caching Validation', () => {
       expect(cache.getStats().totalEntries).toBeLessThanOrEqual(4);
       expect(cache.getStats().totalEntries).toBeGreaterThan(0);
 
-      // At least one of the recently accessed should still be there
-      const key15 = cache.get('key15');
-      const key16 = cache.get('key16');
-      const key17 = cache.get('key17');
-      const anyPresent = key15 !== null || key16 !== null || key17 !== null;
-      expect(anyPresent).toBe(true);
+      // ALL THREE, NOT "AT LEAST ONE". The limit keeps four entries and three of
+      // them were just read, so a correct LRU keeps exactly those three plus one
+      // other. "At least one" passed for a cache that kept key0, key1 and key15
+      // -- which is the bug this test was skipped around.
+      expect(cache.get('key15')).not.toBeNull();
+      expect(cache.get('key16')).not.toBeNull();
+      expect(cache.get('key17')).not.toBeNull();
+      // And it did not keep an entry nobody touched in preference to them.
+      expect(cache.get('key0')).toBeNull();
+    });
+
+    it('evicts by recency even when every operation shares one millisecond', () => {
+      // THE TEST ABOVE DOES NOT DISCRIMINATE ON ITS OWN. Against a file-backed
+      // database each set is its own transaction and takes more than a
+      // millisecond here, so it passed both with and without the ordering fix --
+      // the collision it was skipped for never happened on this machine. Freezing
+      // the clock makes the collision certain instead of machine-dependent, which
+      // is the only way this asserts the guarantee rather than the filesystem's
+      // speed. Verified by reverting the fix: this case fails, that one does not.
+      const frozen = 1_700_000_000_000;
+      const realNow = Date.now;
+      Date.now = () => frozen;
+      try {
+        for (let i = 0; i < 20; i++) {
+          cache.set(`key${i}`, `value${i}`, 100, 50);
+        }
+        cache.get('key15');
+        cache.get('key16');
+        cache.get('key17');
+        cache.evictLRU(200);
+        expect(cache.get('key15')).not.toBeNull();
+        expect(cache.get('key16')).not.toBeNull();
+        expect(cache.get('key17')).not.toBeNull();
+        expect(cache.get('key0')).toBeNull();
+      } finally {
+        Date.now = realNow;
+      }
+    });
+
+    it('never hands out a recency stamp that repeats or goes backwards', () => {
+      const frozen = 1_700_000_000_000;
+      const realNow = Date.now;
+      Date.now = () => frozen;
+      try {
+        for (let i = 0; i < 10; i++) cache.set(`seq${i}`, 'v', 10, 5);
+        const stamps = cache
+          .getAllEntries()
+          .filter((entry) => entry.key.startsWith('seq'))
+          .map((entry) => entry.lastAccessedAt)
+          .sort((a, b) => a - b);
+        expect(stamps).toHaveLength(10);
+        expect(new Set(stamps).size).toBe(10);
+        for (let i = 1; i < stamps.length; i++) {
+          expect(stamps[i]).toBeGreaterThan(stamps[i - 1]);
+        }
+      } finally {
+        Date.now = realNow;
+      }
     });
 
     it('should invalidate based on TTL concept (simulated)', () => {

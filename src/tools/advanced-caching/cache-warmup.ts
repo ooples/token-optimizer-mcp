@@ -371,7 +371,12 @@ export class CacheWarmupTool extends EventEmitter {
       const tokensUsed = tokensUsedResult.tokens;
       if (cacheKey && useCache) {
         const serialized = JSON.stringify(data);
-        this.cache.set(cacheKey, serialized, serialized.length, tokensUsed);
+        this.cache.set(
+          cacheKey,
+          serialized,
+          serialized.length,
+          serialized.length
+        );
       }
 
       // Record metrics
@@ -1513,7 +1518,7 @@ export function getCacheWarmupTool(
 export const CACHE_WARMUP_TOOL_DEFINITION = {
   name: 'cache_warmup',
   description:
-    'Intelligent cache pre-warming with 87%+ token reduction, featuring schedule-based warming, pattern analysis, dependency resolution, and progressive warming strategies',
+    'Intelligent cache pre-warming with an unmeasured design target of 87%+ token reduction, featuring schedule-based warming, pattern analysis, dependency resolution, and progressive warming strategies',
   inputSchema: {
     type: 'object',
     properties: {

@@ -176,6 +176,26 @@ export const CONTEXT_DELTA_TOOL_DEFINITION = {
       },
     },
     required: ['operation', 'sessionId', 'filePath'],
+    /*
+     * compute-delta and seed need `currentContent`; clear does not. Published
+     * here as sibling branches for the same reason as optimization_storage: the
+     * rule lived only in a hand-written discriminated union, so a caller
+     * reading the schema saw an optional field and got a validation error.
+     */
+    anyOf: [
+      {
+        properties: { operation: { const: 'compute-delta' } },
+        required: ['operation', 'currentContent'],
+      },
+      {
+        properties: { operation: { const: 'seed' } },
+        required: ['operation', 'currentContent'],
+      },
+      {
+        properties: { operation: { const: 'clear' } },
+        required: ['operation'],
+      },
+    ],
     additionalProperties: false,
   },
 };

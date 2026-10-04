@@ -26,6 +26,7 @@ import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { harvestCliFor } from './capabilities.mjs';
+import { flagOff } from './flags.mjs';
 
 const MODEL = () => process.env.TOKEN_OPTIMIZER_HARVEST_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -175,7 +176,7 @@ export function harvestMode() {
   // local endpoint AND set TOKEN_OPTIMIZER_HARVEST=0 kept harvesting: `localEndpoint()` returned
   // 'local' before anything looked at the variable. Turning a feature off must not depend on how
   // it happens to be configured.
-  const optedOut = /^(0|false|no|off)$/i.test(process.env.TOKEN_OPTIMIZER_HARVEST || '');
+  const optedOut = flagOff('TOKEN_OPTIMIZER_HARVEST');
   if (optedOut) return 'off:opted-out';
 
   // Free and private, so nothing further to weigh: no credential, no billing, no digest leaving

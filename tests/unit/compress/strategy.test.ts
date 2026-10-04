@@ -14,6 +14,7 @@ import {
   questionIn,
 } from '../../../src/compress/strategy.js';
 import { classify, compressBlock } from '../../../src/compress/router.js';
+import { anchorStore } from '../../../src/compress/anchor.js';
 
 /**
  * The strategies, the cache frontier, and the two failure modes taken straight
@@ -470,5 +471,141 @@ describe('taskIn steers tool deferral without moving the cached prefix', () => {
     };
 
     expect(taskIn(imageOnly)).toContain('Describe the screenshot');
+  });
+});
+
+/**
+ * `content: "..."` is a shape both provider APIs accept, and the one a plain
+ * `{role, content}` message takes. Reading only the array form meant the proxy
+ * walked straight past every such message: on the corpus's rag-conversation --
+ * 171,867 bytes, of which one 161,967-byte string message IS the payload --
+ * the arm reported 0.0% while the identical bytes in array form gave 84.5%.
+ */
+describe('a message whose content is a plain string', () => {
+  /** Fixed, so two arms of the same comparison get the same recovery path. */
+  const fixed = (): string => '/spill/rows.txt';
+
+  const asString = (text: string): ProviderRequest => ({
+    system: 'You are an agent.',
+    messages: [{ role: 'user', content: text }],
+    tools: [],
+  });
+
+  const asBlocks = (text: string): ProviderRequest => ({
+    system: 'You are an agent.',
+    messages: [{ role: 'user', content: [{ type: 'text', text }] }],
+    tools: [],
+  });
+
+  it('is compressed, and handed back as a string', () => {
+    const payload = rows(60);
+    const out = v1Frontier(asString(payload), { spill: fixed });
+    const content = (out.request.messages ?? [])[0].content;
+    // THE WIRE SHAPE IS NOT OURS TO CHANGE. A one-element block array would be
+    // equivalent to the provider, but it is not what the client sent, and a
+    // proxy that reshapes a request it did not need to reshape is changing
+    // bytes it was not asked to change.
+    expect(typeof content).toBe('string');
+    expect((content as string).length).toBeLessThan(payload.length);
+  });
+
+  it('gets exactly the treatment the array form gets', () => {
+    // THE CONTROL. Same bytes, same engine, two shapes. A string path that had
+    // quietly become a second and weaker implementation would show up here as a
+    // difference, and nowhere else.
+    const payload = rows(60);
+    const fromString = v1Frontier(asString(payload), { spill: fixed });
+    const fromBlocks = v1Frontier(asBlocks(payload), { spill: fixed });
+    const content = (fromString.request.messages ?? [])[0].content;
+    expect(content).toBe(textOf(fromBlocks.request));
+  });
+
+  it('is visible to the query the router steers on', () => {
+    // Same omission, different consequence: a question asked in string form was
+    // not merely left uncompressed, it never reached the relevance engines at
+    // all, so they scored the rest of the request against an empty query.
+    expect(questionIn(asString('which release regressed the p99?'))).toContain(
+      'which release regressed the p99?'
+    );
+  });
+});
+
+describe('the re-anchor guard weighs only the cached prefix', () => {
+  /**
+   * Seeded base-36 tokens: no repeated structure and no recognisable shape at
+   * this length, so the engines leave them alone. Seeded so every arm of a
+   * comparison sees the same bytes.
+   */
+  const noise = (n: number): string => {
+    let seed = 7;
+    const next = (): number =>
+      (seed = (seed * 1103515245 + 12345) % 2147483648);
+    return Array.from({ length: n }, () => next().toString(36)).join(' ');
+  };
+
+  /**
+   * Long enough to be joined mid-conversation, which is the speculative path:
+   * the provider is holding the client's own prefix and reverting costs us
+   * nothing, so a rewrite has to repay the 1.25x cache write on its own.
+   *
+   * The cached prefix is a SMALL block of rows plus `pad`; the fresh turn past
+   * the breakpoint is a large one. So the request as a whole always compresses
+   * enormously -- and reverting keeps every byte of that, because reverting
+   * still compresses everything past the frontier. Sizing `pad` moves the
+   * prefix's own share across the bar without touching it.
+   */
+  const joinedWith = (pad: string): ProviderRequest => ({
+    system: 'You are an agent.',
+    messages: [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'Find the duplicates.' }],
+      },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Reading it now.' }],
+      },
+      { role: 'user', content: [{ type: 'text', text: rows(40) }] },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Here is what I saw.' }],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: pad, cache_control: { type: 'ephemeral' } },
+        ],
+      },
+      { role: 'assistant', content: [{ type: 'text', text: 'Understood.' }] },
+      { role: 'user', content: [{ type: 'text', text: rows(400) }] },
+    ],
+    tools: [],
+  });
+
+  const run = (pad: string): StrategyResult =>
+    v1Frontier(joinedWith(pad), { spill, anchors: anchorStore() });
+  const textAt = (r: ProviderRequest, at: number): string => {
+    const content = r.messages?.[at]?.content;
+    return (Array.isArray(content) ? content[0]?.text : undefined) ?? '';
+  };
+
+  it('refuses a rewrite the prefix does not pay for, however well the request compresses', () => {
+    // The request gives up 61.1% of itself, nearly three times the 21.9% bar --
+    // but all of it is the fresh turn, which reverting collapses anyway. The
+    // prefix gives up nothing on its own account, so there is nothing here that
+    // a 1.25x cache write would buy back.
+    const out = run(noise(4000));
+    expect(out.anchor.reanchor).toBe(false);
+    // ...and what it refused is the REWRITE, not the compression: the fresh turn
+    // is still collapsed. A guard that declined by compressing nothing would be
+    // throwing away the saving it just declined to claim.
+    expect(textAt(out.request, 6).length).toBeLessThan(rows(400).length);
+  });
+
+  it('still rewrites a prefix that pays for itself', () => {
+    // The control. Same request, a quarter of the pad, so the same rows are now
+    // 38.0% of the prefix instead of under the bar. A guard that had simply
+    // stopped rewriting prefixes would pass the test above for the wrong reason.
+    expect(run(noise(1000)).anchor.reanchor).toBe(true);
   });
 });

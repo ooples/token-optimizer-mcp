@@ -109,6 +109,15 @@ function npmCalls() {
     : [];
 }
 
+// A TEST THAT SPAWNS AND THEN WAITS NEEDS A BUDGET BIGGER THAN WHAT IT WAITS
+// FOR. `waitFor` polls for up to 30s, and the slow-install case additionally
+// scripts a 4s fake npm delay before three real launches -- so Jest's 5s
+// default never covered any of them. It passed only while the machine was idle
+// enough for the install to land inside five seconds, and failed under
+// full-suite parallel load with the timeout, not an assertion. The budget is
+// derived from `waitFor`'s own, so moving one moves the other.
+const SPAWN_AND_WAIT_MS = 45_000;
+
 async function waitFor(predicate, ms = 30_000) {
   const until = Date.now() + ms;
   while (Date.now() < until) {
@@ -186,7 +195,7 @@ describe('#393 the plugin version is a floor for what is served', () => {
     // Once the backoff has passed, the next launch tries again and succeeds.
     const third = run(shim, [], { TOKEN_OPTIMIZER_PLUGIN_RETRY_MS: '0', FAKE_NPM_AVAILABLE: '7.0.1' });
     expect(third.served).toBe('7.0.1');
-  });
+  }, SPAWN_AND_WAIT_MS);
 
   test('a slow install serves the old runtime now and the new one on the next launch', async () => {
     seedVersion('6.0.2');
@@ -198,7 +207,7 @@ describe('#393 the plugin version is a floor for what is served', () => {
     expect(await waitFor(() => readCurrent() === '7.0.1')).toBe(true);
     const second = run(shim, [], env);
     expect(second.served).toBe('7.0.1');
-  });
+  }, SPAWN_AND_WAIT_MS);
 
   test('a stable plugin outranks a prerelease runtime with the same numbers', () => {
     // Numeric-only comparison called 7.0.1 and 7.0.1-beta.1 equal, so the release was never served.
@@ -280,7 +289,7 @@ describe('#394 a failed refresh does not silence retries', () => {
     const retry = { ...env, TOKEN_OPTIMIZER_REFRESH_RETRY_MS: '0', FAKE_NPM_AVAILABLE: '7.0.1' };
     expect(run(shim, [], retry).served).toBe('6.0.2');
     expect(await waitFor(() => readCurrent() === '7.0.1')).toBe(true);
-  });
+  }, SPAWN_AND_WAIT_MS);
 
   test('a recent success does not delay the retry after a later failure', async () => {
     // The failure decides: a refresh that succeeded an hour ago and failed a minute later must
@@ -300,7 +309,7 @@ describe('#394 a failed refresh does not silence retries', () => {
     expect(run(shim, [], { ...env, FAKE_NPM_AVAILABLE: '7.0.1' }).served).toBe('6.0.2');
     expect(await waitFor(() => readCurrent() === '7.0.1')).toBe(true);
     expect(npmCalls().length).toBeGreaterThan(before);
-  });
+  }, SPAWN_AND_WAIT_MS);
 
   test('installing through npm prints no DEP0190 warning', () => {
     const r = run(pluginWith(null), ['--refresh'], { FAKE_NPM_LATEST: '7.0.1', FAKE_NPM_AVAILABLE: '7.0.1' });

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Grep Tool - 80% Token Reduction
  *
  * Achieves token reduction through:
@@ -20,7 +20,7 @@ import {
 } from '../shared/bounded-traversal.js';
 import { relative, join } from 'path';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -836,7 +836,10 @@ export async function runSmartGrep(
   pattern: string,
   options: SmartGrepOptions = {}
 ): Promise<SmartGrepResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -850,7 +853,7 @@ export async function runSmartGrep(
 export const SMART_GREP_TOOL_DEFINITION = {
   name: 'smart_grep',
   description:
-    'Search file contents with 80% token reduction through match-only output and smart filtering',
+    'Search file contents with an unmeasured design target of 80% token reduction through match-only output and smart filtering',
   annotations: {
     title: 'Search file contents efficiently',
     readOnlyHint: true,

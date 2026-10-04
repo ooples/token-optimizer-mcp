@@ -42,7 +42,7 @@ import {
   type Position,
   type ProviderRequest,
 } from './frontier.js';
-import type { Elision } from './types.js';
+import type { Elision, Stamp } from './types.js';
 
 export type StrategyName =
   | 'v1-frontier'
@@ -52,6 +52,23 @@ export type StrategyName =
   | 'ccr';
 
 export interface StrategyOptions {
+  /**
+   * The key every marker this strategy writes will carry, when the caller picks it.
+   *
+   * LEAVE IT OUT IN PRODUCTION. Omitted, each block is stamped with a keyed MAC
+   * over its own content, which is what makes a planted marker-shaped line
+   * unforgeable: the secret lives in `annotate.ts`, is minted once per process
+   * and is never emitted, so the author of the content cannot compute the key a
+   * decoder will honour. Pinning a value here does not expose that secret and
+   * does not let content predict a stamp -- it only lets a caller who already
+   * controls the whole request choose what its own markers authenticate as.
+   *
+   * `null` means `do not stamp`, and yields markers nothing will honour. The
+   * comparator wants exactly that for the arm it publishes, and wants a pinned
+   * value for the arm it measures, because a MAC over a secret that changes
+   * every process makes the measured text change every run.
+   */
+  readonly stamp?: Stamp;
   /** Writes content with no file of its own somewhere readable. */
   readonly spill?: (content: string, hint: string) => string;
   /**
@@ -80,6 +97,17 @@ export interface StrategyOptions {
   readonly findings?: readonly Finding[];
   /** True when `findings` came from a graph shared across projects. */
   readonly sharedGraph?: boolean;
+  /**
+   * Inject no knowledge block on this pass, whatever the graph holds.
+   *
+   * PASSING NO FINDINGS IS NOT ENOUGH, which is the whole reason this exists. A
+   * block is composed on the turn the prefix is free and then REMEMBERED, and
+   * every later turn replays it from the anchor record so the cached prefix stays
+   * byte-identical -- so a caller that drops `findings` still gets the block back.
+   * The net-saving guard needs a pass that genuinely sends none, to compare
+   * against, and this is that pass.
+   */
+  readonly suppressKnowledge?: boolean;
   /** Characters of findings allowed in the prefix. */
   readonly knowledgeBudget?: number;
   /**
@@ -104,6 +132,20 @@ export interface StrategyResult {
   readonly elisions: readonly Elision[];
   /** Tokens of preamble this strategy ADDED to the request. */
   readonly injectedChars: number;
+  /**
+   * The authenticators the blocks in this request were compressed under.
+   *
+   * ONE PER BLOCK, NOT ONE PER REQUEST, and the difference is the provider's
+   * cache. A stamp is a keyed MAC over the block's own content, so a block that
+   * arrives unchanged next turn compresses to the same bytes and the cached
+   * prefix still matches; a stamp derived from the whole request would change on
+   * every turn and rewrite every marker behind the breakpoint.
+   *
+   * Returned because the decoder honours only markers that verify: output handed
+   * over without these cannot be inverted by anyone, and `lossless` is a claim
+   * about inverting it.
+   */
+  readonly stamps: readonly Stamp[];
   /**
    * What to remember about this conversation IF this request is the one sent.
    *
@@ -170,6 +212,14 @@ export function questionIn(request: ProviderRequest): string {
   const blocks: { text: string }[] = [];
   for (const message of request.messages ?? []) {
     const content = message?.content;
+    // A STRING IS A TEXT BLOCK. `content: "..."` is the shorthand both provider
+    // APIs accept and the shape most clients actually send; reading only the
+    // array form left those messages out of the query, out of the frontier and
+    // out of compression -- see `mapBlocks`.
+    if (typeof content === 'string') {
+      blocks.push({ text: content });
+      continue;
+    }
     if (!Array.isArray(content)) continue;
     for (const raw of content) {
       const block = raw as Block;
@@ -230,6 +280,10 @@ const ELIDED = /\[\.\.\. body, [^\]]+\]/;
 /** The untouched text at a position in the request the strategy was given. */
 function blockTextAt(request: ProviderRequest, at: Position): string | null {
   const content = request.messages?.[at.message]?.content;
+  // String content is ONE block, at index 0 -- the same position `mapBlocks`
+  // gives it. The two have to agree or the frontier would name a block this
+  // cannot resolve.
+  if (typeof content === 'string') return at.block === 0 ? content : null;
   if (!Array.isArray(content)) return null;
   const block = content[at.block] as Block | undefined;
   return typeof block?.text === 'string' ? block.text : null;
@@ -298,6 +352,26 @@ function toolResultPaths(request: ProviderRequest): Map<string, string> {
  * `tool_use` block also has structured fields and must NOT be rewritten -- its
  * input is an argument the model chose, not output to be summarised.
  */
+/**
+ * The bytes at or before `frontier` -- the region the provider is already
+ * holding, and the only region a re-anchor decision is ever about.
+ *
+ * Counted by walking with `mapBlocks` so the positions are the same ones
+ * `pathAddressed` tests against the frontier: a block counted here is exactly a
+ * block that rewrite was free to touch. The visitor returns null for every
+ * block, so nothing is rewritten -- this walks, it does not map.
+ */
+function cachedPrefixBytes(
+  request: ProviderRequest,
+  frontier: Position | null
+): number {
+  let bytes = 0;
+  mapBlocks(request, (text, at) => {
+    if (!isAfter(at, frontier)) bytes += text.length;
+    return null;
+  });
+  return bytes;
+}
 function isToolResult(block: unknown): boolean {
   return (
     typeof block === 'object' &&
@@ -317,6 +391,21 @@ function mapBlocks(
 ): ProviderRequest {
   const messages = (request.messages ?? []).map((message, mi) => {
     const content = message?.content;
+    // THE STRING FORM, COMPRESSED IN PLACE AND HANDED BACK AS A STRING.
+    // `content: "..."` is what a plain `{role, content}` message looks like on
+    // both provider APIs, and skipping it meant the proxy silently passed those
+    // messages through whole: on the corpus's rag-conversation, the one 161,967
+    // character message IS the payload, and the arm reported 0.0% against the
+    // 84.5% the same bytes give in array form.
+    //
+    // REWRITTEN AS A STRING, not normalised into a one-element block array.
+    // The two are equivalent to the provider, but only one of them is what the
+    // client sent, and a proxy that reshapes a request it did not need to
+    // reshape is changing bytes it was not asked to change.
+    if (typeof content === 'string') {
+      const replaced = visit(content, { message: mi, block: 0 }, message);
+      return replaced === null ? message : { ...message, content: replaced };
+    }
     if (!Array.isArray(content)) return message;
 
     const mapped = content.map((raw, bi) => {
@@ -408,7 +497,8 @@ function visitImages(
 function imagePass(
   request: ProviderRequest,
   frontier: Position | null,
-  elisions: Elision[]
+  elisions: Elision[],
+  stamp?: Stamp
 ): ReturnType<typeof dedupImages> {
   const found: { block: unknown; touchable: boolean }[] = [];
   visitImages(request, (block, at, message) => {
@@ -419,7 +509,7 @@ function imagePass(
     return null;
   });
 
-  const images = dedupImages(found);
+  const images = dedupImages(found, stamp);
   if (images.collapsed) {
     elisions.push({
       removed: `${images.collapsed} repeated image${images.collapsed === 1 ? '' : 's'}, about ${images.tokensSaved.toLocaleString('en-US')} tokens`,
@@ -517,7 +607,10 @@ function pathAddressed(
     const touchable =
       !messageIsSigned(message) && (!respectFrontier || isAfter(at, frontier));
     if (!touchable) {
-      staged.push({ text, original: text, touchable: false });
+      // NO STAMP, BECAUSE NOTHING WAS COMPRESSED. These are the original bytes
+      // -- signed, or behind the cache frontier -- so they hold no marker of
+      // ours, and a key here would claim one.
+      staged.push({ text, original: text, touchable: false, stamp: null });
       return null;
     }
     // CACHED CONTENT IS COMPRESSED WITHOUT THE QUESTION, and this is not a
@@ -538,6 +631,7 @@ function pathAddressed(
     const cached = !isAfter(at, breakpoint);
     const repeated = (sourceCounts.get(text) ?? 0) > 1;
     const result = compressBlock(text, {
+      stamp: options.stamp,
       spill: options.spill,
       query: cached || repeated ? undefined : query,
       tuning: options.tuning,
@@ -548,11 +642,19 @@ function pathAddressed(
       sourcePath: toolUseId ? sourcePaths.get(toolUseId) : undefined,
     });
     elisions.push(...result.elisions);
-    staged.push({ text: result.text, original: text, touchable: true });
+    // CARRIED ON THE BLOCK, NOT PUSHED ONTO A LIST BESIDE IT. Dedup may replace
+    // this text with a reference under a key of its own, and the decoder reads
+    // the keys positionally, so the two have to stay paired through that pass.
+    staged.push({
+      text: result.text,
+      original: text,
+      touchable: true,
+      stamp: result.stamp ?? null,
+    });
     return null;
   });
 
-  const deduped = dedupBlocks(staged);
+  const deduped = dedupBlocks(staged, options.stamp);
   elisions.push(...deduped.elisions);
 
   // IMAGES, WHICH NOTHING ABOVE CAN SEE. Every walker here keys on
@@ -565,7 +667,8 @@ function pathAddressed(
   const images = imagePass(
     request,
     respectFrontier ? frontier : null,
-    elisions
+    elisions,
+    options.stamp
   );
 
   // Pass two writes the answers back. `mapBlocks` walks in the same order it
@@ -579,7 +682,12 @@ function pathAddressed(
   );
 
   // Nothing is added to the request: no system message, no tool, no hash.
-  return { request: out, elisions, injectedChars: 0 };
+  // THE TEXT BLOCKS' KEYS THEN THE IMAGE BLOCKS', each in the order the walk
+  // visited them. `dedupBlocks` returns one per block rather than one per
+  // marker it wrote, because the key of a block it left alone is still the key
+  // the caller needs to read the markers already inside it.
+  const stamps = [...deduped.stamps, ...images.stamps];
+  return { request: out, elisions, stamps, injectedChars: 0 };
 }
 
 /**
@@ -664,6 +772,90 @@ export function minRewriteShare(tuning?: Tuning): number {
   return CACHE_WRITE_MULTIPLIER / CACHE_READ_MULTIPLIER / turns;
 }
 
+/**
+ * The exact share a rewrite must remove to repay itself over `turns` more turns.
+ *
+ * NOT `minRewriteShare`, and deliberately a second function rather than a
+ * correction to that one. `minRewriteShare` is `W/R/turns`, a first-order
+ * approximation that is honest at the hundred-turn prior it was written for and
+ * nonsense below about twelve -- at five turns it asks a rewrite to remove 250%
+ * of the payload. The speculative path below bets on a deliberately short
+ * horizon, so it needs the exact form; every existing caller keeps the dial it
+ * was measured against.
+ *
+ * Rewriting a prefix the provider already holds costs `r * (W + R*N)`, where `r`
+ * is the share that survives compression, against `R * (N+1)` for leaving it
+ * exactly where it is. Solving for the removed share `1 - r` gives this.
+ */
+export function breakEvenRewriteShare(turns: number): number {
+  const n = Number.isFinite(turns) && turns > 0 ? turns : 0;
+  const rewritten = CACHE_WRITE_MULTIPLIER + CACHE_READ_MULTIPLIER * n;
+  const left = CACHE_READ_MULTIPLIER * (n + 1);
+  return 1 - left / rewritten;
+}
+
+/**
+ * How many more turns a JOINED conversation is assumed to have left.
+ *
+ * MEASURED, NOT CHOSEN, AND SET TO THE WEAKEST CONVERSATION RATHER THAN THE
+ * AVERAGE ONE. Joining mid-conversation is the one case where the provider
+ * demonstrably holds a prefix in its ORIGINAL form, so a rewrite that does not
+ * pay is money spent for nothing, and the loss is one-sided: betting too low
+ * refuses a rewrite and forfeits a saving, betting too high buys a cache write
+ * nobody re-reads. A bet with that shape belongs at the floor of the
+ * distribution, not at its middle.
+ *
+ * `bench/subscription/session-horizon.mjs` re-derives the floor. It groups every
+ * request in the local transcripts by conversation and takes each conversation
+ * ENTIRE -- a time window truncates the ones that straddle its edges and
+ * manufactures low outliers, inventing a conversation at 37.5 that does not
+ * exist -- then divides each one's cache reads by its cache writes. That ratio
+ * is, by the cost model's own definition, the number of turns a written token is
+ * re-read over. The census below is that measurement; `SESSION_HORIZON_CENSUS`
+ * carries its provenance and `bench/compression/cost-model.mjs` documents the
+ * same derivation for its pooled sibling.
+ *
+ * Forty is the floor of fourteen conversations, 41.1, rounded DOWN -- the only
+ * direction a floor estimated from fourteen samples can be moved without
+ * risking the thing it protects. It sets the bar at 21.9%, against the 65.7%
+ * that the previous unmeasured five demanded.
+ *
+ * WHAT THE CORPUS CANNOT SEE. It is one user's agentic transcripts, and the
+ * smallest conversation in it is 140 requests, so a three-turn chat -- the case a
+ * high bet hurts most -- is not represented. What the corpus does show is that
+ * length barely predicts horizon within it: the shortest conversation, 140
+ * requests over 1.4 hours, has nearly the HIGHEST ratio at 93.8, because a short
+ * session still re-reads its whole prefix on every turn. A population that
+ * disagrees overrides this through `tuning.assumedSessionTurns`.
+ */
+export const JOINED_TURNS_ASSUMED = 40;
+
+/**
+ * The measurement `JOINED_TURNS_ASSUMED` is read off, frozen with its provenance
+ * so the constant above is checkable rather than merely asserted. Re-derive with
+ * `node bench/subscription/session-horizon.mjs`; nothing in the shipped path
+ * reads this, and it deliberately does not import from `bench/`.
+ */
+export const SESSION_HORIZON_CENSUS = Object.freeze({
+  measuredOn: '2026-09-29',
+  basis: 'whole conversations, sidechains excluded, no time window',
+  conversations: 14,
+  requests: 45_042,
+  /** Reads per written token, per conversation. The floor is what the bet uses. */
+  horizon: Object.freeze({
+    floor: 41.1,
+    p10: 44.8,
+    p25: 59.7,
+    median: 69.2,
+    pooled: 71.5,
+  }),
+  smallestConversation: Object.freeze({
+    requests: 140,
+    spanHours: 1.4,
+    horizon: 93.8,
+  }),
+});
+
 export function v1Frontier(
   request: ProviderRequest,
   options: StrategyOptions = {}
@@ -698,20 +890,22 @@ export function v1Frontier(
   const fresh =
     decision.reason === 'first-turn' ||
     decision.reason === 'client-invalidated';
-  const knowledge = fresh
-    ? knowledgeBlock(
-        options.findings ?? [],
-        stableContext(request),
-        options.knowledgeBudget ?? options.tuning?.knowledgeBudgetChars,
-        {
-          embeddings: options.embeddings,
-          // Passed through rather than defaulted here: only the loader knows
-          // which graph these findings came from, and a project claim served
-          // out of a shared graph is a fact about some other tree.
-          sharedGraph: options.sharedGraph === true,
-        }
-      )
-    : (decision.record.knowledge ?? null);
+  const knowledge = options.suppressKnowledge
+    ? null
+    : fresh
+      ? knowledgeBlock(
+          options.findings ?? [],
+          stableContext(request),
+          options.knowledgeBudget ?? options.tuning?.knowledgeBudgetChars,
+          {
+            embeddings: options.embeddings,
+            // Passed through rather than defaulted here: only the loader knows
+            // which graph these findings came from, and a project claim served
+            // out of a shared graph is a fact about some other tree.
+            sharedGraph: options.sharedGraph === true,
+          }
+        )
+      : (decision.record.knowledge ?? null);
 
   // RECONSIDERED EVERY TURN, because the answer changes as the conversation
   // grows. The break-even test below compares what a rewrite would remove
@@ -738,8 +932,22 @@ export function v1Frontier(
   // continuing.
   const longEnough =
     (request.messages ?? []).length >= MIN_MESSAGES_TO_AMORTISE;
+  // A JOINED CONVERSATION IS TRIED, NOT REFUSED -- but only provisionally.
+  // `anchorDecision` answers no here because it cannot know what the provider
+  // holds, which is the right default for a decision taken before anything has
+  // been compressed, and the wrong final answer once it has been. The rewrite is
+  // attempted, measured, and kept only if it clears JOINED_TURNS_ASSUMED turns
+  // of break-even below; otherwise the original is restored and nothing is
+  // recorded, exactly as if this had never been tried.
+  //
+  // Refusing outright held the proxy at 0.0% on every multi-turn agent loop in
+  // the benchmark. The marker sits at the end of a real conversation, so the
+  // frontier rule -- correct for a single turn -- had nothing left to compress.
+  const speculative = decision.reason === 'joined-mid-conversation';
   const attempt =
-    decision.reanchor || (decision.reason === 'left-alone' && longEnough);
+    decision.reanchor ||
+    (decision.reason === 'left-alone' && longEnough) ||
+    speculative;
   // ONLY WHEN WE RECOGNISE THE CONVERSATION AND ITS PREFIX IS UNCHANGED.
   // 'already-anchored' and 'left-alone' are exactly the two states that say
   // the client sent us the same prefix we saw last time, so the breakpoint we
@@ -771,6 +979,9 @@ export function v1Frontier(
   const respect = !attempt || frozen !== null;
   let out = pathAddressed(request, options, respect, floor);
   let reanchored = attempt;
+  // WHETHER THE OUTPUT WE SHIP RESPECTED A BOUNDARY, tracked rather than
+  // re-derived, because the revert below can replace `out` with one that does.
+  let respected = respect;
 
   // COMPRESSING NEW CONTENT COMMITS US TO IT. The moment we shrink a block,
   // the provider caches OUR bytes for it -- so next turn, when the client
@@ -784,14 +995,6 @@ export function v1Frontier(
     JSON.stringify(out.request).length < JSON.stringify(request).length
   )
     reanchored = true;
-
-  // The boundary to reuse next turn: whatever we already froze, or -- on the
-  // turn compression first bites -- the floor it bit at. Recorded only when
-  // something was actually removed, because a turn that changed nothing has
-  // committed us to nothing.
-  const removedAnything =
-    JSON.stringify(out.request).length < JSON.stringify(request).length;
-  const compressFrom = frozen ?? (removedAnything ? floor : null);
 
   // A REWRITE OF THE CACHED PREFIX HAS TO CLEAR ITS OWN COST. See
   // MIN_PREFIX_REWRITE_SHARE: below that share the 1.25x write we are about to
@@ -813,13 +1016,67 @@ export function v1Frontier(
       decision.reason === 'extended') &&
     decision.record.anchored;
   if (attempt && !alreadyOurs) {
-    const before = JSON.stringify(request).length;
-    const removed = before - JSON.stringify(out.request).length;
-    if (removed < before * minRewriteShare(options.tuning)) {
+    // MEASURED OVER THE CACHED PREFIX, NOT THE WHOLE REQUEST. Reverting hands
+    // back `pathAddressed(request, options, true, floor)`, which still
+    // compresses everything past the frontier, so the fresh region's savings are
+    // byte-for-byte identical under both branches and belong on neither side of
+    // this comparison. The bar is a share of a prefix the provider is already
+    // holding; letting fresh bytes into the numerator lets a rewrite clear a
+    // horizon it does not repay at. Measured on the benchmark captures: the
+    // issue-triage capture reads 62.7% whole and clears the 21.9% bar easily,
+    // while the prefix it would actually rewrite gives up 20.1% and does not --
+    // and 20.1% is right: that prefix only repays after 45 turns, and
+    // JOINED_TURNS_ASSUMED bets on 40.
+    const frontier = floor ?? lastCacheBreakpoint(request);
+    const before = cachedPrefixBytes(request, frontier);
+    const removed = before - cachedPrefixBytes(out.request, frontier);
+    // THE SPECULATIVE PATH PAYS A HIGHER BAR, on the exact break-even rather
+    // than the long-session approximation. Everywhere else we either chose to
+    // anchor or the client invalidated its own prefix, so the 1.25x write is
+    // happening regardless and `minRewriteShare`'s prior is the right one. Here
+    // the provider is holding the client's own bytes and reverting genuinely
+    // costs nothing, so the rewrite has to win on a horizon short enough that
+    // being wrong about the session length cannot hurt.
+    const share = speculative
+      ? breakEvenRewriteShare(JOINED_TURNS_ASSUMED)
+      : minRewriteShare(options.tuning);
+    // NOTHING CACHED IS NOT A WON BET. With no frontier there is no prefix to
+    // rewrite, so the two branches produce the same bytes and the arithmetic
+    // above reads 0 removed of 0 -- which is not a share that cleared the bar.
+    // Letting it through would mark the conversation anchored on a turn where
+    // we anchored nothing, and `alreadyOurs` would then skip this guard for
+    // every turn that followed.
+    if (before === 0 || removed < before * share) {
       out = pathAddressed(request, options, true, floor);
       reanchored = false;
+      respected = true;
     }
   }
+
+  // The boundary to reuse next turn: whatever we already froze, or -- on the
+  // turn compression first bites -- the floor it bit at. Recorded only when
+  // something was actually removed, because a turn that changed nothing has
+  // committed us to nothing.
+  //
+  // THE BOUNDARY THE OUTPUT ACTUALLY USED, NOT THE ONE WE WERE HANDED, which is
+  // why it is measured here rather than before the revert above, and why it
+  // reads the tracked `respected` rather than the `respect` we asked for.
+  // `floor` is null on the turn compression first bites, and null does not mean
+  // "no boundary": `pathAddressed` substitutes `lastCacheBreakpoint(request)`
+  // for it and compresses strictly after that. Recording the null froze
+  // nothing, so the turn after it saw `anchored: true` with no boundary,
+  // re-derived the prefix from scratch and rewrote bytes the provider was
+  // already holding -- a guaranteed miss on the whole prefix, which is the one
+  // thing anchoring exists to prevent. Measured on browser-session: v1-anchored
+  // 14,666 steady tokens against v1-frontier's 11,410, equal once it is real.
+  //
+  // And only when the output respected a boundary at all. A full rewrite has
+  // none to freeze, and claiming one would tell the next turn to leave a prefix
+  // alone that we had in fact replaced.
+  const removedAnything =
+    JSON.stringify(out.request).length < JSON.stringify(request).length;
+  const boundary = respected ? (floor ?? lastCacheBreakpoint(request)) : null;
+  const compressFrom = frozen ?? (removedAnything ? boundary : null);
 
   const withKnowledge = injectKnowledge(out.request, knowledge);
 
@@ -905,6 +1162,7 @@ export function ccrStyle(
   options: StrategyOptions = {}
 ): StrategyResult {
   const elisions: Elision[] = [];
+  const stamps: Stamp[] = [];
   const hashes: string[] = [];
   let index = 0;
   // THE CONTROL GETS DEDUP TOO, and it must. A content-addressed cache
@@ -928,6 +1186,7 @@ export function ccrStyle(
     // opaque markers and injected retrieval versus paths and nothing injected.
     const cached = !isAfter(_at, lastCacheBreakpoint(request));
     const result = compressBlock(text, {
+      stamp: options.stamp,
       spill: options.spill,
       query: cached ? undefined : query,
       tuning: options.tuning,
@@ -938,6 +1197,7 @@ export function ccrStyle(
     index += 1;
     hashes.push(marker.slice(7, 19));
     elisions.push(...result.elisions);
+    if (result.stamp !== undefined) stamps.push(result.stamp);
     byContent.set(text, marker);
     // Their form: the compressed body with an opaque marker standing in for
     // everything removed.
@@ -945,14 +1205,15 @@ export function ccrStyle(
   });
 
   // The control gets the image pass too; see `imagePass`.
-  const ccrImages = imagePass(out, null, elisions);
+  const ccrImages = imagePass(out, null, elisions, options.stamp);
   let ccrImageAt = 0;
   const withImages = replaceImages(
     out,
     () => ccrImages.replacements[ccrImageAt++] ?? null
   );
 
-  if (!index) return { request: withImages, elisions, injectedChars: 0 };
+  if (!index)
+    return { request: withImages, elisions, stamps, injectedChars: 0 };
 
   const systemText = CCR_SYSTEM.replace(
     '{HASHES}',
@@ -969,6 +1230,7 @@ export function ccrStyle(
   return {
     request: withInjection,
     elisions,
+    stamps,
     injectedChars: systemText.length + JSON.stringify(CCR_TOOL).length,
   };
 }
@@ -1000,6 +1262,7 @@ export function v4Substitute(
   request: ProviderRequest,
   options: StrategyOptions = {}
 ): StrategyResult {
+  const substituteStamps: Stamp[] = [];
   const substitution = substituteHistory(request.messages, {
     // NO QUERY AND NO EMBEDDINGS -- those depend on the live question, so the
     // same block would compress differently as the conversation moves and the
@@ -1018,9 +1281,20 @@ export function v4Substitute(
     // tool result out and leave a path the agent can read back, which is the
     // whole mechanism. Measured on the agent-loop fixture: 24.5% reduction
     // without it against v3-history's 85.1% on identical bytes.
-    compressToolResult: (text) =>
-      compressBlock(text, { tuning: options.tuning, spill: options.spill })
-        .text,
+    // KEPT, NOT DISCARDED. These blocks are compressed here and never again,
+    // so the key each one was stamped with reaches a caller only through this
+    // array -- and without it the substituted history is output nobody can
+    // invert.
+    compressToolResult: (text) => {
+      const compressed = compressBlock(text, {
+        stamp: options.stamp,
+        tuning: options.tuning,
+        spill: options.spill,
+      });
+      if (compressed.stamp !== undefined)
+        substituteStamps.push(compressed.stamp);
+      return compressed.text;
+    },
   });
   // BOTH REGIONS COUNT, and gating on `substituted` alone silently threw one
   // away. That counter tracks assistant REASONING substitutions only; tool
@@ -1045,6 +1319,7 @@ export function v4Substitute(
     // the request larger, which is the specific way a compression figure
     // becomes a lie.
     injectedChars: result.injectedChars + substitution.substituteChars,
+    stamps: [...substituteStamps, ...result.stamps],
   };
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { compressBlock } from '../../../src/compress/router.js';
-import { expandLog } from '../../helpers/expand-log.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
 
 /**
  * THE GATE ON `lossless: true`, held to its word by reconstruction.
@@ -85,7 +85,7 @@ describe('lossless results reconstruct their input from the output alone', () =>
     // made squad-eval report 1.000 accuracy at 0.0% reduction.
     expect(result.text.length).toBeLessThan(text.length);
     expect(result.lossless).toBe(true);
-    expect(expandLog(result.text)).toBe(text);
+    expect(expandLog(result.text, result.stamp)).toBe(text);
   });
 
   it.each(FIXTURES)('$name -- a damaged output is rejected', ({ text }) => {

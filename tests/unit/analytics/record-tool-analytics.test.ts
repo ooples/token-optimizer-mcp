@@ -8,6 +8,7 @@ import {
   recordToolAnalytics,
   currentHookPhase,
 } from '../../../src/analytics/record-tool-analytics.js';
+import { SAVINGS_MEASUREMENT_SCHEMA_VERSION } from '../../../src/analytics/savings-classification.js';
 import { AnalyticsManager } from '../../../src/analytics/analytics-manager.js';
 import { SqliteAnalyticsStorage } from '../../../src/analytics/analytics-storage.js';
 import path from 'path';
@@ -186,7 +187,10 @@ describe('recordToolAnalytics', () => {
     expect(entry.client).toBe('codex');
     expect(entry.metadata).toMatchObject({
       measurementId: expect.any(String),
-      measurementSchemaVersion: 2,
+      // The stamp new rows carry, read from the constant rather than copied:
+      // the contract gains classes over time, and a copy here turns every such
+      // extension into a test failure that says nothing about behaviour.
+      measurementSchemaVersion: SAVINGS_MEASUREMENT_SCHEMA_VERSION,
       measurementClass: 'verified-transport-reduction',
       baselineKind: 'materialized-undisclosed-mcp-result',
       disclosureRef: 'a'.repeat(16),

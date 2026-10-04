@@ -27,11 +27,20 @@
 
 import { createServer, request, type Server } from 'node:http';
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startProxy } from './server.js';
+import type { TransformationLog } from './transformations.js';
+import type { AccountingRecord } from './accounting.js';
 
 /** Where the supervisor records what it is serving, for callers and for the doctor. */
 export function supervisorStateFile(
@@ -211,8 +220,22 @@ function writeState(state: SupervisorState, env: NodeJS.ProcessEnv): void {
   const temporary = `${file}.tmp-${process.pid}`;
   // eslint-disable-next-line n/no-sync -- see above
   writeFileSync(temporary, JSON.stringify(state, null, 2), { mode: 0o600 });
-  // eslint-disable-next-line n/no-sync -- see above
-  renameSync(temporary, file);
+  try {
+    // eslint-disable-next-line n/no-sync -- see above
+    renameSync(temporary, file);
+  } catch (error) {
+    // A HALF-WRITTEN PUBLISH MUST NOT LEAVE ITS SCRATCH FILE BEHIND. The caller
+    // republishes, so the next attempt would write this same name again; a failure
+    // that accumulated files in the state directory would be read as our litter.
+    try {
+      // eslint-disable-next-line n/no-sync -- see above
+      unlinkSync(temporary);
+    } catch {
+      // Nothing more can be done about it here, and the rename failure below is the
+      // one worth reporting.
+    }
+    throw error;
+  }
 }
 
 export function readSupervisorState(
@@ -302,17 +325,61 @@ async function control<T>(
 /** The supervisor's own report, or null when nothing is listening. */
 export async function supervisorHealth(
   env: NodeJS.ProcessEnv = process.env
-): Promise<{ ok: true; pid: number; routes: SupervisorRoute[] } | null> {
+): Promise<{
+  ok: true;
+  pid: number;
+  routes: SupervisorRoute[];
+  // Present only when this supervisor's last publish failed, so its state file does
+  // not name the routes it is serving. A detached daemon has stdio ignored and no
+  // other voice, so this endpoint is where that has to be readable.
+  unpublished?: string;
+} | null> {
   const health = await control<{
     ok: true;
     pid: number;
     routes: SupervisorRoute[];
+    unpublished?: string;
   }>('/__token-optimizer/health', undefined, env);
   return health?.ok === true &&
     Number.isInteger(health.pid) &&
     health.pid > 0 &&
     Array.isArray(health.routes)
     ? health
+    : null;
+}
+
+/** One listener's window on what it did, as the control endpoint reports it. */
+export interface TransformationWindow {
+  readonly port: number;
+  readonly upstream?: string;
+  readonly project?: string;
+  readonly held: number;
+  readonly dropped: number;
+  readonly records: readonly AccountingRecord[];
+}
+
+/**
+ * What the running proxies recently did, or null when nothing is listening.
+ *
+ * NULL IS A REAL ANSWER HERE, not an error to be papered over: no supervisor
+ * means no transformations, and the caller has something specific to say about
+ * that -- which is why this returns the same null `supervisorHealth` does
+ * rather than throwing or inventing an empty window.
+ */
+export async function supervisorTransformations(
+  env: NodeJS.ProcessEnv = process.env,
+  options: { readonly last?: number; readonly port?: number } = {}
+): Promise<readonly TransformationWindow[] | null> {
+  const query = new URLSearchParams();
+  if (options.last !== undefined) query.set('last', String(options.last));
+  if (options.port !== undefined) query.set('port', String(options.port));
+  const suffix = query.size > 0 ? `?${query.toString()}` : '';
+  const reply = await control<{
+    ok: true;
+    windows: TransformationWindow[];
+  }>(`/__token-optimizer/transformations${suffix}`, undefined, env);
+  return reply?.ok === true && Array.isArray(reply.windows)
+    ? reply.windows
     : null;
 }
 
@@ -328,6 +395,7 @@ export async function runSupervisor(
   server: Server;
   port: number;
   close: () => Promise<void>;
+  decommissioned: Promise<void>;
 } | null> {
   if (await supervisorHealth(env)) return null;
 
@@ -335,23 +403,67 @@ export async function runSupervisor(
   let restoring = true;
   let stopped = false;
   let retryTimer: NodeJS.Timeout | undefined;
+  let stateFileGone = 0;
+  let standDown = (): void => {};
+  // Resolves only when this supervisor has stood itself down; a caller that owns the
+  // process exits on it. Never rejects, and never resolves on an explicit close().
+  const decommissioned = new Promise<void>((resolve) => {
+    standDown = resolve;
+  });
   const waiting = new Map<string, SupervisorRoute>();
   const routes = new Map<string, SupervisorRoute>();
   // Held so shutdown can close them. Without this the listeners outlive every caller: a test run
   // never exits, and a supervisor asked to stop keeps the ports bound.
   const listeners = new Set<Server>();
+  /*
+   * Each listener's own transformation window, keyed by the port it is reachable on.
+   *
+   * KEYED BY PORT RATHER THAN KEPT ON THE ROUTE, because a route is published to the state
+   * file as JSON and a log is a set of closures -- putting one on the other would either
+   * serialise to `{}` or have to be stripped on every publish. The port is already in the
+   * route, so a reader can line the two up, and it is the only identifier a caller passing
+   * `--port` has to hand.
+   */
+  const windows = new Map<number, TransformationLog>();
+  // Why the last publish did not land, or '' while the state file is current.
+  let unpublished = '';
+  /**
+   * PUBLISHING CANNOT THROW, BECAUSE A ROUTE NOBODY CAN FIND IS THE SAME AS NO ROUTE.
+   *
+   * `writeState` throws on a transient this platform really produces: the crash
+   * recovery suite measures the state directory refusing an operation with EPERM on
+   * the first attempt 18/18 times, Windows holding it for a moment after a child of
+   * it is unlinked, and `renameSync` answers the same way.
+   *
+   * That throw used to land in `routeFor`'s catch -- which had ALREADY put the bound
+   * listener in `routes`. So the control port served the route, the state file did
+   * not name it, `routeFor` reported `cannot serve` for a route it had just bound,
+   * and no later call could correct the file because `routes.get(key)` returns the
+   * existing route before publishing is reached again. Observed as a supervisor whose
+   * health listed a route on port 17582 while its own state file listed none, under
+   * the same pid, and stayed that way: the state file is how a client finds a route
+   * at all, so the compression that route exists to provide was silently off.
+   *
+   * So a failure is recorded instead of thrown, and the retry loop below writes again
+   * until the file agrees with this process.
+   */
   const publish = () => {
     if (restoring) return;
-    writeState(
-      {
-        schema: 1,
-        pid: process.pid,
-        startedAt: new Date().toISOString(),
-        controlUrl: `http://127.0.0.1:${controlPort(env)}`,
-        routes: [...waiting.values(), ...routes.values()],
-      },
-      env
-    );
+    try {
+      writeState(
+        {
+          schema: 1,
+          pid: process.pid,
+          startedAt: new Date().toISOString(),
+          controlUrl: `http://127.0.0.1:${controlPort(env)}`,
+          routes: [...waiting.values(), ...routes.values()],
+        },
+        env
+      );
+      unpublished = '';
+    } catch (error) {
+      unpublished = error instanceof Error ? error.message : String(error);
+    }
   };
   // Keyed by upstream AND project, because those are two different listeners: the graph a proxy
   // serves is bound when it starts, so one route cannot answer for two projects.
@@ -389,7 +501,11 @@ export async function runSupervisor(
           (derived === null && (savedPort !== undefined || waiting.has(key)))
         )
           return null;
-        const { server: listener, port } = await startProxy({
+        const {
+          server: listener,
+          port,
+          transformations,
+        } = await startProxy({
           upstream,
           port: derived ?? 0,
           // THE PROJECT IS THE CALLER'S, OR THERE IS NONE.
@@ -407,6 +523,7 @@ export async function runSupervisor(
           ...(project ? { projectRoot: project } : { knowledge: false }),
         });
         listeners.add(listener);
+        windows.set(port, transformations);
         const route: SupervisorRoute = {
           upstream,
           url: `http://127.0.0.1:${port}`,
@@ -446,7 +563,51 @@ export async function runSupervisor(
           ok: true,
           pid: process.pid,
           routes: [...routes.values()],
+          // Named rather than merely true, because the reader's next question is why --
+          // and a daemon with stdio ignored has nowhere else to say it.
+          ...(unpublished ? { unpublished } : {}),
         });
+      }
+      if (path === '/__token-optimizer/transformations') {
+        /*
+         * WHAT THE PROXY DID, read back out of the listeners that did it.
+         *
+         * GET AND LOOPBACK-ONLY, like `/health` beside it, and for the same reason it needs
+         * no further protection: every field here is a count, a duration, a status, a
+         * fixed-vocabulary reason or a tool name. There is no conversation content in a
+         * transformation record -- see the header of `transformations.ts` -- so this is not
+         * a hole in the promise `server.ts` makes about payloads.
+         *
+         * `last` is applied PER WINDOW rather than across all of them, because the
+         * supervisor cannot order two listeners' records without comparing timestamps, and
+         * doing that here would mean deciding, on behalf of a caller who may want them
+         * grouped, that they should be interleaved. The caller merges; this reports.
+         */
+        const query = new URLSearchParams((req.url || '').split('?')[1] ?? '');
+        const asked = Number.parseInt(query.get('last') ?? '', 10);
+        const last =
+          Number.isSafeInteger(asked) && asked > 0 ? asked : undefined;
+        const wanted = query.get('port');
+        const only = wanted === null ? null : Number.parseInt(wanted, 10);
+        if (only !== null && !Number.isSafeInteger(only))
+          return reply(400, { error: 'port must be a number' });
+        const byPort = new Map(
+          [...routes.values()].map((route) => [route.port, route])
+        );
+        const windowsOut = [...windows.entries()]
+          .filter(([port]) => only === null || port === only)
+          .map(([port, log]) => {
+            const route = byPort.get(port);
+            return {
+              port,
+              ...(route ? { upstream: route.upstream } : {}),
+              ...(route?.project ? { project: route.project } : {}),
+              held: log.size(),
+              dropped: log.dropped(),
+              records: log.recent(last),
+            };
+          });
+        return reply(200, { ok: true, windows: windowsOut });
       }
       if (path === '/__token-optimizer/route' && req.method === 'POST') {
         // A PAGE IN A BROWSER CAN POST HERE WITHOUT CORS PERMISSION. `text/plain` is a simple
@@ -540,6 +701,39 @@ export async function runSupervisor(
   publish();
 
   const retry = async () => {
+    // A SUPERVISOR WHOSE STATE FILE IS GONE HAS BEEN DECOMMISSIONED, SO IT STANDS DOWN.
+    //
+    // Nothing used to end this process but a signal, and nothing sends one: a client that
+    // started it exits, and the supervisor keeps its control port and its spill directory
+    // for the next session, which is the point of a daemon. But the state file is how a
+    // client finds it at all, so once that file is gone this process cannot be reached by
+    // anyone, and it holds a port and an open directory for nothing. Measured in the crash
+    // recovery suite: every run left one supervisor behind holding its deleted temp home,
+    // which failed the NEXT run's teardown with EPERM on a directory no live client owned.
+    // A user who removes the state directory, or uninstalls, was leaking the same process.
+    //
+    // Two consecutive observations rather than one, so that nothing here depends on how a
+    // concurrent writeState orders its unlink and its rename.
+    // This file reads and writes its state synchronously throughout (see writeState);
+    // an async stat on a daemon timer tick would only widen the window between the
+    // check and the decision it feeds.
+    // THE FILE FIRST: a route this process serves but has not published is one no
+    // client can reach, and nothing else will ever write it again.
+    if (!stopped && unpublished) publish();
+    // AND A FAILED WRITE IS NOT A DELETED STATE FILE. Standing down asks whether the
+    // file is GONE, which is only a question about a write that succeeded; counting a
+    // write we could not make would retire a supervisor that is serving traffic.
+    // eslint-disable-next-line n/no-sync -- see above
+    if (!stopped && !unpublished && !existsSync(supervisorStateFile(env))) {
+      stateFileGone += 1;
+      if (stateFileGone >= 2) {
+        await close();
+        standDown();
+        return;
+      }
+    } else {
+      stateFileGone = 0;
+    }
     for (const route of waiting.values()) {
       if (stopped) break;
       await routeFor(route.upstream, route.project, route.port);
@@ -558,6 +752,7 @@ export async function runSupervisor(
     await Promise.allSettled(starting.values());
     const all = [server, ...listeners];
     listeners.clear();
+    windows.clear();
     routes.clear();
     await Promise.all(
       all.map(
@@ -565,7 +760,7 @@ export async function runSupervisor(
       )
     );
   };
-  return { server, port: controlPort(env), close };
+  return { server, port: controlPort(env), close, decommissioned };
 }
 
 /**

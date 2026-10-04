@@ -142,7 +142,7 @@ describe('every encoder engages on the shape it exists for', () => {
     const scattered =
       '{\n  "a": { "x": 1 },\n  "note": "prose between the entries",\n' +
       '  "b": { "x": 2 },\n  "other": 7,\n  "c": { "x": 3 }\n}';
-    const result = compressJsonObjectMap(scattered, 3);
+    const result = compressJsonObjectMap(scattered, undefined, 3);
     expect(result.lossless).toBe(true);
     // DECLINED OUTRIGHT, ASSERTED DIRECTLY. The disjunction this replaces --
     // `either it declined, or what it emitted is smaller` -- had no failing

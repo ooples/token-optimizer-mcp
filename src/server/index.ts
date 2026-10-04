@@ -4,37 +4,34 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { startManagedInstallRepair } from './install-repair.js';
 import { installShutdownHandlers } from './lifecycle.js';
-import { discloseResult, expandRef, EXPAND_TOOL } from './disclosure.js';
+import { withoutRestated } from './restated.js';
+import { discloseResult, expandRef } from './disclosure.js';
+import { flagPayloadFailure } from './payload-failure.js';
 import {
   createToolArgumentChecker,
   type ToolDefinitionLike,
 } from './tool-arguments.js';
 import { selectToolDefinitions } from './tool-profile.js';
-import { wasteAudit, WASTE_TOOL } from './waste-tool.js';
-import { cacheAudit, CACHE_TOOL } from './cache-tool.js';
-import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
-import { tokenAudit, AUDIT_TOOL } from './audit-tool.js';
-import { installDoctor, DOCTOR_TOOL } from './doctor-tool.js';
-import { fleetAudit, FLEET_TOOL } from './fleet-tool.js';
+import { TOOL_DEFINITIONS } from './tool-definitions.js';
+import { wasteAudit } from './waste-tool.js';
+import { cacheAudit } from './cache-tool.js';
+import { modelRouting } from './routing-tool.js';
+import { tokenAudit } from './audit-tool.js';
+import { installDoctor } from './doctor-tool.js';
+import { fleetAudit } from './fleet-tool.js';
 import { McpEvidenceRecorder } from './mcp-evidence.js';
-import {
-  wikiWrite,
-  WIKI_WRITE_TOOL_DEFINITION,
-} from '../tools/intelligence/wiki-write.js';
-import {
-  wikiRead,
-  WIKI_READ_TOOL_DEFINITION,
-} from '../tools/intelligence/wiki-read.js';
+import { wikiWrite } from '../tools/intelligence/wiki-write.js';
+import { wikiRead } from '../tools/intelligence/wiki-read.js';
 import {
   wikiQuery,
-  WIKI_QUERY_TOOL_DEFINITION,
   type WikiQueryOptions,
 } from '../tools/intelligence/wiki-query.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { runUcrTool, UCR_TOOL_DEFINITIONS } from './ucr-tools.js';
+import { noteToolCall, flushToolRollup } from '../telemetry/tool-rollup.js';
+import { runUcrTool } from './ucr-tools.js';
 
 import { CacheEngine } from '../core/cache-engine.js';
 import { TokenCounter } from '../core/token-counter.js';
@@ -42,200 +39,79 @@ import { CompressionEngine } from '../core/compression-engine.js';
 import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
 import { MetricsCollector } from '../core/metrics.js';
 import { validateToolArgs } from '../validation/validator.js';
-import {
-  getPredictiveCacheTool,
-  PREDICTIVE_CACHE_TOOL_DEFINITION,
-} from '../tools/advanced-caching/predictive-cache.js';
-import {
-  getCacheWarmupTool,
-  CACHE_WARMUP_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-warmup.js';
+import { getPredictiveCacheTool } from '../tools/advanced-caching/predictive-cache.js';
+import { getCacheWarmupTool } from '../tools/advanced-caching/cache-warmup.js';
 // --- Previously unregistered tools ---------------------------------------
 // Each of these shipped with a definition, a runner and tests, and no line
 // anywhere that let a user reach it. Fifteen finished tools were invisible.
+import { runSmartComplexity } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartDependencies } from '../tools/code-analysis/smart-dependencies.js';
+import { runSmartExports } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartImports } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartRefactor } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartSecurity } from '../tools/code-analysis/smart-security.js';
+import { runSmartSymbols } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartTypescript } from '../tools/code-analysis/lazy-tools.js';
+import { runSmartConfigRead } from '../tools/configuration/smart-config-read.js';
+import { runSmartEnv } from '../tools/configuration/smart-env.js';
+import { runSmartPackageJson } from '../tools/configuration/smart-package-json.js';
+import { runSmartTsconfig } from '../tools/configuration/smart-tsconfig.js';
 import {
-  runSmartComplexity,
-  SMART_COMPLEXITY_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartDependencies,
-  SMART_DEPENDENCIES_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-dependencies.js';
-import {
-  runSmartExports,
-  SMART_EXPORTS_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartImports,
-  SMART_IMPORTS_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartRefactor,
-  SMART_REFACTOR_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartSecurity,
-  SMART_SECURITY_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-security.js';
-import {
-  runSmartSymbols,
-  SMART_SYMBOLS_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartTypescript,
-  SMART_TYPESCRIPT_TOOL_DEFINITION,
-} from '../tools/code-analysis/lazy-tools.js';
-import {
-  runSmartConfigRead,
-  SMART_CONFIG_READ_TOOL_DEFINITION,
-} from '../tools/configuration/smart-config-read.js';
-import {
-  runSmartEnv,
-  SMART_ENV_TOOL_DEFINITION,
-} from '../tools/configuration/smart-env.js';
-import {
-  runSmartPackageJson,
-  SMART_PACKAGE_JSON_TOOL_DEFINITION,
-} from '../tools/configuration/smart-package-json.js';
-import {
-  runSmartTsconfig,
-  SMART_TSCONFIG_TOOL_DEFINITION,
-} from '../tools/configuration/smart-tsconfig.js';
-import {
-  runSmartPretty,
-  SMART_PRETTY_TOOL_DEFINITION,
-} from '../tools/output-formatting/smart-pretty.js';
-import {
-  runSmartProcess,
-  SMART_PROCESS_TOOL_DEFINITION,
-} from '../tools/system-operations/smart-process.js';
-import {
-  runSmartService,
-  SMART_SERVICE_TOOL_DEFINITION,
-} from '../tools/system-operations/smart-service.js';
+  getSmartWorkflowTool,
+  type SmartWorkflowRequest,
+} from '../tools/configuration/smart-workflow.js';
+import { runSmartPretty } from '../tools/output-formatting/smart-pretty.js';
+import { runSmartProcess } from '../tools/system-operations/smart-process.js';
+import { runSmartService } from '../tools/system-operations/smart-service.js';
 
 // Code analysis tools
-import {
-  getSmartAstGrepTool,
-  SMART_AST_GREP_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-ast-grep.js';
-import {
-  getCacheAnalyticsTool,
-  CACHE_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-analytics.js';
-import {
-  runCacheBenchmark,
-  CACHE_BENCHMARK_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-benchmark.js';
-import {
-  runCacheCompression,
-  CACHE_COMPRESSION_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-compression.js';
-import {
-  getCacheInvalidationTool,
-  CACHE_INVALIDATION_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-invalidation.js';
-import {
-  getCacheOptimizerTool,
-  CACHE_OPTIMIZER_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-optimizer.js';
-import {
-  getCachePartitionTool,
-  CACHE_PARTITION_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-partition.js';
-import {
-  getCacheReplicationTool,
-  CACHE_REPLICATION_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-replication.js';
-import {
-  getSmartCacheTool,
-  SMART_CACHE_TOOL_DEFINITION,
-} from '../tools/advanced-caching/smart-cache.js';
-import {
-  getAlertManager,
-  ALERT_MANAGER_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/alert-manager.js';
-import {
-  getMetricCollector,
-  METRIC_COLLECTOR_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/metric-collector.js';
-import {
-  getMonitoringIntegration,
-  MONITORING_INTEGRATION_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/monitoring-integration.js';
-import {
-  getCustomWidget,
-  CUSTOM_WIDGET_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/custom-widget.js';
-import {
-  getDataVisualizer,
-  DATA_VISUALIZER_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/data-visualizer.js';
-import {
-  getHealthMonitor,
-  HEALTH_MONITOR_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/health-monitor.js';
-import {
-  getLogDashboard,
-  LOG_DASHBOARD_TOOL_DEFINITION,
-} from '../tools/dashboard-monitoring/log-dashboard.js';
+import { getSmartAstGrepTool } from '../tools/code-analysis/smart-ast-grep.js';
+import { getCacheAnalyticsTool } from '../tools/advanced-caching/cache-analytics.js';
+import { runCacheBenchmark } from '../tools/advanced-caching/cache-benchmark.js';
+import { runCacheCompression } from '../tools/advanced-caching/cache-compression.js';
+import { getCacheInvalidationTool } from '../tools/advanced-caching/cache-invalidation.js';
+import { getCacheOptimizerTool } from '../tools/advanced-caching/cache-optimizer.js';
+import { getCachePartitionTool } from '../tools/advanced-caching/cache-partition.js';
+import { getCacheReplicationTool } from '../tools/advanced-caching/cache-replication.js';
+import { getSmartCacheTool } from '../tools/advanced-caching/smart-cache.js';
+import { getAlertManager } from '../tools/dashboard-monitoring/alert-manager.js';
+import { getMetricCollector } from '../tools/dashboard-monitoring/metric-collector.js';
+import { getMonitoringIntegration } from '../tools/dashboard-monitoring/monitoring-integration.js';
+import { getCustomWidget } from '../tools/dashboard-monitoring/custom-widget.js';
+import { getDataVisualizer } from '../tools/dashboard-monitoring/data-visualizer.js';
+import { getHealthMonitor } from '../tools/dashboard-monitoring/health-monitor.js';
+import { getLogDashboard } from '../tools/dashboard-monitoring/log-dashboard.js';
 
 // Intelligence tools
+import { runIntelligentAssistant } from '../tools/intelligence/intelligent-assistant.js';
+import { runNaturalLanguageQuery } from '../tools/intelligence/natural-language-query.js';
+import { runPatternRecognition } from '../tools/intelligence/pattern-recognition.js';
+import { runPredictiveAnalytics } from '../tools/intelligence/predictive-analytics.js';
+import { runRecommendationEngine } from '../tools/intelligence/recommendation-engine.js';
+import { runSmartSummarization } from '../tools/intelligence/smart-summarization.js';
 import {
-  runIntelligentAssistant,
-  INTELLIGENTASSISTANTTOOL,
-} from '../tools/intelligence/intelligent-assistant.js';
+  runAnomalyExplainer,
+  type AnomalyExplainerOptions,
+} from '../tools/intelligence/anomaly-explainer.js';
 import {
-  runNaturalLanguageQuery,
-  NATURALLANGUAGEQUERYTOOL,
-} from '../tools/intelligence/natural-language-query.js';
+  getKnowledgeGraphTool,
+  type KnowledgeGraphOptions,
+} from '../tools/intelligence/knowledge-graph.js';
 import {
-  runPatternRecognition,
-  PATTERNRECOGNITIONTOOL,
-} from '../tools/intelligence/pattern-recognition.js';
-import {
-  runPredictiveAnalytics,
-  PREDICTIVEANALYTICSTOOL,
-} from '../tools/intelligence/predictive-analytics.js';
-import {
-  runRecommendationEngine,
-  RECOMMENDATIONENGINETOOL,
-} from '../tools/intelligence/recommendation-engine.js';
-import {
-  runSmartSummarization,
-  SMARTSUMMARIZATIONTOOL,
-} from '../tools/intelligence/smart-summarization.js';
+  getSentimentAnalysisTool,
+  type SentimentAnalysisOptions,
+} from '../tools/intelligence/sentiment-analysis.js';
 
 // Analytics tools
-import {
-  getHookAnalyticsTool,
-  GET_HOOK_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/analytics/get-hook-analytics.js';
-import {
-  getActionAnalyticsTool,
-  GET_ACTION_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/analytics/get-action-analytics.js';
-import {
-  getMcpServerAnalyticsTool,
-  GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/analytics/get-mcp-server-analytics.js';
-import {
-  getExportAnalyticsTool,
-  EXPORT_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/analytics/export-analytics.js';
-import {
-  getOptimizationReportTool,
-  GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
-} from '../tools/analytics/get-optimization-report.js';
+import { getHookAnalyticsTool } from '../tools/analytics/get-hook-analytics.js';
+import { getActionAnalyticsTool } from '../tools/analytics/get-action-analytics.js';
+import { getMcpServerAnalyticsTool } from '../tools/analytics/get-mcp-server-analytics.js';
+import { getExportAnalyticsTool } from '../tools/analytics/export-analytics.js';
+import { getOptimizationReportTool } from '../tools/analytics/get-optimization-report.js';
 import { recordToolAnalytics } from '../analytics/record-tool-analytics.js';
-import {
-  OptimizationStorageTool,
-  OPTIMIZATION_STORAGE_TOOL_DEFINITION,
-} from '../tools/optimization-storage-tool.js';
-import {
-  ContextDeltaTool,
-  CONTEXT_DELTA_TOOL_DEFINITION,
-} from '../tools/context-delta-tool.js';
+import { liftDeclarations } from '../tools/shared/savings.js';
+import { OptimizationStorageTool } from '../tools/optimization-storage-tool.js';
+import { ContextDeltaTool } from '../tools/context-delta-tool.js';
 import { SessionManager } from '../core/session-manager.js';
 import { createSummarizerFromEnv } from '../core/summarization.js';
 import { TokenizerFactory } from '../core/tokenizers/tokenizer-factory.js';
@@ -244,140 +120,43 @@ import { memoRegistry } from '../utils/lru-memoize.js';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
 
 // API & Database tools
-import {
-  getSmartSql,
-  SMART_SQL_TOOL_DEFINITION,
-} from '../tools/api-database/smart-sql.js';
-import {
-  getSmartSchema,
-  SMART_SCHEMA_TOOL_DEFINITION,
-} from '../tools/api-database/smart-schema.js';
-import {
-  getSmartApiFetch,
-  SMART_API_FETCH_TOOL_DEFINITION,
-} from '../tools/api-database/smart-api-fetch.js';
-import {
-  getSmartCacheApi,
-  SMART_CACHE_API_TOOL_DEFINITION,
-} from '../tools/api-database/smart-cache-api.js';
-import {
-  getSmartDatabase,
-  SMART_DATABASE_TOOL_DEFINITION,
-} from '../tools/api-database/smart-database.js';
-import {
-  getSmartGraphQL,
-  SMART_GRAPHQL_TOOL_DEFINITION,
-} from '../tools/api-database/smart-graphql.js';
-import {
-  getSmartMigration,
-  SMART_MIGRATION_TOOL_DEFINITION,
-} from '../tools/api-database/smart-migration.js';
-import {
-  getSmartOrm,
-  SMART_ORM_TOOL_DEFINITION,
-} from '../tools/api-database/smart-orm.js';
-import {
-  getSmartRest,
-  SMART_REST_TOOL_DEFINITION,
-} from '../tools/api-database/smart-rest.js';
-import {
-  getSmartWebSocket,
-  SMART_WEBSOCKET_TOOL_DEFINITION,
-} from '../tools/api-database/smart-websocket.js';
+import { getSmartSql } from '../tools/api-database/smart-sql.js';
+import { getSmartSchema } from '../tools/api-database/smart-schema.js';
+import { getSmartApiFetch } from '../tools/api-database/smart-api-fetch.js';
+import { getSmartCacheApi } from '../tools/api-database/smart-cache-api.js';
+import { getSmartDatabase } from '../tools/api-database/smart-database.js';
+import { getSmartGraphQL } from '../tools/api-database/smart-graphql.js';
+import { getSmartMigration } from '../tools/api-database/smart-migration.js';
+import { getSmartOrm } from '../tools/api-database/smart-orm.js';
+import { getSmartRest } from '../tools/api-database/smart-rest.js';
+import { getSmartWebSocket } from '../tools/api-database/smart-websocket.js';
 
 // Build Systems tools
-import {
-  getSmartProcessesTool,
-  SMART_PROCESSES_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-processes.js';
-import {
-  getSmartNetwork,
-  SMART_NETWORK_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-network.js';
-import {
-  getSmartLogs,
-  SMART_LOGS_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-logs.js';
-import {
-  getSmartLintTool,
-  SMART_LINT_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-lint.js';
-import {
-  getSmartInstall,
-  SMART_INSTALL_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-install.js';
-import {
-  getSmartDocker,
-  SMART_DOCKER_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-docker.js';
-import {
-  getSmartBuildTool,
-  SMART_BUILD_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-build.js';
-import {
-  getSmartSystemMetrics,
-  SMART_SYSTEM_METRICS_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-system-metrics.js';
-import {
-  getSmartTestTool,
-  SMART_TEST_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-test.js';
-import {
-  getSmartTypeCheckTool,
-  SMART_TYPECHECK_TOOL_DEFINITION,
-} from '../tools/build-systems/smart-typecheck.js';
+import { getSmartProcessesTool } from '../tools/build-systems/smart-processes.js';
+import { getSmartNetwork } from '../tools/build-systems/smart-network.js';
+import { getSmartLogs } from '../tools/build-systems/smart-logs.js';
+import { getSmartLintTool } from '../tools/build-systems/smart-lint.js';
+import { getSmartInstall } from '../tools/build-systems/smart-install.js';
+import { getSmartDocker } from '../tools/build-systems/smart-docker.js';
+import { getSmartBuildTool } from '../tools/build-systems/smart-build.js';
+import { getSmartSystemMetrics } from '../tools/build-systems/smart-system-metrics.js';
+import { getSmartTestTool } from '../tools/build-systems/smart-test.js';
+import { getSmartTypeCheckTool } from '../tools/build-systems/smart-typecheck.js';
 // System Operations tools
-import {
-  getSmartCron,
-  SMART_CRON_TOOL_DEFINITION,
-} from '../tools/system-operations/smart-cron.js';
-import {
-  getSmartUser,
-  SMART_USER_TOOL_DEFINITION,
-} from '../tools/system-operations/smart-user.js';
+import { getSmartCron } from '../tools/system-operations/smart-cron.js';
+import { getSmartUser } from '../tools/system-operations/smart-user.js';
 
 // File operations tools
-import {
-  getSmartDiffTool,
-  SMART_DIFF_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-diff.js';
-import {
-  getSmartBranchTool,
-  SMART_BRANCH_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-branch.js';
-import {
-  getSmartMergeTool,
-  SMART_MERGE_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-merge.js';
-import {
-  getSmartStatusTool,
-  SMART_STATUS_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-status.js';
-import {
-  getSmartLogTool,
-  SMART_LOG_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-log.js';
-import {
-  runSmartRead,
-  SMART_READ_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-read.js';
-import {
-  runSmartWrite,
-  SMART_WRITE_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-write.js';
-import {
-  runSmartEdit,
-  SMART_EDIT_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-edit.js';
-import {
-  runSmartGlob,
-  SMART_GLOB_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-glob.js';
-import {
-  runSmartGrep,
-  SMART_GREP_TOOL_DEFINITION,
-  // Analytics tools
-} from '../tools/file-operations/smart-grep.js';
+import { getSmartDiffTool } from '../tools/file-operations/smart-diff.js';
+import { getSmartBranchTool } from '../tools/file-operations/smart-branch.js';
+import { getSmartMergeTool } from '../tools/file-operations/smart-merge.js';
+import { getSmartStatusTool } from '../tools/file-operations/smart-status.js';
+import { getSmartLogTool } from '../tools/file-operations/smart-log.js';
+import { runSmartRead } from '../tools/file-operations/smart-read.js';
+import { runSmartWrite } from '../tools/file-operations/smart-write.js';
+import { runSmartEdit } from '../tools/file-operations/smart-edit.js';
+import { runSmartGlob } from '../tools/file-operations/smart-glob.js';
+import { runSmartGrep } from '../tools/file-operations/smart-grep.js';
 import {
   parseSessionLog,
   resolveSessionLogPath,
@@ -409,6 +188,13 @@ const metrics = new MetricsCollector();
 const analyticsManager = new AnalyticsManager();
 const ANALYTICS_PROCESS_ID = randomUUID();
 
+/*
+ * The seven tools answered this way take no path argument -- they report on the
+ * tool log, the cache or the install, not on a file -- so no displaced input is
+ * passed here. A tool that gains one must pass its arguments through, which is
+ * what the test asserting the path vocabulary against the published schemas is
+ * there to catch.
+ */
 async function recordDirectToolResult<T>(
   toolName: string,
   operation: () => T | Promise<T>,
@@ -416,7 +202,7 @@ async function recordDirectToolResult<T>(
 ): Promise<T> {
   const result = await operation();
   await recordToolAnalytics(analyticsManager, toolName, result as any, {
-    ...mcpEvidence.analyticsAttribution(),
+    ...(await mcpEvidence.analyticsAttribution()),
     operationId,
   });
   return result;
@@ -427,8 +213,9 @@ async function recordDirectToolResult<T>(
  * Used when compression is skipped (file too small or compression doesn't help)
  */
 function cacheUncompressed(key: string, text: string, size: number): void {
-  // Store uncompressed text with size=0 for compressedSize to indicate no compression
-  cache.set(key, text, size, 0);
+  // Uncompressed, so the two sizes are the same size. A zero here would read
+  // as infinite compression in every ratio computed from these columns.
+  cache.set(key, text, size, size);
 }
 
 // Initialize advanced caching tools
@@ -471,6 +258,15 @@ const customWidget = getCustomWidget(cache, tokenCounter, metrics);
 const dataVisualizer = getDataVisualizer(cache, tokenCounter, metrics);
 const healthMonitor = getHealthMonitor(cache, tokenCounter, metrics);
 const logDashboard = getLogDashboard(cache, tokenCounter, metrics);
+
+// Initialize Intelligence tools that keep state between calls
+const knowledgeGraph = getKnowledgeGraphTool(cache, tokenCounter, metrics);
+const sentimentAnalysis = getSentimentAnalysisTool(
+  cache,
+  tokenCounter,
+  metrics
+);
+const smartWorkflow = getSmartWorkflowTool(cache, tokenCounter, metrics);
 
 // Initialize Build Systems tools
 const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
@@ -597,329 +393,58 @@ server.oninitialized = () => {
 };
 
 // Define tools
-/**
- * Every tool this server advertises.
- *
- * Named, rather than inline in the handler, so ONE list is both what the
- * client is shown and what requests are validated against. When they were
- * two things, a tool could declare `required: [ormCode, ormType]` in the
- * schema a caller reads while its Zod entry was the permissive
- * GenericToolOptionsSchema -- and 43 of them use that. Omitting a required
- * field then reached the tool body, where smart_orm answered:
- *
- *     The "data" argument must be of type string or an instance of Buffer,
- *     TypedArray, or DataView. Received undefined
- *
- * which tells the caller nothing about the field they left out.
- */
-const TOOL_DEFINITIONS = [
-  SMART_COMPLEXITY_TOOL_DEFINITION,
-  SMART_DEPENDENCIES_TOOL_DEFINITION,
-  SMART_EXPORTS_TOOL_DEFINITION,
-  SMART_IMPORTS_TOOL_DEFINITION,
-  SMART_REFACTOR_TOOL_DEFINITION,
-  SMART_SECURITY_TOOL_DEFINITION,
-  SMART_SYMBOLS_TOOL_DEFINITION,
-  SMART_TYPESCRIPT_TOOL_DEFINITION,
-  SMART_CONFIG_READ_TOOL_DEFINITION,
-  SMART_ENV_TOOL_DEFINITION,
-  SMART_PACKAGE_JSON_TOOL_DEFINITION,
-  SMART_TSCONFIG_TOOL_DEFINITION,
-  SMART_PRETTY_TOOL_DEFINITION,
-  SMART_PROCESS_TOOL_DEFINITION,
-  SMART_SERVICE_TOOL_DEFINITION,
-  AUDIT_TOOL,
-  DOCTOR_TOOL,
-  FLEET_TOOL,
-  WIKI_WRITE_TOOL_DEFINITION,
-  WIKI_READ_TOOL_DEFINITION,
-  WIKI_QUERY_TOOL_DEFINITION,
-  ...UCR_TOOL_DEFINITIONS,
-  EXPAND_TOOL,
-  WASTE_TOOL,
-  CACHE_TOOL,
-  ROUTING_TOOL,
-  {
-    name: 'optimize_text',
-    description:
-      'Compress and cache text to reduce token usage. Returns compressed version and saves to cache for future use.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: {
-          type: 'string',
-          description: 'Text to optimize',
-        },
-        key: {
-          type: 'string',
-          description: 'Cache key for storing the optimized text',
-        },
-        quality: {
-          type: 'number',
-          description: 'Compression quality (0-11, default 11)',
-          minimum: 0,
-          maximum: 11,
-        },
-      },
-      required: ['text', 'key'],
-    },
-  },
-  {
-    name: 'get_cached',
-    description:
-      'Retrieve previously cached and optimized text. Returns the original text if found in cache.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        key: {
-          type: 'string',
-          description: 'Cache key to retrieve',
-        },
-      },
-      required: ['key'],
-    },
-  },
-  {
-    name: 'count_tokens',
-    description:
-      'Count tokens in text using the pluggable tokenizer framework (#124). Picks a model-specific tokenizer (tiktoken for GPT/Claude, Google AI REST for Gemini, content-aware heuristic fallback).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: {
-          type: 'string',
-          description: 'Text to count tokens for',
-        },
-        modelName: {
-          type: 'string',
-          description:
-            'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). Defaults to the server-configured model when omitted.',
-        },
-      },
-      required: ['text'],
-    },
-  },
-  {
-    name: 'compress_text',
-    description:
-      'Compress text using Brotli, returned as a base64 string. Intended for AT-REST STORAGE/caching (reduces bytes ~50%). NOTE: base64 tokenizes poorly, so the output usually has MORE LLM tokens than the input — do NOT feed the result into a model context expecting savings. The response includes originalTokens/compressedTokens and a warning when the output would increase tokens.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: {
-          type: 'string',
-          description: 'Text to compress',
-        },
-        quality: {
-          type: 'number',
-          description: 'Compression quality (0-11, default 11)',
-          minimum: 0,
-          maximum: 11,
-        },
-      },
-      required: ['text'],
-    },
-  },
-  {
-    name: 'decompress_text',
-    description: 'Decompress base64-encoded Brotli-compressed text.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        compressed: {
-          type: 'string',
-          description: 'Base64-encoded compressed text',
-        },
-      },
-      required: ['compressed'],
-    },
-  },
-  {
-    name: 'get_cache_stats',
-    description:
-      'Get cache statistics including hit rate, compression ratio, and token savings.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-    },
-  },
-  {
-    name: 'clear_cache',
-    description: 'Clear all cached data. Use with caution.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        confirm: {
-          type: 'boolean',
-          description: 'Must be true to confirm cache clearing',
-        },
-      },
-      required: ['confirm'],
-    },
-  },
-  {
-    name: 'analyze_optimization',
-    description:
-      'Analyze text and provide recommendations for optimization including compression benefits and token savings.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: {
-          type: 'string',
-          description: 'Text to analyze',
-        },
-      },
-      required: ['text'],
-    },
-  },
-  {
-    name: 'get_session_stats',
-    description:
-      'Get comprehensive statistics from the PowerShell wrapper session tracker including system reminders, tool operations, and total tokens with accurate tiktoken-based counting.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        sessionId: {
-          type: 'string',
-          description:
-            'Optional session ID to query. If not provided, uses current session.',
-        },
-      },
-    },
-  },
-  {
-    name: 'optimize_session',
-    description:
-      'Analyzes operations in the current session from the session JSONL log, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        sessionId: {
-          type: 'string',
-          description:
-            'Optional session ID to optimize. If not provided, uses the current active session.',
-        },
-        min_token_threshold: {
-          type: 'number',
-          description:
-            'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
-        },
-      },
-    },
-  },
-  // NOTE: 'lookup_cache' tool never existed in master branch - this is NOT a breaking change
-  // This tool (analyze_project_tokens) is a new addition to the MCP server
-  {
-    name: 'analyze_project_tokens',
-    description:
-      'Analyze observed token usage across multiple sessions within a project. Aggregates session logs and identifies top contributors. Cost is Not priced unless the caller supplies an effective input-token rate; any resulting value is a cost equivalent, not an invoice.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        projectPath: {
-          type: 'string',
-          description:
-            'Path to the project directory. If not provided, uses the hooks data directory.',
-        },
-        startDate: {
-          type: 'string',
-          format: 'date',
-          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-          description: 'Optional start date filter (YYYY-MM-DD format).',
-        },
-        endDate: {
-          type: 'string',
-          format: 'date',
-          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-          description: 'Optional end date filter (YYYY-MM-DD format).',
-        },
-        costPerMillionTokens: {
-          type: 'number',
-          description:
-            'Optional effective USD cost per million input tokens. No provider price is assumed when omitted.',
-          minimum: 0,
-        },
-      },
-    },
-  },
-  PREDICTIVE_CACHE_TOOL_DEFINITION,
-  CACHE_WARMUP_TOOL_DEFINITION,
-  // Code analysis tools
-  SMART_AST_GREP_TOOL_DEFINITION,
-  CACHE_ANALYTICS_TOOL_DEFINITION,
-  CACHE_BENCHMARK_TOOL_DEFINITION,
-  CACHE_COMPRESSION_TOOL_DEFINITION,
-  CACHE_INVALIDATION_TOOL_DEFINITION,
-  CACHE_OPTIMIZER_TOOL_DEFINITION,
-  CACHE_PARTITION_TOOL_DEFINITION,
-  CACHE_REPLICATION_TOOL_DEFINITION,
-  SMART_CACHE_TOOL_DEFINITION,
-  // API & Database tools
-  SMART_SQL_TOOL_DEFINITION,
-  SMART_SCHEMA_TOOL_DEFINITION,
-  SMART_API_FETCH_TOOL_DEFINITION,
-  SMART_CACHE_API_TOOL_DEFINITION,
-  SMART_DATABASE_TOOL_DEFINITION,
-  SMART_GRAPHQL_TOOL_DEFINITION,
-  SMART_MIGRATION_TOOL_DEFINITION,
-  SMART_ORM_TOOL_DEFINITION,
-  SMART_REST_TOOL_DEFINITION,
-  SMART_WEBSOCKET_TOOL_DEFINITION,
-  // Dashboard & Monitoring tools
-  ALERT_MANAGER_TOOL_DEFINITION,
-  METRIC_COLLECTOR_TOOL_DEFINITION,
-  MONITORING_INTEGRATION_TOOL_DEFINITION,
-  CUSTOM_WIDGET_TOOL_DEFINITION,
-  DATA_VISUALIZER_TOOL_DEFINITION,
-  HEALTH_MONITOR_TOOL_DEFINITION,
-  LOG_DASHBOARD_TOOL_DEFINITION,
-  // Intelligence tools
-  INTELLIGENTASSISTANTTOOL,
-  NATURALLANGUAGEQUERYTOOL,
-  PATTERNRECOGNITIONTOOL,
-  PREDICTIVEANALYTICSTOOL,
-  RECOMMENDATIONENGINETOOL,
-  SMARTSUMMARIZATIONTOOL,
-  // Build Systems tools
-  SMART_PROCESSES_TOOL_DEFINITION,
-  SMART_NETWORK_TOOL_DEFINITION,
-  SMART_LOGS_TOOL_DEFINITION,
-  SMART_LINT_TOOL_DEFINITION,
-  SMART_INSTALL_TOOL_DEFINITION,
-  SMART_DOCKER_TOOL_DEFINITION,
-  SMART_BUILD_TOOL_DEFINITION,
-  SMART_SYSTEM_METRICS_TOOL_DEFINITION,
-  SMART_TEST_TOOL_DEFINITION,
-  SMART_TYPECHECK_TOOL_DEFINITION,
-  // System Operations tools
-  SMART_CRON_TOOL_DEFINITION,
-  SMART_USER_TOOL_DEFINITION,
-  // File operations tools
-
-  SMART_DIFF_TOOL_DEFINITION,
-  SMART_BRANCH_TOOL_DEFINITION,
-  SMART_MERGE_TOOL_DEFINITION,
-  SMART_STATUS_TOOL_DEFINITION,
-  SMART_LOG_TOOL_DEFINITION,
-  SMART_READ_TOOL_DEFINITION,
-  SMART_WRITE_TOOL_DEFINITION,
-  SMART_EDIT_TOOL_DEFINITION,
-  SMART_GLOB_TOOL_DEFINITION,
-  SMART_GREP_TOOL_DEFINITION,
-  // Analytics tools
-  GET_HOOK_ANALYTICS_TOOL_DEFINITION,
-  GET_ACTION_ANALYTICS_TOOL_DEFINITION,
-  GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
-  EXPORT_ANALYTICS_TOOL_DEFINITION,
-  GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
-  OPTIMIZATION_STORAGE_TOOL_DEFINITION,
-  CONTEXT_DELTA_TOOL_DEFINITION,
-];
 
 const ADVERTISED_TOOL_DEFINITIONS = selectToolDefinitions(TOOL_DEFINITIONS);
 const ADVERTISED_TOOL_NAMES = new Set(
   ADVERTISED_TOOL_DEFINITIONS.map((tool) => tool.name)
 );
+
+/**
+ * For each tool, the inputs whose schema publishes a `default`, and what
+ * that default is.
+ *
+ * Read by the reply pruning in ./restated.ts, which drops a scalar field
+ * equal to one of these: a reply answering `mode: 'graph'` when `graph` is
+ * the published default of its own `mode` input is restating the request,
+ * and the caller read that default out of `tools/list` before calling.
+ *
+ * ONLY the properties that publish one. A declared input with no default is
+ * a property the tool WORKS OUT -- smart_env detects `environment` when the
+ * caller names none -- and its value in a reply is the answer, not an echo.
+ * Keying on names instead cost smart_env a genuine finding.
+ *
+ * Built from the SAME definitions the server advertises, so a renamed or
+ * re-defaulted input cannot leave a stale value behind here.
+ */
+const DECLARED_DEFAULTS: ReadonlyMap<
+  string,
+  ReadonlyMap<string, unknown>
+> = new Map(
+  ADVERTISED_TOOL_DEFINITIONS.map((tool) => [
+    tool.name,
+    new Map<string, unknown>(
+      Object.entries(
+        (tool.inputSchema as { properties?: Record<string, unknown> })
+          .properties ?? {}
+      )
+        .filter(
+          ([, schema]) =>
+            typeof schema === 'object' &&
+            schema !== null &&
+            Object.hasOwn(schema, 'default')
+        )
+        .map(([property, schema]) => [
+          property,
+          (schema as { default?: unknown }).default,
+        ])
+    ),
+  ])
+);
+
+const NO_DECLARED_DEFAULTS: ReadonlyMap<string, unknown> = new Map<
+  string,
+  unknown
+>();
 
 /**
  * Both argument checks, built from the definitions this server publishes -- so
@@ -929,6 +454,20 @@ const { assertRequiredFields, assertKnownFields } = createToolArgumentChecker(
   ADVERTISED_TOOL_DEFINITIONS as ToolDefinitionLike[]
 );
 
+/**
+ * Tools answered before the dispatch switch, so they need the argument check
+ * applied where they are answered rather than where everything else is.
+ */
+const DIRECT_ANSWER_TOOLS: ReadonlySet<string> = new Set([
+  'expand',
+  'waste_audit',
+  'cache_audit',
+  'model_routing',
+  'token_audit',
+  'install_doctor',
+  'fleet_audit',
+]);
+
 // Define tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   mcpEvidence.toolsListed(ADVERTISED_TOOL_DEFINITIONS.length);
@@ -937,46 +476,156 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
+/**
+ * A TOOL THAT ALREADY SPEAKS TEXT MUST NOT BE ENCODED TWICE.
+ *
+ * Twenty-six tools hand back a string rather than an object: twelve return
+ * JSON they serialised themselves, fourteen return a human-readable report.
+ * Every one of them was then passed to JSON.stringify here, which wrapped the
+ * whole thing in quotes and escaped it -- so smart_env's payload arrived as
+ * "{\n  \"success\": true,\n ...", a JSON document encoded as a JSON string.
+ * A caller had to parse it twice, every newline cost two characters instead of
+ * one, and every quote cost two. That is why the compact-wire change moved
+ * those tools not at all: their inflation was a layer underneath it.
+ *
+ * A string is already the text of the result, so it is sent as-is. Anything
+ * else is serialised once, compactly.
+ */
+function toResultText(result: unknown): string {
+  if (typeof result === 'string') {
+    return result;
+  }
+  return JSON.stringify(result);
+}
+
+/**
+ * THE ONE PLACE A TOOL RESULT BECOMES A RESPONSE.
+ *
+ * Eighty-one dispatch cases each built this same block by hand, which is why
+ * there was nowhere to put a step that applies to all of them. The step is
+ * lifting what a tool declared about its own before: a count on
+ * `DECLARED_BASELINE_KEY`, or -- better, where the files exist -- the paths it
+ * resolved on `RESOLVED_INPUT_KEY`. Either is taken off here, before the text
+ * is serialised, so neither is ever part of what the caller pays for, and
+ * carried the rest of the way in `_meta`, where the analytics recorder reads it.
+ *
+ * A DECLARATION IS NOT A SAVING. It names a before and carries no arithmetic,
+ * because the after is measured once, at the wire, by the party that holds it --
+ * and in the resolved-paths case the before is measured there too.
+ */
+function textResult(
+  result: unknown,
+  // The arguments as the caller sent them, and the tool that was called.
+  // Both REQUIRED, not optional, so the compiler proves every one of the
+  // eighty-one dispatch cases passes them: a case that forgot would
+  // silently stop removing the path it echoes and the options it restates.
+  args: unknown,
+  tool: string
+): {
+  content: Array<{ type: string; text: string }>;
+  _meta?: Record<string, unknown>;
+} {
+  const { payload, declaration, resolved } = liftDeclarations(result);
+  // WHAT THE CALLER ALREADY HOLDS DOES NOT TRAVEL BACK: a success flag on a
+  // reply that is not an error, this process own cache bookkeeping, and the
+  // path the caller themselves named. 347 tokens across the benched cases,
+  // and a quarter of the smallest reply. The rule, and the boundary that
+  // keeps it off the caller own parsed content, are in ./restated.ts.
+  //
+  // It happens HERE, before serialisation, because here the payload is still
+  // an object. One step after this it is a string, and editing an answer by
+  // pattern inside prose is how a tool starts corrupting what it reports.
+  // WHAT THE CALLER ALREADY HOLDS DOES NOT TRAVEL BACK: a success flag on a
+  // reply that is not an error, this process' own cache bookkeeping, and the
+  // path the caller themselves named. 347 tokens across the benched cases, and
+  // a quarter of the smallest reply. The rule, and the boundary that keeps it
+  // off the caller's own parsed content, are in ./restated.ts.
+  //
+  // It happens HERE, before serialisation, because here the payload is still an
+  // object. One step after this it is a string, and editing an answer by pattern
+  // inside prose is how a tool starts corrupting what it reports.
+  const sent = withoutRestated(
+    payload,
+    args,
+    DECLARED_DEFAULTS.get(tool) ?? NO_DECLARED_DEFAULTS
+  );
+  const content = [{ type: 'text', text: toResultText(sent) }];
+  if (!declaration && !resolved) return { content };
+  return {
+    content,
+    _meta: {
+      tokenOptimizer: {
+        ...(declaration ? { displacedBaseline: declaration } : {}),
+        ...(resolved ? { resolvedInputFiles: resolved } : {}),
+      },
+    },
+  };
+}
+
+/**
+ * Both argument checks plus zod validation, as ONE step.
+ *
+ * It is a function rather than a block inside handleToolCall because seven
+ * tools never reach handleToolCall: expand, waste_audit, cache_audit,
+ * model_routing, token_audit, install_doctor and fleet_audit are answered
+ * earlier in this file, and so were the seven that had no schema entry at all.
+ * Having the checks in one named place is what lets that path run them too.
+ */
+type ArgumentCheck =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | { readonly ok: true; readonly args: any }
+  | {
+      readonly ok: false;
+      readonly response: {
+        content: Array<{ type: string; text: string }>;
+        isError: boolean;
+      };
+    };
+
+function checkToolArguments(name: string, raw: unknown): ArgumentCheck {
+  // A field the published schema calls required must actually be required.
+  assertRequiredFields(name, raw);
+
+  // ...and a field it does NOT publish must be refused rather than dropped,
+  // which is what the passthrough schemas were doing to every typo.
+  assertKnownFields(name, raw);
+
+  try {
+    return { ok: true, args: validateToolArgs(name, raw || {}) };
+  } catch (validationError) {
+    return {
+      ok: false,
+      response: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              error:
+                validationError instanceof Error
+                  ? validationError.message
+                  : String(validationError),
+            }),
+          },
+        ],
+        isError: true,
+      },
+    };
+  }
+}
+
 // Handle tool calls
 async function handleToolCall(request: {
   params: { name: string; arguments?: unknown };
 }) {
   const { name } = request.params;
 
-  // Validate tool arguments using Zod schemas. The validated (and, for tightened
-  // schemas, sanitized) result REPLACES the raw args so every downstream tool
-  // case operates on validated input — closing the prior gap where the handler
+  // The validated result REPLACES the raw args so every downstream tool case
+  // operates on validated input — closing the prior gap where the handler
   // computed `validatedArgs` but then routed the unvalidated raw `args`.
+  const checked = checkToolArguments(name, request.params.arguments);
+  if (!checked.ok) return checked.response;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let args: any = request.params.arguments;
-
-  // A field the published schema calls required must actually be required.
-  // 43 tools share the permissive GenericToolOptionsSchema, so without this
-  // their `required` arrays were documentation only.
-  assertRequiredFields(name, args);
-
-  // ...and a field it does NOT publish must be refused rather than dropped,
-  // which is what the passthrough schemas were doing to every typo.
-  assertKnownFields(name, args);
-
-  try {
-    args = validateToolArgs(name, args || {});
-  } catch (validationError) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            error:
-              validationError instanceof Error
-                ? validationError.message
-                : String(validationError),
-          }),
-        },
-      ],
-      isError: true,
-    };
-  }
+  let args: any = checked.args;
 
   try {
     switch (name) {
@@ -1000,23 +649,19 @@ async function handleToolCall(request: {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: true,
-                    key,
-                    originalTokens: originalCount.tokens,
-                    compressedTokens: originalCount.tokens,
-                    tokensSaved: 0,
-                    percentSaved: 0,
-                    originalSize,
-                    compressedSize: originalSize,
-                    cached: true,
-                    compressionSkipped: true,
-                    reason: `File too small (${originalSize} bytes < ${COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD} bytes threshold)`,
-                  },
-                  null,
-                  2
-                ),
+                text: JSON.stringify({
+                  success: true,
+                  key,
+                  originalTokens: originalCount.tokens,
+                  compressedTokens: originalCount.tokens,
+                  tokensSaved: 0,
+                  percentSaved: 0,
+                  originalSize,
+                  compressedSize: originalSize,
+                  cached: true,
+                  compressionSkipped: true,
+                  reason: `File too small (${originalSize} bytes < ${COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD} bytes threshold)`,
+                }),
               },
             ],
           };
@@ -1041,23 +686,19 @@ async function handleToolCall(request: {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: true,
-                    key,
-                    originalTokens: originalCount.tokens,
-                    compressedTokens: originalCount.tokens,
-                    tokensSaved: 0,
-                    percentSaved: 0,
-                    originalSize,
-                    compressedSize: originalSize,
-                    cached: true,
-                    compressionSkipped: true,
-                    reason: `Compression would increase tokens (${originalCount.tokens} → ${compressedCount.tokens})`,
-                  },
-                  null,
-                  2
-                ),
+                text: JSON.stringify({
+                  success: true,
+                  key,
+                  originalTokens: originalCount.tokens,
+                  compressedTokens: originalCount.tokens,
+                  tokensSaved: 0,
+                  percentSaved: 0,
+                  originalSize,
+                  compressedSize: originalSize,
+                  cached: true,
+                  compressionSkipped: true,
+                  reason: `Compression would increase tokens (${originalCount.tokens} → ${compressedCount.tokens})`,
+                }),
               },
             ],
           };
@@ -1084,22 +725,18 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
-                  success: true,
-                  key,
-                  originalTokens: originalCount.tokens,
-                  compressedTokens: compressedCount.tokens,
-                  tokensSaved: originalCount.tokens - compressedCount.tokens,
-                  percentSaved: compressionResult.percentSaved,
-                  originalSize: compressionResult.originalSize,
-                  compressedSize: compressionResult.compressedSize,
-                  cached: true,
-                  compressionUsed: true,
-                },
-                null,
-                2
-              ),
+              text: JSON.stringify({
+                success: true,
+                key,
+                originalTokens: originalCount.tokens,
+                compressedTokens: compressedCount.tokens,
+                tokensSaved: originalCount.tokens - compressedCount.tokens,
+                percentSaved: compressionResult.percentSaved,
+                originalSize: compressionResult.originalSize,
+                compressedSize: compressionResult.compressedSize,
+                cached: true,
+                compressionUsed: true,
+              }),
             },
           ],
         };
@@ -1184,11 +821,10 @@ async function handleToolCall(request: {
               },
               {
                 type: 'text',
-                text: JSON.stringify(
-                  { ...result, model: modelName ?? counter.model },
-                  null,
-                  2
-                ),
+                text: JSON.stringify({
+                  ...result,
+                  model: modelName ?? counter.model,
+                }),
               },
             ],
           };
@@ -1219,22 +855,18 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
-                  ...result,
-                  originalTokens,
-                  compressedTokens,
-                  increasesTokens,
-                  ...(increasesTokens
-                    ? {
-                        warning:
-                          'Base64 output has MORE LLM tokens than the input. This tool reduces BYTES for at-rest storage/caching; do NOT inject the result into a model context expecting token savings (use optimize_text with a cache key for that).',
-                      }
-                    : {}),
-                },
-                null,
-                2
-              ),
+              text: JSON.stringify({
+                ...result,
+                originalTokens,
+                compressedTokens,
+                increasesTokens,
+                ...(increasesTokens
+                  ? {
+                      warning:
+                        'Base64 output has MORE LLM tokens than the input. This tool reduces BYTES for at-rest storage/caching; do NOT inject the result into a model context expecting token savings (use optimize_text with a cache key for that).',
+                    }
+                  : {}),
+              }),
             },
           ],
         };
@@ -1248,7 +880,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ text }, null, 2),
+              text: JSON.stringify({ text }),
             },
           ],
         };
@@ -1261,7 +893,7 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(stats, null, 2),
+              text: JSON.stringify(stats),
             },
           ],
         };
@@ -1329,33 +961,29 @@ async function handleToolCall(request: {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
-                  tokens: {
-                    current: tokenResult.tokens,
-                    afterCompression: compressedTokens.tokens,
-                    saved: tokenResult.tokens - compressedTokens.tokens,
-                    percentSaved:
-                      ((tokenResult.tokens - compressedTokens.tokens) /
-                        tokenResult.tokens) *
-                      100,
-                  },
-                  size: {
-                    current: compStats.uncompressed,
-                    compressed: compStats.compressed,
-                    ratio: compStats.ratio,
-                    percentSaved: compStats.percentSaved,
-                  },
-                  recommendations: {
-                    shouldCompress: compStats.recommended,
-                    reason: compStats.recommended
-                      ? 'Compression will provide significant token savings'
-                      : 'Text is too small or compression benefit is minimal',
-                  },
+              text: JSON.stringify({
+                tokens: {
+                  current: tokenResult.tokens,
+                  afterCompression: compressedTokens.tokens,
+                  saved: tokenResult.tokens - compressedTokens.tokens,
+                  percentSaved:
+                    ((tokenResult.tokens - compressedTokens.tokens) /
+                      tokenResult.tokens) *
+                    100,
                 },
-                null,
-                2
-              ),
+                size: {
+                  current: compStats.uncompressed,
+                  compressed: compStats.compressed,
+                  ratio: compStats.ratio,
+                  percentSaved: compStats.percentSaved,
+                },
+                recommendations: {
+                  shouldCompress: compStats.recommended,
+                  reason: compStats.recommended
+                    ? 'Compression will provide significant token savings'
+                    : 'Text is too small or compression benefit is minimal',
+                },
+              }),
             },
           ],
         };
@@ -1460,47 +1088,43 @@ async function handleToolCall(request: {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: true,
-                    sessionId: targetSessionId,
-                    sessionInfo: {
-                      // Taken from the log itself rather than from
-                      // current-session.txt, which only ever describes the
-                      // session running right now and says nothing about a
-                      // past one the caller asked about by id.
-                      startTime: operations[0]?.timestamp ?? '',
-                      lastActivity:
-                        operations[operations.length - 1]?.timestamp ?? '',
-                      totalOperations: operations.length,
-                    },
-                    tokens: {
-                      total: totalTokens,
-                      systemReminders: systemReminderTokens,
-                      tools: toolTokens,
-                      breakdown: {
-                        systemReminders: {
-                          tokens: systemReminderTokens,
-                          percent: systemReminderPercent,
-                        },
-                        tools: {
-                          tokens: toolTokens,
-                          percent: toolPercent,
-                        },
+                text: JSON.stringify({
+                  success: true,
+                  sessionId: targetSessionId,
+                  sessionInfo: {
+                    // Taken from the log itself rather than from
+                    // current-session.txt, which only ever describes the
+                    // session running right now and says nothing about a
+                    // past one the caller asked about by id.
+                    startTime: operations[0]?.timestamp ?? '',
+                    lastActivity:
+                      operations[operations.length - 1]?.timestamp ?? '',
+                    totalOperations: operations.length,
+                  },
+                  tokens: {
+                    total: totalTokens,
+                    systemReminders: systemReminderTokens,
+                    tools: toolTokens,
+                    breakdown: {
+                      systemReminders: {
+                        tokens: systemReminderTokens,
+                        percent: systemReminderPercent,
+                      },
+                      tools: {
+                        tokens: toolTokens,
+                        percent: toolPercent,
                       },
                     },
-                    operations: {
-                      total: operations.length,
-                      byTool: toolBreakdown,
-                    },
-                    tracking: {
-                      method: 'tiktoken-based (accurate)',
-                      note: 'System reminders tracked with tiktoken via Node.js helper, tool costs use fixed estimates',
-                    },
                   },
-                  null,
-                  2
-                ),
+                  operations: {
+                    total: operations.length,
+                    byTool: toolBreakdown,
+                  },
+                  tracking: {
+                    method: 'tiktoken-based (accurate)',
+                    note: 'System reminders tracked with tiktoken via Node.js helper, tool costs use fixed estimates',
+                  },
+                }),
               },
             ],
           };
@@ -1698,26 +1322,22 @@ async function handleToolCall(request: {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: true,
-                    sessionId: targetSessionId,
-                    operationsAnalyzed: operations.length,
-                    operationsCompressed,
-                    tokens: {
-                      before: originalTokens,
-                      after: compressedTokens,
-                      saved: tokensSaved,
-                      percentSaved: percentSaved,
-                    },
-                    security: {
-                      pathsRejected: debugInfo.securityRejected,
-                      secureBaseDir: secureBaseDir,
-                    },
+                text: JSON.stringify({
+                  success: true,
+                  sessionId: targetSessionId,
+                  operationsAnalyzed: operations.length,
+                  operationsCompressed,
+                  tokens: {
+                    before: originalTokens,
+                    after: compressedTokens,
+                    saved: tokensSaved,
+                    percentSaved: percentSaved,
                   },
-                  null,
-                  2
-                ),
+                  security: {
+                    pathsRejected: debugInfo.securityRejected,
+                    secureBaseDir: secureBaseDir,
+                  },
+                }),
               },
             ],
           };
@@ -1818,28 +1438,14 @@ async function handleToolCall(request: {
         const options = args as any;
         const result = await predictiveCache.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'cache_warmup': {
         const options = args as any;
         const result = await cacheWarmup.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       // Code analysis tools
@@ -1850,74 +1456,32 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_dependencies': {
         const result = await runSmartDependencies(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_exports': {
         const result = await runSmartExports(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_imports': {
         const result = await runSmartImports(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_refactor': {
         const result = await runSmartRefactor(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_security': {
         const result = await runSmartSecurity(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_symbols': {
@@ -1927,26 +1491,12 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_typescript': {
         const result = await runSmartTypescript(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_config_read': {
@@ -1956,62 +1506,27 @@ async function handleToolCall(request: {
         // what the schema documents got "Config file not found: undefined".
         const { path: configPath, ...configOptions } = args as any;
         const result = await runSmartConfigRead(configPath, configOptions);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_env': {
         const result = await runSmartEnv(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_package_json': {
         const result = await runSmartPackageJson(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_tsconfig': {
         const result = await runSmartTsconfig(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_pretty': {
         const result = await runSmartPretty(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_process': {
@@ -2021,14 +1536,7 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_service': {
@@ -2038,41 +1546,20 @@ async function handleToolCall(request: {
           tokenCounter,
           metrics
         );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_ast_grep': {
         const options = args as any;
         const result = await smartAstGrep.grep(options.pattern, options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'cache_analytics': {
         const options = args as any;
         const result = await cacheAnalytics.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'cache_benchmark': {
@@ -2084,473 +1571,228 @@ async function handleToolCall(request: {
           metrics
         );
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'cache_compression': {
         const options = args as any;
         const result = await runCacheCompression(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'cache_invalidation': {
         const options = args as any;
         const result = await cacheInvalidation.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'cache_optimizer': {
         const options = args as any;
         const result = await cacheOptimizer.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'cache_partition': {
         const options = args as any;
         const result = await cachePartition.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'cache_replication': {
         const options = args as any;
         const result = await cacheReplication.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_cache': {
         const options = args as any;
         const result = await smartCache.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_sql': {
         const options = args as any;
         const result = await smartSql.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_schema': {
         const options = args as any;
         const result = await smartSchema.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_api_fetch': {
         const options = args as any;
         const result = await smartApiFetch.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_cache_api': {
         const options = args as any;
         const result = await smartCacheApi.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_database': {
         const options = args as any;
         const result = await smartDatabase.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_graphql': {
         const options = args as any;
         const result = await smartGraphQL.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_migration': {
         const options = args as any;
         const result = await smartMigration.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_orm': {
         const options = args as any;
         const result = await smartOrm.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_rest': {
         const options = args as any;
         const result = await smartRest.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_websocket': {
         const options = args as any;
         const result = await smartWebSocket.run(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_processes': {
         const options = args as any;
         const result = await smartProcesses.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_network': {
         const options = args as any;
         const result = await smartNetwork.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_logs': {
         const options = args as any;
         const result = await smartLogs.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_lint': {
         const options = args as any;
         const result = await smartLint.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_install': {
         const options = args as any;
         const result = await smartInstall.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_docker': {
         const options = args as any;
         const result = await smartDocker.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_build': {
         const options = args as any;
         const result = await smartBuild.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_system_metrics': {
         const options = args as any;
         const result = await smartSystemMetrics.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_test': {
         const options = args as any;
         const result = await smartTest.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_typecheck': {
         const options = args as any;
         const result = await smartTypeCheck.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_cron': {
         const options = args as any;
         const result = await smartCron.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_user': {
         const options = args as any;
         const result = await smartUser.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_diff': {
         const options = args as SmartDiffOptions;
         const result = await smartDiff.diff(options);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_branch': {
         const options = args as SmartBranchOptions;
         const result = await smartBranch.branch(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_merge': {
         const options = args as SmartMergeOptions;
         const result = await smartMerge.merge(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_status': {
         const options = args as SmartStatusOptions;
         const result = await smartStatus.status(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_log': {
         const options = args as SmartLogOptions;
         const result = await smartLog.log(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_read': {
         const { path, ...options } = args as any;
         const result = await memoizedSmartRead(path, options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_write': {
@@ -2560,41 +1802,20 @@ async function handleToolCall(request: {
         // entry so the next smart_read/grep/glob reflects the new state
         // instead of waiting for TTL expiry.
         memoRegistry.clearAll();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_edit': {
         const { path, operations, ...options } = args as any;
         const result = await runSmartEdit(path, operations, options);
         memoRegistry.clearAll();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart_glob': {
         const { pattern, ...options } = args as any;
         const result = await memoizedSmartGlob(pattern, options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'wiki_write': {
@@ -2602,18 +1823,14 @@ async function handleToolCall(request: {
         // other tool so it carries a schema and a dispatch case, which the
         // reachability suite requires of everything advertised.
         const result = await wikiWrite(args as any);
-        return {
-          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-        };
+        return textResult(result, args, name);
       }
       case 'wiki_read': {
         // The read counterpart to wiki_write. Until this existed the graph had a
         // deliberate write path and no deliberate read path, so a subagent -- which
         // never receives the SessionStart briefing -- could not reach it at all.
         const result = await wikiRead(args as any);
-        return {
-          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-        };
+        return textResult(result, args, name);
       }
       case 'wiki_query': {
         // The general read path: one finding by key, a ranked search over claims,
@@ -2624,9 +1841,7 @@ async function handleToolCall(request: {
         // to call this for detail since injection landed, so a missing dispatch
         // case here is the difference between an escape hatch and a dead end.
         const result = await wikiQuery(args as WikiQueryOptions);
-        return {
-          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-        };
+        return textResult(result, args, name);
       }
       case 'context_page':
       case 'context_receipt_verify':
@@ -2634,214 +1849,123 @@ async function handleToolCall(request: {
       case 'checkpoint_handoff':
       case 'outcome_report': {
         const result = await runUcrTool(name, args);
-        return {
-          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-        };
+        return textResult(result, args, name);
       }
       case 'smart_grep': {
         const { pattern, ...options } = args as any;
         const result = await memoizedSmartGrep(pattern, options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'optimization_storage': {
         const result = optimizationStorage.run(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'context_delta': {
         const result = contextDelta.run(args as any);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'alert_manager': {
         const options = args as any;
         const result = await alertManager.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'metric_collector': {
         const options = args as any;
         const result = await metricCollectorTool.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'monitoring_integration': {
         const options = args as any;
         const result = await monitoringIntegration.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'custom_widget': {
         const options = args as any;
         const result = await customWidget.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'data_visualizer': {
         const options = args as any;
         const result = await dataVisualizer.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'health_monitor': {
         const options = args as any;
         const result = await healthMonitor.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'log_dashboard': {
         const options = args as any;
         const result = await logDashboard.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'intelligent-assistant': {
         const options = args as any;
         const result = await runIntelligentAssistant(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'natural-language-query': {
         const options = args as any;
         const result = await runNaturalLanguageQuery(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'pattern-recognition': {
         const options = args as any;
         const result = await runPatternRecognition(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'predictive-analytics': {
         const options = args as any;
         const result = await runPredictiveAnalytics(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'recommendation-engine': {
         const options = args as any;
         const result = await runRecommendationEngine(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
       }
 
       case 'smart-summarization': {
         const options = args as any;
         const result = await runSmartSummarization(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return textResult(result, args, name);
+      }
+      case 'anomaly_explainer': {
+        const options = args as unknown as AnomalyExplainerOptions;
+        const result = await runAnomalyExplainer(options);
+        return textResult(result, args, name);
+      }
+
+      case 'knowledge_graph': {
+        const options = args as unknown as KnowledgeGraphOptions;
+        const result = await knowledgeGraph.run(options);
+        return textResult(result, args, name);
+      }
+
+      case 'sentiment_analysis': {
+        const options = args as unknown as SentimentAnalysisOptions;
+        const result = await sentimentAnalysis.run(options);
+        return textResult(result, args, name);
+      }
+
+      case 'smart_workflow': {
+        const request = args as unknown as SmartWorkflowRequest;
+        const result = await smartWorkflow.run(request);
+        return textResult(result, args, name);
       }
 
       case 'get_hook_analytics': {
@@ -2905,15 +2029,35 @@ async function observeMcpToolCall<T>(
 
   try {
     const result = await operation();
-    mcpEvidence.toolOutcome(
-      toolName,
-      Date.now() - started,
-      !(result as { isError?: boolean } | null)?.isError
-    );
+    const ok = !(result as { isError?: boolean } | null)?.isError;
+    mcpEvidence.toolOutcome(toolName, Date.now() - started, ok);
+    countToolCall(toolName, Date.now() - started, ok);
     return result;
   } catch (error) {
     mcpEvidence.toolOutcome(toolName, Date.now() - started, false);
+    countToolCall(toolName, Date.now() - started, false);
     throw error;
+  }
+}
+
+/**
+ * Feed one tool call to the opt-in rollup.
+ *
+ * THE ONE PLACE THE MCP SURFACE IS COUNTED, and it is here rather than in the
+ * request handler because a tool that throws is exactly the tool worth knowing
+ * about, and the handler's own body is what threw. Whether the name was
+ * advertised is passed through rather than re-derived inside the telemetry
+ * module: the catalog is this file's fact, and an unadvertised name -- which a
+ * client is free to send -- must never mint a property key.
+ *
+ * Instrumentation may not break a tool call. `record` already swallows its own
+ * write failures, so this catch is for the unforeseen rest of the path.
+ */
+function countToolCall(toolName: string, elapsedMs: number, ok: boolean): void {
+  try {
+    noteToolCall(toolName, elapsedMs, ok, ADVERTISED_TOOL_NAMES.has(toolName));
+  } catch {
+    /* Optional telemetry cannot fail a tool call. */
   }
 }
 
@@ -2936,13 +2080,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
       };
     }
 
+    /*
+     * The seven tools answered below never reach handleToolCall, which is where
+     * arguments were checked -- so for years they took `request.params
+     * .arguments as any` unvalidated, and none of them had a schema entry
+     * either. Both halves are fixed: every advertised tool now has a derived
+     * schema, and this path runs the same check the switch does.
+     */
+    let directArgs: unknown = request.params.arguments;
+    if (DIRECT_ANSWER_TOOLS.has(request.params.name)) {
+      const checked = checkToolArguments(
+        request.params.name,
+        request.params.arguments
+      );
+      if (!checked.ok) return checked.response;
+      directArgs = checked.args;
+    }
+
     // Following a pointer is handled here rather than in the tool switch, because
     // it is not an operation on the codebase -- it is an operation on what we
     // already said about it.
     if (request.params.name === 'expand') {
       return recordDirectToolResult(
         request.params.name,
-        () => expandRef(request.params.arguments as any),
+        () => expandRef(directArgs as any),
         operationId
       );
     }
@@ -2952,7 +2113,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     if (request.params.name === 'waste_audit') {
       return recordDirectToolResult(
         request.params.name,
-        () => wasteAudit(request.params.arguments as any),
+        () => wasteAudit(directArgs as any),
         operationId
       );
     }
@@ -2968,7 +2129,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     if (request.params.name === 'model_routing') {
       return recordDirectToolResult(
         request.params.name,
-        () => modelRouting(request.params.arguments as any),
+        () => modelRouting(directArgs as any),
         operationId
       );
     }
@@ -2976,7 +2137,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     if (request.params.name === 'token_audit') {
       return recordDirectToolResult(
         request.params.name,
-        () => tokenAudit(request.params.arguments as any),
+        () => tokenAudit(directArgs as any),
         operationId
       );
     }
@@ -2986,7 +2147,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
         request.params.name,
         () =>
           installDoctor({
-            ...(request.params.arguments as any),
+            ...(directArgs as any),
             clientName: server.getClientVersion()?.name,
             // A runtime fact no file inspection can reach: this process may be
             // running on an in-memory cache because the real one would not open.
@@ -3000,13 +2161,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     if (request.params.name === 'fleet_audit') {
       return recordDirectToolResult(
         request.params.name,
-        () => fleetAudit(request.params.arguments as any),
+        () => fleetAudit(directArgs as any),
         operationId
       );
     }
 
     const started = Date.now();
-    const result = await handleToolCall(request);
+    const result = flagPayloadFailure(await handleToolCall(request));
     const disclosed = (await discloseResult(
       request.params.name,
       request.params.arguments as Record<string, unknown> | undefined,
@@ -3020,8 +2181,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
       analyticsManager,
       request.params.name,
       disclosed,
-      { ...mcpEvidence.analyticsAttribution(), operationId },
-      result
+      { ...(await mcpEvidence.analyticsAttribution()), operationId },
+      result,
+      // The arguments as the caller sent them, so the recorder can count the
+      // input this call stood in for instead of taking the tool's word for it.
+      request.params.arguments
     );
     // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
     // per-tool is what keeps it a single policy instead of ninety. The elapsed
@@ -3053,6 +2217,9 @@ async function cleanup() {
   stopRoutingMaintenance?.();
   mcpEvidence.shutdown();
   await runCleanupOperations([
+    // Before anything else closes: a window's worth of counts is lost on a kill,
+    // and a clean exit is the one chance to narrow that to zero.
+    { fn: () => void flushToolRollup(), name: 'flushing tool rollup' },
     {
       fn: async () => await analyticsManager.close(),
       name: 'flushing analytics',
@@ -3094,6 +2261,33 @@ async function main() {
       /* Optional recovery cannot fail MCP startup. */
     });
   startManagedInstallRepair();
+
+  // Both of these refuse on their own when the policy or the opt-in says no, and
+  // the imports are dynamic to keep them off the cold handshake path.
+  void (async () => {
+    // THE HOOKS CANNOT REPORT FOR THEMSELVES, so their ledger is read here. A
+    // hook is a process per tool call, so it holds no window, and it imports
+    // nothing from dist/ -- so it cannot reach the consent policy either. This
+    // reduces its log to counts and records one event. It runs BEFORE the flush
+    // below so the snapshot leaves on this boot instead of waiting for the next.
+    try {
+      const { flushHookSnapshot } = await import('../telemetry/hook-rollup.js');
+      await flushHookSnapshot();
+    } catch {
+      /* Optional telemetry cannot fail MCP startup. */
+    }
+    // WHAT WAS RECORDED EARLIER GOES NOW, NOT AT EXIT. A flush on shutdown has a
+    // bounded window and then exits unconditionally, so the request it starts is
+    // usually cut off mid-flight -- which is indistinguishable, from here, from a
+    // receiver that is down. Sending at boot gives the request the whole session;
+    // the cost is that the last session's events arrive one session late.
+    try {
+      const { flushBeacon } = await import('../telemetry/beacon.js');
+      await flushBeacon();
+    } catch {
+      /* Optional telemetry cannot fail MCP startup. */
+    }
+  })();
 
   // All termination paths (SIGINT/SIGTERM/SIGHUP + stdin end/close/error) run
   // through one guarded shutdown. See ./lifecycle.ts for the full rationale

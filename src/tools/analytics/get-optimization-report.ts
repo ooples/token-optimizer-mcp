@@ -15,7 +15,7 @@ import {
   isVerifiedSavingsEntry,
   verifiedTransportDelta,
 } from '../../analytics/savings-classification.js';
-import { priceTokenUsage } from '../../analytics/provider-pricing.js';
+import { priceVerifiedDelta } from '../../savings/windows.js';
 import type { AnalyticsEntry } from '../../analytics/analytics-types.js';
 import path from 'path';
 import { dirname } from 'path';
@@ -32,11 +32,13 @@ export const GET_OPTIMIZATION_REPORT_TOOL_DEFINITION = {
     properties: {
       startDate: {
         type: 'string',
+        pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z$',
         description:
           'Optional start date filter in ISO 8601 format (e.g., 2025-01-01T00:00:00Z)',
       },
       endDate: {
         type: 'string',
+        pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z$',
         description:
           'Optional end date filter in ISO 8601 format (e.g., 2025-12-31T23:59:59Z)',
       },
@@ -46,7 +48,8 @@ export const GET_OPTIMIZATION_REPORT_TOOL_DEFINITION = {
           'Optional session ID to scope the report to a single session.',
       },
       topN: {
-        type: 'number',
+        type: 'integer',
+        minimum: 1,
         description:
           'Limit each breakdown to the top N rows by tokens saved (default: 10).',
       },
@@ -74,23 +77,13 @@ function directPrice(entries: AnalyticsEntry[]): {
     (entry) => verifiedTransportDelta(entry) !== 0
   );
   for (const entry of eligible) {
-    const tokens = verifiedTransportDelta(entry);
-    const metadata = entry.metadata || {};
-    const priced = priceTokenUsage({
-      client: entry.client || String(metadata.client || ''),
-      provider: String(metadata.provider || ''),
-      route: String(metadata.pricingRoute || metadata.route || ''),
-      model: entry.model || String(metadata.model || ''),
-      timestamp: entry.timestamp,
-      usage: { uncachedInputTokens: Math.abs(tokens) },
-    });
-    if (
-      !priced.available ||
-      priced.currency !== 'USD' ||
-      priced.amount === null
-    )
-      continue;
-    amount += Math.sign(tokens) * priced.amount;
+    // ONE COPY OF THE PRICING RULE. This used to be a second inline
+    // implementation of the same definition `token-optimizer-savings` applies,
+    // and two copies of a pricing rule drift -- the one that drifts being
+    // always the one nobody is looking at.
+    const priced = priceVerifiedDelta(entry);
+    if (priced === null) continue;
+    amount += priced;
     pricedOperations += 1;
   }
   return {

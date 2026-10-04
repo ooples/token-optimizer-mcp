@@ -138,6 +138,7 @@ export const UCR_TOOL_DEFINITIONS = [
       properties: {
         deliveryEventId: {
           type: 'string',
+          minLength: 1,
           description: 'The delivery receipt ID supplied by the host adapter.',
         },
       },
@@ -416,7 +417,19 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
         return receipt;
       }
     );
-    if (args.operation === 'verify-evidence') {
+    /*
+     * The published schema declares `operation` with `default: 'record'` and
+     * does not require it -- only its verify-evidence branch does -- so an
+     * argument list that omits the key is valid and means record. The
+     * validator deliberately never materialises a JSON Schema default (see
+     * `schema-from-definition.ts`), so resolving it here is what makes this
+     * dispatch agree with what the schema publishes. Reading `args.operation`
+     * raw rejected two of this package's own callers with
+     * "unknown operation undefined" -- a refusal for a payload the published
+     * schema accepts.
+     */
+    const operation = args.operation ?? 'record';
+    if (operation === 'verify-evidence') {
       return {
         valid: true,
         receipts: verifiedReceipts.map((receipt: any) => {
@@ -426,6 +439,18 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
         verifier: 'external-deterministic-grader-hmac-sha256',
         persisted: false,
       };
+    }
+    /*
+     * The record path is reached by falling past verify-evidence, so a value
+     * the schema publishes but nothing here handles would have been recorded
+     * as a `record` silently. Naming the operation makes the dispatch match
+     * the published enum member for member, which is what the published-
+     * operations check can read.
+     */
+    if (operation !== 'record') {
+      throw new Error(
+        `cognition_record: unknown operation ${String(args.operation)}`
+      );
     }
     if (!args.kind || !args.semanticObject) {
       throw new Error(
@@ -501,6 +526,11 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
         })
       );
       return { created: true, checkpoint };
+    }
+    if (args.operation !== 'restore') {
+      throw new Error(
+        `checkpoint_handoff: unknown operation ${String(args.operation)}`
+      );
     }
     return ucr.restoreCheckpoint(args.checkpoint, args.currentState || {}, {
       consumer: args.consumer || identity().agentId,

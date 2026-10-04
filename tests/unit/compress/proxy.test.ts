@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from '@jest/globals';
+import { describe, it, expect, afterEach, afterAll } from '@jest/globals';
 import { createServer, request as httpRequest, type Server } from 'node:http';
 import {
   bodyLimitFor,
@@ -13,8 +13,25 @@ import {
   keepToolsFromEnv,
   deferToolsEnabled,
 } from '../../../src/proxy/server.js';
+import { netSavingEnabled } from '../../../src/proxy/server.js';
 import { anchorStore } from '../../../src/compress/anchor.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DEFAULT_KEEP_RELEVANT } from '../../../src/compress/tools.js';
+import { variedRows } from './varied-rows.js';
+
+/**
+ * A project root with no graph in it.
+ *
+ * `startProxy` falls back to `process.cwd()` when no root is given, so without
+ * this every test below would load THIS repository's findings and inject them --
+ * and the assertions about how many bytes reach the wire would then depend on how
+ * much the developer's graph happens to hold. That is how the two wire tests came
+ * to pass in CI, where a fresh clone has no graph, and fail on a working machine.
+ */
+const EMPTY_PROJECT = mkdtempSync(join(tmpdir(), 'proxy-no-graph-'));
 
 /**
  * The proxy, against a real upstream rather than a mock.
@@ -61,6 +78,11 @@ afterEach(async () => {
   spilled = [];
 });
 
+afterAll(() => {
+  // The empty project directory is this suite's, so it goes when the suite does.
+  rmSync(EMPTY_PROJECT, { recursive: true, force: true });
+});
+
 /** A stand-in provider that records what it was sent. */
 function upstream(
   handler?: (body: string) => {
@@ -103,7 +125,11 @@ it('forwards Anthropic tool-search references and beta headers unchanged', async
   const reference = { type: 'tool_reference', tool_name: 'mcp__wiki_query' };
   const response = JSON.stringify({ content: [reference] });
   const provider = await upstream(() => ({ body: response }));
-  const proxy = await startProxy({ upstream: provider.url, knowledge: false });
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+  });
   servers.push(proxy.server);
   const payload = {
     tools: [
@@ -186,7 +212,11 @@ describe('compressBody', () => {
     // leave a marker naming a row count and offering no way back -- the
     // dangling reference this whole design exists to avoid. The rows survive,
     // and the lossless half of the work is still done.
-    const payload = rows(80);
+    // VARIED ROWS. `rows(80)` is folded losslessly by the array templater, so
+    // the engine never reaches an elision and never asks the sink -- which
+    // would leave the spill-failure path below unexercised, the exact blind
+    // spot the counter under test exists to close.
+    const payload = JSON.stringify(variedRows(80));
     const body = bodyOf([
       { role: 'user', content: [{ type: 'text', text: payload }] },
     ]);
@@ -206,7 +236,20 @@ describe('compressBody', () => {
     const sent = JSON.parse(out.body.toString('utf8'));
 
     expect(asked).toBeGreaterThan(0);
-    expect(sent.messages[0].content[0].text).toBe(payload);
+    // EVERY ROW SURVIVES, recovered through the decoder rather than by requiring
+    // the text back unchanged. `rows(80)` used to come back byte for byte because
+    // the array templater refused a row holding an object at all; it now encodes
+    // this shape losslessly without any sink, so byte-equality would demand the
+    // old inability rather than the property named above. What must not happen is
+    // an elision against the failed sink -- a marker naming rows with no way back --
+    // and decoding to the original payload is exactly the proof that none was made.
+    // WITH THE KEY THIS CALL MINTED, which is why `compressBody` returns one per
+    // compressed block. Handed none the decoder honours no marker at all and
+    // this assertion would fail for the wrong reason -- on a body that is in
+    // fact perfectly invertible.
+    expect(
+      rehydrate(sent.messages[0].content[0].text, out.stamps[0] ?? null)
+    ).toBe(payload);
   });
 
   // FAIL OPEN, every branch.
@@ -270,7 +313,10 @@ describe('compressBody', () => {
 describe('the proxy on the wire', () => {
   it('forwards the compressed body and returns the upstream response', async () => {
     const { url, seen } = await upstream();
-    const { server, port } = await startProxy({ upstream: url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: url,
+    });
     servers.push(server);
 
     const payload = JSON.stringify({
@@ -293,7 +339,10 @@ describe('the proxy on the wire', () => {
 
   it('forwards credentials verbatim, without storing them', async () => {
     const { url, seen } = await upstream();
-    const { server, port } = await startProxy({ upstream: url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: url,
+    });
     servers.push(server);
 
     await fetch(`http://127.0.0.1:${port}/v1/messages`, {
@@ -320,7 +369,10 @@ describe('the proxy on the wire', () => {
       status: 302,
       headers: { location: 'https://example.test/moved', 'x-trace': 'abc123' },
     }));
-    const { server, port } = await startProxy({ upstream: url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: url,
+    });
     servers.push(server);
 
     const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
@@ -339,6 +391,8 @@ describe('the proxy on the wire', () => {
 
   it('reports an upstream failure instead of hanging', async () => {
     const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      projectRoot: EMPTY_PROJECT,
       upstream: 'http://127.0.0.1:1',
     });
     servers.push(server);
@@ -356,6 +410,8 @@ describe('the proxy on the wire', () => {
     const { url } = await upstream();
     const summaries: unknown[] = [];
     const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      projectRoot: EMPTY_PROJECT,
       upstream: url,
       onSummary: (s) => summaries.push(s),
     });
@@ -382,7 +438,10 @@ describe('the proxy on the wire', () => {
   });
 
   it('binds loopback only', async () => {
-    const { server } = await startProxy({ upstream: 'http://127.0.0.1:1' });
+    const { server } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: 'http://127.0.0.1:1',
+    });
     servers.push(server);
     const address = server.address();
     expect(typeof address === 'object' && address ? address.address : '').toBe(
@@ -415,7 +474,10 @@ describe('the upstream a proxy will talk to', () => {
     // The one place in this file that does NOT fail open. Carrying on would
     // send credentials in cleartext, and doing that quietly is the harm.
     await expect(
-      startProxy({ upstream: 'http://api.example.com' })
+      startProxy({
+        projectRoot: EMPTY_PROJECT,
+        upstream: 'http://api.example.com',
+      })
     ).rejects.toThrow(/refusing to forward credentials/);
   });
 });
@@ -457,7 +519,10 @@ describe('hop-by-hop headers', () => {
     // is rewritten here, so content-length must be set -- and sending both is
     // two conflicting framing headers, which a strict upstream rejects.
     const { url, seen } = await upstream();
-    const { server, port } = await startProxy({ upstream: url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: url,
+    });
     servers.push(server);
 
     await sendChunked(
@@ -509,7 +574,10 @@ describe('the destination is ours to choose', () => {
     // arrive there, and the proxy must say why rather than forward it.
     const attacker = await upstream();
     const provider = await upstream();
-    const { server, port } = await startProxy({ upstream: provider.url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: provider.url,
+    });
     servers.push(server);
 
     await new Promise<void>((resolve, reject) => {
@@ -668,6 +736,8 @@ describe('what the proxy refuses to buffer or forward', () => {
     // is lowered here rather than sending 64MB, which is the same code path.
     const { url } = await upstream();
     const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      projectRoot: EMPTY_PROJECT,
       upstream: url,
       maxBodyBytes: 4096,
     });
@@ -697,6 +767,8 @@ describe('what the proxy refuses to buffer or forward', () => {
     // actually requires: the request got through, and the caller's own content arrived intact.
     const { url, seen } = await upstream();
     const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      projectRoot: EMPTY_PROJECT,
       upstream: url,
       maxBodyBytes: 4096,
     });
@@ -771,7 +843,7 @@ describe('the default upstream is a guess, and guesses are fenced', () => {
     const saved = process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM;
     delete process.env.TOKEN_OPTIMIZER_PROXY_UPSTREAM;
     try {
-      const { server, port } = await startProxy({});
+      const { server, port } = await startProxy({ projectRoot: EMPTY_PROJECT });
       servers.push(server);
 
       const response = await fetch(
@@ -801,7 +873,10 @@ describe('the default upstream is a guess, and guesses are fenced', () => {
     // The fence applies to a GUESS. An operator who named the provider has said which
     // one it is, and every route is then theirs to serve.
     const { url, seen } = await upstream();
-    const { server, port } = await startProxy({ upstream: url });
+    const { server, port } = await startProxy({
+      projectRoot: EMPTY_PROJECT,
+      upstream: url,
+    });
     servers.push(server);
 
     const response = await fetch(`http://127.0.0.1:${port}/chat/completions`, {
@@ -842,5 +917,123 @@ describe('tool deferral defaults', () => {
     for (const v of ['1', 'true', 'yes', 'on', 'anything']) {
       expect(enabled(v)).toBe(true);
     }
+  });
+});
+
+describe('the net-saving switch', () => {
+  // OFF BY DEFAULT ON PURPOSE. The cached-knowledge block is a deliberate
+  // purchase -- bytes on this request against tool calls on the next few -- so
+  // turning it into a hard no-growth rule would change what the proxy does for
+  // everyone. It is a switch so that anyone measuring us can hold it either way.
+  const PRIOR_NET = process.env.TOKEN_OPTIMIZER_PROXY_NET_SAVING;
+  afterEach(() => {
+    if (PRIOR_NET === undefined)
+      delete process.env.TOKEN_OPTIMIZER_PROXY_NET_SAVING;
+    else process.env.TOKEN_OPTIMIZER_PROXY_NET_SAVING = PRIOR_NET;
+  });
+
+  it('is off when unset, and off for anything that is not a yes', () => {
+    expect(netSavingEnabled({})).toBe(false);
+    for (const raw of ['', '0', 'off', 'false', 'no', 'maybe', 'ON1'])
+      expect(netSavingEnabled({ TOKEN_OPTIMIZER_PROXY_NET_SAVING: raw })).toBe(
+        false
+      );
+  });
+
+  it('reads the spellings of yes, whatever the case or padding', () => {
+    for (const raw of ['1', 'on', 'true', 'yes', ' YES ', 'On'])
+      expect(netSavingEnabled({ TOKEN_OPTIMIZER_PROXY_NET_SAVING: raw })).toBe(
+        true
+      );
+  });
+
+  it('never hands upstream more bytes than it was given, once armed', () => {
+    // A payload that compresses badly is where the block can overshoot, so the
+    // guard is checked on one: prose with no repeated structure to template.
+    const prose = Array.from(
+      { length: 40 },
+      (_, i) =>
+        `Paragraph ${i} of unrelated prose with no repeated shape at all, ${i * 7}.`
+    ).join(' ');
+    const body = bodyOf([
+      { role: 'user', content: [{ type: 'text', text: prose }] },
+    ]);
+    const findings = Array.from({ length: 6 }, (_, i) => ({
+      claim:
+        `established conclusion ${i} worth carrying forward, ` +
+        'x'.repeat(200),
+      key: `k${i}`,
+      type: 'finding',
+      confidence: 0.9,
+      origin: 'human',
+      pinned: true,
+      // VERIFIED AND GLOBAL, because `knowledgeBlock` keeps nothing else
+      // (knowledge.ts:237) and would return null -- no block would reach the
+      // wire, and the positive control below would then pass vacuously.
+      confidenceLabel: 'verified',
+      scope: 'global',
+    }));
+
+    // AN ANCHOR STORE IS WHAT LETS THE BLOCK BE INJECTED AT ALL: knowledge is
+    // only added on a turn the prefix is already free (strategy.ts:698), and
+    // with no store there is no such turn -- the summary came back
+    // `compression did not pay` and nothing was ever added. A fresh store per
+    // arm keeps both on their first turn.
+    delete process.env.TOKEN_OPTIMIZER_PROXY_NET_SAVING;
+    const unguarded = compressBody(body, noSpill, anchorStore(), findings);
+    process.env.TOKEN_OPTIMIZER_PROXY_NET_SAVING = '1';
+    const guarded = compressBody(body, noSpill, anchorStore(), findings);
+
+    expect(guarded.body.length).toBeLessThanOrEqual(body.length);
+    // AND THE GUARD IS WHAT DID IT: if the unguarded arm had not grown the body
+    // the assertion above would hold on its own and prove nothing.
+    expect(unguarded.body.length).toBeGreaterThan(body.length);
+  });
+});
+
+/**
+ * THE ONE FIELD THAT TURNS A LEDGER ROW INTO MONEY. Every other number the
+ * summary carries is a size, and the provider's price catalog is keyed by
+ * model -- so a row without one can report tokens avoided and never a dollar
+ * figure. It is read from the parsed request, which means a refusal reached
+ * AFTER the parse must still carry it: those rows are exactly the ones an
+ * operator asks the cost of.
+ */
+describe('the model on the summary', () => {
+  it('names the model of a request it compressed', () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        model: 'claude-sonnet-5',
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+        ],
+      }),
+      'utf8'
+    );
+    const out = compressBody(body, spill);
+    expect(out.summary.compressed).toBe(true);
+    expect(out.summary.model).toBe('claude-sonnet-5');
+  });
+
+  it('names the model of a request it declined after parsing it', () => {
+    const body = Buffer.from(
+      JSON.stringify({ model: 'claude-sonnet-5', prompt: 'x'.repeat(9000) }),
+      'utf8'
+    );
+    const out = compressBody(body, noSpill);
+    expect(out.summary.reason).toBe('no messages array');
+    expect(out.summary.model).toBe('claude-sonnet-5');
+  });
+
+  it('claims no model when the body never parsed', () => {
+    const out = compressBody(Buffer.from('x'.repeat(9000), 'utf8'), noSpill);
+    expect(out.summary.model).toBeUndefined();
+    // THE CONTROL for the two assertions above: a parsed body that names no
+    // model is also left without one, so the field is read rather than guessed.
+    const anonymous = Buffer.from(
+      JSON.stringify({ prompt: 'x'.repeat(9000) }),
+      'utf8'
+    );
+    expect(compressBody(anonymous, noSpill).summary.model).toBeUndefined();
   });
 });

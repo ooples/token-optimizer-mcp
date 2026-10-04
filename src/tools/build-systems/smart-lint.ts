@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Lint Tool - 75% Token Reduction
  *
  * Wraps ESLint to provide:
@@ -8,7 +8,7 @@
  * - Ignore previously acknowledged issues
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
@@ -323,8 +323,10 @@ export class SmartLint {
     }
 
     try {
-      const result = JSON.parse(cached) as LintOutput & { cachedAt: number };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const { cachedAt, ...result } = JSON.parse(cached) as LintOutput & {
+        cachedAt: number;
+      };
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         return result;
@@ -604,7 +606,9 @@ export function getSmartLintTool(
 export async function runSmartLint(
   options: SmartLintOptions = {}
 ): Promise<string> {
-  const cacheDir = join(homedir(), '.hypercontext', 'cache');
+  const cacheDir = resolveCacheLocation(
+    join(homedir(), '.hypercontext', 'cache')
+  );
   const cache = new CacheEngine(cacheDir, 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();

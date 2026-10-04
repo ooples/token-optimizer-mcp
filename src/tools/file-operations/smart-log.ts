@@ -18,7 +18,7 @@ import {
 } from '../../utils/safe-exec.js';
 import { join } from 'path';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -613,7 +613,10 @@ export function getSmartLogTool(
 export async function runSmartLog(
   options: SmartLogOptions = {}
 ): Promise<SmartLogResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -627,7 +630,7 @@ export async function runSmartLog(
 export const SMART_LOG_TOOL_DEFINITION = {
   name: 'smart_log',
   description:
-    'Get git commit history with 75% token reduction through structured JSON output and smart filtering',
+    'Get git commit history with an unmeasured design target of 75% token reduction through structured JSON output and smart filtering',
   inputSchema: {
     type: 'object',
     properties: {
@@ -637,27 +640,41 @@ export const SMART_LOG_TOOL_DEFINITION = {
       },
       since: {
         type: 'string',
+        maxLength: 1024,
+        pattern: '^[^\\u0000\\n\\r]*$',
         description:
           'Show commits since ref/date (e.g., "HEAD~10", "2024-01-01")',
       },
       until: {
         type: 'string',
+        maxLength: 1024,
+        pattern: '^[^\\u0000\\n\\r]*$',
         description: 'Show commits until ref/date',
       },
       branch: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description: 'Specific branch to query (default: current branch)',
       },
       author: {
         type: 'string',
+        maxLength: 1024,
+        pattern: '^[^\\u0000\\n\\r]*$',
         description: 'Filter by author name or email',
       },
       grep: {
         type: 'string',
+        maxLength: 1024,
+        pattern: '^[^\\u0000\\n\\r]*$',
         description: 'Filter by commit message pattern',
       },
       filePath: {
         type: 'string',
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description: 'Only show commits affecting this file/directory',
       },
       format: {

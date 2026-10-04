@@ -16,6 +16,14 @@ import path from 'path';
 import os from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname } from 'path';
+import { describePolicy } from '../telemetry/policy.js';
+import { recordedBytes, recorderLastError } from '../telemetry/recorder.js';
+import { pendingEvents } from '../telemetry/beacon.js';
+import { pendingCounts } from '../telemetry/rollup.js';
+import { pendingToolCounts } from '../telemetry/tool-rollup.js';
+import { beaconKey, beaconTable, beaconUrl } from '../telemetry/credentials.js';
+import { checkForUpdate, describeUpdate } from '../update/check.js';
+import { rolloutSection } from '../rollout/describe.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -46,6 +54,84 @@ async function modules() {
   }
 }
 
+/**
+ * What the telemetry switches are actually doing, in the doctor's own words.
+ *
+ * REPORTED, NEVER SENT: the doctor is run by people checking whether we are
+ * uploading anything, and a diagnostic that uploaded while answering that
+ * question would be the exact thing they were checking for. It reads the local
+ * log and the resolved endpoint and prints them.
+ *
+ * It also states whether a key was packed, because a policy of "local and
+ * upload: both explicitly enabled" with no key is a build that will never send
+ * a byte, and an operator who opted in deserves to be told that rather than
+ * left to wonder.
+ */
+export async function telemetrySection(
+  env: NodeJS.ProcessEnv = process.env
+): Promise<string[]> {
+  const bytes = recordedBytes(env);
+  const pending = (await pendingEvents(env)).length;
+  const key = beaconKey(env);
+  const lines = [
+    '',
+    'Telemetry',
+    `  policy: ${describePolicy(env)}`,
+    bytes === null
+      ? '  local log: not written yet'
+      : `  local log: ${bytes} bytes, ${pending} event(s) pending`,
+    key
+      ? `  upload target: ${beaconUrl(env)}/rest/v1/${beaconTable(env)}`
+      : '  upload target: none -- this build was packed without a key, so nothing can be sent',
+  ];
+  // COUNTED BUT NOT YET WRITTEN. Usage is accumulated in memory and emitted one
+  // rollup per window, so a proxy that has served fewer requests than a window
+  // has nothing on disk and is not therefore failing to record. Shown only when
+  // there is something to show, so the common case stays quiet.
+  const counted = pendingCounts().requests;
+  if (counted > 0) {
+    lines.push(`  counted since the last rollup: ${counted} request(s)`);
+  }
+  // Reported separately because they are separate windows: the proxy may be
+  // idle while the tools are busy, and a single figure would hide which.
+  const tools = pendingToolCounts().calls;
+  if (typeof tools === 'number' && tools > 0) {
+    lines.push(`  counted since the last tool rollup: ${tools} tool call(s)`);
+  }
+  const err = recorderLastError();
+  if (err) lines.push(`  last recorder error: ${err}`);
+  return lines;
+}
+
+/**
+ * WHETHER THIS COPY IS THE CURRENT ONE, and how to replace it if not.
+ *
+ * Asked here and nowhere else. The check is a GET to the registry npm already
+ * installs from, but it still reveals that this machine is running this package,
+ * so it happens only when a person has explicitly asked for a diagnosis -- never
+ * on the server's boot path, where nobody asked and a slow registry would delay
+ * every session. DO_NOT_TRACK and TOKEN_OPTIMIZER_UPDATE_CHECK=0 both suppress
+ * it; see latestVersion, which refuses before opening a socket.
+ *
+ * A failed lookup is reported as a failed lookup. Reporting "current" because
+ * the registry did not answer would be the one wrong answer, since it is the
+ * answer that stops a user from upgrading out of a bug.
+ */
+export async function versionSection(
+  options: {
+    readonly env?: NodeJS.ProcessEnv;
+    readonly fetcher?: typeof fetch;
+  } = {}
+): Promise<string[]> {
+  const report = await checkForUpdate({
+    env: options.env ?? process.env,
+    ...(options.fetcher ? { fetcher: options.fetcher } : {}),
+    // The install layout of THIS file, not of the doctor's caller: dist/server
+    // sits at the same depth under the package root wherever npm put it.
+    moduleUrl: import.meta.url,
+  });
+  return ['', 'Version', ...describeUpdate(report).map((line) => `  ${line}`)];
+}
 const say = (body: string, isError = false) => ({
   content: [{ type: 'text', text: body }],
   isError,
@@ -143,7 +229,14 @@ export async function installDoctor(input: {
     cacheDegradedReason: input?.cacheDegradedReason ?? null,
   });
 
-  return say(mods.doctor.renderDiagnosis(result));
+  return say(
+    [
+      mods.doctor.renderDiagnosis(result),
+      ...(await versionSection()),
+      ...rolloutSection(),
+      ...(await telemetrySection()),
+    ].join('\n')
+  );
 }
 
 export const DOCTOR_TOOL = {

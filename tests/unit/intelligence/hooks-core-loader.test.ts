@@ -16,7 +16,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+} from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -68,7 +74,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  if (ORIGINAL_RUNTIME === undefined) delete process.env.TOKEN_OPTIMIZER_RUNTIME;
+  if (ORIGINAL_RUNTIME === undefined)
+    delete process.env.TOKEN_OPTIMIZER_RUNTIME;
   else process.env.TOKEN_OPTIMIZER_RUNTIME = ORIGINAL_RUNTIME;
   try {
     rmSync(runtime, { recursive: true, force: true });
@@ -95,9 +102,9 @@ describe('loading hooks-core', () => {
     // a hooks-core directory that has been deleted.
     const { loadHooksCore, HooksCoreUnavailableError } = await loader();
 
-    await expect(loadHooksCore('definitely-not-a-real-module.mjs')).rejects.toThrow(
-      HooksCoreUnavailableError
-    );
+    await expect(
+      loadHooksCore('definitely-not-a-real-module.mjs')
+    ).rejects.toThrow(HooksCoreUnavailableError);
 
     const error = await loadHooksCore('definitely-not-a-real-module.mjs').catch(
       (caught: Error) => caught
@@ -115,7 +122,10 @@ describe('loading hooks-core', () => {
     // mid-test would break every other suite sharing this worker.
     const { HooksCoreUnavailableError } = await loader();
 
-    const error = new HooksCoreUnavailableError('wiki.mjs', new Error('ENOENT'));
+    const error = new HooksCoreUnavailableError(
+      'wiki.mjs',
+      new Error('ENOENT')
+    );
 
     expect(error.name).toBe('HooksCoreUnavailableError');
     expect(error.message).toContain('wiki.mjs');
@@ -214,6 +224,67 @@ describe('loading hooks-core', () => {
     ).rejects.toThrow(/could not load|has been removed/);
   }, 30_000);
 
+  it('loads the whole set wiki_query asks for at once', async () => {
+    // THE CALL PATTERN THAT BROKE. `wikiQuery` asks for these seven in one
+    // `Promise.all`, and twenty-four of the twenty-five hooks-core modules
+    // import `staleness.mjs`, so this is seven overlapping linkings of one
+    // shared subgraph. Under jest's VM-module loader the second graph was
+    // handed the instance the first was still linking and the import failed
+    // with "request for 'node:fs' can not be resolved on module
+    // .../staleness.mjs that is not linked" -- which is why the wiki_query
+    // suite passed alone and failed in the full run.
+    const { loadHooksCore } = await loader();
+
+    const modules = await Promise.all(
+      [
+        'wiki.mjs',
+        'curate.mjs',
+        'metrics.mjs',
+        'staleness.mjs',
+        'lexical.mjs',
+        'projects.mjs',
+        'paths.mjs',
+      ].map((name) => loadHooksCore(name))
+    );
+
+    expect(modules).toHaveLength(7);
+    for (const module of modules) expect(typeof module).toBe('object');
+  }, 30_000);
+
+  it('imports a module once however many callers ask for it', async () => {
+    // Not an optimisation detail: handing every caller the same promise is
+    // what keeps a shared subgraph from being linked twice at once.
+    const { loadHooksCore } = await loader();
+
+    const first = loadHooksCore('wiki.mjs');
+    const second = loadHooksCore('wiki.mjs');
+
+    expect(second).toBe(first);
+    expect(await second).toBe(await first);
+  }, 30_000);
+
+  it('does not cache a failure, so a later refresh can still be used', async () => {
+    // The fallback directory appears when a refresh finishes. Caching the
+    // rejection would make one badly-timed call permanent for the session,
+    // which is the shape of the original defect: wiki tools dead until restart.
+    const { version } = JSON.parse(
+      readFileSync(join(process.cwd(), 'package.json'), 'utf8')
+    ) as { version: string };
+    const sameMajor = `${version.split('.')[0]}.999.999`;
+    const { loadHooksCore } = await loader();
+
+    await expect(
+      loadHooksCore('definitely-not-a-real-module.mjs')
+    ).rejects.toThrow(/could not load|has been removed/);
+
+    makeRuntime(sameMajor, {
+      withModule: 'definitely-not-a-real-module.mjs',
+      packageVersion: sameMajor,
+    });
+
+    const recovered = await loadHooksCore('definitely-not-a-real-module.mjs');
+    expect(recovered.marker).toBe('from-runtime');
+  }, 30_000);
   it('ignores a runtime whose current pointer names nothing', async () => {
     writeFileSync(join(runtime, 'current'), 'nope-not-installed');
 

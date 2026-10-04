@@ -20,12 +20,12 @@
  */
 
 import { parse } from '@babel/parser';
-import { count, inlineMarker, span } from './annotate.js';
+import { count, inlineMarker, span, withStamp } from './annotate.js';
 import { activeRanker } from './ranking.js';
 import type { EmbeddingCache } from './embedding.js';
 import { DEFAULT_TUNING } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
-import { unchanged } from './types.js';
+import { spillFor, unchanged } from './types.js';
 
 /**
  * Bodies shorter than this stay: the marker would cost more than the code.
@@ -144,13 +144,85 @@ export function looksLikeCode(text: string, ctx: EngineContext = {}): boolean {
  * fall back rather than emit something wrong -- a compressor that mangles code
  * it misparsed is worse than one that declines.
  */
+/**
+ * A HASHBANG IS ONLY LEGAL AT OFFSET 0, and a concatenated block puts one
+ * anywhere.
+ *
+ * Babel accepts `#!/usr/bin/env node` as the first two bytes of a program and
+ * nowhere else. A tool result that reads several files hands us one string, so
+ * the second executable in it carries its hashbang into the middle, and the
+ * parse for the WHOLE block throws on that one line. Measured on this
+ * repository's own `src/server` as the codebase-exploration fixture
+ * concatenates it -- `daemon.ts` is the third of four files -- the AST was
+ * lost and the generic line heuristic took over: 52.9% where parsing each file
+ * separately reaches 72.9%. Four of this repository's 272 sources begin with a
+ * hashbang, so it is not a rarity, and it costs the entire block, not the file.
+ *
+ * MASK, DO NOT STRIP. `//` is exactly as wide as `#!`, so the masked copy has
+ * the same length, the same line count and the same columns, and every span the
+ * parser reports still addresses the ORIGINAL text -- which is the text we
+ * elide. Stripping the line would shift every span after it by one.
+ *
+ * A `#!` at offset 0 is left alone: there it is what Babel already expects.
+ */
+function maskInteriorHashbangs(text: string): string {
+  return text.replace(/(?<=\n)#!/g, '//');
+}
+
+/**
+ * The node types a body elision can start from.
+ *
+ * A MAP, NOT AN ALTERNATION REGEX. The regexes these replace were tested once
+ * per node of the parsed file, and on the codebase-exploration fixture this
+ * walk was the single hottest thing in the whole block -- 21% of it. A set
+ * lookup on an interned type string is a hash, not a match.
+ */
+const BODY_KINDS = new Map<string, 1 | 2>([
+  ['FunctionDeclaration', 1],
+  ['FunctionExpression', 1],
+  ['ArrowFunctionExpression', 1],
+  ['ClassMethod', 1],
+  ['ObjectMethod', 1],
+  ['ClassPrivateMethod', 1],
+  ['ObjectExpression', 2],
+  ['ArrayExpression', 2],
+]);
+
+/**
+ * Properties of a parsed node that are not part of the tree.
+ *
+ * COMMENTS ARE REACHED THREE TIMES OVER. Every comment in the file is in
+ * `File.comments`, and the same object is attached again as a neighbour's
+ * `leadingComments` and again as the previous neighbour's `trailingComments`,
+ * so a walk that descends into all of them visits each comment about three
+ * times to find a node that can never be a function or a literal. `loc` is
+ * three objects deep on every node and holds no node either; `extra` holds a
+ * raw string and a flag; `errors` holds recovered parse errors.
+ */
+const NOT_CHILDREN = new Set([
+  'loc',
+  'extra',
+  'comments',
+  'leadingComments',
+  'trailingComments',
+  'innerComments',
+  'tokens',
+  'errors',
+]);
+
 function babelBodies(text: string): Array<[number, number]> | null {
   let ast: ReturnType<typeof parse>;
   try {
-    ast = parse(text, {
+    ast = parse(maskInteriorHashbangs(text), {
       sourceType: 'unambiguous',
       allowReturnOutsideFunction: true,
       errorRecovery: true,
+      // NOTHING HERE READS A COMMENT. Attaching them hangs up to three extra
+      // properties on the nodes either side of every comment in the file, and
+      // the walk below has to step over all of them on every node it visits.
+      // They are still in `ast.comments`; they are just not copied onto the
+      // tree for a pass that skips them.
+      attachComment: false,
       plugins: ['typescript', 'jsx', 'decorators-legacy', 'classProperties'],
     });
   } catch {
@@ -168,15 +240,13 @@ function babelBodies(text: string): Array<[number, number]> | null {
       loc?: { start: { line: number }; end: { line: number } };
     };
 
-    const isFunction =
-      typeof n.type === 'string' &&
-      /^(FunctionDeclaration|FunctionExpression|ArrowFunctionExpression|ClassMethod|ObjectMethod|ClassPrivateMethod)$/.test(
-        n.type
-      );
+    // ONE LOOKUP, NOT TWO. `visit` runs on every node of the parsed file and
+    // the two sets are disjoint, so asking both is asking the same question
+    // twice on every node that is neither -- which is nearly all of them.
+    const kind = BODY_KINDS.get(n.type as string);
+    const isFunction = kind === 1;
     // A big literal is bulk data behind a declaration the model still sees.
-    const isLiteral =
-      typeof n.type === 'string' &&
-      /^(ObjectExpression|ArrayExpression)$/.test(n.type);
+    const isLiteral = kind === 2;
 
     // A BLOCK BODY, OR NOTHING. `n.body` on an arrow function with a CONCISE body is
     // the expression itself, not a BlockStatement -- there are no braces around it. The
@@ -209,9 +279,21 @@ function babelBodies(text: string): Array<[number, number]> | null {
       }
     }
 
-    for (const value of Object.values(n)) {
-      if (Array.isArray(value)) value.forEach(visit);
-      else if (value && typeof value === 'object') visit(value);
+    // SKIPPING THE PROPERTIES THAT HOLD NO NODES -- see NOT_CHILDREN. The
+    // walk itself is keyed rather than run over `Object.values(n)`, which
+    // built an array of every property of every node in the file.
+    for (const key in n) {
+      const value = n[key];
+      // THE CHEAP TEST FIRST. `type`, `start` and `end` are on every node and
+      // are a string and two numbers; asking the set about them is a string
+      // hash to reject what one `typeof` rejects. Only the object-valued
+      // properties reach the set now, which on this fixture is about a third
+      // of the seven properties an average node carries.
+      if (!value || typeof value !== 'object') continue;
+      if (NOT_CHILDREN.has(key)) continue;
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i += 1) visit(value[i]);
+      } else visit(value);
     }
   };
 
@@ -348,10 +430,25 @@ function liveBodies(
  * Signatures, imports, class and type declarations and decorators all survive,
  * which is what makes the output still answer "what is in this file".
  */
+/*
+ * MINTS ITS OWN STAMP WHEN THE CALLER BROUGHT NONE, AND HANDS IT BACK.
+ *
+ * An engine that emits markers and tells nobody how to verify them produces
+ * output that cannot be decoded at all -- the markers are indistinguishable
+ * from content, which is the safe direction and a useless one. So the stamp
+ * travels with the result, from whichever layer created it: the router sets one
+ * for the whole block and this passes it through, and a caller reaching an
+ * engine directly gets one minted from the content it handed over.
+ */
 export function compressCode(
   text: string,
   ctx: EngineContext = {}
 ): CompressionResult {
+  const stamped = withStamp(ctx, text);
+  return { ...compressCodeBody(text, stamped), stamp: stamped.stamp };
+}
+
+function compressCodeBody(text: string, ctx: EngineContext): CompressionResult {
   if (looksLikeDiff(text)) return unchanged(text);
   const tuning = ctx.tuning ?? DEFAULT_TUNING;
   // A replaced body is gone from the text; only its path brings it back.
@@ -416,8 +513,11 @@ export function compressCode(
   //
   // It is also better for the reader: one file holding the original in order,
   // rather than N fragments they would have to reassemble.
-  const anchorPath =
-    ctx.sourcePath ?? (ctx.spill ? ctx.spill(text, 'block.txt') : null);
+  // THROUGH `spillFor`, NOT AROUND IT. Calling the sink directly skipped both
+  // the empty-string check and the one-path-per-content memo, which is how the
+  // same file read three times in one request became three spill files and
+  // three round trips.
+  const anchorPath = ctx.sourcePath ?? spillFor(ctx, text, 'block.txt');
 
   for (const [from, to] of spans) {
     const lineCount = to - from + 1;
@@ -442,7 +542,12 @@ export function compressCode(
     const indent = lines[from - 1]?.match(/^\s*/)?.[0] ?? '  ';
     markerAt.set(
       from,
-      indent + inlineMarker(`body, ${count(lineCount, 'line')}`, where)
+      indent +
+        inlineMarker(
+          `body, ${count(lineCount, 'line')}`,
+          where,
+          ctx.stamp ?? null
+        )
     );
     elisions.push({
       removed: `body, ${count(lineCount, 'line')}`,

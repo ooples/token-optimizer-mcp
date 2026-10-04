@@ -283,10 +283,19 @@ export class CachePartitionTool extends EventEmitter {
       }
 
       // Cache the result
-      const tokensUsedResult = this.tokenCounter.count(JSON.stringify(data));
+      const serialized = JSON.stringify(data);
+      const tokensUsedResult = this.tokenCounter.count(serialized);
       const tokensUsed = tokensUsedResult.tokens;
       if (cacheKey && useCache) {
-        this.cache.set(cacheKey, JSON.stringify(data), cacheTTL, tokensUsed);
+        this.cache.set(
+          cacheKey,
+          serialized,
+          serialized.length,
+          serialized.length,
+          {
+            ttlSeconds: cacheTTL,
+          }
+        );
       }
 
       // Record metrics
@@ -1717,7 +1726,7 @@ export function getCachePartitionTool(
 export const CACHE_PARTITION_TOOL_DEFINITION = {
   name: 'cache_partition',
   description:
-    'Advanced cache partitioning and sharding with 87%+ token reduction through consistent hashing, automatic rebalancing, and partition isolation',
+    'Advanced cache partitioning and sharding with an unmeasured design target of 87%+ token reduction through consistent hashing, automatic rebalancing, and partition isolation',
   inputSchema: {
     type: 'object',
     properties: {

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart SQL Tool - 83% Token Reduction
  *
  * SQL query analyzer with intelligent features:
@@ -10,7 +10,7 @@
  * - Token-optimized output with intelligent caching
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { measured, unmeasured } from '../shared/savings.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -829,19 +829,22 @@ export async function runSmartSql(options: SmartSqlOptions): Promise<string> {
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const sql = getSmartSql(cache, new TokenCounter(), new MetricsCollector());
 
   const result = await sql.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 // MCP tool definition
 export const SMART_SQL_TOOL_DEFINITION = {
   name: 'smart_sql',
   description:
-    'SQL query analyzer with optimization suggestions and execution plan analysis (83% token reduction)',
+    'SQL query analyzer with optimization suggestions and execution plan analysis (unmeasured design target: 83% token reduction)',
   inputSchema: {
     type: 'object' as const,
     properties: {

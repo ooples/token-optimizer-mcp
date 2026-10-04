@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Package.json Tool - 83% Token Reduction
  *
  * Provides intelligent package.json parsing and analysis:
@@ -11,14 +11,28 @@
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { createHash } from 'crypto';
 import { execFileSafeSync } from '../../utils/safe-exec.js';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { homedir } from 'os';
 import { packageManagerInvocation } from '../build-systems/run-node-bin.js';
+import {
+  declaringText,
+  liftDeclarations,
+  RESOLVED_INPUT_KEY,
+  resolvedFiles,
+  type Declaring,
+} from '../shared/savings.js';
+
+/**
+ * Seconds a parsed package.json stays servable. The file is re-read whenever
+ * its hash changes, so the TTL is only a backstop against an entry outliving
+ * the project it describes.
+ */
+const PACKAGE_JSON_CACHE_TTL_SECONDS = 24 * 60 * 60;
 
 interface PackageMetadata {
   name: string;
@@ -209,31 +223,35 @@ interface SmartPackageJsonOutput {
     command?: string;
   }>;
 
-  /**
-   * Token reduction metrics
-   */
-  metrics: {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercentage: number;
-  };
+  // NO metrics FIELD, DELIBERATELY. The three figures that stood here were a
+  // claim this tool was not in a position to make: compactedTokens counted
+  // this payload serialised on its own, while what a caller is charged for is
+  // the human report built from it afterwards -- which is why the footer
+  // printed -92% on a call that really cost 20.9% MORE than reading the file.
+  // The after is counted once now, at the wire. The before is real and is the
+  // one thing this tool does know, because the caller named only a directory
+  // and the tool resolved package.json inside it, so it is declared on the
+  // reserved key rather than printed in the reply.
 }
 
 export class SmartPackageJson {
   private cache: CacheEngine;
-  private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
   private cacheNamespace = 'smart_package_json';
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED. This counter was held so the tool could count the
+    // package.json it had just read and declare the figure. It declares the
+    // path instead, and the counting belongs to the party that also counts the
+    // reply. The parameter stays so every caller's construction call is
+    // unchanged.
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
@@ -243,7 +261,7 @@ export class SmartPackageJson {
    */
   async run(
     options: SmartPackageJsonOptions = {}
-  ): Promise<SmartPackageJsonOutput> {
+  ): Promise<Declaring<SmartPackageJsonOutput>> {
     const startTime = Date.now();
     const {
       force = false,
@@ -254,7 +272,10 @@ export class SmartPackageJson {
       maxTreeDepth = 3,
     } = options;
 
-    const packageJsonPath = join(this.projectRoot, 'package.json');
+    // ABSOLUTE, because the path is declared to the recorder and read there.
+    // A relative projectRoot would otherwise resolve against whatever working
+    // directory the recorder happens to have, which is a different file.
+    const packageJsonPath = resolve(this.projectRoot, 'package.json');
 
     // Validate package.json exists
     if (!existsSync(packageJsonPath)) {
@@ -278,7 +299,7 @@ export class SmartPackageJson {
       const cached = this.getCachedResult(cacheKey, maxCacheAge, fileHash);
       if (cached) {
         this.recordMetrics('cache_hit', Date.now() - startTime);
-        return this.transformOutput(cached, [], true);
+        return this.transformOutput(cached, [], true, packageJsonPath);
       }
     }
 
@@ -317,7 +338,7 @@ export class SmartPackageJson {
     // Generate suggestions
     const suggestions = this.generateSuggestions(result);
 
-    return this.transformOutput(result, suggestions, false);
+    return this.transformOutput(result, suggestions, false, packageJsonPath);
   }
 
   /**
@@ -843,12 +864,14 @@ export class SmartPackageJson {
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached) as ParsedPackageJson & {
+      const { cachedAt, ...result } = JSON.parse(
+        cached
+      ) as ParsedPackageJson & {
         cachedAt: number;
       };
 
       // Check age
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
       if (age > maxAge) {
         return null;
       }
@@ -878,24 +901,15 @@ export class SmartPackageJson {
       cachedAt: Date.now(),
     };
 
-    const tokensSaved = this.estimateTokensSaved(result);
+    const serialized = JSON.stringify(cacheData);
 
     this.cache.set(
       this.cacheNamespace + ':' + key,
-      JSON.stringify(cacheData),
-      86400, // 24 hour TTL
-      tokensSaved
+      serialized,
+      serialized.length,
+      serialized.length,
+      { ttlSeconds: PACKAGE_JSON_CACHE_TTL_SECONDS }
     );
-  }
-
-  /**
-   * Estimate tokens saved by caching
-   */
-  private estimateTokensSaved(result: ParsedPackageJson): number {
-    const fullOutput = JSON.stringify(result);
-    const originalTokens = this.tokenCounter.count(fullOutput).tokens;
-    const compactTokens = Math.ceil(originalTokens * 0.05); // 95% reduction
-    return originalTokens - compactTokens;
   }
 
   /**
@@ -975,8 +989,9 @@ export class SmartPackageJson {
       impact: 'high' | 'medium' | 'low';
       command?: string;
     }>,
-    fromCache: boolean
-  ): SmartPackageJsonOutput {
+    fromCache: boolean,
+    baselinePath: string
+  ): Declaring<SmartPackageJsonOutput> {
     // Update stats with actual counts
     result.stats.outdatedPackages = result.packages.filter(
       (p) => p.outdated
@@ -1028,13 +1043,7 @@ export class SmartPackageJson {
       children: node.dependencies ? Object.keys(node.dependencies).length : 0,
     }));
 
-    // Calculate token metrics
-    const originalSize = this.estimateOriginalSize(result);
-    const compactSize = this.estimateCompactSize(result);
-    const originalTokens = Math.ceil(originalSize / 4);
-    const compactedTokens = Math.ceil(compactSize / 4);
-
-    return {
+    const payload = {
       summary: {
         name: result.metadata.name,
         version: result.metadata.version,
@@ -1057,13 +1066,22 @@ export class SmartPackageJson {
       dependencyTree:
         result.dependencyTree.length > 0 ? dependencyTree : undefined,
       suggestions,
-      metrics: {
-        originalTokens,
-        compactedTokens,
-        reductionPercentage: Math.round(
-          ((originalTokens - compactedTokens) / originalTokens) * 100
-        ),
-      },
+    };
+
+    // THE ONE THING THIS TOOL KNOWS THAT THE ARGUMENTS DO NOT: WHICH FILE.
+    // The caller passed a projectRoot, so nothing in the arguments names the
+    // file that was read, and the recorder would have no before to measure.
+    // What travels is the path, not a count of it -- this tool counted the
+    // content once and reported the figure, which meant a number nobody else
+    // could check standing in for a file anybody can read. The recorder reads
+    // it with the reader and the counter it uses on the reply, so the before
+    // and the after are measured by one party again.
+    return {
+      ...payload,
+      [RESOLVED_INPUT_KEY]: resolvedFiles(
+        [baselinePath],
+        'resolved-project-file'
+      ),
     };
   }
 
@@ -1091,40 +1109,6 @@ export class SmartPackageJson {
   }
 
   /**
-   * Estimate original output size
-   */
-  private estimateOriginalSize(result: ParsedPackageJson): number {
-    // Full package.json + all npm list output + audit output
-    const packageJsonSize = 1000;
-    const dependencyTreeSize = result.dependencyTree.length * 200;
-    const auditSize = result.securityIssues.length * 500;
-    const outdatedSize = result.packages.filter((p) => p.outdated).length * 200;
-
-    return (
-      packageJsonSize + dependencyTreeSize + auditSize + outdatedSize + 5000
-    );
-  }
-
-  /**
-   * Estimate compact output size
-   */
-  private estimateCompactSize(result: ParsedPackageJson): number {
-    const output = {
-      summary: {
-        name: result.metadata.name,
-        totalPackages: result.packages.length,
-        outdated: result.stats.outdatedPackages,
-        vulnerabilities: result.stats.vulnerabilities,
-      },
-      conflicts: result.conflicts.slice(0, 10),
-      security: result.securityIssues.slice(0, 10),
-      outdated: result.packages.filter((p) => p.outdated).slice(0, 10),
-    };
-
-    return JSON.stringify(output).length;
-  }
-
-  /**
    * Record metrics
    */
   private recordMetrics(operation: string, duration: number): void {
@@ -1132,7 +1116,8 @@ export class SmartPackageJson {
       operation,
       duration,
       success: true,
-      savedTokens: 0,
+      // NO TOKEN FIGURE. The literal zero asserted a measured saving of
+      // nothing on every call, including the ones that saved a great deal.
       cacheHit: operation === 'cache_hit',
     });
   }
@@ -1162,8 +1147,10 @@ export function getSmartPackageJson(
  */
 export async function runSmartPackageJson(
   options: SmartPackageJsonOptions = {}
-): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
+): Promise<string | Record<string, unknown>> {
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'))
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartPkg = getSmartPackageJson(
@@ -1174,7 +1161,11 @@ export async function runSmartPackageJson(
   );
 
   try {
-    const result = await smartPkg.run(options);
+    // THE DECLARATION COMES OFF BEFORE THE REPORT IS BUILT, so none of the
+    // report's lines can be written from it, and goes back on at the end as a
+    // sibling of the text rather than a line inside it.
+    const { payload, resolved } = liftDeclarations(await smartPkg.run(options));
+    const result = payload as SmartPackageJsonOutput;
 
     let output = `\n📦 Smart Package.json Analysis ${result.summary.fromCache ? '(cached)' : ''}\n`;
     output += `${'='.repeat(60)}\n\n`;
@@ -1277,13 +1268,12 @@ export async function runSmartPackageJson(
       output += '\n';
     }
 
-    // Metrics
-    output += `Token Reduction:\n`;
-    output += `  Original: ${result.metrics.originalTokens} tokens\n`;
-    output += `  Compacted: ${result.metrics.compactedTokens} tokens\n`;
-    output += `  Reduction: ${result.metrics.reductionPercentage}%\n`;
-
-    return output;
+    // NO TOKEN REDUCTION FOOTER. Four lines of the report were spent stating
+    // a reduction computed from a figure that was not what got sent, and the
+    // digits themselves were part of what the caller paid for. The saving is
+    // measured at the wire; what this tool knows -- the package.json it read
+    // on the caller's behalf -- rides along on the reserved key instead.
+    return declaringText(output, resolved);
   } finally {
     smartPkg.close();
   }
@@ -1295,7 +1285,7 @@ export async function runSmartPackageJson(
 export const SMART_PACKAGE_JSON_TOOL_DEFINITION = {
   name: 'smart_package_json',
   description:
-    'Analyze package.json with dependency resolution, version conflict detection, and security scanning. Provides 83% token reduction through intelligent caching.',
+    'Analyze package.json with dependency resolution, version conflict detection, and security scanning. Measured token reduction vs reading the file: -10% to 91% first read, -1% to 91% repeated (bench/tools, 2 fixtures) -- the loss is on a minimal package.json, the saving on a real one.',
   inputSchema: {
     type: 'object',
     properties: {

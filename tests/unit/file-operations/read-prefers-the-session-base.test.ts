@@ -131,7 +131,11 @@ describe('smart_read picks its diff base', () => {
 
     const result = await reader.read(file, { enableCache: false });
 
-    expect(result.metadata.isDiff).toBe(false);
+    // UNDEFINED, NOT FALSE, and that is the contract: a flag is sent only
+    // when it is true, so absence is how the reply says no. Asserting it
+    // this way also catches the field coming back -- a false flag is 5
+    // tokens the caller is billed for being told nothing.
+    expect(result.metadata.isDiff).toBeUndefined();
     expect(result.content).toContain('viaTool0');
   });
 
@@ -147,7 +151,7 @@ describe('smart_read picks its diff base', () => {
 
     const result = await reader.read(file);
 
-    expect(result.metadata.isDiff).toBe(false);
+    expect(result.metadata.isDiff).toBeUndefined();
     expect(result.content).toContain('authored0');
   });
 });

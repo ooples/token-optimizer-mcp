@@ -1,5 +1,5 @@
 /**
- * Smart Environment Variable Tool - 83% Token Reduction
+ * Smart Environment Variable Tool
  *
  * Features:
  * - Parse and validate .env files
@@ -13,9 +13,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'crypto';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import type { TokenCounter } from '../../core/token-counter.js';
 import type { MetricsCollector } from '../../core/metrics.js';
+import { displayPath, shortHash } from '../shared/report-shape.js';
 
 // ===========================
 // Types & Interfaces
@@ -28,6 +29,7 @@ export interface SmartEnvOptions {
   suggestMissing?: boolean; // Suggest missing variables
   environment?: 'development' | 'staging' | 'production'; // Environment type
   requiredVars?: string[]; // Required variable names
+  includeLocations?: boolean; // Report each variable's line and value length (default: false)
   force?: boolean; // Bypass cache
   ttl?: number; // Cache TTL in seconds (default: 3600)
 }
@@ -35,17 +37,62 @@ export interface SmartEnvOptions {
 export interface EnvVariable {
   key: string;
   /**
-   * REDACTED IN RESPONSES. Present while parsing, because the security checks
-   * genuinely need it -- weak-password detection, localhost URLs, unquoted
-   * whitespace -- but replaced with a placeholder before the result leaves this
-   * module. See {@link redactValues}.
+   * INTERNAL ONLY. Present while parsing, because the security checks genuinely
+   * need it -- weak-password detection, localhost URLs, unquoted whitespace --
+   * but the response carries no value field at all. See {@link tabulate}.
    */
   value: string;
   line: number;
   hasQuotes: boolean;
   isEmpty: boolean;
-  /** Characters the value had, so "is it set and plausible" is still answerable. */
-  length?: number;
+}
+
+/**
+ * The fields a row holds when the caller asked where each variable is.
+ */
+export const ENV_LOCATED_COLUMNS = ['key', 'line', 'length'] as const;
+
+/**
+ * The fields a row holds by default: the name, and nothing else.
+ *
+ * MEASURED, AND IT IS WHY THIS TOOL USED TO LOSE ON EVERY FIXTURE. On the
+ * 48-variable fixture the two extra numbers were 242 of 538 tokens -- 45% of
+ * the report -- and they moved the reading from +39.0% against the file to
+ * -10.9%, a tool that cost more than reading the thing it summarised. Both
+ * numbers answer "where is it", which is a question about editing the file,
+ * not about what is configured in it; the caller that is about to edit asks
+ * for them with `includeLocations` and pays for them then.
+ */
+export const ENV_KEY_COLUMNS = ['key'] as const;
+
+export type EnvVariableColumn = (typeof ENV_LOCATED_COLUMNS)[number];
+
+/**
+ * One variable: its name alone, or its name with the line it is on and the
+ * characters its value had. The width is the caller's choice, so it is read
+ * from `columns` rather than assumed.
+ */
+export type EnvVariableRow = [string] | [string, number, number];
+
+/**
+ * The variables, as a table rather than a list of objects.
+ *
+ * An array of objects repeats every field name once per variable. On the
+ * 48-variable fixture that was 48 copies of "key", "line", "length",
+ * "hasQuotes", "isEmpty" and "value" -- 157 tokens of field names, and 48
+ * copies of the same "[redacted]" placeholder, for 48 rows of data. Naming each
+ * field once costs the same information a third as much, so the report gets
+ * smaller without anything being dropped from it.
+ *
+ * `quoted` and `empty` name only the variables the flag is TRUE of, which in a
+ * real .env is almost none of them. An absent list means no variable has that
+ * property.
+ */
+export interface EnvVariableTable {
+  columns: EnvVariableColumn[];
+  rows: EnvVariableRow[];
+  quoted?: string[];
+  empty?: string[];
 }
 
 /**
@@ -61,15 +108,33 @@ export interface EnvVariable {
  * every legitimate use of this tool actually needs: knowing WHICH variables are
  * defined, not what they are set to.
  */
-const REDACTED = '[redacted]';
+function tabulate(
+  vars: EnvVariable[],
+  includeLocations: boolean
+): EnvVariableTable {
+  const quoted = vars.filter((v) => v.hasQuotes).map((v) => v.key);
+  const empty = vars.filter((v) => v.isEmpty).map((v) => v.key);
 
-function redactValues(vars: EnvVariable[]): EnvVariable[] {
-  return vars.map((v) => ({
-    ...v,
-    length: v.value.length,
-    value: v.isEmpty ? '' : REDACTED,
-  }));
+  return {
+    columns: includeLocations ? [...ENV_LOCATED_COLUMNS] : [...ENV_KEY_COLUMNS],
+    rows: includeLocations
+      ? vars.map((v): EnvVariableRow => [v.key, v.line, v.value.length])
+      : vars.map((v): EnvVariableRow => [v.key]),
+    ...(quoted.length > 0 ? { quoted } : {}),
+    ...(empty.length > 0 ? { empty } : {}),
+  };
 }
+
+/**
+ * Bumped whenever the response shape changes.
+ *
+ * The cache lives in the user's home directory and outlives any release, and
+ * the key was built from the file digest and the options alone. So the run that
+ * turned the variable list into a table would have kept serving the previous
+ * shape -- objects with a redacted value field -- to anyone whose cache already
+ * held an entry for that file, with no error and no way to tell.
+ */
+const RESPONSE_VERSION = 3;
 
 export interface SecurityIssue {
   severity: 'critical' | 'high' | 'medium' | 'low';
@@ -95,7 +160,7 @@ export interface SmartEnvResult {
     empty: number;
     commented: number;
   };
-  parsed?: EnvVariable[];
+  parsed?: EnvVariableTable;
   missing?: MissingVariable[];
   security?: {
     score: number; // 0-100
@@ -104,12 +169,17 @@ export interface SmartEnvResult {
   };
   suggestions?: string[];
   metadata: {
+    /** The file's sha256, shortened by {@link shortHash}. */
     fileHash?: string;
     filePath?: string;
     cached: boolean;
-    tokensUsed: number;
-    tokensSaved: number;
-    executionTime: number;
+    // NO TOKEN FIGURES, DELIBERATELY. baselineTokens, tokensUsed and their
+    // difference used to sit here. The baseline was honest -- the .env file is
+    // exactly what reading it would have cost -- but it is the recorder's to
+    // measure now, from the envFile the caller named. The other two were not:
+    // tokensUsed counted the report object before this metadata block existed
+    // and before the serialised reply was built around it, so it was never the
+    // figure the caller was charged, and the difference inherited that error.
   };
 }
 
@@ -120,7 +190,10 @@ export interface SmartEnvResult {
 export class SmartEnv {
   constructor(
     private cache: CacheEngine,
-    private tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED: this tool no longer counts tokens, because the
+    // only figure it counted them for was one it could not stand behind. The
+    // parameter stays so the construction call is unchanged for every caller.
+    _tokenCounter: TokenCounter,
     private metrics: MetricsCollector
   ) {}
 
@@ -140,12 +213,14 @@ export class SmartEnv {
         const cached = await this.getCached(cacheKey, options.ttl || 3600);
         if (cached) {
           const executionTime = Date.now() - startTime;
+          // A cache hit saves the analysis, not the tokens: the same report is
+          // still sent. No token figure belongs on this record at all -- what
+          // was sent is counted at the wire.
           this.metrics.record({
             operation: 'smart-env',
             duration: executionTime,
             success: true,
             cacheHit: true,
-            savedTokens: cached.metadata.tokensUsed,
           });
           return cached;
         }
@@ -167,14 +242,12 @@ export class SmartEnv {
       await this.cacheResult(cacheKey, result);
 
       const executionTime = Date.now() - startTime;
-      result.metadata.executionTime = executionTime;
 
       this.metrics.record({
         operation: 'smart-env',
         duration: executionTime,
         success: true,
         cacheHit: false,
-        savedTokens: 0,
       });
 
       return result;
@@ -188,7 +261,6 @@ export class SmartEnv {
         duration: executionTime,
         success: false,
         cacheHit: false,
-        savedTokens: 0,
         metadata: { error: errorMessage },
       });
 
@@ -203,9 +275,6 @@ export class SmartEnv {
         },
         metadata: {
           cached: false,
-          tokensUsed: 0,
-          tokensSaved: 0,
-          executionTime,
         },
       };
     }
@@ -342,49 +411,35 @@ export class SmartEnv {
       security
     );
 
-    // Calculate token usage
-    const fullResult = {
+    // THE REPORT IS COUNTED, NOT ESTIMATED.
+    //
+    // This used to build a second, smaller object it never sent -- environment,
+    // three counts and an issue tally -- count THAT, report its size as
+    // tokensUsed, and call the difference between the two a saving. So the tool
+    // reported the cost of a payload the caller never received, and measured
+    // its "saving" against its own output rather than against the file the
+    // caller would otherwise have read. On the eight-line fixture it claimed 24
+    // tokens used and 223 saved while sending 375 tokens to replace a 97-token
+    // file.
+    const report = {
+      success: true as const,
       environment,
       variables: { total, loaded, empty, commented },
-      parsed,
+      // TABULATED HERE, after the security analysis above has used the real
+      // values and before anything leaves this module. The response shape has
+      // no value field, so a value cannot reach the caller by omission.
+      parsed: tabulate(parsed, options.includeLocations === true),
       missing,
       security,
       suggestions,
     };
-
-    const fullJson = JSON.stringify(fullResult);
-    const tokensUsed = this.tokenCounter.count(fullJson).tokens;
-
-    // Calculate token savings (compact view vs full view)
-    const compactResult = {
-      environment,
-      variables: { total, loaded, empty },
-      security: security
-        ? { score: security.score, issueCount: security.issues.length }
-        : undefined,
-      missingCount: missing?.length || 0,
-    };
-    const compactJson = JSON.stringify(compactResult);
-    const compactTokens = this.tokenCounter.count(compactJson).tokens;
-    const tokensSaved = tokensUsed - compactTokens;
 
     return {
-      success: true,
-      environment,
-      variables: { total, loaded, empty, commented },
-      // REDACTED HERE, after the security analysis above has used the real
-      // values and before anything leaves this module.
-      parsed: redactValues(parsed),
-      missing,
-      security,
-      suggestions,
+      ...report,
       metadata: {
-        fileHash,
-        filePath,
+        fileHash: fileHash === undefined ? undefined : shortHash(fileHash),
+        filePath: filePath === undefined ? undefined : displayPath(filePath),
         cached: false,
-        tokensUsed: compactTokens,
-        tokensSaved,
-        executionTime: 0, // Will be set by caller
       },
     };
   }
@@ -707,11 +762,13 @@ export class SmartEnv {
    */
   private generateCacheKey(fileHash: string, options: SmartEnvOptions): string {
     const keyData = {
+      responseVersion: RESPONSE_VERSION,
       fileHash,
       checkSecurity: options.checkSecurity,
       suggestMissing: options.suggestMissing,
       environment: options.environment,
       requiredVars: options.requiredVars,
+      includeLocations: options.includeLocations,
     };
     const hash = createHash('md5')
       .update('smart_env' + JSON.stringify(keyData))
@@ -730,16 +787,20 @@ export class SmartEnv {
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached) as SmartEnvResult & {
+      const { timestamp, ...result } = JSON.parse(cached) as SmartEnvResult & {
         timestamp: number;
       };
-      const age = Date.now() - result.timestamp;
+      const age = Date.now() - timestamp;
 
       if (age > ttl * 1000) {
         await this.cache.delete(key);
         return null;
       }
 
+      // THE STAMP STAYS IN THE CACHE. It is how this function decides the entry
+      // is still fresh, and it is of no use to a caller -- but it was being
+      // spread into the response, so a repeat read cost eight tokens MORE than
+      // the first one on a tool whose description credits its saving to caching.
       result.metadata.cached = true;
       return result;
     } catch {
@@ -777,14 +838,16 @@ export function getSmartEnv(
 // CLI Runner Function
 // ===========================
 
-export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
+export async function runSmartEnv(
+  options: SmartEnvOptions
+): Promise<SmartEnvResult> {
   const { homedir } = await import('os');
   const { join } = await import('path');
   const { TokenCounter } = await import('../../core/token-counter.js');
   const { MetricsCollector } = await import('../../core/metrics.js');
 
   const cache = new CacheEngine(
-    join(homedir(), '.token-optimizer-cache', 'cache.db')
+    resolveCacheLocation(join(homedir(), '.token-optimizer-cache', 'cache.db'))
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
@@ -792,7 +855,13 @@ export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
   const tool = getSmartEnv(cache, tokenCounter, metrics);
   const result = await tool.run(options);
 
-  return JSON.stringify(result, null, 2);
+  // THE OBJECT, NOT ITS TEXT. A runner that serialises its own answer puts that
+  // answer past the one seam where a reply is edited before it is sent, so the
+  // envelope pruning in src/server/restated.ts could never see it: this reply
+  // kept a success flag, a file hash and an echo of the caller path -- 28 of its
+  // 111 tokens -- while every object-returning tool had them removed. The wire
+  // bytes are unchanged otherwise, because toResultText serialises compactly too.
+  return result;
 }
 
 // ===========================
@@ -802,7 +871,7 @@ export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
 export const SMART_ENV_TOOL_DEFINITION = {
   name: 'smart_env',
   description:
-    'Smart environment variable analyzer with security checking and suggestions (83% token reduction)',
+    'Smart environment variable analyzer with security checking and suggestions. Measured token reduction vs reading the file: 16-50% first read, 16-50% repeated (bench/tools, 2 fixtures) -- it names every variable without returning any value; `includeLocations` adds each line and value length back and costs 52-98% more.',
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -833,6 +902,12 @@ export const SMART_ENV_TOOL_DEFINITION = {
         type: 'array',
         items: { type: 'string' },
         description: 'List of required variable names',
+      },
+      includeLocations: {
+        type: 'boolean',
+        description:
+          "Report each variable's line number and value length as well as its name. Costs about 45% more on a 48-variable file, so it is off unless you are about to edit the file (default: false)",
+        default: false,
       },
       force: {
         type: 'boolean',

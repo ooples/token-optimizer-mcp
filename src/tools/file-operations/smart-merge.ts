@@ -20,7 +20,7 @@ import {
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -761,7 +761,10 @@ export function getSmartMergeTool(
 export async function runSmartMerge(
   options: SmartMergeOptions = {}
 ): Promise<SmartMergeResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -775,7 +778,7 @@ export async function runSmartMerge(
 export const SMART_MERGE_TOOL_DEFINITION = {
   name: 'smart_merge',
   description:
-    'Manage git merges with 80% token reduction through structured status and conflict management',
+    'Manage git merges with an unmeasured design target of 80% token reduction through structured status and conflict management',
   inputSchema: {
     type: 'object',
     properties: {
@@ -791,10 +794,16 @@ export const SMART_MERGE_TOOL_DEFINITION = {
       },
       branch: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description: 'Branch to merge from (for merge mode)',
       },
       commit: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description: 'Specific commit to merge (for merge mode)',
       },
       noCommit: {
@@ -819,6 +828,9 @@ export const SMART_MERGE_TOOL_DEFINITION = {
       },
       strategy: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         enum: ['recursive', 'ours', 'theirs', 'octopus', 'subtree'],
         description: 'Merge strategy',
         default: 'recursive',
@@ -846,7 +858,11 @@ export const SMART_MERGE_TOOL_DEFINITION = {
       // argument object into options, so these worked while being undiscoverable.
       strategyOption: {
         type: 'array',
-        items: { type: 'string' },
+        items: {
+          type: 'string',
+          maxLength: 1024,
+          pattern: '^[^\\u0000\\n\\r]*$',
+        },
         description:
           'Strategy options passed through to git, for example ["ignore-space-change"]',
       },
