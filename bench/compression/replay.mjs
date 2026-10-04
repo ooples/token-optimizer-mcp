@@ -20,6 +20,22 @@
  * measured as the real byte agreement between consecutive outgoing bodies
  * rather than assumed. That is the number the whole volatile-tail argument
  * rests on, and it has never been measured once.
+ *
+ * MEASURED, with recorded counts rather than census estimates: 98.4% of the
+ * prefix survives, weighted across turns. The one-shot recording said 20 tokens
+ * of a 150,000-token payload, about 0.01%, so the product preserves the cached
+ * prefix and the single-shot harness simply could not see it.
+ *
+ * The spread is the work. raw-build-log keeps 17.4%, browser-session 17.7%,
+ * grep-output 33.2%, codebase-exploration 36.8%, repeated-reads 44.1% -- five
+ * shapes where the engine rewrites most of what it already sent, and the ones a
+ * volatile-tail discipline would fix. Everything else is near 100%, which is
+ * what carries the weighted figure.
+ *
+ * RUN IT WITH THE STAMP SEED. Without TOKEN_OPTIMIZER_BENCH_STAMP_SEED the
+ * markers differ from the ones that were recorded, every payload digest misses,
+ * and `tokens` refuses rather than estimating -- which is the correct failure
+ * and not a defect in this file.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
