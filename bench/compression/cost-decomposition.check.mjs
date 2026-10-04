@@ -452,6 +452,43 @@ ok(
   'ours via the expand tool, theirs via compression_store.retrieve'
 );
 
+// --- AND THE WHOLE COLUMN IS IN THE WRONG CURRENCY -----------------------
+// THIS SUPERSEDES EVERY ROUTE ABOVE. head-to-head.mjs pins
+// `ENCODING_NAME = 'cl100k_base'` at :303 and counts with it at :332, and the
+// line it publishes at :1724 says so outright. cl100k_base is OpenAI's
+// tokenizer. Nothing in this comparison is billed by OpenAI, and the claim the
+// numbers support is about what a CLAUDE subscription spends -- for which the
+// only authority is Anthropic's `count_tokens`, which `currency.mjs` already
+// serves from a recorded fixture so CI stays offline.
+//
+// The tools bench was moved onto that currency and eleven of its published
+// ranges moved with it. I then wrote that the compression bench had been moved
+// first and was the reason to move the tools bench; that was wrong. It has not
+// been moved.
+//
+// The two encodings do not differ by a constant -- they split code and
+// punctuation differently -- so a ratio taken under one is not preserved under
+// the other. Every token figure in the recorded head-to-head is therefore
+// provisional: ours 44.4%, theirs 59.6%, handed 442,276 against 321,556, the
+// 917,472-token gap and the $4.59 that follows from it. The gap could be
+// larger, smaller, or the other way round, and no route above can be scored
+// until the currency is right.
+//
+// Deliberately a FAILURE rather than a note. A target measured in the wrong
+// unit is worse than no target, and this one has been quoted in a pull request
+// description as the thing to beat.
+const recordedEncoding = record.harness?.encoding ?? 'cl100k_base';
+if (/cl100k|o200k|tiktoken/i.test(String(recordedEncoding)))
+  bad(
+    'the comparison is denominated in Anthropic count_tokens',
+    `it is '${recordedEncoding}', an OpenAI encoding, so every token figure here is provisional -- see head-to-head.mjs:303`
+  );
+else
+  ok(
+    'the comparison is denominated in Anthropic count_tokens',
+    String(recordedEncoding)
+  );
+
 console.log(
   failures === 0
     ? '\nthe p=0 gap is the handed payload, with no residual'
