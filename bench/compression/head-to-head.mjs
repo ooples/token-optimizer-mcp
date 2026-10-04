@@ -327,6 +327,15 @@ const ENCODING_NAME = `anthropic:${MODEL}`;
  * still gets the keyed MAC, so nothing about the forgery guarantee changes; the
  * guarantee is held by tests/unit/compress/planted-marker-is-content.test.ts,
  * not by this constant. Nine characters because that is `STAMP_CHARS`.
+ *
+ * MEASURED DOWN IN TWO STEPS, NOT ASSUMED. Two census passes over one capture
+ * went 72 of 234 payloads varying, then 29 once every `compressBlock` site took
+ * the stamp -- the first pass had matched only options objects with a trailing
+ * comma, so the main `ours` arm written on one line kept minting its own -- and
+ * then 13. The last 13 are the proxy arm: `compressBody` takes positional
+ * arguments and has no options parameter, so there is nowhere to hand it a
+ * stamp. Giving it one is the remaining work before this harness can be
+ * denominated in recorded counts at all.
  */
 const BENCH_STAMP = '100000001';
 
