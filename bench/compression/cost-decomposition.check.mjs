@@ -270,6 +270,53 @@ else
     `brotli reaches ${(floor * 100).toFixed(1)}%-${(Math.max(...ratios) * 100).toFixed(1)}% where we manage ${worst}%`
   );
 
+// --- and the headroom is INSIDE a block, not across blocks ---------------
+// WHICH RULES OUT THE OBVIOUS SUSPECT. The worst fixture is three messages --
+// 36,518 chars, 89, then 101,206 -- and two large user turns that each re-read
+// source invite the reading that the second repeats the first, which a
+// per-block compressor structurally cannot see.
+//
+// It does not. Compressed separately the three come to 24,512 bytes; compressed
+// together, 24,042 -- so only 1.9% of the redundancy is cross-message. Each
+// message is individually 75.8% and 84.6% compressible. The headroom is intra
+// block, which is exactly what `compressBlock` already has the scope to take,
+// and it is taking 14.2% of an available 82.6%.
+//
+// So this is not a missing cross-block pass, and widening the dedup scope would
+// buy 1.9%. It is the single-block compressor being weak on bulk machine
+// output, which is the narrowest and most actionable form this finding can take.
+if (ratios.length) {
+  const worstFixture = list.find((e) => e.name === 'codebase-exploration');
+  const parts = worstFixture
+    ? Object.keys(worstFixture)
+        .filter((k) => /^[0-9]+$/.test(k))
+        .map((k) => worstFixture[k])
+        .map((m) =>
+          typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+        )
+    : [];
+  if (parts.length < 2)
+    bad(
+      'the worst fixture has parts to compare',
+      `found ${parts.length}, so cross-block redundancy cannot be measured and the intra-block reading does not follow`
+    );
+  else {
+    const size = (text) => brotliCompressSync(Buffer.from(text, 'utf8')).length;
+    const apart = parts.reduce((sum, part) => sum + size(part), 0);
+    const together = size(parts.join(String.fromCharCode(10)));
+    const across = 1 - together / apart;
+    eq(
+      'cross-block redundancy is negligible',
+      Number((across * 100).toFixed(1)) < 5,
+      true
+    );
+    ok(
+      'so the headroom is inside a block',
+      `${(across * 100).toFixed(1)}% across ${parts.length} parts, where the whole fixture is ${(ratios[list.indexOf(worstFixture)] * 100).toFixed(1)}% compressible`
+    );
+  }
+}
+
 // --- the fetch term is a READ, and that is correct ------------------------
 // SETTLED BY OBSERVATION, HAVING FIRST BEEN ASSERTED WRONGLY. The claim was
 // that `cost-model.mjs` undercharges a fetch by pricing cache invalidation as a
