@@ -152,3 +152,39 @@ export function reducesToCostLine(handed, turnsAfter, rates = RATES) {
   const theirs = handed * (rates.cacheWrite + rates.cacheRead * turnsAfter);
   return { mine, theirs, agree: Math.abs(mine - theirs) < 1e-6 };
 }
+
+/**
+ * Price a batched drop against a real dead-share, per conversation.
+ *
+ * `handed` is the tokens the arm hands over today, `deadShare` the fraction of
+ * it liveness.mjs finds is never referenced again, and `at` the turn the drop
+ * happens on. The drop pays the cache a full re-write of what survives it --
+ * which is why doing it once beats doing it per unit -- and then re-reads the
+ * smaller body for every remaining turn.
+ *
+ * `at` matters in two directions and the caller has to choose it: early saves
+ * more turns of residency, late is safer because a unit that looked dead has
+ * had longer to prove it. The sweep below reports both ends rather than picking.
+ */
+export function batchedDrop(
+  { handed, deadShare, turnsAfter, at },
+  rates = RATES
+) {
+  if (!(deadShare >= 0 && deadShare <= 1))
+    throw new Error(`deadShare must be a fraction, got ${deadShare}`);
+  if (!(at >= 1 && at <= turnsAfter))
+    throw new Error(
+      `the drop turn must fall inside the session: got ${at} of ${turnsAfter}`
+    );
+  const kept = handed * (1 - deadShare);
+  const bodies = [];
+  const shared = [];
+  for (let t = 0; t <= turnsAfter; t += 1) {
+    const body = t < at ? handed : kept;
+    bodies.push(body);
+    // At the drop the prefix breaks: the dead units were the OLD ones, so
+    // nothing in front of them survives and the whole remainder is re-written.
+    shared.push(t === 0 ? 0 : t === at ? 0 : body);
+  }
+  return assemblyCost(bodies, shared, rates);
+}
