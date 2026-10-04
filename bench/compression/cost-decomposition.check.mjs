@@ -534,6 +534,9 @@ else
 // losing, it is the wrong arm being quoted: the preset was computed on every
 // workload and dropped before the cost comparison.
 const cap = record.totals.cost.session.capMultiple;
+// REPORTED, NOT GATED. A win at an assumed fetch rate is not a win, so these
+// state the comparison at both ends instead of asserting one of them. The gate
+// is the fetchRate assertion below.
 for (const [rate, mine, theirs] of [
   ['nothing fetched', 'presetP0', 'theirsP0'],
   ['half fetched', 'presetP50', 'theirsP50'],
@@ -545,17 +548,41 @@ for (const [rate, mine, theirs] of [
       `a subscription buys more with us than with them, ${rate}`,
       `the record carries no ${mine} or ${theirs}; re-record with head-to-head.mjs --record`
     );
-  else if (!(ours > them))
-    bad(
-      `a subscription buys more with us than with them, ${rate}`,
-      `ours ${ours}x against their ${them}x -- the gate for this work`
-    );
   else
     ok(
-      `a subscription buys more with us than with them, ${rate}`,
-      `${ours}x against their ${them}x`
+      `at ${rate}, the evicting arm reads`,
+      `${ours}x against their ${them}x -- an assumed rate, not a result`
     );
 }
+// AND THE FETCH RATE IS NOT MEASURED, WHICH MAKES EVERY ROW ABOVE A BRACKET.
+// p=0 means nothing withheld is ever retrieved, and at that rate withholding is
+// FREE -- so any arm scores better by hiding more. Our preset hides enough to
+// need 61 round trips against their 18, which is the whole reason it reads
+// 2.81x against their 1.69x there. At p=1 it is the worst arm on the board:
+// 3,925,756 against their 3,523,083 and our own non-withholding arm's
+// 3,088,040. The preset wins only while the user never looks at what was
+// hidden.
+//
+// So the bracket runs 2.81x to 1.43x and contains both "we win easily" and "we
+// lose badly". Which it is depends on one number nobody has measured.
+//
+// IT IS NOT MEASURABLE FROM WHAT WE RECORD TODAY, AND THAT IS THE GAP. The
+// local event log holds 207,906 events across 67 files; `mcp.tool_completed`
+// carries `toolName`, so expansions ARE countable. Nothing counts captures, so
+// the denominator does not exist -- a rate needs both. Emitting a capture count
+// beside the expand count is the smallest change that turns the bracket into a
+// figure, and until it exists no arm here can be claimed, theirs included.
+if (record.totals.cost.session.fetchRate === undefined)
+  bad(
+    'the comparison rests on a measured fetch rate',
+    'no `fetchRate` in the record: p=0 and p=1 are assumptions, the arms are ranked differently at each, and the spread is 2.81x to 1.43x'
+  );
+else
+  ok(
+    'the comparison rests on a measured fetch rate',
+    String(record.totals.cost.session.fetchRate)
+  );
+
 // AND THE PRICE OF IT, STATED NOT BURIED. The eviction is free only while
 // nothing is fetched; every one of its round trips is paid at p=1, where the
 // multiple falls to presetP1. `presetBreakEven` is the fetch rate where the
