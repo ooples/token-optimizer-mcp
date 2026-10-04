@@ -803,7 +803,7 @@ export async function runSmartTsconfig(
 export const SMART_TSCONFIG_TOOL_DEFINITION = {
   name: 'smart_tsconfig',
   description:
-    'Parse and analyze TypeScript configuration. Resolves extends chains, detects issues, and caches results for 7 days. Measured token reduction vs reading the file: -49% to 37% first read, -49% to 37% repeated (bench/tools, 3 fixtures) -- this answers what the resolved config is and what is wrong with it; it pays most where there is an extends chain to resolve, and the one loss is a 76-token tsconfig, which no structured answer about it can be smaller than.',
+    'Parse and analyze TypeScript configuration. Resolves extends chains, detects issues, and caches results for 7 days. Measured token reduction vs reading the file: 42-90% first read, 42-90% repeated (bench/tools, 3 fixtures) -- it answers what the resolved config is and what is wrong with it, and sends the merge only where there was one: a config that extends nothing is answered with that fact and its suggestions, because the caller already holds the file.',
   inputSchema: {
     type: 'object',
     properties: {

@@ -294,7 +294,24 @@ export class SmartDependenciesTool {
       // The MAP, for the analysis modes below. `graphResult.graph` is the
       // JSON payload the caller receives; the two were one field, which is how
       // a Map came to be JSON.stringify'd into `{}`.
-      const graph = graphResult.rawGraph!;
+      const graph = graphResult.rawGraph;
+
+      // NOTHING WAS WALKED, SO THERE IS NOTHING TO REPORT. See scannedNothing:
+      //
+      // UNLESS THE WALK WAS CUT SHORT, which is a different answer and already
+      // carries its own: a truncated graph travels with searchTruncated and a
+      // note saying it covers only part of the tree, so an empty one is "I ran
+      // out of time" rather than "your scope matched nothing". Refusing there
+      // would drop the flag the caller needs in order to retry with a wider
+      // deadline.
+      // an empty graph is a targeting miss, and answering one as a graph makes
+      // a claim about the project that was never measured.
+      if (
+        (!graph || graph.size === 0) &&
+        !graphResult.metadata.searchTruncated
+      ) {
+        return this.scannedNothing(opts, startTime);
+      }
 
       // Run analysis based on mode
       let result: SmartDependenciesResult;
@@ -438,7 +455,23 @@ export class SmartDependenciesTool {
     // for a value nobody read.
     SmartDependenciesResult & { rawGraph: Map<string, DependencyNode> }
   > {
-    const cacheKey = generateCacheKey('dependency_graph', { cwd: opts.cwd });
+    // THE KEY COVERS WHICH FILES WERE WALKED, not just where they live.
+    //
+    // Keyed on `cwd` alone, a call naming `files: ['one.ts']` was answered
+    // with the graph a previous call for the whole directory had cached -- and
+    // the reverse, so asking about a directory got back a one-file graph, which
+    // reads as a project that contains one file. Both arrived as plausible
+    // answers carrying `cacheHit: true`, with nothing in them to say they were
+    // about a different question. Sorted, because the same files named in
+    // another order are the same question.
+    //
+    // `includeExternal` is deliberately absent: it filters at render time, in
+    // transformGraphOutput, so one cached graph serves both settings.
+    const cacheKey = generateCacheKey('dependency_graph', {
+      cwd: opts.cwd,
+      files: [...opts.files].sort(),
+      exclude: [...opts.exclude].sort(),
+    });
 
     // Try to load from cache
     if (opts.useCache) {
@@ -1324,6 +1357,48 @@ export class SmartDependenciesTool {
   }
 
   /**
+   * The walk matched no file, so there is no dependency graph to answer with.
+   *
+   * THIS USED TO ANSWER `{"nodes":[],"edges":[],"externalDependencies":[]}`
+   * with `success: true`. A project has source files; an empty graph means the
+   * targeting missed -- `files` naming something that is not source, a `cwd`
+   * that is not the project root, or an `exclude` that swallowed the tree.
+   * Dressed as an answer it reads as "this project imports nothing", which is a
+   * stronger and wronger claim than "I found nothing to read". The bench
+   * recorded one of these as a 93-99.7% token reduction: fourteen tokens
+   * against a package.json, for a graph of nothing.
+   *
+   * The refusal names the scope AS WRITTEN, so the caller can see which part of
+   * it missed. Those are the caller's own strings, returned to them; nothing
+   * here is logged or transmitted.
+   */
+  private scannedNothing(
+    opts: Required<SmartDependenciesOptions>,
+    startTime: number
+  ): SmartDependenciesResult {
+    this.metrics.record({
+      operation: 'smart_dependencies',
+      duration: Date.now() - startTime,
+      success: false,
+      cacheHit: false,
+    });
+
+    return {
+      success: false,
+      mode: opts.mode,
+      metadata: {
+        totalFiles: 0,
+        analyzedFiles: 0,
+        externalDependencies: 0,
+        internalDependencies: 0,
+        cacheHit: false,
+        incrementalUpdate: false,
+      },
+      error: `No source file matched, so there is no dependency graph to report. Looked under ${opts.cwd} for ${opts.files.join(', ')}. Only files whose imports can be parsed are walked, so naming a manifest such as package.json matches nothing here -- check the cwd, files and exclude arguments.`,
+    };
+  }
+
+  /**
    * Cache graph
    */
   private cacheGraph(
@@ -1419,7 +1494,7 @@ export async function runSmartDependencies(
 export const SMART_DEPENDENCIES_TOOL_DEFINITION = {
   name: 'smart_dependencies',
   description:
-    'Analyze project dependencies through graph caching and incremental updates. Measured token reduction vs reading the file: 73-99% first read, 73-99% repeated (bench/tools, 2 fixtures).',
+    'Analyze project dependencies through graph caching and incremental updates. Measured token reduction vs reading the file: 97-99% first read, 97-99% repeated (bench/tools, 2 fixtures) -- it resolves the imports of the files it is pointed at, so a scope matching no source file is refused rather than answered with an empty graph.',
   inputSchema: {
     type: 'object',
     properties: {

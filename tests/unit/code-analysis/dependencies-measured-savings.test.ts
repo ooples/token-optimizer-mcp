@@ -271,3 +271,93 @@ describe('smart_dependencies names the baseline it displaced', () => {
     expect(r.graph.nodes.length).toBe(Object.keys(TINY).length);
   });
 });
+
+describe('smart_dependencies refuses rather than answer about nothing', () => {
+  it('refuses when the scope matched no source file', async () => {
+    // A project with a manifest and no source. The reply used to be
+    // `{"nodes":[],"edges":[],"externalDependencies":[]}` with success, which
+    // is a claim that this project imports nothing -- fourteen tokens the
+    // bench then recorded as a 93-99.7% saving against the manifest.
+    const { dir, tool } = project({});
+
+    const r = await tool.analyze({ cwd: dir, useCache: false });
+
+    expect(r.success).toBe(false);
+    expect(r.graph).toBeUndefined();
+    // The scope AS WRITTEN, so the caller can see which part of it missed.
+    expect(r.error).toContain(dir);
+    expect(r.error).toContain('{ts,tsx,js,jsx,mjs,cjs}');
+    expect(r.metadata.totalFiles).toBe(0);
+  });
+
+  it('control: a project that does have source gets its graph', async () => {
+    // THE POSITIVE CONTROL. Without it the refusal above could be an
+    // unconditional one, and every assertion in it would still pass.
+    const { dir, tool } = project(TINY);
+
+    const r = await tool.analyze({ cwd: dir, useCache: false });
+
+    expect(r.success).toBe(true);
+    expect(r.graph?.nodes.length).toBe(Object.keys(TINY).length);
+  });
+
+  it('refuses when files names something with no imports to walk', async () => {
+    // The shape the bench was asking in: a path that exists and is not source.
+    const { dir, tool } = project(TINY);
+
+    const r = await tool.analyze({
+      cwd: dir,
+      files: ['package.json'],
+      useCache: false,
+    });
+
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('package.json');
+  });
+});
+
+describe('a cached graph answers only the question it was built for', () => {
+  it('does not serve a whole-directory graph to a one-file question', async () => {
+    // THE KEY WAS `cwd` ALONE. So the second call here was a cache hit on the
+    // first one's graph, and reported three files for a question about one --
+    // with `cacheHit: true` and nothing else to say the graph was built for a
+    // different scope. The reverse was worse: ask for one file first and the
+    // whole directory came back as a project of one file.
+    const { dir, tool } = project(TINY);
+
+    const whole = await tool.analyze({ cwd: dir });
+    expect(whole.success).toBe(true);
+    expect(whole.metadata.cacheHit).toBe(false);
+    expect(whole.graph?.nodes.length).toBe(3);
+
+    const one = await tool.analyze({ cwd: dir, files: ['src/a.ts'] });
+    expect(one.success).toBe(true);
+    expect(one.metadata.cacheHit).toBe(false);
+    expect(one.graph?.nodes.length).toBe(1);
+  });
+
+  it('control: the same scope twice is still a hit', async () => {
+    // THE POSITIVE CONTROL, and the reason the key is not simply the whole
+    // options object: a key that separated everything would never hit, and
+    // these assertions would read exactly like a working cache.
+    const { dir, tool } = project(TINY);
+
+    await tool.analyze({ cwd: dir, files: ['src/a.ts'] });
+    const again = await tool.analyze({ cwd: dir, files: ['src/a.ts'] });
+
+    expect(again.metadata.cacheHit).toBe(true);
+    expect(again.graph?.nodes.length).toBe(1);
+  });
+
+  it('serves one graph for both includeExternal settings', async () => {
+    // Which is why that option is deliberately NOT in the key: it filters at
+    // render time, so separating on it would pay for a second walk to answer
+    // from the same graph.
+    const { dir, tool } = project(TINY);
+
+    await tool.analyze({ cwd: dir });
+    const external = await tool.analyze({ cwd: dir, includeExternal: true });
+
+    expect(external.metadata.cacheHit).toBe(true);
+  });
+});

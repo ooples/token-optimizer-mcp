@@ -200,12 +200,23 @@ export const CASES = [
     fixture: 'tool-profile.ts',
     args: byProjectFileList,
   },
-  { tool: 'smart_dependencies', fixture: 'package.json', args: byFileList },
+  // ASK IT ABOUT SOURCE, OR THE ROW MEASURES A REFUSAL.
+  //
+  // Both of these named a package.json. A manifest declares dependencies but
+  // contains no imports to walk, so the graph came back empty -- and the
+  // harness priced fourteen tokens of nothing against a 4,328-token manifest
+  // and recorded 93-99.7%. The reply now refuses (see scannedNothing in
+  // smart-dependencies.ts); these ask it what it analyses.
   {
     tool: 'smart_dependencies',
-    fixture: 'large-project/package.json',
+    fixture: 'smart-complexity.ts',
     args: byFileList,
   },
+  // token-counter.ts, NOT the importless tool-profile.ts. A file with no
+  // imports is answered with a node and no edges, which is correct and was
+  // worth 98.7% here -- a figure earned by there being nothing to find. Both
+  // fixtures now have real edges, so the row is about resolving them.
+  { tool: 'smart_dependencies', fixture: 'token-counter.ts', args: byFileList },
   { tool: 'smart_read', fixture: 'smart-complexity.ts', args: byPathKey },
   { tool: 'smart_read', fixture: 'token-counter.ts', args: byPathKey },
   { tool: 'smart_read', fixture: 'tool-profile.ts', args: byPathKey },
