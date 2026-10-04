@@ -240,10 +240,19 @@ for (let round = 1; round <= 5; round += 1) {
     // answers a miss provisionally so a target is expected to SUCCEED here; a
     // non-zero exit means it never reached its payloads, and carrying on would
     // record a fixture that silently omits every string it would have counted.
-    if (status !== 0)
+    if (status !== 0) {
+      // A KILL IS NOT A FAILURE, and saying so matters: the comparator takes
+      // longer than any wrapper's patience, and under `timeout` it comes back
+      // 143 having counted thousands of payloads perfectly well. Reporting that
+      // as "reached none of its payloads" sent me looking for a defect in the
+      // target instead of for the stopwatch around it.
+      const killed = status === 143 || status === 137 || status === null;
       throw new Error(
-        `census target ${label(target)} exited ${status}, so it reached none of its payloads; the counts it would have contributed cannot be recorded and the fixture would be silently incomplete`
+        killed
+          ? `census target ${label(target)} was killed (status ${status}) before it finished, so the fixture would be incomplete for whatever it had not yet reached. It needs to run to completion -- do not wrap it in a timeout.`
+          : `census target ${label(target)} exited ${status}, so it reached none of its payloads; the counts it would have contributed cannot be recorded and the fixture would be silently incomplete`
       );
+    }
   }
 
   const fresh = new Map();
