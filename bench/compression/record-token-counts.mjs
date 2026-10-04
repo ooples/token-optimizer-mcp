@@ -55,12 +55,13 @@ const TARGETS = [
   // an HMAC keyed by `SECRET = randomBytes(32)` at annotate.ts:114, minted once
   // per process and never emitted, so every run stamps differently.
   //
-  // The seam to pin it already exists and was built for this: `options.stamp`
-  // flows through strategy.ts (:634, :657, :671, :1189), and production omits
-  // it and still gets the keyed MAC. Passing a fixed stamp here makes the
-  // comparator's payloads byte-stable without weakening the forgery guarantee.
-  // Until that is wired, the strict pass below fails, which is the correct
-  // result rather than a fixture recorded over a third of a moving target.
+  // FIXED by seeding the stamp secret for every target below, which took three
+  // attempts to get right: `options.stamp` at the comparator's compressBlock
+  // sites took it from 72 to 29, wiring the two sites written on one line took
+  // it to 13, and the last 13 were `compressBody`, which takes positional
+  // arguments through four levels and has nowhere to receive a stamp. Seeding
+  // the secret covers every path at once, including the ones that were never
+  // found. Two census passes over one capture now agree exactly: 0 of 234.
   //
   // IT TAKES THE COMPETITOR'S CAPTURE DIRECTORY AS AN ARGUMENT, so registering
   // it bare recorded nothing: a run with no argument prints its usage line and
@@ -203,7 +204,17 @@ function run(target, env) {
   const [file, ...args] = Array.isArray(target) ? target : [target];
   return spawnSync(process.execPath, [file, ...args], {
     cwd: REPO,
-    env: { ...process.env, ...env },
+    env: {
+      ...process.env,
+      // EVERY TARGET STAMPS THE SAME WAY, OR NO FIXTURE CAN BE COMPLETE. A
+      // marker stamp is an HMAC keyed by a per-process random secret, so a
+      // payload carrying one has different bytes every run and its digest never
+      // repeats. Measured on the comparator: 72 of 234 payloads varied, and with
+      // this set, 0. The seed is read only by annotate.ts and only when present,
+      // so nothing in production is affected; see the note there for the trade.
+      TOKEN_OPTIMIZER_BENCH_STAMP_SEED: 'token-counts',
+      ...env,
+    },
     stdio: 'ignore',
   }).status;
 }
