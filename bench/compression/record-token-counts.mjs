@@ -44,6 +44,12 @@ const TARGETS = [
   // content-digest-keyed fixture possible for them at all.
   'bench/tools/reduction.mjs',
   'bench/tools/reduction.check.mjs',
+  // THE COMPETITIVE COMPARATOR, which counted with tiktoken cl100k_base until
+  // the currency was corrected. Its census needs the competitor's engine
+  // present, so a run without hr-corpus and the clone will not reach every
+  // payload; that is why the decomposition check fails loudly on the encoding
+  // rather than trusting a partial census to have caught it.
+  'bench/compression/head-to-head.mjs',
 ];
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages/count_tokens';

@@ -34,7 +34,7 @@
  *    their harness's own dump. Not a reimplementation of their fixtures.
  *
  * 2. BOTH DENOMINATORS, NAMED, AND ACTUALLY DIFFERENT. Characters, and tokens
- *    from a real tokeniser (cl100k_base) run over both arms' real output. An
+ *    from Anthropic's own count_tokens, run over both arms' real output. An
  *    earlier version counted tokens as chars/4, which made the second column a
  *    rescaling of the first and the phrase "both denominators" untrue.
  *
@@ -95,7 +95,7 @@ import { readBaseContext } from '../subscription/base-context.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { get_encoding } from 'tiktoken';
+import { MODEL, tokens as countText } from './currency.mjs';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { reproducibilityRefusal } from './reproducibility.mjs';
@@ -300,8 +300,18 @@ const resolved = existsSync(resolvedPath)
 // encoding the token column was measured in and a second literal is a second
 // thing to forget. cl100k_base against o200k_base moves the same text by double
 // digits.
-const ENCODING_NAME = 'cl100k_base';
-const encoding = get_encoding(ENCODING_NAME);
+// AND IT IS NOT OURS TO CHOOSE. This read `cl100k_base` -- OpenAI's tokenizer
+// -- while every claim the column supports is about what a CLAUDE subscription
+// spends. The two do not differ by a constant: they split code and punctuation
+// differently, so a ratio taken under one is not preserved under the other, and
+// the competitive gap measured under cl100k could be larger, smaller or the
+// other way round. The only authority for the claim is Anthropic's own
+// `count_tokens`, which `currency.mjs` serves from a recorded fixture keyed on
+// the exact payload bytes so CI stays offline. A lookup throws on a miss rather
+// than estimating, so a payload that changed since the counts were recorded
+// cannot be priced at all -- which is the property that makes the figures
+// reproducible rather than merely repeatable.
+const ENCODING_NAME = `anthropic:${MODEL}`;
 
 // IMAGES ARE NOT BILLED AS THE TEXT THEY ARRIVE IN, and counting them that way
 // was not a rounding error. browser-session carries four PNG screenshots; the
@@ -329,7 +339,7 @@ const tokens = (text) => {
     imaged += Math.ceil((size.width * size.height) / PIXELS_PER_TOKEN);
     return '';
   });
-  return encoding.encode(stripped).length + imaged;
+  return countText(stripped) + imaged;
 };
 
 // The identifier extractor moved to its own module so it could be tested; see
@@ -1721,7 +1731,7 @@ console.log(
   `chars   ours ${pct(oursChars)}   theirs ${pct(theirsChars)}   (denominator: the payload bytes both arms were given; theirs is best-of-any arm, offload included -- see like4like)`
 );
 console.log(
-  `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload; cl100k_base on text, pixels/750 on images, both arms' real output; theirs is best-of-any arm, offload included -- see like4like)`
+  `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload; ${ENCODING_NAME} on text, pixels/750 on images, both arms' real output; theirs is best-of-any arm, offload included -- see like4like)`
 );
 // THE LIKE-FOR-LIKE ROW: our encoding arm against their best NON-offloading
 // arm, over the workloads where such an arm exists on their side.
