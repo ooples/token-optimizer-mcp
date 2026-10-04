@@ -74,6 +74,10 @@ const TARGETS = [
   // The prefix-survival measurement, which counts the shared run between turns
   // as text rather than scaling a character share.
   'bench/compression/prefix-survival.mjs',
+  // The turn-by-turn replay, which prices each turn against the prefix the one
+  // before it left cached. Its payloads are whole requests rather than single
+  // replies, so it contributes the largest strings in the fixture.
+  'bench/compression/replay.mjs',
 ];
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages/count_tokens';
