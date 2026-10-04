@@ -47,6 +47,21 @@ const TARGETS = [
   // THE COMPETITIVE COMPARATOR, which counted with tiktoken cl100k_base until
   // the currency was corrected.
   //
+  // ITS CENSUS DOES NOT CONVERGE YET, and the cause is known. Rounds 4 and 5
+  // each found exactly 72 new strings and two independent census passes gave
+  // `run1 234 run2 234 only1 72 only2 72`: 72 of its 234 payloads have
+  // different bytes on every run, so their digests never repeat and no fixture
+  // can be complete. Those are the payloads carrying marker stamps. A stamp is
+  // an HMAC keyed by `SECRET = randomBytes(32)` at annotate.ts:114, minted once
+  // per process and never emitted, so every run stamps differently.
+  //
+  // The seam to pin it already exists and was built for this: `options.stamp`
+  // flows through strategy.ts (:634, :657, :671, :1189), and production omits
+  // it and still gets the keyed MAC. Passing a fixed stamp here makes the
+  // comparator's payloads byte-stable without weakening the forgery guarantee.
+  // Until that is wired, the strict pass below fails, which is the correct
+  // result rather than a fixture recorded over a third of a moving target.
+  //
   // IT TAKES THE COMPETITOR'S CAPTURE DIRECTORY AS AN ARGUMENT, so registering
   // it bare recorded nothing: a run with no argument prints its usage line and
   // exits, which the census read as a target that reached zero strings rather
