@@ -22,6 +22,21 @@
  *
  * A prefix-stable arm scores near 1. An arm that rewrites what it already sent
  * scores near 0 and has earned no discount.
+ *
+ * WHAT THIS MEASURES IS NOT WHAT PRODUCTION DOES, AND THE NUMBER BELOW IS NOT A
+ * CREDIT. It recompresses `turns.slice(0, i + 1)` at every turn, so a change
+ * anywhere shifts everything after it; that is why conversations land near 50%.
+ * Production recompresses nothing: a tool reply is compressed once when it is
+ * produced and the bytes before it never move again, so the production figure
+ * is ~100% by construction and needs no measuring.
+ *
+ * It is kept for the one thing it does say honestly: 86.7% weighted survival is
+ * a FLOOR on prefix stability even under full recompression, which is the
+ * adversarial case. It must not be used to credit `cachedPrefix` in the cost
+ * model -- doing that would lower our own bill by 25% without making anything
+ * better for a user, which is re-scoring the benchmark rather than beating
+ * anyone, and the subscription gate in cost-decomposition.check.mjs is
+ * deliberately blind to it.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
