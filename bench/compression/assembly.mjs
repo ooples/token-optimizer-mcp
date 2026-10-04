@@ -75,38 +75,80 @@ export function assemblyCost(bodies, shared, rates = RATES) {
  * trace that nothing records yet. The absolute figures are therefore not a
  * measurement of our engine; the ordering between them is the claim.
  */
+/**
+ * The policies, priced against a liveness order that is not chosen to flatter
+ * them.
+ *
+ * THE PREVIOUS VERSION OF THIS WAS INVALID AND READ AS A 47% WIN. It let the
+ * drop-from-the-end policy remove the same NUMBER of units as drop-oldest while
+ * the units that had actually died were at the FRONT -- so it bought its saving
+ * by dropping live content and was never a policy anyone could ship. The
+ * tension it papered over is the real finding here: in a conversation, dead
+ * content is old content and sits at the front, where the cache makes it the
+ * most expensive thing to remove, while the cheap end to remove from holds the
+ * turn the model is working on. Cache economics and liveness economics point in
+ * opposite directions.
+ *
+ * So `dropDead` drops from the front, because that is where the dead units are,
+ * and pays the suffix re-write the cache charges for it. `dropBatched` drops the
+ * same units at one turn instead of a few per turn, paying that penalty once.
+ */
 export function comparePolicies({ units, unitTokens, turns, deadAfter }) {
   const all = units * unitTokens;
-  const keepAll = {
-    bodies: Array.from({ length: turns }, () => all),
-    shared: Array.from({ length: turns }, () => all),
+  const schedule = (bodyAt, sharedAt) => {
+    const bodies = [];
+    const shared = [];
+    for (let t = 0; t <= turns; t += 1) {
+      bodies.push(bodyAt(t));
+      shared.push(t === 0 ? 0 : sharedAt(t));
+    }
+    return { bodies, shared };
   };
-  // Drop the oldest dead unit each turn: the prefix breaks at the front, so
-  // everything still resident is re-written.
-  const oldest = { bodies: [], shared: [] };
-  // Drop from the end instead: the prefix survives up to the drop point.
-  const newest = { bodies: [], shared: [] };
-  // Every drop batched into one turn, once.
-  const batched = { bodies: [], shared: [] };
-  for (let t = 0; t < turns; t += 1) {
-    const dead = Math.min(units, Math.floor(t / deadAfter));
-    const live = (units - dead) * unitTokens;
-    oldest.bodies.push(live);
-    oldest.shared.push(dead === 0 ? live : 0);
-    newest.bodies.push(live);
-    newest.shared.push(live);
-    const cut = t >= turns / 2;
-    batched.bodies.push(cut ? all - units * unitTokens * 0.5 : all);
-    batched.shared.push(
-      t === Math.ceil(turns / 2)
-        ? all * 0.5
-        : all - (cut ? units * unitTokens * 0.5 : 0)
-    );
-  }
+  /** How many units have died by turn t, oldest first. */
+  const deadBy = (t) => Math.min(units, Math.floor(t / deadAfter));
+
+  // Nothing is ever removed: one write, then a re-read every turn. This is the
+  // arm `costLine` prices, and `reducesToCostLine` below checks it agrees.
+  const keepAll = schedule(
+    () => all,
+    () => all
+  );
+
+  // Remove each dead unit as it dies. The dead ones are the oldest, so the
+  // first byte of the body moves and nothing before the drop survives: the
+  // cached prefix is zero on every turn a drop happens.
+  const dropDead = schedule(
+    (t) => all - deadBy(t) * unitTokens,
+    (t) => (deadBy(t) === deadBy(t - 1) ? all - deadBy(t) * unitTokens : 0)
+  );
+
+  // The same units, removed in one event at the half-way turn.
+  const at = Math.ceil(turns / 2);
+  const dropBatched = schedule(
+    (t) => (t < at ? all : all - deadBy(at) * unitTokens),
+    (t) => (t === at ? 0 : t < at ? all : all - deadBy(at) * unitTokens)
+  );
+
   return {
     keepAll: assemblyCost(keepAll.bodies, keepAll.shared),
-    dropOldest: assemblyCost(oldest.bodies, oldest.shared),
-    dropNewest: assemblyCost(newest.bodies, newest.shared),
-    dropBatched: assemblyCost(batched.bodies, batched.shared),
+    dropDead: assemblyCost(dropDead.bodies, dropDead.shared),
+    dropBatched: assemblyCost(dropBatched.bodies, dropBatched.shared),
   };
+}
+
+/**
+ * THE CONTROL: this model has to agree with the one it generalises.
+ *
+ * A body that never changes costs `handed * W` on the first turn and
+ * `handed * R` on each of the next N, which is `handed * (W + R*N)` -- exactly
+ * `costLine`'s c0 with no cached prefix. The first version of this file claimed
+ * that reduction and was off by one turn, because its schedule ran N turns
+ * rather than the first turn plus N after it.
+ */
+export function reducesToCostLine(handed, turnsAfter, rates = RATES) {
+  const bodies = Array.from({ length: turnsAfter + 1 }, () => handed);
+  const shared = bodies.map((_, t) => (t === 0 ? 0 : handed));
+  const mine = assemblyCost(bodies, shared, rates);
+  const theirs = handed * (rates.cacheWrite + rates.cacheRead * turnsAfter);
+  return { mine, theirs, agree: Math.abs(mine - theirs) < 1e-6 };
 }
