@@ -121,6 +121,8 @@ await new Promise((done) => upstream.listen(0, '127.0.0.1', done));
 const upstreamUrl = `http://127.0.0.1:${upstream.address().port}`;
 
 resetRollup();
+let total = {};
+let last = {};
 // `spill: true` GIVES A SINK AND NOT A POLICY, which is why the first run of
 // this reported nothing withheld over 1,323 requests. `spillWholeBlockBelow`
 // defaults to 0 -- never move a block out -- so a spilling proxy still spills
@@ -142,15 +144,52 @@ try {
         signal: AbortSignal.timeout(30000),
       }).then((r) => r.arrayBuffer());
       sent += 1;
+      // ACCUMULATE ACROSS FLUSHES. ROLLUP_EVERY is a hardcoded 200, so a run of
+      // 1,323 requests empties the pending counters six times and a single read
+      // at the end sees only the remainder. That is how the first reading came
+      // out with `reinstated` ABOVE `spilled`: the two counters were spanning
+      // different windows, units having been withheld in a flushed batch and
+      // wanted back in the surviving one. referenceRate refused to divide them,
+      // which is the guard working -- a rate above one means the numerator and
+      // denominator are measuring different populations.
+      const now = pendingCounts();
+      if ((now.requests ?? 0) < (last.requests ?? 0))
+        for (const [k, v] of Object.entries(last))
+          total[k] = (total[k] ?? 0) + v;
+      last = { ...now };
     }
   }
 } finally {
+  // READ THE COUNTERS BEFORE SETTLING. `pendingCounts()` is what has not been
+  // rolled up yet, and `ledgerSettled` flushes -- so reading after it returns
+  // an empty ledger by definition. The first version of this read afterwards
+  // and reported every counter as zero, including bytes_in, which looked like
+  // a proxy that never compressed anything and was a harness reading an
+  // already-emptied counter.
+  for (const [k, v] of Object.entries(pendingCounts()))
+    total[k] = (total[k] ?? 0) + v;
   await proxy.ledgerSettled?.();
   await new Promise((done) => proxy.server.close(done));
   await new Promise((done) => upstream.close(done));
 }
 
-const counts = pendingCounts();
+const counts = total;
+// DID THE PROXY COMPRESS ANYTHING AT ALL? Without this the harness cannot tell
+// "the arm withheld nothing" from "the arm never ran", and those have opposite
+// meanings: the first is a measurement and the second is a broken harness. The
+// first version of this file could not tell them apart and I published a
+// product claim off the ambiguity.
+// EVERY COUNTER, NAMED, rather than two I guessed at. The first version of this
+// line printed `counts.compressed` and `counts.requests` and reported 0 for
+// both -- which could as easily have meant the keys do not exist as that
+// nothing happened, which is the exact ambiguity it was added to remove.
+console.log(
+  `ledger: ${
+    Object.entries(counts)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(' ') || '(empty)'
+  }`
+);
 const rate = referenceRate(counts);
 console.log(
   `${sent} request(s) over ${rows.length} conversation(s): spilled ${counts.spilled ?? 0}, reinstated ${counts.reinstated ?? 0}`
