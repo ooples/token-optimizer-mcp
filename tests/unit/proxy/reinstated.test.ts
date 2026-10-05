@@ -16,6 +16,7 @@ const WITHHELD =
   'a build log, four hundred lines of it, withheld from the body';
 const OTHER = 'something else entirely that never left';
 
+/** A plain text block: the client resending history, which is NOT a retrieval. */
 const bodyWith = (...texts: string[]) =>
   JSON.stringify({
     model: 'claude-sonnet-4-5',
@@ -25,58 +26,92 @@ const bodyWith = (...texts: string[]) =>
     })),
   });
 
-describe('counting reinstated units', () => {
-  it('counts a unit that came back', () => {
-    const withheld = new Set([digestOf(WITHHELD)]);
-    expect(reinstatedIn(bodyWith(OTHER, WITHHELD), withheld)).toBe(1);
+/** A tool result: content arriving back because somebody asked for it. */
+const bodyWithToolResults = (...texts: string[]) =>
+  JSON.stringify({
+    model: 'claude-sonnet-4-5',
+    messages: texts.map((text) => ({
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: 'tu_1',
+          content: [{ type: 'text', text }],
+        },
+      ],
+    })),
   });
 
-  it('counts nothing when it did not', () => {
-    // THE CONTROL for the test above: the same set, a body without the unit.
+describe('counting reinstated units', () => {
+  it('counts a unit that came back as a tool result', () => {
+    const withheld = new Set([digestOf(WITHHELD)]);
+    expect(reinstatedIn(bodyWithToolResults(OTHER, WITHHELD), withheld)).toBe(
+      1
+    );
+  });
+
+  it('does NOT count the client resending history', () => {
+    // THE CORRECTION THIS FILE EXISTS FOR. A conversation resends its whole
+    // history every turn, so a unit withheld at turn 5 arrives again at 6, 7
+    // and 8. Counting those made `reinstated` five times `spilled` over a real
+    // run of 1,323 requests -- not a rate at all. The client never reinstates
+    // anything: it sends originals, the proxy removes them on the way out, and
+    // the proxy re-decides every turn.
+    const withheld = new Set([digestOf(WITHHELD)]);
+    expect(reinstatedIn(bodyWith(OTHER, WITHHELD), withheld)).toBe(0);
+  });
+
+  it('counts nothing when the unit did not come back', () => {
     const withheld = new Set([digestOf(WITHHELD)]);
     expect(
-      reinstatedIn(bodyWith(OTHER, 'and more of the same'), withheld)
+      reinstatedIn(bodyWithToolResults(OTHER, 'and more of the same'), withheld)
     ).toBe(0);
   });
 
-  it('counts a unit once however often it is pasted', () => {
-    // The question is whether it was wanted, not how many times it appears.
+  it('counts a unit once however often it is returned', () => {
     const withheld = new Set([digestOf(WITHHELD)]);
-    expect(reinstatedIn(bodyWith(WITHHELD, OTHER, WITHHELD), withheld)).toBe(1);
+    expect(
+      reinstatedIn(bodyWithToolResults(WITHHELD, OTHER, WITHHELD), withheld)
+    ).toBe(1);
   });
 
   it('counts two different units separately', () => {
     const withheld = new Set([digestOf(WITHHELD), digestOf(OTHER)]);
-    expect(reinstatedIn(bodyWith(WITHHELD, OTHER), withheld)).toBe(2);
+    expect(reinstatedIn(bodyWithToolResults(WITHHELD, OTHER), withheld)).toBe(
+      2
+    );
   });
 
-  it('reads string content as well as blocks', () => {
-    // A client may send content as a bare string rather than a block list.
+  it('reads a tool result whose content is a bare string', () => {
     const withheld = new Set([digestOf(WITHHELD)]);
     const body = JSON.stringify({
-      messages: [{ role: 'user', content: WITHHELD }],
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'tool_result', content: WITHHELD }],
+        },
+      ],
     });
     expect(reinstatedIn(body, withheld)).toBe(1);
   });
 
   it('answers zero for a body that does not parse', () => {
-    // A malformed request is not evidence about the rate, so it must not throw
-    // and must not be counted as a reinstatement either.
     expect(reinstatedIn('not json at all', new Set([digestOf(WITHHELD)]))).toBe(
       0
     );
   });
 
   it('answers zero when nothing has been withheld', () => {
-    // The arm is not running, so there is no rate to contribute to.
-    expect(reinstatedIn(bodyWith(WITHHELD), new Set())).toBe(0);
+    expect(reinstatedIn(bodyWithToolResults(WITHHELD), new Set())).toBe(0);
   });
 
   it('does not match a unit that was only partly sent back', () => {
-    // A digest is of the whole unit. Half of it is a different string, which is
-    // what stops a stub naming the unit from counting as the unit returning.
+    // A digest is of the whole unit, which is what stops a stub NAMING the unit
+    // from counting as the unit returning.
     const withheld = new Set([digestOf(WITHHELD)]);
-    expect(reinstatedIn(bodyWith(WITHHELD.slice(0, 20)), withheld)).toBe(0);
+    expect(
+      reinstatedIn(bodyWithToolResults(WITHHELD.slice(0, 20)), withheld)
+    ).toBe(0);
   });
 });
 

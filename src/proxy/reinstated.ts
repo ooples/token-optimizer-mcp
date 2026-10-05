@@ -26,6 +26,37 @@ export const digestOf = (content: string): string =>
  * parse, or carries no messages, answers zero rather than throwing: a
  * malformed request is not evidence about the reference rate.
  */
+/** The text a tool-result block carries, in either shape the API allows. */
+function toolResultText(block: unknown): string[] {
+  const candidate = block as { type?: unknown; content?: unknown };
+  if (candidate?.type !== 'tool_result') return [];
+  const content = candidate.content;
+  if (typeof content === 'string') return [content];
+  if (!Array.isArray(content)) return [];
+  return content
+    .map((part) => (part as { text?: unknown })?.text)
+    .filter((text): text is string => typeof text === 'string');
+}
+
+/**
+ * How many withheld units this request brings back AS A RETRIEVAL.
+ *
+ * ONLY TOOL RESULTS COUNT, and the first version of this counted every block.
+ * In a conversation the client resends the whole history every turn, so a unit
+ * withheld at turn 5 arrives again at turns 6, 7 and 8 -- and counting those
+ * made `reinstated` five times `spilled` over a real run, which is not a rate
+ * at all. The client never reinstates anything here: it sends originals, the
+ * proxy removes them on the way out, and the proxy re-decides every turn.
+ *
+ * What a retrieval actually looks like is the model calling the expand tool and
+ * the content arriving as a NEW tool-result block. That is the only shape that
+ * means somebody wanted the unit back, so it is the only shape counted.
+ *
+ * Counted once per unit however many times it appears, because the question is
+ * whether it was wanted, not how often it was pasted. A body that does not
+ * parse, or carries no messages, answers zero rather than throwing: a malformed
+ * request is not evidence about the reference rate.
+ */
 export function reinstatedIn(
   body: string,
   withheld: ReadonlySet<string>
@@ -42,17 +73,13 @@ export function reinstatedIn(
   const seen = new Set<string>();
   for (const message of messages) {
     const content = (message as { content?: unknown })?.content;
-    const blocks = Array.isArray(content)
-      ? content
-      : typeof content === 'string'
-        ? [{ text: content }]
-        : [];
-    for (const block of blocks) {
-      const text = (block as { text?: unknown })?.text;
-      if (typeof text !== 'string' || text.length === 0) continue;
-      const digest = digestOf(text);
-      if (withheld.has(digest)) seen.add(digest);
-    }
+    if (!Array.isArray(content)) continue;
+    for (const block of content)
+      for (const text of toolResultText(block)) {
+        if (text.length === 0) continue;
+        const digest = digestOf(text);
+        if (withheld.has(digest)) seen.add(digest);
+      }
   }
   return seen.size;
 }

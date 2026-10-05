@@ -39,6 +39,24 @@
  * the withholding arm being unreachable through the proxy. Establishing what
  * the proxy keys a conversation on is the next step, and until then no claim
  * either way is supported.
+ *
+ * SETTLED: THE ARM IS REACHABLE AND THIS HARNESS CANNOT MEASURE THE RATE.
+ * Through a real proxy with `spill: true` and `spillWholeBlockBelow: 0.9`, over
+ * 1,323 requests: 648 elisions and 75 units withheld. So the withholding arm
+ * works through the proxy and the earlier worry that it existed only in the
+ * bench is retired.
+ *
+ * The rate reads 0.0% -- a REAL zero, 75 withheld and none returned, which the
+ * guard reports as 0 rather than as absent. But it is an artifact of this
+ * harness: the upstream is a stub that answers "ok", so no model is deciding
+ * anything and no expand tool is ever called. A replay against a canned
+ * upstream can never produce a retrieval, so 0.0% is the only answer it could
+ * give.
+ *
+ * Which bounds what this file is for. It proves the arm withholds and the
+ * counters move, and the rate itself needs a live model that can ask for
+ * something back. The counters are in the shipped ledger so that a real session
+ * answers it.
  */
 import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
