@@ -136,32 +136,25 @@ export interface CompressionFacts {
   readonly deferredToolChars?: number;
 
   /**
-   * How many withheld units a later request put back.
+   * NOT HERE. Withheld and reinstated counts live on the telemetry rollup, not
+   * on this record, and this is where I put the declaration by mistake.
    *
-   * THE DENOMINATOR ALREADY EXISTS AND I ALMOST DUPLICATED IT. `spilledBlocks`
-   * is counted at the sink in server.ts and already flows into the telemetry
-   * rollup as `live.spilled` -- so how many units leave a request has been
-   * recorded all along. What has never been recorded is how many come back,
-   * which is the numerator and the only half that was missing.
+   * `reinstatedUnits` was declared on this type and populated nowhere: the
+   * value is passed to `noteRequest` in server.ts, which builds a
+   * `RequestFacts` for the rollup, and `spilledBlocks` goes to the same place.
+   * So the field here read as recorded and never was -- the exact failure mode
+   * reproducibility.mjs refuses a record for, since a field that is present and
+   * unusable is worse than an absent one.
    *
-   * THE RATE THESE TWO MAKE IS THE ONE NUMBER THE WHOLE EVICTION CASE RESTS ON.
-   * Withholding a unit saves its residency for every remaining turn and costs
-   * nothing unless the unit is wanted again, so the arm's value is almost
-   * entirely a function of how often that happens. It has been estimated from
-   * textual recurrence on a borrowed corpus at 0.23, and that estimate cannot
-   * see a unit the model read and reasoned about without quoting -- so it is
-   * biased low, in the direction that flatters the arm.
-   *
-   * There was no second signal to check it against. The event log carries tool
-   * names but no withheld count, so no rate could be formed from it at all, and
-   * every call in it came from the benchmark rather than from a session.
-   *
-   * These are counts and nothing else, which is what lets them exist here: an
-   * AccountingRecord carries counts, durations, statuses, fixed-vocabulary
-   * reasons and tool names, never content. A unit's identity, path or bytes are
-   * none of the ledger's business.
+   * It matters because the two sinks are not interchangeable. The rollup is
+   * where `spilled` and `reinstated` are counted; `src/savings/` reads THIS
+   * record from the accounting ledger and can see neither. So the savings
+   * report cannot show an operator how much the withholding arm held back or
+   * how often it came back -- the two numbers that decide whether the arm is
+   * paying for them -- and giving it that needs both counts added here
+   * deliberately, with the per-request spill delta, rather than one field
+   * dropped in on the way past.
    */
-  readonly reinstatedUnits?: number;
   /**
    * Characters of cached knowledge added to the request.
    *
