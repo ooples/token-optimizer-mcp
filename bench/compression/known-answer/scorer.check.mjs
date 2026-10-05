@@ -39,7 +39,13 @@ import { DROP, ID_CHARS } from './ours-lossy.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..', '..');
-const RUN_THEIRS = join(REPO, 'bench', 'compression', 'headroom', 'run-theirs.py');
+const RUN_THEIRS = join(
+  REPO,
+  'bench',
+  'compression',
+  'headroom',
+  'run-theirs.py'
+);
 const ARMS = join(HERE, 'arms.py');
 const SCORER = join(REPO, 'bench', 'compression', 'head-to-head.mjs');
 
@@ -57,7 +63,9 @@ const check = (ok, name, detail = '') => {
   const before = failures;
   check(false, '(negative control -- this FAIL is expected)');
   if (failures !== before + 1) {
-    console.log('  FAIL the checker does not count a failure; every result below is void');
+    console.log(
+      '  FAIL the checker does not count a failure; every result below is void'
+    );
     process.exit(1);
   }
   failures = before;
@@ -67,7 +75,8 @@ const check = (ok, name, detail = '') => {
 const tmp = mkdtempSync(join(tmpdir(), 'ka-scorer-'));
 const pct = (s) => Number(String(s).replace('%', ''));
 /** The record lists workloads as an array; every lookup below wants them by name. */
-const byName = (rec) => Object.fromEntries(rec.workloads.map((w) => [w.name, w]));
+const byName = (rec) =>
+  Object.fromEntries(rec.workloads.map((w) => [w.name, w]));
 const num = (s) => Number(s);
 
 /** Run the scorer over `outDir` with a stub profile, and return the record. */
@@ -76,6 +85,24 @@ function score(profile, { mirrorDir, recordTo, extraEnv } = {}) {
   const env = {
     ...process.env,
     BENCH_KNOWN_ANSWER_OURS: join(HERE, `ours-${profile}.mjs`),
+    // CENSUS MODE, AND HERE IT IS THE RIGHT ANSWER RATHER THAN A SHORTCUT.
+    //
+    // The comparison now counts with Anthropic's `count_tokens`, served from a
+    // fixture keyed on exact payload bytes, and a lookup REFUSES a digest it
+    // has never seen rather than estimating. That is what makes a published
+    // figure reproducible -- and it made this file impossible: a known-answer
+    // run builds a synthetic capture in a temp directory with stub engines, so
+    // its payloads are fresh every run and can never be in any fixture. The
+    // scorer died before writing its record and the only symptom was an ENOENT
+    // on a file that was never created.
+    //
+    // Census mode answers a miss provisionally. That is sound HERE and nowhere
+    // near a published number: this file checks that the scorer reaches the
+    // right VERDICT on a capture whose answer is known in advance, and a
+    // verdict is a comparison between two arms measured the same way. It would
+    // not be sound for a figure anyone quotes, which is why every other target
+    // runs strict.
+    TOKEN_OPTIMIZER_BENCH_CENSUS: join(tmp, `census-${profile}.jsonl`),
     ...extraEnv,
   };
   if (mirrorDir) env.BENCH_KA_MIRROR_DIR = mirrorDir;
@@ -95,14 +122,20 @@ try {
     JSON.stringify(Object.fromEntries(KA.map((f) => [f.name, f.native]))),
     'utf8'
   );
-  const built = spawnSync('python', [RUN_THEIRS, '-', join(tmp, 'out'), '--extra', natives], {
-    encoding: 'utf8',
-    env: { ...process.env, BENCH_KNOWN_ANSWER_ARMS: ARMS },
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  const built = spawnSync(
+    'python',
+    [RUN_THEIRS, '-', join(tmp, 'out'), '--extra', natives],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, BENCH_KNOWN_ANSWER_ARMS: ARMS },
+      maxBuffer: 64 * 1024 * 1024,
+    }
+  );
   if (built.status !== 0) {
     console.log(built.stdout, built.stderr);
-    throw new Error('known-answer capture did not build; nothing below is meaningful');
+    throw new Error(
+      'known-answer capture did not build; nothing below is meaningful'
+    );
   }
 
   // ------------------------------------------------------ the two refusals
@@ -114,7 +147,9 @@ try {
     const bare = spawnSync('node', [SCORER, join(tmp, 'out')], {
       encoding: 'utf8',
       env: Object.fromEntries(
-        Object.entries(process.env).filter(([k]) => k !== 'BENCH_KNOWN_ANSWER_OURS')
+        Object.entries(process.env).filter(
+          ([k]) => k !== 'BENCH_KNOWN_ANSWER_OURS'
+        )
       ),
       maxBuffer: 64 * 1024 * 1024,
     });
@@ -139,14 +174,19 @@ try {
   console.log('\nprofile identity -- the zero of the instrument');
   const identity = (() => {
     const { run, at } = score('identity');
-    check(run.status === 0 || run.status === 1, 'the scorer completes', `exit ${run.status}`);
+    check(
+      run.status === 0 || run.status === 1,
+      'the scorer completes',
+      `exit ${run.status}`
+    );
     check(
       /KNOWN-ANSWER SCORER RUN/.test(run.stderr),
       'the run announces that our column is a stub'
     );
     const rec = JSON.parse(readFileSync(at, 'utf8'));
     check(
-      typeof rec.stubOurs === 'string' && rec.stubOurs.includes('ours-identity'),
+      typeof rec.stubOurs === 'string' &&
+        rec.stubOurs.includes('ours-identity'),
       'the record stamps which stub produced it',
       String(rec.stubOurs)
     );
@@ -179,7 +219,8 @@ try {
     // about the tree, not about a field the scorer forgot. The only reasons
     // allowed here are the ones this environment really has.
     check(
-      rep.refusal === null || /(dirty|working tree was modified)/.test(String(rep.refusal)),
+      rep.refusal === null ||
+        /(dirty|working tree was modified)/.test(String(rep.refusal)),
       'and any refusal it carries is about the tree, not a field left unfilled',
       String(rep.refusal)
     );
@@ -263,15 +304,27 @@ try {
     // other direction too: a scorer that starts filling the slot in with a zero
     // fails right here.
     const sorted = (xs) => [...xs].sort().join(',');
-    const absent = rec.workloads.filter((w) => w.chars.body === null).map((w) => w.name);
-    const notConversations = KA.filter((f) => f.kind !== 'messages').map((f) => f.name);
+    const absent = rec.workloads
+      .filter((w) => w.chars.body === null)
+      .map((w) => w.name);
+    const notConversations = KA.filter((f) => f.kind !== 'messages').map(
+      (f) => f.name
+    );
     check(
       sorted(absent) === sorted(notConversations),
       'the body arm is absent on exactly the fixtures that are not conversations',
       `absent [${sorted(absent)}], not conversations [${sorted(notConversations)}]`
     );
-    check(pct(rec.totals.chars.ours) === 0, 'totals: 0.0% of characters', rec.totals.chars.ours);
-    check(pct(rec.totals.tokens.ours) === 0, 'totals: 0.0% of tokens', rec.totals.tokens.ours);
+    check(
+      pct(rec.totals.chars.ours) === 0,
+      'totals: 0.0% of characters',
+      rec.totals.chars.ours
+    );
+    check(
+      pct(rec.totals.tokens.ours) === 0,
+      'totals: 0.0% of tokens',
+      rec.totals.tokens.ours
+    );
     return rec;
   })();
   // ------------------------------------------------------- the unpriced arm
@@ -318,8 +371,9 @@ try {
       `${un.workloads.length} workloads`
     );
     check(
-      un.workloads.every((w) => /no base-context record at/.test(String(w.costRefusal))) &&
-        identity.workloads.every((w) => w.costRefusal === null),
+      un.workloads.every((w) =>
+        /no base-context record at/.test(String(w.costRefusal))
+      ) && identity.workloads.every((w) => w.costRefusal === null),
       'and names the reason, which a zero could never do',
       String(un.workloads[0]?.costRefusal)
     );
@@ -337,7 +391,12 @@ try {
       JSON.stringify({
         chars: rec.totals.chars,
         tokens: rec.totals.tokens,
-        workloads: rec.workloads.map((w) => [w.name, w.chars, w.tokens, w.retention]),
+        workloads: rec.workloads.map((w) => [
+          w.name,
+          w.chars,
+          w.tokens,
+          w.retention,
+        ]),
       });
     check(
       nonCost(un) === nonCost(identity) && nonCost(un).length > 100,
@@ -354,7 +413,9 @@ try {
   // is what makes a change to it visible instead of merely numerically different.
   console.log('\nthe retention denominator, by name');
   {
-    const payloads = JSON.parse(readFileSync(join(tmp, 'out', 'payloads.json'), 'utf8'));
+    const payloads = JSON.parse(
+      readFileSync(join(tmp, 'out', 'payloads.json'), 'utf8')
+    );
     const found = [...identifiers(payloads['ka-identifiers'])];
     const planted = found.filter((x) => /^KA-ID-\d{4}$/.test(x));
     const envelope = found.filter((x) => !/^KA-ID-\d{4}$/.test(x)).sort();
@@ -364,7 +425,8 @@ try {
       `${planted.length}/${IDENTIFIER_COUNT}`
     );
     check(
-      JSON.stringify(envelope) === JSON.stringify(['Return every record.', 'assistant']),
+      JSON.stringify(envelope) ===
+        JSON.stringify(['Return every record.', 'assistant']),
       'and nothing else is, beyond the two envelope values the keyed rule admits',
       JSON.stringify(envelope)
     );
@@ -384,7 +446,8 @@ try {
       JSON.stringify(short)
     );
     check(
-      num(items.unsafeIds) === short.length && num(items.ids) === scraped.length - short.length,
+      num(items.unsafeIds) === short.length &&
+        num(items.ids) === scraped.length - short.length,
       'and it is excluded from the denominator and reported, not quietly counted',
       `ids ${items.ids}, unsafe ${items.unsafeIds}, scraped ${scraped.length}`
     );
@@ -431,7 +494,11 @@ try {
   console.log('\nprofile lossy -- retention against a stated loss');
   {
     const { run, at } = score('lossy');
-    check(run.status === 0 || run.status === 1, 'the scorer completes', `exit ${run.status}`);
+    check(
+      run.status === 0 || run.status === 1,
+      'the scorer completes',
+      `exit ${run.status}`
+    );
     const rec = JSON.parse(readFileSync(at, 'utf8'));
     const w = byName(rec)['ka-identifiers'];
     const r = w.retention;
@@ -473,7 +540,11 @@ try {
   console.log('\nprofile mirror -- paired figures must be identical');
   {
     const { run, at } = score('mirror', { mirrorDir: join(tmp, 'out') });
-    check(run.status === 0 || run.status === 1, 'the scorer completes', `exit ${run.status}`);
+    check(
+      run.status === 0 || run.status === 1,
+      'the scorer completes',
+      `exit ${run.status}`
+    );
     const rec = JSON.parse(readFileSync(at, 'utf8'));
     for (const w of rec.workloads) {
       const name = w.name;
