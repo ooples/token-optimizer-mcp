@@ -68,6 +68,7 @@ import {
 } from './transformations.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import { serialiseKeepingPrefix } from './cached-prefix.js';
+import { digestOf, reinstatedIn } from './reinstated.js';
 import { record, libraryVersion } from '../telemetry/recorder.js';
 import { noteRequest, flushRollup } from '../telemetry/rollup.js';
 import type { SpillSink, Stamp } from '../compress/types.js';
@@ -1793,9 +1794,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
             const oldest = spilledDigests.values().next().value;
             if (oldest !== undefined) spilledDigests.delete(oldest);
           }
-          spilledDigests.add(
-            createHash('sha256').update(content).digest('hex')
-          );
+          spilledDigests.add(digestOf(content));
           return sink(content, hint);
         };
 
@@ -1806,33 +1805,6 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
    * looked up. It counts a unit once however many times it appears, because the
    * question is whether it was wanted, not how often it was pasted.
    */
-  const countReinstated = (text: string): number => {
-    if (spilledDigests.size === 0) return 0;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      return 0;
-    }
-    const messages = (parsed as { messages?: unknown[] })?.messages;
-    if (!Array.isArray(messages)) return 0;
-    const seen = new Set<string>();
-    for (const message of messages) {
-      const content = (message as { content?: unknown })?.content;
-      const blocks = Array.isArray(content)
-        ? content
-        : typeof content === 'string'
-          ? [{ text: content }]
-          : [];
-      for (const block of blocks) {
-        const body = (block as { text?: unknown })?.text;
-        if (typeof body !== 'string' || body.length === 0) continue;
-        const digest = createHash('sha256').update(body).digest('hex');
-        if (spilledDigests.has(digest)) seen.add(digest);
-      }
-    }
-    return seen.size;
-  };
   // One store per proxy, holding a hash and a boolean per conversation.
   // Per-conversation, never per-request, and passed in explicitly rather
   // than reached for -- HeadRoom's #3486 is a shared router keeping request
@@ -2004,7 +1976,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         // matched against the digests of what left -- the numerator of the one
         // rate the eviction case turns on, where `spilledBlocks` is the
         // denominator and has been recorded all along.
-        reinstatedUnits: countReinstated(body.toString('utf8')),
+        reinstatedUnits: reinstatedIn(body.toString('utf8'), spilledDigests),
         losslessMode: options.spill !== true,
       });
       // SPREAD, NOT RE-LISTED. This was seventeen fields copied across by hand,
