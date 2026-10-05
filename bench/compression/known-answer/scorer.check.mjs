@@ -195,12 +195,28 @@ try {
     // a deficient block; what it cannot prove is that the scorer FILLS one in,
     // and a gate reading a field nothing writes passes every record forever.
     const rep = rec.reproduction ?? {};
+    // THE COUNTER CHANGED AND THIS GATE DID NOT. It required
+    // `encoding === 'cl100k_base'` and a semver tiktoken version, which is the
+    // toolchain that no longer produces any number in the record: the column is
+    // counted by Anthropic's `count_tokens` from a recorded fixture now. So the
+    // gate asserted a stale fact about a current record and reported it as the
+    // record's problem.
+    //
+    // What identifies the currency today is the model and the fixture the
+    // counts came from -- a figure is only as good as that fixture, and two
+    // records priced against different ones are not comparable. `envelope` is
+    // the per-request overhead every count is net of, so a change in it changes
+    // every figure.
+    const counts = rep.counts ?? {};
     check(
       rep.node === process.versions.node &&
-        /^[0-9]+[.][0-9]+[.][0-9]+/.test(String(rep.tiktoken)) &&
-        rep.encoding === 'cl100k_base',
+        String(rep.encoding).startsWith('anthropic:') &&
+        String(counts.model).length > 0 &&
+        Number.isInteger(counts.envelope) &&
+        Number.isInteger(counts.strings) &&
+        counts.strings > 0,
       'the record states the toolchain the token column was measured with',
-      `node ${rep.node}, tiktoken ${rep.tiktoken}, ${rep.encoding}`
+      `node ${rep.node}, ${rep.encoding}, counts ${counts.model} envelope ${counts.envelope} over ${counts.strings} string(s)`
     );
     check(
       /^[0-9a-f]{16}$/.test(String(rep.payloadsDigest)) &&
