@@ -30,6 +30,21 @@
  * been decided in the turn that acts on it. Whether that lands is a question
  * for a live session, which is why this ships gated and measured rather than
  * on.
+ *
+ * WHERE IT MUST BE INJECTED, learned by putting it in the wrong place first.
+ * strategy.ts injects the knowledge block at the end of `v1Frontier`, and that
+ * line is downstream of an early return: with nothing compressible -- which is
+ * every first request, since the frontier only works on the span after the
+ * breakpoint it saw LAST turn -- the function returns before reaching it.
+ * Wired there, the guidance never appeared at all: `injectedChars` stayed 0 and
+ * the system block was byte-identical with the flag on and off.
+ *
+ * It is worse than useless there even when it does fire. A constant instruction
+ * has to be present from the first request or not at all: arriving on the turn
+ * compression first happens changes the cached prefix mid-session, so it would
+ * pay a full cache write on everything after it for the privilege of arriving
+ * late. It belongs where the proxy rewrites every request, unconditionally when
+ * enabled.
  */
 
 /** The env var an operator sets to turn this on. */
