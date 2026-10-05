@@ -272,6 +272,33 @@ export function calibrationLine(report: ProxySavingsReport): string {
  * disappearing -- an absent latency line beside a large saving reads as a
  * saving that cost nothing.
  */
+/**
+ * What the withholding arm held back, when it is on.
+ *
+ * SILENT WHEN IT IS OFF, because a line reading "0 units withheld" on every
+ * report of every operator who never enabled the arm says nothing and trains
+ * people to skip it. The arm is opt-in -- `--spill` with
+ * `TOKEN_OPTIMIZER_COMPRESSION=aggressive` -- and this appears only once it has
+ * actually moved something.
+ *
+ * It reports the count and NOT a saving. What withholding is worth depends on
+ * how often the content is wanted back, and that rate is not in this ledger:
+ * the numerator would be retrievals, which arrive as tool results and are
+ * counted on the telemetry rollup rather than here. Printing a dollar figure
+ * from the count alone would be the projection this branch has been careful not
+ * to publish as a result.
+ */
+export function withheldLine(report: ProxySavingsReport): string {
+  const all = report.windows.find((window) => window.since === null);
+  const held = all?.withheldUnits ?? 0;
+  if (all === undefined || held === 0) return '';
+  return (
+    `Withheld by the aggressive arm: ${count(held)} unit(s) moved out of ` +
+    `${count(all.requests)} request(s). What that saves depends on how often ` +
+    `they are asked for again, which this ledger does not record.`
+  );
+}
+
 export function latencyLine(report: ProxySavingsReport): string {
   const all = report.windows.find((window) => window.since === null);
   if (all === undefined || all.requests === 0) return '';
@@ -519,6 +546,8 @@ export function renderProxySavings(
   if (deferral !== '') lines.push(deferral);
   const latency = latencyLine(report);
   if (latency !== '') lines.push(latency);
+  const withheld = withheldLine(report);
+  if (withheld !== '') lines.push(withheld);
   lines.push(...outputLines(report));
   const gate = proxyGateNote(report);
   if (gate !== '') lines.push(gate);
