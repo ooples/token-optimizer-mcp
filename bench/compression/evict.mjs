@@ -158,7 +158,45 @@ if (rows.length === 0) {
     );
   const base = rows.reduce((s, r) => s + r.base, 0);
   const evicted = rows.reduce((s, r) => s + r.evicted, 0);
+  const ratio = (v) => (v / base).toFixed(3);
   console.log(
-    `\nbatched eviction of unreferenced messages: ${Math.round(base)} -> ${Math.round(evicted)} (${(evicted / base).toFixed(3)}x), measured turn by turn with the prefix found in bytes`
+    String.fromCharCode(10) +
+      'batched eviction everywhere: ' +
+      Math.round(base) +
+      ' -> ' +
+      Math.round(evicted) +
+      ' (' +
+      ratio(evicted) +
+      'x)'
   );
+  // GATED: TAKE THE ARM ONLY WHERE IT PAYS. Applied everywhere, eviction loses
+  // on some shapes -- human-authored-json by 35% -- because the stub breaks the
+  // cached prefix and the residency saved does not cover re-writing what
+  // follows. The decision is per conversation, and the harness can make it the
+  // way a proxy would: price both arms and keep the cheaper. A policy that can
+  // decline is strictly better than one that cannot, and the gap between these
+  // two lines is what the global version throws away.
+  const gated = rows.reduce((s, r) => s + Math.min(r.base, r.evicted), 0);
+  const declined = rows.filter((r) => r.evicted >= r.base).length;
+  console.log(
+    'gated, taken only where it pays: ' +
+      Math.round(base) +
+      ' -> ' +
+      Math.round(gated) +
+      ' (' +
+      ratio(gated) +
+      'x), declined on ' +
+      declined +
+      ' of ' +
+      rows.length +
+      ' conversation(s)'
+  );
+  // A gate that can make things worse is not a gate.
+  if (gated > base)
+    throw new Error(
+      'a gated policy cannot cost more than its baseline: ' +
+        gated +
+        ' against ' +
+        base
+    );
 }

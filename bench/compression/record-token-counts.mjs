@@ -78,6 +78,9 @@ const TARGETS = [
   // before it left cached. Its payloads are whole requests rather than single
   // replies, so it contributes the largest strings in the fixture.
   'bench/compression/replay.mjs',
+  // The eviction arms, which replay each conversation twice and so contribute
+  // both the baseline bodies and the stubbed ones.
+  'bench/compression/evict.mjs',
 ];
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages/count_tokens';
