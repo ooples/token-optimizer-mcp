@@ -56,7 +56,13 @@ import { inputParity } from './input-parity.mjs';
 import { retentionVerdict, tightenFloor } from './retention-floor.mjs';
 import { bothColumns, columnsFor } from './arm-selection.mjs';
 import { agreeAcrossRecordings } from './replicate-agreement.mjs';
-import { instrumentFingerprint, inheritance, retractionMap, writeEntry } from './ratchet.mjs';
+import {
+  instrumentFingerprint,
+  inheritance,
+  retractionMap,
+  writeEntry,
+} from './ratchet.mjs';
+import { sideFromRecord } from './store-effect.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // WHICH RECORD IS BEING JUDGED. The canonical one by default; `--results <path>`
@@ -109,7 +115,10 @@ if (resultsFlag !== -1 && (RESULTS === undefined || RESULTS.startsWith('--'))) {
   console.error('--results needs a path');
   process.exit(2);
 }
-if (replicateFlag !== -1 && (REPLICATE === undefined || REPLICATE.startsWith('--'))) {
+if (
+  replicateFlag !== -1 &&
+  (REPLICATE === undefined || REPLICATE.startsWith('--'))
+) {
   console.error('--replicate needs a path');
   process.exit(2);
 }
@@ -120,7 +129,7 @@ if (replicateFlag !== -1 && (REPLICATE === undefined || REPLICATE.startsWith('--
 if (resultsFlag !== -1 && replicateFlag === -1) {
   console.error(
     'warning: --results without --replicate judges this capture against the PUBLISHED ' +
-      "replicate, so every speed row will read NOT ENFORCEABLE -- two captures are not two " +
+      'replicate, so every speed row will read NOT ENFORCEABLE -- two captures are not two ' +
       'recordings of one. Record a second pass of the same capture dir and pass --replicate.'
   );
 }
@@ -183,7 +192,8 @@ const num = (v) => (v === null || v === undefined ? null : Number(v));
  * quietly. Nothing here can turn into a pass either: an unclaimed criterion is
  * never promoted and never enforced.
  */
-const outOfScope = (criterion, cfg) => criterion === 'retention' && cfg.retention === null;
+const outOfScope = (criterion, cfg) =>
+  criterion === 'retention' && cfg.retention === null;
 
 /**
  * The four must-wins for one row, each as `{ pass, detail }`, with `pass: null`
@@ -204,9 +214,7 @@ function comparableRefusal(row) {
   if (row.comparable === undefined || row.comparable === null)
     return 'comparable arm UNRECORDED (re-run head-to-head)';
   if (row.comparable.arm === null || row.comparable.arm === undefined)
-    return (
-      'no comparable arm: ' + String(row.comparable.detail ?? 'no detail')
-    );
+    return 'no comparable arm: ' + String(row.comparable.detail ?? 'no detail');
   if (row.input?.comparableSame === false)
     return `${row.comparable.arm} was handed different bytes from ours`;
   if (row.input?.comparableSame === undefined)
@@ -288,8 +296,7 @@ function judge(row, cfg, floors) {
     const woc = num(wc.ours);
     const wtc = num(wc.theirsAtLeast);
     const p0okc = tie ? p0o <= p0c : p0o < p0c;
-    const wokc =
-      tie && Number(wc.fetchRate) === 0 ? woc <= wtc : woc < wtc;
+    const wokc = tie && Number(wc.fetchRate) === 0 ? woc <= wtc : woc < wtc;
     return {
       pass: p0okc && p1o < p1c && wokc,
       detail:
@@ -325,8 +332,10 @@ function judge(row, cfg, floors) {
   // That is UNMEASURED, not a loss, and it is not a pass either.
   const proxyRefusal = (() => {
     if (c.session.p0.proxy === null || c.session.p0.proxy === undefined)
-      return 'no proxy arm on this payload: it is not a message list, so there ' +
-        'is no request body for the proxy to rewrite';
+      return (
+        'no proxy arm on this payload: it is not a message list, so there ' +
+        'is no request body for the proxy to rewrite'
+      );
     if (c.session.worstProxy === undefined)
       return 'proxy worst point UNRECORDED (re-run head-to-head)';
     return null;
@@ -336,7 +345,8 @@ function judge(row, cfg, floors) {
   const proxyBest = (() => {
     if (proxyRefusal !== null) return { pass: null, detail: proxyRefusal };
     const wp = c.session.worstProxy;
-    if (wp === null) return { pass: null, detail: 'proxy worst point UNRECORDED' };
+    if (wp === null)
+      return { pass: null, detail: 'proxy worst point UNRECORDED' };
     const wpo = num(wp.proxy);
     const wpt = num(wp.theirs);
     const p0okp = tie ? px0 <= p0t : px0 < p0t;
@@ -451,7 +461,12 @@ function judge(row, cfg, floors) {
   // its own known-answer suite -- including the arm that proves a copied record
   // is rejected as a second recording.
   const mustAgreeAcrossRecordings = (judge) =>
-    agreeAcrossRecordings({ judge, primary: results, replicate: replicateFile, name: row.name });
+    agreeAcrossRecordings({
+      judge,
+      primary: results,
+      replicate: replicateFile,
+      name: row.name,
+    });
 
   const speedBestOf = (speed) => {
     if (load.ok === false) return { pass: null, detail: load.detail };
@@ -555,9 +570,13 @@ function judge(row, cfg, floors) {
     if (why !== null) return { pass: null, detail: why };
     const offloads = (speed?.theirsComparableTurns ?? 0) > 0;
     const v = latencyVerdict({
-      ourTransformPasses: offloads ? speed?.oursSubMsPasses : speed?.oursMsPasses,
+      ourTransformPasses: offloads
+        ? speed?.oursSubMsPasses
+        : speed?.oursMsPasses,
       theirTransformPasses: speed?.theirsComparableMsPasses,
-      ourTurns: num(offloads ? row.cost?.turns?.oursSub : row.cost?.turns?.ours),
+      ourTurns: num(
+        offloads ? row.cost?.turns?.oursSub : row.cost?.turns?.ours
+      ),
       theirTurns: num(c.turns.theirsComparable),
       ourFetch: offloads ? (speed?.oursSubFetch ?? null) : null,
       // THEIR RETRIEVAL IS THEIR STORE WHICHEVER ARM WROTE THE MARKER, so the
@@ -664,7 +683,9 @@ const ratchet = existsSync(RATCHET)
 // different one is not silently carried. See ratchet.mjs for the promotion this
 // caught: five speed passes taken against their engine while its native
 // detector was off and its model had not loaded.
-const fingerprint = instrumentFingerprint(results.capture?.theirsProvenance ?? null);
+const fingerprint = instrumentFingerprint(
+  results.capture?.theirsProvenance ?? null
+);
 
 const report = {};
 const regressed = [];
@@ -682,9 +703,7 @@ const nextFloors = { ...floors };
 for (const row of results.workloads) {
   const cfg = ROWS[row.name];
   if (!cfg) continue;
-  for (const [criterion, v] of Object.entries(
-    judge(row, cfg, floors)
-  )) {
+  for (const [criterion, v] of Object.entries(judge(row, cfg, floors))) {
     // THE FLOOR IS THE FEWEST UNITS EVER LOST, not the most ever retained, and
     // it carries the denominator that count was taken over. A ratchet may only
     // tighten, which `tightenFloor` is responsible for.
@@ -714,12 +733,18 @@ for (const row of results.workloads) {
     };
     // A pair stays enforced once enforced, so a regression is reported on every
     // later run rather than only on the one that caused it.
-    if (v.pass === true) next[key] = writeEntry(results.capture?.dir ?? 'unrecorded', fingerprint);
+    if (v.pass === true)
+      next[key] = writeEntry(results.capture?.dir ?? 'unrecorded', fingerprint);
     else if (was) next[key] = ratchet.enforced?.[key];
     // A CLAIM WHOSE INSTRUMENT IS UNKNOWN AND THAT DOES NOT PASS NOW IS RETRACTED,
     // in the file, with the verdict that replaced it. Deleting the key would
     // leave no trace that the claim was ever made.
-    else if (carry.reason !== null) retractions[key] = { reason: carry.reason, verdict: v.detail, pass: v.pass };
+    else if (carry.reason !== null)
+      retractions[key] = {
+        reason: carry.reason,
+        verdict: v.detail,
+        pass: v.pass,
+      };
     if (v.pass === true && !was) unpromoted.push(`${key} - ${v.detail}`);
     // AN ENFORCED PAIR THAT NO LONGER PASSES FAILS THE GATE EITHER WAY, but the
     // two ways are different facts and get reported as such. `false` means the
@@ -727,17 +752,75 @@ for (const row of results.workloads) {
     // saying "regressed" there is the same category error as publishing a
     // saturated fit's zero residual: it reports as a finding about the code
     // something that is only a fact about the measurement.
-    if (v.pass === false && was) regressed.push(`${key} - ${v.detail} (was enforced)`);
-    if (v.pass === null && was) unverified.push(`${key} - ${v.detail} (was enforced)`);
+    if (v.pass === false && was)
+      regressed.push(`${key} - ${v.detail} (was enforced)`);
+    if (v.pass === null && was)
+      unverified.push(`${key} - ${v.detail} (was enforced)`);
     if (v.pass === false && !was)
       open.push(`#${cfg.issue} ${key} - ${v.detail}`);
-    if (v.pass === null && !was && outOfScope(criterion, cfg))
-    {
+    if (v.pass === null && !was && outOfScope(criterion, cfg)) {
       unclaimed.push(`#${cfg.issue} ${key} - ${v.detail}`);
       unclaimedKeys.push(key);
-    }
-    else if (v.pass === null && !was)
+    } else if (v.pass === null && !was)
       open.push(`#${cfg.issue} ${key} - UNMEASURED: ${v.detail}`);
+  }
+}
+
+/**
+ * Passes that need THEIR store warm, which are not ours to enforce.
+ *
+ * `store-pair.check.mjs` refuses to let an enforced criterion depend on the
+ * competitor's cache being warm, and it caught three the first time this gate
+ * promoted a full set -- code-search/speed, code-search/latency and
+ * sre-debugging/speed pass warm and fail the comparable arm from an empty
+ * store. It caught them AFTERWARDS, with the ratchet already written, and the
+ * only ways back were hand-editing a generated file or re-running against a
+ * record chosen not to contain the pass.
+ *
+ * So the judgement moves to where the decision is made. These are reported and
+ * NOT counted as unrecorded passes: a gate that demanded they be promoted
+ * while promote withheld them could never go green, which is the deadlock the
+ * first version of this created. They are also never retracted -- this only
+ * withholds a promotion.
+ *
+ * THE DECISION IS PERSISTED IN THE RATCHET, not re-derived from a file beside
+ * the results. The first version read the store-empty record as a sibling path
+ * of whatever `--results` named, so a run against a copy elsewhere -- which is
+ * exactly what tests/bench/must-win-exit-status.test.mjs does -- could not see
+ * it, fell back to calling the three "newly passing", and failed. Where a pair
+ * is enforceable is a fact about the pair, so it belongs with the other facts
+ * about the pair.
+ */
+const warmOnly = [...(ratchet.warmOnly ?? [])].filter((key) =>
+  unpromoted.some((line) => line.split(' - ')[0] === key)
+);
+for (const key of warmOnly)
+  unpromoted.splice(
+    unpromoted.findIndex((line) => line.split(' - ')[0] === key),
+    1
+  );
+{
+  const emptyPath = RESULTS.replace(/\.json$/, '.store-empty.json');
+  const emptyReplicate = RESULTS.replace(
+    /\.json$/,
+    '.store-empty.replicate.json'
+  );
+  if (existsSync(emptyPath) && unpromoted.length > 0) {
+    const side = sideFromRecord(
+      'empty',
+      emptyPath,
+      existsSync(emptyReplicate) ? emptyReplicate : undefined
+    );
+    for (const line of [...unpromoted]) {
+      const key = line.split(' - ')[0];
+      const cut = key.lastIndexOf('/');
+      const onEmpty =
+        side.verdicts?.[key.slice(0, cut)]?.[key.slice(cut + 1)]?.pass ?? null;
+      if (onEmpty !== true && !warmOnly.includes(key)) {
+        warmOnly.push(key);
+        unpromoted.splice(unpromoted.indexOf(line), 1);
+      }
+    }
   }
 }
 
@@ -753,8 +836,12 @@ if (promote) {
     );
     process.exit(1);
   }
-  const enforced = Object.fromEntries(Object.keys(next).sort().map((k) => [k, next[k]]));
-  // A RETRACTION THAT HAS SINCE BEEN RE-EARNED IS STAMPED, NOT DELETED -- see
+  for (const key of warmOnly) delete next[key];
+  const enforced = Object.fromEntries(
+    Object.keys(next)
+      .sort()
+      .map((k) => [k, next[k]])
+  );
   // `retractionMap` in ratchet.mjs, and ratchet.check.mjs for the cases.
   const retracted = retractionMap(
     ratchet.retracted,
@@ -771,6 +858,8 @@ if (promote) {
         note: ratchet.note,
         enforced,
         retracted,
+        // Reported every run, never enforced; see `warmOnly` above.
+        warmOnly: [...warmOnly].sort(),
         retentionFloors: nextFloors,
       },
       null,
@@ -857,7 +946,9 @@ console.log(
 );
 console.log(
   `capture: ${results.capture?.dir ?? 'unrecorded'}` +
-    (resultsFlag === -1 ? '' : ` (--results ${RESULTS}, not the published record)`) +
+    (resultsFlag === -1
+      ? ''
+      : ` (--results ${RESULTS}, not the published record)`) +
     ` | replicate: ${replicateFile?.capture?.dir ?? 'none'}` +
     (replicateFlag === -1 ? '' : ` (--replicate ${REPLICATE})`)
 );
@@ -870,6 +961,10 @@ if (unclaimed.length)
   console.log(
     `\nNOT CLAIMED BY ANY ISSUE - measured, reported, and not counted as open ` +
       `work:\n  ${unclaimed.join('\n  ')}`
+  );
+if (warmOnly.length)
+  console.log(
+    `\nPASSES ONLY FROM A WARM STORE - reported, and not enforceable:\n  ${warmOnly.join('\n  ')}\n  Their cache being warm is not a property of our code, so the ratchet does not take these.`
   );
 if (unpromoted.length)
   console.log(
