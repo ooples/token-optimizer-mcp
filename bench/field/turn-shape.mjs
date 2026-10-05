@@ -108,6 +108,25 @@
  * through proxy-side injection. I did not apply the test until after pricing
  * the turn lever as a win, which is a check that belongs before a headline.
  *
+ * COMPACTION FAILS THE TEST TOO, mostly. The client already compacts: 1,792
+ * compaction markers across 390,142 transcript lines. So the measured N of 56
+ * is already a compacted world, client-side compaction is a common factor that
+ * helps any optimizer in that position equally, and ours is worth only the
+ * MARGIN over what the client does unprompted. That is a much smaller lever
+ * than "replace twenty turns with a digest" suggested when it was picked.
+ *
+ * Which leaves the approved list thin, and honestly so:
+ *
+ *   cache TTL              closed -- W is a common factor
+ *   compaction             deflated -- the client already does it 1,792 times
+ *   batching               passes only via proxy injection, and the precedent
+ *                          says asking achieves little (1.15 calls per turn
+ *                          against an instruction that already asks)
+ *   think-then-act merge   33% measured, passes via proxy injection, untested
+ *
+ * The last is the only one with a large number that survives the test, and what
+ * it needs is a live session rather than more arithmetic.
+ *
  * AND THE BATCHABLE HEADROOM IS BOUNDED, measured the same way. Of 36,301 runs
  * of consecutive tool-only turns holding 52,785 turns between them, 69.5% are a
  * run of ONE -- a single tool call sitting between two pieces of reasoning,
