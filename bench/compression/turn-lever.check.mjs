@@ -96,6 +96,24 @@ const FIELD = Object.freeze({
 });
 
 /**
+ * `bench/field/batch-headroom.mjs`, as of 2026-10-05.
+ *
+ * NOT BYTE-STABLE, and the figures drift upward between runs because the
+ * session doing the measuring is appending to the transcripts being measured
+ * -- 52,972 then 52,974 then 52,983 acting turns across three consecutive
+ * runs. The fractions are stable to a tenth of a percent, which is what these
+ * are used for; the absolute counts are an as-of and not a fixture.
+ */
+const BATCH = Object.freeze({
+  actingTurns: 52983,
+  scoredPairs: 50943,
+  /** UPPER bound: no distinctive token shared with the earlier result. */
+  noTextualDependence: 29427,
+  /** LOWER bound: every token was in context before the earlier call. */
+  everyInputInHand: 19153,
+});
+
+/**
  * The block the lever would have injected, kept verbatim for its length.
  *
  * CHARGED AT ITS CHARACTER COUNT. A real token count needs the recorded
@@ -250,6 +268,72 @@ check(
 check(
   collapsed > headroom * 10,
   `and it is a different lever: ${(collapsed * 100).toFixed(0)}% against the merge instruction's ${(headroom * 100).toFixed(2)}%`
+);
+
+// ---------------------------------------------------------------------------
+// THE BATCHING ARM, PRICED. This is where the merge instruction's argument
+// lands once the measurement is right: the behaviour is NOT already universal
+// -- 1.15 calls per turn, 92.1% of turns carrying exactly one -- so unlike the
+// merge case there is headroom for an instruction to move.
+// ---------------------------------------------------------------------------
+const batchB = BATCH.everyInputInHand / BATCH.actingTurns;
+const batchA = BATCH.noTextualDependence / BATCH.actingTurns;
+check(
+  batchB > headroom * 100,
+  `batching headroom is ${(batchB / headroom).toFixed(0)}x the merge instruction's: ${(batchB * 100).toFixed(1)}% of turns against ${(headroom * 100).toFixed(2)}%`
+);
+
+console.log('');
+for (const [label, rate] of [
+  ['arm B (lower)', batchB],
+  ['arm A (upper)', batchA],
+]) {
+  const n = RECORDED.turnsAfter * (1 - rate);
+  const cost = oursAt(n);
+  console.log(
+    `${label}: N -> ${n.toFixed(1)}, ${cost.toFixed(0)}, cap ${capMultiple(cost, n).toFixed(2)}x against their ${theirsCap.toFixed(2)}x  (block charged)`
+  );
+}
+
+const batchN = RECORDED.turnsAfter * (1 - batchB);
+const batchCost = oursAt(batchN);
+check(
+  batchCost < RECORDED.theirsP0,
+  `arm B alone takes p=0: ${batchCost.toFixed(0)} against their ${RECORDED.theirsP0} (${(((RECORDED.theirsP0 - batchCost) / RECORDED.theirsP0) * 100).toFixed(1)}% cheaper), with the block's residency already charged`
+);
+check(
+  capMultiple(batchCost, batchN) > theirsCap,
+  `and the cap multiple: ${capMultiple(batchCost, batchN).toFixed(2)}x against their ${theirsCap.toFixed(2)}x`
+);
+
+/** The obedience rate at which a batching block pays for its own residency. */
+const batchPayback = (() => {
+  for (let rate = 0; rate <= 1.0001; rate += 0.0005) {
+    const n = RECORDED.turnsAfter * (1 - batchB * rate);
+    if (oursAt(n) <= RECORDED.oursP0) return rate;
+  }
+  return null;
+})();
+check(
+  batchPayback !== null && batchPayback < 0.05,
+  `a batching block pays for itself at ${batchPayback === null ? 'no' : (batchPayback * 100).toFixed(2) + '%'} obedience -- against the merge instruction, which never does`
+);
+
+/** The obedience rate at which it takes the p=0 column. */
+const batchToWin = (() => {
+  for (let rate = 0; rate <= 1.0001; rate += 0.0005) {
+    const n = RECORDED.turnsAfter * (1 - batchB * rate);
+    if (capMultiple(oursAt(n), n) >= theirsCap) return rate;
+  }
+  return null;
+})();
+check(
+  batchToWin !== null && batchToWin < 0.5,
+  `and takes the p=0 cap multiple at ${batchToWin === null ? 'unreachable' : (batchToWin * 100).toFixed(1) + '%'} obedience`
+);
+console.log(
+  `
+WHAT IS STILL UNMEASURED: whether an instruction moves the calls-per-turn figure at all. The headroom is real and the break-even is low; obedience is not a number this file has.`
 );
 
 if (failures.length > 0) {

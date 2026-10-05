@@ -68,6 +68,8 @@ import {
 } from './transformations.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import { serialiseKeepingPrefix } from './cached-prefix.js';
+import { batchGuidance } from '../compress/batch-guidance.js';
+import { injectKnowledge } from '../compress/knowledge.js';
 import { digestOf, reinstatedIn } from './reinstated.js';
 import { record, libraryVersion } from '../telemetry/recorder.js';
 import { noteRequest, flushRollup } from '../telemetry/rollup.js';
@@ -1945,6 +1947,44 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
           }
         });
 
+      // THE BATCHING GUIDANCE, INJECTED BEFORE ANYTHING ELSE LOOKS AT THE BODY.
+      //
+      // Off unless the operator asks. It is HERE and not in the compression
+      // strategy, where the knowledge block goes and where this was first
+      // wired, because that injection sits downstream of an early return taken
+      // by every request with nothing compressible -- which includes the first
+      // request of every session. With the flag on, five unit tests passing and
+      // the strategy wired, the block reached no request at all.
+      //
+      // And a session-constant instruction has to arrive on the FIRST request
+      // or not at all: arriving later moves the cached prefix mid-session and
+      // charges a write on everything behind it, which costs more than the
+      // instruction can save. Injected here, consistently, our outgoing prefix
+      // is stable turn to turn and the cost is one re-serialisation against the
+      // client's bytes, paid once rather than missed every turn.
+      //
+      // NOT ON EVERY ROUTE. `count_tokens` is the client asking what a request
+      // would cost; adding to it would make the answer describe a request the
+      // client never sends, and a token count has to stay the client's own.
+      const generates = /\/(messages|chat\/completions)\/?$/.test(
+        (requestPath(req.url) ?? '').split('?')[0]
+      );
+      const guidance = generates ? batchGuidance() : null;
+      let guidanceChars = 0;
+      if (guidance !== null) {
+        try {
+          const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
+          body = Buffer.from(
+            JSON.stringify(injectKnowledge(parsed, guidance)),
+            'utf8'
+          );
+          guidanceChars = guidance.length;
+        } catch {
+          // A body that does not parse is one we leave alone: the guidance is
+          // an optimisation and must never be the reason a request fails.
+        }
+      }
+
       const transformStarted = performance.now();
       const spilledBefore = spilledBlocks;
       const { body: next, summary } = compressBody(
@@ -1971,7 +2011,12 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         beforeBytes: summary.beforeBytes,
         afterBytes: summary.afterBytes,
         compressed: summary.compressed,
-        injectedChars: summary.injectedChars,
+        // THE GUIDANCE COUNTS AS INJECTION. It is text we added that the
+        // client did not send, which is what injectedChars means; leaving it
+        // out would let the block read as free in the ledger, and that is
+        // exactly how an A/B of the knowledge block once read its own effect
+        // as zero.
+        injectedChars: (summary.injectedChars ?? 0) + guidanceChars,
         elisions: summary.elisions,
         spilledBlocks: spilledBlocks - spilledBefore,
         // COUNTED ON THE WAY IN, BEFORE THIS REQUEST IS REWRITTEN. A unit the
