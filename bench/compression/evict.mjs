@@ -20,8 +20,13 @@
  * -- a stub rather than a hole, so a wrong decision costs a turn of latency
  * when the model asks again rather than costing the answer.
  *
- * MEASURED WITH RECORDED COUNTS: 2,868,124 -> 2,639,288, which is 0.920x and an
- * 8% saving. Run in census mode, where an unrecorded string is answered with
+ * MEASURED WITH RECORDED COUNTS: 0.925x ungated at unit grain, 0.920x gated --
+ * no better than the 0.920x message grain already gave. Unit grain read 0.886x
+ * in census mode and that was an artifact: chars/4 undercounts a stub-heavy
+ * body, so the finer grain looked like an improvement and is not one. The gate
+ * is what holds the line, declining on 3 of 18 conversations and recovering
+ * 0.925x back to 0.920x, which is the first time it has been worth more than a
+ * thousandth. Run in census mode, where an unrecorded string is answered with
  * chars/4, the same arms read 0.815x -- so the estimate flattered eviction by
  * more than a factor of two, and the 18.5% this file reported before the
  * payloads were recorded was not a measurement.
