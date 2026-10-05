@@ -171,9 +171,22 @@ export interface CompressionFacts {
    * rather than per whole-unit move, or copying the result object changes
    * something downstream that depends on its identity.
    *
-   * So the next attempt starts by establishing what each counter counts -- a
-   * test that spills a known number of known units and asserts both figures --
-   * before adding a field to either. An 11x move in a measurement from a
+   * BISECTED SINCE, and it is the wrapper alone. Applying only the sink wrapper
+   * -- counting into a variable that is then discarded, no result copied, no
+   * field added -- still moves the figure from 75 to 845. The result spread is
+   * innocent. And `spillTo` returns a plain arrow with no attached properties,
+   * so the engine cannot be reading anything off the sink that a wrapper drops.
+   *
+   * What a known-answer test DID settle (tests/unit/proxy/spill-counts-what.test.ts):
+   * one sink call is one whole-unit move, not one elided fragment, and a move is
+   * also counted as an elision. Four incompressible messages give four calls and
+   * four elisions. So the replay's 854 elisions against 75 spills means most of
+   * its elisions are in-place -- and a delegating wrapper cannot turn an
+   * in-place elision into a move. The mechanism is still unexplained.
+   *
+   * The next attempt therefore starts from the bisect, not from the feature:
+   * find what observable differs between calling the proxy's sink directly and
+   * calling it through one extra frame. An 11x move in a measurement from a
    * refactor that cannot affect it means the measurement was not understood,
    * and shipping a report built on it would publish that misunderstanding.
    */
