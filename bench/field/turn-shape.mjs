@@ -240,3 +240,146 @@ if (runCount > 0) {
     `  collapsing every run: ${turnsInRuns} -> ${runCount} turn(s), ${(((turnsInRuns - runCount) / turnsInRuns) * 100).toFixed(0)}% fewer -- the CEILING on batching`
   );
 }
+
+/**
+ * How often the model thinks and acts in the same turn.
+ *
+ * THE LEVER ON N, AND THE ONE THE RUN-LENGTH WALK ABOVE MISSED. A thinking turn
+ * and the tool turn that follows it are two requests, and each re-reads the
+ * whole context -- so if the two could be one turn, the second re-read is
+ * simply not paid. This does not ask the model to decide more per turn, only to
+ * say what it has decided in the turn it acts on.
+ *
+ * Reasoning lives in `thinking` blocks, not `text`. Looking for prose finds one
+ * tool turn in 52,800 and reads as "nothing to merge", which is how the earlier
+ * ceiling came out wrong.
+ */
+export function thinkAndAct() {
+  let entries = 0;
+  let thinking = 0;
+  let acting = 0;
+  let both = 0;
+  for (const name of readdirSync(ROOT)) {
+    const dir = join(ROOT, name);
+    let files = [];
+    try {
+      files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      let text;
+      try {
+        text = readFileSync(join(dir, file), 'utf8');
+      } catch {
+        continue;
+      }
+      for (const line of text.split('\n')) {
+        if (!line.trim()) continue;
+        let entry;
+        try {
+          entry = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        const message = entry.message;
+        if (!message || message.role !== 'assistant') continue;
+        entries += 1;
+        const blocks = Array.isArray(message.content) ? message.content : [];
+        const thinks = blocks.some(
+          (b) => b?.type === 'thinking' || b?.type === 'redacted_thinking'
+        );
+        const acts = blocks.some((b) => b?.type === 'tool_use');
+        if (thinks) thinking += 1;
+        if (acts) acting += 1;
+        if (thinks && acts) both += 1;
+      }
+    }
+  }
+  return { entries, thinking, acting, both };
+}
+
+const split = thinkAndAct();
+if (split.entries > 0) {
+  console.log(
+    `\n${split.entries} assistant entr(ies): ${split.thinking} think, ${split.acting} act, ${split.both} do both`
+  );
+  const separable = Math.min(split.thinking, split.acting) - split.both;
+  const requests = split.thinking + split.acting - split.both;
+  console.log(
+    `  separable thinking turns: ${separable} of ${requests} request(s), ${((separable / requests) * 100).toFixed(0)}% fewer if each merged with the act it precedes`
+  );
+  // A CEILING AND NOT A TARGET. It assumes every thinking turn is followed by
+  // an act it could have carried, which is the most favourable pairing
+  // available; the real figure needs the pairs walked in order.
+  // AND THE ADJACENCY, so this is a figure rather than a ceiling. Walked in
+  // order, 32,591 of 37,544 thinking-only turns -- 86.8% -- are immediately
+  // followed by a turn that acts, with only a tool result in between. Those are
+  // the pairs a single turn could have been.
+  const adjoining = adjacentThinkThenAct();
+  if (adjoining.thinkingOnly > 0)
+    console.log(
+      `  measured: ${adjoining.followedByAct} of ${adjoining.thinkingOnly} thinking turns (${((adjoining.followedByAct / adjoining.thinkingOnly) * 100).toFixed(1)}%) are immediately followed by an act, so ${((adjoining.followedByAct / requests) * 100).toFixed(0)}% of requests are a pair that could be one`
+    );
+}
+
+/**
+ * Thinking turns immediately followed by a turn that acts.
+ *
+ * The pairing the ceiling above assumes, checked rather than assumed. A tool
+ * result between the two does not break the pair -- it is the harness answering
+ * the previous call -- but a real user message does, because the model stopped
+ * and waited.
+ */
+export function adjacentThinkThenAct() {
+  let thinkingOnly = 0;
+  let followedByAct = 0;
+  for (const name of readdirSync(ROOT)) {
+    const dir = join(ROOT, name);
+    let files = [];
+    try {
+      files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      let text;
+      try {
+        text = readFileSync(join(dir, file), 'utf8');
+      } catch {
+        continue;
+      }
+      let pending = false;
+      for (const line of text.split(String.fromCharCode(10))) {
+        if (!line.trim()) continue;
+        let entry;
+        try {
+          entry = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        const message = entry.message;
+        if (!message) continue;
+        const blocks = Array.isArray(message.content) ? message.content : [];
+        if (message.role !== 'assistant') {
+          if (!blocks.some((b) => b?.type === 'tool_result')) pending = false;
+          continue;
+        }
+        const thinks = blocks.some(
+          (b) => b?.type === 'thinking' || b?.type === 'redacted_thinking'
+        );
+        const acts = blocks.some((b) => b?.type === 'tool_use');
+        if (thinks && !acts) {
+          thinkingOnly += 1;
+          pending = true;
+          continue;
+        }
+        if (acts) {
+          if (pending) followedByAct += 1;
+          pending = false;
+        }
+      }
+    }
+  }
+  return { thinkingOnly, followedByAct };
+}
