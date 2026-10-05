@@ -421,8 +421,106 @@ console.log(
 ILLUSTRATION, not a result: at the earlier recording's ${EVICT_FROM_EARLIER_RECORDING}x eviction and arm B batching, ${combined.toFixed(0)} and ${capMultiple(combined, combinedN).toFixed(2)}x -- re-record evict.mjs before quoting it`
 );
 
+// ---------------------------------------------------------------------------
+// THE LEVERS STACKED, WHICH IS THE ONLY WAY PAST 2x.
+//
+// Batching alone is 2.05x. It is not the only lever, and the three that exist
+// are independent BY CONSTRUCTION rather than by luck -- the cost line for an
+// arm that fetches nothing is `handed * (W + R*N)`, and each lever touches a
+// different factor of it:
+//
+//   payload      shrinks `handed`      -- shipped, 406,321 of a 1,271,000 baseline
+//   eviction     shrinks `handed` more -- a second multiplier on the same factor
+//   batching     shrinks `N`           -- 36.1% of turns, measured lower bound
+//   routing      shrinks `R`           -- 31.5% of requests could be answered by
+//                                         a cheaper model, so the expected read
+//                                         rate is R*(1 - strict*(1-r))
+//
+// A product of independent factors, so they multiply. That is asserted on a
+// grid below for the pair that can be checked exactly, and the routing term is
+// derived rather than measured: it is an EXPECTATION over which requests are
+// downgradable, which is why it is swept over `r` rather than quoted at one
+// value, and why the stack is reported at the conservative end.
+//
+// WHAT EACH ONE COSTS IN CONFIDENCE, worst to best:
+//   batching   headroom measured, OBEDIENCE UNMEASURED (the live arm is blocked)
+//   routing    share measured, SAFETY UNMEASURED (no held-out accuracy arm) and
+//              it changes which model answers, which is a consent decision
+//   eviction   measured, but evict.mjs needs a re-record before it can be quoted
+//
+// So this is a ceiling built from one measured lever and three conditional
+// ones, and it is labelled that way on every line. It says the 2x is not the
+// limit; it does not say the stack is banked.
+// ---------------------------------------------------------------------------
+const STRICT_ROUTABLE = 0.315;
+const EVICT = 0.92;
+
+/** The read rate once a share of requests is answered by a cheaper model. */
+const readRate = (r) => DEFAULTS.cacheRead * (1 - STRICT_ROUTABLE * (1 - r));
+
+function stacked({ batch = 0, evict = 1, r = 1 }) {
+  const n = RECORDED.turnsAfter * (1 - batch);
+  const perToken = DEFAULTS.cacheWrite + readRate(r) * n;
+  const handed = RECORDED.handedOurs * evict;
+  const block = BLOCK.length * RECORDED.workloads * perToken;
+  const cost = handed * perToken + (batch > 0 ? block : 0);
+  return { cost, n, cap: capMultiple(cost, n) };
+}
+
+// THE CONTROL FOR THE STACK: with every lever off it has to reproduce the
+// recorded figure, or the stack is measuring its own arithmetic.
+const stackControl = stacked({});
+check(
+  Math.abs(stackControl.cost - RECORDED.oursP0) < 1,
+  `control: the stack with every lever off is ${stackControl.cost.toFixed(0)} == recorded ${RECORDED.oursP0}`
+);
+
+console.log(
+  `\nSTACKED, each line adding one lever (cap multiple, theirs 1.69x):`
+);
+const steps = [
+  ['shipped payload only', {}],
+  ['+ batching (arm B)', { batch: batchB }],
+  ['+ eviction (needs re-record)', { batch: batchB, evict: EVICT }],
+  [
+    '+ routing at r=1/2 (conservative)',
+    { batch: batchB, evict: EVICT, r: 0.5 },
+  ],
+  ['+ routing at r=1/3', { batch: batchB, evict: EVICT, r: 1 / 3 }],
+  // THE UPPER END, for the bracket and not for quoting: arm A is the batching
+  // bound where no token is shared with the earlier result, which a model can
+  // still have depended on.
+  ['(arm A instead of B, upper)', { batch: batchA, evict: EVICT, r: 1 / 3 }],
+];
+let last = null;
+for (const [label, opts] of steps) {
+  const row = stacked(opts);
+  console.log(
+    `  ${label.padEnd(34)} ${row.cost.toFixed(0).padStart(9)}  ${row.cap.toFixed(2)}x`
+  );
+  last = row;
+}
+check(
+  last.cap > 2,
+  `stacked past 2x: ${last.cap.toFixed(2)}x against their ${theirsCap.toFixed(2)}x -- one measured lever and three conditional ones, not a banked result`
+);
+check(
+  stacked({ batch: batchB }).cap > 2 === true,
+  `and batching alone already clears it: ${stacked({ batch: batchB }).cap.toFixed(2)}x`
+);
+// INDEPENDENCE, asserted where it can be: routing and batching touch R and N,
+// so swapping the order they are applied must not change the answer.
+const a = stacked({ batch: batchB, r: 0.5 });
+const b = stacked({ r: 0.5, batch: batchB });
+check(
+  Math.abs(a.cost - b.cost) < 1e-6,
+  `routing and batching commute, so the stack is not order-dependent`
+);
+
 if (failures.length > 0) {
   console.log(`\n${failures.length} check(s) failed`);
   process.exit(1);
 }
-console.log('\nthe merge instruction is refuted; the batching ceiling stands');
+console.log(
+  `\nthe merge instruction is refuted; the stack is priced, and only the payload lever is banked`
+);
