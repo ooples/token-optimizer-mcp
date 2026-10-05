@@ -89,6 +89,25 @@
  * bill and moves the comparison not at all, so it is a real saving for a user
  * and worth nothing against a competitor. Lever closed.
  *
+ * AND THE SAME TRAP APPLIES TO THE TURN LEVER, which nearly voided it. Fewer
+ * turns helps only the arm that CAUSES them. If merging think-then-act needs
+ * Claude Code's own prompt changed, every optimizer in that position gets the
+ * benefit, N falls for both arms, and -- exactly like W -- the comparison does
+ * not move: a 33% cut would be a real saving for a user and worth nothing
+ * against a competitor.
+ *
+ * It survives only because the proxy can ask for it itself. The proxy already
+ * injects into requests -- `knowledge_injected` and `injectedChars` sit on every
+ * ledger row -- so the guidance can be ours rather than the client's, and then
+ * the turn reduction belongs to our arm alone. That is the difference between
+ * the 21.7% priced above and a wash, and it rests entirely on where the
+ * instruction lives.
+ *
+ * So that is the test every remaining lever must pass before it is built: does
+ * it reduce OUR cost, or everybody's? W failed it. The turn lever passes only
+ * through proxy-side injection. I did not apply the test until after pricing
+ * the turn lever as a win, which is a check that belongs before a headline.
+ *
  * AND THE BATCHABLE HEADROOM IS BOUNDED, measured the same way. Of 36,301 runs
  * of consecutive tool-only turns holding 52,785 turns between them, 69.5% are a
  * run of ONE -- a single tool call sitting between two pieces of reasoning,
