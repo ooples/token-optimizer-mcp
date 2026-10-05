@@ -151,9 +151,15 @@ export interface CompressionFacts {
    * record from the accounting ledger and can see neither. So the savings
    * report cannot show an operator how much the withholding arm held back or
    * how often it came back -- the two numbers that decide whether the arm is
-   * paying for them -- and giving it that needs both counts added here
-   * deliberately, with the per-request spill delta, rather than one field
-   * dropped in on the way past.
+   * paying for them.
+   *
+   * AND THEY DO NOT BELONG ON THIS TYPE EITHER. This record is assembled by
+   * spreading a `CompressionFacts` into it (server.ts:1553), so a count has to
+   * be on THAT type to arrive here -- which is also why the compiler rejected
+   * the field when I first tried to populate it: the object I was writing to is
+   * an `Omit<ProxySummary, 'path'>`, not this. The next attempt starts on
+   * CompressionFacts, carrying the per-request spill delta, and arrives here for
+   * free.
    */
   /**
    * Characters of cached knowledge added to the request.
